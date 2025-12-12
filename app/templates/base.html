@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Family Task Manager{% endblock %}</title>
+    
+    <!-- Flowbite CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/flowbite@2.5.1/dist/flowbite.min.css" rel="stylesheet" />
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom styles -->
+    <style>
+        /* Custom color scheme for family-friendly UI */
+        :root {
+            --primary-color: #4F46E5; /* Indigo */
+            --secondary-color: #10B981; /* Green */
+            --warning-color: #F59E0B; /* Amber */
+            --danger-color: #EF4444; /* Red */
+        }
+    </style>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-50 antialiased">
+    
+    <!-- Navigation Bar -->
+    {% include 'partials/navbar.html' %}
+    
+    <!-- Flash Messages -->
+    {% if messages %}
+    <div class="container mx-auto px-4 py-4">
+        {% for message in messages %}
+        <div class="mb-4 rounded-lg p-4 text-sm {% if message.type == 'success' %}bg-green-50 text-green-800{% elif message.type == 'error' %}bg-red-50 text-red-800{% elif message.type == 'warning' %}bg-yellow-50 text-yellow-800{% else %}bg-blue-50 text-blue-800{% endif %}" role="alert">
+            <span class="font-medium">{{ message.text }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <!-- Footer -->
+    <footer class="bg-white border-t mt-12">
+        <div class="container mx-auto px-4 py-6 text-center text-sm text-gray-600">
+            <p>&copy; 2025 Family Task Manager. Hecho con ❤️ para familias.</p>
+        </div>
+    </footer>
+    
+    <!-- Flowbite JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flowbite@2.5.1/dist/flowbite.min.js"></script>
+    
+    <!-- Alpine.js for interactivity -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- HTMX for dynamic updates -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

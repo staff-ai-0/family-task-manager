@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Family Task Manager{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            ¡Hola, {{ current_user.name }}! 👋
+        </h1>
+        <p class="text-gray-600 dark:text-gray-400">
+            Aquí está tu resumen de hoy
+        </p>
+    </div>
+    
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Points Card -->
+        <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-indigo-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Mis Puntos</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ current_user.points }}</p>
+                </div>
+                <div class="text-4xl">⭐</div>
+            </div>
+        </div>
+        
+        <!-- Pending Tasks -->
+        <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Tareas Pendientes</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ stats.pending_tasks }}</p>
+                </div>
+                <div class="text-4xl">📝</div>
+            </div>
+        </div>
+        
+        <!-- Completed Today -->
+        <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Completadas Hoy</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ stats.completed_today }}</p>
+                </div>
+                <div class="text-4xl">✅</div>
+            </div>
+        </div>
+        
+        <!-- Active Consequences -->
+        {% if stats.active_consequences > 0 %}
+        <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Consecuencias Activas</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ stats.active_consequences }}</p>
+                </div>
+                <div class="text-4xl">⚠️</div>
+            </div>
+        </div>
+        {% else %}
+        <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Estado</p>
+                    <p class="text-xl font-bold text-green-600">¡Excelente!</p>
+                </div>
+                <div class="text-4xl">🎉</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Today's Tasks -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-gray-900">Tareas de Hoy</h2>
+                <a href="/tasks" class="text-sm text-indigo-600 hover:text-indigo-800">Ver todas →</a>
+            </div>
+            
+            {% if tasks %}
+            <div class="space-y-3">
+                {% for task in tasks[:5] %}
+                <div class="flex items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-medium text-gray-900">{{ task.title }}</h3>
+                            {% if task.is_default %}
+                            <span class="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">
+                                Obligatoria
+                            </span>
+                            {% endif %}
+                        </div>
+                        <p class="text-sm text-gray-600">{{ task.points }} puntos</p>
+                    </div>
+                    <button 
+                        hx-patch="/api/tasks/{{ task.id }}/complete"
+                        hx-swap="outerHTML"
+                        class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition">
+                        Completar
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8 text-gray-500">
+                <p class="text-4xl mb-2">🎉</p>
+                <p>¡No tienes tareas pendientes!</p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Available Rewards -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-gray-900">Recompensas Disponibles</h2>
+                <a href="/rewards" class="text-sm text-indigo-600 hover:text-indigo-800">Ver todas →</a>
+            </div>
+            
+            {% if rewards %}
+            <div class="space-y-3">
+                {% for reward in rewards[:5] %}
+                <div class="flex items-center p-4 bg-gray-50 rounded-lg">
+                    <div class="text-3xl mr-4">{{ reward.icon or '🎁' }}</div>
+                    <div class="flex-1">
+                        <h3 class="font-medium text-gray-900">{{ reward.title }}</h3>
+                        <p class="text-sm text-gray-600">{{ reward.points_cost }} puntos</p>
+                    </div>
+                    {% if current_user.points >= reward.points_cost %}
+                    <span class="px-3 py-1 text-sm font-medium bg-green-100 text-green-800 rounded">
+                        Disponible
+                    </span>
+                    {% else %}
+                    <span class="px-3 py-1 text-sm font-medium bg-gray-100 text-gray-600 rounded">
+                        {{ reward.points_cost - current_user.points }} pts más
+                    </span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8 text-gray-500">
+                <p class="text-4xl mb-2">🎁</p>
+                <p>No hay recompensas disponibles</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Active Consequences Alert -->
+    {% if active_consequences %}
+    <div class="mt-8 bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <span class="text-2xl">⚠️</span>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-red-800">Tienes consecuencias activas</h3>
+                <div class="mt-2 text-sm text-red-700">
+                    <ul class="list-disc list-inside space-y-1">
+                        {% for consequence in active_consequences %}
+                        <li>{{ consequence.title }} - {{ consequence.days_remaining }} días restantes</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
