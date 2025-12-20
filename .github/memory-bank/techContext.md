@@ -1,6 +1,6 @@
 # Family Task Manager - Technical Context
 
-**Last Updated**: December 11, 2025
+**Last Updated**: December 12, 2025
 
 ## Technology Stack Decisions
 
@@ -89,20 +89,42 @@
 
 **Decision**: Render provides the best balance of simplicity, cost, and features for a FastAPI + PostgreSQL application.
 
-### Authentication: JWT
+### Authentication: Session-Based with OAuth Support
 
-**Why JWT?**
-- Stateless authentication
-- Works well with FastAPI
-- Mobile app ready (future)
-- Industry standard
-- Easy to implement
+**Why Session-Based Authentication?**
+- Server-side rendering requires session cookies
+- Better security for SSR applications
+- HTTP-only cookies prevent XSS attacks
+- Works seamlessly with Jinja2 templates
+- Industry standard for traditional web apps
 
 **Implementation Details**:
-- Access tokens with 30-minute expiration
-- Refresh tokens for longer sessions
-- Bcrypt for password hashing
+- Session cookies with 30-minute expiration
+- Bcrypt for password hashing (work factor 12)
+- HTTP-only, SameSite=Lax cookies
+- SessionMiddleware for OAuth state management
 - Role-based access control (RBAC)
+
+**OAuth 2.0 Integration**:
+- Google OAuth for social login
+- Auto-creates family for new OAuth users
+- Email automatically verified for OAuth users
+- OAuth users assigned PARENT role by default
+- Credentials stored in HashiCorp Vault
+
+**Password Recovery**:
+- Secure token-based password reset
+- Tokens expire after 1 hour
+- One-time use tokens (marked as used)
+- Tokens stored in database with user reference
+- Email delivery via SMTP (Zoho)
+
+**Email Verification**:
+- Tokens generated on registration
+- 24-hour expiration window
+- One-time use with used_at timestamp
+- Verification banner shown on dashboard
+- Resend functionality available
 
 ### Frontend Libraries
 
@@ -137,12 +159,32 @@
 **users**:
 - id (UUID, PK)
 - email (unique)
-- password_hash
+- password_hash (nullable for OAuth users)
 - name
 - role (enum: PARENT, CHILD, TEEN)
 - family_id (FK)
 - points (integer)
+- email_verified (boolean)
+- email_verified_at (timestamp)
+- oauth_provider (varchar 50, nullable)
+- oauth_id (varchar 255, nullable)
 - created_at, updated_at
+
+**email_verification_tokens**:
+- id (UUID, PK)
+- token (varchar, unique)
+- user_id (FK)
+- expires_at (timestamp with timezone)
+- is_used (boolean)
+- used_at (timestamp with timezone)
+- created_at (timestamp with timezone)
+
+**password_reset_tokens**:
+- token (varchar 64, PK)
+- user_id (FK)
+- expires_at (timestamp)
+- is_used (boolean)
+- created_at (timestamp)
 
 **families**:
 - id (UUID, PK)
@@ -220,10 +262,18 @@
 ### RESTful Endpoints
 
 **Authentication**:
-- POST /api/auth/register
-- POST /api/auth/login
-- POST /api/auth/logout
-- GET /api/auth/me
+- POST /register - Create new user account
+- POST /login - Authenticate with email/password
+- GET /auth/google/login - Initiate Google OAuth flow
+- GET /auth/google/callback - OAuth callback handler
+- GET /auth/forgot-password - Show password reset request page
+- POST /auth/forgot-password - Send password reset email
+- GET /auth/reset-password?token= - Show password reset form
+- POST /auth/reset-password - Complete password reset
+- GET /auth/verify-email?token= - Verify email address
+- POST /auth/resend-verification - Resend verification email
+- POST /logout - End user session
+- GET /dashboard - Protected dashboard (requires auth)
 
 **Tasks**:
 - GET /api/tasks (list with filters)
@@ -405,15 +455,24 @@ Render Platform
 ### Environment Variables
 
 **Required**:
-- DATABASE_URL
-- SECRET_KEY
-- ALGORITHM (HS256)
-- ACCESS_TOKEN_EXPIRE_MINUTES
+- DATABASE_URL - PostgreSQL connection string
+- SECRET_KEY - Session encryption key
+- ALGORITHM - Hashing algorithm (HS256)
+- GOOGLE_CLIENT_ID - OAuth client ID
+- GOOGLE_CLIENT_SECRET - OAuth client secret
+- GOOGLE_REDIRECT_URI - OAuth callback URL
+- SMTP_HOST - Email server host
+- SMTP_PORT - Email server port
+- SMTP_USER - Email sender username
+- SMTP_PASSWORD - Email sender password
+- SMTP_FROM_EMAIL - From email address
+- SMTP_FROM_NAME - From display name
 
 **Optional**:
-- REDIS_URL
-- SENTRY_DSN (error tracking)
-- LOG_LEVEL
+- REDIS_URL - Cache server (optional)
+- SENTRY_DSN - Error tracking (optional)
+- LOG_LEVEL - Logging verbosity (default: INFO)
+- EMAIL_VERIFICATION_EXPIRE_MINUTES - Token expiry (default: 1440 = 24 hours)
 
 ## Monitoring & Logging
 
@@ -437,6 +496,84 @@ Render Platform
 - Reward redemption frequency
 
 ## Development Workflow
+
+### OAuth Configuration
+
+**Google Cloud Console Setup**:
+1. Create OAuth 2.0 Client ID at https://console.cloud.google.com/
+2. Application type: Web application
+3. Authorized redirect URIs:
+   - Development: `http://localhost:8000/auth/google/callback`
+   - Production: `https://yourdomain.com/auth/google/callback`
+4. Store credentials in `.env` and HashiCorp Vault
+
+**Current OAuth Credentials**:
+- Client ID: `302073118386-pvn9h3d0ccbnu31jr0ipkatc8n0rgm5f.apps.googleusercontent.com`
+- Stored in Vault: `secret/shared/oauth`
+- Updated: December 12, 2025
+
+**OAuth Flow**:
+1. User clicks "Continue with Google"
+2. Redirected to Google authorization page
+3. User authorizes application
+4. Google redirects to callback with auth code
+5. Backend exchanges code for user info
+6. Create or login user
+7. Auto-create family for new users
+8. Mark email as verified
+9. Redirect to dashboard
+
+### Email Configuration
+
+**SMTP Provider**: Zoho Mail
+
+**Current Configuration**:
+- Host: `smtp.zoho.com`
+- Port: `465` (SSL)
+- From: `noreply@a-ai4all.com`
+- From Name: "Family Task Manager"
+- Stored in Vault: `secret/shared/smtp`
+
+**Email Types**:
+1. **Email Verification**: Sent on registration, 24-hour expiry
+2. **Password Reset**: Sent on forgot password, 1-hour expiry
+3. **Welcome Email**: (Future) Sent after email verification
+
+**Email Templates**:
+- HTML templates with inline CSS
+- Responsive design for mobile
+- Branded with application colors
+- Clear call-to-action buttons
+
+### HashiCorp Vault Integration
+
+**Vault Server**: `10.1.0.99:8200`
+
+**Stored Secrets**:
+- `secret/shared/oauth` - Google OAuth credentials (Client ID, Secret)
+- `secret/shared/smtp` - SMTP configuration (Host, Port, User, Password)
+- `secret/icegg-app/*` - Other application secrets
+
+**Access Pattern**:
+```bash
+# Unseal Vault (requires 3 of 5 keys)
+vault operator unseal
+
+# Get OAuth credentials
+vault kv get secret/shared/oauth
+
+# Get SMTP credentials
+vault kv get secret/shared/smtp
+
+# Store new secret
+vault kv put secret/shared/oauth google_client_id="xxx" google_client_secret="yyy"
+```
+
+**Security**:
+- Vault tokens expire after use
+- Root token only for emergency access
+- Backend token for application access
+- Secrets versioned (can rollback if needed)
 
 1. **Local Development**:
    - Run FastAPI with hot reload

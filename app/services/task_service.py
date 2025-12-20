@@ -183,19 +183,29 @@ class TaskService:
     ) -> List[Consequence]:
         """Trigger consequences for overdue default tasks"""
         # Find overdue default tasks without active consequences
+        # Check if task already has a consequence by looking for existing Consequence records
         query = select(Task).where(
             and_(
                 Task.family_id == family_id,
                 Task.status == TaskStatus.OVERDUE,
                 Task.is_default == True,
-                Task.consequence_id.is_(None),
             )
         )
         
         overdue_tasks = (await db.execute(query)).scalars().all()
+        
+        # Filter out tasks that already have consequences
+        tasks_without_consequences = []
+        for task in overdue_tasks:
+            consequence_check = await db.execute(
+                select(Consequence).where(Consequence.triggered_by_task_id == task.id)
+            )
+            if not consequence_check.scalar_one_or_none():
+                tasks_without_consequences.append(task)
+        
         consequences = []
         
-        for task in overdue_tasks:
+        for task in tasks_without_consequences:
             # Create consequence
             consequence = Consequence(
                 title=f"Incomplete task: {task.title}",
@@ -208,9 +218,6 @@ class TaskService:
                 family_id=family_id,
             )
             consequence.apply_consequence()
-            
-            # Link consequence to task
-            task.consequence_id = consequence.id
             
             db.add(consequence)
             consequences.append(consequence)

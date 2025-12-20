@@ -3,7 +3,8 @@
 **Project Name**: Family Task Manager  
 **Model**: OurHome-inspired gamified family task organization  
 **Target Audience**: Families with children (ages 6-14)  
-**Created**: December 11, 2025
+**Created**: December 11, 2025  
+**Last Updated**: December 12, 2025
 
 ## Executive Summary
 
@@ -168,7 +169,12 @@ A gamified task management system where:
 ## Roadmap
 
 **MVP (Month 1-2)**:
-- ✅ User authentication
+- ✅ User authentication (email/password)
+- ✅ Google OAuth integration
+- ✅ Email verification system
+- ✅ Password reset functionality
+- ✅ Session-based authentication
+- ✅ Role-based access control
 - ✅ Task CRUD operations
 - ✅ Points system
 - ✅ Basic reward catalog
@@ -212,4 +218,5 @@ A gamified task management system where:
 ---
 
 **Created**: December 11, 2025  
-**Updated**: December 11, 2025
+**Updated**: December 12, 2025  
+**Current Phase**: MVP Complete - Authentication System Implemented

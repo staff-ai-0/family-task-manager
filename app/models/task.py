@@ -54,9 +54,6 @@ class Task(Base):
     due_date = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     
-    # Consequence linkage
-    consequence_id = Column(UUID(as_uuid=True), ForeignKey("consequences.id", ondelete="SET NULL"), nullable=True)
-    
     # Metadata
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -65,7 +62,7 @@ class Task(Base):
     assigned_user = relationship("User", back_populates="assigned_tasks", foreign_keys=[assigned_to])
     creator = relationship("User", back_populates="created_tasks", foreign_keys=[created_by])
     family = relationship("Family", back_populates="tasks")
-    consequence = relationship("Consequence", back_populates="triggered_task", foreign_keys=[consequence_id])
+    consequence = relationship("Consequence", back_populates="triggered_task", uselist=False)
     point_transactions = relationship("PointTransaction", back_populates="task", cascade="all, delete-orphan")
 
     def __repr__(self):

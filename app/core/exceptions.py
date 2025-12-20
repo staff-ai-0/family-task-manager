@@ -16,8 +16,21 @@ class PermissionDeniedError(FamilyAppException):
     pass
 
 
+# Alias for compatibility
+ForbiddenException = PermissionDeniedError
+
+
 class ValidationError(FamilyAppException):
     """Raised when data validation fails"""
+    pass
+
+
+# Alias for compatibility
+ValidationException = ValidationError
+
+
+class UnauthorizedException(FamilyAppException):
+    """Raised when user is not authorized"""
     pass
 
 

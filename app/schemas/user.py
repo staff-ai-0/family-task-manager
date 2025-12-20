@@ -23,7 +23,7 @@ class UserCreate(UserBase):
     """Schema for creating a new user"""
     password: str = Field(..., min_length=8, max_length=100)
     role: UserRole = UserRole.CHILD
-    family_id: UUID
+    family_id: UUID  # Required - must belong to a family
 
 
 class UserUpdate(BaseModel):

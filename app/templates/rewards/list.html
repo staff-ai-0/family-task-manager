@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Recompensas - Family Task Manager{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:ml-64">
+    <div class="p-4 rounded-lg mt-14">
+        <!-- Page Header -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white" data-i18n="rewards.title">Recompensas</h1>
+                <p class="text-gray-600 dark:text-gray-400 mt-1" data-i18n="rewards.subtitle">Canjea tus puntos por recompensas</p>
+            </div>
+            {% if current_user and current_user.role == 'PARENT' %}
+            <button data-modal-target="create-reward-modal" data-modal-toggle="create-reward-modal" 
+                    class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800">
+                <i class="fas fa-plus mr-2"></i>
+                <span data-i18n="rewards.create">Nueva Recompensa</span>
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- Rewards Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% if rewards %}
+                {% for reward in rewards %}
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                    <!-- Reward Image -->
+                    <div class="h-48 bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
+                        <i class="fas fa-gift text-6xl text-white opacity-80"></i>
+                    </div>
+                    
+                    <!-- Reward Info -->
+                    <div class="p-6">
+                        <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">{{ reward.name }}</h3>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm mb-4">{{ reward.description }}</p>
+                        
+                        <!-- Points Cost -->
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center">
+                                <i class="fas fa-star text-yellow-400 mr-2"></i>
+                                <span class="text-2xl font-bold text-gray-900 dark:text-white">{{ reward.points_cost }}</span>
+                                <span class="text-gray-600 dark:text-gray-400 ml-2" data-i18n="rewards.points">puntos</span>
+                            </div>
+                            {% if reward.available %}
+                            <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-green-900 dark:text-green-300" data-i18n="rewards.available">Disponible</span>
+                            {% else %}
+                            <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-red-900 dark:text-red-300" data-i18n="rewards.unavailable">No disponible</span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="flex gap-2">
+                            {% if current_user %}
+                                {% if reward.available and current_user.points >= reward.points_cost %}
+                                <button data-modal-target="redeem-modal-{{ reward.id }}" data-modal-toggle="redeem-modal-{{ reward.id }}"
+                                        class="flex-1 text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-4 py-2 dark:bg-green-600 dark:hover:bg-green-700 focus:outline-none dark:focus:ring-green-800">
+                                    <i class="fas fa-check mr-2"></i>
+                                    <span data-i18n="rewards.redeem">Canjear</span>
+                                </button>
+                                {% else %}
+                                <button disabled 
+                                        class="flex-1 text-gray-400 bg-gray-200 cursor-not-allowed font-medium rounded-lg text-sm px-4 py-2 dark:bg-gray-700 dark:text-gray-500">
+                                    <i class="fas fa-lock mr-2"></i>
+                                    <span data-i18n="rewards.insufficient">Puntos insuficientes</span>
+                                </button>
+                                {% endif %}
+                            {% endif %}
+                            
+                            {% if current_user and current_user.role == 'PARENT' %}
+                            <button data-modal-target="edit-reward-modal-{{ reward.id }}" data-modal-toggle="edit-reward-modal-{{ reward.id }}"
+                                    class="text-blue-700 hover:text-white border border-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2 dark:border-blue-500 dark:text-blue-500 dark:hover:text-white dark:hover:bg-blue-500 dark:focus:ring-blue-800">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button data-modal-target="delete-reward-modal-{{ reward.id }}" data-modal-toggle="delete-reward-modal-{{ reward.id }}"
+                                    class="text-red-700 hover:text-white border border-red-700 hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-4 py-2 dark:border-red-500 dark:text-red-500 dark:hover:text-white dark:hover:bg-red-600 dark:focus:ring-red-900">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Redeem Confirmation Modal -->
+                <div id="redeem-modal-{{ reward.id }}" tabindex="-1" class="hidden overflow-y-auto overflow-x-hidden fixed top-0 right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-[calc(100%-1rem)] max-h-full">
+                    <div class="relative p-4 w-full max-w-md max-h-full">
+                        <div class="relative bg-white rounded-lg shadow dark:bg-gray-700">
+                            <button type="button" class="absolute top-3 end-2.5 text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ms-auto inline-flex justify-center items-center dark:hover:bg-gray-600 dark:hover:text-white" data-modal-hide="redeem-modal-{{ reward.id }}">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <div class="p-4 md:p-5 text-center">
+                                <i class="fas fa-gift text-5xl text-green-500 mb-4"></i>
+                                <h3 class="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+                                    <span data-i18n="rewards.confirm_redeem">¿Confirmas que deseas canjear</span>
+                                    <strong>{{ reward.name }}</strong>
+                                    <span data-i18n="rewards.for">por</span>
+                                    <strong>{{ reward.points_cost }}</strong>
+                                    <span data-i18n="rewards.points">puntos</span>?
+                                </h3>
+                                <form method="POST" action="/rewards/{{ reward.id }}/redeem">
+                                    <button type="submit" class="text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-300 dark:focus:ring-green-800 font-medium rounded-lg text-sm inline-flex items-center px-5 py-2.5 text-center">
+                                        <span data-i18n="rewards.yes_redeem">Sí, canjear</span>
+                                    </button>
+                                    <button data-modal-hide="redeem-modal-{{ reward.id }}" type="button" class="py-2.5 px-5 ms-3 text-sm font-medium text-gray-900 focus:outline-none bg-white rounded-lg border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700">
+                                        <span data-i18n="common.cancel">Cancelar</span>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <!-- Empty State -->
+                <div class="col-span-full text-center py-12">
+                    <i class="fas fa-gift text-6xl text-gray-400 dark:text-gray-600 mb-4"></i>
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2" data-i18n="rewards.no_rewards">No hay recompensas disponibles</h3>
+                    <p class="text-gray-600 dark:text-gray-400" data-i18n="rewards.no_rewards_desc">Los padres pueden crear recompensas para que las canjes con tus puntos</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Create Reward Modal (Parents only) -->
+{% if current_user and current_user.role == 'PARENT' %}
+<div id="create-reward-modal" tabindex="-1" aria-hidden="true" class="hidden overflow-y-auto overflow-x-hidden fixed top-0 right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-[calc(100%-1rem)] max-h-full">
+    <div class="relative p-4 w-full max-w-md max-h-full">
+        <div class="relative bg-white rounded-lg shadow dark:bg-gray-700">
+            <div class="flex items-center justify-between p-4 md:p-5 border-b rounded-t dark:border-gray-600">
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white" data-i18n="rewards.create">Nueva Recompensa</h3>
+                <button type="button" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ms-auto inline-flex justify-center items-center dark:hover:bg-gray-600 dark:hover:text-white" data-modal-hide="create-reward-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form method="POST" action="/rewards/new" class="p-4 md:p-5">
+                <div class="mb-4">
+                    <label for="reward_name" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" data-i18n="rewards.form.name">Nombre</label>
+                    <input type="text" name="name" id="reward_name" required 
+                           class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white" 
+                           placeholder="Ej: Salida al cine" data-i18n-placeholder="rewards.form.name_placeholder">
+                </div>
+                <div class="mb-4">
+                    <label for="reward_description" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" data-i18n="rewards.form.description">Descripción</label>
+                    <textarea name="description" id="reward_description" rows="3" required
+                              class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white" 
+                              placeholder="Describe la recompensa" data-i18n-placeholder="rewards.form.description_placeholder"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="reward_points" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" data-i18n="rewards.form.points">Costo en puntos</label>
+                    <input type="number" name="points_cost" id="reward_points" min="1" required 
+                           class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white" 
+                           placeholder="100">
+                </div>
+                <div class="mb-4">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="available" value="true" checked class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        <span class="ms-3 text-sm font-medium text-gray-900 dark:text-gray-300" data-i18n="rewards.form.available">Disponible</span>
+                    </label>
+                </div>
+                <button type="submit" class="w-full text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
+                    <i class="fas fa-plus mr-2"></i>
+                    <span data-i18n="rewards.form.create_button">Crear Recompensa</span>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

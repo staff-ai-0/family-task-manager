@@ -2,12 +2,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
 import logging
 
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.routes import auth, users, tasks, rewards, consequences, families
+from app.api.routes.views import router as views_router
 
 # Configure logging
 logging.basicConfig(
@@ -54,6 +57,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Session Middleware (required for OAuth)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SECRET_KEY,
+    max_age=1800  # 30 minutes
+)
+
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -67,16 +77,14 @@ app.include_router(families.router, prefix="/api/families", tags=["Families"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(rewards.router, prefix="/api/rewards", tags=["Rewards"])
 app.include_router(consequences.router, prefix="/api/consequences", tags=["Consequences"])
+# HTML Views router (no prefix - served at root level)
+app.include_router(views_router)
 
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
-    return {
-        "message": "Welcome to Family Task Manager API",
-        "version": "1.0.0",
-        "docs": "/docs" if settings.DEBUG else "Documentation disabled in production"
-    }
+    """Root endpoint - redirect to dashboard"""
+    return RedirectResponse(url="/dashboard")
 
 
 @app.get("/health")

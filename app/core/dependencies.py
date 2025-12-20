@@ -1,6 +1,7 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from typing import Optional
 
 from app.core.database import get_db
 from app.core.security import decode_token, oauth2_scheme
@@ -55,3 +56,41 @@ def require_teen_or_parent(current_user: User = Depends(get_current_user)) -> Us
             detail="This operation requires teen or parent privileges"
         )
     return current_user
+
+
+async def get_optional_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+) -> Optional[User]:
+    """Get current user from session cookie (optional, returns None if not authenticated)"""
+    # Get user_id from session cookie
+    user_id = request.cookies.get("user_id")
+    
+    if not user_id:
+        return None
+    
+    try:
+        # Get user from database
+        result = await db.execute(
+            select(User).filter(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        return user
+    except Exception:
+        return None
+
+
+async def get_current_user_session(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+) -> User:
+    """Get current authenticated user from session (raises exception if not authenticated)"""
+    user = await get_optional_user(request, db)
+    
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    
+    return user

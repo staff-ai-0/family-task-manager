@@ -5,62 +5,64 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Family Task Manager{% endblock %}</title>
     
-    <!-- Flowbite CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/flowbite@2.5.1/dist/flowbite.min.css" rel="stylesheet" />
-    
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Custom styles -->
-    <style>
-        /* Custom color scheme for family-friendly UI */
-        :root {
-            --primary-color: #4F46E5; /* Indigo */
-            --secondary-color: #10B981; /* Green */
-            --warning-color: #F59E0B; /* Amber */
-            --danger-color: #EF4444; /* Red */
-        }
-    </style>
+    <!-- Flowbite CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.0/flowbite.min.css" rel="stylesheet" />
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     
     {% block extra_head %}{% endblock %}
+    
+    <!-- Dark mode initialization -->
+    <script>
+        // On page load or when changing themes, best to add inline in `head` to avoid FOUC
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
 </head>
-<body class="bg-gray-50 antialiased">
+<body class="bg-gray-50 dark:bg-gray-900">
+    <!-- Navigation -->
+    {% include "components/navbar.html" %}
     
-    <!-- Navigation Bar -->
-    {% include 'partials/navbar.html' %}
-    
-    <!-- Flash Messages -->
-    {% if messages %}
-    <div class="container mx-auto px-4 py-4">
-        {% for message in messages %}
-        <div class="mb-4 rounded-lg p-4 text-sm {% if message.type == 'success' %}bg-green-50 text-green-800{% elif message.type == 'error' %}bg-red-50 text-red-800{% elif message.type == 'warning' %}bg-yellow-50 text-yellow-800{% else %}bg-blue-50 text-blue-800{% endif %}" role="alert">
-            <span class="font-medium">{{ message.text }}</span>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
+    <!-- Sidebar -->
+    {% include "components/sidebar.html" %}
     
     <!-- Main Content -->
-    <main class="container mx-auto px-4 py-8">
-        {% block content %}{% endblock %}
-    </main>
-    
-    <!-- Footer -->
-    <footer class="bg-white border-t mt-12">
-        <div class="container mx-auto px-4 py-6 text-center text-sm text-gray-600">
-            <p>&copy; 2025 Family Task Manager. Hecho con ❤️ para familias.</p>
+    <div class="p-4 sm:ml-64">
+        <div class="p-4 mt-14">
+            <!-- Flash Messages -->
+            {% if messages %}
+                {% for message in messages %}
+                <div class="flex items-center p-4 mb-4 text-sm {% if message.type == 'success' %}text-green-800 bg-green-50 dark:bg-gray-800 dark:text-green-400{% elif message.type == 'error' %}text-red-800 bg-red-50 dark:bg-gray-800 dark:text-red-400{% else %}text-blue-800 bg-blue-50 dark:bg-gray-800 dark:text-blue-400{% endif %} rounded-lg" role="alert">
+                    <i class="fas {% if message.type == 'success' %}fa-check-circle{% elif message.type == 'error' %}fa-exclamation-circle{% else %}fa-info-circle{% endif %} flex-shrink-0 inline w-4 h-4 me-3"></i>
+                    <span class="sr-only">{{ message.type|title }}</span>
+                    <div>
+                        <span class="font-medium">{{ message.text }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            {% endif %}
+            
+            <!-- Page Content -->
+            {% block content %}{% endblock %}
         </div>
-    </footer>
+    </div>
     
-    <!-- Flowbite JS -->
-    <script src="https://cdn.jsdelivr.net/npm/flowbite@2.5.1/dist/flowbite.min.js"></script>
+    <!-- Flowbite JS (ONLY allowed library) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.0/flowbite.min.js"></script>
     
-    <!-- Alpine.js for interactivity -->
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Dark mode toggle script -->
+    <script src="/static/js/darkmode.js"></script>
     
-    <!-- HTMX for dynamic updates -->
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <!-- Translation system -->
+    <script src="/static/js/translations.js"></script>
     
-    {% block extra_scripts %}{% endblock %}
+    {% block extra_js %}{% endblock %}
 </body>
 </html>
