@@ -28,8 +28,15 @@ env/
 
 # Environment Variables
 .env
+.env.production
 .env.local
 .env.*.local
+*.backup
+*.bak
+
+# Sensitive data files (actual credentials)
+CREDENTIALS.md
+service-keys.txt
 
 # IDE
 .vscode/

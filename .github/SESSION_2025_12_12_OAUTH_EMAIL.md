@@ -170,7 +170,7 @@ model_config = SettingsConfigDict(
   - Reset tokens generated and stored in database
   - Tokens have 1-hour expiry
   - Reset password page renders with token
-  - SMTP configured (Zoho: `<from CREDENTIALS.md>`)
+  - SMTP configured (Zoho: `noreply@a-ai4all.com`)
 - **Database Verified**: Password reset tokens created
 
 ### ✅ Google OAuth Endpoints
@@ -196,7 +196,7 @@ model_config = SettingsConfigDict(
 - **Priority**: Medium (non-critical for MVP)
 
 ### 2. SMTP Email Sending
-- **Issue**: Connection timeout to <from CREDENTIALS.md>:465 from Docker
+- **Issue**: Connection timeout to smtp.zoho.com:465 from Docker
 - **Root Cause**: Docker network configuration or firewall
 - **Status**: Configuration correct, email content visible in logs
 - **Workaround**: Emails would work in production environment
@@ -252,7 +252,7 @@ GOOGLE_CLIENT_SECRET=<from CREDENTIALS.md>
 
 # Already Configured (from previous session):
 SMTP_HOST=<from CREDENTIALS.md>
-SMTP_PORT=465
+SMTP_PORT=<from CREDENTIALS.md>
 SMTP_USER=<from CREDENTIALS.md>
 SMTP_PASSWORD=<from CREDENTIALS.md>
 ```
@@ -418,7 +418,7 @@ Before deploying to production:
 - Root Token: `<from CREDENTIALS.md>`
 - Backend Token: `<from CREDENTIALS.md>`
 
-**Unseal Keys** (need 3 of 5):
+**Unseal Keys** (need 3 of 5): `<from CREDENTIALS.md>`
 
 **Current Status**: ✅ Unsealed
 

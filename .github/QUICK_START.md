@@ -27,12 +27,10 @@ docker compose down
 
 ## Current Credentials
 
+**⚠️ All actual credentials are stored in `CREDENTIALS.md` (gitignored)**
+
 ### Test User
-- Email: `testuser1765530116@example.com`
-- Password: `Test123!`
-- Role: PARENT
-- Email Verified: Yes
-- Family: Test Family
+- See `CREDENTIALS.md` for test user credentials
 
 ### Google OAuth
 - Client ID: `<from CREDENTIALS.md>`
@@ -40,10 +38,7 @@ docker compose down
 - Redirect URI: `http://localhost:8000/auth/google/callback`
 
 ### SMTP (Zoho)
-- Host: `<from CREDENTIALS.md>`
-- Port: `465`
-- User: `<from CREDENTIALS.md>`
-- Password: `<from CREDENTIALS.md>`
+- See `CREDENTIALS.md` for SMTP configuration
 
 ### Vault Access
 - Server: `10.1.0.99:8200`
@@ -212,10 +207,10 @@ docker compose up -d
 ### Required `.env` Variables:
 ```bash
 # Database
-DATABASE_URL=postgresql://familyapp:familyapp123@db:5432/familyapp
+DATABASE_URL=<from CREDENTIALS.md>
 
 # Security
-SECRET_KEY=your-secret-key-change-this-in-production
+SECRET_KEY=<from CREDENTIALS.md>
 ALGORITHM=HS256
 
 # Google OAuth
@@ -225,7 +220,7 @@ GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
 
 # SMTP (Zoho)
 SMTP_HOST=<from CREDENTIALS.md>
-SMTP_PORT=465
+SMTP_PORT=<from CREDENTIALS.md>
 SMTP_USER=<from CREDENTIALS.md>
 SMTP_PASSWORD=<from CREDENTIALS.md>
 SMTP_FROM_EMAIL=<from CREDENTIALS.md>
@@ -313,12 +308,12 @@ ssh 10.1.0.99
 # Check vault status
 sudo docker exec -e VAULT_ADDR="http://127.0.0.1:8200" icegg_vault vault status
 
-# Get OAuth credentials
+# Get OAuth credentials (requires root token from CREDENTIALS.md)
 sudo docker exec -e VAULT_ADDR="http://127.0.0.1:8200" \
   -e VAULT_TOKEN="<from CREDENTIALS.md>" \
   icegg_vault vault kv get secret/shared/oauth
 
-# Store new credentials
+# Store new credentials (requires root token from CREDENTIALS.md)
 sudo docker exec -e VAULT_ADDR="http://127.0.0.1:8200" \
   -e VAULT_TOKEN="<from CREDENTIALS.md>" \
   icegg_vault vault kv put secret/shared/oauth \
