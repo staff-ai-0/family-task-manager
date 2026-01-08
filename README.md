@@ -310,3 +310,24 @@ This project is licensed under the MIT License.
 ---
 
 **Made with ❤️ for families everywhere**
+
+---
+
+## 🏢 Enterprise Resources
+
+This repository is part of the StaffAI enterprise platform. For comprehensive documentation:
+
+- **[Enterprise Architecture](../staffai-docs/architecture/ENTERPRISE_ARCHITECTURE.md)** - System overview, service dependencies, technology stack
+- **[Infrastructure Topology](../staffai-docs/architecture/infrastructure-topology.md)** - Network diagrams, server layout, port matrix
+- **[Deployment Procedures](../staffai-docs/operations/deployment-procedures.md)** - Production deployment steps, rollback procedures
+- **[Secrets Management](../staffai-docs/security/secrets-management.md)** - Vault setup, API key rotation, credential handling
+- **[Dev Environment Setup](../staffai-docs/operations/dev-environment-setup.md)** - Onboarding guide for new developers
+
+**Service Guides**: See [services/](../staffai-docs/services/) directory for detailed service documentation
+
+**Shared Infrastructure**:
+- [PostgreSQL](../staffai-docs/shared-infrastructure/postgresql-management.md)
+- [Redis](../staffai-docs/shared-infrastructure/redis-management.md)
+- [Elasticsearch](../staffai-docs/shared-infrastructure/elasticsearch-management.md)
+- [Vault](../staffai-docs/shared-infrastructure/vault-management.md)
+

@@ -1,4 +1,49 @@
+# =============================================================================
+# StaffAI Standard .gitignore - family-task-manager
+# Version: 1.0
+# Last Updated: 2025-12-27
+# =============================================================================
+
+# =============================================================================
+# CRITICAL: Secrets & Credentials (NEVER COMMIT)
+# =============================================================================
+
+# Environment files
+.env
+.env.*
+.env.production
+.env.local
+!.env.example
+!.env.template
+
+# Credentials files
+CREDENTIALS.md
+service-keys.txt
+secrets.json
+*.secrets
+
+# Keys & Certificates
+*.key
+*.pem
+*.p12
+*.pfx
+keys/
+vault-keys/
+.vault-token
+
+# =============================================================================
+# Backups (Keep Local, Don't Commit)
+# =============================================================================
+
+*.backup
+*.bak
+*.sql
+*.dump
+
+# =============================================================================
 # Python
+# =============================================================================
+
 __pycache__/
 *.py[cod]
 *$py.class
@@ -20,31 +65,11 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
+# Virtual environments
 venv/
-ENV/
 env/
+ENV/
 .venv
-
-# Environment Variables
-.env
-.env.production
-.env.local
-.env.*.local
-*.backup
-*.bak
-
-# Sensitive data files (actual credentials)
-CREDENTIALS.md
-service-keys.txt
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
 
 # Testing
 .pytest_cache/
@@ -53,35 +78,61 @@ htmlcov/
 *.cover
 .hypothesis/
 
-# Database
-*.db
-*.sqlite3
-*.sql
-
-# Logs
-*.log
-logs/
-
-# Alembic
-# Keep the migrations folder but ignore the database files
-# migrations/versions/*.pyc
-
-# Docker
-docker-compose.override.yml
-
-# OS
-.DS_Store
-Thumbs.db
-
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb
 
-# MyPy
+# mypy
 .mypy_cache/
 .dmypy.json
 dmypy.json
 
+# =============================================================================
+# IDEs and Editors
+# =============================================================================
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# Operating Systems
+# =============================================================================
+
+.DS_Store
+Thumbs.db
+
+# =============================================================================
+# Databases
+# =============================================================================
+
+*.db
+*.sqlite3
+
+# =============================================================================
+# Logs
+# =============================================================================
+
+*.log
+logs/
+
+# =============================================================================
+# Docker
+# =============================================================================
+
+docker-compose.override.yml
+
+# =============================================================================
+# Project-Specific: Family Task Manager
+# =============================================================================
+
 # Static files collected for production
 staticfiles/
+
+# User uploaded media
 media/
+
+# Alembic migration cache
+# migrations/versions/*.pyc
