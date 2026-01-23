@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Family Task Manager"
     DEBUG: bool = True
     VERSION: str = "1.0.0"
+    BASE_URL: str = "http://localhost:8000"  # Used for OAuth callbacks and email links
     
     # Database
     DATABASE_URL: str = "postgresql://familyapp:familyapp123@db:5432/familyapp"
@@ -38,7 +39,15 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: Union[List[str], str] = [
         "http://localhost:8000",
         "http://localhost:3000",
+        "https://fam.a-ai4all.com",
     ]
+    
+    @property
+    def google_redirect_uri(self) -> str:
+        """Generate Google redirect URI from BASE_URL"""
+        if self.GOOGLE_REDIRECT_URI:
+            return self.GOOGLE_REDIRECT_URI
+        return f"{self.BASE_URL}/auth/google/callback"
     
     # Redis (Optional)
     REDIS_URL: str = "redis://redis:6379/0"

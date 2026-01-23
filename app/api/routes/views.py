@@ -419,7 +419,8 @@ async def register(
         
         # Send verification email (don't block on this)
         try:
-            await EmailService.send_verification_email(db, user, base_url="http://localhost:8000")
+            from app.core.config import settings
+            await EmailService.send_verification_email(db, user, base_url=settings.BASE_URL)
         except Exception as e:
             print(f"Failed to send verification email: {e}")
         
@@ -483,7 +484,8 @@ async def resend_verification(
         )
     
     # Send verification email
-    await EmailService.send_verification_email(db, current_user)
+    from app.core.config import settings
+    await EmailService.send_verification_email(db, current_user, base_url=settings.BASE_URL)
     
     return RedirectResponse(
         url="/dashboard?message=verification_sent",
@@ -498,7 +500,8 @@ async def resend_verification(
 @router.get("/auth/google/login")
 async def google_login(request: Request):
     """Redirect to Google OAuth"""
-    redirect_uri = request.url_for('google_callback')
+    from app.core.config import settings
+    redirect_uri = settings.GOOGLE_REDIRECT_URI
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
@@ -604,8 +607,9 @@ async def forgot_password(
     # Always show success message (don't reveal if email exists)
     if user:
         try:
+            from app.core.config import settings
             await EmailService.send_password_reset_email(
-                db, user, base_url="http://localhost:8000"
+                db, user, base_url=settings.BASE_URL
             )
         except Exception as e:
             print(f"Failed to send password reset email: {e}")
