@@ -31,6 +31,93 @@ class PointsService:
         return user.points
 
     @staticmethod
+    async def award_points_for_task(
+        db: AsyncSession,
+        user_id: UUID,
+        task_id: UUID,
+        points: int,
+    ) -> PointTransaction:
+        """
+        Award points to a user for completing a task.
+
+        Args:
+            db: Database session
+            user_id: ID of user receiving points
+            task_id: ID of completed task
+            points: Number of points to award
+
+        Returns:
+            Created PointTransaction
+        """
+        # Get user
+        user = await get_user_by_id(db, user_id)
+
+        # Create transaction
+        transaction = PointTransaction.create_task_completion(
+            user_id=user_id,
+            task_id=task_id,
+            points=points,
+            balance_before=user.points,
+        )
+
+        # Update user balance
+        user.points += points
+
+        db.add(transaction)
+        await db.commit()
+        await db.refresh(transaction)
+
+        return transaction
+
+    @staticmethod
+    async def deduct_points_for_reward(
+        db: AsyncSession,
+        user_id: UUID,
+        reward_id: UUID,
+        points_cost: int,
+    ) -> PointTransaction:
+        """
+        Deduct points from a user for redeeming a reward.
+
+        Args:
+            db: Database session
+            user_id: ID of user redeeming reward
+            reward_id: ID of reward being redeemed
+            points_cost: Number of points to deduct
+
+        Returns:
+            Created PointTransaction
+
+        Raises:
+            ValidationException: If user has insufficient points
+        """
+        # Get user
+        user = await get_user_by_id(db, user_id)
+
+        # Check if user has enough points
+        if user.points < points_cost:
+            raise ValidationException(
+                f"Insufficient points. Need {points_cost}, have {user.points}"
+            )
+
+        # Create transaction
+        transaction = PointTransaction.create_reward_redemption(
+            user_id=user_id,
+            reward_id=reward_id,
+            points_cost=points_cost,
+            balance_before=user.points,
+        )
+
+        # Update user balance
+        user.points -= points_cost
+
+        db.add(transaction)
+        await db.commit()
+        await db.refresh(transaction)
+
+        return transaction
+
+    @staticmethod
     async def get_transaction_history(
         db: AsyncSession,
         user_id: UUID,

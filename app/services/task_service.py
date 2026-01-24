@@ -24,6 +24,7 @@ from app.services.base_service import (
     verify_user_in_family,
     get_user_by_id,
 )
+from app.services.points_service import PointsService
 
 
 class TaskService(BaseFamilyService[Task]):
@@ -119,24 +120,19 @@ class TaskService(BaseFamilyService[Task]):
         if task.assigned_to != user_id:
             raise ForbiddenException("Only the assigned user can complete this task")
 
-        # Get user for point balance
-        user = await get_user_by_id(db, user_id)
-
         # Mark task as completed
         task.status = TaskStatus.COMPLETED
         task.completed_at = datetime.utcnow()
 
-        # Award points
-        transaction = PointTransaction.create_task_completion(
+        # Award points using PointsService
+        await PointsService.award_points_for_task(
+            db=db,
             user_id=user_id,
             task_id=task.id,
             points=task.points,
-            balance_before=user.points,
         )
-        user.points += task.points
 
-        db.add(transaction)
-        await db.commit()
+        # Refresh task to get updated state
         await db.refresh(task)
 
         return task

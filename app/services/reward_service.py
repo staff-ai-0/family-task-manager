@@ -19,6 +19,7 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.services.base_service import BaseFamilyService, verify_user_in_family
+from app.services.points_service import PointsService
 
 
 class RewardService(BaseFamilyService[Reward]):
@@ -99,14 +100,8 @@ class RewardService(BaseFamilyService[Reward]):
         if not reward.is_redeemable:
             raise ValidationException("This reward is currently not available")
 
-        # Get user
-        user = await verify_user_in_family(db, user_id, family_id)
-
-        # Check if user has enough points
-        if user.points < reward.points_cost:
-            raise ValidationException(
-                f"Insufficient points. Need {reward.points_cost}, have {user.points}"
-            )
+        # Verify user belongs to family
+        await verify_user_in_family(db, user_id, family_id)
 
         # Check for active consequences that block reward redemption
         active_restrictions = (
@@ -126,18 +121,13 @@ class RewardService(BaseFamilyService[Reward]):
                 "You have an active consequence that prevents reward redemption"
             )
 
-        # Create transaction and deduct points
-        transaction = PointTransaction.create_reward_redemption(
+        # Deduct points using PointsService
+        transaction = await PointsService.deduct_points_for_reward(
+            db=db,
             user_id=user_id,
             reward_id=reward.id,
             points_cost=reward.points_cost,
-            balance_before=user.points,
         )
-        user.points -= reward.points_cost
-
-        db.add(transaction)
-        await db.commit()
-        await db.refresh(transaction)
 
         return transaction
 
