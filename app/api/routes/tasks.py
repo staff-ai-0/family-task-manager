@@ -3,6 +3,7 @@ Task management routes
 
 Handles task CRUD operations, completion, and overdue management.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
@@ -10,6 +11,7 @@ from uuid import UUID
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
+from app.core.type_utils import to_uuid_required
 from app.services import TaskService
 from app.schemas.task import (
     TaskCreate,
@@ -39,7 +41,7 @@ async def list_tasks(
     """List all tasks"""
     tasks = await TaskService.list_tasks(
         db,
-        family_id=current_user.family_id,
+        family_id=to_uuid_required(current_user.family_id),
         user_id=user_id,
         status=status,
         is_default=is_default,
@@ -58,8 +60,8 @@ async def create_task(
         task = await TaskService.create_task(
             db,
             task_data,
-            family_id=current_user.family_id,
-            created_by=current_user.id,
+            family_id=to_uuid_required(current_user.family_id),
+            created_by=to_uuid_required(current_user.id),
         )
         return task
     except NotFoundException as e:
@@ -74,7 +76,9 @@ async def get_task(
 ):
     """Get task by ID"""
     try:
-        task = await TaskService.get_task(db, task_id, current_user.family_id)
+        task = await TaskService.get_task(
+            db, task_id, to_uuid_required(current_user.family_id)
+        )
         return task
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -91,8 +95,8 @@ async def complete_task(
         task = await TaskService.complete_task(
             db,
             task_id,
-            family_id=current_user.family_id,
-            user_id=current_user.id,
+            family_id=to_uuid_required(current_user.family_id),
+            user_id=to_uuid_required(current_user.id),
         )
         return task
     except NotFoundException as e:
@@ -113,7 +117,7 @@ async def update_task(
     """Update task"""
     try:
         task = await TaskService.update_task(
-            db, task_id, task_data, current_user.family_id
+            db, task_id, task_data, to_uuid_required(current_user.family_id)
         )
         return task
     except NotFoundException as e:
@@ -128,7 +132,9 @@ async def delete_task(
 ):
     """Delete task"""
     try:
-        await TaskService.delete_task(db, task_id, current_user.family_id)
+        await TaskService.delete_task(
+            db, task_id, to_uuid_required(current_user.family_id)
+        )
         return None
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -140,6 +146,7 @@ async def check_overdue_tasks(
     db: AsyncSession = Depends(get_db),
 ):
     """Check for overdue tasks and update status"""
-    tasks = await TaskService.check_overdue_tasks(db, current_user.family_id)
+    tasks = await TaskService.check_overdue_tasks(
+        db, to_uuid_required(current_user.family_id)
+    )
     return tasks
-

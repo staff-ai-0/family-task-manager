@@ -3,11 +3,13 @@ Authentication routes
 
 Handles user registration, login, token management.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.type_utils import to_uuid_required
 from app.services import AuthService
 from app.schemas.user import (
     UserCreate,
@@ -26,7 +28,9 @@ from app.core.exceptions import (
 router = APIRouter()
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+)
 async def register(
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db),
@@ -82,7 +86,7 @@ async def update_password(
     try:
         user = await AuthService.update_password(
             db,
-            current_user.id,
+            to_uuid_required(current_user.id),
             password_data.current_password,
             password_data.new_password,
         )
@@ -91,4 +95,3 @@ async def update_password(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-

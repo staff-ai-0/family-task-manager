@@ -71,6 +71,13 @@
 
 **Decision**: SQLAlchemy 2.0 with async support provides the best developer experience and performance.
 
+**Type Safety Guidelines**:
+- Use `Mapped[]` syntax for proper type hints (SQLAlchemy 2.0+)
+- Convert Column types to Python types when passing to service methods
+- See `.github/instructions/04-python-type-safety.instructions.md` for details
+- Avoid direct Column comparisons; use explicit type conversion
+- Use `UUID(as_uuid=True)` for proper UUID handling
+
 ### Deployment: Render
 
 **Why Render?**

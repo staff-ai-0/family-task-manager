@@ -3,6 +3,7 @@ Reward management routes
 
 Handles reward CRUD operations and redemption.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
@@ -10,6 +11,7 @@ from uuid import UUID
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
+from app.core.type_utils import to_uuid_required
 from app.services import RewardService
 from app.schemas.reward import (
     RewardCreate,
@@ -38,7 +40,7 @@ async def list_rewards(
     """List all rewards"""
     rewards = await RewardService.list_rewards(
         db,
-        family_id=current_user.family_id,
+        family_id=to_uuid_required(current_user.family_id),
         category=category,
         is_active=is_active,
     )
@@ -53,7 +55,7 @@ async def create_reward(
 ):
     """Create a new reward (parent only)"""
     reward = await RewardService.create_reward(
-        db, reward_data, family_id=current_user.family_id
+        db, reward_data, family_id=to_uuid_required(current_user.family_id)
     )
     return reward
 
@@ -66,7 +68,9 @@ async def get_reward(
 ):
     """Get reward by ID"""
     try:
-        reward = await RewardService.get_reward(db, reward_id, current_user.family_id)
+        reward = await RewardService.get_reward(
+            db, reward_id, to_uuid_required(current_user.family_id)
+        )
         return reward
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -83,8 +87,8 @@ async def redeem_reward(
         transaction = await RewardService.redeem_reward(
             db,
             reward_id=reward_id,
-            user_id=current_user.id,
-            family_id=current_user.family_id,
+            user_id=to_uuid_required(current_user.id),
+            family_id=to_uuid_required(current_user.family_id),
         )
         return transaction
     except NotFoundException as e:
@@ -105,7 +109,7 @@ async def update_reward(
     """Update reward"""
     try:
         reward = await RewardService.update_reward(
-            db, reward_id, reward_data, current_user.family_id
+            db, reward_id, reward_data, to_uuid_required(current_user.family_id)
         )
         return reward
     except NotFoundException as e:
@@ -120,8 +124,9 @@ async def delete_reward(
 ):
     """Delete reward"""
     try:
-        await RewardService.delete_reward(db, reward_id, current_user.family_id)
+        await RewardService.delete_reward(
+            db, reward_id, to_uuid_required(current_user.family_id)
+        )
         return None
     except NotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-

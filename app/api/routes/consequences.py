@@ -3,6 +3,7 @@ Consequence management routes
 
 Handles consequence CRUD operations and resolution.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
@@ -10,6 +11,7 @@ from uuid import UUID
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
+from app.core.type_utils import to_uuid_required
 from app.services import ConsequenceService
 from app.schemas.consequence import (
     ConsequenceCreate,
@@ -35,7 +37,7 @@ async def list_consequences(
     """List active consequences"""
     consequences = await ConsequenceService.list_consequences(
         db,
-        family_id=current_user.family_id,
+        family_id=to_uuid_required(current_user.family_id),
         user_id=user_id,
         active_only=active_only,
     )
@@ -48,11 +50,15 @@ async def get_my_active_consequences(
     db: AsyncSession = Depends(get_db),
 ):
     """Get my active consequences"""
-    consequences = await ConsequenceService.get_active_consequences(db, current_user.id)
+    consequences = await ConsequenceService.get_active_consequences(
+        db, to_uuid_required(current_user.id)
+    )
     return consequences
 
 
-@router.post("/", response_model=ConsequenceResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=ConsequenceResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_consequence(
     consequence_data: ConsequenceCreate,
     current_user: User = Depends(require_parent_role),
@@ -61,7 +67,7 @@ async def create_consequence(
     """Create a new consequence (parent only)"""
     try:
         consequence = await ConsequenceService.create_consequence(
-            db, consequence_data, family_id=current_user.family_id
+            db, consequence_data, family_id=to_uuid_required(current_user.family_id)
         )
         return consequence
     except NotFoundException as e:
@@ -77,7 +83,7 @@ async def resolve_consequence(
     """Resolve a consequence (parent only)"""
     try:
         consequence = await ConsequenceService.resolve_consequence(
-            db, consequence_id, current_user.family_id
+            db, consequence_id, to_uuid_required(current_user.family_id)
         )
         return consequence
     except NotFoundException as e:
@@ -96,7 +102,10 @@ async def update_consequence(
     """Update consequence"""
     try:
         consequence = await ConsequenceService.update_consequence(
-            db, consequence_id, consequence_data, current_user.family_id
+            db,
+            consequence_id,
+            consequence_data,
+            to_uuid_required(current_user.family_id),
         )
         return consequence
     except NotFoundException as e:
@@ -114,7 +123,7 @@ async def delete_consequence(
     """Delete consequence"""
     try:
         await ConsequenceService.delete_consequence(
-            db, consequence_id, current_user.family_id
+            db, consequence_id, to_uuid_required(current_user.family_id)
         )
         return None
     except NotFoundException as e:
@@ -128,7 +137,6 @@ async def check_expired_consequences(
 ):
     """Check for expired consequences and auto-resolve"""
     consequences = await ConsequenceService.check_expired_consequences(
-        db, current_user.family_id
+        db, to_uuid_required(current_user.family_id)
     )
     return consequences
-
