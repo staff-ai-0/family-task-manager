@@ -9,13 +9,13 @@ import logging
 
 from app.core.config import settings
 from app.core.database import engine, Base
+from app.core.exception_handlers import register_exception_handlers
 from app.api.routes import auth, users, tasks, rewards, consequences, families
 from app.api.routes.views import router as views_router
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -25,14 +25,16 @@ async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
     logger.info("Starting Family Task Manager application...")
-    logger.info(f"Database URL: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'Not configured'}")
-    
+    logger.info(
+        f"Database URL: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'Not configured'}"
+    )
+
     # Create database tables (in production, use Alembic migrations)
     # async with engine.begin() as conn:
     #     await conn.run_sync(Base.metadata.create_all)
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down application...")
     await engine.dispose()
@@ -61,8 +63,11 @@ app.add_middleware(
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SECRET_KEY,
-    max_age=1800  # 30 minutes
+    max_age=1800,  # 30 minutes
 )
+
+# Register exception handlers
+register_exception_handlers(app)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -76,7 +81,9 @@ app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(families.router, prefix="/api/families", tags=["Families"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(rewards.router, prefix="/api/rewards", tags=["Rewards"])
-app.include_router(consequences.router, prefix="/api/consequences", tags=["Consequences"])
+app.include_router(
+    consequences.router, prefix="/api/consequences", tags=["Consequences"]
+)
 # HTML Views router (no prefix - served at root level)
 app.include_router(views_router)
 
@@ -90,18 +97,10 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "database": "connected",
-        "version": "1.0.0"
-    }
+    return {"status": "healthy", "database": "connected", "version": "1.0.0"}
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=settings.DEBUG
-    )
+
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=settings.DEBUG)
