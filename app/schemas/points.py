@@ -3,17 +3,20 @@ PointTransaction Pydantic schemas
 
 Request and response models for point transaction operations.
 """
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
 
 from app.models.point_transaction import TransactionType
+from app.schemas.base import BaseResponse
 
 
 # Base schemas
 class PointTransactionBase(BaseModel):
     """Base point transaction schema"""
+
     type: TransactionType
     points: int
     description: Optional[str] = None
@@ -22,12 +25,14 @@ class PointTransactionBase(BaseModel):
 # Request schemas
 class PointTransactionCreate(PointTransactionBase):
     """Schema for creating a manual point transaction"""
+
     user_id: UUID
     created_by: UUID
 
 
 class ParentAdjustment(BaseModel):
     """Schema for parent making manual point adjustment"""
+
     user_id: UUID
     points: int = Field(..., ge=-1000, le=1000)  # Limit adjustment range
     reason: str = Field(..., min_length=1, max_length=500)
@@ -35,6 +40,7 @@ class ParentAdjustment(BaseModel):
 
 class PointTransfer(BaseModel):
     """Schema for transferring points between users"""
+
     from_user_id: UUID
     to_user_id: UUID
     points: int = Field(..., ge=1, le=1000)
@@ -42,11 +48,13 @@ class PointTransfer(BaseModel):
 
 
 # Response schemas
-class PointTransactionResponse(PointTransactionBase):
+class PointTransactionResponse(BaseResponse):
     """Schema for point transaction response"""
-    model_config = ConfigDict(from_attributes=True)
-    
+
     id: UUID
+    type: TransactionType
+    points: int
+    description: Optional[str] = None
     user_id: UUID
     balance_before: int
     balance_after: int
@@ -58,6 +66,7 @@ class PointTransactionResponse(PointTransactionBase):
 
 class PointTransactionWithDetails(PointTransactionResponse):
     """Point transaction with additional details"""
+
     user_name: Optional[str] = None
     task_title: Optional[str] = None
     reward_title: Optional[str] = None
@@ -67,6 +76,7 @@ class PointTransactionWithDetails(PointTransactionResponse):
 # Summary schemas
 class PointsSummary(BaseModel):
     """Summary of user points and recent transactions"""
+
     user_id: UUID
     current_balance: int
     total_earned: int

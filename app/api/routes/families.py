@@ -10,7 +10,7 @@ from typing import List
 from uuid import UUID
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, verify_family_id
 from app.core.type_utils import to_uuid_required
 from app.services import FamilyService
 from app.schemas.family import (
@@ -58,64 +58,40 @@ async def create_family(
 
 @router.get("/{family_id}", response_model=FamilyResponse)
 async def get_family(
-    family_id: UUID,
-    current_user: User = Depends(get_current_user),
+    family_id: UUID = Depends(verify_family_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Get family by ID"""
-    if to_uuid_required(current_user.family_id) != family_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only access your own family",
-        )
     family = await FamilyService.get_family(db, family_id)
     return family
 
 
 @router.put("/{family_id}", response_model=FamilyResponse)
 async def update_family(
-    family_id: UUID,
     family_data: FamilyUpdate,
-    current_user: User = Depends(get_current_user),
+    family_id: UUID = Depends(verify_family_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Update family information"""
-    if to_uuid_required(current_user.family_id) != family_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only update your own family",
-        )
     family = await FamilyService.update_family(db, family_id, family_data)
     return family
 
 
 @router.get("/{family_id}/members", response_model=List[UserResponse])
 async def get_family_members(
-    family_id: UUID,
-    current_user: User = Depends(get_current_user),
+    family_id: UUID = Depends(verify_family_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Get all family members"""
-    if to_uuid_required(current_user.family_id) != family_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only access your own family members",
-        )
     members = await FamilyService.get_family_members(db, family_id)
     return members
 
 
 @router.get("/{family_id}/stats", response_model=FamilyStats)
 async def get_family_stats(
-    family_id: UUID,
-    current_user: User = Depends(get_current_user),
+    family_id: UUID = Depends(verify_family_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Get family statistics"""
-    if to_uuid_required(current_user.family_id) != family_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only access your own family stats",
-        )
     stats = await FamilyService.get_family_stats(db, family_id)
     return stats
