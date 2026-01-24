@@ -3,6 +3,7 @@ Points Service
 
 Business logic for point transaction management.
 """
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, or_
 from typing import List, Optional
@@ -17,6 +18,7 @@ from app.core.exceptions import (
     ValidationException,
     ForbiddenException,
 )
+from app.services.base_service import verify_user_in_family, get_user_by_id
 
 
 class PointsService:
@@ -25,9 +27,7 @@ class PointsService:
     @staticmethod
     async def get_user_balance(db: AsyncSession, user_id: UUID) -> int:
         """Get current point balance for a user"""
-        user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
-        if not user:
-            raise NotFoundException("User not found")
+        user = await get_user_by_id(db, user_id)
         return user.points
 
     @staticmethod
@@ -39,10 +39,10 @@ class PointsService:
     ) -> List[PointTransaction]:
         """Get transaction history for a user"""
         query = select(PointTransaction).where(PointTransaction.user_id == user_id)
-        
+
         if transaction_type:
             query = query.where(PointTransaction.type == transaction_type)
-        
+
         query = query.order_by(PointTransaction.created_at.desc()).limit(limit)
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -56,19 +56,11 @@ class PointsService:
     ) -> PointTransaction:
         """Create manual point adjustment by parent"""
         # Verify user exists and belongs to family
-        user = (await db.execute(
-            select(User).where(and_(User.id == adjustment.user_id, User.family_id == family_id))
-        )).scalar_one_or_none()
-        if not user:
-            raise NotFoundException("User not found or does not belong to this family")
-        
+        user = await verify_user_in_family(db, adjustment.user_id, family_id)
+
         # Verify parent belongs to family
-        parent = (await db.execute(
-            select(User).where(and_(User.id == parent_id, User.family_id == family_id))
-        )).scalar_one_or_none()
-        if not parent:
-            raise ForbiddenException("Parent does not belong to this family")
-        
+        await verify_user_in_family(db, parent_id, family_id)
+
         # Create transaction
         transaction = PointTransaction.create_parent_adjustment(
             user_id=adjustment.user_id,
@@ -77,16 +69,16 @@ class PointsService:
             reason=adjustment.reason,
             created_by=parent_id,
         )
-        
+
         # Update user balance
         user.points += adjustment.points
         if user.points < 0:
             user.points = 0  # Prevent negative balance
-        
+
         db.add(transaction)
         await db.commit()
         await db.refresh(transaction)
-        
+
         return transaction
 
     @staticmethod
@@ -97,25 +89,18 @@ class PointsService:
     ) -> tuple[PointTransaction, PointTransaction]:
         """Transfer points between users (parent feature)"""
         # Verify both users exist and belong to family
-        from_user = (await db.execute(
-            select(User).where(and_(User.id == transfer.from_user_id, User.family_id == family_id))
-        )).scalar_one_or_none()
-        to_user = (await db.execute(
-            select(User).where(and_(User.id == transfer.to_user_id, User.family_id == family_id))
-        )).scalar_one_or_none()
-        
-        if not from_user or not to_user:
-            raise NotFoundException("One or both users not found")
-        
+        from_user = await verify_user_in_family(db, transfer.from_user_id, family_id)
+        to_user = await verify_user_in_family(db, transfer.to_user_id, family_id)
+
         # Check if from_user has enough points
         if from_user.points < transfer.points:
             raise ValidationException(
                 f"Insufficient points to transfer. User has {from_user.points} points"
             )
-        
+
         # Create transactions
         reason = transfer.reason or "Point transfer"
-        
+
         debit_transaction = PointTransaction(
             type=TransactionType.TRANSFER,
             user_id=transfer.from_user_id,
@@ -124,7 +109,7 @@ class PointsService:
             balance_after=from_user.points - transfer.points,
             description=f"Transferred {transfer.points} points to {to_user.name}. {reason}",
         )
-        
+
         credit_transaction = PointTransaction(
             type=TransactionType.TRANSFER,
             user_id=transfer.to_user_id,
@@ -133,17 +118,17 @@ class PointsService:
             balance_after=to_user.points + transfer.points,
             description=f"Received {transfer.points} points from {from_user.name}. {reason}",
         )
-        
+
         # Update balances
         from_user.points -= transfer.points
         to_user.points += transfer.points
-        
+
         db.add(debit_transaction)
         db.add(credit_transaction)
         await db.commit()
         await db.refresh(debit_transaction)
         await db.refresh(credit_transaction)
-        
+
         return (debit_transaction, credit_transaction)
 
     @staticmethod
@@ -171,18 +156,16 @@ class PointsService:
         return abs(result.scalar() or 0)
 
     @staticmethod
-    async def get_points_summary(
-        db: AsyncSession, user_id: UUID
-    ) -> dict:
+    async def get_points_summary(db: AsyncSession, user_id: UUID) -> dict:
         """Get comprehensive points summary for user"""
-        user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
-        if not user:
-            raise NotFoundException("User not found")
-        
+        user = await get_user_by_id(db, user_id)
+
         total_earned = await PointsService.get_total_earned(db, user_id)
         total_spent = await PointsService.get_total_spent(db, user_id)
-        recent_transactions = await PointsService.get_transaction_history(db, user_id, limit=10)
-        
+        recent_transactions = await PointsService.get_transaction_history(
+            db, user_id, limit=10
+        )
+
         return {
             "user_id": user_id,
             "current_balance": user.points,

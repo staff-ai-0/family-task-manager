@@ -17,7 +17,7 @@ from app.core.exceptions import (
     NotFoundException,
     ValidationException,
 )
-from app.services.base_service import BaseFamilyService
+from app.services.base_service import BaseFamilyService, verify_user_in_family
 
 
 class ConsequenceService(BaseFamilyService[Consequence]):
@@ -33,18 +33,7 @@ class ConsequenceService(BaseFamilyService[Consequence]):
     ) -> Consequence:
         """Create a new consequence"""
         # Verify user exists and belongs to family
-        user = (
-            await db.execute(
-                select(User).where(
-                    and_(
-                        User.id == consequence_data.applied_to_user,
-                        User.family_id == family_id,
-                    )
-                )
-            )
-        ).scalar_one_or_none()
-        if not user:
-            raise NotFoundException("User not found or does not belong to this family")
+        await verify_user_in_family(db, consequence_data.applied_to_user, family_id)
 
         # Create consequence
         consequence = Consequence(

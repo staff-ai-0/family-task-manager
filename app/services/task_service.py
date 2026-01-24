@@ -19,7 +19,11 @@ from app.core.exceptions import (
     ForbiddenException,
     ValidationException,
 )
-from app.services.base_service import BaseFamilyService
+from app.services.base_service import (
+    BaseFamilyService,
+    verify_user_in_family,
+    get_user_by_id,
+)
 
 
 class TaskService(BaseFamilyService[Task]):
@@ -36,12 +40,7 @@ class TaskService(BaseFamilyService[Task]):
     ) -> Task:
         """Create a new task"""
         # Verify user exists and belongs to family
-        user_query = select(User).where(
-            and_(User.id == task_data.assigned_to, User.family_id == family_id)
-        )
-        user = (await db.execute(user_query)).scalar_one_or_none()
-        if not user:
-            raise NotFoundException("User not found or does not belong to this family")
+        await verify_user_in_family(db, task_data.assigned_to, family_id)
 
         # Create task
         task = Task(
@@ -121,7 +120,7 @@ class TaskService(BaseFamilyService[Task]):
             raise ForbiddenException("Only the assigned user can complete this task")
 
         # Get user for point balance
-        user = (await db.execute(select(User).where(User.id == user_id))).scalar_one()
+        user = await get_user_by_id(db, user_id)
 
         # Mark task as completed
         task.status = TaskStatus.COMPLETED

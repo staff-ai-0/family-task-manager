@@ -18,7 +18,7 @@ from app.core.exceptions import (
     ForbiddenException,
     ValidationException,
 )
-from app.services.base_service import BaseFamilyService
+from app.services.base_service import BaseFamilyService, verify_user_in_family
 
 
 class RewardService(BaseFamilyService[Reward]):
@@ -100,15 +100,7 @@ class RewardService(BaseFamilyService[Reward]):
             raise ValidationException("This reward is currently not available")
 
         # Get user
-        user = (
-            await db.execute(
-                select(User).where(
-                    and_(User.id == user_id, User.family_id == family_id)
-                )
-            )
-        ).scalar_one_or_none()
-        if not user:
-            raise NotFoundException("User not found")
+        user = await verify_user_in_family(db, user_id, family_id)
 
         # Check if user has enough points
         if user.points < reward.points_cost:

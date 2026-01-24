@@ -13,6 +13,12 @@ from datetime import datetime
 
 from app.core.exceptions import NotFoundException
 
+# Import User model for helper methods
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models import User
+
 # Generic type for SQLAlchemy models
 ModelType = TypeVar("ModelType")
 
@@ -196,3 +202,59 @@ class BaseFamilyService(Generic[ModelType]):
         )
         result = await db.execute(query)
         return result.scalar_one()
+
+
+# Query Helper Functions (can be used by any service)
+
+
+async def verify_user_in_family(
+    db: AsyncSession, user_id: UUID, family_id: UUID
+) -> "User":
+    """
+    Verify that a user exists and belongs to the specified family.
+
+    Args:
+        db: Database session
+        user_id: ID of the user to verify
+        family_id: Family ID to verify membership
+
+    Returns:
+        User instance
+
+    Raises:
+        NotFoundException: If user not found or doesn't belong to family
+    """
+    from app.models import User
+
+    query = select(User).where(and_(User.id == user_id, User.family_id == family_id))
+    user = (await db.execute(query)).scalar_one_or_none()
+
+    if not user:
+        raise NotFoundException("User not found or does not belong to this family")
+
+    return user
+
+
+async def get_user_by_id(db: AsyncSession, user_id: UUID) -> "User":
+    """
+    Get a user by ID.
+
+    Args:
+        db: Database session
+        user_id: ID of the user to retrieve
+
+    Returns:
+        User instance
+
+    Raises:
+        NotFoundException: If user not found
+    """
+    from app.models import User
+
+    query = select(User).where(User.id == user_id)
+    user = (await db.execute(query)).scalar_one_or_none()
+
+    if not user:
+        raise NotFoundException("User not found")
+
+    return user
