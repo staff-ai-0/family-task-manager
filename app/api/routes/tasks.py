@@ -4,7 +4,7 @@ Task management routes
 Handles task CRUD operations, completion, and overdue management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from uuid import UUID
@@ -21,11 +21,6 @@ from app.schemas.task import (
 )
 from app.models import User
 from app.models.task import TaskStatus
-from app.core.exceptions import (
-    NotFoundException,
-    ValidationException,
-    ForbiddenException,
-)
 
 router = APIRouter()
 
@@ -56,16 +51,13 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new task (parent only)"""
-    try:
-        task = await TaskService.create_task(
-            db,
-            task_data,
-            family_id=to_uuid_required(current_user.family_id),
-            created_by=to_uuid_required(current_user.id),
-        )
-        return task
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    task = await TaskService.create_task(
+        db,
+        task_data,
+        family_id=to_uuid_required(current_user.family_id),
+        created_by=to_uuid_required(current_user.id),
+    )
+    return task
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
@@ -75,13 +67,10 @@ async def get_task(
     db: AsyncSession = Depends(get_db),
 ):
     """Get task by ID"""
-    try:
-        task = await TaskService.get_task(
-            db, task_id, to_uuid_required(current_user.family_id)
-        )
-        return task
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    task = await TaskService.get_task(
+        db, task_id, to_uuid_required(current_user.family_id)
+    )
+    return task
 
 
 @router.patch("/{task_id}/complete", response_model=TaskResponse)
@@ -91,20 +80,13 @@ async def complete_task(
     db: AsyncSession = Depends(get_db),
 ):
     """Mark task as completed"""
-    try:
-        task = await TaskService.complete_task(
-            db,
-            task_id,
-            family_id=to_uuid_required(current_user.family_id),
-            user_id=to_uuid_required(current_user.id),
-        )
-        return task
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except ForbiddenException as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    task = await TaskService.complete_task(
+        db,
+        task_id,
+        family_id=to_uuid_required(current_user.family_id),
+        user_id=to_uuid_required(current_user.id),
+    )
+    return task
 
 
 @router.put("/{task_id}", response_model=TaskResponse)
@@ -115,13 +97,10 @@ async def update_task(
     db: AsyncSession = Depends(get_db),
 ):
     """Update task"""
-    try:
-        task = await TaskService.update_task(
-            db, task_id, task_data, to_uuid_required(current_user.family_id)
-        )
-        return task
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    task = await TaskService.update_task(
+        db, task_id, task_data, to_uuid_required(current_user.family_id)
+    )
+    return task
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -131,13 +110,8 @@ async def delete_task(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete task"""
-    try:
-        await TaskService.delete_task(
-            db, task_id, to_uuid_required(current_user.family_id)
-        )
-        return None
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    await TaskService.delete_task(db, task_id, to_uuid_required(current_user.family_id))
+    return None
 
 
 @router.post("/check-overdue", response_model=List[TaskResponse])

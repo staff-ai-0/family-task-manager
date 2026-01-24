@@ -22,7 +22,6 @@ from app.schemas.family import (
 )
 from app.schemas.user import UserResponse
 from app.models import User
-from app.core.exceptions import NotFoundException
 
 router = APIRouter()
 
@@ -33,18 +32,15 @@ async def get_my_family(
     db: AsyncSession = Depends(get_db),
 ):
     """Get current user's family with members"""
-    try:
-        family = await FamilyService.get_family(
-            db, to_uuid_required(current_user.family_id)
-        )
-        members = await FamilyService.get_family_members(
-            db, to_uuid_required(current_user.family_id)
-        )
-        return FamilyWithMembers(
-            **family.__dict__, members=[UserResponse.model_validate(m) for m in members]
-        )
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    family = await FamilyService.get_family(
+        db, to_uuid_required(current_user.family_id)
+    )
+    members = await FamilyService.get_family_members(
+        db, to_uuid_required(current_user.family_id)
+    )
+    return FamilyWithMembers(
+        **family.__dict__, members=[UserResponse.model_validate(m) for m in members]
+    )
 
 
 @router.post("/", response_model=FamilyResponse, status_code=status.HTTP_201_CREATED)
@@ -72,11 +68,8 @@ async def get_family(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only access your own family",
         )
-    try:
-        family = await FamilyService.get_family(db, family_id)
-        return family
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    family = await FamilyService.get_family(db, family_id)
+    return family
 
 
 @router.put("/{family_id}", response_model=FamilyResponse)
@@ -92,11 +85,8 @@ async def update_family(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only update your own family",
         )
-    try:
-        family = await FamilyService.update_family(db, family_id, family_data)
-        return family
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    family = await FamilyService.update_family(db, family_id, family_data)
+    return family
 
 
 @router.get("/{family_id}/members", response_model=List[UserResponse])

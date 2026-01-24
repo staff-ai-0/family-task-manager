@@ -4,7 +4,7 @@ Consequence management routes
 Handles consequence CRUD operations and resolution.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from uuid import UUID
@@ -19,10 +19,6 @@ from app.schemas.consequence import (
     ConsequenceResponse,
 )
 from app.models import User
-from app.core.exceptions import (
-    NotFoundException,
-    ValidationException,
-)
 
 router = APIRouter()
 
@@ -65,13 +61,10 @@ async def create_consequence(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new consequence (parent only)"""
-    try:
-        consequence = await ConsequenceService.create_consequence(
-            db, consequence_data, family_id=to_uuid_required(current_user.family_id)
-        )
-        return consequence
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    consequence = await ConsequenceService.create_consequence(
+        db, consequence_data, family_id=to_uuid_required(current_user.family_id)
+    )
+    return consequence
 
 
 @router.post("/{consequence_id}/resolve", response_model=ConsequenceResponse)
@@ -81,15 +74,10 @@ async def resolve_consequence(
     db: AsyncSession = Depends(get_db),
 ):
     """Resolve a consequence (parent only)"""
-    try:
-        consequence = await ConsequenceService.resolve_consequence(
-            db, consequence_id, to_uuid_required(current_user.family_id)
-        )
-        return consequence
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    consequence = await ConsequenceService.resolve_consequence(
+        db, consequence_id, to_uuid_required(current_user.family_id)
+    )
+    return consequence
 
 
 @router.put("/{consequence_id}", response_model=ConsequenceResponse)
@@ -100,18 +88,13 @@ async def update_consequence(
     db: AsyncSession = Depends(get_db),
 ):
     """Update consequence"""
-    try:
-        consequence = await ConsequenceService.update_consequence(
-            db,
-            consequence_id,
-            consequence_data,
-            to_uuid_required(current_user.family_id),
-        )
-        return consequence
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    consequence = await ConsequenceService.update_consequence(
+        db,
+        consequence_id,
+        consequence_data,
+        to_uuid_required(current_user.family_id),
+    )
+    return consequence
 
 
 @router.delete("/{consequence_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -121,13 +104,10 @@ async def delete_consequence(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete consequence"""
-    try:
-        await ConsequenceService.delete_consequence(
-            db, consequence_id, to_uuid_required(current_user.family_id)
-        )
-        return None
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    await ConsequenceService.delete_consequence(
+        db, consequence_id, to_uuid_required(current_user.family_id)
+    )
+    return None
 
 
 @router.post("/check-expired", response_model=List[ConsequenceResponse])
