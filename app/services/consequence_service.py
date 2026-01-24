@@ -3,6 +3,7 @@ Consequence Service
 
 Business logic for consequence management and enforcement.
 """
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from typing import List, Optional
@@ -16,10 +17,13 @@ from app.core.exceptions import (
     NotFoundException,
     ValidationException,
 )
+from app.services.base_service import BaseFamilyService
 
 
-class ConsequenceService:
+class ConsequenceService(BaseFamilyService[Consequence]):
     """Service for consequence-related operations"""
+
+    model = Consequence
 
     @staticmethod
     async def create_consequence(
@@ -29,12 +33,19 @@ class ConsequenceService:
     ) -> Consequence:
         """Create a new consequence"""
         # Verify user exists and belongs to family
-        user = (await db.execute(
-            select(User).where(and_(User.id == consequence_data.applied_to_user, User.family_id == family_id))
-        )).scalar_one_or_none()
+        user = (
+            await db.execute(
+                select(User).where(
+                    and_(
+                        User.id == consequence_data.applied_to_user,
+                        User.family_id == family_id,
+                    )
+                )
+            )
+        ).scalar_one_or_none()
         if not user:
             raise NotFoundException("User not found or does not belong to this family")
-        
+
         # Create consequence
         consequence = Consequence(
             title=consequence_data.title,
@@ -47,7 +58,7 @@ class ConsequenceService:
             family_id=family_id,
         )
         consequence.apply_consequence()
-        
+
         db.add(consequence)
         await db.commit()
         await db.refresh(consequence)
@@ -58,13 +69,7 @@ class ConsequenceService:
         db: AsyncSession, consequence_id: UUID, family_id: UUID
     ) -> Consequence:
         """Get a consequence by ID"""
-        query = select(Consequence).where(
-            and_(Consequence.id == consequence_id, Consequence.family_id == family_id)
-        )
-        consequence = (await db.execute(query)).scalar_one_or_none()
-        if not consequence:
-            raise NotFoundException("Consequence not found")
-        return consequence
+        return await ConsequenceService.get_by_id(db, consequence_id, family_id)
 
     @staticmethod
     async def list_consequences(
@@ -75,12 +80,12 @@ class ConsequenceService:
     ) -> List[Consequence]:
         """List consequences with optional filters"""
         query = select(Consequence).where(Consequence.family_id == family_id)
-        
+
         if user_id:
             query = query.where(Consequence.applied_to_user == user_id)
         if active_only:
             query = query.where(Consequence.active == True)
-        
+
         query = query.order_by(Consequence.created_at.desc())
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -108,21 +113,19 @@ class ConsequenceService:
         family_id: UUID,
     ) -> Consequence:
         """Update consequence details"""
-        consequence = await ConsequenceService.get_consequence(db, consequence_id, family_id)
-        
+        consequence = await ConsequenceService.get_consequence(
+            db, consequence_id, family_id
+        )
+
         # Don't allow updates to resolved consequences
         if consequence.resolved:
             raise ValidationException("Cannot update a resolved consequence")
-        
-        # Update fields if provided
+
+        # Update fields
         update_fields = consequence_data.model_dump(exclude_unset=True)
-        for field, value in update_fields.items():
-            setattr(consequence, field, value)
-        
-        consequence.updated_at = datetime.utcnow()
-        await db.commit()
-        await db.refresh(consequence)
-        return consequence
+        return await ConsequenceService.update_by_id(
+            db, consequence_id, family_id, update_fields
+        )
 
     @staticmethod
     async def resolve_consequence(
@@ -131,21 +134,25 @@ class ConsequenceService:
         family_id: UUID,
     ) -> Consequence:
         """Mark consequence as resolved"""
-        consequence = await ConsequenceService.get_consequence(db, consequence_id, family_id)
-        
+        consequence = await ConsequenceService.get_consequence(
+            db, consequence_id, family_id
+        )
+
         if consequence.resolved:
             raise ValidationException("Consequence is already resolved")
-        
+
         consequence.resolve_consequence()
         await db.commit()
         await db.refresh(consequence)
         return consequence
 
     @staticmethod
-    async def check_expired_consequences(db: AsyncSession, family_id: UUID) -> List[Consequence]:
+    async def check_expired_consequences(
+        db: AsyncSession, family_id: UUID
+    ) -> List[Consequence]:
         """Check for expired consequences and auto-resolve them"""
         now = datetime.utcnow()
-        
+
         query = select(Consequence).where(
             and_(
                 Consequence.family_id == family_id,
@@ -154,15 +161,15 @@ class ConsequenceService:
                 Consequence.end_date < now,
             )
         )
-        
+
         consequences = (await db.execute(query)).scalars().all()
-        
+
         for consequence in consequences:
             consequence.resolve_consequence()
-        
+
         if consequences:
             await db.commit()
-        
+
         return list(consequences)
 
     @staticmethod
@@ -188,6 +195,4 @@ class ConsequenceService:
         db: AsyncSession, consequence_id: UUID, family_id: UUID
     ) -> None:
         """Delete a consequence"""
-        consequence = await ConsequenceService.get_consequence(db, consequence_id, family_id)
-        await db.delete(consequence)
-        await db.commit()
+        await ConsequenceService.delete_by_id(db, consequence_id, family_id)

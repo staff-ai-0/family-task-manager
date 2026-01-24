@@ -3,6 +3,7 @@ Reward Service
 
 Business logic for reward management and redemption.
 """
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from typing import List, Optional
@@ -17,10 +18,13 @@ from app.core.exceptions import (
     ForbiddenException,
     ValidationException,
 )
+from app.services.base_service import BaseFamilyService
 
 
-class RewardService:
+class RewardService(BaseFamilyService[Reward]):
     """Service for reward-related operations"""
+
+    model = Reward
 
     @staticmethod
     async def create_reward(
@@ -39,7 +43,7 @@ class RewardService:
             family_id=family_id,
             is_active=True,
         )
-        
+
         db.add(reward)
         await db.commit()
         await db.refresh(reward)
@@ -48,13 +52,7 @@ class RewardService:
     @staticmethod
     async def get_reward(db: AsyncSession, reward_id: UUID, family_id: UUID) -> Reward:
         """Get a reward by ID"""
-        query = select(Reward).where(
-            and_(Reward.id == reward_id, Reward.family_id == family_id)
-        )
-        reward = (await db.execute(query)).scalar_one_or_none()
-        if not reward:
-            raise NotFoundException("Reward not found")
-        return reward
+        return await RewardService.get_by_id(db, reward_id, family_id)
 
     @staticmethod
     async def list_rewards(
@@ -65,12 +63,12 @@ class RewardService:
     ) -> List[Reward]:
         """List rewards with optional filters"""
         query = select(Reward).where(Reward.family_id == family_id)
-        
+
         if category:
             query = query.where(Reward.category == category)
         if is_active is not None:
             query = query.where(Reward.is_active == is_active)
-        
+
         query = query.order_by(Reward.points_cost.asc(), Reward.title.asc())
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -83,17 +81,8 @@ class RewardService:
         family_id: UUID,
     ) -> Reward:
         """Update reward details"""
-        reward = await RewardService.get_reward(db, reward_id, family_id)
-        
-        # Update fields if provided
         update_fields = reward_data.model_dump(exclude_unset=True)
-        for field, value in update_fields.items():
-            setattr(reward, field, value)
-        
-        reward.updated_at = datetime.utcnow()
-        await db.commit()
-        await db.refresh(reward)
-        return reward
+        return await RewardService.update_by_id(db, reward_id, family_id, update_fields)
 
     @staticmethod
     async def redeem_reward(
@@ -105,40 +94,46 @@ class RewardService:
         """Redeem a reward with user's points"""
         # Get reward
         reward = await RewardService.get_reward(db, reward_id, family_id)
-        
+
         # Check if reward is redeemable
         if not reward.is_redeemable:
             raise ValidationException("This reward is currently not available")
-        
+
         # Get user
-        user = (await db.execute(
-            select(User).where(and_(User.id == user_id, User.family_id == family_id))
-        )).scalar_one_or_none()
+        user = (
+            await db.execute(
+                select(User).where(
+                    and_(User.id == user_id, User.family_id == family_id)
+                )
+            )
+        ).scalar_one_or_none()
         if not user:
             raise NotFoundException("User not found")
-        
+
         # Check if user has enough points
         if user.points < reward.points_cost:
             raise ValidationException(
                 f"Insufficient points. Need {reward.points_cost}, have {user.points}"
             )
-        
+
         # Check for active consequences that block reward redemption
-        active_restrictions = (await db.execute(
-            select(Consequence).where(
-                and_(
-                    Consequence.applied_to_user == user_id,
-                    Consequence.active == True,
-                    Consequence.restriction_type.in_(['rewards', 'REWARDS']),
+        active_restrictions = (
+            await db.execute(
+                select(Consequence).where(
+                    and_(
+                        Consequence.applied_to_user == user_id,
+                        Consequence.active == True,
+                        Consequence.restriction_type.in_(["rewards", "REWARDS"]),
+                    )
                 )
             )
-        )).scalar_one_or_none()
-        
+        ).scalar_one_or_none()
+
         if active_restrictions:
             raise ForbiddenException(
                 "You have an active consequence that prevents reward redemption"
             )
-        
+
         # Create transaction and deduct points
         transaction = PointTransaction.create_reward_redemption(
             user_id=user_id,
@@ -147,29 +142,31 @@ class RewardService:
             balance_before=user.points,
         )
         user.points -= reward.points_cost
-        
+
         db.add(transaction)
         await db.commit()
         await db.refresh(transaction)
-        
+
         return transaction
 
     @staticmethod
     async def delete_reward(db: AsyncSession, reward_id: UUID, family_id: UUID) -> None:
         """Delete a reward"""
-        reward = await RewardService.get_reward(db, reward_id, family_id)
-        await db.delete(reward)
-        await db.commit()
+        await RewardService.delete_by_id(db, reward_id, family_id)
 
     @staticmethod
     async def get_user_redemption_count(
         db: AsyncSession, user_id: UUID, reward_id: UUID
     ) -> int:
         """Get number of times user has redeemed a specific reward"""
-        query = select(func.count()).select_from(PointTransaction).where(
-            and_(
-                PointTransaction.user_id == user_id,
-                PointTransaction.reward_id == reward_id,
+        query = (
+            select(func.count())
+            .select_from(PointTransaction)
+            .where(
+                and_(
+                    PointTransaction.user_id == user_id,
+                    PointTransaction.reward_id == reward_id,
+                )
             )
         )
         result = await db.execute(query)
