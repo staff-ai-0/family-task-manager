@@ -4,7 +4,7 @@ Authentication routes
 Handles user registration, login, token management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -19,11 +19,6 @@ from app.schemas.user import (
     UserPasswordUpdate,
 )
 from app.models import User
-from app.core.exceptions import (
-    ValidationException,
-    UnauthorizedException,
-    NotFoundException,
-)
 
 router = APIRouter()
 
@@ -36,13 +31,8 @@ async def register(
     db: AsyncSession = Depends(get_db),
 ):
     """Register a new user"""
-    try:
-        user = await AuthService.register_user(db, user_data)
-        return user
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    user = await AuthService.register_user(db, user_data)
+    return user
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -51,15 +41,12 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     """Login and get access token"""
-    try:
-        user, access_token = await AuthService.authenticate_user(db, login_data)
-        return TokenResponse(
-            access_token=access_token,
-            token_type="bearer",
-            user=UserResponse.model_validate(user),
-        )
-    except UnauthorizedException as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    user, access_token = await AuthService.authenticate_user(db, login_data)
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserResponse.model_validate(user),
+    )
 
 
 @router.post("/logout")
@@ -83,15 +70,10 @@ async def update_password(
     db: AsyncSession = Depends(get_db),
 ):
     """Update user password"""
-    try:
-        user = await AuthService.update_password(
-            db,
-            to_uuid_required(current_user.id),
-            password_data.current_password,
-            password_data.new_password,
-        )
-        return user
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except NotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    user = await AuthService.update_password(
+        db,
+        to_uuid_required(current_user.id),
+        password_data.current_password,
+        password_data.new_password,
+    )
+    return user
