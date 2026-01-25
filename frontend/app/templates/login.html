@@ -2,8 +2,23 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
     <title>Iniciar Sesión - Family Task Manager</title>
+    
+    <!-- iOS Web App Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Family Tasks">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#4F46E5" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1F2937" media="(prefers-color-scheme: dark)">
+    
+    <!-- iOS Touch Icons -->
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon-180x180.png">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
     
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -13,6 +28,33 @@
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <!-- iOS Safe Area & Mobile Enhancements -->
+    <style>
+        :root {
+            --sat: env(safe-area-inset-top);
+            --sar: env(safe-area-inset-right);
+            --sab: env(safe-area-inset-bottom);
+            --sal: env(safe-area-inset-left);
+        }
+        html { -webkit-text-size-adjust: 100%; }
+        body { overscroll-behavior-y: contain; }
+        .touch-target { min-height: 44px; min-width: 44px; }
+        @supports (-webkit-touch-callout: none) {
+            input, select, textarea { font-size: 16px !important; }
+        }
+        .pt-safe { padding-top: env(safe-area-inset-top); }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .pl-safe { padding-left: env(safe-area-inset-left); }
+        .pr-safe { padding-right: env(safe-area-inset-right); }
+        button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
+        @media (hover: none) and (pointer: coarse) {
+            button:active, a:active, [role="button"]:active {
+                opacity: 0.7;
+                transform: scale(0.98);
+            }
+        }
+    </style>
     
     <!-- Dark mode initialization -->
     <script>
@@ -24,7 +66,7 @@
     </script>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900">
-    <div class="flex min-h-screen items-center justify-center px-4 py-12">
+    <div class="flex min-h-screen items-center justify-center px-4 py-12 pt-safe pb-safe pl-safe pr-safe">
         <div class="w-full max-w-md">
             <!-- Logo/Header -->
             <div class="mb-8 text-center">
@@ -66,8 +108,8 @@
                                 <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                                     <i class="fas fa-envelope text-gray-400"></i>
                                 </div>
-                                <input type="email" name="email" id="email" required
-                                       class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 pl-10 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:ring-blue-500"
+                                <input type="email" name="email" id="email" required autocomplete="email" inputmode="email"
+                                       class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-3 pl-10 text-base text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:ring-blue-500"
                                        placeholder="tu@email.com" data-i18n-placeholder="login.email_placeholder">
                             </div>
                         </div>
@@ -81,29 +123,29 @@
                                 <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                                     <i class="fas fa-lock text-gray-400"></i>
                                 </div>
-                                <input type="password" name="password" id="password" required minlength="8"
-                                       class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 pl-10 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:ring-blue-500"
+                                <input type="password" name="password" id="password" required minlength="8" autocomplete="current-password"
+                                       class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-3 pl-10 text-base text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:ring-blue-500"
                                        placeholder="••••••••" data-i18n-placeholder="login.password_placeholder">
                             </div>
                         </div>
 
                         <!-- Remember me & Forgot password -->
                         <div class="flex items-center justify-between">
-                            <div class="flex items-center">
+                            <div class="flex items-center min-h-[44px]">
                                 <input id="remember" name="remember" type="checkbox" value="true"
-                                       class="h-4 w-4 rounded border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-800 dark:focus:ring-blue-600">
+                                       class="h-5 w-5 rounded border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:ring-offset-gray-800 dark:focus:ring-blue-600">
                                 <label for="remember" class="ml-2 text-sm text-gray-600 dark:text-gray-400" data-i18n="login.remember">
                                     Recordarme
                                 </label>
                             </div>
-                            <a href="/auth/forgot-password" class="text-sm text-blue-600 hover:underline dark:text-blue-500" data-i18n="login.forgot_password">
+                            <a href="/auth/forgot-password" class="text-sm text-blue-600 hover:underline dark:text-blue-500 min-h-[44px] flex items-center touch-target" data-i18n="login.forgot_password">
                                 ¿Olvidaste tu contraseña?
                             </a>
                         </div>
 
                         <!-- Submit Button -->
                         <button type="submit"
-                                class="w-full rounded-lg bg-blue-700 px-5 py-2.5 text-center text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
+                                class="w-full rounded-lg bg-blue-700 px-5 py-3 text-center text-base font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 min-h-[48px] touch-target">
                             <i class="fas fa-sign-in-alt mr-2"></i>
                             <span data-i18n="login.submit">Iniciar Sesión</span>
                         </button>
@@ -121,7 +163,7 @@
 
                     <!-- Google OAuth Button -->
                     <a href="/auth/google/login"
-                       class="flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-center text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:focus:ring-gray-700">
+                       class="flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-3 text-center text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:focus:ring-gray-700 min-h-[48px] touch-target">
                         <svg class="mr-2 h-5 w-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -144,9 +186,9 @@
             <!-- Dark Mode Toggle -->
             <div class="mt-6 flex justify-center">
                 <button id="theme-toggle" type="button"
-                        class="rounded-lg p-2.5 text-sm text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-700">
-                    <i id="theme-toggle-dark-icon" class="fas fa-moon hidden"></i>
-                    <i id="theme-toggle-light-icon" class="fas fa-sun hidden"></i>
+                        class="rounded-lg p-3 text-sm text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-700 min-w-[44px] min-h-[44px] touch-target">
+                    <i id="theme-toggle-dark-icon" class="fas fa-moon hidden text-lg"></i>
+                    <i id="theme-toggle-light-icon" class="fas fa-sun hidden text-lg"></i>
                 </button>
             </div>
         </div>
