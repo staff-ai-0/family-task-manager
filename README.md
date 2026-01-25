@@ -18,8 +18,8 @@ Inspired by **OurHome**, this application helps families organize daily tasks th
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/family-app.git
-cd family-app
+git clone https://github.com/yourusername/family-task-manager.git
+cd family-task-manager
 
 # 2. Copy environment file
 cp .env.example .env
@@ -28,17 +28,19 @@ cp .env.example .env
 # Generate a secure key with: openssl rand -hex 32
 
 # 4. Build and start services
-docker-compose up --build
+docker-compose up -d
 
 # 5. Access the application
-# API: http://localhost:8000
-# Docs: http://localhost:8000/docs
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8000
+# API Docs: http://localhost:8000/docs
 ```
 
 ### Local Development Setup
 
 ```bash
-# 1. Create virtual environment
+# 1. Create virtual environment (in backend/)
+cd backend
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
@@ -46,57 +48,64 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # 3. Setup environment variables
-cp .env.example .env
+cp ../.env.example ../.env
 # Edit .env with your configuration
 
 # 4. Start PostgreSQL with Docker
-docker-compose up -d db
+cd ..
+docker-compose up -d db test_db
 
 # 5. Run migrations
+cd backend
 alembic upgrade head
 
-# 6. Start development server
-uvicorn app.main:app --reload
+# 6. Seed demo data (optional)
+python seed_data.py
+
+# 7. Start development server
+uvicorn app.main:app --reload --port 8000
 ```
 
 ---
 
 ## 📖 Documentation
 
-All documentation is in the `.github/` directory:
-
-- **`.github/README.md`** - Documentation index
-- **`.github/GUIA_RAPIDA.md`** - Quick start guide (Spanish)
+- **[AGENTS.md](./AGENTS.md)** - AI Development Guide (OpenCode)
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Multi-tenant architecture & patterns
+- **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** - Deployment procedures
 - **`.github/copilot-instructions.md`** - Complete project guide
-- **`.github/memory-bank/projectbrief.md`** - Business requirements
-- **`.github/memory-bank/techContext.md`** - Technical architecture
+- **`.github/instructions/`** - Development patterns & standards
+- **`.github/memory-bank/`** - Project context & active development
 
 ---
 
 ## 🏗️ Project Structure
 
 ```
-family-app/
-├── app/
-│   ├── main.py                 # FastAPI application entry point
-│   ├── api/
-│   │   └── routes/             # API endpoints
-│   ├── core/
-│   │   ├── config.py           # Settings and configuration
-│   │   ├── database.py         # Database connection
-│   │   ├── security.py         # Authentication utilities
-│   │   └── dependencies.py     # Shared dependencies
-│   ├── models/                 # SQLAlchemy models
-│   ├── schemas/                # Pydantic schemas
-│   ├── services/               # Business logic
-│   ├── templates/              # Jinja2 HTML templates
-│   └── static/                 # CSS, JS, images
-├── tests/                      # Test suite
-├── migrations/                 # Alembic migrations
-├── docker-compose.yml          # Docker services
-├── Dockerfile                  # Application container
-├── requirements.txt            # Python dependencies
-└── .github/                    # 📚 Documentation
+family-task-manager/
+├── backend/                    # Backend API service
+│   ├── app/
+│   │   ├── main.py            # FastAPI application entry point
+│   │   ├── api/               # API endpoints
+│   │   ├── core/              # Configuration, database, security
+│   │   ├── models/            # SQLAlchemy models
+│   │   ├── schemas/           # Pydantic schemas
+│   │   └── services/          # Business logic layer
+│   ├── tests/                 # Comprehensive test suite (118 tests)
+│   ├── migrations/            # Alembic database migrations
+│   ├── seed_data.py           # Demo data seeder
+│   └── requirements.txt       # Python dependencies
+├── frontend/                  # Frontend web service
+│   ├── app/
+│   │   ├── main.py            # Frontend server
+│   │   ├── templates/         # Jinja2 HTML templates
+│   │   └── static/            # CSS, JS, images (Flowbite)
+│   └── requirements.txt       # Frontend dependencies
+├── docker-compose.yml         # Multi-service orchestration
+├── .github/                   # Documentation & instructions
+│   ├── instructions/          # Development patterns
+│   └── memory-bank/           # Project context
+└── README.md                  # This file
 ```
 
 ---
@@ -127,70 +136,97 @@ family-app/
 
 ## 🛠️ Tech Stack
 
-**Backend**:
-- FastAPI (Python 3.12+)
-- PostgreSQL
-- SQLAlchemy (async)
+**Backend** (FastAPI):
+- Python 3.12+
+- FastAPI (async web framework)
+- PostgreSQL (production DB - port 5433)
+- PostgreSQL (test DB - port 5435)
+- SQLAlchemy 2.0 (async ORM)
 - Alembic (migrations)
-- JWT + Bcrypt (auth)
+- Redis (sessions - port 6380)
+- JWT + Bcrypt (authentication)
 
-**Frontend**:
+**Frontend** (Jinja2):
 - Jinja2 (server-side rendering)
 - Flowbite (Tailwind CSS components)
 - HTMX (dynamic updates)
 - Alpine.js (interactivity)
 
-**Deployment**:
-- Docker & Docker Compose
-- Render (production)
+**Architecture**:
+- Multi-tenant (family-based isolation)
+- Clean Architecture (API → Service → Repository → Models)
+- Domain-Driven Design patterns
+- CQRS for complex operations
+- Docker Compose orchestration
 
 ---
 
 ## 🐳 Docker Commands
 
 ```bash
-# Start all services
-docker-compose up
+# Start all services (backend, frontend, databases, redis)
+docker-compose up -d
 
 # Build and start
-docker-compose up --build
+docker-compose up -d --build
 
-# Start in background
-docker-compose up -d
+# View logs
+docker-compose logs -f backend
+docker-compose logs -f frontend
 
 # Stop services
 docker-compose down
 
-# View logs
-docker-compose logs -f web
+# Run tests
+docker exec -e PYTHONPATH=/app family_app_backend pytest tests/ -v
 
 # Run migrations
-docker-compose exec web alembic upgrade head
+docker exec family_app_backend alembic upgrade head
 
-# Create migration
-docker-compose exec web alembic revision --autogenerate -m "description"
+# Create new migration
+docker exec family_app_backend alembic revision --autogenerate -m "description"
 
-# Access database
-docker-compose exec db psql -U familyapp -d familyapp
+# Seed demo data
+docker exec family_app_backend python /app/seed_data.py
+
+# Access production database
+docker exec -it family_app_db psql -U familyapp -d familyapp
+
+# Access test database
+docker exec -it family_app_test_db psql -U familyapp_test -d familyapp_test
+
+# Check service status
+docker-compose ps
 ```
 
 ---
 
 ## 🧪 Testing
 
-```bash
-# Run all tests
-pytest
+The project has **118 comprehensive tests** with 70%+ coverage.
 
-# Run with coverage
-pytest --cov=app --cov-report=html
+```bash
+# Run all tests (in Docker)
+docker exec -e PYTHONPATH=/app family_app_backend pytest tests/ -v
+
+# Run with coverage report
+docker exec -e PYTHONPATH=/app family_app_backend pytest tests/ --cov=app --cov-report=html
 
 # Run specific test file
-pytest tests/test_tasks.py
+docker exec -e PYTHONPATH=/app family_app_backend pytest tests/api/test_tasks.py -v
 
-# Verbose output
-pytest -v
+# Run tests locally (from backend/)
+cd backend
+pytest tests/ -v
+pytest tests/ --cov=app --cov-report=html
 ```
+
+**Test Structure**:
+- `tests/api/` - API endpoint tests
+- `tests/services/` - Business logic tests
+- `tests/models/` - Database model tests
+- Multi-tenant isolation tests
+- Role-based access control tests
 
 ---
 
@@ -198,8 +234,21 @@ pytest -v
 
 Once the application is running, access:
 
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
+
+### Demo Users
+
+After seeding demo data, you can login with:
+
+```
+mom@demo.com / password123 (PARENT, 500 points)
+dad@demo.com / password123 (PARENT, 300 points)
+emma@demo.com / password123 (CHILD, 150 points)
+lucas@demo.com / password123 (TEEN, 280 points)
+```
 
 ### Key Endpoints
 
@@ -252,38 +301,38 @@ DATABASE_URL=postgresql://user:pass@db:5432/familyapp
 
 ---
 
-## 🚀 Deployment to Render
+## 🚀 Deployment
 
-1. **Create account** on [Render](https://render.com)
+See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for detailed deployment instructions.
 
-2. **Create PostgreSQL database**:
-   - New → PostgreSQL
-   - Copy DATABASE_URL
+### Quick Deploy with Render
 
-3. **Create Web Service**:
-   - New → Web Service
-   - Connect GitHub repository
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+The application is configured for easy deployment on Render with the included `docker-compose.yml`.
 
-4. **Set Environment Variables**:
-   - `DATABASE_URL` - From PostgreSQL instance
-   - `SECRET_KEY` - Generated secure key
-   - `DEBUG` - `False`
-   - `ALLOWED_ORIGINS` - Your domain
-
-5. **Run Migrations**:
-   - In Render shell: `alembic upgrade head`
+**Service URLs**:
+- Frontend (Port 3000)
+- Backend API (Port 8000)
+- PostgreSQL Production DB (Port 5433)
+- PostgreSQL Test DB (Port 5435)
+- Redis (Port 6380)
 
 ---
 
 ## 🤝 Contributing
 
-1. Read `.github/copilot-instructions.md`
-2. Check `.github/prompts/` for templates
-3. Follow code quality rules in `.github/instructions/`
-4. Write tests for new features
-5. Update documentation
+1. Read **[AGENTS.md](./AGENTS.md)** for AI development guide
+2. Read **[ARCHITECTURE.md](./ARCHITECTURE.md)** for architecture patterns
+3. Check `.github/instructions/` for coding standards
+4. Follow multi-tenant patterns (family-based isolation)
+5. Write tests for new features (maintain 70%+ coverage)
+6. Update documentation as needed
+
+**Key Principles**:
+- All models must have `family_id` for multi-tenant isolation
+- Follow Clean Architecture (API → Service → Repository → Models)
+- Use Domain-Driven Design patterns
+- Write comprehensive tests
+- Document architectural decisions
 
 ---
 
@@ -295,9 +344,12 @@ This project is licensed under the MIT License.
 
 ## 🆘 Support
 
-- **Documentation**: `.github/README.md`
+- **Quick Start**: See [AGENTS.md](./AGENTS.md) Setup Commands
+- **Architecture**: See [ARCHITECTURE.md](./ARCHITECTURE.md)
+- **Deployment**: See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
+- **AI Instructions**: See `.github/copilot-instructions.md`
 - **Issues**: GitHub Issues
-- **Discussions**: GitHub Discussions
+- **Documentation**: `.github/memory-bank/`
 
 ---
 
@@ -310,24 +362,4 @@ This project is licensed under the MIT License.
 ---
 
 **Made with ❤️ for families everywhere**
-
----
-
-## 🏢 Enterprise Resources
-
-This repository is part of the StaffAI enterprise platform. For comprehensive documentation:
-
-- **[Enterprise Architecture](../staffai-docs/architecture/ENTERPRISE_ARCHITECTURE.md)** - System overview, service dependencies, technology stack
-- **[Infrastructure Topology](../staffai-docs/architecture/infrastructure-topology.md)** - Network diagrams, server layout, port matrix
-- **[Deployment Procedures](../staffai-docs/operations/deployment-procedures.md)** - Production deployment steps, rollback procedures
-- **[Secrets Management](../staffai-docs/security/secrets-management.md)** - Vault setup, API key rotation, credential handling
-- **[Dev Environment Setup](../staffai-docs/operations/dev-environment-setup.md)** - Onboarding guide for new developers
-
-**Service Guides**: See [services/](../staffai-docs/services/) directory for detailed service documentation
-
-**Shared Infrastructure**:
-- [PostgreSQL](../staffai-docs/shared-infrastructure/postgresql-management.md)
-- [Redis](../staffai-docs/shared-infrastructure/redis-management.md)
-- [Elasticsearch](../staffai-docs/shared-infrastructure/elasticsearch-management.md)
-- [Vault](../staffai-docs/shared-infrastructure/vault-management.md)
 

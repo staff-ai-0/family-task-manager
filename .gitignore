@@ -1,7 +1,7 @@
 # =============================================================================
-# StaffAI Standard .gitignore - family-task-manager
-# Version: 1.0
-# Last Updated: 2025-12-27
+# Family Task Manager - .gitignore
+# Version: 2.0
+# Last Updated: 2026-01-25
 # =============================================================================
 
 # =============================================================================
@@ -74,9 +74,11 @@ ENV/
 # Testing
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 *.cover
 .hypothesis/
+.ruff_cache/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -136,3 +138,12 @@ media/
 
 # Alembic migration cache
 # migrations/versions/*.pyc
+
+# Temporary/test files
+cookies.txt
+*.old.*
+
+# Test scripts (keep only in backend/)
+test_startup.py
+send_test_email.py
+send_frontend_credentials.py
