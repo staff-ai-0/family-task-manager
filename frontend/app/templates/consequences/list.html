@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block title %}Consecuencias - Family Task Manager{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:ml-64">
+    <div class="p-4 rounded-lg mt-14">
+        <!-- Page Header -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white" data-i18n="consequences.title">Consecuencias</h1>
+                <p class="text-gray-600 dark:text-gray-400 mt-1" data-i18n="consequences.subtitle">Gestiona las consecuencias de la familia</p>
+            </div>
+            {% if current_user and current_user.role == 'PARENT' %}
+            <button data-modal-target="create-consequence-modal" data-modal-toggle="create-consequence-modal" 
+                    class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800">
+                <i class="fas fa-plus mr-2"></i>
+                <span data-i18n="consequences.create">Nueva Consecuencia</span>
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- Consequences List -->
+        <div class="space-y-4">
+            {% if consequences %}
+                {% for consequence in consequences %}
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-2">
+                                <h3 class="text-xl font-semibold text-gray-900 dark:text-white">{{ consequence.name }}</h3>
+                                {% if consequence.active %}
+                                <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-red-900 dark:text-red-300" data-i18n="consequences.active">Activa</span>
+                                {% else %}
+                                <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300" data-i18n="consequences.inactive">Inactiva</span>
+                                {% endif %}
+                            </div>
+                            <p class="text-gray-600 dark:text-gray-400 mb-3">{{ consequence.description }}</p>
+                            
+                            <div class="flex items-center gap-6 text-sm">
+                                <!-- Points Deducted -->
+                                <div class="flex items-center">
+                                    <i class="fas fa-star text-yellow-400 mr-2"></i>
+                                    <span class="font-semibold text-gray-900 dark:text-white">-{{ consequence.points_cost }}</span>
+                                    <span class="text-gray-600 dark:text-gray-400 ml-1" data-i18n="consequences.points">puntos</span>
+                                </div>
+                                
+                                <!-- Assigned User -->
+                                {% if consequence.user %}
+                                <div class="flex items-center">
+                                    <i class="fas fa-user text-gray-400 mr-2"></i>
+                                    <span class="text-gray-600 dark:text-gray-400" data-i18n="consequences.assigned_to">Asignada a:</span>
+                                    <span class="font-semibold text-gray-900 dark:text-white ml-1">{{ consequence.user.name }}</span>
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Duration -->
+                                {% if consequence.duration_hours %}
+                                <div class="flex items-center">
+                                    <i class="fas fa-clock text-gray-400 mr-2"></i>
+                                    <span class="text-gray-600 dark:text-gray-400">{{ consequence.duration_hours }}</span>
+                                    <span class="text-gray-600 dark:text-gray-400 ml-1" data-i18n="consequences.hours">horas</span>
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Created date -->
+                                <div class="flex items-center">
+                                    <i class="fas fa-calendar text-gray-400 mr-2"></i>
+                                    <span class="text-gray-600 dark:text-gray-400">{{ consequence.created_at.strftime('%d/%m/%Y') }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        {% if current_user and current_user.role == 'PARENT' %}
+                        <div class="flex gap-2 ml-4">
+                            {% if consequence.active %}
+                            <form method="POST" action="/consequences/{{ consequence.id }}/deactivate">
+                                <button type="submit" class="text-green-700 hover:text-white border border-green-700 hover:bg-green-800 focus:ring-4 focus:outline-none focus:ring-green-300 font-medium rounded-lg text-sm px-4 py-2 dark:border-green-500 dark:text-green-500 dark:hover:text-white dark:hover:bg-green-500 dark:focus:ring-green-800">
+                                    <i class="fas fa-check mr-1"></i>
+                                    <span data-i18n="consequences.deactivate">Desactivar</span>
+                                </button>
+                            </form>
+                            {% else %}
+                            <form method="POST" action="/consequences/{{ consequence.id }}/activate">
+                                <button type="submit" class="text-blue-700 hover:text-white border border-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2 dark:border-blue-500 dark:text-blue-500 dark:hover:text-white dark:hover:bg-blue-500 dark:focus:ring-blue-800">
+                                    <i class="fas fa-play mr-1"></i>
+                                    <span data-i18n="consequences.activate">Activar</span>
+                                </button>
+                            </form>
+                            {% endif %}
+                            
+                            <button data-modal-target="edit-consequence-modal-{{ consequence.id }}" data-modal-toggle="edit-consequence-modal-{{ consequence.id }}"
+                                    class="text-blue-700 hover:text-white border border-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2 dark:border-blue-500 dark:text-blue-500 dark:hover:text-white dark:hover:bg-blue-500 dark:focus:ring-blue-800">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            
+                            <button data-modal-target="delete-consequence-modal-{{ consequence.id }}" data-modal-toggle="delete-consequence-modal-{{ consequence.id }}"
+                                    class="text-red-700 hover:text-white border border-red-700 hover:bg-red-800 focus:ring-4 focus:outline-none focus:ring-red-300 font-medium rounded-lg text-sm px-4 py-2 dark:border-red-500 dark:text-red-500 dark:hover:text-white dark:hover:bg-red-600 dark:focus:ring-red-900">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <!-- Empty State -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12 text-center">
+                    <i class="fas fa-exclamation-triangle text-6xl text-gray-400 dark:text-gray-600 mb-4"></i>
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2" data-i18n="consequences.no_consequences">No hay consecuencias registradas</h3>
+                    <p class="text-gray-600 dark:text-gray-400" data-i18n="consequences.no_consequences_desc">Los padres pueden crear consecuencias cuando sea necesario</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Create Consequence Modal (Parents only) -->
+{% if current_user and current_user.role == 'PARENT' %}
+<div id="create-consequence-modal" tabindex="-1" aria-hidden="true" class="hidden overflow-y-auto overflow-x-hidden fixed top-0 right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-[calc(100%-1rem)] max-h-full">
+    <div class="relative p-4 w-full max-w-md max-h-full">
+        <div class="relative bg-white rounded-lg shadow dark:bg-gray-700">
+            <div class="flex items-center justify-between p-4 md:p-5 border-b rounded-t dark:border-gray-600">
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white" data-i18n="consequences.create">Nueva Consecuencia</h3>
+                <button type="button" class="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ms-auto inline-flex justify-center items-center dark:hover:bg-gray-600 dark:hover:text-white" data-modal-hide="create-consequence-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form method="POST" action="/consequences/new" class="p-4 md:p-5">
+                <div class="mb-4">
+                    <label for="consequence_name" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" data-i18n="consequences.form.name">Nombre</label>
+                    <input type="text" name="name" id="consequence_name" required 
+                           class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white" 
+                           placeholder="Ej: Tiempo fuera" data-i18n-placeholder="consequences.form.name_placeholder">
+                </div>
+                <div class="mb-4">
+                    <label for="consequence_description" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" data-i18n="consequences.form.description">Descripción</label>
+                    <textarea name="description" id="consequence_description" rows="3" required
+                              class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white" 
+                              placeholder="Describe la consecuencia" data-i18n-placeholder="consequences.form.description_placeholder"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="consequence_points" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" data-i18n="consequences.form.points">Puntos a descontar</label>
+                    <input type="number" name="points_cost" id="consequence_points" min="1" required 
+                           class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white" 
+                           placeholder="50">
+                </div>
+                <div class="mb-4">
+                    <label for="consequence_duration" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" data-i18n="consequences.form.duration">Duración (horas) - Opcional</label>
+                    <input type="number" name="duration_hours" id="consequence_duration" min="1" 
+                           class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white" 
+                           placeholder="24">
+                </div>
+                <div class="mb-4">
+                    <label for="consequence_user" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white" data-i18n="consequences.form.assign_to">Asignar a</label>
+                    <select name="user_id" id="consequence_user" required
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                        <option value="" data-i18n="consequences.form.select_user">Seleccionar miembro</option>
+                        <!-- TODO: Populate with family members -->
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="active" value="true" checked class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        <span class="ms-3 text-sm font-medium text-gray-900 dark:text-gray-300" data-i18n="consequences.form.active">Activa</span>
+                    </label>
+                </div>
+                <button type="submit" class="w-full text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
+                    <i class="fas fa-plus mr-2"></i>
+                    <span data-i18n="consequences.form.create_button">Crear Consecuencia</span>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
