@@ -15,6 +15,8 @@ from app.models.task import Task, TaskStatus, TaskFrequency
 from app.models.reward import Reward, RewardCategory
 from app.models.consequence import Consequence, ConsequenceSeverity, RestrictionType
 from app.models.point_transaction import PointTransaction, TransactionType
+from app.models.password_reset import PasswordResetToken
+from app.models.email_verification import EmailVerificationToken
 
 __all__ = [
     "Base",
@@ -25,6 +27,8 @@ __all__ = [
     "Reward",
     "Consequence",
     "PointTransaction",
+    "PasswordResetToken",
+    "EmailVerificationToken",
     # Enums
     "UserRole",
     "TaskStatus",

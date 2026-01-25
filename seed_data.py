@@ -47,14 +47,15 @@ async def clear_existing_data(session: AsyncSession):
         "tasks",
         "rewards",
         "consequences",
-        "email_verification_tokens",
-        "password_reset_tokens",
         "users",
         "families",
     ]
 
     for table in tables:
-        await session.execute(text(f"DELETE FROM {table}"))
+        try:
+            await session.execute(text(f"DELETE FROM {table}"))
+        except Exception as e:
+            print(f"Warning: Could not delete from {table}: {e}")
 
     await session.commit()
     print("✅ Data cleared")

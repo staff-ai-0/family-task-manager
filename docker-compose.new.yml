@@ -21,6 +21,26 @@ services:
     networks:
       - app_network
 
+  # Test Database (separate from production)
+  test_db:
+    image: postgres:15-alpine
+    container_name: family_app_test_db
+    environment:
+      POSTGRES_DB: familyapp_test
+      POSTGRES_USER: familyapp_test
+      POSTGRES_PASSWORD: familyapp_test123
+    ports:
+      - "5435:5432"
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U familyapp_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
+
   # Redis Cache
   redis:
     image: redis:7-alpine
@@ -43,6 +63,7 @@ services:
     container_name: family_app_backend
     environment:
       DATABASE_URL: postgresql+asyncpg://familyapp:familyapp123@db:5432/familyapp
+      TEST_DATABASE_URL: postgresql+asyncpg://familyapp_test:familyapp_test123@test_db:5432/familyapp_test
       REDIS_URL: redis://redis:6379/0
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret-key}
@@ -52,6 +73,8 @@ services:
       - "8000:8000"
     depends_on:
       db:
+        condition: service_healthy
+      test_db:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -85,6 +108,7 @@ services:
 
 volumes:
   postgres_data:
+  test_postgres_data:
 
 networks:
   app_network:
