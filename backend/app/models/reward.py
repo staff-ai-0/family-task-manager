@@ -38,6 +38,7 @@ class Reward(Base):
     
     # Availability
     is_active = Column(Boolean, default=True, nullable=False)  # Can be temporarily disabled
+    is_default = Column(Boolean, default=False, nullable=False)  # Default vs extra rewards
     requires_parent_approval = Column(Boolean, default=False, nullable=False)  # High-value rewards
     
     # Family isolation

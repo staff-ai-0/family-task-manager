@@ -5,7 +5,7 @@ Request and response models for task-related operations.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
 
@@ -75,3 +75,33 @@ class TaskWithDetails(TaskResponse):
     created_by_name: Optional[str] = None
     is_overdue: bool = False
     can_complete: bool = True
+
+
+# Bulk operation schemas
+class TaskBulkCreate(TaskBase):
+    """Schema for creating tasks for multiple users at once"""
+
+    assigned_to: List[UUID] = Field(..., min_length=1, description="List of user IDs to assign the task to")
+    due_date: Optional[datetime] = None
+
+
+class TaskBulkCreateResponse(BaseModel):
+    """Response for bulk task creation"""
+
+    created_count: int
+    tasks: List[TaskResponse]
+
+
+class TaskDuplicate(BaseModel):
+    """Schema for duplicating a task"""
+
+    assigned_to: Optional[UUID] = Field(None, description="New user to assign the duplicated task to (optional)")
+    include_due_date: bool = Field(False, description="Whether to copy the due date")
+
+
+class TaskRegenerateRequest(BaseModel):
+    """Schema for regenerating recurring tasks"""
+
+    frequency: TaskFrequency = Field(..., description="Frequency of tasks to regenerate")
+    user_ids: Optional[List[UUID]] = Field(None, description="Specific users to regenerate tasks for (optional, defaults to all)")
+    reset_completed: bool = Field(True, description="Whether to reset completed tasks of this frequency")

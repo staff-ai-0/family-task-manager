@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Portal de Administracion - Family Task Manager{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:ml-64">
+    <div class="p-4 rounded-lg mt-14">
+        <!-- Page Header -->
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Portal de Administracion</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">Gestiona tareas, recompensas y consecuencias para tu familia</p>
+        </div>
+
+        <!-- Stats Overview -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <!-- Children -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-blue-100 dark:bg-blue-900">
+                        <i class="fas fa-users text-blue-600 dark:text-blue-400 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Hijos</p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ stats.total_children }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pending Tasks -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-yellow-100 dark:bg-yellow-900">
+                        <i class="fas fa-clock text-yellow-600 dark:text-yellow-400 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Tareas Pendientes</p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ stats.pending_tasks }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Completed Tasks -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-green-100 dark:bg-green-900">
+                        <i class="fas fa-check-circle text-green-600 dark:text-green-400 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Completadas</p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ stats.completed_tasks }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Consequences -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-red-100 dark:bg-red-900">
+                        <i class="fas fa-exclamation-triangle text-red-600 dark:text-red-400 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Consecuencias</p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ stats.active_consequences }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Tasks Card -->
+            <a href="/admin/tasks" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="p-3 rounded-full bg-indigo-100 dark:bg-indigo-900">
+                        <i class="fas fa-tasks text-indigo-600 dark:text-indigo-400 text-2xl"></i>
+                    </div>
+                    <span class="text-sm text-gray-500 dark:text-gray-400">
+                        {{ stats.default_tasks }} default / {{ stats.extra_tasks }} extra
+                    </span>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Gestionar Tareas</h3>
+                <p class="text-gray-600 dark:text-gray-400 text-sm">Crear, asignar y administrar tareas para tus hijos</p>
+            </a>
+
+            <!-- Rewards Card -->
+            <a href="/admin/rewards" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="p-3 rounded-full bg-purple-100 dark:bg-purple-900">
+                        <i class="fas fa-gift text-purple-600 dark:text-purple-400 text-2xl"></i>
+                    </div>
+                    <span class="text-sm text-gray-500 dark:text-gray-400">
+                        {{ stats.total_rewards }} recompensas
+                    </span>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Gestionar Recompensas</h3>
+                <p class="text-gray-600 dark:text-gray-400 text-sm">Configurar recompensas que pueden canjear con puntos</p>
+            </a>
+
+            <!-- Consequences Card -->
+            <a href="/admin/consequences" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="p-3 rounded-full bg-red-100 dark:bg-red-900">
+                        <i class="fas fa-gavel text-red-600 dark:text-red-400 text-2xl"></i>
+                    </div>
+                    <span class="text-sm text-gray-500 dark:text-gray-400">
+                        {{ stats.active_consequences }} activas
+                    </span>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Gestionar Consecuencias</h3>
+                <p class="text-gray-600 dark:text-gray-400 text-sm">Administrar consecuencias y sanciones</p>
+            </a>
+        </div>
+
+        <!-- Children Overview -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Resumen de Hijos</h2>
+            
+            {% if children %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                        <tr>
+                            <th scope="col" class="px-6 py-3">Nombre</th>
+                            <th scope="col" class="px-6 py-3">Rol</th>
+                            <th scope="col" class="px-6 py-3">Puntos</th>
+                            <th scope="col" class="px-6 py-3">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for child in children %}
+                        <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+                            <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold mr-3">
+                                        {{ child.name[0].upper() if child.name else '?' }}
+                                    </div>
+                                    {{ child.name }}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                {% if child.role|lower == 'teen' %}
+                                <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-blue-900 dark:text-blue-300">Adolescente</span>
+                                {% else %}
+                                <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-green-900 dark:text-green-300">Nino/a</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center">
+                                    <i class="fas fa-star text-yellow-400 mr-1"></i>
+                                    <span class="font-semibold text-gray-900 dark:text-white">{{ child.points or 0 }}</span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <a href="/admin/tasks?user={{ child.id }}" class="text-blue-600 dark:text-blue-400 hover:underline mr-3">
+                                    <i class="fas fa-tasks"></i> Tareas
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-gray-500 dark:text-gray-400 text-center py-8">
+                No hay hijos registrados en la familia.
+                <a href="/family" class="text-blue-600 dark:text-blue-400 hover:underline">Invitar miembros</a>
+            </p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

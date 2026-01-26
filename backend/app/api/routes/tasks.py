@@ -18,6 +18,10 @@ from app.schemas.task import (
     TaskUpdate,
     TaskComplete,
     TaskResponse,
+    TaskBulkCreate,
+    TaskBulkCreateResponse,
+    TaskDuplicate,
+    TaskRegenerateRequest,
 )
 from app.models import User
 from app.models.task import TaskStatus
@@ -122,5 +126,60 @@ async def check_overdue_tasks(
     """Check for overdue tasks and update status"""
     tasks = await TaskService.check_overdue_tasks(
         db, to_uuid_required(current_user.family_id)
+    )
+    return tasks
+
+
+@router.post("/bulk-create", response_model=TaskBulkCreateResponse, status_code=status.HTTP_201_CREATED)
+async def bulk_create_tasks(
+    task_data: TaskBulkCreate,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create the same task for multiple users at once (parent only)"""
+    tasks = await TaskService.bulk_create_tasks(
+        db,
+        task_data,
+        family_id=to_uuid_required(current_user.family_id),
+        created_by=to_uuid_required(current_user.id),
+    )
+    return TaskBulkCreateResponse(created_count=len(tasks), tasks=tasks)
+
+
+@router.post("/{task_id}/duplicate", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
+async def duplicate_task(
+    task_id: UUID,
+    duplicate_data: TaskDuplicate,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Duplicate an existing task (parent only)"""
+    task = await TaskService.duplicate_task(
+        db,
+        task_id,
+        family_id=to_uuid_required(current_user.family_id),
+        created_by=to_uuid_required(current_user.id),
+        assigned_to=duplicate_data.assigned_to,
+        include_due_date=duplicate_data.include_due_date,
+    )
+    return task
+
+
+@router.post("/regenerate", response_model=List[TaskResponse], status_code=status.HTTP_201_CREATED)
+async def regenerate_tasks(
+    request: TaskRegenerateRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Regenerate recurring tasks based on frequency (parent only)
+    
+    Creates new pending task instances from completed tasks of the specified frequency.
+    Useful for resetting daily/weekly/monthly tasks for a new period.
+    """
+    tasks = await TaskService.regenerate_tasks(
+        db,
+        request,
+        family_id=to_uuid_required(current_user.family_id),
+        created_by=to_uuid_required(current_user.id),
     )
     return tasks
