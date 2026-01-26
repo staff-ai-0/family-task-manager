@@ -70,7 +70,7 @@ module.exports = {
       name: 'family-frontend',
       cwd: path.join(BASE_PATH, 'frontend'),
       script: path.join(BASE_PATH, 'venv/bin/uvicorn'),
-      args: 'app.main:app --host 0.0.0.0 --port 3000',
+      args: 'app.main:app --host 0.0.0.0 --port 3001',
       interpreter: path.join(BASE_PATH, 'venv/bin/python3'),
       instances: 1,
       exec_mode: 'fork',
@@ -82,7 +82,7 @@ module.exports = {
       env: {
         NODE_ENV: 'development',
         DEBUG: 'true',
-        PORT: 3000,
+        PORT: 3001,
         API_BASE_URL: 'http://localhost:8000',
       },
       
@@ -90,7 +90,7 @@ module.exports = {
       env_stage: {
         NODE_ENV: 'staging',
         DEBUG: 'false',
-        PORT: 3000,
+        PORT: 3001,
         API_BASE_URL: 'http://localhost:8000',
       },
       
@@ -98,7 +98,7 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         DEBUG: 'false',
-        PORT: 3000,
+        PORT: 3001,
         API_BASE_URL: 'http://localhost:8000',
       },
       
