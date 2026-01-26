@@ -123,9 +123,16 @@ async def dashboard(request: Request):
     })
 
 
-@router.get("/logout")
+@router.post("/logout")
 async def logout(request: Request):
     """Logout user"""
+    request.session.clear()
+    return RedirectResponse(url="/login", status_code=303)
+
+
+@router.get("/logout")
+async def logout_get(request: Request):
+    """Logout user (GET fallback)"""
     request.session.clear()
     return RedirectResponse(url="/login", status_code=303)
 
@@ -133,60 +140,175 @@ async def logout(request: Request):
 @router.get("/tasks", response_class=HTMLResponse)
 async def tasks_page(request: Request):
     """Render tasks list page"""
+    token = get_access_token_from_session(request)
+    if not token:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    current_user = get_current_user_from_session(request)
+    
+    # Fetch tasks from backend API
+    tasks = []
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                f"{API_BASE_URL}/api/tasks",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0
+            )
+            if response.status_code == 200:
+                tasks = response.json()
+        except Exception:
+            pass
+    
     return templates.TemplateResponse("tasks/list.html", {
         "request": request,
-        "current_user": None,
-        "tasks": []
+        "current_user": current_user,
+        "tasks": tasks,
+        "pending_tasks_count": len([t for t in tasks if t.get("status") == "pending"])
     })
 
 
 @router.get("/rewards", response_class=HTMLResponse)
 async def rewards_page(request: Request):
     """Render rewards list page"""
+    token = get_access_token_from_session(request)
+    if not token:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    current_user = get_current_user_from_session(request)
+    
+    # Fetch rewards from backend API
+    rewards = []
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                f"{API_BASE_URL}/api/rewards",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0
+            )
+            if response.status_code == 200:
+                rewards = response.json()
+        except Exception:
+            pass
+    
     return templates.TemplateResponse("rewards/list.html", {
         "request": request,
-        "current_user": None,
-        "rewards": []
+        "current_user": current_user,
+        "rewards": rewards
     })
 
 
 @router.get("/consequences", response_class=HTMLResponse)
 async def consequences_page(request: Request):
     """Render consequences list page"""
+    token = get_access_token_from_session(request)
+    if not token:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    current_user = get_current_user_from_session(request)
+    
+    # Fetch consequences from backend API
+    consequences = []
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                f"{API_BASE_URL}/api/consequences",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0
+            )
+            if response.status_code == 200:
+                consequences = response.json()
+        except Exception:
+            pass
+    
     return templates.TemplateResponse("consequences/list.html", {
         "request": request,
-        "current_user": None,
-        "consequences": []
+        "current_user": current_user,
+        "consequences": consequences,
+        "active_consequences_count": len([c for c in consequences if c.get("status") == "active"])
     })
 
 
 @router.get("/points", response_class=HTMLResponse)
 async def points_page(request: Request):
     """Render points history page"""
+    token = get_access_token_from_session(request)
+    if not token:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    current_user = get_current_user_from_session(request)
+    
+    # Fetch transactions from backend API
+    transactions = []
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                f"{API_BASE_URL}/api/points/history",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0
+            )
+            if response.status_code == 200:
+                transactions = response.json()
+        except Exception:
+            pass
+    
     return templates.TemplateResponse("points/history.html", {
         "request": request,
-        "current_user": None,
-        "transactions": []
+        "current_user": current_user,
+        "transactions": transactions
     })
 
 
 @router.get("/family", response_class=HTMLResponse)
 async def family_page(request: Request):
     """Render family management page"""
+    token = get_access_token_from_session(request)
+    if not token:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    current_user = get_current_user_from_session(request)
+    
+    # Only parents can access family management
+    if current_user and current_user.get("role", "").lower() != "parent":
+        return RedirectResponse(url="/dashboard", status_code=303)
+    
+    # Fetch family and members from backend API
+    family = None
+    members = []
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                f"{API_BASE_URL}/api/family",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0
+            )
+            if response.status_code == 200:
+                data = response.json()
+                family = data.get("family")
+                members = data.get("members", [])
+        except Exception:
+            pass
+    
     return templates.TemplateResponse("family/manage.html", {
         "request": request,
-        "current_user": None,
-        "family": None,
-        "members": []
+        "current_user": current_user,
+        "family": family,
+        "members": members
     })
 
 
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     """Render settings page"""
+    token = get_access_token_from_session(request)
+    if not token:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    current_user = get_current_user_from_session(request)
+    
     return templates.TemplateResponse("settings.html", {
         "request": request,
-        "current_user": None
+        "current_user": current_user
     })
 
 
