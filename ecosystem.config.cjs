@@ -1,3 +1,6 @@
+const path = require('path');
+const BASE_PATH = process.env.FAMILY_APP_PATH || '/home/jc/family-task-manager';
+
 /**
  * Family Task Manager - PM2 Ecosystem Configuration
  * ==================================================
@@ -17,10 +20,10 @@ module.exports = {
     // Backend API (FastAPI/Uvicorn)
     {
       name: 'family-backend',
-      cwd: './backend',
-      script: '../venv/bin/uvicorn',
+      cwd: path.join(BASE_PATH, 'backend'),
+      script: path.join(BASE_PATH, 'venv/bin/uvicorn'),
       args: 'app.main:app --host 0.0.0.0 --port 8000',
-      interpreter: '../venv/bin/python3',
+      interpreter: path.join(BASE_PATH, 'venv/bin/python3'),
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -65,10 +68,10 @@ module.exports = {
     // Frontend Web (FastAPI/Uvicorn with Jinja2)
     {
       name: 'family-frontend',
-      cwd: './frontend',
-      script: '../venv/bin/uvicorn',
+      cwd: path.join(BASE_PATH, 'frontend'),
+      script: path.join(BASE_PATH, 'venv/bin/uvicorn'),
       args: 'app.main:app --host 0.0.0.0 --port 3000',
-      interpreter: '../venv/bin/python3',
+      interpreter: path.join(BASE_PATH, 'venv/bin/python3'),
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
