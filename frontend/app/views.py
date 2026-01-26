@@ -146,10 +146,12 @@ async def tasks_page(request: Request):
     
     current_user = get_current_user_from_session(request)
     
-    # Fetch tasks from backend API
+    # Fetch tasks and family members from backend API
     tasks = []
+    family_members = []
     async with httpx.AsyncClient() as client:
         try:
+            # Fetch tasks
             response = await client.get(
                 f"{API_BASE_URL}/api/tasks",
                 headers={"Authorization": f"Bearer {token}"},
@@ -157,6 +159,17 @@ async def tasks_page(request: Request):
             )
             if response.status_code == 200:
                 tasks = response.json()
+            
+            # Fetch family members for assignment dropdown (parents only)
+            if current_user and current_user.get("role", "").lower() == "parent":
+                family_response = await client.get(
+                    f"{API_BASE_URL}/api/families/me",
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10.0
+                )
+                if family_response.status_code == 200:
+                    family_data = family_response.json()
+                    family_members = family_data.get("members", [])
         except Exception:
             pass
     
@@ -164,8 +177,96 @@ async def tasks_page(request: Request):
         "request": request,
         "current_user": current_user,
         "tasks": tasks,
+        "family_members": family_members,
         "pending_tasks_count": len([t for t in tasks if t.get("status") == "pending"])
     })
+
+
+@router.post("/tasks/new")
+async def create_task(
+    request: Request,
+    title: str = Form(...),
+    description: str = Form(""),
+    points: int = Form(...),
+    frequency: str = Form("ONCE"),
+    is_default: bool = Form(False),
+    assigned_to_id: str = Form(None)
+):
+    """Create a new task"""
+    token = get_access_token_from_session(request)
+    if not token:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    current_user = get_current_user_from_session(request)
+    if not current_user or current_user.get("role", "").lower() != "parent":
+        return RedirectResponse(url="/tasks", status_code=303)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            task_data = {
+                "title": title,
+                "description": description,
+                "points": points,
+                "frequency": frequency,
+                "is_default": is_default
+            }
+            if assigned_to_id:
+                task_data["assigned_to_id"] = assigned_to_id
+            
+            await client.post(
+                f"{API_BASE_URL}/api/tasks",
+                headers={"Authorization": f"Bearer {token}"},
+                json=task_data,
+                timeout=10.0
+            )
+        except Exception:
+            pass
+    
+    return RedirectResponse(url="/tasks", status_code=303)
+
+
+@router.post("/tasks/{task_id}/complete")
+async def complete_task(request: Request, task_id: str):
+    """Mark a task as complete"""
+    token = get_access_token_from_session(request)
+    if not token:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(
+                f"{API_BASE_URL}/api/tasks/{task_id}/complete",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0
+            )
+        except Exception:
+            pass
+    
+    return RedirectResponse(url="/tasks", status_code=303)
+
+
+@router.post("/tasks/{task_id}/delete")
+async def delete_task(request: Request, task_id: str):
+    """Delete a task"""
+    token = get_access_token_from_session(request)
+    if not token:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    current_user = get_current_user_from_session(request)
+    if not current_user or current_user.get("role", "").lower() != "parent":
+        return RedirectResponse(url="/tasks", status_code=303)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.delete(
+                f"{API_BASE_URL}/api/tasks/{task_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0
+            )
+        except Exception:
+            pass
+    
+    return RedirectResponse(url="/tasks", status_code=303)
 
 
 @router.get("/rewards", response_class=HTMLResponse)
@@ -196,6 +297,88 @@ async def rewards_page(request: Request):
         "current_user": current_user,
         "rewards": rewards
     })
+
+
+@router.post("/rewards/new")
+async def create_reward(
+    request: Request,
+    name: str = Form(...),
+    description: str = Form(""),
+    points_cost: int = Form(...),
+    quantity: int = Form(-1)
+):
+    """Create a new reward"""
+    token = get_access_token_from_session(request)
+    if not token:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    current_user = get_current_user_from_session(request)
+    if not current_user or current_user.get("role", "").lower() != "parent":
+        return RedirectResponse(url="/rewards", status_code=303)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            reward_data = {
+                "name": name,
+                "description": description,
+                "points_cost": points_cost,
+                "quantity": quantity if quantity > 0 else -1  # -1 means unlimited
+            }
+            
+            await client.post(
+                f"{API_BASE_URL}/api/rewards",
+                headers={"Authorization": f"Bearer {token}"},
+                json=reward_data,
+                timeout=10.0
+            )
+        except Exception:
+            pass
+    
+    return RedirectResponse(url="/rewards", status_code=303)
+
+
+@router.post("/rewards/{reward_id}/redeem")
+async def redeem_reward(request: Request, reward_id: str):
+    """Redeem a reward"""
+    token = get_access_token_from_session(request)
+    if not token:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(
+                f"{API_BASE_URL}/api/rewards/{reward_id}/redeem",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0
+            )
+        except Exception:
+            pass
+    
+    return RedirectResponse(url="/rewards", status_code=303)
+
+
+@router.post("/rewards/{reward_id}/delete")
+async def delete_reward(request: Request, reward_id: str):
+    """Delete a reward"""
+    token = get_access_token_from_session(request)
+    if not token:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    current_user = get_current_user_from_session(request)
+    if not current_user or current_user.get("role", "").lower() != "parent":
+        return RedirectResponse(url="/rewards", status_code=303)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.delete(
+                f"{API_BASE_URL}/api/rewards/{reward_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0
+            )
+        except Exception:
+            pass
+    
+    return RedirectResponse(url="/rewards", status_code=303)
 
 
 @router.get("/consequences", response_class=HTMLResponse)
