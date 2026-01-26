@@ -38,7 +38,7 @@ class FamilyResponse(EntityResponse):
     """Schema for family response"""
 
     name: str = Field(..., min_length=1, max_length=100)
-    created_by: UUID
+    created_by: Optional[UUID] = None  # Optional for legacy data
     is_active: bool
 
 
