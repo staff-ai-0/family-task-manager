@@ -66,7 +66,7 @@
                                 <!-- Created date -->
                                 <div class="flex items-center">
                                     <i class="fas fa-calendar text-gray-400 mr-2"></i>
-                                    <span class="text-gray-600 dark:text-gray-400">{{ consequence.created_at.strftime('%d/%m/%Y') }}</span>
+                                    <span class="text-gray-600 dark:text-gray-400">{{ consequence.created_at[:10] if consequence.created_at else '-' }}</span>
                                 </div>
                             </div>
                         </div>
