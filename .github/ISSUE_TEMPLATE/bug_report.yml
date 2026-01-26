@@ -1,0 +1,103 @@
+name: Bug Report
+description: Report a bug in Family Task Manager
+title: "[Bug]: "
+labels: ["bug", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the sections below to help us understand and fix the issue.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the application is affected?
+      options:
+        - Backend API
+        - Frontend UI
+        - Authentication
+        - Database/Migrations
+        - Docker/Infrastructure
+        - Tests
+        - Documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe what happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: Describe what should have happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this bug?
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tenant-isolation
+    attributes:
+      label: Multi-Tenant Impact
+      description: Does this bug affect tenant isolation (data leaking between families)?
+      options:
+        - "Yes - CRITICAL: Data visible across families"
+        - "No - Isolated to single family"
+        - "Unknown"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Please provide environment details
+      value: |
+        - OS: [e.g., macOS 14.0]
+        - Browser: [e.g., Chrome 120]
+        - Docker Compose Version: [e.g., 2.23.0]
+        - Python Version: [e.g., 3.12]
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: Please paste any relevant log output (use `docker-compose logs backend`)
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have tested with the latest version from the main branch
+          required: false
+        - label: I can provide test credentials if needed (for auth-related bugs)
+          required: false
