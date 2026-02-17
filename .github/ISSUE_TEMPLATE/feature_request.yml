@@ -1,0 +1,131 @@
+name: Feature Request
+description: Suggest a new feature for Family Task Manager
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please describe your idea below.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: What area does this feature relate to?
+      options:
+        - Task Management
+        - Points & Rewards System
+        - Consequence System
+        - Family Management
+        - User Roles & Permissions
+        - Authentication & Security
+        - Dashboard & UI
+        - Notifications
+        - API Enhancements
+        - Performance
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: user-type
+    attributes:
+      label: Primary User Type
+      description: Who would primarily benefit from this feature?
+      options:
+        - Parents
+        - Children (6-10 years)
+        - Teens (11-14 years)
+        - All family members
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: "Currently, parents cannot... / Children struggle to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe your proposed solution in detail.
+      placeholder: |
+        ## Feature Description
+        [Describe the feature]
+
+        ## User Flow
+        1. User navigates to...
+        2. User clicks...
+        3. System responds with...
+
+        ## Expected Outcome
+        [What should happen when this feature is used]
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered any alternative solutions?
+      placeholder: "I also considered... but chose this approach because..."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: multi-tenant
+    attributes:
+      label: Multi-Tenant Considerations
+      description: Does this feature require family-specific data?
+      options:
+        - "Yes - Data must be isolated per family"
+        - "No - System-wide feature"
+        - "Unsure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: How complex do you think this feature is?
+      options:
+        - Small (1-2 days)
+        - Medium (3-5 days)
+        - Large (1-2 weeks)
+        - Very Large (2+ weeks)
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this feature is complete?
+      placeholder: |
+        - [ ] User can...
+        - [ ] System displays...
+        - [ ] Tests cover...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: implementation
+    attributes:
+      label: Implementation Requirements
+      description: What components will this feature likely need?
+      options:
+        - label: New database model/migration
+        - label: New API endpoint(s)
+        - label: New service layer logic
+        - label: Frontend UI changes
+        - label: New tests required
+        - label: Documentation updates

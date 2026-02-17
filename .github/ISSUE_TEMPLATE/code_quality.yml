@@ -1,0 +1,160 @@
+name: Code Quality / Refactoring
+description: Propose code improvements, refactoring, or technical debt reduction
+title: "[Quality]: "
+labels: ["refactor", "tech-debt"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to propose code quality improvements, refactoring, or technical debt reduction.
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Improvement Type
+      description: What type of code quality improvement is this?
+      options:
+        - Refactoring - Code restructuring without changing behavior
+        - Performance - Optimization improvements
+        - Security - Security hardening
+        - Testing - Test coverage improvement
+        - Documentation - Code documentation or comments
+        - Type Safety - Type hints and type checking improvements
+        - Architecture - Architectural improvements
+        - Dependency - Dependency updates or cleanup
+        - Cleanup - Dead code removal, unused imports
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Architecture Layer
+      description: Which layer of the architecture is affected?
+      options:
+        - API Layer (Routes)
+        - Service Layer (Business Logic)
+        - Repository Layer (Data Access)
+        - Models Layer (Database Entities)
+        - Core/Config
+        - Frontend (Templates/Static)
+        - Tests
+        - Multiple Layers
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-state
+    attributes:
+      label: Current State
+      description: Describe the current code/state and its issues
+      placeholder: |
+        ## Current Implementation
+        ```python
+        # Example of current problematic code
+        ```
+
+        ## Issues
+        - Performance bottleneck because...
+        - Violates clean architecture because...
+        - Missing type safety because...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-change
+    attributes:
+      label: Proposed Changes
+      description: Describe the proposed improvements
+      placeholder: |
+        ## Proposed Implementation
+        ```python
+        # Example of improved code
+        ```
+
+        ## Benefits
+        - Improves performance by...
+        - Better follows clean architecture because...
+        - Adds type safety for...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: multi-tenant-compliance
+    attributes:
+      label: Multi-Tenant Compliance
+      description: Does this change affect multi-tenant patterns?
+      options:
+        - "Improves - Better enforces family isolation"
+        - "Neutral - No impact on tenant isolation"
+        - "Requires Review - May affect tenant boundaries"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Breaking Changes
+      description: Does this change introduce breaking changes?
+      options:
+        - "No - Backward compatible"
+        - "Yes - API changes"
+        - "Yes - Database migration required"
+        - "Yes - Configuration changes required"
+    validations:
+      required: true
+
+  - type: textarea
+    id: files-affected
+    attributes:
+      label: Files/Components Affected
+      description: List the files or components that will be modified
+      placeholder: |
+        - `backend/app/services/task_service.py`
+        - `backend/app/repositories/task_repository.py`
+        - `backend/tests/test_task_service.py`
+    validations:
+      required: false
+
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk Level
+      description: What's the risk level of this change?
+      options:
+        - Low - Isolated change, good test coverage
+        - Medium - Multiple components affected
+        - High - Core functionality, requires careful review
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Quality Checklist
+      description: Confirm the following before submitting
+      options:
+        - label: Change maintains or improves test coverage (70%+ target)
+          required: true
+        - label: Change follows existing code patterns in systemPatterns.md
+          required: true
+        - label: Change preserves multi-tenant isolation
+          required: true
+        - label: Change uses proper type hints (Mapped[] syntax for models)
+          required: false
+        - label: Change has been tested locally
+          required: false
+
+  - type: textarea
+    id: testing-plan
+    attributes:
+      label: Testing Plan
+      description: How will you verify this change doesn't break anything?
+      placeholder: |
+        1. Run existing test suite: `docker exec family_app_backend pytest tests/`
+        2. Add new tests for...
+        3. Verify tenant isolation with...
+    validations:
+      required: false

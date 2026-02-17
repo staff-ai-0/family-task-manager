@@ -27,6 +27,7 @@ class RewardBase(BaseModel):
 class RewardCreate(RewardBase):
     """Schema for creating a new reward"""
 
+    is_default: bool = False
     requires_parent_approval: bool = False
 
 
@@ -39,6 +40,7 @@ class RewardUpdate(BaseModel):
     category: Optional[RewardCategory] = None
     icon: Optional[str] = Field(None, max_length=50)
     is_active: Optional[bool] = None
+    is_default: Optional[bool] = None
     requires_parent_approval: Optional[bool] = None
 
 
@@ -66,6 +68,7 @@ class RewardResponse(FamilyEntityResponse):
     category: RewardCategory
     icon: Optional[str] = Field(None, max_length=50)
     is_active: bool
+    is_default: bool = False
     requires_parent_approval: bool
 
 

@@ -1,0 +1,41 @@
+<!-- Mobile Bottom Navigation - Only visible on small screens -->
+<nav class="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 dark:bg-gray-800 dark:border-gray-700 sm:hidden bottom-nav-safe pl-safe pr-safe">
+    <div class="grid h-16 grid-cols-5 mx-auto">
+        <!-- Dashboard -->
+        <a href="/dashboard" class="inline-flex flex-col items-center justify-center px-2 py-2 group touch-target {% if request.url.path == '/dashboard' %}text-indigo-600 dark:text-indigo-400{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <i class="fas fa-home w-6 h-6 mb-1 {% if request.url.path == '/dashboard' %}text-indigo-600 dark:text-indigo-400{% else %}group-hover:text-indigo-600 dark:group-hover:text-indigo-400{% endif %}"></i>
+            <span class="text-xs font-medium" data-i18n="nav.home">Inicio</span>
+        </a>
+        
+        <!-- Tasks -->
+        <a href="/tasks" class="inline-flex flex-col items-center justify-center px-2 py-2 group touch-target relative {% if request.url.path == '/tasks' %}text-indigo-600 dark:text-indigo-400{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <i class="fas fa-tasks w-6 h-6 mb-1 {% if request.url.path == '/tasks' %}text-indigo-600 dark:text-indigo-400{% else %}group-hover:text-indigo-600 dark:group-hover:text-indigo-400{% endif %}"></i>
+            <span class="text-xs font-medium" data-i18n="nav.tasks">Tareas</span>
+            {% if pending_tasks_count %}
+            <span class="absolute top-1 right-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                {{ pending_tasks_count }}
+            </span>
+            {% endif %}
+        </a>
+        
+        <!-- Rewards (Center - Featured) -->
+        <a href="/rewards" class="inline-flex flex-col items-center justify-center px-2 py-2 group touch-target {% if request.url.path == '/rewards' %}text-indigo-600 dark:text-indigo-400{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <div class="flex items-center justify-center w-12 h-12 -mt-6 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-lg {% if request.url.path == '/rewards' %}ring-4 ring-indigo-200 dark:ring-indigo-800{% endif %}">
+                <i class="fas fa-gift w-6 h-6 text-white"></i>
+            </div>
+            <span class="text-xs font-medium mt-1" data-i18n="nav.rewards">Premios</span>
+        </a>
+        
+        <!-- Points -->
+        <a href="/points" class="inline-flex flex-col items-center justify-center px-2 py-2 group touch-target {% if request.url.path == '/points' %}text-indigo-600 dark:text-indigo-400{% else %}text-gray-500 dark:text-gray-400{% endif %}">
+            <i class="fas fa-star w-6 h-6 mb-1 {% if request.url.path == '/points' %}text-indigo-600 dark:text-indigo-400{% else %}group-hover:text-indigo-600 dark:group-hover:text-indigo-400{% endif %}"></i>
+            <span class="text-xs font-medium" data-i18n="nav.points">Puntos</span>
+        </a>
+        
+        <!-- More Menu -->
+        <button type="button" data-drawer-target="sidebar" data-drawer-toggle="sidebar" class="inline-flex flex-col items-center justify-center px-2 py-2 group touch-target text-gray-500 dark:text-gray-400">
+            <i class="fas fa-bars w-6 h-6 mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400"></i>
+            <span class="text-xs font-medium" data-i18n="nav.more">Más</span>
+        </button>
+    </div>
+</nav>

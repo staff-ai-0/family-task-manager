@@ -140,7 +140,7 @@ media/
 # migrations/versions/*.pyc
 
 # Temporary/test files
-cookies.txt
+cookies*.txt
 *.old.*
 
 # Test scripts (keep only in backend/)

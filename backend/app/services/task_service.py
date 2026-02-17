@@ -13,7 +13,7 @@ from uuid import UUID
 from app.models import Task, User, Family, PointTransaction, Consequence
 from app.models.task import TaskStatus, TaskFrequency
 from app.models.consequence import ConsequenceSeverity, RestrictionType
-from app.schemas.task import TaskCreate, TaskUpdate
+from app.schemas.task import TaskCreate, TaskUpdate, TaskBulkCreate, TaskRegenerateRequest
 from app.core.exceptions import (
     NotFoundException,
     ForbiddenException,
@@ -231,3 +231,142 @@ class TaskService(BaseFamilyService[Task]):
         )
         result = await db.execute(query)
         return result.scalar() or 0
+
+    @staticmethod
+    async def bulk_create_tasks(
+        db: AsyncSession,
+        task_data: TaskBulkCreate,
+        family_id: UUID,
+        created_by: UUID,
+    ) -> List[Task]:
+        """Create the same task for multiple users at once"""
+        tasks = []
+        
+        for user_id in task_data.assigned_to:
+            # Verify each user belongs to the family
+            await verify_user_in_family(db, user_id, family_id)
+            
+            task = Task(
+                title=task_data.title,
+                description=task_data.description,
+                points=task_data.points,
+                is_default=task_data.is_default,
+                frequency=task_data.frequency,
+                assigned_to=user_id,
+                created_by=created_by,
+                family_id=family_id,
+                due_date=task_data.due_date,
+                status=TaskStatus.PENDING,
+            )
+            db.add(task)
+            tasks.append(task)
+        
+        await db.commit()
+        
+        # Refresh all tasks to get their IDs
+        for task in tasks:
+            await db.refresh(task)
+        
+        return tasks
+
+    @staticmethod
+    async def duplicate_task(
+        db: AsyncSession,
+        task_id: UUID,
+        family_id: UUID,
+        created_by: UUID,
+        assigned_to: Optional[UUID] = None,
+        include_due_date: bool = False,
+    ) -> Task:
+        """Duplicate an existing task"""
+        original = await TaskService.get_task(db, task_id, family_id)
+        
+        # Use original assignee if not specified
+        target_user = assigned_to or original.assigned_to
+        await verify_user_in_family(db, target_user, family_id)
+        
+        new_task = Task(
+            title=original.title,
+            description=original.description,
+            points=original.points,
+            is_default=original.is_default,
+            frequency=original.frequency,
+            assigned_to=target_user,
+            created_by=created_by,
+            family_id=family_id,
+            due_date=original.due_date if include_due_date else None,
+            status=TaskStatus.PENDING,
+        )
+        
+        db.add(new_task)
+        await db.commit()
+        await db.refresh(new_task)
+        return new_task
+
+    @staticmethod
+    async def regenerate_tasks(
+        db: AsyncSession,
+        request: TaskRegenerateRequest,
+        family_id: UUID,
+        created_by: UUID,
+    ) -> List[Task]:
+        """Regenerate tasks based on frequency - creates new pending tasks from completed ones"""
+        # Find completed or cancelled tasks with the specified frequency
+        query = select(Task).where(
+            and_(
+                Task.family_id == family_id,
+                Task.frequency == request.frequency,
+                Task.status.in_([TaskStatus.COMPLETED, TaskStatus.CANCELLED]),
+            )
+        )
+        
+        if request.user_ids:
+            query = query.where(Task.assigned_to.in_(request.user_ids))
+        
+        completed_tasks = (await db.execute(query)).scalars().all()
+        
+        new_tasks = []
+        seen_templates = set()  # Track (title, assigned_to) to avoid duplicates
+        
+        for task in completed_tasks:
+            template_key = (task.title, task.assigned_to)
+            if template_key in seen_templates:
+                continue
+            seen_templates.add(template_key)
+            
+            # Check if there's already a pending task with same title for this user
+            existing_query = select(Task).where(
+                and_(
+                    Task.family_id == family_id,
+                    Task.title == task.title,
+                    Task.assigned_to == task.assigned_to,
+                    Task.status == TaskStatus.PENDING,
+                )
+            )
+            existing = (await db.execute(existing_query)).scalar_one_or_none()
+            
+            if existing:
+                continue  # Don't create duplicate pending task
+            
+            # Create new task instance
+            new_task = Task(
+                title=task.title,
+                description=task.description,
+                points=task.points,
+                is_default=task.is_default,
+                frequency=task.frequency,
+                assigned_to=task.assigned_to,
+                created_by=created_by,
+                family_id=family_id,
+                due_date=None,  # Parent can set new due dates
+                status=TaskStatus.PENDING,
+            )
+            db.add(new_task)
+            new_tasks.append(new_task)
+        
+        if new_tasks:
+            await db.commit()
+            for task in new_tasks:
+                await db.refresh(task)
+        
+        return new_tasks
