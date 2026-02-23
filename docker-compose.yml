@@ -10,11 +10,11 @@ services:
       POSTGRES_USER: familyapp
       POSTGRES_PASSWORD: familyapp123
     ports:
-      - "5433:5432"
+      - "5437:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U familyapp"]
+      test: [ "CMD-SHELL", "pg_isready -U familyapp" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -34,7 +34,7 @@ services:
     volumes:
       - test_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U familyapp_test"]
+      test: [ "CMD-SHELL", "pg_isready -U familyapp_test" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -48,7 +48,7 @@ services:
     ports:
       - "6380:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -68,9 +68,9 @@ services:
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret-key}
       DEBUG: ${DEBUG:-true}
-      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8080
+      ALLOWED_ORIGINS: http://localhost:3003,http://localhost:8080
     ports:
-      - "8000:8000"
+      - "8002:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -93,22 +93,22 @@ services:
     container_name: family_app_frontend
     environment:
       API_BASE_URL: http://backend:8000
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
-      DEBUG: ${DEBUG:-true}
       PORT: 3000
     ports:
-      - "3000:3000"
+      - "3003:3000"
     depends_on:
       - backend
     volumes:
-      - ./frontend/app:/app/app
+      - ./frontend:/app
+      - /app/node_modules
     networks:
       - app_network
-    command: uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
+    command: npm run dev -- --host
 
 volumes:
   postgres_data:
   test_postgres_data:
+
 
 networks:
   app_network:

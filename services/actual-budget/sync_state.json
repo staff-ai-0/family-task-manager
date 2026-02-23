@@ -1,0 +1,17 @@
+{
+  "last_sync": "2026-02-22",
+  "synced_members": {
+    "76a8d673-4308-437f-8317-c32f3c749bf1": {
+      "name": "Emma Johnson",
+      "last_points": 150,
+      "last_sync": "2026-02-22",
+      "last_amount": 15.0
+    },
+    "7c293e12-c11b-4e49-9dcf-1c9e8652ee70": {
+      "name": "Lucas Johnson",
+      "last_points": 280,
+      "last_sync": "2026-02-22",
+      "last_amount": 28.0
+    }
+  }
+}

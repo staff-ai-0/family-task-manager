@@ -1,0 +1,7 @@
+---
+if (Astro.cookies.has("access_token")) {
+	return Astro.redirect("/dashboard");
+} else {
+	return Astro.redirect("/login");
+}
+---

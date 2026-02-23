@@ -1,0 +1,220 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BottomNav from "../../components/BottomNav.astro";
+import { apiFetch } from "../../lib/api";
+import { t } from "../../lib/i18n";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+const actualUrl = "http://localhost:5006";
+
+// Fetch live actual budget categories
+let budgetData = { groups: [] };
+try {
+    const resp = await fetch("http://127.0.0.1:5007/api/finance/categories");
+    if (resp.ok) {
+        budgetData = await resp.json();
+    }
+} catch (e) {
+    console.error("Failed to fetch budget categories", e);
+}
+
+// Ensure we have some groups, filter out Income so we focus on Expenses
+const expenseGroups =
+    budgetData.groups?.filter((g: any) => g.is_income === 0) || [];
+---
+
+<Layout
+    title={`${lang === "es" ? "Finanzas Familiares" : "Family Finances"} - Family Task Manager`}
+>
+    <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+        <header
+            class="bg-gradient-to-br from-emerald-700 to-teal-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md"
+        >
+            <a
+                href="/parent"
+                class="text-emerald-200 text-sm flex items-center gap-1 mb-3"
+            >
+                <svg
+                    class="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M15 19l-7-7 7-7"></path>
+                </svg>
+                {lang === "es" ? "Panel de Padres" : "Parent Dashboard"}
+            </a>
+            <div class="flex items-center gap-3">
+                <div
+                    class="w-12 h-12 rounded-xl bg-emerald-500/30 flex items-center justify-center"
+                >
+                    <svg
+                        class="h-7 w-7 text-emerald-100"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        ></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold">
+                        {
+                            lang === "es"
+                                ? "Finanzas Familiares"
+                                : "Family Finances"
+                        }
+                    </h1>
+                    <p class="text-emerald-200 text-sm">
+                        {
+                            lang === "es"
+                                ? "Toca una categoría para añadir gastos"
+                                : "Tap a category to add expenses"
+                        }
+                    </p>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 px-4 py-6 space-y-8">
+            {
+                expenseGroups.length === 0 && (
+                    <div class="bg-yellow-50 text-yellow-800 p-4 rounded-xl text-sm border border-yellow-200">
+                        ⚠️{" "}
+                        {lang === "es"
+                            ? "No se pudieron cargar las categorías o no hay grupos de gastos creados en Actual Budget."
+                            : "Could not load categories or no expense groups created in Actual Budget."}
+                    </div>
+                )
+            }
+
+            {
+                expenseGroups.map((group: any) => (
+                    <section>
+                        <h2 class="font-bold text-slate-800 mb-3 px-1">
+                            {group.name}
+                        </h2>
+                        <div class="grid grid-cols-2 gap-3">
+                            {group.categories.map((cat: any) => (
+                                <a
+                                    href={`/parent/finances/${cat.id}?name=${encodeURIComponent(cat.name)}`}
+                                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 text-left hover:shadow-md hover:border-emerald-200 transition-all flex flex-col justify-between"
+                                    style="min-height: 100px;"
+                                >
+                                    <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center mb-2">
+                                        <svg
+                                            class="h-4 w-4 text-emerald-600"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                                            />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-bold text-slate-700">
+                                            {cat.name}
+                                        </p>
+                                        <p class="text-[10px] text-slate-400 mt-1">
+                                            {lang === "es"
+                                                ? "Añadir / Ver"
+                                                : "Add / View"}
+                                        </p>
+                                    </div>
+                                </a>
+                            ))}
+                        </div>
+                    </section>
+                ))
+            }
+
+            <!-- Launch Actual Budget -->
+            <section
+                class="bg-white rounded-2xl p-6 shadow-sm border border-emerald-100"
+            >
+                <div class="flex items-start gap-4">
+                    <div
+                        class="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center flex-shrink-0"
+                    >
+                        <svg
+                            class="h-8 w-8 text-emerald-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                            ></path>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="font-bold text-slate-800 text-lg">
+                            Actual Budget
+                        </h3>
+                        <p class="text-sm text-slate-500 mt-1">
+                            {
+                                lang === "es"
+                                    ? "Abre la herramienta completa de presupuesto para gestionar metas de ahorro y ver reportes."
+                                    : "Open the full budget tool to manage savings goals and view reports."
+                            }
+                        </p>
+                    </div>
+                </div>
+                <a
+                    href={actualUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="mt-5 w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl transition-colors shadow-sm active:scale-[0.98]"
+                >
+                    <svg
+                        class="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                        ></path>
+                    </svg>
+                    {
+                        lang === "es"
+                            ? "Abrir Actual Budget"
+                            : "Open Actual Budget"
+                    }
+                </a>
+            </section>
+        </main>
+
+        <BottomNav active="parent" role={user.role} lang={lang} />
+    </div>
+</Layout>

@@ -1,0 +1,230 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BottomNav from "../../components/BottomNav.astro";
+import { apiFetch } from "../../lib/api";
+import { t } from "../../lib/i18n";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+const { data: family } = await apiFetch<any>("/api/families/me", { token });
+---
+
+<Layout title={`${t(lang, "parent_dashboard")} - Family Task Manager`}>
+    <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+        <header
+            class="bg-gradient-to-br from-slate-800 to-slate-700 text-white pt-12 pb-8 px-6 rounded-b-3xl shadow-md"
+        >
+            <p class="text-slate-400 text-sm mb-1">
+                {t(lang, "parent_dashboard")}
+            </p>
+            <h1 class="text-2xl font-bold">{family?.name || "—"}</h1>
+            <p class="text-slate-400 text-sm mt-1">
+                {t(lang, "parent_members_count")(family?.members?.length ?? 0)}
+            </p>
+        </header>
+
+        <main class="flex-1 px-4 py-6">
+            <div class="grid grid-cols-2 gap-4">
+                <a
+                    href="/parent/tasks"
+                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-primary-200 transition-all flex flex-col items-center text-center gap-3"
+                >
+                    <div
+                        class="w-12 h-12 rounded-xl bg-primary-50 flex items-center justify-center"
+                    >
+                        <svg
+                            class="h-6 w-6 text-primary-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                            ></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800">
+                            {t(lang, "parent_tasks_label")}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {t(lang, "parent_tasks_desc")}
+                        </p>
+                    </div>
+                </a>
+                <a
+                    href="/parent/rewards"
+                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-amber-200 transition-all flex flex-col items-center text-center gap-3"
+                >
+                    <div
+                        class="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center"
+                    >
+                        <svg
+                            class="h-6 w-6 text-amber-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"
+                            ></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800">
+                            {t(lang, "parent_rewards_label")}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {t(lang, "parent_rewards_desc")}
+                        </p>
+                    </div>
+                </a>
+                <a
+                    href="/parent/members"
+                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-violet-200 transition-all flex flex-col items-center text-center gap-3"
+                >
+                    <div
+                        class="w-12 h-12 rounded-xl bg-violet-50 flex items-center justify-center"
+                    >
+                        <svg
+                            class="h-6 w-6 text-violet-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                            ></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800">
+                            {t(lang, "parent_members_label")}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {t(lang, "parent_members_desc")}
+                        </p>
+                    </div>
+                </a>
+                <a
+                    href="/parent/consequences"
+                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-rose-200 transition-all flex flex-col items-center text-center gap-3"
+                >
+                    <div
+                        class="w-12 h-12 rounded-xl bg-rose-50 flex items-center justify-center"
+                    >
+                        <svg
+                            class="h-6 w-6 text-rose-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                            ></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800">
+                            {t(lang, "parent_consequences_label")}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {t(lang, "parent_consequences_desc")}
+                        </p>
+                    </div>
+                </a>
+                <a
+                    href="/parent/finances"
+                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-emerald-200 transition-all flex flex-col items-center text-center gap-3 col-span-2"
+                >
+                    <div
+                        class="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center"
+                    >
+                        <svg
+                            class="h-6 w-6 text-emerald-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            ></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800">
+                            {
+                                lang === "es"
+                                    ? "💰 Finanzas Familiares"
+                                    : "💰 Family Finances"
+                            }
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {
+                                lang === "es"
+                                    ? "Presupuesto, mandado, domingos, ahorro"
+                                    : "Budget, groceries, allowance, savings"
+                            }
+                        </p>
+                    </div>
+                </a>
+            </div>
+
+            {
+                family?.members && family.members.length > 0 && (
+                    <section class="mt-6 bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                        <h2 class="font-bold text-slate-800 mb-3">
+                            {t(lang, "parent_family_members")}
+                        </h2>
+                        <div class="space-y-3">
+                            {family.members.map((m: any) => (
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-sm">
+                                        {m.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="font-medium text-slate-800 text-sm">
+                                            {m.name}
+                                        </p>
+                                        <p class="text-xs text-slate-400">
+                                            {m.role}
+                                        </p>
+                                    </div>
+                                    <span class="text-sm font-bold text-amber-600">
+                                        {m.points ?? 0} pts
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )
+            }
+        </main>
+
+        <BottomNav active="parent" role={user.role} lang={lang} />
+    </div>
+</Layout>
