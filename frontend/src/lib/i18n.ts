@@ -1,0 +1,294 @@
+/**
+ * Internationalization (i18n) for the Family Task Manager frontend.
+ * Supports English (en) and Spanish (es).
+ */
+
+export type Lang = "en" | "es";
+
+export const translations = {
+    en: {
+        // Common / Nav
+        nav_tasks: "Tasks",
+        nav_rewards: "Rewards",
+        nav_profile: "Profile",
+        nav_manage: "Manage",
+        nav_logout: "Logout",
+
+        // Auth
+        login_welcome: "Welcome Back",
+        login_subtitle: "Sign in to Family Task Manager",
+        login_email: "Email Address",
+        login_password: "Password",
+        login_submit: "Sign In",
+        login_demo: "Demo Accounts",
+        login_error_invalid: "Invalid email or password",
+        login_error_server: "An error occurred connecting to the server.",
+
+        // Dashboard
+        dashboard_hello: "Hello,",
+        dashboard_my_points: "My Points",
+        dashboard_pending_tasks: "Pending Tasks",
+        dashboard_tasks_count: (n: number) => `${n} ${n === 1 ? "task" : "tasks"}`,
+        dashboard_all_done: "All done!",
+        dashboard_all_done_subtitle: "No pending tasks right now. Enjoy your day!",
+        dashboard_completed: "Completed",
+        dashboard_earned: (n: number) => `+${n} pts earned`,
+
+        // Rewards
+        rewards_title: "Rewards Store",
+        rewards_subtitle: "Spend your hard-earned points!",
+        rewards_available_points: "Available Points",
+        rewards_cost: "Cost",
+        rewards_pts: "pts",
+        rewards_redeem: "Redeem Reward",
+        rewards_not_enough: "Not enough points",
+        rewards_empty_title: "No rewards yet",
+        rewards_empty_subtitle: "Ask a parent to add some rewards!",
+        rewards_redeemed_flash: "Reward redeemed! Points deducted.",
+
+        // Profile
+        profile_title: "Profile",
+        profile_points_summary: "Points Summary",
+        profile_earned: "Earned",
+        profile_spent: "Spent",
+        profile_balance: "Balance",
+        profile_active_consequences: "Active Consequences",
+        profile_until: "Until",
+        profile_change_password: "Change Password",
+        profile_current_password: "Current Password",
+        profile_new_password: "New Password",
+        profile_update_password: "Update Password",
+        profile_password_success: "Password updated successfully!",
+        profile_password_error: "Failed to update password.",
+
+        // Parent Dashboard
+        parent_dashboard: "Parent Dashboard",
+        parent_members_count: (n: number) => `${n} ${n === 1 ? "member" : "members"}`,
+        parent_tasks_label: "Tasks",
+        parent_tasks_desc: "Create & manage tasks",
+        parent_rewards_label: "Rewards",
+        parent_rewards_desc: "Create & manage rewards",
+        parent_members_label: "Members",
+        parent_members_desc: "Manage family members",
+        parent_consequences_label: "Consequences",
+        parent_consequences_desc: "Create & resolve",
+        parent_family_members: "Family Members",
+
+        // Parent Tasks
+        pt_title: "Manage Tasks",
+        pt_tasks_in_family: (n: number) => `${n} tasks in family`,
+        pt_create_title: "Create New Task",
+        pt_task_title: "Task title",
+        pt_description: "Description (optional)",
+        pt_points: "Points",
+        pt_due_date: "Due Date",
+        pt_assign_to: "Assign to",
+        pt_unassigned: "— Unassigned —",
+        pt_create_btn: "Create Task",
+        pt_all_tasks: "All Tasks",
+        pt_none: "No tasks yet. Create one above!",
+        pt_created: "Task created!",
+        pt_deleted: "Task deleted.",
+        pt_edit_title: "Edit Task",
+        pt_save: "Save Changes",
+
+        // Parent Rewards
+        pr_title: "Manage Rewards",
+        pr_active_rewards: (n: number) => `${n} active rewards`,
+        pr_create_title: "Create New Reward",
+        pr_name: "Reward name",
+        pr_point_cost: "Point Cost",
+        pr_category: "Category",
+        pr_none_cat: "— None —",
+        pr_create_btn: "Create Reward",
+        pr_list_title: "Active Rewards",
+        pr_none: "No rewards yet. Create one above!",
+        pr_created: "Reward created!",
+        pr_deleted: "Reward deleted.",
+        pr_edit_title: "Edit Reward",
+
+        // Parent Members
+        pm_title: "Family Members",
+        pm_deactivate: "Deactivate",
+        pm_activate: "Activate",
+        pm_adjust_points: "Adjust Points",
+        pm_pts_placeholder: "±pts",
+        pm_reason_placeholder: "Reason",
+        pm_apply: "Apply",
+        pm_register_title: "Register New Child",
+        pm_name: "Full name",
+        pm_email: "Email address",
+        pm_password: "Password (min 8 chars)",
+        pm_register_btn: "Register Child",
+        pm_registered: "Member registered!",
+        pm_points_adjusted: "Points adjusted!",
+
+        // Parent Consequences
+        pc_title: "Consequences",
+        pc_create_title: "Create Consequence",
+        pc_consequence_title: "Consequence title",
+        pc_assign_to: "Assign to",
+        pc_select_member: "— Select member —",
+        pc_create_btn: "Create Consequence",
+        pc_list_title: "All Consequences",
+        pc_none: "No consequences. 🎉",
+        pc_active: "Active",
+        pc_resolved: "Resolved",
+        pc_resolve_btn: "Resolve",
+        pc_created: "Consequence created.",
+        pc_resolved_flash: "Consequence resolved!",
+        pc_deleted: "Consequence deleted.",
+        pc_until: "Until",
+
+        // Back links
+        back_parent: "Parent Dashboard",
+        back_all_tasks: "All Tasks",
+        back_all_rewards: "All Rewards",
+    },
+    es: {
+        // Common / Nav
+        nav_tasks: "Tareas",
+        nav_rewards: "Premios",
+        nav_profile: "Perfil",
+        nav_manage: "Gestión",
+        nav_logout: "Salir",
+
+        // Auth
+        login_welcome: "Bienvenido",
+        login_subtitle: "Iniciar sesión en Family Task Manager",
+        login_email: "Correo Electrónico",
+        login_password: "Contraseña",
+        login_submit: "Iniciar Sesión",
+        login_demo: "Cuentas Demo",
+        login_error_invalid: "Correo o contraseña incorrectos",
+        login_error_server: "Error al conectar con el servidor.",
+
+        // Dashboard
+        dashboard_hello: "Hola,",
+        dashboard_my_points: "Mis Puntos",
+        dashboard_pending_tasks: "Tareas Pendientes",
+        dashboard_tasks_count: (n: number) => `${n} ${n === 1 ? "tarea" : "tareas"}`,
+        dashboard_all_done: "¡Todo listo!",
+        dashboard_all_done_subtitle: "No hay tareas pendientes. ¡Disfruta tu día!",
+        dashboard_completed: "Completadas",
+        dashboard_earned: (n: number) => `+${n} pts ganados`,
+
+        // Rewards
+        rewards_title: "Tienda de Premios",
+        rewards_subtitle: "¡Gasta tus puntos ganados!",
+        rewards_available_points: "Puntos Disponibles",
+        rewards_cost: "Costo",
+        rewards_pts: "pts",
+        rewards_redeem: "Canjear Premio",
+        rewards_not_enough: "No tienes suficientes puntos",
+        rewards_empty_title: "Sin premios aún",
+        rewards_empty_subtitle: "¡Pide a un padre que agregue premios!",
+        rewards_redeemed_flash: "¡Premio canjeado! Puntos descontados.",
+
+        // Profile
+        profile_title: "Perfil",
+        profile_points_summary: "Resumen de Puntos",
+        profile_earned: "Ganados",
+        profile_spent: "Gastados",
+        profile_balance: "Saldo",
+        profile_active_consequences: "Consecuencias Activas",
+        profile_until: "Hasta",
+        profile_change_password: "Cambiar Contraseña",
+        profile_current_password: "Contraseña Actual",
+        profile_new_password: "Nueva Contraseña",
+        profile_update_password: "Actualizar Contraseña",
+        profile_password_success: "¡Contraseña actualizada!",
+        profile_password_error: "No se pudo actualizar la contraseña.",
+
+        // Parent Dashboard
+        parent_dashboard: "Panel de Padres",
+        parent_members_count: (n: number) => `${n} ${n === 1 ? "miembro" : "miembros"}`,
+        parent_tasks_label: "Tareas",
+        parent_tasks_desc: "Crear y gestionar tareas",
+        parent_rewards_label: "Premios",
+        parent_rewards_desc: "Crear y gestionar premios",
+        parent_members_label: "Miembros",
+        parent_members_desc: "Gestionar miembros de la familia",
+        parent_consequences_label: "Consecuencias",
+        parent_consequences_desc: "Crear y resolver",
+        parent_family_members: "Miembros de la Familia",
+
+        // Parent Tasks
+        pt_title: "Gestionar Tareas",
+        pt_tasks_in_family: (n: number) => `${n} tareas en la familia`,
+        pt_create_title: "Crear Nueva Tarea",
+        pt_task_title: "Título de la tarea",
+        pt_description: "Descripción (opcional)",
+        pt_points: "Puntos",
+        pt_due_date: "Fecha Límite",
+        pt_assign_to: "Asignar a",
+        pt_unassigned: "— Sin asignar —",
+        pt_create_btn: "Crear Tarea",
+        pt_all_tasks: "Todas las Tareas",
+        pt_none: "Sin tareas. ¡Crea una arriba!",
+        pt_created: "¡Tarea creada!",
+        pt_deleted: "Tarea eliminada.",
+        pt_edit_title: "Editar Tarea",
+        pt_save: "Guardar Cambios",
+
+        // Parent Rewards
+        pr_title: "Gestionar Premios",
+        pr_active_rewards: (n: number) => `${n} premios activos`,
+        pr_create_title: "Crear Nuevo Premio",
+        pr_name: "Nombre del premio",
+        pr_point_cost: "Costo en Puntos",
+        pr_category: "Categoría",
+        pr_none_cat: "— Ninguna —",
+        pr_create_btn: "Crear Premio",
+        pr_list_title: "Premios Activos",
+        pr_none: "Sin premios. ¡Crea uno arriba!",
+        pr_created: "¡Premio creado!",
+        pr_deleted: "Premio eliminado.",
+        pr_edit_title: "Editar Premio",
+
+        // Parent Members
+        pm_title: "Miembros de la Familia",
+        pm_deactivate: "Desactivar",
+        pm_activate: "Activar",
+        pm_adjust_points: "Ajustar Puntos",
+        pm_pts_placeholder: "±pts",
+        pm_reason_placeholder: "Motivo",
+        pm_apply: "Aplicar",
+        pm_register_title: "Registrar Nuevo Hijo",
+        pm_name: "Nombre completo",
+        pm_email: "Correo electrónico",
+        pm_password: "Contraseña (mín. 8 caracteres)",
+        pm_register_btn: "Registrar Hijo",
+        pm_registered: "¡Miembro registrado!",
+        pm_points_adjusted: "¡Puntos ajustados!",
+
+        // Parent Consequences
+        pc_title: "Consecuencias",
+        pc_create_title: "Crear Consecuencia",
+        pc_consequence_title: "Título de la consecuencia",
+        pc_assign_to: "Asignar a",
+        pc_select_member: "— Seleccionar miembro —",
+        pc_create_btn: "Crear Consecuencia",
+        pc_list_title: "Todas las Consecuencias",
+        pc_none: "Sin consecuencias. 🎉",
+        pc_active: "Activa",
+        pc_resolved: "Resuelta",
+        pc_resolve_btn: "Resolver",
+        pc_created: "Consecuencia creada.",
+        pc_resolved_flash: "¡Consecuencia resuelta!",
+        pc_deleted: "Consecuencia eliminada.",
+        pc_until: "Hasta",
+
+        // Back links
+        back_parent: "Panel de Padres",
+        back_all_tasks: "Todas las Tareas",
+        back_all_rewards: "Todos los Premios",
+    },
+} as const;
+
+type TranslationKey = keyof typeof translations.en;
+
+export function t(lang: string, key: TranslationKey): any {
+    const locale = lang === "es" ? translations.es : translations.en;
+    return locale[key] ?? translations.en[key] ?? key;
+}
