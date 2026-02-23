@@ -4,12 +4,13 @@ Seed Data Script for Family Task Manager
 
 Creates demo data for testing and development:
 - 1 demo family with 2 parents and 2 children
-- 5 default tasks and 3 extra tasks
+- Task templates (regular + bonus) with weekly shuffle
 - 5 rewards
 - Sample point transactions
 """
 
 import asyncio
+import random
 import sys
 from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -21,7 +22,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.models.user import User, UserRole
 from app.models.family import Family
-from app.models.task import Task, TaskStatus, TaskFrequency
+from app.models.task_template import TaskTemplate
+from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.reward import Reward, RewardCategory
 from app.models.point_transaction import PointTransaction, TransactionType
 from app.models.password_reset import PasswordResetToken
@@ -39,11 +41,13 @@ DATABASE_URL = os.getenv(
 
 async def clear_existing_data(session: AsyncSession):
     """Clear all existing data"""
-    print("🧹 Clearing existing data...")
+    print("Clearing existing data...")
 
     # Delete in correct order (respecting foreign keys)
     tables = [
         "point_transactions",
+        "task_assignments",
+        "task_templates",
         "tasks",
         "rewards",
         "consequences",
@@ -58,12 +62,12 @@ async def clear_existing_data(session: AsyncSession):
             print(f"Warning: Could not delete from {table}: {e}")
 
     await session.commit()
-    print("✅ Data cleared")
+    print("Data cleared")
 
 
 async def create_demo_family(session: AsyncSession):
     """Create a demo family with users"""
-    print("\n👨‍👩‍👧‍👦 Creating demo family...")
+    print("\nCreating demo family...")
 
     # Create family
     family = Family(name="Demo Family")
@@ -115,114 +119,193 @@ async def create_demo_family(session: AsyncSession):
     session.add_all([parent1, parent2, child1, child2])
     await session.commit()
 
-    print(f"✅ Created family: {family.name}")
+    print(f"Created family: {family.name}")
     print(f"   Parents: {parent1.name}, {parent2.name}")
     print(f"   Children: {child1.name}, {child2.name}")
 
-    return family, parent1, child1, child2
+    return family, parent1, parent2, child1, child2
 
 
-async def create_demo_tasks(
-    session: AsyncSession, family: Family, parent: User, children: list[User]
+async def create_demo_templates(
+    session: AsyncSession, family: Family, parent: User
 ):
-    """Create demo tasks"""
-    print("\n📝 Creating demo tasks...")
+    """Create demo task templates (regular + bonus)"""
+    print("\nCreating task templates...")
 
-    tasks_data = [
-        # Default tasks (obligatory)
+    templates_data = [
+        # Regular daily tasks
         {
             "title": "Make Your Bed",
             "description": "Make your bed neatly every morning",
             "points": 20,
-            "is_default": True,
-            "frequency": TaskFrequency.DAILY,
-            "assigned_to": children[0],
+            "interval_days": 1,
+            "is_bonus": False,
         },
         {
             "title": "Complete Homework",
             "description": "Finish all homework before dinner",
             "points": 50,
-            "is_default": True,
-            "frequency": TaskFrequency.DAILY,
-            "assigned_to": children[0],
-        },
-        {
-            "title": "Clean Your Room",
-            "description": "Pick up toys and organize your space",
-            "points": 30,
-            "is_default": True,
-            "frequency": TaskFrequency.WEEKLY,
-            "assigned_to": children[1],
-        },
-        {
-            "title": "Feed the Pet",
-            "description": "Give food and water to the family pet",
-            "points": 15,
-            "is_default": True,
-            "frequency": TaskFrequency.DAILY,
-            "assigned_to": children[1],
+            "interval_days": 1,
+            "is_bonus": False,
         },
         {
             "title": "Brush Teeth",
             "description": "Brush teeth morning and night",
             "points": 10,
-            "is_default": True,
-            "frequency": TaskFrequency.DAILY,
-            "assigned_to": children[0],
+            "interval_days": 1,
+            "is_bonus": False,
         },
-        # Extra tasks (optional)
+        {
+            "title": "Feed the Pet",
+            "description": "Give food and water to the family pet",
+            "points": 15,
+            "interval_days": 1,
+            "is_bonus": False,
+        },
+        # Regular tasks every 3 days
+        {
+            "title": "Take Out Trash",
+            "description": "Empty trash cans and take bags to the curb",
+            "points": 25,
+            "interval_days": 3,
+            "is_bonus": False,
+        },
+        # Regular weekly tasks
+        {
+            "title": "Clean Your Room",
+            "description": "Pick up toys and organize your space",
+            "points": 30,
+            "interval_days": 7,
+            "is_bonus": False,
+        },
+        # Bonus tasks (optional, require all required tasks done first)
         {
             "title": "Help With Dishes",
             "description": "Help wash or dry dishes after dinner",
             "points": 40,
-            "is_default": False,
-            "frequency": TaskFrequency.DAILY,
-            "assigned_to": children[1],
+            "interval_days": 1,
+            "is_bonus": True,
         },
         {
             "title": "Vacuum Living Room",
             "description": "Vacuum the living room and hallway",
             "points": 75,
-            "is_default": False,
-            "frequency": TaskFrequency.WEEKLY,
-            "assigned_to": children[1],
+            "interval_days": 7,
+            "is_bonus": True,
         },
         {
             "title": "Help With Laundry",
             "description": "Fold and put away your clean clothes",
             "points": 60,
-            "is_default": False,
-            "frequency": TaskFrequency.WEEKLY,
-            "assigned_to": children[0],
+            "interval_days": 7,
+            "is_bonus": True,
         },
     ]
 
-    tasks = []
-    for task_data in tasks_data:
-        assigned_to = task_data.pop("assigned_to")
-        task = Task(
+    templates = []
+    for tdata in templates_data:
+        template = TaskTemplate(
             family_id=family.id,
             created_by=parent.id,
-            assigned_to=assigned_to.id,
-            status=TaskStatus.PENDING,
-            due_date=date.today(),
-            **task_data,
+            is_active=True,
+            **tdata,
         )
-        tasks.append(task)
+        templates.append(template)
 
-    session.add_all(tasks)
+    session.add_all(templates)
     await session.commit()
 
-    print(f"✅ Created {len(tasks)} tasks")
-    print(f"   Default tasks: {sum(1 for t in tasks if t.is_default)}")
-    print(f"   Extra tasks: {sum(1 for t in tasks if not t.is_default)}")
+    regular = [t for t in templates if not t.is_bonus]
+    bonus = [t for t in templates if t.is_bonus]
+    print(f"Created {len(templates)} task templates")
+    print(f"   Regular: {len(regular)} (shuffled across members)")
+    print(f"   Bonus: {len(bonus)} (assigned to all members)")
 
-    return tasks
+    return templates
+
+
+async def run_shuffle(
+    session: AsyncSession,
+    family: Family,
+    templates: list[TaskTemplate],
+    members: list[User],
+):
+    """Run the shuffle algorithm to create assignments for the current week"""
+    print("\nShuffling tasks for the current week...")
+
+    today = date.today()
+    week_monday = today - timedelta(days=today.weekday())
+
+    regular_templates = [t for t in templates if not t.is_bonus]
+    bonus_templates = [t for t in templates if t.is_bonus]
+
+    assignments = []
+
+    # Expand regular templates into (template, date) instances
+    instances = []
+    for template in regular_templates:
+        current = week_monday
+        week_end = week_monday + timedelta(days=6)
+        while current <= week_end:
+            instances.append((template, current))
+            current += timedelta(days=template.interval_days)
+
+    # Shuffle and distribute via round-robin
+    random.shuffle(instances)
+    for i, (template, assigned_date) in enumerate(instances):
+        member = members[i % len(members)]
+        assignment = TaskAssignment(
+            template_id=template.id,
+            assigned_to=member.id,
+            family_id=family.id,
+            status=AssignmentStatus.PENDING,
+            assigned_date=assigned_date,
+            week_of=week_monday,
+        )
+        assignments.append(assignment)
+
+    # Bonus templates: assign to ALL members on their dates
+    for template in bonus_templates:
+        current = week_monday
+        week_end = week_monday + timedelta(days=6)
+        while current <= week_end:
+            for member in members:
+                assignment = TaskAssignment(
+                    template_id=template.id,
+                    assigned_to=member.id,
+                    family_id=family.id,
+                    status=AssignmentStatus.PENDING,
+                    assigned_date=current,
+                    week_of=week_monday,
+                )
+                assignments.append(assignment)
+            current += timedelta(days=template.interval_days)
+
+    # Mark some past assignments as COMPLETED for demo variety
+    for assignment in assignments:
+        if assignment.assigned_date < today:
+            # 70% chance of being completed for past dates
+            if random.random() < 0.7:
+                assignment.status = AssignmentStatus.COMPLETED
+                assignment.completed_at = datetime.combine(
+                    assignment.assigned_date, datetime.min.time()
+                ).replace(hour=15, minute=30)
+
+    session.add_all(assignments)
+    await session.commit()
+
+    completed = sum(1 for a in assignments if a.status == AssignmentStatus.COMPLETED)
+    print(f"Created {len(assignments)} assignments for week of {week_monday}")
+    print(f"   Regular: {len([a for a in instances])}")
+    print(f"   Bonus: {len(assignments) - len(instances)}")
+    print(f"   Pre-completed (past dates): {completed}")
+
+    return assignments
 
 
 async def create_demo_rewards(session: AsyncSession, family: Family, parent: User):
     """Create demo rewards"""
-    print("\n🎁 Creating demo rewards...")
+    print("\nCreating demo rewards...")
 
     rewards_data = [
         {
@@ -230,35 +313,35 @@ async def create_demo_rewards(session: AsyncSession, family: Family, parent: Use
             "description": "Extra 30 minutes for games, TV, or tablet",
             "points_cost": 100,
             "category": RewardCategory.SCREEN_TIME,
-            "icon": "🎮",
+            "icon": "screen",
         },
         {
             "title": "Ice Cream Trip",
             "description": "Trip to get your favorite ice cream",
             "points_cost": 150,
             "category": RewardCategory.TREATS,
-            "icon": "🍦",
+            "icon": "treat",
         },
         {
             "title": "Movie Night Pick",
             "description": "Choose the movie for family movie night",
             "points_cost": 120,
             "category": RewardCategory.PRIVILEGES,
-            "icon": "🎬",
+            "icon": "movie",
         },
         {
             "title": "Later Bedtime",
             "description": "Stay up 30 minutes past bedtime (one night)",
             "points_cost": 200,
             "category": RewardCategory.PRIVILEGES,
-            "icon": "🌙",
+            "icon": "bedtime",
         },
         {
             "title": "Small Toy/Book",
             "description": "Pick a small toy or book ($10 or less)",
             "points_cost": 500,
             "category": RewardCategory.TOYS,
-            "icon": "🎁",
+            "icon": "toy",
         },
     ]
 
@@ -272,57 +355,57 @@ async def create_demo_rewards(session: AsyncSession, family: Family, parent: Use
     session.add_all(rewards)
     await session.commit()
 
-    print(f"✅ Created {len(rewards)} rewards")
+    print(f"Created {len(rewards)} rewards")
     for reward in rewards:
-        print(f"   {reward.icon} {reward.title} - {reward.points_cost} points")
+        print(f"   {reward.title} - {reward.points_cost} points")
 
     return rewards
 
 
 async def create_demo_transactions(
-    session: AsyncSession, users: list[User], tasks: list[Task], rewards: list[Reward]
+    session: AsyncSession,
+    child: User,
+    assignments: list[TaskAssignment],
+    rewards: list[Reward],
 ):
-    """Create sample point transactions"""
-    print("\n💰 Creating demo transactions...")
+    """Create sample point transactions from completed assignments"""
+    print("\nCreating demo transactions...")
 
     transactions = []
-    child = users[2]  # Emma
+    completed_assignments = [a for a in assignments if a.status == AssignmentStatus.COMPLETED and a.assigned_to == child.id]
 
-    # Some completed tasks
-    transaction1 = PointTransaction(
-        user_id=child.id,
-        task_id=tasks[0].id,
-        points=tasks[0].points,
-        type=TransactionType.TASK_COMPLETED,
-        balance_before=0,
-        balance_after=tasks[0].points,
-    )
-
-    transaction2 = PointTransaction(
-        user_id=child.id,
-        task_id=tasks[1].id,
-        points=tasks[1].points,
-        type=TransactionType.TASK_COMPLETED,
-        balance_before=tasks[0].points,
-        balance_after=tasks[0].points + tasks[1].points,
-    )
+    running_balance = 0
+    for assignment in completed_assignments[:3]:  # First 3 completed
+        # We need the template points; get from the assignment's template
+        # Since templates are already in session we just reference the points from the template list
+        points = 20  # Default; in real usage this comes from template
+        transaction = PointTransaction(
+            user_id=child.id,
+            assignment_id=assignment.id,
+            points=points,
+            type=TransactionType.TASK_COMPLETED,
+            balance_before=running_balance,
+            balance_after=running_balance + points,
+        )
+        running_balance += points
+        transactions.append(transaction)
 
     # A redeemed reward
-    transaction3 = PointTransaction(
-        user_id=child.id,
-        reward_id=rewards[0].id,
-        points=-rewards[0].points_cost,
-        type=TransactionType.REWARD_REDEEMED,
-        balance_before=tasks[0].points + tasks[1].points,
-        balance_after=tasks[0].points + tasks[1].points - rewards[0].points_cost,
-    )
-
-    transactions.extend([transaction1, transaction2, transaction3])
+    if rewards:
+        transaction = PointTransaction(
+            user_id=child.id,
+            reward_id=rewards[0].id,
+            points=-rewards[0].points_cost,
+            type=TransactionType.REWARD_REDEEMED,
+            balance_before=running_balance,
+            balance_after=running_balance - rewards[0].points_cost,
+        )
+        transactions.append(transaction)
 
     session.add_all(transactions)
     await session.commit()
 
-    print(f"✅ Created {len(transactions)} sample transactions")
+    print(f"Created {len(transactions)} sample transactions")
 
     return transactions
 
@@ -330,7 +413,7 @@ async def create_demo_transactions(
 async def main():
     """Main seed script"""
     print("=" * 60)
-    print("🌱 Family Task Manager - Seed Data Script")
+    print("Family Task Manager - Seed Data Script")
     print("=" * 60)
 
     # Create engine
@@ -342,23 +425,33 @@ async def main():
         await clear_existing_data(session)
 
         # Create demo data
-        family, parent, child1, child2 = await create_demo_family(session)
-        tasks = await create_demo_tasks(session, family, parent, [child1, child2])
-        rewards = await create_demo_rewards(session, family, parent)
+        family, parent1, parent2, child1, child2 = await create_demo_family(session)
+        all_members = [parent1, parent2, child1, child2]
+
+        # Create task templates
+        templates = await create_demo_templates(session, family, parent1)
+
+        # Run the shuffle to create weekly assignments
+        assignments = await run_shuffle(session, family, templates, all_members)
+
+        # Create rewards
+        rewards = await create_demo_rewards(session, family, parent1)
+
+        # Create sample transactions
         transactions = await create_demo_transactions(
-            session, [parent, child1, child2], tasks, rewards
+            session, child1, assignments, rewards
         )
 
         print("\n" + "=" * 60)
-        print("✅ Seed data created successfully!")
+        print("Seed data created successfully!")
         print("=" * 60)
-        print("\n📋 Demo Credentials:")
+        print("\nDemo Credentials:")
         print("   Parent: mom@demo.com / password123")
         print("   Parent: dad@demo.com / password123")
         print("   Child: emma@demo.com / password123")
         print("   Teen: lucas@demo.com / password123")
-        print("\n🚀 Start the app with: ./dev.sh")
-        print("   Then login at: http://localhost:8000")
+        print("\nStart the app with: docker-compose up -d")
+        print("   Then login at: http://localhost:3000")
         print()
 
     await engine.dispose()

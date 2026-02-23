@@ -33,6 +33,23 @@ from app.schemas.task import (
     TaskWithDetails,
 )
 
+from app.schemas.task_template import (
+    TaskTemplateBase,
+    TaskTemplateCreate,
+    TaskTemplateUpdate,
+    TaskTemplateResponse,
+    TaskTemplateWithStats,
+)
+
+from app.schemas.task_assignment import (
+    AssignmentComplete,
+    ShuffleRequest,
+    ShuffleResponse,
+    TaskAssignmentResponse,
+    TaskAssignmentWithDetails,
+    DailyProgressResponse,
+)
+
 from app.schemas.reward import (
     RewardBase,
     RewardCreate,
@@ -79,13 +96,26 @@ __all__ = [
     "FamilyResponse",
     "FamilyWithMembers",
     "FamilyStats",
-    # Task schemas
+    # Task schemas (legacy)
     "TaskBase",
     "TaskCreate",
     "TaskUpdate",
     "TaskComplete",
     "TaskResponse",
     "TaskWithDetails",
+    # Task Template schemas
+    "TaskTemplateBase",
+    "TaskTemplateCreate",
+    "TaskTemplateUpdate",
+    "TaskTemplateResponse",
+    "TaskTemplateWithStats",
+    # Task Assignment schemas
+    "AssignmentComplete",
+    "ShuffleRequest",
+    "ShuffleResponse",
+    "TaskAssignmentResponse",
+    "TaskAssignmentWithDetails",
+    "DailyProgressResponse",
     # Reward schemas
     "RewardBase",
     "RewardCreate",

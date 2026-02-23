@@ -445,7 +445,7 @@ if [ "$SKIP_MIGRATIONS" = false ]; then
         ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && set -a && source ${REMOTE_PATH}/.env 2>/dev/null && set +a && ${REMOTE_PATH}/venv/bin/python3 -m alembic upgrade head"
 
         if [ $? -eq 0 ]; then
-            NEW_MIGRATION=$(ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && export \$(grep -v '^#' ${REMOTE_PATH}/.env 2>/dev/null | xargs) && ${REMOTE_PATH}/venv/bin/python3 -m alembic current 2>&1 | grep -v 'INFO'" || echo "Unknown")
+            NEW_MIGRATION=$(ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && set -a && source ${REMOTE_PATH}/.env 2>/dev/null && set +a && ${REMOTE_PATH}/venv/bin/python3 -m alembic current 2>&1 | grep -v 'INFO'" || echo "Unknown")
             echo -e "${GREEN}  Migrations completed${NC}"
             if [ "$CURRENT_MIGRATION" != "$NEW_MIGRATION" ]; then
                 echo -e "${GREEN}  Database schema updated: ${NEW_MIGRATION}${NC}"

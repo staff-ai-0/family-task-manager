@@ -51,7 +51,8 @@ class Consequence(Base):
     resolved = Column(Boolean, default=False, nullable=False)
     
     # Linkage
-    triggered_by_task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    triggered_by_task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)  # Legacy
+    triggered_by_assignment_id = Column(UUID(as_uuid=True), ForeignKey("task_assignments.id", ondelete="SET NULL"), nullable=True)
     applied_to_user = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     family_id = Column(UUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
     
@@ -65,7 +66,8 @@ class Consequence(Base):
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
     # Relationships
-    triggered_task = relationship("Task", back_populates="consequence", foreign_keys=[triggered_by_task_id])
+    triggered_task = relationship("Task", back_populates="consequence", foreign_keys=[triggered_by_task_id])  # Legacy
+    triggered_assignment = relationship("TaskAssignment", back_populates="consequence", foreign_keys=[triggered_by_assignment_id])
     user = relationship("User", back_populates="consequences", foreign_keys=[applied_to_user])
     family = relationship("Family", back_populates="consequences")
 

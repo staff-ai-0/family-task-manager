@@ -83,13 +83,13 @@ module.exports = {
       max_memory_restart: '300M',
       
       // Environment variables (base)
+      // FINANCE_API_KEY should be set in .env, not hardcoded here
       env: {
         NODE_ENV: 'development',
         HOST: '0.0.0.0',
         PORT: 3000,
         API_BASE_URL: 'http://localhost:8000',
         FINANCE_API_URL: 'http://localhost:5007',
-        FINANCE_API_KEY: '',
         ACTUAL_BUDGET_URL: 'http://localhost:5006',
       },
       
@@ -100,7 +100,6 @@ module.exports = {
         PORT: 3000,
         API_BASE_URL: 'http://localhost:8000',
         FINANCE_API_URL: 'http://localhost:5007',
-        FINANCE_API_KEY: '',
         ACTUAL_BUDGET_URL: 'http://localhost:5006',
       },
       
@@ -111,7 +110,6 @@ module.exports = {
         PORT: 3000,
         API_BASE_URL: 'http://localhost:8000',
         FINANCE_API_URL: 'http://localhost:5007',
-        FINANCE_API_KEY: '',
         ACTUAL_BUDGET_URL: 'http://localhost:5006',
       },
       
@@ -140,30 +138,25 @@ module.exports = {
       watch: false,
       max_memory_restart: '200M',
       
-      // Environment variables (base)
+      // Environment variables (base) — loaded from .env at deploy time
+      // ACTUAL_PASSWORD and FINANCE_API_KEY should be set in .env, not here
       env: {
         ACTUAL_SERVER_URL: 'http://localhost:5006',
-        ACTUAL_PASSWORD: '',
         ACTUAL_BUDGET_NAME: 'My Finances',
-        FINANCE_API_KEY: '',
         ALLOWED_ORIGINS: 'http://localhost:3000,http://localhost:3003',
       },
       
       // Staging environment
       env_stage: {
         ACTUAL_SERVER_URL: 'http://localhost:5006',
-        ACTUAL_PASSWORD: '',
         ACTUAL_BUDGET_NAME: 'My Finances',
-        FINANCE_API_KEY: '',
-        ALLOWED_ORIGINS: 'https://fam-stage.a-ai4all.com',
+        ALLOWED_ORIGINS: 'https://fam-stage.a-ai4all.com,http://localhost:3000',
       },
       
       // Production environment
       env_production: {
         ACTUAL_SERVER_URL: 'http://localhost:5006',
-        ACTUAL_PASSWORD: '',
         ACTUAL_BUDGET_NAME: 'My Finances',
-        FINANCE_API_KEY: '',
         ALLOWED_ORIGINS: 'https://fam.a-ai4all.com',
       },
       

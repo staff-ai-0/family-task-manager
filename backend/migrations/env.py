@@ -14,6 +14,8 @@ from app.models import (
     Family,
     User,
     Task,
+    TaskTemplate,
+    TaskAssignment,
     Reward,
     Consequence,
     PointTransaction,

@@ -20,7 +20,11 @@ class Family(Base):
     
     # Relationships
     members = relationship("User", back_populates="family")
+    # Legacy task relationship (to be removed after migration)
     tasks = relationship("Task", back_populates="family", cascade="all, delete-orphan")
+    # New template/assignment relationships
+    task_templates = relationship("TaskTemplate", back_populates="family", cascade="all, delete-orphan")
+    task_assignments = relationship("TaskAssignment", back_populates="family", cascade="all, delete-orphan")
     rewards = relationship("Reward", back_populates="family", cascade="all, delete-orphan")
     consequences = relationship("Consequence", back_populates="family", cascade="all, delete-orphan")
     

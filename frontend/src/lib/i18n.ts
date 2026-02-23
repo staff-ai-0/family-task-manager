@@ -33,6 +33,14 @@ export const translations = {
         dashboard_all_done_subtitle: "No pending tasks right now. Enjoy your day!",
         dashboard_completed: "Completed",
         dashboard_earned: (n: number) => `+${n} pts earned`,
+        dashboard_required: "Required Tasks",
+        dashboard_bonus: "Bonus Tasks",
+        dashboard_bonus_locked: "Complete all required tasks to unlock bonus tasks",
+        dashboard_bonus_unlocked: "Bonus tasks unlocked!",
+        dashboard_progress: (done: number, total: number) => `${done}/${total} done`,
+        dashboard_no_assignments: "No tasks assigned for today. Ask a parent to shuffle!",
+        dashboard_complete_btn: "Complete",
+        dashboard_today: "Today",
 
         // Rewards
         rewards_title: "Rewards Store",
@@ -74,23 +82,52 @@ export const translations = {
         parent_consequences_desc: "Create & resolve",
         parent_family_members: "Family Members",
 
-        // Parent Tasks
+        // Parent Tasks (Templates)
         pt_title: "Manage Tasks",
-        pt_tasks_in_family: (n: number) => `${n} tasks in family`,
-        pt_create_title: "Create New Task",
+        pt_templates_in_family: (n: number) => `${n} ${n === 1 ? "template" : "templates"} in family`,
+        pt_create_title: "Create New Template",
         pt_task_title: "Task title",
         pt_description: "Description (optional)",
         pt_points: "Points",
+        pt_interval: "Frequency",
+        pt_interval_daily: "Daily",
+        pt_interval_every3: "Every 3 days",
+        pt_interval_weekly: "Weekly",
+        pt_is_bonus: "Bonus task",
+        pt_is_bonus_hint: "Bonus tasks unlock after completing all required tasks for the day",
+        pt_create_btn: "Create Template",
+        pt_all_templates: "All Templates",
+        pt_none: "No templates yet. Create one above!",
+        pt_created: "Template created!",
+        pt_deleted: "Template deleted.",
+        pt_edit_title: "Edit Template",
+        pt_save: "Save Changes",
+        pt_active: "Active",
+        pt_inactive: "Inactive",
+        pt_bonus: "Bonus",
+        pt_regular: "Required",
+        pt_daily: "Daily",
+        pt_every_n_days: (n: number) => `Every ${n}d`,
+        pt_weekly: "Weekly",
+
+        // Shuffle
+        shuffle_title: "Weekly Shuffle",
+        shuffle_btn: "Shuffle Tasks",
+        shuffle_desc: "Randomly assign templates to family members for this week",
+        shuffle_success: (n: number) => `Shuffled! ${n} assignments created.`,
+        shuffle_error: "Failed to shuffle tasks.",
+        shuffle_week_of: "Week of",
+
+        // Assignments (parent view)
+        pa_week_assignments: "This Week's Assignments",
+        pa_no_assignments: "No assignments yet. Press Shuffle to generate!",
+
+        // Legacy compat keys
         pt_due_date: "Due Date",
         pt_assign_to: "Assign to",
         pt_unassigned: "— Unassigned —",
-        pt_create_btn: "Create Task",
         pt_all_tasks: "All Tasks",
-        pt_none: "No tasks yet. Create one above!",
-        pt_created: "Task created!",
-        pt_deleted: "Task deleted.",
-        pt_edit_title: "Edit Task",
-        pt_save: "Save Changes",
+        back_all_tasks: "All Templates",
 
         // Parent Rewards
         pr_title: "Manage Rewards",
@@ -168,10 +205,18 @@ export const translations = {
         dashboard_my_points: "Mis Puntos",
         dashboard_pending_tasks: "Tareas Pendientes",
         dashboard_tasks_count: (n: number) => `${n} ${n === 1 ? "tarea" : "tareas"}`,
-        dashboard_all_done: "¡Todo listo!",
-        dashboard_all_done_subtitle: "No hay tareas pendientes. ¡Disfruta tu día!",
+        dashboard_all_done: "Todo listo!",
+        dashboard_all_done_subtitle: "No hay tareas pendientes. Disfruta tu dia!",
         dashboard_completed: "Completadas",
         dashboard_earned: (n: number) => `+${n} pts ganados`,
+        dashboard_required: "Tareas Obligatorias",
+        dashboard_bonus: "Tareas Bonus",
+        dashboard_bonus_locked: "Completa todas las tareas obligatorias para desbloquear las bonus",
+        dashboard_bonus_unlocked: "Tareas bonus desbloqueadas!",
+        dashboard_progress: (done: number, total: number) => `${done}/${total} listas`,
+        dashboard_no_assignments: "No hay tareas asignadas para hoy. Pide a un padre que haga el shuffle!",
+        dashboard_complete_btn: "Completar",
+        dashboard_today: "Hoy",
 
         // Rewards
         rewards_title: "Tienda de Premios",
@@ -213,23 +258,52 @@ export const translations = {
         parent_consequences_desc: "Crear y resolver",
         parent_family_members: "Miembros de la Familia",
 
-        // Parent Tasks
+        // Parent Tasks (Templates)
         pt_title: "Gestionar Tareas",
-        pt_tasks_in_family: (n: number) => `${n} tareas en la familia`,
-        pt_create_title: "Crear Nueva Tarea",
-        pt_task_title: "Título de la tarea",
-        pt_description: "Descripción (opcional)",
+        pt_templates_in_family: (n: number) => `${n} ${n === 1 ? "plantilla" : "plantillas"} en la familia`,
+        pt_create_title: "Crear Nueva Plantilla",
+        pt_task_title: "Titulo de la tarea",
+        pt_description: "Descripcion (opcional)",
         pt_points: "Puntos",
-        pt_due_date: "Fecha Límite",
-        pt_assign_to: "Asignar a",
-        pt_unassigned: "— Sin asignar —",
-        pt_create_btn: "Crear Tarea",
-        pt_all_tasks: "Todas las Tareas",
-        pt_none: "Sin tareas. ¡Crea una arriba!",
-        pt_created: "¡Tarea creada!",
-        pt_deleted: "Tarea eliminada.",
-        pt_edit_title: "Editar Tarea",
+        pt_interval: "Frecuencia",
+        pt_interval_daily: "Diaria",
+        pt_interval_every3: "Cada 3 dias",
+        pt_interval_weekly: "Semanal",
+        pt_is_bonus: "Tarea bonus",
+        pt_is_bonus_hint: "Las tareas bonus se desbloquean al completar las obligatorias del dia",
+        pt_create_btn: "Crear Plantilla",
+        pt_all_templates: "Todas las Plantillas",
+        pt_none: "Sin plantillas. Crea una arriba!",
+        pt_created: "Plantilla creada!",
+        pt_deleted: "Plantilla eliminada.",
+        pt_edit_title: "Editar Plantilla",
         pt_save: "Guardar Cambios",
+        pt_active: "Activa",
+        pt_inactive: "Inactiva",
+        pt_bonus: "Bonus",
+        pt_regular: "Obligatoria",
+        pt_daily: "Diaria",
+        pt_every_n_days: (n: number) => `Cada ${n}d`,
+        pt_weekly: "Semanal",
+
+        // Shuffle
+        shuffle_title: "Shuffle Semanal",
+        shuffle_btn: "Mezclar Tareas",
+        shuffle_desc: "Asignar plantillas aleatoriamente a los miembros para esta semana",
+        shuffle_success: (n: number) => `Mezclado! ${n} asignaciones creadas.`,
+        shuffle_error: "Error al mezclar tareas.",
+        shuffle_week_of: "Semana del",
+
+        // Assignments (parent view)
+        pa_week_assignments: "Asignaciones de la Semana",
+        pa_no_assignments: "Sin asignaciones. Presiona Mezclar para generar!",
+
+        // Legacy compat keys
+        pt_due_date: "Fecha Limite",
+        pt_assign_to: "Asignar a",
+        pt_unassigned: "-- Sin asignar --",
+        pt_all_tasks: "Todas las Tareas",
+        back_all_tasks: "Todas las Plantillas",
 
         // Parent Rewards
         pr_title: "Gestionar Premios",
@@ -281,7 +355,7 @@ export const translations = {
 
         // Back links
         back_parent: "Panel de Padres",
-        back_all_tasks: "Todas las Tareas",
+        back_all_tasks: "Todas las Plantillas",
         back_all_rewards: "Todos los Premios",
     },
 } as const;

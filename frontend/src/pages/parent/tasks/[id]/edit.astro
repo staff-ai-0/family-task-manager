@@ -24,13 +24,11 @@ if (Astro.request.method === "POST") {
         title: data.get("title"),
         description: data.get("description") || null,
         points: Number(data.get("points")) || 10,
+        interval_days: Number(data.get("interval_days")) || 1,
+        is_bonus: data.get("is_bonus") === "on",
     };
-    const dueDate = data.get("due_date");
-    if (dueDate) payload.due_date = dueDate;
-    const assignedTo = data.get("assigned_to");
-    if (assignedTo) payload.assigned_to = assignedTo;
 
-    const { ok, error } = await apiFetch(`/api/tasks/${id}`, {
+    const { ok, error } = await apiFetch(`/api/task-templates/${id}`, {
         method: "PUT",
         token,
         body: JSON.stringify(payload),
@@ -42,13 +40,8 @@ if (Astro.request.method === "POST") {
     }
 }
 
-const [{ data: task }, { data: family }] = await Promise.all([
-    apiFetch<any>(`/api/tasks/${id}`, { token }),
-    apiFetch<any>("/api/families/me", { token }),
-]);
-if (!task) return Astro.redirect("/parent/tasks");
-const members: any[] = family?.members ?? [];
-const dueDateFormatted = task.due_date ? task.due_date.substring(0, 10) : "";
+const { data: tmpl } = await apiFetch<any>(`/api/task-templates/${id}`, { token });
+if (!tmpl) return Astro.redirect("/parent/tasks");
 ---
 
 <Layout title={`${t(lang, "pt_edit_title")} - Family Task Manager`}>
@@ -60,108 +53,93 @@ const dueDateFormatted = task.due_date ? task.due_date.substring(0, 10) : "";
                 href="/parent/tasks"
                 class="text-primary-200 text-sm flex items-center gap-1 mb-3"
             >
-                <svg
-                    class="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M15 19l-7-7 7-7"></path>
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                 </svg>
                 {t(lang, "back_all_tasks")}
             </a>
             <h1 class="text-2xl font-bold">{t(lang, "pt_edit_title")}</h1>
         </header>
         <main class="flex-1 px-4 py-6">
-            {
-                errorMsg && (
-                    <div class="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">
-                        {errorMsg}
-                    </div>
-                )
-            }
+            {errorMsg && (
+                <div class="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">
+                    {errorMsg}
+                </div>
+            )}
             <form
                 method="POST"
                 class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 space-y-4"
             >
                 <div>
-                    <label class="text-sm font-medium text-slate-700 mb-1 block"
-                        >{t(lang, "pt_task_title")}</label
-                    >
+                    <label class="text-sm font-medium text-slate-700 mb-1 block">
+                        {t(lang, "pt_task_title")}
+                    </label>
                     <input
                         name="title"
                         required
-                        value={task.title}
+                        value={tmpl.title}
                         class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
                     />
                 </div>
                 <div>
-                    <label class="text-sm font-medium text-slate-700 mb-1 block"
-                        >{t(lang, "pt_description")}</label
-                    >
+                    <label class="text-sm font-medium text-slate-700 mb-1 block">
+                        {t(lang, "pt_description")}
+                    </label>
                     <textarea
                         name="description"
                         rows={3}
                         class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none"
-                        >{task.description}</textarea
-                    >
+                    >{tmpl.description}</textarea>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label
-                            class="text-sm font-medium text-slate-700 mb-1 block"
-                            >{t(lang, "pt_points")}</label
-                        >
+                        <label class="text-sm font-medium text-slate-700 mb-1 block">
+                            {t(lang, "pt_points")}
+                        </label>
                         <input
                             type="number"
                             name="points"
                             min={1}
-                            value={task.points}
+                            max={1000}
+                            value={tmpl.points}
                             class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
                         />
                     </div>
                     <div>
-                        <label
-                            class="text-sm font-medium text-slate-700 mb-1 block"
-                            >{t(lang, "pt_due_date")}</label
+                        <label class="text-sm font-medium text-slate-700 mb-1 block">
+                            {t(lang, "pt_interval")}
+                        </label>
+                        <select
+                            name="interval_days"
+                            class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white"
                         >
-                        <input
-                            type="date"
-                            name="due_date"
-                            value={dueDateFormatted}
-                            class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-                        />
+                            <option value="1" selected={tmpl.interval_days === 1}>
+                                {t(lang, "pt_interval_daily")}
+                            </option>
+                            <option value="3" selected={tmpl.interval_days === 3}>
+                                {t(lang, "pt_interval_every3")}
+                            </option>
+                            <option value="7" selected={tmpl.interval_days === 7}>
+                                {t(lang, "pt_interval_weekly")}
+                            </option>
+                        </select>
                     </div>
                 </div>
-                {
-                    members.length > 0 && (
-                        <div>
-                            <label class="text-sm font-medium text-slate-700 mb-1 block">
-                                {t(lang, "pt_assign_to")}
-                            </label>
-                            <select
-                                name="assigned_to"
-                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white"
-                            >
-                                <option value="">
-                                    {t(lang, "pt_unassigned")}
-                                </option>
-                                {members.map((m: any) => (
-                                    <option
-                                        value={m.id}
-                                        selected={task.assigned_to === m.id}
-                                    >
-                                        {m.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    )
-                }
+                <div class="flex items-center gap-3 py-1">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            name="is_bonus"
+                            class="sr-only peer"
+                            checked={tmpl.is_bonus}
+                        />
+                        <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-amber-500 peer-focus:ring-2 peer-focus:ring-amber-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                    <div>
+                        <span class="text-sm font-medium text-slate-700">{t(lang, "pt_is_bonus")}</span>
+                        <p class="text-xs text-slate-400">{t(lang, "pt_is_bonus_hint")}</p>
+                    </div>
+                </div>
                 <button
                     type="submit"
                     class="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm"

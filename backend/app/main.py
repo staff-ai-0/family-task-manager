@@ -7,7 +7,7 @@ import logging
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.exception_handlers import register_exception_handlers
-from app.api.routes import auth, users, tasks, rewards, consequences, families
+from app.api.routes import auth, users, tasks, rewards, consequences, families, task_templates, task_assignments
 
 # Configure logging
 logging.basicConfig(
@@ -72,7 +72,9 @@ register_exception_handlers(app)
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(families.router, prefix="/api/families", tags=["Families"])
-app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
+app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks (Legacy)"])
+app.include_router(task_templates.router, prefix="/api/task-templates", tags=["Task Templates"])
+app.include_router(task_assignments.router, prefix="/api/task-assignments", tags=["Task Assignments"])
 app.include_router(rewards.router, prefix="/api/rewards", tags=["Rewards"])
 app.include_router(
     consequences.router, prefix="/api/consequences", tags=["Consequences"]
