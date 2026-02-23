@@ -53,7 +53,7 @@ def upgrade() -> None:
         sa.Column('template_id', sa.UUID(), nullable=False),
         sa.Column('assigned_to', sa.UUID(), nullable=False),
         sa.Column('family_id', sa.UUID(), nullable=False),
-        sa.Column('status', sa.Enum('pending', 'completed', 'overdue', 'cancelled', name='assignmentstatus'), nullable=False, server_default='pending'),
+        sa.Column('status', postgresql.ENUM('pending', 'completed', 'overdue', 'cancelled', name='assignmentstatus', create_type=False), nullable=False, server_default='pending'),
         sa.Column('assigned_date', sa.Date(), nullable=False),
         sa.Column('due_date', sa.DateTime(timezone=True), nullable=True),
         sa.Column('week_of', sa.Date(), nullable=False),
