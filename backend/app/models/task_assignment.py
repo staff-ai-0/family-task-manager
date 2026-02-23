@@ -65,7 +65,10 @@ class TaskAssignment(Base):
 
     # Status
     status = Column(
-        SQLEnum(AssignmentStatus),
+        SQLEnum(
+            AssignmentStatus,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         default=AssignmentStatus.PENDING,
         nullable=False,
         index=True,
