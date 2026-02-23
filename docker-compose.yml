@@ -93,6 +93,9 @@ services:
     container_name: family_app_frontend
     environment:
       API_BASE_URL: http://backend:8000
+      FINANCE_API_URL: http://finance-api:5007
+      FINANCE_API_KEY: ${FINANCE_API_KEY:-dev-finance-key}
+      ACTUAL_BUDGET_URL: http://localhost:5006
       PORT: 3000
     ports:
       - "3003:3000"
@@ -105,9 +108,50 @@ services:
       - app_network
     command: npm run dev -- --host
 
+  # Actual Budget Server (personal finance management)
+  actual-server:
+    image: actualbudget/actual-server:latest
+    container_name: family_actual_budget
+    ports:
+      - "5006:5006"
+    volumes:
+      - actual_budget_data:/data
+    environment:
+      - ACTUAL_PORT=5006
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5006/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - app_network
+
+  # Finance API (Actual Budget wrapper for Astro frontend)
+  finance-api:
+    build:
+      context: ./services/actual-budget
+      dockerfile: Dockerfile
+    container_name: family_finance_api
+    environment:
+      ACTUAL_SERVER_URL: http://actual-server:5006
+      ACTUAL_PASSWORD: ${ACTUAL_PASSWORD:-changeme}
+      ACTUAL_BUDGET_NAME: ${ACTUAL_BUDGET_NAME:-My Finances}
+      FINANCE_API_KEY: ${FINANCE_API_KEY:-dev-finance-key}
+      ALLOWED_ORIGINS: http://localhost:3003,http://localhost:3000
+    ports:
+      - "5007:5007"
+    depends_on:
+      actual-server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app_network
+
 volumes:
   postgres_data:
   test_postgres_data:
+  actual_budget_data:
 
 
 networks:

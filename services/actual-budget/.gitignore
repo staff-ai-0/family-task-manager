@@ -1,2 +1,15 @@
 # Actual Budget server data (contains personal financial data)
 actual-data/
+
+# Virtual environment
+.venv/
+
+# Environment variables (contains credentials)
+.env
+
+# Sync state (contains user data)
+sync_state.json
+
+# Python cache
+__pycache__/
+*.pyc

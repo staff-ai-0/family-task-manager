@@ -2,7 +2,7 @@
 
 **AI Tool**: OpenCode  
 **Architecture**: Multi-tenant (Family-based isolation)  
-**Tech Stack**: Python/FastAPI + Jinja2/Flowbite  
+**Tech Stack**: Python/FastAPI + Astro 5/Tailwind CSS v4  
 **Phase**: Active Development  
 
 ## Setup Commands
@@ -74,7 +74,7 @@ Models (Database Entities)
 
 ```
 Frontend (Port 3000)        Backend API (Port 8000)
-Jinja2 + Flowbite    ←→    FastAPI + SQLAlchemy
+Astro 5 + Tailwind v4 ←→    FastAPI + SQLAlchemy
     ↓                              ↓
   Sessions                    PostgreSQL (Port 5433)
     ↓                              ↓
@@ -110,7 +110,7 @@ lucas@demo.com / password123 (TEEN, 280 points)
 
 ### Essential Development Flow
 
-1. **Make Changes** → Edit code in `backend/app/` or `frontend/app/`
+1. **Make Changes** → Edit code in `backend/app/` or `frontend/src/`
 2. **Write Tests** → Add tests in `backend/tests/`
 3. **Run Tests** → `docker exec family_app_backend pytest tests/`
 4. **Check Coverage** → Ensure 70%+ coverage

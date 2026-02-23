@@ -24,7 +24,10 @@ let accounts = [];
 let errorMsg = null;
 let successMsg = null;
 
-const API_SERVER = "http://127.0.0.1:5007";
+const FINANCE_API_URL = import.meta.env.FINANCE_API_URL || process.env.FINANCE_API_URL || "http://127.0.0.1:5007";
+const FINANCE_API_KEY = import.meta.env.FINANCE_API_KEY || process.env.FINANCE_API_KEY || "";
+const apiHeaders: Record<string, string> = {};
+if (FINANCE_API_KEY) apiHeaders["X-API-Key"] = FINANCE_API_KEY;
 
 // Handle Add Transaction POST
 if (Astro.request.method === "POST") {
@@ -46,9 +49,9 @@ if (Astro.request.method === "POST") {
             payee_name: payee,
         };
 
-        const addResp = await fetch(`${API_SERVER}/api/finance/transactions`, {
+        const addResp = await fetch(`${FINANCE_API_URL}/api/finance/transactions`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...apiHeaders },
             body: JSON.stringify(payload),
         });
 
@@ -68,7 +71,7 @@ if (Astro.request.method === "POST") {
 
 // Fetch Accounts (for the dropdown)
 try {
-    const sumResp = await fetch(`${API_SERVER}/api/finance/summary`);
+    const sumResp = await fetch(`${FINANCE_API_URL}/api/finance/summary`, { headers: apiHeaders });
     if (sumResp.ok) {
         const sumData = await sumResp.json();
         accounts = sumData.accounts || [];
@@ -80,7 +83,8 @@ try {
 // Fetch Category Transactions
 try {
     const txResp = await fetch(
-        `${API_SERVER}/api/finance/categories/${id}/transactions`,
+        `${FINANCE_API_URL}/api/finance/categories/${id}/transactions`,
+        { headers: apiHeaders },
     );
     if (txResp.ok) {
         const txData = await txResp.json();

@@ -21,22 +21,22 @@
 
 **Decision**: FastAPI provides the best balance of performance, developer experience, and features for our use case.
 
-### Frontend: Server-Side Rendering with Flowbite
+### Frontend: Astro 5 SSR with Tailwind CSS v4
 
-**Why SSR with Flowbite?**
-- Fast initial page load
-- Better SEO (future consideration)
-- Reduced JavaScript complexity
-- Flowbite provides ready-to-use Tailwind components
-- HTMX enables dynamic updates without heavy JS
-- Alpine.js for lightweight interactivity
+**Why Astro 5 with Tailwind CSS v4?**
+- Server-side rendering with island architecture
+- Zero client-side JS by default, fast initial page load
+- File-based routing with dynamic segments
+- Tailwind CSS v4 via `@tailwindcss/vite` Vite plugin
+- CSS-first configuration with `@theme` (no `tailwind.config.js`)
+- TypeScript support out of the box
 
 **Alternatives Considered**:
 - React/Vue SPA: Overkill for our needs, complex deployment
-- Plain HTML/CSS: Too much manual work
-- Bootstrap: Flowbite/Tailwind more modern
+- Jinja2 + Flowbite (previous stack): Migrated to Astro for better DX and decoupled architecture
+- Next.js: Team expertise is Python backend, Astro is simpler
 
-**Decision**: Server-side rendering with Flowbite provides a modern, fast, and maintainable solution without the complexity of a full SPA framework.
+**Decision**: Astro 5 SSR with Tailwind CSS v4 provides a modern, fast, and maintainable frontend with minimal JavaScript complexity.
 
 ### Database: PostgreSQL
 
@@ -102,7 +102,7 @@
 - Server-side rendering requires session cookies
 - Better security for SSR applications
 - HTTP-only cookies prevent XSS attacks
-- Works seamlessly with Jinja2 templates
+- Works seamlessly with Astro SSR pages
 - Industry standard for traditional web apps
 
 **Implementation Details**:
@@ -135,29 +135,36 @@
 
 ### Frontend Libraries
 
-**Flowbite**: UI components built on Tailwind CSS
-- Pre-built cards, modals, alerts, buttons
-- Responsive by default
-- Consistent design system
-- Good documentation
+**Tailwind CSS v4**: Utility-first styling
+- CSS-first configuration via `@theme` block in `global.css`
+- Integrated via `@tailwindcss/vite` Vite plugin
+- No legacy `tailwind.config.js` or `postcss.config.js`
+- Custom primary color palette (50-950) defined in `@theme`
+- Mobile-first approach with responsive utilities
 
-**HTMX**: Dynamic HTML updates
-- Enables SPA-like experience without JavaScript frameworks
-- Progressive enhancement
-- Works with server-rendered HTML
-- Minimal JavaScript footprint
+### Actual Budget Integration
 
-**Alpine.js**: Reactive interactivity
-- Lightweight (15kb)
-- Vue-like syntax
-- Perfect for simple interactions
-- No build step required
+**Why Actual Budget?**
+- Open-source, privacy-focused budgeting tool
+- Self-hosted via Docker (no cloud dependency)
+- Python library (`actualpy`) for programmatic access
+- Bridges the family task/points system with real financial management
 
-**Tailwind CSS**: Utility-first styling
-- Rapid UI development
-- Consistent design
-- Small production bundle (with PurgeCSS)
-- Mobile-first approach
+**Architecture**:
+- Actual Budget Server (Docker, port 5006): Official `actualbudget/actual-server` image
+- Finance API (FastAPI, port 5007): Wrapper service exposing Actual Budget data as JSON REST
+- Sync Service (`sync.py`): CLI tool that converts children's earned points into allowance transactions
+- Frontend pages: `parent/finances.astro` and `parent/finances/[id].astro` consume the Finance API via SSR
+
+**Security**:
+- Finance API secured with API key (`X-API-Key` header)
+- CORS restricted to frontend origins
+- Credentials stored in environment variables (not committed to git)
+- Parent-only access enforced at the Astro page level via auth checks
+
+**Key Dependencies**:
+- `actualpy>=0.9.0` (Python client for Actual Budget)
+- `httpx>=0.26.0` (HTTP client for sync service)
 
 ## Database Schema Design
 
@@ -363,7 +370,7 @@
    - Never construct raw SQL from user input
 
 3. **XSS Prevention**:
-   - Jinja2 auto-escapes HTML
+   - Astro auto-escapes expressions in templates
    - Sanitize user-generated content
    - Content Security Policy headers
 
@@ -399,14 +406,14 @@
 
 ### Frontend Performance
 
-1. **HTMX Benefits**:
-   - Partial page updates
-   - Reduced JavaScript
-   - Better perceived performance
+1. **Astro SSR Benefits**:
+   - Server-side rendering for fast initial load
+   - Zero client-side JS by default
+   - Island architecture for selective hydration
 
 2. **Asset Optimization**:
-   - Minified CSS/JS
-   - CDN for Flowbite/Tailwind
+   - Vite bundling and tree-shaking
+   - Tailwind CSS v4 automatic purging
    - Image optimization
 
 ## Testing Strategy
@@ -442,10 +449,14 @@
 ### Development Environment
 
 ```
-Local Machine
-├── FastAPI (uvicorn --reload)
-├── PostgreSQL (Docker)
-├── Redis (Docker, optional)
+Docker Compose
+├── PostgreSQL (port 5437)
+├── Test PostgreSQL (port 5435)
+├── Redis (port 6380)
+├── Backend - FastAPI (port 8002)
+├── Frontend - Astro 5 SSR (port 3003)
+├── Actual Budget Server (port 5006)
+├── Finance API - FastAPI (port 5007)
 └── Browser
 ```
 
@@ -480,6 +491,11 @@ Render Platform
 - SENTRY_DSN - Error tracking (optional)
 - LOG_LEVEL - Logging verbosity (default: INFO)
 - EMAIL_VERIFICATION_EXPIRE_MINUTES - Token expiry (default: 1440 = 24 hours)
+- FINANCE_API_URL - Finance API URL (default: http://127.0.0.1:5007)
+- FINANCE_API_KEY - API key for finance service authentication
+- ACTUAL_BUDGET_URL - Actual Budget UI URL for external links
+- ACTUAL_PASSWORD - Actual Budget server password
+- ACTUAL_BUDGET_NAME - Actual Budget file name
 
 ## Monitoring & Logging
 

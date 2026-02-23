@@ -12,34 +12,82 @@ import os
 import datetime
 import decimal
 from contextlib import contextmanager
+from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
+from pydantic import BaseModel
+from actual import Actual
+from actual.queries import (
+    get_accounts,
+    get_transactions,
+    get_category_groups,
+    get_categories as actual_get_categories,
+    get_or_create_payee,
+    create_transaction,
+)
 
 load_dotenv()
 
+# Configuration
 ACTUAL_SERVER_URL = os.getenv("ACTUAL_SERVER_URL", "http://localhost:5006")
 ACTUAL_PASSWORD = os.getenv("ACTUAL_PASSWORD", "jc")
 ACTUAL_BUDGET_NAME = os.getenv("ACTUAL_BUDGET_NAME", "My Finances")
+FINANCE_API_KEY = os.getenv("FINANCE_API_KEY", "")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3003,http://localhost:3000").split(",")
 
-app = FastAPI(title="Family Finance API", version="1.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# --- Auth ---
 
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+async def verify_api_key(api_key: Optional[str] = Security(api_key_header)):
+    """Verify API key if one is configured. Skips auth if FINANCE_API_KEY is empty."""
+    if not FINANCE_API_KEY:
+        return  # No key configured = open access (dev mode)
+    if api_key != FINANCE_API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid or missing API key")
+
+
+# --- App ---
+
+app = FastAPI(title="Family Finance API", version="1.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+
+# --- Pydantic models ---
+
+class TransactionCreate(BaseModel):
+    account_id: str
+    category_id: str
+    amount: float
+    notes: str = ""
+    date: Optional[str] = None
+    payee_name: str = "Family Task Manager"
+
+
+# --- Helpers ---
 
 @contextmanager
 def get_actual():
     """Context manager for Actual Budget connection."""
-    from actual import Actual
     with Actual(base_url=ACTUAL_SERVER_URL, password=ACTUAL_PASSWORD, file=ACTUAL_BUDGET_NAME) as actual:
         yield actual
 
 
+# --- Routes ---
+
 @app.get("/api/finance/summary")
-def get_summary():
+def get_summary(_: None = Depends(verify_api_key)):
     """Get a high-level summary of all accounts and balances."""
     try:
-        from actual.queries import get_accounts, get_transactions
         with get_actual() as actual:
             accounts = get_accounts(actual.session)
             result = []
@@ -48,26 +96,32 @@ def get_summary():
             for acc in accounts:
                 transactions = get_transactions(actual.session, account=acc)
                 balance = sum(
-                    float(t.amount) / 100 if hasattr(t, 'amount') and t.amount else 0
+                    float(t.amount) / 100 if hasattr(t, "amount") and t.amount else 0
                     for t in transactions
                 )
                 total_balance += balance
                 last_tx = None
                 if transactions:
-                    last = sorted(transactions, key=lambda t: t.date or datetime.date.min, reverse=True)[0]
+                    last = sorted(
+                        transactions,
+                        key=lambda t: t.date or datetime.date.min,
+                        reverse=True,
+                    )[0]
                     last_tx = {
                         "date": str(last.date) if last.date else None,
                         "amount": float(last.amount) / 100 if last.amount else 0,
                         "notes": last.notes,
                     }
 
-                result.append({
-                    "id": str(acc.id),
-                    "name": acc.name,
-                    "balance": round(balance, 2),
-                    "transaction_count": len(transactions),
-                    "last_transaction": last_tx,
-                })
+                result.append(
+                    {
+                        "id": str(acc.id),
+                        "name": acc.name,
+                        "balance": round(balance, 2),
+                        "transaction_count": len(transactions),
+                        "last_transaction": last_tx,
+                    }
+                )
 
             return {
                 "accounts": result,
@@ -81,10 +135,9 @@ def get_summary():
 
 
 @app.get("/api/finance/accounts/{account_id}/transactions")
-def get_account_transactions(account_id: str):
+def get_account_transactions(account_id: str, _: None = Depends(verify_api_key)):
     """Get transactions for a specific account."""
     try:
-        from actual.queries import get_accounts, get_transactions
         with get_actual() as actual:
             accounts = get_accounts(actual.session)
             account = next((a for a in accounts if str(a.id) == account_id), None)
@@ -103,7 +156,11 @@ def get_account_transactions(account_id: str):
                         "payee_name": t.payee.name if t.payee else None,
                         "category_name": t.category.name if t.category else None,
                     }
-                    for t in sorted(transactions, key=lambda t: t.date or datetime.date.min, reverse=True)
+                    for t in sorted(
+                        transactions,
+                        key=lambda t: t.date or datetime.date.min,
+                        reverse=True,
+                    )
                 ],
             }
     except HTTPException:
@@ -113,45 +170,51 @@ def get_account_transactions(account_id: str):
 
 
 @app.get("/api/finance/categories")
-def get_categories(month: str = None):
+def get_categories(month: Optional[str] = None, _: None = Depends(verify_api_key)):
     """Get categories and their current budget/balance for a given month (YYYY-MM)."""
     if not month:
         month = datetime.date.today().strftime("%Y-%m")
-        
+
     try:
-        from actual.queries import get_category_groups, get_categories as actual_get_categories
         with get_actual() as actual:
-            # We would need to read budget balances, but actualpy limits this somewhat natively.
-            # As a simplification for the API, we'll return the categories.
-            # In a real implementation we would query the `zero_budget_months` table.
-            
+            # Note: actualpy doesn't natively expose budget amounts per category/month.
+            # A full implementation would query the `zero_budget_months` table directly.
+            # For now we return the category structure without budget amounts.
+
             groups = get_category_groups(actual.session)
             categories = actual_get_categories(actual.session)
-            
-            cat_map = {c.id: {'id': str(c.id), 'name': c.name, 'group_id': str(c.cat_group), 'is_income': c.is_income} for c in categories}
-            group_list = []
-            
-            for g in groups:
-                group_cats = [c for c in cat_map.values() if c['group_id'] == str(g.id)]
-                group_list.append({
-                    "id": str(g.id),
-                    "name": g.name,
-                    "is_income": g.is_income,
-                    "categories": group_cats
-                })
-                
-            return {
-                "month": month,
-                "groups": group_list
+
+            cat_map = {
+                c.id: {
+                    "id": str(c.id),
+                    "name": c.name,
+                    "group_id": str(c.cat_group),
+                    "is_income": c.is_income,
+                }
+                for c in categories
             }
+            group_list = []
+
+            for g in groups:
+                group_cats = [c for c in cat_map.values() if c["group_id"] == str(g.id)]
+                group_list.append(
+                    {
+                        "id": str(g.id),
+                        "name": g.name,
+                        "is_income": g.is_income,
+                        "categories": group_cats,
+                    }
+                )
+
+            return {"month": month, "groups": group_list}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/finance/categories/{category_id}/transactions")
-def get_category_transactions(category_id: str):
+def get_category_transactions(category_id: str, _: None = Depends(verify_api_key)):
     """Get transactions for a specific category."""
     try:
-        from actual.queries import get_categories as actual_get_categories, get_transactions
         with get_actual() as actual:
             categories = actual_get_categories(actual.session)
             category = next((c for c in categories if str(c.id) == category_id), None)
@@ -168,9 +231,13 @@ def get_category_transactions(category_id: str):
                         "amount": float(t.amount) / 100 if t.amount else 0,
                         "notes": t.notes,
                         "payee_name": t.payee.name if t.payee else None,
-                        "account_name": t.account.name if getattr(t, 'account', None) else None,
+                        "account_name": t.account.name if getattr(t, "account", None) else None,
                     }
-                    for t in sorted(transactions, key=lambda t: t.date or datetime.date.min, reverse=True)
+                    for t in sorted(
+                        transactions,
+                        key=lambda t: t.date or datetime.date.min,
+                        reverse=True,
+                    )
                 ],
             }
     except HTTPException:
@@ -178,32 +245,21 @@ def get_category_transactions(category_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "service": "family-finance-api"}
-
-from pydantic import BaseModel
-class TransactionCreate(BaseModel):
-    account_id: str
-    category_id: str
-    amount: float
-    notes: str = ""
-    date: str = None
-    payee_name: str = "Family Task Manager"
 
 @app.post("/api/finance/transactions")
-def add_transaction(data: TransactionCreate):
+def add_transaction(data: TransactionCreate, _: None = Depends(verify_api_key)):
     """Create a new transaction in Actual Budget."""
     try:
-        from actual.queries import get_accounts, get_categories as actual_get_categories, get_or_create_payee, create_transaction
         with get_actual() as actual:
             accounts = get_accounts(actual.session)
             account = next((a for a in accounts if str(a.id) == data.account_id), None)
             if not account:
-                # Fallback to the first account (e.g. cash) if specific account not found
+                # Fallback to the first account if specific account not found
                 account = accounts[0] if accounts else None
                 if not account:
-                    raise HTTPException(status_code=400, detail="No accounts exist to create transaction")
+                    raise HTTPException(
+                        status_code=400, detail="No accounts exist to create transaction"
+                    )
 
             categories = actual_get_categories(actual.session)
             category = next((c for c in categories if str(c.id) == data.category_id), None)
@@ -222,6 +278,12 @@ def add_transaction(data: TransactionCreate):
             )
             actual.commit()
             return {"status": "ok", "transaction_id": str(t.id)}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "family-finance-api"}

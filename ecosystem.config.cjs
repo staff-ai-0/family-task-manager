@@ -11,8 +11,11 @@ const BASE_PATH = process.env.FAMILY_APP_PATH || '/home/jc/family-task-manager';
  *   pm2 start ecosystem.config.cjs --env stage
  *   pm2 start ecosystem.config.cjs --env production
  * 
- * Note: This project uses Python/Uvicorn, not Node.js.
- * PM2 is used as a process manager for the Python applications.
+ * Architecture:
+ *   - Backend: Python/FastAPI via Uvicorn
+ *   - Frontend: Astro 5 SSR via Node.js (standalone mode)
+ *   - Finance API: Python/FastAPI via Uvicorn
+ *   - Infrastructure (DB, Redis, Actual Budget): Docker via docker-compose.stage.yml
  */
 
 module.exports = {
@@ -55,8 +58,8 @@ module.exports = {
       
       // Logging
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-      error_file: './logs/backend-error.log',
-      out_file: './logs/backend-out.log',
+      error_file: path.join(BASE_PATH, 'logs/backend-error.log'),
+      out_file: path.join(BASE_PATH, 'logs/backend-out.log'),
       merge_logs: true,
       
       // Restart policy
@@ -65,13 +68,14 @@ module.exports = {
       restart_delay: 4000,
     },
     
-    // Frontend Web (FastAPI/Uvicorn with Jinja2)
+    // Frontend Web (Astro 5 SSR - Node.js standalone)
+    // Build: cd frontend && npm run build
+    // Output: frontend/dist/server/entry.mjs
     {
       name: 'family-frontend',
       cwd: path.join(BASE_PATH, 'frontend'),
-      script: path.join(BASE_PATH, 'venv/bin/uvicorn'),
-      args: 'app.main:app --host 0.0.0.0 --port 3001',
-      interpreter: path.join(BASE_PATH, 'venv/bin/python3'),
+      script: './dist/server/entry.mjs',
+      interpreter: 'node',
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
@@ -81,31 +85,92 @@ module.exports = {
       // Environment variables (base)
       env: {
         NODE_ENV: 'development',
-        DEBUG: 'true',
-        PORT: 3001,
+        HOST: '0.0.0.0',
+        PORT: 3000,
         API_BASE_URL: 'http://localhost:8000',
+        FINANCE_API_URL: 'http://localhost:5007',
+        FINANCE_API_KEY: '',
+        ACTUAL_BUDGET_URL: 'http://localhost:5006',
       },
       
       // Staging environment
       env_stage: {
         NODE_ENV: 'staging',
-        DEBUG: 'false',
-        PORT: 3001,
+        HOST: '0.0.0.0',
+        PORT: 3000,
         API_BASE_URL: 'http://localhost:8000',
+        FINANCE_API_URL: 'http://localhost:5007',
+        FINANCE_API_KEY: '',
+        ACTUAL_BUDGET_URL: 'http://localhost:5006',
       },
       
       // Production environment
       env_production: {
         NODE_ENV: 'production',
-        DEBUG: 'false',
-        PORT: 3001,
+        HOST: '0.0.0.0',
+        PORT: 3000,
         API_BASE_URL: 'http://localhost:8000',
+        FINANCE_API_URL: 'http://localhost:5007',
+        FINANCE_API_KEY: '',
+        ACTUAL_BUDGET_URL: 'http://localhost:5006',
       },
       
       // Logging
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-      error_file: './logs/frontend-error.log',
-      out_file: './logs/frontend-out.log',
+      error_file: path.join(BASE_PATH, 'logs/frontend-error.log'),
+      out_file: path.join(BASE_PATH, 'logs/frontend-out.log'),
+      merge_logs: true,
+      
+      // Restart policy
+      min_uptime: '10s',
+      max_restarts: 10,
+      restart_delay: 4000,
+    },
+
+    // Finance API (Actual Budget wrapper - Python/FastAPI)
+    {
+      name: 'family-finance-api',
+      cwd: path.join(BASE_PATH, 'services/actual-budget'),
+      script: path.join(BASE_PATH, 'venv/bin/uvicorn'),
+      args: 'api:app --host 0.0.0.0 --port 5007',
+      interpreter: path.join(BASE_PATH, 'venv/bin/python3'),
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '200M',
+      
+      // Environment variables (base)
+      env: {
+        ACTUAL_SERVER_URL: 'http://localhost:5006',
+        ACTUAL_PASSWORD: '',
+        ACTUAL_BUDGET_NAME: 'My Finances',
+        FINANCE_API_KEY: '',
+        ALLOWED_ORIGINS: 'http://localhost:3000,http://localhost:3003',
+      },
+      
+      // Staging environment
+      env_stage: {
+        ACTUAL_SERVER_URL: 'http://localhost:5006',
+        ACTUAL_PASSWORD: '',
+        ACTUAL_BUDGET_NAME: 'My Finances',
+        FINANCE_API_KEY: '',
+        ALLOWED_ORIGINS: 'https://fam-stage.a-ai4all.com',
+      },
+      
+      // Production environment
+      env_production: {
+        ACTUAL_SERVER_URL: 'http://localhost:5006',
+        ACTUAL_PASSWORD: '',
+        ACTUAL_BUDGET_NAME: 'My Finances',
+        FINANCE_API_KEY: '',
+        ALLOWED_ORIGINS: 'https://fam.a-ai4all.com',
+      },
+      
+      // Logging
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      error_file: path.join(BASE_PATH, 'logs/finance-api-error.log'),
+      out_file: path.join(BASE_PATH, 'logs/finance-api-out.log'),
       merge_logs: true,
       
       // Restart policy
@@ -124,7 +189,7 @@ module.exports = {
       repo: 'git@github.com:staff-ai-0/family-task-manager.git',
       path: '/home/jc/family-task-manager',
       'pre-deploy': 'git fetch --all',
-      'post-deploy': 'docker compose -f docker-compose.stage.yml up -d && sleep 10 && pm2 reload ecosystem.config.cjs --env stage',
+      'post-deploy': 'docker compose -f docker-compose.stage.yml up -d && sleep 10 && cd frontend && npm ci && npm run build && cd .. && pm2 reload ecosystem.config.cjs --env stage',
       env: {
         NODE_ENV: 'staging',
       },
@@ -136,7 +201,7 @@ module.exports = {
       repo: 'git@github.com:staff-ai-0/family-task-manager.git',
       path: '/home/jc/family-task-manager',
       'pre-deploy': 'git fetch --all',
-      'post-deploy': 'docker compose -f docker-compose.prod.yml up -d && sleep 10 && pm2 reload ecosystem.config.cjs --env production',
+      'post-deploy': 'docker compose -f docker-compose.prod.yml up -d && sleep 10 && cd frontend && npm ci && npm run build && cd .. && pm2 reload ecosystem.config.cjs --env production',
       env: {
         NODE_ENV: 'production',
       },

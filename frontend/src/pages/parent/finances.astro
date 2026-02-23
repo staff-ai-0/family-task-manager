@@ -15,12 +15,16 @@ if (!user) {
 }
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
-const actualUrl = "http://localhost:5006";
+const FINANCE_API_URL = import.meta.env.FINANCE_API_URL || process.env.FINANCE_API_URL || "http://127.0.0.1:5007";
+const FINANCE_API_KEY = import.meta.env.FINANCE_API_KEY || process.env.FINANCE_API_KEY || "";
+const actualUrl = import.meta.env.ACTUAL_BUDGET_URL || process.env.ACTUAL_BUDGET_URL || "http://localhost:5006";
 
 // Fetch live actual budget categories
 let budgetData = { groups: [] };
 try {
-    const resp = await fetch("http://127.0.0.1:5007/api/finance/categories");
+    const headers: Record<string, string> = {};
+    if (FINANCE_API_KEY) headers["X-API-Key"] = FINANCE_API_KEY;
+    const resp = await fetch(`${FINANCE_API_URL}/api/finance/categories`, { headers });
     if (resp.ok) {
         budgetData = await resp.json();
     }
