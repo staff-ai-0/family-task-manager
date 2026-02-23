@@ -127,7 +127,6 @@ export const translations = {
         pt_assign_to: "Assign to",
         pt_unassigned: "— Unassigned —",
         pt_all_tasks: "All Tasks",
-        back_all_tasks: "All Templates",
 
         // Parent Rewards
         pr_title: "Manage Rewards",
@@ -179,7 +178,7 @@ export const translations = {
 
         // Back links
         back_parent: "Parent Dashboard",
-        back_all_tasks: "All Tasks",
+        back_all_tasks: "All Templates",
         back_all_rewards: "All Rewards",
     },
     es: {
@@ -303,7 +302,6 @@ export const translations = {
         pt_assign_to: "Asignar a",
         pt_unassigned: "-- Sin asignar --",
         pt_all_tasks: "Todas las Tareas",
-        back_all_tasks: "Todas las Plantillas",
 
         // Parent Rewards
         pr_title: "Gestionar Premios",
