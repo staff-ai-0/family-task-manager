@@ -438,11 +438,11 @@ if [ "$SKIP_MIGRATIONS" = false ]; then
     else
         # Check current migration (load .env for DATABASE_URL)
         echo -e "${BLUE}  Checking current migration status...${NC}"
-        CURRENT_MIGRATION=$(ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && export \$(grep -v '^#' ${REMOTE_PATH}/.env 2>/dev/null | xargs) && ${REMOTE_PATH}/venv/bin/python3 -m alembic current 2>&1 | grep -v 'INFO'" || echo "Unknown")
+        CURRENT_MIGRATION=$(ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && set -a && source ${REMOTE_PATH}/.env 2>/dev/null && set +a && ${REMOTE_PATH}/venv/bin/python3 -m alembic current 2>&1 | grep -v 'INFO'" || echo "Unknown")
         echo -e "${BLUE}  Current: ${CURRENT_MIGRATION}${NC}"
 
         # Run migrations (load .env for DATABASE_URL)
-        ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && export \$(grep -v '^#' ${REMOTE_PATH}/.env 2>/dev/null | xargs) && ${REMOTE_PATH}/venv/bin/python3 -m alembic upgrade head"
+        ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && set -a && source ${REMOTE_PATH}/.env 2>/dev/null && set +a && ${REMOTE_PATH}/venv/bin/python3 -m alembic upgrade head"
 
         if [ $? -eq 0 ]; then
             NEW_MIGRATION=$(ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && export \$(grep -v '^#' ${REMOTE_PATH}/.env 2>/dev/null | xargs) && ${REMOTE_PATH}/venv/bin/python3 -m alembic current 2>&1 | grep -v 'INFO'" || echo "Unknown")
@@ -524,7 +524,7 @@ else
     ssh ${REMOTE_SERVER} "pm2 delete ${PM2_APPS} 2>/dev/null || true"
 
     echo -e "${BLUE}  Starting PM2 apps (env: ${PM2_ENV})...${NC}"
-    ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH} && export \$(grep -v '^#' .env 2>/dev/null | xargs) && pm2 start ecosystem.config.cjs --env ${PM2_ENV} && pm2 save"
+    ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH} && set -a && source .env 2>/dev/null && set +a && pm2 start ecosystem.config.cjs --env ${PM2_ENV} && pm2 save"
 
     echo -e "${GREEN}  PM2 applications started${NC}"
 fi
