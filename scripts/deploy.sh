@@ -436,16 +436,16 @@ if [ "$SKIP_MIGRATIONS" = false ]; then
     if [ "$DRY_RUN" = true ]; then
         echo -e "${BLUE}[DRY-RUN] Would run: alembic upgrade head${NC}"
     else
-        # Check current migration
+        # Check current migration (load .env for DATABASE_URL)
         echo -e "${BLUE}  Checking current migration status...${NC}"
-        CURRENT_MIGRATION=$(ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && ${REMOTE_PATH}/venv/bin/python3 -m alembic current 2>&1 | grep -v 'INFO'" || echo "Unknown")
+        CURRENT_MIGRATION=$(ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && export \$(grep -v '^#' ${REMOTE_PATH}/.env 2>/dev/null | xargs) && ${REMOTE_PATH}/venv/bin/python3 -m alembic current 2>&1 | grep -v 'INFO'" || echo "Unknown")
         echo -e "${BLUE}  Current: ${CURRENT_MIGRATION}${NC}"
 
-        # Run migrations
-        ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && ${REMOTE_PATH}/venv/bin/python3 -m alembic upgrade head"
+        # Run migrations (load .env for DATABASE_URL)
+        ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && export \$(grep -v '^#' ${REMOTE_PATH}/.env 2>/dev/null | xargs) && ${REMOTE_PATH}/venv/bin/python3 -m alembic upgrade head"
 
         if [ $? -eq 0 ]; then
-            NEW_MIGRATION=$(ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && ${REMOTE_PATH}/venv/bin/python3 -m alembic current 2>&1 | grep -v 'INFO'" || echo "Unknown")
+            NEW_MIGRATION=$(ssh ${REMOTE_SERVER} "cd ${REMOTE_PATH}/backend && export \$(grep -v '^#' ${REMOTE_PATH}/.env 2>/dev/null | xargs) && ${REMOTE_PATH}/venv/bin/python3 -m alembic current 2>&1 | grep -v 'INFO'" || echo "Unknown")
             echo -e "${GREEN}  Migrations completed${NC}"
             if [ "$CURRENT_MIGRATION" != "$NEW_MIGRATION" ]; then
                 echo -e "${GREEN}  Database schema updated: ${NEW_MIGRATION}${NC}"
