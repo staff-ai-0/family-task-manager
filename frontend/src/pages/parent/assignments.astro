@@ -1,0 +1,349 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BottomNav from "../../components/BottomNav.astro";
+import { apiFetch } from "../../lib/api";
+import { t } from "../../lib/i18n";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+// Week navigation via query param
+const url = new URL(Astro.request.url);
+const weekParam = url.searchParams.get("week");
+
+// Calculate Monday of the target week
+function getMonday(d: Date): Date {
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(d.getFullYear(), d.getMonth(), diff);
+}
+
+function formatDateISO(d: Date): string {
+    return d.toISOString().split("T")[0];
+}
+
+function addDays(d: Date, n: number): Date {
+    const result = new Date(d);
+    result.setDate(result.getDate() + n);
+    return result;
+}
+
+const today = new Date();
+let weekMonday: Date;
+if (weekParam) {
+    weekMonday = getMonday(new Date(weekParam + "T12:00:00"));
+} else {
+    weekMonday = getMonday(today);
+}
+
+const prevWeek = formatDateISO(addDays(weekMonday, -7));
+const nextWeek = formatDateISO(addDays(weekMonday, 7));
+
+// Build array of 7 days (Mon-Sun)
+const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i));
+const dayKeys = ["pac_day_mon", "pac_day_tue", "pac_day_wed", "pac_day_thu", "pac_day_fri", "pac_day_sat", "pac_day_sun"] as const;
+
+// Fetch family members
+const { data: family } = await apiFetch<any>("/api/families/me", { token });
+const members: any[] = family?.members ?? [];
+
+// Member filter
+const memberFilter = url.searchParams.get("member") ?? "all";
+
+// Fetch assignments for the week
+let apiUrl = `/api/task-assignments/week?week_of=${formatDateISO(weekMonday)}`;
+if (memberFilter !== "all") {
+    apiUrl += `&user_id=${memberFilter}`;
+}
+const { data: assignments } = await apiFetch<any[]>(apiUrl, { token });
+const allAssignments: any[] = assignments ?? [];
+
+// Group assignments by member -> date
+type AssignmentMap = Record<string, Record<string, any[]>>;
+const byMember: AssignmentMap = {};
+
+for (const a of allAssignments) {
+    const memberId = a.assigned_to;
+    const dateStr = a.assigned_date;
+    if (!byMember[memberId]) byMember[memberId] = {};
+    if (!byMember[memberId][dateStr]) byMember[memberId][dateStr] = [];
+    byMember[memberId][dateStr].push(a);
+}
+
+// Get unique member IDs from assignments (preserve order from family members list)
+const activeMemberIds = memberFilter !== "all"
+    ? [memberFilter]
+    : members.map((m: any) => m.id).filter((id: string) => byMember[id]);
+
+// Helper: member name by ID
+const memberNameMap: Record<string, string> = {};
+for (const m of members) {
+    memberNameMap[m.id] = m.name;
+}
+
+// Stats
+const totalTasks = allAssignments.length;
+const completedTasks = allAssignments.filter((a: any) => a.status === "completed").length;
+
+// Format week range for display
+const weekSunday = addDays(weekMonday, 6);
+const monthNames = lang === "es"
+    ? ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function formatShortDate(d: Date): string {
+    return `${monthNames[d.getMonth()]} ${d.getDate()}`;
+}
+
+const weekRange = `${formatShortDate(weekMonday)} - ${formatShortDate(weekSunday)}`;
+
+// Check if a day is today
+function isToday(d: Date): boolean {
+    return formatDateISO(d) === formatDateISO(today);
+}
+---
+
+<Layout title={`${t(lang, "pac_title")} - Family Task Manager`}>
+    <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+        <!-- Header -->
+        <header class="bg-gradient-to-br from-sky-700 to-sky-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center gap-3 mb-4">
+                <a href="/parent" class="text-sky-200 hover:text-white transition-colors">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <span class="text-sky-200 text-sm">{t(lang, "back_parent")}</span>
+            </div>
+            <h1 class="text-2xl font-bold">{t(lang, "pac_title")}</h1>
+            <p class="text-sky-200 text-sm mt-1">{t(lang, "pac_subtitle")}</p>
+
+            <!-- Week navigator -->
+            <div class="flex items-center justify-between mt-4 bg-white/15 backdrop-blur-md rounded-xl px-4 py-3 border border-white/20">
+                <a
+                    href={`/parent/assignments?week=${prevWeek}${memberFilter !== "all" ? `&member=${memberFilter}` : ""}`}
+                    class="text-white hover:text-sky-200 transition-colors p-1"
+                    title={t(lang, "pac_prev_week")}
+                >
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <div class="text-center">
+                    <p class="text-xs text-sky-200 font-medium uppercase tracking-wider">{t(lang, "pac_week_of")}</p>
+                    <p class="text-lg font-bold">{weekRange}</p>
+                </div>
+                <a
+                    href={`/parent/assignments?week=${nextWeek}${memberFilter !== "all" ? `&member=${memberFilter}` : ""}`}
+                    class="text-white hover:text-sky-200 transition-colors p-1"
+                    title={t(lang, "pac_next_week")}
+                >
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </a>
+            </div>
+        </header>
+
+        <main class="flex-1 px-4 py-6">
+            <!-- Member filter -->
+            <div class="mb-4">
+                <div class="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+                    <a
+                        href={`/parent/assignments?week=${formatDateISO(weekMonday)}`}
+                        class:list={[
+                            "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors",
+                            memberFilter === "all"
+                                ? "bg-sky-600 text-white shadow-sm"
+                                : "bg-white text-slate-600 border border-slate-200 hover:border-sky-300",
+                        ]}
+                    >
+                        {t(lang, "pac_all_members")}
+                    </a>
+                    {members.map((m: any) => (
+                        <a
+                            href={`/parent/assignments?week=${formatDateISO(weekMonday)}&member=${m.id}`}
+                            class:list={[
+                                "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors",
+                                memberFilter === m.id
+                                    ? "bg-sky-600 text-white shadow-sm"
+                                    : "bg-white text-slate-600 border border-slate-200 hover:border-sky-300",
+                            ]}
+                        >
+                            {m.name}
+                        </a>
+                    ))}
+                </div>
+            </div>
+
+            <!-- Summary stats -->
+            {totalTasks > 0 && (
+                <div class="flex items-center justify-between bg-white rounded-2xl px-5 py-3 shadow-sm border border-slate-100 mb-4">
+                    <span class="text-sm text-slate-600">
+                        {t(lang, "pac_total_tasks")(totalTasks)}
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <div class="w-20 bg-slate-200 rounded-full h-2">
+                            <div
+                                class="bg-green-500 h-2 rounded-full transition-all"
+                                style={`width: ${totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0}%`}
+                            ></div>
+                        </div>
+                        <span class="text-sm font-bold text-slate-700">
+                            {t(lang, "pac_completed_count")(completedTasks, totalTasks)}
+                        </span>
+                    </div>
+                </div>
+            )}
+
+            <!-- No assignments state -->
+            {totalTasks === 0 && (
+                <div class="bg-white rounded-2xl p-8 text-center border border-slate-100 shadow-sm">
+                    <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <p class="text-slate-500 text-sm">{t(lang, "pac_no_assignments")}</p>
+                </div>
+            )}
+
+            <!-- Calendar grid per member -->
+            {activeMemberIds.map((memberId: string) => {
+                const memberAssignments = byMember[memberId] ?? {};
+                const memberName = memberNameMap[memberId] ?? "?";
+
+                // Count stats for this member
+                const memberTotal = Object.values(memberAssignments).flat().length;
+                const memberDone = Object.values(memberAssignments).flat().filter((a: any) => a.status === "completed").length;
+
+                return (
+                    <div class="mb-6">
+                        <!-- Member header -->
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center text-sky-700 font-bold text-sm">
+                                {memberName.charAt(0).toUpperCase()}
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-bold text-slate-800">{memberName}</p>
+                            </div>
+                            <span class="text-xs font-medium text-slate-500">
+                                {t(lang, "pac_completed_count")(memberDone, memberTotal)}
+                            </span>
+                        </div>
+
+                        <!-- Day columns -->
+                        <div class="grid grid-cols-7 gap-1">
+                            {/* Day headers */}
+                            {dayKeys.map((dayKey, i) => (
+                                <div class:list={[
+                                    "text-center text-xs font-semibold py-1.5 rounded-t-lg",
+                                    isToday(weekDays[i])
+                                        ? "bg-sky-600 text-white"
+                                        : "bg-slate-200 text-slate-600",
+                                ]}>
+                                    <div>{t(lang, dayKey)}</div>
+                                    <div class:list={[
+                                        "text-xs font-normal mt-0.5",
+                                        isToday(weekDays[i]) ? "text-sky-100" : "text-slate-400",
+                                    ]}>
+                                        {weekDays[i].getDate()}
+                                    </div>
+                                </div>
+                            ))}
+
+                            {/* Task cells */}
+                            {weekDays.map((day) => {
+                                const dateStr = formatDateISO(day);
+                                const dayTasks = memberAssignments[dateStr] ?? [];
+                                const todayHighlight = isToday(day);
+
+                                return (
+                                    <div class:list={[
+                                        "min-h-16 p-0.5 rounded-b-lg border",
+                                        todayHighlight
+                                            ? "bg-sky-50 border-sky-200"
+                                            : "bg-white border-slate-100",
+                                    ]}>
+                                        {dayTasks.length === 0 && (
+                                            <div class="h-full flex items-center justify-center">
+                                                <span class="text-slate-300 text-xs">-</span>
+                                            </div>
+                                        )}
+                                        {dayTasks.map((task: any) => {
+                                            const statusColor = task.status === "completed"
+                                                ? "bg-green-100 text-green-700 border-green-200"
+                                                : task.status === "overdue"
+                                                    ? "bg-red-100 text-red-700 border-red-200"
+                                                    : task.status === "cancelled"
+                                                        ? "bg-slate-100 text-slate-400 border-slate-200 line-through"
+                                                        : "bg-amber-50 text-amber-700 border-amber-200";
+
+                                            const statusIcon = task.status === "completed"
+                                                ? "M5 13l4 4L19 7"
+                                                : task.status === "overdue"
+                                                    ? "M12 8v4m0 4h.01"
+                                                    : "";
+
+                                            return (
+                                                <div class={`text-xs px-1 py-0.5 mb-0.5 rounded border ${statusColor} truncate`}
+                                                     title={`${task.template_title} (${task.status})${task.template_is_bonus ? " [BONUS]" : ""}`}>
+                                                    <div class="flex items-center gap-0.5">
+                                                        {statusIcon && (
+                                                            <svg class="w-2.5 h-2.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" d={statusIcon} />
+                                                            </svg>
+                                                        )}
+                                                        <span class="truncate text-[10px] leading-tight">
+                                                            {task.template_title.length > 6
+                                                                ? task.template_title.slice(0, 6) + ".."
+                                                                : task.template_title}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })}
+
+            <!-- Legend -->
+            {totalTasks > 0 && (
+                <div class="mt-4 bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                    <div class="flex flex-wrap gap-3 justify-center">
+                        <div class="flex items-center gap-1.5">
+                            <div class="w-3 h-3 rounded bg-amber-100 border border-amber-200"></div>
+                            <span class="text-xs text-slate-600">{t(lang, "pac_status_pending")}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <div class="w-3 h-3 rounded bg-green-100 border border-green-200"></div>
+                            <span class="text-xs text-slate-600">{t(lang, "pac_status_completed")}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <div class="w-3 h-3 rounded bg-red-100 border border-red-200"></div>
+                            <span class="text-xs text-slate-600">{t(lang, "pac_status_overdue")}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <div class="w-3 h-3 rounded bg-slate-100 border border-slate-200"></div>
+                            <span class="text-xs text-slate-600">{t(lang, "pac_status_cancelled")}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </main>
+
+        <BottomNav active="parent" role={user.role} lang={lang} />
+    </div>
+</Layout>

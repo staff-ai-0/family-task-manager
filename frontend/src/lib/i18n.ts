@@ -80,6 +80,8 @@ export const translations = {
         parent_members_desc: "Manage family members",
         parent_consequences_label: "Consequences",
         parent_consequences_desc: "Create & resolve",
+        parent_assignments_label: "Calendar",
+        parent_assignments_desc: "Weekly assignment view",
         parent_family_members: "Family Members",
 
         // Parent Tasks (Templates)
@@ -180,6 +182,28 @@ export const translations = {
         back_parent: "Parent Dashboard",
         back_all_tasks: "All Templates",
         back_all_rewards: "All Rewards",
+
+        // Parent Assignments Calendar
+        pac_title: "Assignment Calendar",
+        pac_subtitle: "Weekly overview of all family assignments",
+        pac_week_of: "Week of",
+        pac_prev_week: "Previous week",
+        pac_next_week: "Next week",
+        pac_all_members: "All Members",
+        pac_no_assignments: "No assignments this week. Go to Tasks and press Shuffle!",
+        pac_day_mon: "Mon",
+        pac_day_tue: "Tue",
+        pac_day_wed: "Wed",
+        pac_day_thu: "Thu",
+        pac_day_fri: "Fri",
+        pac_day_sat: "Sat",
+        pac_day_sun: "Sun",
+        pac_status_pending: "Pending",
+        pac_status_completed: "Done",
+        pac_status_overdue: "Overdue",
+        pac_status_cancelled: "Cancelled",
+        pac_total_tasks: (n: number) => `${n} ${n === 1 ? "task" : "tasks"}`,
+        pac_completed_count: (done: number, total: number) => `${done}/${total}`,
     },
     es: {
         // Common / Nav
@@ -255,6 +279,8 @@ export const translations = {
         parent_members_desc: "Gestionar miembros de la familia",
         parent_consequences_label: "Consecuencias",
         parent_consequences_desc: "Crear y resolver",
+        parent_assignments_label: "Calendario",
+        parent_assignments_desc: "Vista semanal de asignaciones",
         parent_family_members: "Miembros de la Familia",
 
         // Parent Tasks (Templates)
@@ -355,6 +381,28 @@ export const translations = {
         back_parent: "Panel de Padres",
         back_all_tasks: "Todas las Plantillas",
         back_all_rewards: "Todos los Premios",
+
+        // Parent Assignments Calendar
+        pac_title: "Calendario de Asignaciones",
+        pac_subtitle: "Vista semanal de todas las asignaciones familiares",
+        pac_week_of: "Semana del",
+        pac_prev_week: "Semana anterior",
+        pac_next_week: "Semana siguiente",
+        pac_all_members: "Todos los Miembros",
+        pac_no_assignments: "Sin asignaciones esta semana. Ve a Tareas y presiona Mezclar!",
+        pac_day_mon: "Lun",
+        pac_day_tue: "Mar",
+        pac_day_wed: "Mie",
+        pac_day_thu: "Jue",
+        pac_day_fri: "Vie",
+        pac_day_sat: "Sab",
+        pac_day_sun: "Dom",
+        pac_status_pending: "Pendiente",
+        pac_status_completed: "Hecha",
+        pac_status_overdue: "Atrasada",
+        pac_status_cancelled: "Cancelada",
+        pac_total_tasks: (n: number) => `${n} ${n === 1 ? "tarea" : "tareas"}`,
+        pac_completed_count: (done: number, total: number) => `${done}/${total}`,
     },
 } as const;
 

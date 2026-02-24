@@ -174,6 +174,7 @@ async def check_overdue_assignments(
 def _assignment_to_detail(assignment) -> dict:
     """Convert a TaskAssignment ORM object to TaskAssignmentWithDetails dict"""
     template = assignment.template
+    assigned_user = getattr(assignment, "assigned_user", None)
     return {
         "id": assignment.id,
         "family_id": assignment.family_id,
@@ -191,8 +192,9 @@ def _assignment_to_detail(assignment) -> dict:
         "template_description": template.description if template else None,
         "template_points": template.points if template else 0,
         "template_is_bonus": template.is_bonus if template else False,
+        # User details
+        "assigned_user_name": assigned_user.name if assigned_user else "",
         # Computed
-        "assigned_user_name": "",  # Populated by frontend if needed
         "is_overdue": assignment.is_overdue,
         "can_complete": assignment.can_complete,
     }

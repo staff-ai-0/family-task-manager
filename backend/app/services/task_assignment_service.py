@@ -197,7 +197,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         """Get an assignment by ID with template eagerly loaded"""
         query = (
             select(TaskAssignment)
-            .options(selectinload(TaskAssignment.template))
+            .options(
+                selectinload(TaskAssignment.template),
+                selectinload(TaskAssignment.assigned_user),
+            )
             .where(
                 and_(
                     TaskAssignment.id == assignment_id,
@@ -224,7 +227,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         query = (
             select(TaskAssignment)
-            .options(selectinload(TaskAssignment.template))
+            .options(
+                selectinload(TaskAssignment.template),
+                selectinload(TaskAssignment.assigned_user),
+            )
             .where(
                 and_(
                     TaskAssignment.family_id == family_id,
@@ -254,7 +260,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         """List assignments for a specific date"""
         query = (
             select(TaskAssignment)
-            .options(selectinload(TaskAssignment.template))
+            .options(
+                selectinload(TaskAssignment.template),
+                selectinload(TaskAssignment.assigned_user),
+            )
             .where(
                 and_(
                     TaskAssignment.family_id == family_id,
