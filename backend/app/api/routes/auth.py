@@ -17,6 +17,7 @@ from app.schemas.user import (
     UserResponse,
     TokenResponse,
     UserPasswordUpdate,
+    UserUpdate,
 )
 from app.models import User
 
@@ -61,6 +62,28 @@ async def logout(current_user: User = Depends(get_current_user)):
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information"""
     return current_user
+
+
+@router.put("/me", response_model=UserResponse)
+async def update_current_user_profile(
+    update_data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update current user profile (name, preferred_lang)"""
+    # Only allow self-update of safe fields (not role, is_active)
+    safe_fields = {
+        k: v
+        for k, v in update_data.model_dump(exclude_unset=True).items()
+        if k in ("name", "preferred_lang")
+    }
+    if not safe_fields:
+        return current_user
+
+    user = await AuthService.update_profile(
+        db, to_uuid_required(current_user.id), safe_fields
+    )
+    return user
 
 
 @router.put("/password", response_model=UserResponse)

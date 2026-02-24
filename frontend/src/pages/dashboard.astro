@@ -167,8 +167,12 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                         {pendingRequired.map((a: any) => (
                             <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition-all flex justify-between items-center">
                                 <div class="pr-4 flex-1">
-                                    <h3 class="font-bold text-slate-800 text-lg mb-1">{a.template_title}</h3>
-                                    <p class="text-slate-500 text-sm line-clamp-2">{a.template_description || "--"}</p>
+                                    <h3 class="font-bold text-slate-800 text-lg mb-1">
+                                        {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
+                                    </h3>
+                                    <p class="text-slate-500 text-sm line-clamp-2">
+                                        {(lang === "es" && a.template_description_es ? a.template_description_es : a.template_description) || "--"}
+                                    </p>
                                     <div class="flex items-center gap-2 mt-3 flex-wrap">
                                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-primary-100 text-primary-700">
                                             +{a.template_points} pts
@@ -211,7 +215,9 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                             </svg>
                                         </div>
                                         <div>
-                                            <p class="font-medium text-slate-600 line-through">{a.template_title}</p>
+                                            <p class="font-medium text-slate-600 line-through">
+                                                {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
+                                            </p>
                                             <p class="text-xs text-slate-400">{t(lang, "dashboard_earned")(a.template_points)}</p>
                                         </div>
                                     </div>
@@ -256,12 +262,16 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     <div class="bg-white rounded-2xl p-5 shadow-sm border border-amber-100 hover:shadow-md transition-all flex justify-between items-center">
                                         <div class="pr-4 flex-1">
                                             <div class="flex items-center gap-2 mb-1">
-                                                <h3 class="font-bold text-slate-800 text-lg">{a.template_title}</h3>
+                                                <h3 class="font-bold text-slate-800 text-lg">
+                                                    {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
+                                                </h3>
                                                 <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
                                                     {t(lang, "dashboard_bonus_badge")}
                                                 </span>
                                             </div>
-                                            <p class="text-slate-500 text-sm line-clamp-2">{a.template_description || "--"}</p>
+                                            <p class="text-slate-500 text-sm line-clamp-2">
+                                                {(lang === "es" && a.template_description_es ? a.template_description_es : a.template_description) || "--"}
+                                            </p>
                                             <div class="flex items-center gap-2 mt-3">
                                                 <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
                                                     +{a.template_points} pts
@@ -304,7 +314,9 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                                     </svg>
                                                 </div>
                                                 <div>
-                                                    <p class="font-medium text-slate-600 line-through">{a.template_title}</p>
+                                                    <p class="font-medium text-slate-600 line-through">
+                                                        {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
+                                                    </p>
                                                     <p class="text-xs text-slate-400">{t(lang, "dashboard_earned")(a.template_points)}</p>
                                                 </div>
                                             </div>

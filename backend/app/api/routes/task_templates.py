@@ -2,9 +2,11 @@
 Task template management routes
 
 Handles CRUD operations for reusable task templates (parent only).
+Includes auto-translation endpoint for bilingual support.
 """
 
-from fastapi import APIRouter, Depends, status, Query
+import logging
+from fastapi import APIRouter, Depends, status, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from uuid import UUID
@@ -13,12 +15,17 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.services.task_template_service import TaskTemplateService
+from app.services.translation_service import TranslationService
 from app.schemas.task_template import (
     TaskTemplateCreate,
     TaskTemplateUpdate,
     TaskTemplateResponse,
+    TranslateRequest,
+    TranslateResponse,
 )
 from app.models import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -107,3 +114,59 @@ async def toggle_template(
         db, template_id, to_uuid_required(current_user.family_id)
     )
     return template
+
+
+@router.post("/{template_id}/translate", response_model=TranslateResponse)
+async def translate_template(
+    template_id: UUID,
+    request: TranslateRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Auto-translate a template's title and description using LiteLLM proxy (parent only).
+    Does NOT save the translation — returns it for review before saving via PUT.
+    """
+    template = await TaskTemplateService.get_template(
+        db, template_id, to_uuid_required(current_user.family_id)
+    )
+
+    # Determine source text based on source_lang
+    if request.source_lang == "en":
+        source_title = template.title
+        source_description = template.description
+    else:
+        source_title = template.title_es
+        source_description = template.description_es
+
+    if not source_title:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Template has no {request.source_lang} title to translate from",
+        )
+
+    try:
+        result = await TranslationService.translate_template_fields(
+            title=source_title,
+            description=source_description,
+            source_lang=request.source_lang,
+            target_lang=request.target_lang,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Translation failed for template {template_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Translation service failed. Please try again.",
+        )
+
+    return TranslateResponse(
+        title=result["title"],
+        description=result["description"],
+        source_lang=request.source_lang,
+        target_lang=request.target_lang,
+    )

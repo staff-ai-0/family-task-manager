@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     # Redis (Optional)
     REDIS_URL: str = "redis://redis:6379/0"
     
+    # LiteLLM Proxy (for auto-translation via mistral-nemo)
+    LITELLM_API_BASE: str = "http://10.1.0.99:4000"
+    LITELLM_API_KEY: str = ""
+    LITELLM_MODEL: str = "mistral-nemo"
+    
     # Logging
     LOG_LEVEL: str = "INFO"
     

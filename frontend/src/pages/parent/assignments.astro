@@ -296,9 +296,11 @@ function isToday(d: Date): boolean {
                                                     ? "M12 8v4m0 4h.01"
                                                     : "";
 
+                                            const displayTitle = (lang === "es" && task.template_title_es) ? task.template_title_es : task.template_title;
+
                                             return (
                                                 <div class={`text-xs px-1 py-0.5 mb-0.5 rounded border ${statusColor} truncate`}
-                                                     title={`${task.template_title} (${task.status})${task.template_is_bonus ? " [BONUS]" : ""}`}>
+                                                     title={`${displayTitle} (${task.status})${task.template_is_bonus ? " [BONUS]" : ""}`}>
                                                     <div class="flex items-center gap-0.5">
                                                         {statusIcon && (
                                                             <svg class="w-2.5 h-2.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
@@ -306,9 +308,9 @@ function isToday(d: Date): boolean {
                                                             </svg>
                                                         )}
                                                         <span class="truncate text-[10px] leading-tight">
-                                                            {task.template_title.length > 6
-                                                                ? task.template_title.slice(0, 6) + ".."
-                                                                : task.template_title}
+                                                            {displayTitle.length > 6
+                                                                ? displayTitle.slice(0, 6) + ".."
+                                                                : displayTitle}
                                                         </span>
                                                     </div>
                                                 </div>

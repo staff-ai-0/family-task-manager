@@ -136,28 +136,36 @@ async def create_demo_templates(
         # Regular daily tasks
         {
             "title": "Make Your Bed",
+            "title_es": "Hacer la Cama",
             "description": "Make your bed neatly every morning",
+            "description_es": "Haz tu cama ordenadamente cada mañana",
             "points": 20,
             "interval_days": 1,
             "is_bonus": False,
         },
         {
             "title": "Complete Homework",
+            "title_es": "Terminar la Tarea",
             "description": "Finish all homework before dinner",
+            "description_es": "Termina toda la tarea antes de la cena",
             "points": 50,
             "interval_days": 1,
             "is_bonus": False,
         },
         {
             "title": "Brush Teeth",
+            "title_es": "Cepillar Dientes",
             "description": "Brush teeth morning and night",
+            "description_es": "Cepíllate los dientes en la mañana y en la noche",
             "points": 10,
             "interval_days": 1,
             "is_bonus": False,
         },
         {
             "title": "Feed the Pet",
+            "title_es": "Alimentar Mascota",
             "description": "Give food and water to the family pet",
+            "description_es": "Dale comida y agua a la mascota",
             "points": 15,
             "interval_days": 1,
             "is_bonus": False,
@@ -165,7 +173,9 @@ async def create_demo_templates(
         # Regular tasks every 3 days
         {
             "title": "Take Out Trash",
+            "title_es": "Sacar la Basura",
             "description": "Empty trash cans and take bags to the curb",
+            "description_es": "Vacía los botes y saca las bolsas",
             "points": 25,
             "interval_days": 3,
             "is_bonus": False,
@@ -173,7 +183,9 @@ async def create_demo_templates(
         # Regular weekly tasks
         {
             "title": "Clean Your Room",
+            "title_es": "Limpiar Cuarto",
             "description": "Pick up toys and organize your space",
+            "description_es": "Recoge los juguetes y organiza tu espacio",
             "points": 30,
             "interval_days": 7,
             "is_bonus": False,
@@ -181,21 +193,27 @@ async def create_demo_templates(
         # Bonus tasks (optional, require all required tasks done first)
         {
             "title": "Help With Dishes",
+            "title_es": "Ayudar con Platos",
             "description": "Help wash or dry dishes after dinner",
+            "description_es": "Ayuda a lavar o secar los platos después de cenar",
             "points": 40,
             "interval_days": 1,
             "is_bonus": True,
         },
         {
             "title": "Vacuum Living Room",
+            "title_es": "Aspirar la Sala",
             "description": "Vacuum the living room and hallway",
+            "description_es": "Aspira la sala y el pasillo",
             "points": 75,
             "interval_days": 7,
             "is_bonus": True,
         },
         {
             "title": "Help With Laundry",
+            "title_es": "Ayudar con Ropa",
             "description": "Fold and put away your clean clothes",
+            "description_es": "Dobla y guarda tu ropa limpia",
             "points": 60,
             "interval_days": 7,
             "is_bonus": True,

@@ -44,15 +44,16 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     def _expand_dates(week_monday: date, interval_days: int) -> List[date]:
         """
         Expand a template into specific dates for the week based on interval_days.
-
+        
         interval_days=1 -> [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
-        interval_days=2 -> [Mon, Wed, Fri, Sun]
-        interval_days=3 -> [Mon, Thu, Sun]
-        interval_days=7 -> [Mon]
+        interval_days=7 -> [Any single day] (Handled by shuffle_tasks now)
+        Others -> Fixed pattern starting Mon
         """
         dates = []
         current = week_monday
         week_end = week_monday + timedelta(days=6)  # Sunday
+        
+        # Standard rigid expansion
         while current <= week_end:
             dates.append(current)
             current += timedelta(days=interval_days)
@@ -71,10 +72,12 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         1. Get all active non-bonus templates for the family
         2. Get all family members
         3. Delete existing PENDING assignments for this week (idempotent re-shuffle)
-        4. Expand each template into date instances based on interval_days
-        5. Shuffle all instances randomly
-        6. Distribute via round-robin to ensure equal count per person
-        7. Create TaskAssignment records
+        4. Distribute tasks aiming for equitable load (points):
+           - Sort templates by points (Heaviest first)
+           - Daily tasks (interval=1): Rotate among members daily
+           - Weekly tasks (interval=7): Assign to Member/Day with lowest current load
+           - Other intervals: Use standard expansion, assign to best fit member
+        5. Create TaskAssignment records
 
         Also generates bonus task assignments (assigned to all members).
         """
@@ -123,8 +126,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         if not members:
             raise ValidationException("No active family members found")
+            
+        random.shuffle(members)  # Randomize order to avoid bias in ties
 
-        # 3. Delete existing PENDING assignments for this week (re-shuffle is idempotent)
+        # 3. Delete existing PENDING assignments for this week
         delete_stmt = sql_delete(TaskAssignment).where(
             and_(
                 TaskAssignment.family_id == family_id,
@@ -135,32 +140,112 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         await db.execute(delete_stmt)
 
         assignments: List[TaskAssignment] = []
-
-        # 4. Expand regular templates into (template, date) instances
-        instances = []
+        
+        # LOAD BALANCING SETUP
+        # Track load[member_id][date_iso] = total_points
+        # Dates are Mon-Sun of the target week
+        week_dates = [week_monday + timedelta(days=i) for i in range(7)]
+        date_strs = [d.isoformat() for d in week_dates]
+        
+        member_load = {m.id: {d_str: 0 for d_str in date_strs} for m in members}
+        
+        # Sort templates by points descending (allocate heavy tasks first)
+        regular_templates.sort(key=lambda t: t.points, reverse=True)
+        
         for template in regular_templates:
-            dates = TaskAssignmentService._expand_dates(
-                week_monday, template.interval_days
-            )
-            for d in dates:
-                instances.append((template, d))
+            # Case A: Weekly Tasks (interval=7) - Flexible Day
+            if template.interval_days == 7:
+                # Find the (member, day) slot with the absolute lowest current load
+                best_member = None
+                best_date = None
+                min_load = float('inf')
+                
+                # Check all combinations
+                candidates = []
+                for m in members:
+                    for d in week_dates:
+                        d_str = d.isoformat()
+                        load = member_load[m.id][d_str]
+                        candidates.append((load, m, d))
+                
+                # Sort by load (asc), then random shuffle for ties?
+                # Actually min() finds the first one. Let's shuffle candidates first to break ties randomly.
+                random.shuffle(candidates)
+                best_candidate = min(candidates, key=lambda x: x[0])
+                
+                _, best_member, best_date = best_candidate
+                
+                # Assign
+                assignment = TaskAssignment(
+                    template_id=template.id,
+                    assigned_to=best_member.id,
+                    family_id=family_id,
+                    status=AssignmentStatus.PENDING,
+                    assigned_date=best_date,
+                    week_of=week_monday,
+                )
+                db.add(assignment)
+                assignments.append(assignment)
+                
+                # Update load
+                member_load[best_member.id][best_date.isoformat()] += template.points
+                
+            # Case B: Daily Tasks (interval=1) - Fixed Day, Rotate Member
+            elif template.interval_days == 1:
+                # We have 7 instances (Mon-Sun)
+                # We want to rotate these among members fairly
+                # Strategy: For each day, give to member with lowest load on that day
+                for d in week_dates:
+                    d_str = d.isoformat()
+                    # Find member with lowest load on this specific day
+                    day_candidates = [(member_load[m.id][d_str], m) for m in members]
+                    random.shuffle(day_candidates)
+                    _, best_member = min(day_candidates, key=lambda x: x[0])
+                    
+                    assignment = TaskAssignment(
+                        template_id=template.id,
+                        assigned_to=best_member.id,
+                        family_id=family_id,
+                        status=AssignmentStatus.PENDING,
+                        assigned_date=d,
+                        week_of=week_monday,
+                    )
+                    db.add(assignment)
+                    assignments.append(assignment)
+                    member_load[best_member.id][d_str] += template.points
 
-        # 5. Shuffle randomly
-        random.shuffle(instances)
-
-        # 6. Distribute via round-robin
-        for i, (template, assigned_date) in enumerate(instances):
-            member = members[i % len(members)]
-            assignment = TaskAssignment(
-                template_id=template.id,
-                assigned_to=member.id,
-                family_id=family_id,
-                status=AssignmentStatus.PENDING,
-                assigned_date=assigned_date,
-                week_of=week_monday,
-            )
-            db.add(assignment)
-            assignments.append(assignment)
+            # Case C: Other Intervals (e.g. 3) - Fixed Pattern, Best Member
+            else:
+                dates = TaskAssignmentService._expand_dates(week_monday, template.interval_days)
+                
+                # Find member who can take this SET of dates with least impact
+                # We look at sum of loads on these dates, or max load on these dates
+                candidates = []
+                for m in members:
+                    max_impact = 0
+                    current_sum = 0
+                    for d in dates:
+                        d_str = d.isoformat()
+                        load = member_load[m.id][d_str]
+                        if load > max_impact: max_impact = load
+                        current_sum += load
+                    candidates.append((current_sum, max_impact, m)) # Prioritize total load then peak
+                
+                random.shuffle(candidates)
+                _, _, best_member = min(candidates, key=lambda x: (x[0], x[1]))
+                
+                for d in dates:
+                    assignment = TaskAssignment(
+                        template_id=template.id,
+                        assigned_to=best_member.id,
+                        family_id=family_id,
+                        status=AssignmentStatus.PENDING,
+                        assigned_date=d,
+                        week_of=week_monday,
+                    )
+                    db.add(assignment)
+                    assignments.append(assignment)
+                    member_load[best_member.id][d.isoformat()] += template.points
 
         # 7. Bonus templates — assign to ALL members on their dates
         for template in bonus_templates:

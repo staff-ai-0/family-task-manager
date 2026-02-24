@@ -36,6 +36,7 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
+    preferred_lang: Optional[str] = Field(None, pattern=r"^(en|es)$")
 
 
 class UserPasswordUpdate(BaseModel):
@@ -55,6 +56,7 @@ class UserResponse(EntityResponse):
     family_id: UUID
     points: int
     is_active: bool
+    preferred_lang: str = "en"
 
 
 class UserWithStats(UserResponse):

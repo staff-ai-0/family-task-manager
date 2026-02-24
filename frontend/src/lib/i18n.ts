@@ -256,6 +256,23 @@ export const translations = {
         pac_status_cancelled: "Cancelled",
         pac_total_tasks: (n: number) => `${n} ${n === 1 ? "task" : "tasks"}`,
         pac_completed_count: (done: number, total: number) => `${done}/${total}`,
+
+        // Bilingual / Translation
+        translation_missing: "Translation missing",
+        translation_title_es: "Title (Spanish)",
+        translation_desc_es: "Description (Spanish)",
+        translation_title_en: "Title (English)",
+        translation_desc_en: "Description (English)",
+        translation_auto_translate: "Auto-translate",
+        translation_translating: "Translating...",
+        translation_success: "Translation generated! Review and save.",
+        translation_error: "Translation failed. Try again or enter manually.",
+        translation_no_key: "Translation service not configured.",
+        profile_preferred_lang: "Preferred Language",
+        profile_lang_en: "English",
+        profile_lang_es: "Spanish",
+        profile_lang_saved: "Language preference saved!",
+        profile_lang_error: "Failed to save language preference.",
     },
     es: {
         // Common / Nav
@@ -507,6 +524,23 @@ export const translations = {
         pac_status_cancelled: "Cancelada",
         pac_total_tasks: (n: number) => `${n} ${n === 1 ? "tarea" : "tareas"}`,
         pac_completed_count: (done: number, total: number) => `${done}/${total}`,
+
+        // Bilingual / Translation
+        translation_missing: "Falta traduccion",
+        translation_title_es: "Titulo (Espanol)",
+        translation_desc_es: "Descripcion (Espanol)",
+        translation_title_en: "Titulo (Ingles)",
+        translation_desc_en: "Descripcion (Ingles)",
+        translation_auto_translate: "Auto-traducir",
+        translation_translating: "Traduciendo...",
+        translation_success: "Traduccion generada! Revisa y guarda.",
+        translation_error: "Error al traducir. Intenta de nuevo o ingresa manualmente.",
+        translation_no_key: "Servicio de traduccion no configurado.",
+        profile_preferred_lang: "Idioma Preferido",
+        profile_lang_en: "Ingles",
+        profile_lang_es: "Espanol",
+        profile_lang_saved: "Preferencia de idioma guardada!",
+        profile_lang_error: "Error al guardar preferencia de idioma.",
     },
 } as const;
 

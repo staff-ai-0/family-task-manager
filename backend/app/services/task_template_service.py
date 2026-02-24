@@ -36,6 +36,8 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
         template = TaskTemplate(
             title=data.title,
             description=data.description,
+            title_es=data.title_es,
+            description_es=data.description_es,
             points=data.points,
             interval_days=data.interval_days,
             is_bonus=data.is_bonus,

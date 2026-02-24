@@ -27,6 +27,7 @@ class User(Base):
     family_id = Column(UUID(as_uuid=True), ForeignKey("families.id"), nullable=False, index=True)
     points = Column(Integer, default=0, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    preferred_lang = Column(String(5), default="en", nullable=False, server_default="en")
     
     email_verified = Column(Boolean, default=False, nullable=False)
     email_verified_at = Column(DateTime, nullable=True)

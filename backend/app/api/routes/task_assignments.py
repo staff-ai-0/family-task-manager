@@ -190,6 +190,8 @@ def _assignment_to_detail(assignment) -> dict:
         # Template details
         "template_title": template.title if template else "",
         "template_description": template.description if template else None,
+        "template_title_es": template.title_es if template else None,
+        "template_description_es": template.description_es if template else None,
         "template_points": template.points if template else 0,
         "template_is_bonus": template.is_bonus if template else False,
         # User details

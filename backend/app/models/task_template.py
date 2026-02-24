@@ -31,6 +31,8 @@ class TaskTemplate(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
+    title_es = Column(String(200), nullable=True)
+    description_es = Column(Text, nullable=True)
     points = Column(Integer, nullable=False, default=10)
 
     # Scheduling: how often per week (1=daily, 3=every 3 days, 7=weekly)

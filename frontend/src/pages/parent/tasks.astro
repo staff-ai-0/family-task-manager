@@ -26,6 +26,8 @@ if (Astro.request.method === "POST") {
         const payload: any = {
             title: data.get("title"),
             description: data.get("description") || null,
+            title_es: data.get("title_es") || null,
+            description_es: data.get("description_es") || null,
             points: Number(data.get("points")) || 10,
             interval_days: Number(data.get("interval_days")) || 1,
             is_bonus: data.get("is_bonus") === "on",
@@ -167,18 +169,37 @@ function freqLabel(interval: number): string {
                 <h2 class="font-bold text-slate-800 mb-4">{t(lang, "pt_create_title")}</h2>
                 <form method="POST" class="space-y-3">
                     <input type="hidden" name="action" value="create" />
-                    <input
-                        name="title"
-                        required
-                        placeholder={t(lang, "pt_task_title")}
-                        class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-                    />
-                    <textarea
-                        name="description"
-                        placeholder={t(lang, "pt_description")}
-                        rows={2}
-                        class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none"
-                    ></textarea>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-3">
+                            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">English</h3>
+                            <input
+                                name="title"
+                                required
+                                placeholder={t(lang, "pt_task_title")}
+                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                            />
+                            <textarea
+                                name="description"
+                                placeholder={t(lang, "pt_description")}
+                                rows={2}
+                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+                            ></textarea>
+                        </div>
+                        <div class="space-y-3">
+                            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Español</h3>
+                            <input
+                                name="title_es"
+                                placeholder={t(lang, "translation_title_es")}
+                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                            />
+                            <textarea
+                                name="description_es"
+                                placeholder={t(lang, "translation_desc_es")}
+                                rows={2}
+                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+                            ></textarea>
+                        </div>
+                    </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="text-xs font-medium text-slate-600 mb-1 block">
@@ -238,7 +259,14 @@ function freqLabel(interval: number): string {
                                 <div class="flex items-start justify-between gap-3">
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2 flex-wrap mb-1">
-                                            <h3 class="font-bold text-slate-800 text-sm">{tmpl.title}</h3>
+                                            <h3 class="font-bold text-slate-800 text-sm">
+                                                {tmpl.title}
+                                                {!tmpl.title_es && (
+                                                    <span class="inline-block ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title={t(lang, "translation_missing")}>
+                                                        ES missing
+                                                    </span>
+                                                )}
+                                            </h3>
                                             <span class={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                                                 tmpl.is_bonus
                                                     ? "bg-amber-100 text-amber-700"

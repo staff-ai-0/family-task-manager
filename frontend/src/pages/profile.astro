@@ -25,6 +25,19 @@ if (Astro.request.method === "POST") {
         });
         successMsg = ok ? t(lang, "profile_password_success") : "";
         errorMsg = ok ? "" : error || t(lang, "profile_password_error");
+    } else if (action === "change_lang") {
+        const newLang = data.get("preferred_lang") as string;
+        const { ok } = await apiFetch("/api/auth/me", {
+            method: "PUT",
+            token,
+            body: JSON.stringify({ preferred_lang: newLang }),
+        });
+        if (ok) {
+            Astro.cookies.set("lang", newLang, { path: "/", maxAge: 60 * 60 * 24 * 365 });
+            successMsg = t(newLang, "profile_lang_saved");
+        } else {
+            errorMsg = t(lang, "profile_lang_error");
+        }
     }
 }
 
@@ -152,6 +165,29 @@ const consequences: any[] = Array.isArray(consequencesRaw)
                     </section>
                 )
             }
+
+            <!-- Language Preference -->
+            <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                <h2 class="text-lg font-bold text-slate-800 mb-4">
+                    {t(lang, "profile_preferred_lang")}
+                </h2>
+                <form method="POST" class="flex items-center gap-3">
+                    <input type="hidden" name="action" value="change_lang" />
+                    <select
+                        name="preferred_lang"
+                        class="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 outline-none text-sm bg-white"
+                    >
+                        <option value="en" selected={user.preferred_lang === "en"}>{t(lang, "profile_lang_en")}</option>
+                        <option value="es" selected={user.preferred_lang === "es"}>{t(lang, "profile_lang_es")}</option>
+                    </select>
+                    <button
+                        type="submit"
+                        class="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
+                    >
+                        {t(lang, "pt_save")}
+                    </button>
+                </form>
+            </section>
 
             <section
                 class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100"

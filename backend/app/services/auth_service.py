@@ -144,3 +144,17 @@ class AuthService:
         await db.commit()
         await db.refresh(user)
         return user
+
+    @staticmethod
+    async def update_profile(db: AsyncSession, user_id: UUID, update_data: dict) -> User:
+        """Update user profile fields (name, preferred_lang, etc.)"""
+        user = await AuthService.get_user_by_id(db, user_id)
+
+        for key, value in update_data.items():
+            if value is not None and hasattr(user, key):
+                setattr(user, key, value)
+
+        user.updated_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(user)
+        return user

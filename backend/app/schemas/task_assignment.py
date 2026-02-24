@@ -47,6 +47,8 @@ class TaskAssignmentWithDetails(TaskAssignmentResponse):
 
     template_title: str = ""
     template_description: Optional[str] = None
+    template_title_es: Optional[str] = None
+    template_description_es: Optional[str] = None
     template_points: int = 0
     template_is_bonus: bool = False
     assigned_user_name: str = ""

@@ -17,6 +17,8 @@ class TaskTemplateBase(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
+    title_es: Optional[str] = Field(None, min_length=1, max_length=200)
+    description_es: Optional[str] = Field(None, max_length=1000)
     points: int = Field(10, ge=0, le=1000)
     interval_days: int = Field(1, ge=1, le=7, description="1=daily, 3=every 3 days, 7=weekly")
     is_bonus: bool = False
@@ -34,6 +36,8 @@ class TaskTemplateUpdate(BaseModel):
 
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
+    title_es: Optional[str] = Field(None, max_length=200)
+    description_es: Optional[str] = Field(None, max_length=1000)
     points: Optional[int] = Field(None, ge=0, le=1000)
     interval_days: Optional[int] = Field(None, ge=1, le=7)
     is_bonus: Optional[bool] = None
@@ -46,6 +50,8 @@ class TaskTemplateResponse(FamilyEntityResponse):
 
     title: str
     description: Optional[str] = None
+    title_es: Optional[str] = None
+    description_es: Optional[str] = None
     points: int
     interval_days: int
     is_bonus: bool
@@ -59,3 +65,19 @@ class TaskTemplateWithStats(TaskTemplateResponse):
     assignment_count: int = 0
     completed_count: int = 0
     frequency_label: str = "daily"
+
+
+class TranslateRequest(BaseModel):
+    """Schema for requesting auto-translation of template fields"""
+
+    source_lang: str = Field("en", pattern=r"^(en|es)$")
+    target_lang: str = Field("es", pattern=r"^(en|es)$")
+
+
+class TranslateResponse(BaseModel):
+    """Schema for translation response"""
+
+    title: str
+    description: Optional[str] = None
+    source_lang: str
+    target_lang: str
