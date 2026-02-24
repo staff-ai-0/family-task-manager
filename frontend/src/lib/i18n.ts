@@ -8,6 +8,9 @@ export type Lang = "en" | "es";
 export const translations = {
     en: {
         // Common / Nav
+        app_name: "Family Task Manager",
+        meta_description: "Manage tasks, rewards, and consequences for your family.",
+        lang_toggle: "Cambiar a Espanol",
         nav_tasks: "Tasks",
         nav_rewards: "Rewards",
         nav_profile: "Profile",
@@ -25,6 +28,7 @@ export const translations = {
         login_error_server: "An error occurred connecting to the server.",
 
         // Dashboard
+        dashboard_page_title: "Dashboard",
         dashboard_hello: "Hello,",
         dashboard_my_points: "My Points",
         dashboard_pending_tasks: "Pending Tasks",
@@ -40,7 +44,9 @@ export const translations = {
         dashboard_progress: (done: number, total: number) => `${done}/${total} done`,
         dashboard_no_assignments: "No tasks assigned for today. Ask a parent to shuffle!",
         dashboard_complete_btn: "Complete",
+        dashboard_complete_error: "Cannot complete task",
         dashboard_today: "Today",
+        dashboard_bonus_badge: "BONUS",
 
         // Rewards
         rewards_title: "Rewards Store",
@@ -82,6 +88,8 @@ export const translations = {
         parent_consequences_desc: "Create & resolve",
         parent_assignments_label: "Calendar",
         parent_assignments_desc: "Weekly assignment view",
+        parent_finances_label: "Family Finances",
+        parent_finances_desc: "Budget, groceries, allowance, savings",
         parent_family_members: "Family Members",
 
         // Parent Tasks (Templates)
@@ -111,14 +119,18 @@ export const translations = {
         pt_daily: "Daily",
         pt_every_n_days: (n: number) => `Every ${n}d`,
         pt_weekly: "Weekly",
+        pt_toggled: "Template toggled.",
+        pt_delete_confirm: "Delete this template and all its assignments?",
 
         // Shuffle
         shuffle_title: "Weekly Shuffle",
         shuffle_btn: "Shuffle Tasks",
         shuffle_desc: "Randomly assign templates to family members for this week",
+        shuffle_confirm: "This will re-shuffle all pending assignments for this week. Continue?",
         shuffle_success: (n: number) => `Shuffled! ${n} assignments created.`,
         shuffle_error: "Failed to shuffle tasks.",
         shuffle_week_of: "Week of",
+        shuffle_assignment_count: (n: number) => `${n} ${n === 1 ? "assignment" : "assignments"}`,
 
         // Assignments (parent view)
         pa_week_assignments: "This Week's Assignments",
@@ -144,6 +156,11 @@ export const translations = {
         pr_created: "Reward created!",
         pr_deleted: "Reward deleted.",
         pr_edit_title: "Edit Reward",
+        pr_cat_screen_time: "Screen Time",
+        pr_cat_food: "Food",
+        pr_cat_activity: "Activity",
+        pr_cat_privilege: "Privilege",
+        pr_cat_item: "Item",
 
         // Parent Members
         pm_title: "Family Members",
@@ -177,11 +194,46 @@ export const translations = {
         pc_resolved_flash: "Consequence resolved!",
         pc_deleted: "Consequence deleted.",
         pc_until: "Until",
+        pc_total_count: (n: number) => `${n} total`,
+
+        // Common actions
+        confirm_delete: "Delete?",
 
         // Back links
         back_parent: "Parent Dashboard",
         back_all_tasks: "All Templates",
         back_all_rewards: "All Rewards",
+
+        // Finance
+        fin_title: "Family Finances",
+        fin_subtitle: "Tap a category to add expenses",
+        fin_no_categories: "Could not load categories. Check that the finance service is running.",
+        fin_add_view: "Add / View",
+        fin_actual_title: "Actual Budget",
+        fin_actual_desc: "Open the full budget tool for detailed tracking, reports, and account management.",
+        fin_open_actual: "Open Actual Budget",
+        fin_back: "Back to Finances",
+        fin_category_history: "Category history",
+        fin_add_expense: "Add Expense",
+        fin_amount: "Amount",
+        fin_account: "Account (Source of funds)",
+        fin_date: "Date",
+        fin_payee: "Payee",
+        fin_notes: "Notes (Optional)",
+        fin_notes_placeholder: "Weekly groceries",
+        fin_save_expense: "Save Expense",
+        fin_recent_transactions: "Recent Transactions",
+        fin_no_transactions: "No transactions in this category yet.",
+        fin_unknown_payee: "Unknown",
+        fin_tx_added: "Transaction added successfully",
+        fin_tx_error: "Error adding transaction",
+        fin_account_fallback: "Account",
+
+        // Month names
+        month_jan: "Jan", month_feb: "Feb", month_mar: "Mar",
+        month_apr: "Apr", month_may: "May", month_jun: "Jun",
+        month_jul: "Jul", month_aug: "Aug", month_sep: "Sep",
+        month_oct: "Oct", month_nov: "Nov", month_dec: "Dec",
 
         // Parent Assignments Calendar
         pac_title: "Assignment Calendar",
@@ -207,10 +259,13 @@ export const translations = {
     },
     es: {
         // Common / Nav
+        app_name: "Family Task Manager",
+        meta_description: "Gestiona tareas, premios y consecuencias para tu familia.",
+        lang_toggle: "Switch to English",
         nav_tasks: "Tareas",
         nav_rewards: "Premios",
         nav_profile: "Perfil",
-        nav_manage: "Gestión",
+        nav_manage: "Gestion",
         nav_logout: "Salir",
 
         // Auth
@@ -224,6 +279,7 @@ export const translations = {
         login_error_server: "Error al conectar con el servidor.",
 
         // Dashboard
+        dashboard_page_title: "Tablero",
         dashboard_hello: "Hola,",
         dashboard_my_points: "Mis Puntos",
         dashboard_pending_tasks: "Tareas Pendientes",
@@ -239,7 +295,9 @@ export const translations = {
         dashboard_progress: (done: number, total: number) => `${done}/${total} listas`,
         dashboard_no_assignments: "No hay tareas asignadas para hoy. Pide a un padre que haga el shuffle!",
         dashboard_complete_btn: "Completar",
+        dashboard_complete_error: "No se pudo completar la tarea",
         dashboard_today: "Hoy",
+        dashboard_bonus_badge: "BONUS",
 
         // Rewards
         rewards_title: "Tienda de Premios",
@@ -281,6 +339,8 @@ export const translations = {
         parent_consequences_desc: "Crear y resolver",
         parent_assignments_label: "Calendario",
         parent_assignments_desc: "Vista semanal de asignaciones",
+        parent_finances_label: "Finanzas Familiares",
+        parent_finances_desc: "Presupuesto, mandado, domingos, ahorro",
         parent_family_members: "Miembros de la Familia",
 
         // Parent Tasks (Templates)
@@ -310,14 +370,18 @@ export const translations = {
         pt_daily: "Diaria",
         pt_every_n_days: (n: number) => `Cada ${n}d`,
         pt_weekly: "Semanal",
+        pt_toggled: "Plantilla cambiada.",
+        pt_delete_confirm: "Eliminar esta plantilla y todas sus asignaciones?",
 
         // Shuffle
         shuffle_title: "Shuffle Semanal",
         shuffle_btn: "Mezclar Tareas",
         shuffle_desc: "Asignar plantillas aleatoriamente a los miembros para esta semana",
+        shuffle_confirm: "Esto va a re-mezclar todas las asignaciones pendientes de esta semana. Continuar?",
         shuffle_success: (n: number) => `Mezclado! ${n} asignaciones creadas.`,
         shuffle_error: "Error al mezclar tareas.",
         shuffle_week_of: "Semana del",
+        shuffle_assignment_count: (n: number) => `${n} ${n === 1 ? "asignacion" : "asignaciones"}`,
 
         // Assignments (parent view)
         pa_week_assignments: "Asignaciones de la Semana",
@@ -343,6 +407,11 @@ export const translations = {
         pr_created: "¡Premio creado!",
         pr_deleted: "Premio eliminado.",
         pr_edit_title: "Editar Premio",
+        pr_cat_screen_time: "Tiempo de Pantalla",
+        pr_cat_food: "Comida",
+        pr_cat_activity: "Actividad",
+        pr_cat_privilege: "Privilegio",
+        pr_cat_item: "Articulo",
 
         // Parent Members
         pm_title: "Miembros de la Familia",
@@ -376,11 +445,46 @@ export const translations = {
         pc_resolved_flash: "¡Consecuencia resuelta!",
         pc_deleted: "Consecuencia eliminada.",
         pc_until: "Hasta",
+        pc_total_count: (n: number) => `${n} total`,
+
+        // Common actions
+        confirm_delete: "Eliminar?",
 
         // Back links
         back_parent: "Panel de Padres",
         back_all_tasks: "Todas las Plantillas",
         back_all_rewards: "Todos los Premios",
+
+        // Finance
+        fin_title: "Finanzas Familiares",
+        fin_subtitle: "Toca una categoria para anadir gastos",
+        fin_no_categories: "No se pudieron cargar las categorias. Verifica que el servicio de finanzas este funcionando.",
+        fin_add_view: "Anadir / Ver",
+        fin_actual_title: "Actual Budget",
+        fin_actual_desc: "Abre la herramienta completa de presupuesto para seguimiento detallado, reportes y gestion de cuentas.",
+        fin_open_actual: "Abrir Actual Budget",
+        fin_back: "Volver a Finanzas",
+        fin_category_history: "Historial de categoria",
+        fin_add_expense: "Anadir Gasto",
+        fin_amount: "Monto",
+        fin_account: "Cuenta (Origen de fondos)",
+        fin_date: "Fecha",
+        fin_payee: "Lugar / Payee",
+        fin_notes: "Notas (Opcional)",
+        fin_notes_placeholder: "Despensa semanal",
+        fin_save_expense: "Guardar Gasto",
+        fin_recent_transactions: "Transacciones Recientes",
+        fin_no_transactions: "No hay transacciones en esta categoria.",
+        fin_unknown_payee: "Sin lugar",
+        fin_tx_added: "Transaccion anadida con exito",
+        fin_tx_error: "Error al anadir transaccion",
+        fin_account_fallback: "Cuenta",
+
+        // Month names
+        month_jan: "Ene", month_feb: "Feb", month_mar: "Mar",
+        month_apr: "Abr", month_may: "May", month_jun: "Jun",
+        month_jul: "Jul", month_aug: "Ago", month_sep: "Sep",
+        month_oct: "Oct", month_nov: "Nov", month_dec: "Dic",
 
         // Parent Assignments Calendar
         pac_title: "Calendario de Asignaciones",

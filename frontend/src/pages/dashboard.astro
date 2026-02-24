@@ -26,7 +26,7 @@ if (Astro.request.method === "POST") {
             });
             if (!ok) {
                 // Store error in cookie for display after redirect
-                Astro.cookies.set("flash_error", error || "Cannot complete task", { path: "/" });
+                Astro.cookies.set("flash_error", error || (t(lang, "dashboard_complete_error") as string), { path: "/" });
             }
         }
         return Astro.redirect("/dashboard");
@@ -68,7 +68,7 @@ const flashError = Astro.cookies.get("flash_error")?.value;
 if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 ---
 
-<Layout title="Dashboard - Family Task Manager">
+<Layout title={`${t(lang, "dashboard_page_title")} - Family Task Manager`}>
     <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
         <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
             <div class="flex justify-between items-center mb-6">
@@ -258,7 +258,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                             <div class="flex items-center gap-2 mb-1">
                                                 <h3 class="font-bold text-slate-800 text-lg">{a.template_title}</h3>
                                                 <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                                                    BONUS
+                                                    {t(lang, "dashboard_bonus_badge")}
                                                 </span>
                                             </div>
                                             <p class="text-slate-500 text-sm line-clamp-2">{a.template_description || "--"}</p>

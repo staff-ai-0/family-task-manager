@@ -56,13 +56,10 @@ if (Astro.request.method === "POST") {
         });
 
         if (addResp.ok) {
-            successMsg =
-                lang === "es"
-                    ? "Transacción añadida con éxito"
-                    : "Transaction added successfully";
+            successMsg = t(lang, "fin_tx_added") as string;
         } else {
             const err = await addResp.json();
-            errorMsg = err.detail || "Error adding transaction";
+            errorMsg = err.detail || (t(lang, "fin_tx_error") as string);
         }
     } catch (e: any) {
         errorMsg = e.message;
@@ -96,7 +93,7 @@ try {
 ---
 
 <Layout
-    title={`${categoryName} - ${lang === "es" ? "Finanzas Familiares" : "Family Finances"} - Family Task Manager`}
+    title={`${categoryName} - ${t(lang, "fin_title")} - Family Task Manager`}
 >
     <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
         <header
@@ -118,16 +115,12 @@ try {
                         stroke-width="2"
                         d="M15 19l-7-7 7-7"></path>
                 </svg>
-                {lang === "es" ? "Volver a Finanzas" : "Back to Finances"}
+                {t(lang, "fin_back")}
             </a>
             <div>
                 <h1 class="text-2xl font-bold">{categoryName}</h1>
                 <p class="text-emerald-200 text-sm">
-                    {
-                        lang === "es"
-                            ? "Historial de categoría"
-                            : "Category history"
-                    }
+                    {t(lang, "fin_category_history")}
                 </p>
             </div>
         </header>
@@ -154,13 +147,13 @@ try {
                 class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100"
             >
                 <h2 class="font-bold text-slate-800 mb-4">
-                    {lang === "es" ? "Añadir Gasto" : "Add Expense"}
+                    {t(lang, "fin_add_expense")}
                 </h2>
                 <form method="POST" class="space-y-4">
                     <div>
                         <label
                             class="block text-xs font-semibold text-slate-500 mb-1"
-                            >{lang === "es" ? "Monto" : "Amount"} ($)</label
+                            >{t(lang, "fin_amount")} ($)</label
                         >
                         <input
                             type="number"
@@ -176,11 +169,7 @@ try {
                     <div>
                         <label
                             class="block text-xs font-semibold text-slate-500 mb-1"
-                            >{
-                                lang === "es"
-                                    ? "Cuenta (Origen de fondos)"
-                                    : "Account (Source of funds)"
-                            }</label
+                            >{t(lang, "fin_account")}</label
                         >
                         <select
                             name="account_id"
@@ -201,7 +190,7 @@ try {
                         <div>
                             <label
                                 class="block text-xs font-semibold text-slate-500 mb-1"
-                                >{lang === "es" ? "Fecha" : "Date"}</label
+                                >{t(lang, "fin_date")}</label
                             >
                             <input
                                 type="date"
@@ -216,9 +205,7 @@ try {
                         <div>
                             <label
                                 class="block text-xs font-semibold text-slate-500 mb-1"
-                                >{
-                                    lang === "es" ? "Lugar / Payee" : "Payee"
-                                }</label
+                                >{t(lang, "fin_payee")}</label
                             >
                             <input
                                 type="text"
@@ -233,18 +220,12 @@ try {
                     <div>
                         <label
                             class="block text-xs font-semibold text-slate-500 mb-1"
-                            >{
-                                lang === "es"
-                                    ? "Notas (Opcional)"
-                                    : "Notes (Optional)"
-                            }</label
+                            >{t(lang, "fin_notes")}</label
                         >
                         <input
                             type="text"
                             name="notes"
-                            placeholder={lang === "es"
-                                ? "Despensa semanal"
-                                : "Weekly groceries"}
+                            placeholder={t(lang, "fin_notes_placeholder") as string}
                             class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-700"
                         />
                     </div>
@@ -253,7 +234,7 @@ try {
                         type="submit"
                         class="w-full py-4 mt-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-all shadow-md active:scale-[0.98]"
                     >
-                        {lang === "es" ? "Guardar Gasto" : "Save Expense"}
+                        {t(lang, "fin_save_expense")}
                     </button>
                 </form>
             </section>
@@ -261,11 +242,7 @@ try {
             <!-- Recent Transactions -->
             <section>
                 <h2 class="font-bold text-slate-800 mb-4 px-1">
-                    {
-                        lang === "es"
-                            ? "Transacciones Recientes"
-                            : "Recent Transactions"
-                    }
+                    {t(lang, "fin_recent_transactions")}
                 </h2>
 
                 {
@@ -273,9 +250,7 @@ try {
                         <div class="text-center py-8 bg-slate-100 rounded-2xl border-2 border-dashed border-slate-200">
                             <span class="text-3xl mb-2 block">📝</span>
                             <p class="text-slate-500 text-sm">
-                                {lang === "es"
-                                    ? "No hay transacciones en esta categoría."
-                                    : "No transactions in this category."}
+                                {t(lang, "fin_no_transactions")}
                             </p>
                         </div>
                     ) : (
@@ -312,13 +287,11 @@ try {
                                         <div>
                                             <h4 class="font-bold text-slate-800">
                                                 {tx.payee_name ||
-                                                    (lang === "es"
-                                                        ? "Sin lugar"
-                                                        : "Unknown")}
+                                                    (t(lang, "fin_unknown_payee") as string)}
                                             </h4>
                                             <p class="text-xs text-slate-500 mt-0.5">
                                                 {tx.date} •{" "}
-                                                {tx.account_name || "Account"}
+                                                {tx.account_name || (t(lang, "fin_account_fallback") as string)}
                                             </p>
                                             {tx.notes && (
                                                 <p class="text-xs text-slate-400 italic mt-0.5">

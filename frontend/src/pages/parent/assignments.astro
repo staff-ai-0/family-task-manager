@@ -95,9 +95,12 @@ const completedTasks = allAssignments.filter((a: any) => a.status === "completed
 
 // Format week range for display
 const weekSunday = addDays(weekMonday, 6);
-const monthNames = lang === "es"
-    ? ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-    : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const monthNames = [
+    t(lang, "month_jan"), t(lang, "month_feb"), t(lang, "month_mar"),
+    t(lang, "month_apr"), t(lang, "month_may"), t(lang, "month_jun"),
+    t(lang, "month_jul"), t(lang, "month_aug"), t(lang, "month_sep"),
+    t(lang, "month_oct"), t(lang, "month_nov"), t(lang, "month_dec"),
+];
 
 function formatShortDate(d: Date): string {
     return `${monthNames[d.getMonth()]} ${d.getDate()}`;

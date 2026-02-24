@@ -62,7 +62,7 @@ if (Astro.request.method === "POST") {
             token,
         });
         if (ok) {
-            successMsg = "Template toggled.";
+            successMsg = t(lang, "pt_toggled") as string;
         } else {
             errorMsg = error || "Error";
         }
@@ -146,7 +146,7 @@ function freqLabel(interval: number): string {
                     <input type="hidden" name="action" value="shuffle" />
                     <button
                         type="submit"
-                        onclick="return confirm('This will re-shuffle all pending assignments for this week. Continue?')"
+                        onclick={`return confirm('${t(lang, "shuffle_confirm")}')`}
                         class="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2"
                     >
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -157,7 +157,7 @@ function freqLabel(interval: number): string {
                 </form>
                 {assignmentList.length > 0 && (
                     <p class="text-xs text-amber-700 mt-2 text-center">
-                        {t(lang, "shuffle_week_of")}: {assignmentList[0]?.week_of} | {assignmentList.length} assignments
+                        {t(lang, "shuffle_week_of")}: {assignmentList[0]?.week_of} | {(t(lang, "shuffle_assignment_count") as Function)(assignmentList.length)}
                     </p>
                 )}
             </section>
@@ -267,7 +267,7 @@ function freqLabel(interval: number): string {
                                             <input type="hidden" name="template_id" value={tmpl.id} />
                                             <button
                                                 type="submit"
-                                                title={tmpl.is_active ? "Deactivate" : "Activate"}
+                                                title={tmpl.is_active ? (t(lang, "pm_deactivate") as string) : (t(lang, "pm_activate") as string)}
                                                 class={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${
                                                     tmpl.is_active
                                                         ? "bg-green-100 text-green-600 hover:bg-green-200"
@@ -294,7 +294,7 @@ function freqLabel(interval: number): string {
                                             <input type="hidden" name="template_id" value={tmpl.id} />
                                             <button
                                                 type="submit"
-                                                onclick="return confirm('Delete this template and all its assignments?')"
+                                                onclick={`return confirm('${t(lang, "pt_delete_confirm")}')`}
                                                 class="h-8 w-8 rounded-lg bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors"
                                             >
                                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

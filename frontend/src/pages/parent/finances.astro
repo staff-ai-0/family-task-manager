@@ -38,7 +38,7 @@ const expenseGroups =
 ---
 
 <Layout
-    title={`${lang === "es" ? "Finanzas Familiares" : "Family Finances"} - Family Task Manager`}
+    title={`${t(lang, "fin_title")} - Family Task Manager`}
 >
     <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
         <header
@@ -60,7 +60,7 @@ const expenseGroups =
                         stroke-width="2"
                         d="M15 19l-7-7 7-7"></path>
                 </svg>
-                {lang === "es" ? "Panel de Padres" : "Parent Dashboard"}
+                {t(lang, "back_parent")}
             </a>
             <div class="flex items-center gap-3">
                 <div
@@ -82,18 +82,10 @@ const expenseGroups =
                 </div>
                 <div>
                     <h1 class="text-2xl font-bold">
-                        {
-                            lang === "es"
-                                ? "Finanzas Familiares"
-                                : "Family Finances"
-                        }
+                        {t(lang, "fin_title")}
                     </h1>
                     <p class="text-emerald-200 text-sm">
-                        {
-                            lang === "es"
-                                ? "Toca una categoría para añadir gastos"
-                                : "Tap a category to add expenses"
-                        }
+                        {t(lang, "fin_subtitle")}
                     </p>
                 </div>
             </div>
@@ -104,9 +96,7 @@ const expenseGroups =
                 expenseGroups.length === 0 && (
                     <div class="bg-yellow-50 text-yellow-800 p-4 rounded-xl text-sm border border-yellow-200">
                         ⚠️{" "}
-                        {lang === "es"
-                            ? "No se pudieron cargar las categorías o no hay grupos de gastos creados en Actual Budget."
-                            : "Could not load categories or no expense groups created in Actual Budget."}
+                        {t(lang, "fin_no_categories")}
                     </div>
                 )
             }
@@ -144,9 +134,7 @@ const expenseGroups =
                                             {cat.name}
                                         </p>
                                         <p class="text-[10px] text-slate-400 mt-1">
-                                            {lang === "es"
-                                                ? "Añadir / Ver"
-                                                : "Add / View"}
+                                            {t(lang, "fin_add_view")}
                                         </p>
                                     </div>
                                 </a>
@@ -183,11 +171,7 @@ const expenseGroups =
                             Actual Budget
                         </h3>
                         <p class="text-sm text-slate-500 mt-1">
-                            {
-                                lang === "es"
-                                    ? "Abre la herramienta completa de presupuesto para gestionar metas de ahorro y ver reportes."
-                                    : "Open the full budget tool to manage savings goals and view reports."
-                            }
+                            {t(lang, "fin_actual_desc")}
                         </p>
                     </div>
                 </div>
@@ -210,11 +194,7 @@ const expenseGroups =
                             d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
                         ></path>
                     </svg>
-                    {
-                        lang === "es"
-                            ? "Abrir Actual Budget"
-                            : "Open Actual Budget"
-                    }
+                    {t(lang, "fin_open_actual")}
                 </a>
             </section>
         </main>

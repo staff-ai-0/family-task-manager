@@ -153,11 +153,11 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
                                 <option value=""
                                     >{t(lang, "pr_none_cat")}</option
                                 >
-                                <option value="SCREEN_TIME">Screen Time</option>
-                                <option value="FOOD">Food</option>
-                                <option value="ACTIVITY">Activity</option>
-                                <option value="PRIVILEGE">Privilege</option>
-                                <option value="ITEM">Item</option>
+                                <option value="SCREEN_TIME">{t(lang, "pr_cat_screen_time")}</option>
+                                <option value="FOOD">{t(lang, "pr_cat_food")}</option>
+                                <option value="ACTIVITY">{t(lang, "pr_cat_activity")}</option>
+                                <option value="PRIVILEGE">{t(lang, "pr_cat_privilege")}</option>
+                                <option value="ITEM">{t(lang, "pr_cat_item")}</option>
                             </select>
                         </div>
                     </div>
@@ -228,7 +228,7 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
                                             />
                                             <button
                                                 type="submit"
-                                                onclick="return confirm('Delete?')"
+                                                onclick={`return confirm('${t(lang, "confirm_delete")}')`}
                                                 class="h-8 w-8 rounded-lg bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors"
                                             >
                                                 <svg

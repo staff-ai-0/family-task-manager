@@ -129,27 +129,27 @@ if (!reward) return Astro.redirect("/parent/rewards");
                             <option
                                 value="SCREEN_TIME"
                                 selected={reward.category === "SCREEN_TIME"}
-                                >Screen Time</option
+                                >{t(lang, "pr_cat_screen_time")}</option
                             >
                             <option
                                 value="FOOD"
                                 selected={reward.category === "FOOD"}
-                                >Food</option
+                                >{t(lang, "pr_cat_food")}</option
                             >
                             <option
                                 value="ACTIVITY"
                                 selected={reward.category === "ACTIVITY"}
-                                >Activity</option
+                                >{t(lang, "pr_cat_activity")}</option
                             >
                             <option
                                 value="PRIVILEGE"
                                 selected={reward.category === "PRIVILEGE"}
-                                >Privilege</option
+                                >{t(lang, "pr_cat_privilege")}</option
                             >
                             <option
                                 value="ITEM"
                                 selected={reward.category === "ITEM"}
-                                >Item</option
+                                >{t(lang, "pr_cat_item")}</option
                             >
                         </select>
                     </div>

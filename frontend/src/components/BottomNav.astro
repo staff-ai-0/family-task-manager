@@ -118,9 +118,7 @@ const langLabel = lang === "es" ? "EN" : "ES";
             <input type="hidden" name="lang" value={nextLang} />
             <button
                 type="submit"
-                title={lang === "es"
-                    ? "Switch to English"
-                    : "Cambiar a Español"}
+                title={t(lang, "lang_toggle") as string}
                 class="flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-xl text-slate-400 hover:text-indigo-500 transition-colors"
             >
                 <svg

@@ -207,18 +207,10 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                     </div>
                     <div>
                         <p class="font-bold text-slate-800">
-                            {
-                                lang === "es"
-                                    ? "💰 Finanzas Familiares"
-                                    : "💰 Family Finances"
-                            }
+                            {t(lang, "parent_finances_label")}
                         </p>
                         <p class="text-xs text-slate-500">
-                            {
-                                lang === "es"
-                                    ? "Presupuesto, mandado, domingos, ahorro"
-                                    : "Budget, groceries, allowance, savings"
-                            }
+                            {t(lang, "parent_finances_desc")}
                         </p>
                     </div>
                 </a>
