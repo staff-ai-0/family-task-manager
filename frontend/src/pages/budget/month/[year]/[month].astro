@@ -4,10 +4,10 @@
  * Shows budget allocations, spending, and available amounts for a specific month
  */
 
-import Layout from "../../../layouts/Layout.astro";
-import BottomNav from "../../../components/BottomNav.astro";
-import { apiFetch } from "../../../lib/api";
-import { getMonthBudget, formatCurrency, getMonthName } from "../../../lib/api/budget";
+import Layout from "../../../../layouts/Layout.astro";
+import BottomNav from "../../../../components/BottomNav.astro";
+import { apiFetch } from "../../../../lib/api";
+import { getMonthBudget, formatCurrency, getMonthName } from "../../../../lib/api/budget";
 import type { MonthBudgetView } from "../../../lib/api/budget";
 
 // Authentication check
