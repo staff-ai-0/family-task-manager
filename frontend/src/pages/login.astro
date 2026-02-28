@@ -115,7 +115,8 @@ if (flashError) {
                 </div>
             </div>
 
-            <form method="POST" action="/api/auth/login" class="space-y-6">
+            <form id="login-form" class="space-y-6">
+                <div id="login-error" class="hidden mb-4 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm"></div>
                 <div>
                     <label
                         for="email"
@@ -148,6 +149,7 @@ if (flashError) {
                 </div>
                 <button
                     type="submit"
+                    id="login-submit-btn"
                     class="w-full flex justify-center py-3 px-4 rounded-lg text-white font-medium bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors shadow-sm"
                 >
                     {t(lang, "login_submit")}
@@ -191,6 +193,62 @@ if (flashError) {
     </main>
 
     <script>
+        // Email/password login via fetch
+        document.getElementById('login-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const form = e.target as HTMLFormElement;
+            const emailInput = form.querySelector('#email') as HTMLInputElement;
+            const passwordInput = form.querySelector('#password') as HTMLInputElement;
+            const submitBtn = form.querySelector('#login-submit-btn') as HTMLButtonElement;
+            const errorDiv = document.getElementById('login-error');
+            
+            // Hide previous errors
+            if (errorDiv) {
+                errorDiv.classList.add('hidden');
+                errorDiv.textContent = '';
+            }
+            
+            // Disable button during request
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = '...';
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: emailInput.value,
+                        password: passwordInput.value,
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.redirect) {
+                    // Cookie was set via Set-Cookie header, redirect client-side
+                    window.location.href = data.redirect;
+                } else {
+                    // Show error
+                    if (errorDiv) {
+                        errorDiv.textContent = data.error || 'Login failed. Please try again.';
+                        errorDiv.classList.remove('hidden');
+                    }
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                if (errorDiv) {
+                    errorDiv.textContent = 'An error occurred. Please try again.';
+                    errorDiv.classList.remove('hidden');
+                }
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
+
         // Toggle join code section
         document.getElementById('toggle-join-code')?.addEventListener('click', () => {
             const section = document.getElementById('join-code-section');

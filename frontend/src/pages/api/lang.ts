@@ -1,17 +1,18 @@
 import type { APIRoute } from "astro";
 
-export const POST: APIRoute = async ({ request, cookies, redirect }) => {
+export const POST: APIRoute = async ({ request }) => {
     const formData = await request.formData();
     const lang = formData.get("lang")?.toString();
     const referer = request.headers.get("referer") || "/dashboard";
 
+    const headers = new Headers({ Location: referer });
+    
     if (lang === "en" || lang === "es") {
-        cookies.set("lang", lang, {
-            path: "/",
-            maxAge: 60 * 60 * 24 * 365, // 1 year
-            sameSite: "lax",
-        });
+        headers.append(
+            "Set-Cookie",
+            `lang=${lang}; Path=/; Max-Age=${60 * 60 * 24 * 365}; SameSite=Lax`
+        );
     }
 
-    return redirect(referer, 302);
+    return new Response(null, { status: 302, headers });
 };

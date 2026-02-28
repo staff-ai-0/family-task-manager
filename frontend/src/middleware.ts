@@ -21,37 +21,35 @@ export const onRequest = defineMiddleware(async (context, next) => {
         
         // Allow null origin for server-side requests (Astro API routes calling backend)
         // This happens when our own API routes make server-to-server requests
-        if (origin === null) {
-            // Server-side request from our own API routes - allow it
-            return next();
-        }
-        
-        // In development, allow localhost origins
-        if (import.meta.env.DEV) {
-            const devOrigins = [
-                `http://${host}`,
-                `https://${host}`,
-                "http://localhost:3000",
-                "http://localhost:3003",
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:3003"
-            ];
-            if (!devOrigins.includes(origin)) {
-                console.error(`CSRF violation in dev: origin ${origin} not in allowed list for ${path}`);
-                return new Response(
-                    JSON.stringify({ detail: "CSRF validation failed" }),
-                    { status: 403, headers: { "Content-Type": "application/json" } }
-                );
-            }
-        } else {
-            // In production, strictly enforce same-origin
-            const expectedOrigin = `https://${host}`;
-            if (origin !== expectedOrigin) {
-                console.error(`CSRF violation: origin ${origin} does not match ${expectedOrigin}`);
-                return new Response(
-                    JSON.stringify({ detail: "CSRF validation failed" }),
-                    { status: 403, headers: { "Content-Type": "application/json" } }
-                );
+        // We only skip the CSRF check; auth checks below still apply
+        if (origin !== null) {
+            // In development, allow localhost origins
+            if (import.meta.env.DEV) {
+                const devOrigins = [
+                    `http://${host}`,
+                    `https://${host}`,
+                    "http://localhost:3000",
+                    "http://localhost:3003",
+                    "http://127.0.0.1:3000",
+                    "http://127.0.0.1:3003"
+                ];
+                if (!devOrigins.includes(origin)) {
+                    console.error(`CSRF violation in dev: origin ${origin} not in allowed list for ${path}`);
+                    return new Response(
+                        JSON.stringify({ detail: "CSRF validation failed" }),
+                        { status: 403, headers: { "Content-Type": "application/json" } }
+                    );
+                }
+            } else {
+                // In production, strictly enforce same-origin
+                const expectedOrigin = `https://${host}`;
+                if (origin !== expectedOrigin) {
+                    console.error(`CSRF violation: origin ${origin} does not match ${expectedOrigin}`);
+                    return new Response(
+                        JSON.stringify({ detail: "CSRF validation failed" }),
+                        { status: 403, headers: { "Content-Type": "application/json" } }
+                    );
+                }
             }
         }
     }
