@@ -143,6 +143,14 @@ media/
 cookies*.txt
 *.old.*
 
+# E2E Tests & Playwright
+e2e-tests/
+*.png
+*.jpg
+*.jpeg
+playwright-report/
+test-results/
+
 # Test scripts (keep only in backend/)
 test_startup.py
 send_test_email.py
