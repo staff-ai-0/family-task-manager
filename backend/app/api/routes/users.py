@@ -87,3 +87,23 @@ async def activate_user(
     """Activate a user account (parent only)"""
     user = await AuthService.activate_user(db, user.id)
     return user
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user: User = Depends(get_family_user),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently delete a user account (parent only)
+    
+    This will cascade delete all related records (tasks, points, etc.).
+    Parents cannot delete themselves.
+    """
+    # Prevent parents from deleting themselves
+    if user.id == current_user.id:
+        from app.core.exceptions import ValidationException
+        raise ValidationException("Cannot delete your own account")
+    
+    await AuthService.delete_user(db, user.id)
+    return None

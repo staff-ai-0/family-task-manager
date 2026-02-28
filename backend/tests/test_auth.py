@@ -130,3 +130,96 @@ class TestProtectedEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert data["email"] == test_parent_user.email
+
+
+class TestUserDeletion:
+    """Test user deletion functionality"""
+
+    @pytest.mark.asyncio
+    async def test_parent_can_delete_child(
+        self, client: AsyncClient, test_parent_user, test_child_user
+    ):
+        """Test that parent can delete a child user"""
+        # Login as parent
+        login_response = await client.post(
+            "/api/auth/login",
+            json={"email": test_parent_user.email, "password": "password123"},
+        )
+        token = login_response.json()["access_token"]
+
+        # Delete child user
+        response = await client.delete(
+            f"/api/users/{test_child_user.id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 204
+
+        # Verify user is deleted (try to get user should fail)
+        get_response = await client.get(
+            f"/api/users/{test_child_user.id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert get_response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_parent_cannot_delete_self(
+        self, client: AsyncClient, test_parent_user
+    ):
+        """Test that parent cannot delete themselves"""
+        # Login as parent
+        login_response = await client.post(
+            "/api/auth/login",
+            json={"email": test_parent_user.email, "password": "password123"},
+        )
+        token = login_response.json()["access_token"]
+
+        # Try to delete self
+        response = await client.delete(
+            f"/api/users/{test_parent_user.id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 400
+        assert "cannot delete your own account" in response.json()["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_child_cannot_delete_users(
+        self, client: AsyncClient, test_child_user, test_parent_user
+    ):
+        """Test that child cannot delete users"""
+        # Login as child
+        login_response = await client.post(
+            "/api/auth/login",
+            json={"email": test_child_user.email, "password": "password123"},
+        )
+        token = login_response.json()["access_token"]
+
+        # Try to delete parent user
+        response = await client.delete(
+            f"/api/users/{test_parent_user.id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 403  # Forbidden
+
+    @pytest.mark.asyncio
+    async def test_delete_nonexistent_user(
+        self, client: AsyncClient, test_parent_user
+    ):
+        """Test deleting a user that doesn't exist"""
+        # Login as parent
+        login_response = await client.post(
+            "/api/auth/login",
+            json={"email": test_parent_user.email, "password": "password123"},
+        )
+        token = login_response.json()["access_token"]
+
+        # Try to delete non-existent user
+        fake_uuid = "00000000-0000-0000-0000-000000000000"
+        response = await client.delete(
+            f"/api/users/{fake_uuid}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 404

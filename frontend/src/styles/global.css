@@ -16,6 +16,11 @@
   --color-primary-950: #172554;
 }
 
+svg {
+  width: 1em;
+  height: 1em;
+}
+
 html, body {
   margin: 0;
   padding: 0;

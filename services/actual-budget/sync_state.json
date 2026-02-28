@@ -1,5 +1,5 @@
 {
-  "last_sync": "2026-02-22",
+  "last_sync": "2026-02-27",
   "synced_members": {
     "76a8d673-4308-437f-8317-c32f3c749bf1": {
       "name": "Emma Johnson",
@@ -12,6 +12,156 @@
       "last_points": 280,
       "last_sync": "2026-02-22",
       "last_amount": 28.0
+    },
+    "3d8d403b-2f2d-492a-90a7-fa65c9323ad4": {
+      "name": "Emma Johnson",
+      "last_points": 1712,
+      "last_sync": "2026-02-26",
+      "last_amount": 138.2
+    },
+    "93e2630c-8536-4dac-a112-c69741314575": {
+      "name": "Lucas Johnson",
+      "last_points": 1593,
+      "last_sync": "2026-02-26",
+      "last_amount": 103.3
+    }
+  },
+  "synced_to_actual": {
+    "ftm-delta-3d8d403b-2f2d-492a-90a7-fa65c9323ad4-2026-02-26": {
+      "child_id": "3d8d403b-2f2d-492a-90a7-fa65c9323ad4",
+      "actual_tx_id": "cd4db37c-0d62-48fa-b74b-fadb8bf92258",
+      "points": 1382,
+      "amount": 138.2,
+      "synced_at": "2026-02-26"
+    },
+    "ftm-delta-93e2630c-8536-4dac-a112-c69741314575-2026-02-26": {
+      "child_id": "93e2630c-8536-4dac-a112-c69741314575",
+      "actual_tx_id": "4b854e3d-f147-444e-ac8e-f0daca502ef9",
+      "points": 1033,
+      "amount": 103.3,
+      "synced_at": "2026-02-26"
+    }
+  },
+  "synced_from_actual": {
+    "ae8b3603-3365-4a0d-a990-9385fa47d40e": {
+      "child_id": "3d8d403b-2f2d-492a-90a7-fa65c9323ad4",
+      "points": 165,
+      "amount": 16.5,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-26",
+      "payee": "Family Task Manager"
+    },
+    "c402e3a0-ec9f-4731-9f12-145ce412901f": {
+      "child_id": "93e2630c-8536-4dac-a112-c69741314575",
+      "points": 280,
+      "amount": 28.0,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-26",
+      "payee": "Family Task Manager"
+    },
+    "92468b2b-1c43-40a4-afa5-89f2051a3279": {
+      "child_id": "3d8d403b-2f2d-492a-90a7-fa65c9323ad4",
+      "points": 165,
+      "amount": 16.5,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-26",
+      "payee": "Family Task Manager"
+    },
+    "11c78b9f-e3cc-40cd-b2f7-6516a1f2ddc7": {
+      "child_id": "93e2630c-8536-4dac-a112-c69741314575",
+      "points": 280,
+      "amount": 28.0,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-26",
+      "payee": "Family Task Manager"
+    },
+    "8e87189c-3ac1-48a2-97fc-80b7936d3c42": {
+      "child_id": "3d8d403b-2f2d-492a-90a7-fa65c9323ad4",
+      "points": -300,
+      "amount": -30.0,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-26",
+      "payee": "Toy Store"
+    },
+    "e32f7cc0-a3e8-4366-831d-e79bc4baf5f0": {
+      "child_id": "3d8d403b-2f2d-492a-90a7-fa65c9323ad4",
+      "points": 1000,
+      "amount": 100.0,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-25",
+      "payee": "Book Store"
+    },
+    "40842d8d-51e3-40be-9d68-b656ad601b65": {
+      "child_id": "3d8d403b-2f2d-492a-90a7-fa65c9323ad4",
+      "points": 500,
+      "amount": 50.0,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-24",
+      "payee": "Ice Cream Reward"
+    },
+    "55e42b31-4016-4361-8117-044b5ab6e3bb": {
+      "child_id": "93e2630c-8536-4dac-a112-c69741314575",
+      "points": 750,
+      "amount": 75.0,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-26",
+      "payee": "Extra Chores Bonus"
+    },
+    "d27b37f1-afb0-41f2-bc2f-2f6468b890a2": {
+      "child_id": "3d8d403b-2f2d-492a-90a7-fa65c9323ad4",
+      "points": -3,
+      "amount": -0.3,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-26",
+      "payee": "Toy Store"
+    },
+    "31593169-8863-49f5-b7a6-4979b7b4a15a": {
+      "child_id": "3d8d403b-2f2d-492a-90a7-fa65c9323ad4",
+      "points": 5,
+      "amount": 0.5,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-26",
+      "payee": "Unknown"
+    },
+    "229a8c38-f363-460a-9741-77e4fd1317cc": {
+      "child_id": "3d8d403b-2f2d-492a-90a7-fa65c9323ad4",
+      "points": 10,
+      "amount": 1.0,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-25",
+      "payee": "Book Store"
+    },
+    "60613bb5-b7ad-4747-9147-02176676c953": {
+      "child_id": "3d8d403b-2f2d-492a-90a7-fa65c9323ad4",
+      "points": 5,
+      "amount": 0.5,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-24",
+      "payee": "Ice Cream Reward"
+    },
+    "1c0560dc-78bb-4da8-b73b-db03b24ba6f8": {
+      "child_id": "93e2630c-8536-4dac-a112-c69741314575",
+      "points": 8,
+      "amount": 0.75,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-26",
+      "payee": "Extra Chores Bonus"
+    },
+    "50884173-40f1-414f-9da4-492f4303e428": {
+      "child_id": "93e2630c-8536-4dac-a112-c69741314575",
+      "points": -20,
+      "amount": -2.0,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-25",
+      "payee": "Game Store"
+    },
+    "2e535ef7-b8cb-430e-8cd0-5f9c06308f90": {
+      "child_id": "93e2630c-8536-4dac-a112-c69741314575",
+      "points": 15,
+      "amount": 1.5,
+      "synced_at": "2026-02-26",
+      "actual_date": "2026-02-23",
+      "payee": "Movie Theater"
     }
   }
 }

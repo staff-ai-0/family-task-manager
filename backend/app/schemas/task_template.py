@@ -5,10 +5,11 @@ Request and response models for task template operations.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from app.schemas.base import FamilyEntityResponse
+from app.models.task_template import AssignmentType
 
 
 # Base schemas
@@ -22,6 +23,8 @@ class TaskTemplateBase(BaseModel):
     points: int = Field(10, ge=0, le=1000)
     interval_days: int = Field(1, ge=1, le=7, description="1=daily, 3=every 3 days, 7=weekly")
     is_bonus: bool = False
+    assignment_type: AssignmentType = AssignmentType.AUTO
+    assigned_user_ids: Optional[List[UUID]] = Field(None, description="User UUIDs for FIXED or ROTATE assignment")
 
 
 # Request schemas
@@ -42,6 +45,8 @@ class TaskTemplateUpdate(BaseModel):
     interval_days: Optional[int] = Field(None, ge=1, le=7)
     is_bonus: Optional[bool] = None
     is_active: Optional[bool] = None
+    assignment_type: Optional[AssignmentType] = None
+    assigned_user_ids: Optional[List[UUID]] = None
 
 
 # Response schemas
@@ -57,6 +62,8 @@ class TaskTemplateResponse(FamilyEntityResponse):
     is_bonus: bool
     is_active: bool
     created_by: Optional[UUID] = None
+    assignment_type: AssignmentType
+    assigned_user_ids: Optional[List[UUID]] = None
 
 
 class TaskTemplateWithStats(TaskTemplateResponse):

@@ -10,7 +10,7 @@ from typing import List
 from uuid import UUID
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user, verify_family_id
+from app.core.dependencies import get_current_user, verify_family_id, require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.services import FamilyService
 from app.schemas.family import (
@@ -95,3 +95,27 @@ async def get_family_stats(
     """Get family statistics"""
     stats = await FamilyService.get_family_stats(db, family_id)
     return stats
+
+
+# --- Join Code Endpoints ---
+
+@router.post("/join-code/generate")
+async def generate_join_code(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate or regenerate a family join code (parent only)"""
+    family_id = to_uuid_required(current_user.family_id)
+    code = await FamilyService.generate_join_code(db, family_id)
+    return {"join_code": code}
+
+
+@router.get("/join-code/current")
+async def get_join_code(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the current family join code (parent only)"""
+    family_id = to_uuid_required(current_user.family_id)
+    family = await FamilyService.get_family(db, family_id)
+    return {"join_code": family.join_code}

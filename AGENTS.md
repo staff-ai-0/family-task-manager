@@ -17,6 +17,7 @@ docker-compose ps
 
 # View logs
 docker-compose logs -f backend
+docker-compose logs -f sync-service
 ```
 
 ### Run Tests
@@ -38,6 +39,19 @@ docker exec family_app_backend alembic revision --autogenerate -m "description"
 
 # Seed demo data
 docker exec family_app_backend python /app/seed_data.py
+```
+
+### Sync Operations
+```bash
+# Manual sync (bidirectional)
+TOKEN=$(curl -s -X POST http://localhost:8002/api/auth/login -H "Content-Type: application/json" -d '{"email":"mom@demo.com","password":"password123"}' | jq -r '.access_token')
+curl -X POST "http://localhost:8002/api/sync/trigger?direction=both&dry_run=false" -H "Authorization: Bearer $TOKEN"
+
+# Check sync status
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8002/api/sync/status | jq
+
+# Setup Actual Budget
+docker exec family_sync_service python3 /app/setup_budget.py
 ```
 
 ## Architectural Overview
@@ -73,13 +87,41 @@ Models (Database Entities)
 ### Decoupled Services Architecture
 
 ```
-Frontend (Port 3000)        Backend API (Port 8000)
+Frontend (Port 3003)        Backend API (Port 8002)
 Astro 5 + Tailwind v4 ←→    FastAPI + SQLAlchemy
     ↓                              ↓
   Sessions                    PostgreSQL (Port 5433)
     ↓                              ↓
   Redis (Port 6380)          Test DB (Port 5435)
+    
+Sync Service (Port 5008)    Actual Budget (Port 5006)
+FastAPI + Python ←→         Personal Finance Server
+    ↓                              ↓
+  Hourly Cron Job           Budget Data Storage
 ```
+
+### Sync Service Architecture
+
+The **Sync Service** is a dedicated container that provides bidirectional synchronization between the Family Task Manager points system and Actual Budget:
+
+**Components:**
+- `sync.py`: Core bidirectional sync logic (600+ lines)
+- `sync_api.py`: FastAPI wrapper with REST endpoints
+- `sync_cron.sh`: Hourly automatic sync job
+- `sync_state.json`: Transaction tracking and deduplication
+
+**Key Features:**
+- **Bidirectional Sync**: Family ↔ Actual Budget
+- **Conversion Rate**: 1 point = $0.10 MXN (configurable)
+- **Deduplication**: Uses `imported_id` patterns to prevent sync loops
+- **Account Mapping**: One "Domingo {child_name}" account per child in Actual Budget
+- **Automatic + Manual**: Hourly cron job + manual trigger via UI/API
+- **Transaction Tracking**: Prevents duplicate syncs using state file
+
+**Sync Endpoints:**
+- `POST /trigger`: Trigger manual sync (direction: both/to_actual/from_actual)
+- `GET /status`: Get current sync state and statistics
+- `GET /health`: Health check with sync script verification
 
 ## AI Instructions
 
@@ -95,8 +137,10 @@ For specific patterns:
 ## Quick Start
 
 ### Access Points
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000/docs
+- **Frontend**: http://localhost:3003
+- **Backend API**: http://localhost:8002/docs
+- **Sync Service**: http://localhost:5008 (health check)
+- **Actual Budget UI**: http://localhost:5006
 - **Database**: localhost:5433 (production), localhost:5435 (test)
 - **Redis**: localhost:6380
 
@@ -119,6 +163,19 @@ lucas@demo.com / password123 (TEEN, 280 points)
 ## Current Development Focus
 
 **Phase**: Active Development  
-**Current Sprint**: Adding AI support and improving DDD/CQRS patterns
+**Current Sprint**: Bidirectional Sync System with Actual Budget
+
+**Recently Completed:**
+- ✅ Bidirectional sync between points and Actual Budget
+- ✅ Dedicated sync service with FastAPI API
+- ✅ Manual sync trigger from parent finances UI
+- ✅ Automatic hourly sync via cron
+- ✅ Transaction deduplication and state tracking
+- ✅ CORS configuration for cross-origin requests
+
+**Active Work:**
+- Sync history/logs UI
+- Enhanced error handling and retry logic
+- Sync performance optimization
 
 See `.github/memory-bank/activeContext.md` for current tasks and blockers.

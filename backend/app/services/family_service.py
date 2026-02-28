@@ -11,8 +11,9 @@ from uuid import UUID
 
 from app.models import Family, User, Task, Reward, Consequence
 from app.models.task import TaskStatus
+from app.models.family import generate_join_code
 from app.schemas.family import FamilyCreate, FamilyUpdate
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, ValidationException
 
 
 class FamilyService:
@@ -34,6 +35,37 @@ class FamilyService:
         db.add(family)
         await db.commit()
         await db.refresh(family)
+        return family
+
+    @staticmethod
+    async def generate_join_code(db: AsyncSession, family_id: UUID) -> str:
+        """Generate or regenerate a unique join code for a family"""
+        family = await FamilyService.get_family(db, family_id)
+        
+        # Try up to 10 times to generate a unique code
+        for _ in range(10):
+            code = generate_join_code()
+            existing = (await db.execute(
+                select(Family).where(Family.join_code == code)
+            )).scalar_one_or_none()
+            if not existing:
+                family.join_code = code
+                family.updated_at = datetime.utcnow()
+                await db.commit()
+                await db.refresh(family)
+                return code
+        
+        raise ValidationException("Could not generate unique join code. Try again.")
+
+    @staticmethod
+    async def get_family_by_join_code(db: AsyncSession, join_code: str) -> Optional[Family]:
+        """Find a family by its join code"""
+        family = (await db.execute(
+            select(Family).where(
+                Family.join_code == join_code.upper().strip(),
+                Family.is_active == True,
+            )
+        )).scalar_one_or_none()
         return family
 
     @staticmethod

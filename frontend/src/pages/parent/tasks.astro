@@ -23,6 +23,9 @@ if (Astro.request.method === "POST") {
     const action = data.get("action");
 
     if (action === "create") {
+        const assignmentType = data.get("assignment_type") || "auto";
+        const assignedUserIds = data.getAll("assigned_user_ids[]").filter(id => id);
+        
         const payload: any = {
             title: data.get("title"),
             description: data.get("description") || null,
@@ -31,6 +34,8 @@ if (Astro.request.method === "POST") {
             points: Number(data.get("points")) || 10,
             interval_days: Number(data.get("interval_days")) || 1,
             is_bonus: data.get("is_bonus") === "on",
+            assignment_type: assignmentType,
+            assigned_user_ids: assignedUserIds.length > 0 ? assignedUserIds : null,
         };
         const { ok, error } = await apiFetch("/api/task-templates/", {
             method: "POST",
@@ -84,12 +89,14 @@ if (Astro.request.method === "POST") {
     }
 }
 
-const [{ data: templates }, { data: weekAssignments }] = await Promise.all([
+const [{ data: templates }, { data: weekAssignments }, { data: familyMembers }] = await Promise.all([
     apiFetch<any[]>("/api/task-templates/", { token }),
     apiFetch<any[]>("/api/task-assignments/week", { token }),
+    apiFetch<any[]>(`/api/families/${user.family_id}/members`, { token }),
 ]);
 const templateList: any[] = Array.isArray(templates) ? templates : [];
 const assignmentList: any[] = Array.isArray(weekAssignments) ? weekAssignments : [];
+const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
 
 // Group assignments by user
 const assignmentsByUser: Record<string, any[]> = {};
@@ -107,7 +114,7 @@ function freqLabel(interval: number): string {
 ---
 
 <Layout title={`${t(lang, "pt_title")} - Family Task Manager`}>
-    <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
         <header
             class="bg-gradient-to-br from-primary-700 to-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md"
         >
@@ -228,6 +235,44 @@ function freqLabel(interval: number): string {
                             </select>
                         </div>
                     </div>
+                    <div>
+                        <label class="text-xs font-medium text-slate-600 mb-1 block">
+                            Assignment Type
+                        </label>
+                        <select
+                            id="assignment_type"
+                            name="assignment_type"
+                            class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                            onchange="toggleUserSelection(this.value)"
+                        >
+                            <option value="auto">Auto - Load Balancing (Default)</option>
+                            <option value="fixed">Fixed - Always same person(s)</option>
+                            <option value="rotate">Rotate - Cycle through specific people</option>
+                        </select>
+                    </div>
+                    <div id="user_selection_container" class="hidden">
+                        <label class="text-xs font-medium text-slate-600 mb-1 block">
+                            Assign To (select one or more)
+                        </label>
+                        <div class="space-y-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                            {memberList.map((member: any) => (
+                                <label class="flex items-center gap-2 cursor-pointer hover:bg-white px-2 py-1.5 rounded transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        name="assigned_user_ids[]"
+                                        value={member.id}
+                                        class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-2 focus:ring-primary-500"
+                                    />
+                                    <span class="text-sm text-slate-700">{member.name}</span>
+                                    <span class="text-xs text-slate-500 ml-auto">{member.role.toLowerCase()}</span>
+                                </label>
+                            ))}
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">
+                            <strong>Fixed:</strong> Task always assigned to selected person(s). 
+                            <strong>Rotate:</strong> Task cycles through selected people in order.
+                        </p>
+                    </div>
                     <div class="flex items-center gap-3 py-1">
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" name="is_bonus" class="sr-only peer" />
@@ -277,6 +322,15 @@ function freqLabel(interval: number): string {
                                             <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                                                 {freqLabel(tmpl.interval_days)}
                                             </span>
+                                            {tmpl.assignment_type && tmpl.assignment_type !== 'auto' && (
+                                                <span class={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                                    tmpl.assignment_type === 'fixed' 
+                                                        ? 'bg-purple-100 text-purple-700' 
+                                                        : 'bg-green-100 text-green-700'
+                                                }`}>
+                                                    {tmpl.assignment_type === 'fixed' ? '📌 Fixed' : '🔄 Rotate'}
+                                                </span>
+                                            )}
                                             {!tmpl.is_active && (
                                                 <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">
                                                     {t(lang, "pt_inactive")}
@@ -341,4 +395,17 @@ function freqLabel(interval: number): string {
 
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
+    
+    <script>
+        function toggleUserSelection(assignmentType: string) {
+            const container = document.getElementById('user_selection_container');
+            if (container) {
+                if (assignmentType === 'fixed' || assignmentType === 'rotate') {
+                    container.classList.remove('hidden');
+                } else {
+                    container.classList.add('hidden');
+                }
+            }
+        }
+    </script>
 </Layout>

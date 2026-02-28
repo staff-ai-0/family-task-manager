@@ -158,3 +158,16 @@ class AuthService:
         await db.commit()
         await db.refresh(user)
         return user
+
+    @staticmethod
+    async def delete_user(db: AsyncSession, user_id: UUID) -> None:
+        """Permanently delete a user account
+        
+        This will cascade delete all related records (tasks, points, etc.)
+        due to database foreign key constraints with CASCADE.
+        """
+        user = await AuthService.get_user_by_id(db, user_id)
+        
+        # Delete the user (cascade will handle related records)
+        await db.delete(user)
+        await db.commit()

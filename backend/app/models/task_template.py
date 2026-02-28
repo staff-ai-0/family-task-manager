@@ -14,13 +14,22 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Text,
+    Enum as SQLEnum,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from enum import Enum
 import uuid
 
 from app.core.database import Base
+
+
+class AssignmentType(str, Enum):
+    """How the task should be assigned to family members"""
+    AUTO = "auto"  # Automatic load balancing (default)
+    FIXED = "fixed"  # Always assign to specific user(s)
+    ROTATE = "rotate"  # Rotate among specific users in order
 
 
 class TaskTemplate(Base):
@@ -38,8 +47,22 @@ class TaskTemplate(Base):
     # Scheduling: how often per week (1=daily, 3=every 3 days, 7=weekly)
     interval_days = Column(Integer, nullable=False, default=1)
 
+    # Assignment configuration
+    assignment_type = Column(
+        SQLEnum(AssignmentType),
+        nullable=False,
+        default=AssignmentType.AUTO,
+        server_default="auto"
+    )
+    assigned_user_ids = Column(
+        JSONB,
+        nullable=True,
+        comment="List of user UUIDs for FIXED or ROTATE assignment types"
+    )
+
     # Classification
     is_bonus = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False, index=True)
 
     # Ownership

@@ -69,6 +69,15 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret-key}
       DEBUG: ${DEBUG:-true}
       ALLOWED_ORIGINS: http://localhost:3003,http://localhost:8080
+      # Google OAuth
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8002/auth/google/callback}
+      # PayPal
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+      PAYPAL_MODE: ${PAYPAL_MODE:-sandbox}
+      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID:-}
     ports:
       - "8002:8000"
     depends_on:
@@ -81,6 +90,7 @@ services:
     volumes:
       - ./backend/app:/app/app
       - ./backend/migrations:/app/migrations
+      - ./services:/app/services
     networks:
       - app_network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -93,6 +103,7 @@ services:
     container_name: family_app_frontend
     environment:
       API_BASE_URL: http://backend:8000
+      PUBLIC_API_BASE_URL: http://localhost:8002
       FINANCE_API_URL: http://finance-api:5007
       FINANCE_API_KEY: ${FINANCE_API_KEY:-dev-finance-key}
       ACTUAL_BUDGET_URL: http://localhost:5006
@@ -137,6 +148,7 @@ services:
       ACTUAL_SERVER_URL: http://actual-server:5006
       ACTUAL_PASSWORD: ${ACTUAL_PASSWORD:-changeme}
       ACTUAL_BUDGET_NAME: ${ACTUAL_BUDGET_NAME:-My Finances}
+      ACTUAL_FILE_ID: ${ACTUAL_FILE_ID:-72b651ac-8211-42d3-81fa-36200fe2d593}
       FINANCE_API_KEY: ${FINANCE_API_KEY:-dev-finance-key}
       ALLOWED_ORIGINS: http://localhost:3003,http://localhost:3000
     ports:
@@ -144,6 +156,35 @@ services:
     depends_on:
       actual-server:
         condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app_network
+
+  # Sync Service (Bidirectional sync between Family Task Manager and Actual Budget)
+  sync-service:
+    build:
+      context: ./services/actual-budget
+      dockerfile: Dockerfile.sync
+    container_name: family_sync_service
+    environment:
+      ACTUAL_SERVER_URL: http://actual-server:5006
+      ACTUAL_PASSWORD: changeme
+      ACTUAL_BUDGET_NAME: ${ACTUAL_BUDGET_NAME:-My Finances}
+      ACTUAL_FILE_ID: ${ACTUAL_FILE_ID:-72b651ac-8211-42d3-81fa-36200fe2d593}
+      FAMILY_API_URL: http://backend:8000
+      FAMILY_API_EMAIL: ${FAMILY_API_EMAIL:-mom@demo.com}
+      FAMILY_API_PASSWORD: ${FAMILY_API_PASSWORD:-password123}
+      POINTS_TO_MONEY_RATE: ${POINTS_TO_MONEY_RATE:-0.10}
+      POINTS_TO_MONEY_CURRENCY: ${POINTS_TO_MONEY_CURRENCY:-MXN}
+    ports:
+      - "5008:5008"
+    depends_on:
+      backend:
+        condition: service_started
+      actual-server:
+        condition: service_healthy
+    volumes:
+      - ./services/actual-budget:/app
     restart: unless-stopped
     networks:
       - app_network

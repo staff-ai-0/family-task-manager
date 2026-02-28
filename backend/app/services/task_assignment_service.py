@@ -12,7 +12,7 @@ from typing import List, Optional
 from datetime import datetime, date, timedelta
 from uuid import UUID
 
-from app.models.task_template import TaskTemplate
+from app.models.task_template import TaskTemplate, AssignmentType
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.user import User
 from app.models.point_transaction import PointTransaction, TransactionType
@@ -152,59 +152,67 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         # Sort templates by points descending (allocate heavy tasks first)
         regular_templates.sort(key=lambda t: t.points, reverse=True)
         
+        # Track rotation state for ROTATE templates (template_id -> current_index)
+        rotation_state = {}
+        
         for template in regular_templates:
-            # Case A: Weekly Tasks (interval=7) - Flexible Day
+            # Determine which users can be assigned to this template
+            eligible_members = members
+            
+            if template.assignment_type == AssignmentType.FIXED:
+                # FIXED: Only assign to specific user(s)
+                if not template.assigned_user_ids:
+                    continue  # Skip if no users assigned
+                eligible_members = [m for m in members if str(m.id) in template.assigned_user_ids]
+                if not eligible_members:
+                    continue  # Skip if assigned users not found
+                    
+            elif template.assignment_type == AssignmentType.ROTATE:
+                # ROTATE: Rotate among specific users in order
+                if not template.assigned_user_ids or len(template.assigned_user_ids) == 0:
+                    continue  # Skip if no users assigned
+                eligible_members = [m for m in members if str(m.id) in template.assigned_user_ids]
+                if not eligible_members:
+                    continue  # Skip if assigned users not found
+                # Initialize rotation index for this template
+                if template.id not in rotation_state:
+                    rotation_state[template.id] = 0
+            
+            # Calculate dates for this template
             if template.interval_days == 7:
-                # Find the (member, day) slot with the absolute lowest current load
-                best_member = None
-                best_date = None
-                min_load = float('inf')
+                # Weekly task - pick best day
+                task_dates = week_dates  # Consider all days
+            else:
+                task_dates = TaskAssignmentService._expand_dates(week_monday, template.interval_days)
+            
+            # Assignment logic based on type and interval
+            if template.assignment_type == AssignmentType.FIXED:
+                # FIXED: Always assign to the same user (first in list for simplicity)
+                fixed_user = eligible_members[0]
                 
-                # Check all combinations
-                candidates = []
-                for m in members:
-                    for d in week_dates:
-                        d_str = d.isoformat()
-                        load = member_load[m.id][d_str]
-                        candidates.append((load, m, d))
-                
-                # Sort by load (asc), then random shuffle for ties?
-                # Actually min() finds the first one. Let's shuffle candidates first to break ties randomly.
-                random.shuffle(candidates)
-                best_candidate = min(candidates, key=lambda x: x[0])
-                
-                _, best_member, best_date = best_candidate
-                
-                # Assign
-                assignment = TaskAssignment(
-                    template_id=template.id,
-                    assigned_to=best_member.id,
-                    family_id=family_id,
-                    status=AssignmentStatus.PENDING,
-                    assigned_date=best_date,
-                    week_of=week_monday,
-                )
-                db.add(assignment)
-                assignments.append(assignment)
-                
-                # Update load
-                member_load[best_member.id][best_date.isoformat()] += template.points
-                
-            # Case B: Daily Tasks (interval=1) - Fixed Day, Rotate Member
-            elif template.interval_days == 1:
-                # We have 7 instances (Mon-Sun)
-                # We want to rotate these among members fairly
-                # Strategy: For each day, give to member with lowest load on that day
-                for d in week_dates:
-                    d_str = d.isoformat()
-                    # Find member with lowest load on this specific day
-                    day_candidates = [(member_load[m.id][d_str], m) for m in members]
-                    random.shuffle(day_candidates)
-                    _, best_member = min(day_candidates, key=lambda x: x[0])
+                for d in task_dates:
+                    assignment = TaskAssignment(
+                        template_id=template.id,
+                        assigned_to=fixed_user.id,
+                        family_id=family_id,
+                        status=AssignmentStatus.PENDING,
+                        assigned_date=d,
+                        week_of=week_monday,
+                    )
+                    db.add(assignment)
+                    assignments.append(assignment)
+                    member_load[fixed_user.id][d.isoformat()] += template.points
+                    
+            elif template.assignment_type == AssignmentType.ROTATE:
+                # ROTATE: Cycle through eligible users in order
+                for d in task_dates:
+                    # Get next user in rotation
+                    current_idx = rotation_state[template.id]
+                    assigned_user = eligible_members[current_idx % len(eligible_members)]
                     
                     assignment = TaskAssignment(
                         template_id=template.id,
-                        assigned_to=best_member.id,
+                        assigned_to=assigned_user.id,
                         family_id=family_id,
                         status=AssignmentStatus.PENDING,
                         assigned_date=d,
@@ -212,40 +220,92 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     )
                     db.add(assignment)
                     assignments.append(assignment)
-                    member_load[best_member.id][d_str] += template.points
-
-            # Case C: Other Intervals (e.g. 3) - Fixed Pattern, Best Member
-            else:
-                dates = TaskAssignmentService._expand_dates(week_monday, template.interval_days)
-                
-                # Find member who can take this SET of dates with least impact
-                # We look at sum of loads on these dates, or max load on these dates
-                candidates = []
-                for m in members:
-                    max_impact = 0
-                    current_sum = 0
-                    for d in dates:
-                        d_str = d.isoformat()
-                        load = member_load[m.id][d_str]
-                        if load > max_impact: max_impact = load
-                        current_sum += load
-                    candidates.append((current_sum, max_impact, m)) # Prioritize total load then peak
-                
-                random.shuffle(candidates)
-                _, _, best_member = min(candidates, key=lambda x: (x[0], x[1]))
-                
-                for d in dates:
+                    member_load[assigned_user.id][d.isoformat()] += template.points
+                    
+                    # Advance rotation
+                    rotation_state[template.id] += 1
+                    
+            else:  # AUTO (default)
+                # Original load-balancing algorithm
+                # Case A: Weekly Tasks (interval=7) - Flexible Day
+                if template.interval_days == 7:
+                    # Find the (member, day) slot with the absolute lowest current load
+                    candidates = []
+                    for m in eligible_members:
+                        for d in week_dates:
+                            d_str = d.isoformat()
+                            load = member_load[m.id][d_str]
+                            candidates.append((load, m, d))
+                    
+                    random.shuffle(candidates)
+                    best_candidate = min(candidates, key=lambda x: x[0])
+                    _, best_member, best_date = best_candidate
+                    
+                    # Assign
                     assignment = TaskAssignment(
                         template_id=template.id,
                         assigned_to=best_member.id,
                         family_id=family_id,
                         status=AssignmentStatus.PENDING,
-                        assigned_date=d,
+                        assigned_date=best_date,
                         week_of=week_monday,
                     )
                     db.add(assignment)
                     assignments.append(assignment)
-                    member_load[best_member.id][d.isoformat()] += template.points
+                    member_load[best_member.id][best_date.isoformat()] += template.points
+                    
+                # Case B: Daily Tasks (interval=1) - Fixed Day, Rotate Member
+                elif template.interval_days == 1:
+                    for d in week_dates:
+                        d_str = d.isoformat()
+                        # Find member with lowest load on this specific day
+                        day_candidates = [(member_load[m.id][d_str], m) for m in eligible_members]
+                        random.shuffle(day_candidates)
+                        _, best_member = min(day_candidates, key=lambda x: x[0])
+                        
+                        assignment = TaskAssignment(
+                            template_id=template.id,
+                            assigned_to=best_member.id,
+                            family_id=family_id,
+                            status=AssignmentStatus.PENDING,
+                            assigned_date=d,
+                            week_of=week_monday,
+                        )
+                        db.add(assignment)
+                        assignments.append(assignment)
+                        member_load[best_member.id][d_str] += template.points
+
+                # Case C: Other Intervals (e.g. 3) - Fixed Pattern, Best Member
+                else:
+                    dates = TaskAssignmentService._expand_dates(week_monday, template.interval_days)
+                    
+                    # Find member who can take this SET of dates with least impact
+                    candidates = []
+                    for m in eligible_members:
+                        max_impact = 0
+                        current_sum = 0
+                        for d in dates:
+                            d_str = d.isoformat()
+                            load = member_load[m.id][d_str]
+                            if load > max_impact: max_impact = load
+                            current_sum += load
+                        candidates.append((current_sum, max_impact, m))
+                    
+                    random.shuffle(candidates)
+                    _, _, best_member = min(candidates, key=lambda x: (x[0], x[1]))
+                    
+                    for d in dates:
+                        assignment = TaskAssignment(
+                            template_id=template.id,
+                            assigned_to=best_member.id,
+                            family_id=family_id,
+                            status=AssignmentStatus.PENDING,
+                            assigned_date=d,
+                            week_of=week_monday,
+                        )
+                        db.add(assignment)
+                        assignments.append(assignment)
+                        member_load[best_member.id][d.isoformat()] += template.points
 
         # 7. Bonus templates — assign to ALL members on their dates
         for template in bonus_templates:

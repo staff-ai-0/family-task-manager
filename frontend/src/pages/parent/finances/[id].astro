@@ -26,7 +26,9 @@ let successMsg = null;
 
 const FINANCE_API_URL = import.meta.env.FINANCE_API_URL || process.env.FINANCE_API_URL || "http://127.0.0.1:5007";
 const FINANCE_API_KEY = import.meta.env.FINANCE_API_KEY || process.env.FINANCE_API_KEY || "";
-const apiHeaders: Record<string, string> = {};
+const apiHeaders: Record<string, string> = {
+    "Authorization": `Bearer ${token}`,
+};
 if (FINANCE_API_KEY) apiHeaders["X-API-Key"] = FINANCE_API_KEY;
 
 // Handle Add Transaction POST
@@ -95,7 +97,7 @@ try {
 <Layout
     title={`${categoryName} - ${t(lang, "fin_title")} - Family Task Manager`}
 >
-    <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
         <header
             class="bg-gradient-to-br from-emerald-700 to-teal-600 text-white pt-12 pb-6 px-6 shadow-md rounded-b-3xl"
         >

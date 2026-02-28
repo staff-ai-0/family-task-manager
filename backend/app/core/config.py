@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/google/callback"
     
+    # PayPal Configuration
+    PAYPAL_CLIENT_ID: str = ""
+    PAYPAL_CLIENT_SECRET: str = ""
+    PAYPAL_MODE: str = "sandbox"  # sandbox or live
+    PAYPAL_WEBHOOK_ID: str = ""
+    
     # Email Configuration
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
