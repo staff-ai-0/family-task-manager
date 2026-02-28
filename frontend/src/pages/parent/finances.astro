@@ -22,6 +22,8 @@ const FINANCE_API_KEY = process.env.FINANCE_API_KEY ?? "";
 const actualUrl = process.env.ACTUAL_BUDGET_URL ?? "http://localhost:5006";
 
 console.log(`[Finances] Using FINANCE_API_URL: ${FINANCE_API_URL}`);
+console.log(`[Finances] Token present: ${!!token}, Token length: ${token?.length || 0}`);
+console.log(`[Finances] User: ${user?.email}, Family: ${user?.family_id}`);
 
 // Fetch live actual budget categories
 let budgetData = { groups: [] };
@@ -35,8 +37,9 @@ try {
         budgetData = await resp.json();
         console.log(`[Finances] Fetched ${budgetData.groups?.length || 0} groups from Actual Budget`);
     } else {
+        const errorText = await resp.text();
         console.error(`[Finances] Failed to fetch categories: ${resp.status} ${resp.statusText}`);
-    }
+        console.error(`[Finances] Error response: ${errorText}`);
 } catch (e) {
     console.error("[Finances] Failed to fetch budget categories", e);
 }
