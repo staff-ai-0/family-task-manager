@@ -16,10 +16,10 @@ if (!user) {
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 // Runtime environment variables (available in SSR)
-// In Astro SSR, we need to use import.meta.env for server-side runtime vars
-const FINANCE_API_URL = import.meta.env.FINANCE_API_URL ?? process.env.FINANCE_API_URL ?? "http://finance-api:5007";
-const FINANCE_API_KEY = import.meta.env.FINANCE_API_KEY ?? process.env.FINANCE_API_KEY ?? "";
-const actualUrl = import.meta.env.ACTUAL_BUDGET_URL ?? process.env.ACTUAL_BUDGET_URL ?? "http://localhost:5006";
+// With @astrojs/node adapter, use process.env for runtime server-side variables
+const FINANCE_API_URL = process.env.FINANCE_API_URL ?? "http://finance-api:5007";
+const FINANCE_API_KEY = process.env.FINANCE_API_KEY ?? "";
+const actualUrl = process.env.ACTUAL_BUDGET_URL ?? "http://localhost:5006";
 
 console.log(`[Finances] Using FINANCE_API_URL: ${FINANCE_API_URL}`);
 
