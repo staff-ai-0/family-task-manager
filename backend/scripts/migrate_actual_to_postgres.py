@@ -154,8 +154,10 @@ class ActualBudgetMigration:
                 family_id=self.family_id,
                 group_id=group_uuid,
                 name=category.name,
-                is_income=category.is_income or False,
                 sort_order=category.sort_order or 0,
+                hidden=False,
+                rollover_enabled=True,
+                goal_amount=0,
             )
             
             if not self.dry_run:
@@ -196,7 +198,9 @@ class ActualBudgetMigration:
                 family_id=self.family_id,
                 name=account.name,
                 type=account_type,
-                off_budget=account.offbudget or False,
+                offbudget=account.offbudget or False,
+                closed=False,
+                sort_order=0,
             )
             
             if not self.dry_run:
@@ -281,8 +285,8 @@ class ActualBudgetMigration:
                     self.stats["skipped_duplicates"] += 1
                     continue
             
-            # Convert amount from cents to decimal
-            amount = Decimal(tx.amount) / 100 if tx.amount else Decimal(0)
+            # Amount is already in cents in Actual Budget
+            amount_cents = tx.amount if tx.amount else 0
             
             # Parse date
             tx_date = tx.date if tx.date else date.today()
@@ -296,11 +300,12 @@ class ActualBudgetMigration:
                 category_id=category_uuid,
                 payee_id=payee_uuid,
                 date=tx_date,
-                amount=amount,
+                amount=amount_cents,  # Store as cents (integer)
                 notes=tx.notes or "",
                 cleared=tx.cleared or False,
                 reconciled=False,  # Actual doesn't have reconciled flag
                 imported_id=tx.imported_id,
+                is_parent=False,
             )
             
             if not self.dry_run:
@@ -371,7 +376,7 @@ class ActualBudgetMigration:
                 family_id=self.family_id,
                 category_id=category_uuid,
                 month=month_date,
-                budgeted=amount,
+                budgeted_amount=int(amount_cents),  # Keep as cents (integer)
             )
             
             if not self.dry_run:
