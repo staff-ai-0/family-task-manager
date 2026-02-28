@@ -26,6 +26,7 @@ from app.models.budget import (
     BudgetAccount,
     BudgetPayee,
     BudgetTransaction,
+    BudgetSyncState,
 )
 
 __all__ = [
@@ -48,6 +49,7 @@ __all__ = [
     "BudgetAccount",
     "BudgetPayee",
     "BudgetTransaction",
+    "BudgetSyncState",
     # Enums
     "UserRole",
     "TaskStatus",
