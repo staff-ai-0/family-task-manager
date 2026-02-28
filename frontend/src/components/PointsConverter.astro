@@ -58,32 +58,38 @@ if (token) {
     }
 }
 
-// If no eligibility data or not eligible, don't show the converter
-if (!eligibility || !eligibility.eligible) {
-    // Optionally show why not eligible
-    if (eligibility && !eligibility.eligible) {
-        ---
-        <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mx-6 mt-4">
-            <p class="text-yellow-800 text-sm">
-                <strong>💡 {lang === "es" ? "Conversión bloqueada" : "Conversion blocked"}:</strong>
-                {" "}{eligibility.reason}
-            </p>
-            <p class="text-yellow-700 text-xs mt-2">
-                {lang === "es" 
-                    ? `Completa ${eligibility.required_total - eligibility.required_completed} tareas más esta semana.`
-                    : `Complete ${eligibility.required_total - eligibility.required_completed} more tasks this week.`
-                }
-            </p>
-        </div>
-        ---
-    }
-} else {
-    // User is eligible to convert points
-    const maxPoints = eligibility.max_convertible_points;
-    const maxAmount = eligibility.max_convertible_amount;
-    const completionPct = eligibility.completion_percentage;
-    const conversionRate = 0.10; // MXN per point
+// Determine if user is eligible and set conversion parameters
+let maxPoints = 0;
+let maxAmount = 0;
+let completionPct = 0;
+const conversionRate = 0.10; // MXN per point
+const isEligible = eligibility && eligibility.eligible;
+
+if (isEligible) {
+    maxPoints = eligibility.max_convertible_points;
+    maxAmount = eligibility.max_convertible_amount;
+    completionPct = eligibility.completion_percentage;
+}
 ---
+
+{/* Show blocked message if not eligible */}
+{eligibility && !eligibility.eligible && (
+    <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mx-6 mt-4">
+        <p class="text-yellow-800 text-sm">
+            <strong>💡 {lang === "es" ? "Conversión bloqueada" : "Conversion blocked"}:</strong>
+            {" "}{eligibility.reason}
+        </p>
+        <p class="text-yellow-700 text-xs mt-2">
+            {lang === "es" 
+                ? `Completa ${eligibility.required_total - eligibility.required_completed} tareas más esta semana.`
+                : `Complete ${eligibility.required_total - eligibility.required_completed} more tasks this week.`
+            }
+        </p>
+    </div>
+)}
+
+{/* Show converter if eligible */}
+{isEligible && (
 
 <div class="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-2xl p-5 mx-6 mt-4 shadow-md">
     <div class="flex items-center justify-between mb-4">
@@ -334,6 +340,4 @@ if (!eligibility || !eligibility.eligible) {
         }
     });
 </script>
-
----
-}
+)}
