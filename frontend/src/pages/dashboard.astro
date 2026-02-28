@@ -1,37 +1,13 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import BottomNav from "../components/BottomNav.astro";
+import PointsConverter from "../components/PointsConverter.astro";
 import { apiFetch } from "../lib/api";
 import { t } from "../lib/i18n";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 const lang = Astro.cookies.get("lang")?.value ?? "en";
-
-if (Astro.request.method === "POST") {
-    const data = await Astro.request.formData();
-    const action = data.get("action");
-
-    if (action === "logout") {
-        Astro.cookies.delete("access_token", { path: "/" });
-        return Astro.redirect("/login");
-    }
-
-    if (action === "complete") {
-        const assignmentId = data.get("assignment_id");
-        if (assignmentId) {
-            const { ok, error } = await apiFetch(`/api/task-assignments/${assignmentId}/complete`, {
-                method: "PATCH",
-                token,
-            });
-            if (!ok) {
-                // Store error in cookie for display after redirect
-                Astro.cookies.set("flash_error", error || (t(lang, "dashboard_complete_error") as string), { path: "/" });
-            }
-        }
-        return Astro.redirect("/dashboard");
-    }
-}
 
 const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
 if (!userOk) {
@@ -69,7 +45,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 ---
 
 <Layout title={`${t(lang, "dashboard_page_title")} - Family Task Manager`}>
-    <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
         <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
             <div class="flex justify-between items-center mb-6">
                 <div>
@@ -94,6 +70,16 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 </div>
             </div>
         </header>
+
+        <!-- Points Converter (only for TEEN/CHILD users) -->
+        {(user.role === "TEEN" || user.role === "CHILD") && (
+            <PointsConverter
+                userId={user.id}
+                currentPoints={user.points}
+                userName={user.name}
+                lang={lang}
+            />
+        )}
 
         {flash && (
             <div class="mx-4 mt-4 p-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl">
@@ -180,8 +166,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     </div>
                                 </div>
                                 {a.can_complete && (
-                                    <form method="POST">
-                                        <input type="hidden" name="action" value="complete" />
+                                    <form method="POST" action="/api/assignments/complete">
                                         <input type="hidden" name="assignment_id" value={a.id} />
                                         <button
                                             type="submit"
@@ -279,8 +264,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                             </div>
                                         </div>
                                         {a.can_complete && (
-                                            <form method="POST">
-                                                <input type="hidden" name="action" value="complete" />
+                                            <form method="POST" action="/api/assignments/complete">
                                                 <input type="hidden" name="assignment_id" value={a.id} />
                                                 <button
                                                     type="submit"

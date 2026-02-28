@@ -15,32 +15,88 @@ if (!user) {
 }
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
-const FINANCE_API_URL = import.meta.env.FINANCE_API_URL || process.env.FINANCE_API_URL || "http://127.0.0.1:5007";
-const FINANCE_API_KEY = import.meta.env.FINANCE_API_KEY || process.env.FINANCE_API_KEY || "";
-const actualUrl = import.meta.env.ACTUAL_BUDGET_URL || process.env.ACTUAL_BUDGET_URL || "http://localhost:5006";
+// Runtime environment variables (available in SSR)
+const FINANCE_API_URL = process.env.FINANCE_API_URL ?? "http://127.0.0.1:5007";
+const FINANCE_API_KEY = process.env.FINANCE_API_KEY ?? "";
+const actualUrl = process.env.ACTUAL_BUDGET_URL ?? "http://localhost:5006";
+
+console.log(`[Finances] Using FINANCE_API_URL: ${FINANCE_API_URL}`);
 
 // Fetch live actual budget categories
 let budgetData = { groups: [] };
 try {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`,
+    };
     if (FINANCE_API_KEY) headers["X-API-Key"] = FINANCE_API_KEY;
     const resp = await fetch(`${FINANCE_API_URL}/api/finance/categories`, { headers });
     if (resp.ok) {
         budgetData = await resp.json();
+        console.log(`[Finances] Fetched ${budgetData.groups?.length || 0} groups from Actual Budget`);
+    } else {
+        console.error(`[Finances] Failed to fetch categories: ${resp.status} ${resp.statusText}`);
     }
 } catch (e) {
-    console.error("Failed to fetch budget categories", e);
+    console.error("[Finances] Failed to fetch budget categories", e);
 }
 
 // Ensure we have some groups, filter out Income so we focus on Expenses
 const expenseGroups =
     budgetData.groups?.filter((g: any) => g.is_income === 0) || [];
+console.log(`[Finances] Filtered to ${expenseGroups.length} expense groups`);
+
+// Fetch children's Actual Budget accounts
+let childrenAccounts: any[] = [];
+try {
+    const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`,
+    };
+    if (FINANCE_API_KEY) headers["X-API-Key"] = FINANCE_API_KEY;
+    
+    const accountsResp = await fetch(`${FINANCE_API_URL}/api/finance/accounts`, { headers });
+    if (accountsResp.ok) {
+        const accountsData = await accountsResp.json();
+        
+        // Filter for children's accounts (contain " - Cuenta de")
+        const allAccounts = accountsData.accounts || [];
+        const childAccountsRaw = allAccounts.filter((acc: any) => 
+            acc.name && acc.name.includes(" - Cuenta de")
+        );
+        
+        // Group by child name
+        const groupedByChild: Record<string, any> = {};
+        for (const acc of childAccountsRaw) {
+            const childName = acc.name.split(" - ")[0];
+            if (!groupedByChild[childName]) {
+                groupedByChild[childName] = {
+                    name: childName,
+                    savings: null,
+                    checking: null,
+                    total: 0,
+                };
+            }
+            
+            if (acc.name.includes("Ahorros")) {
+                groupedByChild[childName].savings = acc;
+            } else if (acc.name.includes("Cheques") || acc.name.includes("Cash")) {
+                groupedByChild[childName].checking = acc;
+            }
+            
+            groupedByChild[childName].total += (acc.balance || 0);
+        }
+        
+        childrenAccounts = Object.values(groupedByChild);
+        console.log(`[Finances] Found ${childrenAccounts.length} children with accounts`);
+    }
+} catch (e) {
+    console.error("[Finances] Failed to fetch children accounts", e);
+}
 ---
 
 <Layout
     title={`${t(lang, "fin_title")} - Family Task Manager`}
 >
-    <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
         <header
             class="bg-gradient-to-br from-emerald-700 to-teal-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md"
         >
@@ -101,104 +157,456 @@ const expenseGroups =
                 )
             }
 
+            <!-- Add Category Button -->
+            <section class="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl p-5 border border-emerald-200">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center flex-shrink-0">
+                        <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="font-bold text-emerald-900 text-lg mb-1">
+                            {t(lang, "fin_add_category_title")}
+                        </h3>
+                        <p class="text-sm text-emerald-700 mb-3">
+                            {t(lang, "fin_add_category_desc")}
+                        </p>
+                        <button
+                            id="open-category-modal"
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm active:scale-[0.98]"
+                        >
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            {t(lang, "fin_add_category_btn")}
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Sync Points with Actual Budget -->
+            <section id="sync-section" class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-200">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0">
+                        <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="font-bold text-blue-900 text-lg mb-1">
+                            {t(lang, "fin_sync_title")}
+                        </h3>
+                        <p class="text-sm text-blue-700 mb-3">
+                            {t(lang, "fin_sync_help")}
+                        </p>
+                        <button
+                            id="sync-btn"
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            <span id="sync-btn-text">{t(lang, "fin_sync_now")}</span>
+                        </button>
+                        <div id="sync-status" class="mt-3 text-sm hidden"></div>
+                    </div>
+                </div>
+            </section>
+
             {
                 expenseGroups.map((group: any) => (
                     <section>
-                        <h2 class="font-bold text-slate-800 mb-3 px-1">
-                            {group.name}
-                        </h2>
-                        <div class="grid grid-cols-2 gap-3">
-                            {group.categories.map((cat: any) => (
-                                <a
-                                    href={`/parent/finances/${cat.id}?name=${encodeURIComponent(cat.name)}`}
-                                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 text-left hover:shadow-md hover:border-emerald-200 transition-all flex flex-col justify-between"
-                                    style="min-height: 100px;"
-                                >
-                                    <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center mb-2">
-                                        <svg
-                                            class="h-4 w-4 text-emerald-600"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
-                                        >
-                                            <path
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                                stroke-width="2"
-                                                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                                            />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <p class="text-sm font-bold text-slate-700">
-                                            {cat.name}
-                                        </p>
-                                        <p class="text-[10px] text-slate-400 mt-1">
-                                            {t(lang, "fin_add_view")}
-                                        </p>
-                                    </div>
-                                </a>
-                            ))}
+                        <div class="flex justify-between items-baseline mb-3 px-1">
+                            <h2 class="font-bold text-slate-800">
+                                {group.name}
+                            </h2>
+                            {group.budgeted > 0 && (
+                                <div class="text-xs text-slate-500">
+                                    <span class="font-semibold text-slate-700">
+                                        ${group.spent.toFixed(2)}
+                                    </span>
+                                    {" "}/{" "}
+                                    <span class="text-slate-600">
+                                        ${group.budgeted.toFixed(2)}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {group.categories.map((cat: any) => {
+                                const progress = cat.budgeted > 0 ? (cat.spent / cat.budgeted) * 100 : 0;
+                                const isOverspent = cat.spent > cat.budgeted && cat.budgeted > 0;
+                                const hasNoBudget = cat.budgeted === 0;
+                                
+                                return (
+                                    <a
+                                        href={`/parent/finances/${cat.id}?name=${encodeURIComponent(cat.name)}`}
+                                        class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 text-left hover:shadow-md hover:border-emerald-200 transition-all"
+                                    >
+                                        <div class="flex items-start justify-between mb-3">
+                                            <div class="flex-1">
+                                                <p class="text-sm font-bold text-slate-700 mb-1">
+                                                    {cat.name}
+                                                </p>
+                                                {hasNoBudget ? (
+                                                    <p class="text-xs text-slate-400">
+                                                        {t(lang, "fin_no_budget")}
+                                                    </p>
+                                                ) : (
+                                                    <div class="flex items-baseline gap-2">
+                                                        <span class={`text-lg font-bold ${isOverspent ? 'text-red-600' : cat.balance > 0 ? 'text-emerald-600' : 'text-slate-600'}`}>
+                                                            ${cat.balance.toFixed(2)}
+                                                        </span>
+                                                        <span class="text-xs text-slate-400">
+                                                            {t(lang, "fin_left")}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center">
+                                                <svg
+                                                    class="h-4 w-4 text-emerald-600"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    stroke="currentColor"
+                                                >
+                                                    <path
+                                                        stroke-linecap="round"
+                                                        stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M9 5l7 7-7 7"
+                                                    />
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        
+                                        {!hasNoBudget && (
+                                            <>
+                                                <div class="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden">
+                                                    <div
+                                                        class={`h-full rounded-full transition-all ${
+                                                            isOverspent 
+                                                                ? 'bg-red-500' 
+                                                                : progress > 80 
+                                                                ? 'bg-amber-500' 
+                                                                : 'bg-emerald-500'
+                                                        }`}
+                                                        style={`width: ${Math.min(progress, 100)}%`}
+                                                    />
+                                                </div>
+                                                <div class="flex justify-between text-xs text-slate-500">
+                                                    <span>
+                                                        {t(lang, "fin_spent")}: ${cat.spent.toFixed(2)}
+                                                    </span>
+                                                    <span>
+                                                        {t(lang, "fin_budgeted")}: ${cat.budgeted.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        )}
+                                    </a>
+                                );
+                            })}
                         </div>
                     </section>
                 ))
             }
 
-            <!-- Launch Actual Budget -->
-            <section
-                class="bg-white rounded-2xl p-6 shadow-sm border border-emerald-100"
-            >
-                <div class="flex items-start gap-4">
-                    <div
-                        class="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center flex-shrink-0"
-                    >
-                        <svg
-                            class="h-8 w-8 text-emerald-600"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                            ></path>
-                        </svg>
+            <!-- Children's Accounts Section -->
+            {childrenAccounts.length > 0 && (
+                <section class="mt-8">
+                    <h2 class="text-2xl font-bold text-slate-800 mb-4 px-1">
+                        👧 {lang === "es" ? "Cuentas de los Niños" : "Children's Accounts"}
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {childrenAccounts.map((child: any) => (
+                            <div class="bg-white rounded-xl p-5 border-2 border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="h-12 w-12 rounded-full bg-purple-500 flex items-center justify-center text-white text-lg font-bold">
+                                            {child.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <h3 class="text-lg font-bold text-slate-900">{child.name}</h3>
+                                            <p class="text-xs text-slate-500">
+                                                {lang === "es" ? "Total:" : "Total:"} ${child.total.toFixed(2)} MXN
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-3">
+                                    {child.checking && (
+                                        <div class="bg-green-50 rounded-lg p-3 border border-green-200">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-lg">💵</span>
+                                                    <span class="text-sm font-semibold text-slate-700">
+                                                        {lang === "es" ? "Efectivo" : "Spending"}
+                                                    </span>
+                                                </div>
+                                                <span class="text-lg font-bold text-green-700">
+                                                    ${(child.checking.balance || 0).toFixed(2)}
+                                                </span>
+                                            </div>
+                                            <p class="text-xs text-slate-500 mt-1">
+                                                {lang === "es" ? "Disponible para gastar" : "Available to spend"}
+                                            </p>
+                                        </div>
+                                    )}
+                                    
+                                    {child.savings && (
+                                        <div class="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-lg">🏦</span>
+                                                    <span class="text-sm font-semibold text-slate-700">
+                                                        {lang === "es" ? "Ahorros" : "Savings"}
+                                                    </span>
+                                                </div>
+                                                <span class="text-lg font-bold text-blue-700">
+                                                    ${(child.savings.balance || 0).toFixed(2)}
+                                                </span>
+                                            </div>
+                                            <p class="text-xs text-slate-500 mt-1">
+                                                {lang === "es" ? "Bloqueado (15% de conversiones)" : "Locked (15% of conversions)"}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                    <div class="flex-1">
-                        <h3 class="font-bold text-slate-800 text-lg">
-                            Actual Budget
-                        </h3>
-                        <p class="text-sm text-slate-500 mt-1">
-                            {t(lang, "fin_actual_desc")}
-                        </p>
-                    </div>
-                </div>
-                <a
-                    href={actualUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="mt-5 w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl transition-colors shadow-sm active:scale-[0.98]"
-                >
-                    <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                        ></path>
-                    </svg>
-                    {t(lang, "fin_open_actual")}
-                </a>
-            </section>
+                </section>
+            )}
         </main>
 
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
+
+    <!-- Modal for creating categories -->
+    <div id="category-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-slate-800">Create New Category</h2>
+                <button id="close-modal" class="text-slate-400 hover:text-slate-600">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="category-form" class="space-y-4">
+                <div>
+                    <label for="category-name" class="block text-sm font-medium text-slate-700 mb-1">
+                        Category Name
+                    </label>
+                    <input
+                        type="text"
+                        id="category-name"
+                        name="name"
+                        required
+                        class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        placeholder="e.g., Groceries"
+                    />
+                </div>
+                <div>
+                    <label for="category-group" class="block text-sm font-medium text-slate-700 mb-1">
+                        Category Group
+                    </label>
+                    <select
+                        id="category-group"
+                        name="group_name"
+                        class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    >
+                        {expenseGroups.map((group: any) => (
+                            <option value={group.name}>{group.name}</option>
+                        ))}
+                        <option value="new-group">+ Create New Group</option>
+                    </select>
+                </div>
+                <div id="new-group-input" class="hidden">
+                    <label for="new-group-name" class="block text-sm font-medium text-slate-700 mb-1">
+                        New Group Name
+                    </label>
+                    <input
+                        type="text"
+                        id="new-group-name"
+                        class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        placeholder="e.g., Monthly Expenses"
+                    />
+                </div>
+                <div id="category-status" class="hidden text-sm"></div>
+                <div class="flex gap-3 pt-2">
+                    <button
+                        type="button"
+                        id="cancel-btn"
+                        class="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        id="submit-category"
+                        class="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors"
+                    >
+                        Create Category
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </Layout>
+
+<script>
+    // Category Modal Management
+    const modal = document.getElementById('category-modal');
+    const openModalBtn = document.getElementById('open-category-modal');
+    const closeModalBtn = document.getElementById('close-modal');
+    const cancelBtn = document.getElementById('cancel-btn');
+    const categoryForm = document.getElementById('category-form') as HTMLFormElement;
+    const categoryGroup = document.getElementById('category-group') as HTMLSelectElement;
+    const newGroupInput = document.getElementById('new-group-input');
+    const newGroupName = document.getElementById('new-group-name') as HTMLInputElement;
+    const categoryStatus = document.getElementById('category-status');
+    const submitBtn = document.getElementById('submit-category') as HTMLButtonElement;
+
+    openModalBtn?.addEventListener('click', () => {
+        modal?.classList.remove('hidden');
+    });
+
+    const closeModal = () => {
+        modal?.classList.add('hidden');
+        categoryForm?.reset();
+        newGroupInput?.classList.add('hidden');
+        categoryStatus?.classList.add('hidden');
+    };
+
+    closeModalBtn?.addEventListener('click', closeModal);
+    cancelBtn?.addEventListener('click', closeModal);
+
+    categoryGroup?.addEventListener('change', (e) => {
+        const target = e.target as HTMLSelectElement;
+        if (target.value === 'new-group') {
+            newGroupInput?.classList.remove('hidden');
+            newGroupName.required = true;
+        } else {
+            newGroupInput?.classList.add('hidden');
+            newGroupName.required = false;
+        }
+    });
+
+    categoryForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating...';
+        categoryStatus?.classList.add('hidden');
+
+        const formData = new FormData(categoryForm);
+        const categoryName = formData.get('name') as string;
+        let groupName = formData.get('group_name') as string;
+
+        try {
+            // If creating new group, create it first
+            if (groupName === 'new-group') {
+                groupName = newGroupName.value;
+                if (!groupName) {
+                    throw new Error('Group name is required');
+                }
+            }
+
+            // Create category via Finance API
+            const response = await fetch(`${window.location.origin}/api/finance/categories/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ name: categoryName, group_name: groupName })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to create category');
+            }
+
+            categoryStatus!.textContent = '✅ Category created successfully!';
+            categoryStatus!.className = 'text-sm text-green-700 bg-green-50 p-3 rounded-lg';
+            categoryStatus?.classList.remove('hidden');
+
+            // Reload page after 1 second
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            categoryStatus!.textContent = `❌ Error: ${errorMessage}`;
+            categoryStatus!.className = 'text-sm text-red-700 bg-red-50 p-3 rounded-lg';
+            categoryStatus?.classList.remove('hidden');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Create Category';
+        }
+    });
+
+    // Sync Button Management
+    const syncBtn = document.getElementById('sync-btn') as HTMLButtonElement;
+    const syncBtnText = document.getElementById('sync-btn-text') as HTMLSpanElement;
+    const syncStatus = document.getElementById('sync-status') as HTMLDivElement;
+
+    // Get translations from data attributes
+    const lang = document.documentElement.lang || 'en';
+    const translations = {
+        en: {
+            syncing: 'Syncing...',
+            success: '✅ Sync completed successfully',
+            error_prefix: '❌ Error:',
+            error_unknown: 'Unknown error',
+            sync_now: 'Sync Now',
+            network_error: '❌ Network error:',
+            backend_check: 'Check that the backend is running at'
+        },
+        es: {
+            syncing: 'Sincronizando...',
+            success: '✅ Sincronización completada exitosamente',
+            error_prefix: '❌ Error:',
+            error_unknown: 'Error desconocido',
+            sync_now: 'Sincronizar Ahora',
+            network_error: '❌ Error de red:',
+            backend_check: 'Verifica que el backend esté corriendo en'
+        }
+    };
+    const t = translations[lang as keyof typeof translations] || translations.en;
+
+    syncBtn?.addEventListener('click', async () => {
+        syncBtn.disabled = true;
+        syncBtnText.textContent = t.syncing;
+        syncStatus.textContent = '';
+        syncStatus.classList.add('hidden');
+
+        try {
+            const response = await fetch('/api/sync/trigger?direction=both&dry_run=false', {
+                method: 'POST',
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ detail: t.error_unknown }));
+                throw new Error(errorData.detail || t.error_unknown);
+            }
+
+            const data = await response.json();
+            syncStatus.textContent = t.success;
+            syncStatus.className = 'mt-3 text-sm text-green-700 bg-green-50 p-3 rounded-lg';
+            syncStatus.classList.remove('hidden');
+
+            // Reload page after 2 seconds to show updated data
+            setTimeout(() => window.location.reload(), 2000);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : t.error_unknown;
+            syncStatus.textContent = `${t.error_prefix} ${errorMessage}`;
+            syncStatus.className = 'mt-3 text-sm text-red-700 bg-red-50 p-3 rounded-lg';
+            syncStatus.classList.remove('hidden');
+        } finally {
+            syncBtn.disabled = false;
+            syncBtnText.textContent = t.sync_now;
+        }
+    });
+</script>
