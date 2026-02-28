@@ -29,6 +29,11 @@ aioredis==2.0.1
 # HTTP Client
 httpx==0.26.0
 
+# OAuth & Payment Integration
+google-auth==2.27.0
+google-auth-oauthlib==1.2.0
+paypalrestsdk==1.13.1
+
 # Testing
 pytest==7.4.4
 pytest-asyncio==0.23.3
