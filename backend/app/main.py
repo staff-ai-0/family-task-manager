@@ -7,7 +7,7 @@ import logging
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.exception_handlers import register_exception_handlers
-from app.api.routes import auth, users, tasks, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion
+from app.api.routes import auth, users, tasks, rewards, consequences, families, task_templates, task_assignments
 from app.api.routes.budget import router as budget_router
 
 # Configure logging
@@ -71,8 +71,9 @@ register_exception_handlers(app)
 
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(oauth.router, prefix="/api/oauth", tags=["OAuth"])
-app.include_router(payment.router, prefix="/api/payment", tags=["Payment"])
+# OAuth and Payment routers commented out - not yet implemented
+# app.include_router(oauth.router, prefix="/api/oauth", tags=["OAuth"])
+# app.include_router(payment.router, prefix="/api/payment", tags=["Payment"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(families.router, prefix="/api/families", tags=["Families"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks (Legacy)"])
@@ -83,8 +84,9 @@ app.include_router(
     consequences.router, prefix="/api/consequences", tags=["Consequences"]
 )
 app.include_router(budget_router, prefix="/api/budget", tags=["Budget"])
-app.include_router(points_conversion.router, prefix="/api/points-conversion", tags=["Points Conversion"])
-app.include_router(sync.router, tags=["Sync"])
+# Points conversion and sync routers commented out - not yet implemented
+# app.include_router(points_conversion.router, prefix="/api/points-conversion", tags=["Points Conversion"])
+# app.include_router(sync.router, tags=["Sync"])
 
 
 @app.get("/")
