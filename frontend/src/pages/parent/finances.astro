@@ -40,6 +40,7 @@ try {
         const errorText = await resp.text();
         console.error(`[Finances] Failed to fetch categories: ${resp.status} ${resp.statusText}`);
         console.error(`[Finances] Error response: ${errorText}`);
+    }
 } catch (e) {
     console.error("[Finances] Failed to fetch budget categories", e);
 }
