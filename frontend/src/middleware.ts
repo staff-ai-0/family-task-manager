@@ -54,6 +54,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
         }
     }
 
+    // Always allow static assets (CSS, JS, images, fonts)
+    if (path.startsWith("/_astro/") || path.startsWith("/favicon") || path.match(/\.(css|js|png|svg|ico|woff2?|ttf|otf)$/)) {
+        return next();
+    }
+
     // Public routes that don't require authentication
     const publicRoutes = ["/", "/login", "/api/auth/login", "/api/oauth/google", "/api/lang"];
     const isPublicRoute = publicRoutes.some(route => path === route || path.startsWith("/api/translate"));
