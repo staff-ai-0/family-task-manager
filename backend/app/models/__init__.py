@@ -19,6 +19,14 @@ from app.models.consequence import Consequence, ConsequenceSeverity, Restriction
 from app.models.point_transaction import PointTransaction, TransactionType
 from app.models.password_reset import PasswordResetToken
 from app.models.email_verification import EmailVerificationToken
+from app.models.budget import (
+    BudgetCategoryGroup,
+    BudgetCategory,
+    BudgetAllocation,
+    BudgetAccount,
+    BudgetPayee,
+    BudgetTransaction,
+)
 
 __all__ = [
     "Base",
@@ -33,6 +41,13 @@ __all__ = [
     "PointTransaction",
     "PasswordResetToken",
     "EmailVerificationToken",
+    # Budget Models
+    "BudgetCategoryGroup",
+    "BudgetCategory",
+    "BudgetAllocation",
+    "BudgetAccount",
+    "BudgetPayee",
+    "BudgetTransaction",
     # Enums
     "UserRole",
     "TaskStatus",

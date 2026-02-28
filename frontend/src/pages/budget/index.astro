@@ -1,0 +1,13 @@
+---
+/**
+ * Budget Index Page - Redirects to current month budget view
+ */
+
+// Get current year and month
+const now = new Date();
+const year = now.getFullYear();
+const month = now.getMonth() + 1; // JavaScript months are 0-indexed
+
+// Redirect to current month budget
+return Astro.redirect(`/budget/month/${year}/${month}`);
+---

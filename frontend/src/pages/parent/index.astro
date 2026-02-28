@@ -19,7 +19,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 ---
 
 <Layout title={`${t(lang, "parent_dashboard")} - Family Task Manager`}>
-    <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
         <header
             class="bg-gradient-to-br from-slate-800 to-slate-700 text-white pt-12 pb-8 px-6 rounded-b-3xl shadow-md"
         >
@@ -33,7 +33,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
         </header>
 
         <main class="flex-1 px-4 py-6">
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 <a
                     href="/parent/tasks"
                     class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-primary-200 transition-all flex flex-col items-center text-center gap-3"
@@ -181,6 +181,36 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                         </p>
                         <p class="text-xs text-slate-500">
                             {t(lang, "parent_assignments_desc")}
+                        </p>
+                    </div>
+                </a>
+                <a
+                    href="/budget"
+                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-blue-200 transition-all flex flex-col items-center text-center gap-3"
+                >
+                    <div
+                        class="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center"
+                    >
+                        <svg
+                            class="h-6 w-6 text-blue-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z"
+                            ></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800">
+                            Presupuesto
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            Presupuesto mensual
                         </p>
                     </div>
                 </a>

@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.exception_handlers import register_exception_handlers
 from app.api.routes import auth, users, tasks, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion
+from app.api.routes.budget import router as budget_router
 
 # Configure logging
 logging.basicConfig(
@@ -81,6 +82,7 @@ app.include_router(rewards.router, prefix="/api/rewards", tags=["Rewards"])
 app.include_router(
     consequences.router, prefix="/api/consequences", tags=["Consequences"]
 )
+app.include_router(budget_router, prefix="/api/budget", tags=["Budget"])
 app.include_router(points_conversion.router, prefix="/api/points-conversion", tags=["Points Conversion"])
 app.include_router(sync.router, tags=["Sync"])
 
