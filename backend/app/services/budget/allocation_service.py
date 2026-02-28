@@ -231,3 +231,159 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
         await db.commit()
         await db.refresh(allocation)
         return allocation
+
+    @classmethod
+    async def get_category_available_amount(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        category_id: UUID,
+        month: date,
+    ) -> dict:
+        """
+        Calculate available amount for a category in a given month.
+        
+        Formula: Available = Previous Balance + Budgeted + Activity
+        
+        Where:
+        - Previous Balance = rollover from previous month (if enabled)
+        - Budgeted = amount allocated this month
+        - Activity = sum of transactions in this month (negative for expenses)
+        
+        Args:
+            db: Database session
+            family_id: Family ID
+            category_id: Category ID
+            month: Month to calculate for
+        
+        Returns:
+            Dict with budgeted, activity, previous_balance, and available amounts
+        """
+        from app.services.budget.category_service import CategoryService
+        from app.services.budget.transaction_service import TransactionService
+        from datetime import timedelta
+        from sqlalchemy import func
+        
+        # Get category to check rollover setting
+        category = await CategoryService.get_by_id(db, category_id, family_id)
+        if not category:
+            raise NotFoundException(f"Category {category_id} not found")
+        
+        # Get current month's allocation
+        allocation = await cls.get_or_create_for_category_month(
+            db, family_id, category_id, month
+        )
+        budgeted = allocation.budgeted_amount
+        
+        # Calculate activity (transactions) for this month
+        # Month range: first day to last day
+        if month.month == 12:
+            next_month = date(month.year + 1, 1, 1)
+        else:
+            next_month = date(month.year, month.month + 1, 1)
+        
+        from app.models.budget import BudgetTransaction
+        activity_query = (
+            select(func.coalesce(func.sum(BudgetTransaction.amount), 0))
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.category_id == category_id,
+                    BudgetTransaction.date >= month,
+                    BudgetTransaction.date < next_month,
+                )
+            )
+        )
+        activity_result = await db.execute(activity_query)
+        activity = activity_result.scalar() or 0
+        
+        # Calculate previous balance (if rollover enabled)
+        previous_balance = 0
+        if category.rollover_enabled:
+            # Get previous month
+            if month.month == 1:
+                prev_month = date(month.year - 1, 12, 1)
+            else:
+                prev_month = date(month.year, month.month - 1, 1)
+            
+            # Recursively calculate previous month's available
+            # (Note: This could be optimized with caching for production)
+            try:
+                prev_data = await cls.get_category_available_amount(
+                    db, family_id, category_id, prev_month
+                )
+                previous_balance = prev_data["available"]
+            except:
+                # If previous month doesn't exist, start with 0
+                previous_balance = 0
+        
+        # Calculate available = previous + budgeted + activity
+        available = previous_balance + budgeted + activity
+        
+        return {
+            "category_id": str(category_id),
+            "month": month.isoformat(),
+            "budgeted": budgeted,
+            "activity": activity,
+            "previous_balance": previous_balance,
+            "available": available,
+            "rollover_enabled": category.rollover_enabled,
+        }
+    
+    @classmethod
+    async def get_month_summary(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        month: date,
+    ) -> dict:
+        """
+        Get complete budget summary for a month with all categories.
+        
+        Returns budgeted, activity, and available amounts for each category.
+        
+        Args:
+            db: Database session
+            family_id: Family ID
+            month: Month to summarize
+        
+        Returns:
+            Dict with category summaries and totals
+        """
+        from app.services.budget.category_service import CategoryService
+        
+        # Get all categories
+        categories = await CategoryService.list_by_family(db, family_id)
+        
+        category_summaries = []
+        total_budgeted = 0
+        total_activity = 0
+        total_available = 0
+        
+        for category in categories:
+            if category.hidden:
+                continue
+            
+            summary = await cls.get_category_available_amount(
+                db, family_id, category.id, month
+            )
+            
+            category_summaries.append({
+                **summary,
+                "category_name": category.name,
+                "group_id": str(category.group_id),
+            })
+            
+            total_budgeted += summary["budgeted"]
+            total_activity += summary["activity"]
+            total_available += summary["available"]
+        
+        return {
+            "month": month.isoformat(),
+            "categories": category_summaries,
+            "totals": {
+                "budgeted": total_budgeted,
+                "activity": total_activity,
+                "available": total_available,
+            },
+        }

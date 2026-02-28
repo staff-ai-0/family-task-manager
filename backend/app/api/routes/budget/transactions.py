@@ -109,3 +109,24 @@ async def delete_transaction(
         transaction_id,
         to_uuid_required(current_user.family_id),
     )
+
+
+@router.put("/{transaction_id}/reconcile", response_model=TransactionResponse)
+async def reconcile_transaction(
+    transaction_id: UUID,
+    reconciled: bool = Query(True, description="Mark as reconciled (true) or unreconciled (false)"),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Mark a transaction as reconciled or unreconciled (parent only).
+    
+    Reconciled transactions are locked and cannot be edited except by parents.
+    """
+    transaction = await TransactionService.reconcile_transaction(
+        db,
+        transaction_id,
+        to_uuid_required(current_user.family_id),
+        reconciled=reconciled,
+    )
+    return transaction

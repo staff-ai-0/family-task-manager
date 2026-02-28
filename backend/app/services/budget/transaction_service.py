@@ -310,3 +310,84 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         result = await db.execute(query)
         activity = result.scalar_one_or_none()
         return activity or 0
+
+    @classmethod
+    async def reconcile_transaction(
+        cls,
+        db: AsyncSession,
+        transaction_id: UUID,
+        family_id: UUID,
+        reconciled: bool = True,
+    ) -> BudgetTransaction:
+        """
+        Mark a transaction as reconciled or unreconciled.
+        
+        Args:
+            db: Database session
+            transaction_id: Transaction ID
+            family_id: Family ID for verification
+            reconciled: Whether to mark as reconciled
+        
+        Returns:
+            Updated transaction
+        """
+        transaction = await cls.get_by_id(db, transaction_id, family_id)
+        if not transaction:
+            raise NotFoundException(f"Transaction {transaction_id} not found")
+        
+        transaction.reconciled = reconciled
+        # Reconciled transactions are automatically marked as cleared
+        if reconciled:
+            transaction.cleared = True
+        
+        await db.commit()
+        await db.refresh(transaction)
+        return transaction
+    
+    @classmethod
+    async def bulk_reconcile_account(
+        cls,
+        db: AsyncSession,
+        account_id: UUID,
+        family_id: UUID,
+        transaction_ids: List[UUID],
+    ) -> int:
+        """
+        Reconcile multiple transactions for an account.
+        
+        Args:
+            db: Database session
+            account_id: Account ID
+            family_id: Family ID for verification
+            transaction_ids: List of transaction IDs to reconcile
+        
+        Returns:
+            Number of transactions reconciled
+        """
+        # Verify account belongs to family
+        from app.services.budget.account_service import AccountService
+        await AccountService.get_by_id(db, account_id, family_id)
+        
+        # Get all transactions
+        query = (
+            select(BudgetTransaction)
+            .where(
+                and_(
+                    BudgetTransaction.id.in_(transaction_ids),
+                    BudgetTransaction.account_id == account_id,
+                    BudgetTransaction.family_id == family_id,
+                )
+            )
+        )
+        result = await db.execute(query)
+        transactions = list(result.scalars().all())
+        
+        # Mark as reconciled
+        count = 0
+        for transaction in transactions:
+            transaction.reconciled = True
+            transaction.cleared = True
+            count += 1
+        
+        await db.commit()
+        return count

@@ -105,3 +105,69 @@ async def delete_account(
         account_id,
         to_uuid_required(current_user.family_id),
     )
+
+
+@router.get("/{account_id}/balance")
+async def get_account_balance(
+    account_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    as_of_date: str = Query(None, description="Calculate balance as of date (YYYY-MM-DD)"),
+):
+    """
+    Get account balance.
+    
+    Returns total balance, cleared balance, and uncleared balance (all in cents).
+    """
+    from datetime import date as date_type
+    
+    family_id = to_uuid_required(current_user.family_id)
+    
+    # Parse date if provided
+    as_of = None
+    if as_of_date:
+        as_of = date_type.fromisoformat(as_of_date)
+    
+    balance_info = await AccountService.get_balance(
+        db, account_id, family_id, as_of_date=as_of
+    )
+    
+    # Convert cents to currency for response
+    return {
+        "account_id": str(account_id),
+        "balance": balance_info["balance"] / 100,
+        "balance_cents": balance_info["balance"],
+        "cleared_balance": balance_info["cleared_balance"] / 100,
+        "cleared_balance_cents": balance_info["cleared_balance"],
+        "uncleared_balance": balance_info["uncleared_balance"] / 100,
+        "uncleared_balance_cents": balance_info["uncleared_balance"],
+        "as_of_date": as_of_date,
+    }
+
+
+@router.post("/{account_id}/reconcile")
+async def bulk_reconcile_account(
+    account_id: UUID,
+    transaction_ids: List[UUID],
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Reconcile multiple transactions for an account (parent only).
+    
+    This is typically used after reconciling an account statement.
+    """
+    from app.services.budget.transaction_service import TransactionService
+    
+    count = await TransactionService.bulk_reconcile_account(
+        db,
+        account_id,
+        to_uuid_required(current_user.family_id),
+        transaction_ids,
+    )
+    
+    return {
+        "account_id": str(account_id),
+        "reconciled_count": count,
+        "message": f"Successfully reconciled {count} transactions",
+    }
