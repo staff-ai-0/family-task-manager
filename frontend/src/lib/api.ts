@@ -6,7 +6,7 @@
 import type { ApiResponse } from "../types/api";
 
 // Use runtime environment variable (process.env works in Astro SSR)
-export const FALLBACK_API_BASE_URL = process.env.PUBLIC_API_URL ?? "http://localhost:8002";
+export const FALLBACK_API_BASE_URL = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
 
 export interface ApiFetchOptions extends RequestInit {
     token?: string;
