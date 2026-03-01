@@ -41,31 +41,24 @@ docker exec family_app_backend alembic revision --autogenerate -m "description"
 docker exec family_app_backend python /app/seed_data.py
 ```
 
-### Sync Operations
-```bash
-# Check sync service health
-curl http://localhost:5008/health
-
-# Get sync status (requires family_id)
-curl "http://localhost:5008/status?family_id=ce875133-1b85-4bfc-8e61-b52309381f0b"
-
-# Trigger manual sync
-curl -X POST http://localhost:5008/trigger \
-  -H "Content-Type: application/json" \
-  -d '{"family_id":"ce875133-1b85-4bfc-8e61-b52309381f0b","direction":"both","dry_run":false}'
-```
-
 ### Budget Operations
 ```bash
-# Migrate data from Actual Budget (one-time)
-docker exec family_app_backend python /app/scripts/migrate_actual_to_postgres.py
-
 # Test budget API
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8002/api/budget/categories
 
-# Run sync test
-docker exec family_sync_service python3 /app/test_sync.py
+# View budget categories
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8002/api/budget/categories
+
+# View accounts
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8002/api/budget/accounts
+
+# View transactions
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8002/api/budget/transactions
 ```
+
+**Note**: The Actual Budget sync service (phase 10 decommissioning) has been replaced with 
+PostgreSQL-based budget system. All budget data is now managed internally. See 
+[PHASE_9_MIGRATION_GUIDE.md](./PHASE_9_MIGRATION_GUIDE.md) for migration details.
 
 ## Architectural Overview
 
@@ -109,18 +102,16 @@ Models (Database Entities)
 ### Decoupled Services Architecture
 
 ```
-Frontend (Port 3003)        Backend API (Port 8002)
+Frontend (Port 3003)        Backend API (Port 8000)
 Astro 5 + Tailwind v4 ←→    FastAPI + SQLAlchemy
     ↓                              ↓
-  Sessions                    PostgreSQL (Port 5434)
+  Sessions                    PostgreSQL (Port 5437)
     ↓                              ↓
-  Redis (Port 6382)          Test DB (Port 5438)
-    
-Sync Service (Port 5008)    
-PostgreSQL-based Budget Sync
-    ↓                              
-  Hourly Cron Job           
+  Redis (Port 6380)          Test DB (Port 5435)
 ```
+
+**Note**: The Actual Budget sync service (Phase 10) has been decommissioned. All budget 
+functionality is now handled by the internal PostgreSQL-based budget system in the backend.
 
 ### Budget System Architecture
 
