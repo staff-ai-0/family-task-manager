@@ -5,12 +5,12 @@ Business logic for budget allocation operations.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from typing import List
 from datetime import date
 from uuid import UUID
 
-from app.models.budget import BudgetAllocation
+from app.models.budget import BudgetAllocation, BudgetTransaction
 from app.schemas.budget import AllocationCreate, AllocationUpdate
 from app.services.base_service import BaseFamilyService
 from app.core.exceptions import NotFoundException
@@ -261,8 +261,6 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
         """
         from app.services.budget.category_service import CategoryService
         from app.services.budget.transaction_service import TransactionService
-        from datetime import timedelta
-        from sqlalchemy import func
         
         # Get category to check rollover setting
         category = await CategoryService.get_by_id(db, category_id, family_id)
@@ -276,50 +274,42 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
         budgeted = allocation.budgeted_amount
         
         # Calculate activity (transactions) for this month
-        # Month range: first day to last day
-        if month.month == 12:
-            next_month = date(month.year + 1, 1, 1)
-        else:
-            next_month = date(month.year, month.month + 1, 1)
-        
-        from app.models.budget import BudgetTransaction
-        activity_query = (
-            select(func.coalesce(func.sum(BudgetTransaction.amount), 0))
-            .where(
-                and_(
-                    BudgetTransaction.family_id == family_id,
-                    BudgetTransaction.category_id == category_id,
-                    BudgetTransaction.date >= month,
-                    BudgetTransaction.date < next_month,
-                )
-            )
+        activity = await TransactionService.get_category_activity(
+            db, category_id, family_id, month
         )
-        activity_result = await db.execute(activity_query)
-        activity = activity_result.scalar() or 0
         
-        # Calculate previous balance (if rollover enabled)
         previous_balance = 0
         if category.rollover_enabled:
-            # Get previous month
-            if month.month == 1:
-                prev_month = date(month.year - 1, 12, 1)
-            else:
-                prev_month = date(month.year, month.month - 1, 1)
-            
-            # Recursively calculate previous month's available
-            # (Note: This could be optimized with caching for production)
-            try:
-                prev_data = await cls.get_category_available_amount(
-                    db, family_id, category_id, prev_month
+            prev_alloc_query = (
+                select(func.coalesce(func.sum(BudgetAllocation.budgeted_amount), 0))
+                .where(
+                    and_(
+                        BudgetAllocation.family_id == family_id,
+                        BudgetAllocation.category_id == category_id,
+                        BudgetAllocation.month < month,
+                    )
                 )
-                previous_balance = prev_data["available"]
-            except:
-                # If previous month doesn't exist, start with 0
-                previous_balance = 0
+            )
+            prev_alloc_result = await db.execute(prev_alloc_query)
+            prev_budgeted = prev_alloc_result.scalar() or 0
+
+            prev_activity_query = (
+                select(func.coalesce(func.sum(BudgetTransaction.amount), 0))
+                .where(
+                    and_(
+                        BudgetTransaction.family_id == family_id,
+                        BudgetTransaction.category_id == category_id,
+                        BudgetTransaction.date < month,
+                    )
+                )
+            )
+            prev_activity_result = await db.execute(prev_activity_query)
+            prev_activity = prev_activity_result.scalar() or 0
+
+            previous_balance = prev_budgeted + prev_activity
         
-        # Calculate available = previous + budgeted + activity
         available = previous_balance + budgeted + activity
-        
+
         return {
             "category_id": str(category_id),
             "month": month.isoformat(),

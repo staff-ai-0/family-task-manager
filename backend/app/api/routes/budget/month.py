@@ -14,7 +14,6 @@ from app.core.dependencies import get_current_user
 from app.core.type_utils import to_uuid_required
 from app.services.budget.category_service import CategoryGroupService
 from app.services.budget.allocation_service import AllocationService
-from app.services.budget.transaction_service import TransactionService
 from app.models import User
 
 router = APIRouter()
@@ -45,11 +44,6 @@ async def get_month_budget(
         db, family_id, include_hidden=False
     )
     
-    # Get allocations for this month
-    allocations = await AllocationService.list_by_month(db, family_id, month_date)
-    allocation_map = {alloc.category_id: alloc.budgeted_amount for alloc in allocations}
-    
-    # Build response
     result = {
         "month": month_date.isoformat(),
         "year": year,
@@ -74,31 +68,25 @@ async def get_month_budget(
         }
         
         for category in group.categories:
-            # Get budgeted amount for this category
-            budgeted = allocation_map.get(category.id, 0)
-            
-            # Get activity (actual spending) for this month
-            activity = await TransactionService.get_category_activity(
-                db, category.id, family_id, month_date
+            summary = await AllocationService.get_category_available_amount(
+                db, family_id, category.id, month_date
             )
-            
-            # Calculate available
-            available = budgeted + activity  # activity is negative for expenses
-            
+
             category_data = {
                 "id": str(category.id),
                 "name": category.name,
-                "budgeted": budgeted,
-                "activity": activity,
-                "available": available,
+                "budgeted": summary["budgeted"],
+                "activity": summary["activity"],
+                "available": summary["available"],
+                "previous_balance": summary["previous_balance"],
                 "goal_amount": category.goal_amount,
-                "rollover_enabled": category.rollover_enabled,
+                "rollover_enabled": summary["rollover_enabled"],
             }
             
             group_data["categories"].append(category_data)
-            group_data["total_budgeted"] += budgeted
-            group_data["total_activity"] += activity
-            group_data["total_available"] += available
+            group_data["total_budgeted"] += category_data["budgeted"]
+            group_data["total_activity"] += category_data["activity"]
+            group_data["total_available"] += category_data["available"]
         
         result["category_groups"].append(group_data)
         
