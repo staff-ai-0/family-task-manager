@@ -91,6 +91,7 @@ export interface CategoryWithActivity {
     budgeted: number;
     activity: number;
     available: number;
+    previous_balance: number;
     goal_amount: number;
     rollover_enabled: boolean;
 }
