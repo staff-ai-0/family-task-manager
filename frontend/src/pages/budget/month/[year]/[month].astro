@@ -215,28 +215,36 @@ const isCurrentMonth = yearNum === now.getFullYear() && monthNum === now.getMont
                                             data-budgeted={category.budgeted}
                                             data-activity={category.activity}
                                             data-available={category.available}
+                                            data-previous-balance={category.previous_balance || 0}
                                         >
-                                            <div class="flex items-center justify-between mb-2">
-                                                <span class="text-sm font-medium text-slate-700">{category.name}</span>
-                                                <span class={`text-sm font-bold ${isOverBudget ? 'text-red-600' : 'text-slate-900'}`}>
-                                                    {formatCurrency(category.available)}
-                                                </span>
-                                            </div>
-                                            <div class="flex items-center justify-between text-xs text-slate-500">
-                                                <button 
-                                                    class="budgeted-btn hover:bg-primary-100 px-2 py-1 rounded transition text-left group"
-                                                    data-category-id={category.id}
-                                                    data-amount={category.budgeted}
-                                                >
-                                                    <span class="budgeted-display">
-                                                        {formatCurrency(category.budgeted)} presupuestado
-                                                    </span>
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline-block ml-1 opacity-0 group-hover:opacity-100 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                    </svg>
-                                                </button>
-                                                <span>{formatCurrency(Math.abs(category.activity))} gastado</span>
-                                            </div>
+                                         <div class="flex items-center justify-between mb-2">
+                                                 <span class="text-sm font-medium text-slate-700">{category.name}</span>
+                                                 <span class={`text-sm font-bold ${isOverBudget ? 'text-red-600' : category.available > 0 ? 'text-green-600' : 'text-slate-900'}`}>
+                                                     {formatCurrency(category.available)}
+                                                 </span>
+                                             </div>
+                                             <div class="text-xs text-slate-500 mb-2">
+                                                 {category.previous_balance > 0 && (
+                                                     <span class="text-green-600 font-semibold">
+                                                         {formatCurrency(category.previous_balance)} saldo anterior
+                                                     </span>
+                                                 )}
+                                             </div>
+                                             <div class="flex items-center justify-between text-xs text-slate-500">
+                                                 <button 
+                                                     class="budgeted-btn hover:bg-primary-100 px-2 py-1 rounded transition text-left group"
+                                                     data-category-id={category.id}
+                                                     data-amount={category.budgeted}
+                                                 >
+                                                     <span class="budgeted-display">
+                                                         {formatCurrency(category.budgeted)} presupuestado
+                                                     </span>
+                                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline-block ml-1 opacity-0 group-hover:opacity-100 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                     </svg>
+                                                 </button>
+                                                 <span>{formatCurrency(Math.abs(category.activity))} gastado</span>
+                                             </div>
                                             {category.budgeted > 0 && (
                                                 <div class="mt-2 bg-slate-200 rounded-full h-1.5 overflow-hidden">
                                                     <div 
@@ -301,6 +309,10 @@ const isCurrentMonth = yearNum === now.getFullYear() && monthNum === now.getMont
 
                     <div class="bg-slate-50 rounded-lg p-4 space-y-2 text-sm">
                         <div class="flex justify-between">
+                            <span class="text-slate-600">Saldo Anterior:</span>
+                            <span id="modal-previous-balance" class="font-semibold text-green-600">$0</span>
+                        </div>
+                        <div class="flex justify-between">
                             <span class="text-slate-600">Presupuestado:</span>
                             <span id="modal-budgeted" class="font-semibold text-slate-900">$0</span>
                         </div>
@@ -349,12 +361,14 @@ const isCurrentMonth = yearNum === now.getFullYear() && monthNum === now.getMont
     const modalCategoryName = document.getElementById('modal-category-name');
     const modalBudgeted = document.getElementById('modal-budgeted');
     const modalActivity = document.getElementById('modal-activity');
+    const modalPreviousBalance = document.getElementById('modal-previous-balance');
     const modalAvailable = document.getElementById('modal-available');
     const modalError = document.getElementById('modal-error');
     const modalLoading = document.getElementById('modal-loading');
 
     let currentCategoryId = null;
     let currentActivity = 0;
+    let currentPreviousBalance = 0;
 
     // Format currency helper
     function formatCurrency(cents) {
@@ -367,9 +381,10 @@ const isCurrentMonth = yearNum === now.getFullYear() && monthNum === now.getMont
     }
 
     // Open modal
-    function openModal(categoryId, categoryName, budgeted, activity) {
+    function openModal(categoryId, categoryName, budgeted, activity, previousBalance = 0) {
         currentCategoryId = categoryId;
         currentActivity = activity;
+        currentPreviousBalance = previousBalance || 0;
         
         modalCategoryName.textContent = categoryName;
         budgetInput.value = (budgeted / 100).toFixed(2);
@@ -391,8 +406,9 @@ const isCurrentMonth = yearNum === now.getFullYear() && monthNum === now.getMont
 
     // Update preview
     function updateModalPreview(budgetedCents) {
-        const available = budgetedCents + currentActivity;
+        const available = currentPreviousBalance + budgetedCents + currentActivity;
         
+        modalPreviousBalance.textContent = formatCurrency(currentPreviousBalance);
         modalBudgeted.textContent = formatCurrency(budgetedCents);
         modalActivity.textContent = formatCurrency(Math.abs(currentActivity));
         modalAvailable.textContent = formatCurrency(available);
@@ -464,8 +480,9 @@ const isCurrentMonth = yearNum === now.getFullYear() && monthNum === now.getMont
             const categoryName = categoryRow.dataset.categoryName;
             const budgeted = parseInt(categoryRow.dataset.budgeted);
             const activity = parseInt(categoryRow.dataset.activity);
+            const previousBalance = parseInt(categoryRow.dataset.previousBalance || '0');
             
-            openModal(categoryId, categoryName, budgeted, activity);
+            openModal(categoryId, categoryName, budgeted, activity, previousBalance);
         });
     });
 
