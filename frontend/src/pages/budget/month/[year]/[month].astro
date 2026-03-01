@@ -208,7 +208,14 @@ const isCurrentMonth = yearNum === now.getFullYear() && monthNum === now.getMont
                                     const isOverBudget = category.available < 0;
                                     
                                     return (
-                                        <div class="px-4 py-3 hover:bg-slate-50 transition">
+                                        <div 
+                                            class="px-4 py-3 hover:bg-slate-50 transition category-row"
+                                            data-category-id={category.id}
+                                            data-category-name={category.name}
+                                            data-budgeted={category.budgeted}
+                                            data-activity={category.activity}
+                                            data-available={category.available}
+                                        >
                                             <div class="flex items-center justify-between mb-2">
                                                 <span class="text-sm font-medium text-slate-700">{category.name}</span>
                                                 <span class={`text-sm font-bold ${isOverBudget ? 'text-red-600' : 'text-slate-900'}`}>
@@ -216,13 +223,24 @@ const isCurrentMonth = yearNum === now.getFullYear() && monthNum === now.getMont
                                                 </span>
                                             </div>
                                             <div class="flex items-center justify-between text-xs text-slate-500">
-                                                <span>{formatCurrency(category.budgeted)} presupuestado</span>
+                                                <button 
+                                                    class="budgeted-btn hover:bg-primary-100 px-2 py-1 rounded transition text-left group"
+                                                    data-category-id={category.id}
+                                                    data-amount={category.budgeted}
+                                                >
+                                                    <span class="budgeted-display">
+                                                        {formatCurrency(category.budgeted)} presupuestado
+                                                    </span>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline-block ml-1 opacity-0 group-hover:opacity-100 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </button>
                                                 <span>{formatCurrency(Math.abs(category.activity))} gastado</span>
                                             </div>
                                             {category.budgeted > 0 && (
                                                 <div class="mt-2 bg-slate-200 rounded-full h-1.5 overflow-hidden">
                                                     <div 
-                                                        class={`h-full transition-all ${isOverBudget ? 'bg-red-500' : 'bg-blue-500'}`}
+                                                        class={`h-full transition-all progress-bar ${isOverBudget ? 'bg-red-500' : 'bg-blue-500'}`}
                                                         style={`width: ${Math.min(percentUsed, 100)}%`}
                                                     ></div>
                                                 </div>
@@ -246,4 +264,240 @@ const isCurrentMonth = yearNum === now.getFullYear() && monthNum === now.getMont
 
         <BottomNav />
     </div>
+
+    <!-- Edit Budget Modal -->
+    <div id="edit-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div class="bg-primary-600 text-white px-6 py-4 rounded-t-2xl">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-bold">Editar Presupuesto</h2>
+                    <button id="close-modal" class="text-white hover:text-primary-100 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <p id="modal-category-name" class="text-sm text-slate-600 mb-4"></p>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label for="budget-amount" class="block text-sm font-semibold text-slate-700 mb-2">
+                            Cantidad Presupuestada (MXN)
+                        </label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                            <input
+                                type="number"
+                                id="budget-amount"
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                class="w-full pl-8 pr-4 py-3 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-lg"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 rounded-lg p-4 space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-slate-600">Presupuestado:</span>
+                            <span id="modal-budgeted" class="font-semibold text-slate-900">$0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-600">Gastado:</span>
+                            <span id="modal-activity" class="font-semibold text-slate-900">$0</span>
+                        </div>
+                        <div class="border-t border-slate-200 pt-2 flex justify-between">
+                            <span class="text-slate-700 font-semibold">Disponible:</span>
+                            <span id="modal-available" class="font-bold text-lg">$0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 mt-6">
+                    <button
+                        id="cancel-btn"
+                        class="flex-1 bg-slate-200 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-300 transition"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        id="save-btn"
+                        class="flex-1 bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
+                    >
+                        Guardar
+                    </button>
+                </div>
+
+                <div id="modal-error" class="hidden mt-4 bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm"></div>
+                <div id="modal-loading" class="hidden mt-4 text-center">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 </Layout>
+
+<script define:vars={{ yearNum, monthNum }}>
+    // Budget editing functionality
+    const modal = document.getElementById('edit-modal');
+    const closeModalBtn = document.getElementById('close-modal');
+    const cancelBtn = document.getElementById('cancel-btn');
+    const saveBtn = document.getElementById('save-btn');
+    const budgetInput = document.getElementById('budget-amount');
+    const modalCategoryName = document.getElementById('modal-category-name');
+    const modalBudgeted = document.getElementById('modal-budgeted');
+    const modalActivity = document.getElementById('modal-activity');
+    const modalAvailable = document.getElementById('modal-available');
+    const modalError = document.getElementById('modal-error');
+    const modalLoading = document.getElementById('modal-loading');
+
+    let currentCategoryId = null;
+    let currentActivity = 0;
+
+    // Format currency helper
+    function formatCurrency(cents) {
+        return new Intl.NumberFormat('es-MX', {
+            style: 'currency',
+            currency: 'MXN',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(cents / 100);
+    }
+
+    // Open modal
+    function openModal(categoryId, categoryName, budgeted, activity) {
+        currentCategoryId = categoryId;
+        currentActivity = activity;
+        
+        modalCategoryName.textContent = categoryName;
+        budgetInput.value = (budgeted / 100).toFixed(2);
+        
+        updateModalPreview(budgeted);
+        
+        modal.classList.remove('hidden');
+        budgetInput.focus();
+        budgetInput.select();
+    }
+
+    // Close modal
+    function closeModal() {
+        modal.classList.add('hidden');
+        currentCategoryId = null;
+        modalError.classList.add('hidden');
+        modalLoading.classList.add('hidden');
+    }
+
+    // Update preview
+    function updateModalPreview(budgetedCents) {
+        const available = budgetedCents + currentActivity;
+        
+        modalBudgeted.textContent = formatCurrency(budgetedCents);
+        modalActivity.textContent = formatCurrency(Math.abs(currentActivity));
+        modalAvailable.textContent = formatCurrency(available);
+        
+        // Color code available
+        if (available < 0) {
+            modalAvailable.classList.add('text-red-600');
+            modalAvailable.classList.remove('text-green-600', 'text-slate-900');
+        } else if (available > 0) {
+            modalAvailable.classList.add('text-green-600');
+            modalAvailable.classList.remove('text-red-600', 'text-slate-900');
+        } else {
+            modalAvailable.classList.add('text-slate-900');
+            modalAvailable.classList.remove('text-red-600', 'text-green-600');
+        }
+    }
+
+    // Save budget allocation
+    async function saveBudget() {
+        const amountStr = budgetInput.value;
+        const amountCents = Math.round(parseFloat(amountStr) * 100);
+
+        if (isNaN(amountCents) || amountCents < 0) {
+            modalError.textContent = 'Por favor ingresa una cantidad válida';
+            modalError.classList.remove('hidden');
+            return;
+        }
+
+        modalError.classList.add('hidden');
+        modalLoading.classList.remove('hidden');
+        saveBtn.disabled = true;
+
+        try {
+            const month = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
+            
+            const response = await fetch('/api/budget/allocations/set', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${document.cookie.split('access_token=')[1]?.split(';')[0]}`
+                },
+                body: JSON.stringify({
+                    category_id: currentCategoryId,
+                    month: month,
+                    amount: amountCents
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Error al guardar presupuesto');
+            }
+
+            // Success! Reload page to show updated data
+            window.location.reload();
+        } catch (error) {
+            modalError.textContent = error.message;
+            modalError.classList.remove('hidden');
+            modalLoading.classList.add('hidden');
+            saveBtn.disabled = false;
+        }
+    }
+
+    // Event listeners
+    document.querySelectorAll('.budgeted-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const categoryRow = btn.closest('.category-row');
+            const categoryId = categoryRow.dataset.categoryId;
+            const categoryName = categoryRow.dataset.categoryName;
+            const budgeted = parseInt(categoryRow.dataset.budgeted);
+            const activity = parseInt(categoryRow.dataset.activity);
+            
+            openModal(categoryId, categoryName, budgeted, activity);
+        });
+    });
+
+    closeModalBtn?.addEventListener('click', closeModal);
+    cancelBtn?.addEventListener('click', closeModal);
+    saveBtn?.addEventListener('click', saveBudget);
+
+    // Update preview on input change
+    budgetInput?.addEventListener('input', () => {
+        const amountStr = budgetInput.value;
+        const amountCents = Math.round(parseFloat(amountStr || '0') * 100);
+        updateModalPreview(amountCents);
+    });
+
+    // Save on Enter key
+    budgetInput?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            saveBudget();
+        }
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closeModal();
+        }
+    });
+
+    // Close modal on backdrop click
+    modal?.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+</script>

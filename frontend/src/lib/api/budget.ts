@@ -145,6 +145,106 @@ export async function getCategories(token: string, groupId?: string): Promise<Ap
 }
 
 /**
+ * Create a new category group
+ */
+export async function createCategoryGroup(
+    token: string,
+    data: {
+        name: string;
+        is_income?: boolean;
+        sort_order?: number;
+    }
+): Promise<ApiResponse<BudgetCategoryGroup>> {
+    return apiFetch<BudgetCategoryGroup>("/api/budget/categories/groups", {
+        token,
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}
+
+/**
+ * Update a category group
+ */
+export async function updateCategoryGroup(
+    token: string,
+    id: string,
+    data: Partial<{
+        name: string;
+        is_income: boolean;
+        hidden: boolean;
+        sort_order: number;
+    }>
+): Promise<ApiResponse<BudgetCategoryGroup>> {
+    return apiFetch<BudgetCategoryGroup>(`/api/budget/categories/groups/${id}`, {
+        token,
+        method: "PUT",
+        body: JSON.stringify(data),
+    });
+}
+
+/**
+ * Delete a category group
+ */
+export async function deleteCategoryGroup(token: string, id: string): Promise<ApiResponse<void>> {
+    return apiFetch<void>(`/api/budget/categories/groups/${id}`, {
+        token,
+        method: "DELETE",
+    });
+}
+
+/**
+ * Create a new category
+ */
+export async function createCategory(
+    token: string,
+    data: {
+        name: string;
+        group_id: string;
+        rollover_enabled?: boolean;
+        goal_amount?: number;
+        sort_order?: number;
+    }
+): Promise<ApiResponse<BudgetCategory>> {
+    return apiFetch<BudgetCategory>("/api/budget/categories/", {
+        token,
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}
+
+/**
+ * Update a category
+ */
+export async function updateCategory(
+    token: string,
+    id: string,
+    data: Partial<{
+        name: string;
+        group_id: string;
+        rollover_enabled: boolean;
+        goal_amount: number;
+        hidden: boolean;
+        sort_order: number;
+    }>
+): Promise<ApiResponse<BudgetCategory>> {
+    return apiFetch<BudgetCategory>(`/api/budget/categories/${id}`, {
+        token,
+        method: "PUT",
+        body: JSON.stringify(data),
+    });
+}
+
+/**
+ * Delete a category
+ */
+export async function deleteCategory(token: string, id: string): Promise<ApiResponse<void>> {
+    return apiFetch<void>(`/api/budget/categories/${id}`, {
+        token,
+        method: "DELETE",
+    });
+}
+
+/**
  * Get all budget accounts
  */
 export async function getAccounts(token: string, options?: {
@@ -161,6 +261,77 @@ export async function getAccounts(token: string, options?: {
         ? `/api/budget/accounts/?${params.toString()}`
         : "/api/budget/accounts/";
     return apiFetch<BudgetAccount[]>(path, { token });
+}
+
+/**
+ * Get a single account by ID
+ */
+export async function getAccount(token: string, id: string): Promise<ApiResponse<BudgetAccount>> {
+    return apiFetch<BudgetAccount>(`/api/budget/accounts/${id}`, { token });
+}
+
+/**
+ * Create a new account
+ */
+export async function createAccount(
+    token: string,
+    account: {
+        name: string;
+        type: "checking" | "savings" | "credit" | "investment" | "other";
+        offbudget?: boolean;
+        notes?: string;
+    }
+): Promise<ApiResponse<BudgetAccount>> {
+    return apiFetch<BudgetAccount>("/api/budget/accounts/", {
+        token,
+        method: "POST",
+        body: JSON.stringify(account),
+    });
+}
+
+/**
+ * Update an account
+ */
+export async function updateAccount(
+    token: string,
+    id: string,
+    account: Partial<{
+        name: string;
+        type: "checking" | "savings" | "credit" | "investment" | "other";
+        offbudget: boolean;
+        closed: boolean;
+        notes: string;
+    }>
+): Promise<ApiResponse<BudgetAccount>> {
+    return apiFetch<BudgetAccount>(`/api/budget/accounts/${id}`, {
+        token,
+        method: "PUT",
+        body: JSON.stringify(account),
+    });
+}
+
+/**
+ * Delete an account
+ */
+export async function deleteAccount(token: string, id: string): Promise<ApiResponse<void>> {
+    return apiFetch<void>(`/api/budget/accounts/${id}`, {
+        token,
+        method: "DELETE",
+    });
+}
+
+/**
+ * Get account balance
+ */
+export async function getAccountBalance(token: string, id: string): Promise<ApiResponse<{
+    total: number;
+    cleared: number;
+    uncleared: number;
+}>> {
+    return apiFetch<{ total: number; cleared: number; uncleared: number }>(
+        `/api/budget/accounts/${id}/balance`,
+        { token }
+    );
 }
 
 /**
@@ -251,6 +422,24 @@ export async function deleteTransaction(token: string, id: string): Promise<ApiR
 }
 
 /**
+ * Reconcile transactions for an account
+ */
+export async function reconcileAccount(
+    token: string,
+    accountId: string,
+    transactionIds: string[]
+): Promise<ApiResponse<{ updated_count: number }>> {
+    return apiFetch<{ updated_count: number }>(
+        `/api/budget/accounts/${accountId}/reconcile`,
+        {
+            token,
+            method: "POST",
+            body: JSON.stringify({ transaction_ids: transactionIds }),
+        }
+    );
+}
+
+/**
  * Get monthly budget view with all calculations
  */
 export async function getMonthBudget(
@@ -323,4 +512,50 @@ export function formatDate(dateStr: string, lang: string = "es"): string {
         month: "short",
         day: "numeric",
     }).format(date);
+}
+
+/**
+ * Get spending report
+ */
+export async function getSpendingReport(
+    token: string,
+    startDate: string,
+    endDate: string,
+    groupBy: "category" | "group" | "month" | "payee" = "category"
+): Promise<ApiResponse<any>> {
+    const params = new URLSearchParams({
+        start_date: startDate,
+        end_date: endDate,
+        group_by: groupBy,
+    });
+    return apiFetch<any>(`/api/budget/reports/spending?${params.toString()}`, { token });
+}
+
+/**
+ * Get income vs expense report
+ */
+export async function getIncomeVsExpenseReport(
+    token: string,
+    startDate: string,
+    endDate: string,
+    groupBy: "month" | "week" | "day" = "month"
+): Promise<ApiResponse<any>> {
+    const params = new URLSearchParams({
+        start_date: startDate,
+        end_date: endDate,
+        group_by: groupBy,
+    });
+    return apiFetch<any>(`/api/budget/reports/income-vs-expense?${params.toString()}`, { token });
+}
+
+/**
+ * Get net worth report
+ */
+export async function getNetWorthReport(
+    token: string,
+    asOfDate?: string
+): Promise<ApiResponse<any>> {
+    const params = asOfDate ? new URLSearchParams({ as_of_date: asOfDate }) : new URLSearchParams();
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiFetch<any>(`/api/budget/reports/net-worth${query}`, { token });
 }

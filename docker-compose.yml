@@ -104,9 +104,6 @@ services:
     environment:
       API_BASE_URL: http://backend:8000
       PUBLIC_API_BASE_URL: http://localhost:8002
-      FINANCE_API_URL: http://finance-api:5007
-      FINANCE_API_KEY: ${FINANCE_API_KEY:-dev-finance-key}
-      ACTUAL_BUDGET_URL: http://localhost:5006
       PORT: 3000
     ports:
       - "3003:3000"
@@ -119,61 +116,24 @@ services:
       - app_network
     command: npm run dev -- --host
 
-  # Actual Budget Server (personal finance management)
-  actual-server:
-    image: actualbudget/actual-server:latest
-    container_name: family_actual_budget
-    ports:
-      - "5006:5006"
-    volumes:
-      - actual_budget_data:/data
-    environment:
-      - ACTUAL_PORT=5006
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5006/', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    networks:
-      - app_network
-
-  # Finance API (Actual Budget wrapper for Astro frontend)
-  finance-api:
-    build:
-      context: ./services/actual-budget
-      dockerfile: Dockerfile
-    container_name: family_finance_api
-    environment:
-      ACTUAL_SERVER_URL: http://actual-server:5006
-      ACTUAL_PASSWORD: ${ACTUAL_PASSWORD:-changeme}
-      ACTUAL_BUDGET_NAME: ${ACTUAL_BUDGET_NAME:-My Finances}
-      ACTUAL_FILE_ID: ${ACTUAL_FILE_ID:-72b651ac-8211-42d3-81fa-36200fe2d593}
-      FINANCE_API_KEY: ${FINANCE_API_KEY:-dev-finance-key}
-      ALLOWED_ORIGINS: http://localhost:3003,http://localhost:3000
-    ports:
-      - "5007:5007"
-    depends_on:
-      actual-server:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - app_network
-
-  # Sync Service (Bidirectional sync between Family Task Manager and Actual Budget)
+  # Sync Service (PostgreSQL-based sync for Family Task Manager budget)
   sync-service:
     build:
       context: ./services/actual-budget
       dockerfile: Dockerfile.sync
     container_name: family_sync_service
     environment:
-      ACTUAL_SERVER_URL: http://actual-server:5006
-      ACTUAL_PASSWORD: changeme
-      ACTUAL_BUDGET_NAME: ${ACTUAL_BUDGET_NAME:-My Finances}
-      ACTUAL_FILE_ID: ${ACTUAL_FILE_ID:-72b651ac-8211-42d3-81fa-36200fe2d593}
+      # Database configuration
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: familyapp
+      DB_USER: familyapp
+      DB_PASSWORD: familyapp123
+      # Family API configuration
       FAMILY_API_URL: http://backend:8000
       FAMILY_API_EMAIL: ${FAMILY_API_EMAIL:-mom@demo.com}
       FAMILY_API_PASSWORD: ${FAMILY_API_PASSWORD:-password123}
+      # Conversion rate
       POINTS_TO_MONEY_RATE: ${POINTS_TO_MONEY_RATE:-0.10}
       POINTS_TO_MONEY_CURRENCY: ${POINTS_TO_MONEY_CURRENCY:-MXN}
     ports:
@@ -181,7 +141,7 @@ services:
     depends_on:
       backend:
         condition: service_started
-      actual-server:
+      db:
         condition: service_healthy
     volumes:
       - ./services/actual-budget:/app
@@ -192,7 +152,6 @@ services:
 volumes:
   postgres_data:
   test_postgres_data:
-  actual_budget_data:
 
 
 networks:

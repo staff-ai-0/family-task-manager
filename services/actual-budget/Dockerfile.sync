@@ -12,8 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install FastAPI for the API server
 RUN pip install --no-cache-dir fastapi uvicorn
 
-# Copy sync script and environment config
-COPY sync.py sync_api.py sync_cron.sh .
+# Copy sync scripts and environment config
+COPY sync.py sync_postgres.py sync_api.py sync_cron.sh test_sync.py .
 COPY .env.example .env
 
 # Make cron script executable

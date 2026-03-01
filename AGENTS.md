@@ -43,15 +43,28 @@ docker exec family_app_backend python /app/seed_data.py
 
 ### Sync Operations
 ```bash
-# Manual sync (bidirectional)
-TOKEN=$(curl -s -X POST http://localhost:8002/api/auth/login -H "Content-Type: application/json" -d '{"email":"mom@demo.com","password":"password123"}' | jq -r '.access_token')
-curl -X POST "http://localhost:8002/api/sync/trigger?direction=both&dry_run=false" -H "Authorization: Bearer $TOKEN"
+# Check sync service health
+curl http://localhost:5008/health
 
-# Check sync status
-curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8002/api/sync/status | jq
+# Get sync status (requires family_id)
+curl "http://localhost:5008/status?family_id=ce875133-1b85-4bfc-8e61-b52309381f0b"
 
-# Setup Actual Budget
-docker exec family_sync_service python3 /app/setup_budget.py
+# Trigger manual sync
+curl -X POST http://localhost:5008/trigger \
+  -H "Content-Type: application/json" \
+  -d '{"family_id":"ce875133-1b85-4bfc-8e61-b52309381f0b","direction":"both","dry_run":false}'
+```
+
+### Budget Operations
+```bash
+# Migrate data from Actual Budget (one-time)
+docker exec family_app_backend python /app/scripts/migrate_actual_to_postgres.py
+
+# Test budget API
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8002/api/budget/categories
+
+# Run sync test
+docker exec family_sync_service python3 /app/test_sync.py
 ```
 
 ## Architectural Overview
@@ -94,34 +107,30 @@ Astro 5 + Tailwind v4 ←→    FastAPI + SQLAlchemy
     ↓                              ↓
   Redis (Port 6380)          Test DB (Port 5435)
     
-Sync Service (Port 5008)    Actual Budget (Port 5006)
-FastAPI + Python ←→         Personal Finance Server
-    ↓                              ↓
-  Hourly Cron Job           Budget Data Storage
+Sync Service (Port 5008)    
+PostgreSQL-based Budget Sync
+    ↓                              
+  Hourly Cron Job           
 ```
 
-### Sync Service Architecture
+### Budget System Architecture
 
-The **Sync Service** is a dedicated container that provides bidirectional synchronization between the Family Task Manager points system and Actual Budget:
+The **Budget System** is fully integrated with PostgreSQL:
 
 **Components:**
-- `sync.py`: Core bidirectional sync logic (600+ lines)
-- `sync_api.py`: FastAPI wrapper with REST endpoints
-- `sync_cron.sh`: Hourly automatic sync job
-- `sync_state.json`: Transaction tracking and deduplication
+- `backend/app/models/budget.py`: Budget database models (7 tables)
+- `backend/app/services/budget/`: Business logic services
+- `backend/app/api/routes/budget/`: REST API endpoints
+- `frontend/src/pages/budget/`: Budget management UI
+- `services/actual-budget/sync_postgres.py`: PostgreSQL-based sync (600+ lines)
 
 **Key Features:**
-- **Bidirectional Sync**: Family ↔ Actual Budget
-- **Conversion Rate**: 1 point = $0.10 MXN (configurable)
-- **Deduplication**: Uses `imported_id` patterns to prevent sync loops
-- **Account Mapping**: One "Domingo {child_name}" account per child in Actual Budget
-- **Automatic + Manual**: Hourly cron job + manual trigger via UI/API
-- **Transaction Tracking**: Prevents duplicate syncs using state file
-
-**Sync Endpoints:**
-- `POST /trigger`: Trigger manual sync (direction: both/to_actual/from_actual)
-- `GET /status`: Get current sync state and statistics
-- `GET /health`: Health check with sync script verification
+- **Envelope Budgeting**: Monthly allocations per category
+- **Multi-Account Support**: Checking, savings, credit cards, investments
+- **Transaction Management**: Income, expenses, transfers
+- **Reporting**: Spending analysis, cashflow, net worth
+- **Reconciliation**: Match bank statements
+- **Multi-Tenant**: Proper family isolation
 
 ## AI Instructions
 
@@ -140,7 +149,7 @@ For specific patterns:
 - **Frontend**: http://localhost:3003
 - **Backend API**: http://localhost:8002/docs
 - **Sync Service**: http://localhost:5008 (health check)
-- **Actual Budget UI**: http://localhost:5006
+- **Budget UI**: http://localhost:3003/budget
 - **Database**: localhost:5433 (production), localhost:5435 (test)
 - **Redis**: localhost:6380
 
@@ -162,20 +171,22 @@ lucas@demo.com / password123 (TEEN, 280 points)
 
 ## Current Development Focus
 
-**Phase**: Active Development  
-**Current Sprint**: Bidirectional Sync System with Actual Budget
+**Phase**: Migration Complete ✅  
+**Latest**: PostgreSQL-based budget system with full CRUD
 
 **Recently Completed:**
-- ✅ Bidirectional sync between points and Actual Budget
-- ✅ Dedicated sync service with FastAPI API
-- ✅ Manual sync trigger from parent finances UI
-- ✅ Automatic hourly sync via cron
-- ✅ Transaction deduplication and state tracking
-- ✅ CORS configuration for cross-origin requests
+- ✅ Complete budget system migration to PostgreSQL
+- ✅ Full CRUD API for categories, accounts, transactions, allocations
+- ✅ Budget management UI under `/budget/*` (12 pages)
+- ✅ Inline budget editing in month view
+- ✅ Reconciliation workflow
+- ✅ Reporting dashboards (spending, cashflow, net worth)
+- ✅ PostgreSQL-based sync service
+- ✅ Removed Actual Budget and finance-api dependencies
 
 **Active Work:**
-- Sync history/logs UI
-- Enhanced error handling and retry logic
-- Sync performance optimization
+- Production deployment and testing
+- User training and documentation
+- Performance monitoring
 
-See `.github/memory-bank/activeContext.md` for current tasks and blockers.
+See `MIGRATION_GUIDE.md` for complete migration details.

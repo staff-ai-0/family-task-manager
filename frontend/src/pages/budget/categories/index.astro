@@ -1,0 +1,591 @@
+---
+/**
+ * Category Management Page
+ * Manage budget categories and category groups
+ */
+
+import Layout from "../../../layouts/Layout.astro";
+import BottomNav from "../../../components/BottomNav.astro";
+import { apiFetch } from "../../../lib/api";
+import { getCategoryGroups, formatCurrency } from "../../../lib/api/budget";
+import type { CategoryGroupWithCategories } from "../../../lib/api/budget";
+
+// Authentication check
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+// Get user info
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+// Only parents can manage categories
+if (user.role !== "parent") {
+    return Astro.redirect("/dashboard");
+}
+
+// Fetch category groups with categories
+const { data: categoryGroups, ok: groupsOk, error } = await getCategoryGroups(token);
+
+// Separate income and expense groups
+const incomeGroups = categoryGroups?.filter(g => g.is_income) || [];
+const expenseGroups = categoryGroups?.filter(g => !g.is_income) || [];
+
+// Calculate totals
+const totalGroups = categoryGroups?.length || 0;
+const totalCategories = categoryGroups?.reduce((sum, g) => sum + g.categories.length, 0) || 0;
+---
+
+<Layout title="Categorías - Presupuesto">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+        <!-- Header -->
+        <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center justify-between mb-6">
+                <a href="/budget" class="text-white hover:text-primary-100 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="text-2xl font-bold">Categorías</h1>
+                <button id="add-group-btn" class="text-white hover:text-primary-100 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Summary -->
+            <div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
+                            Grupos
+                        </p>
+                        <p class="text-2xl font-bold text-white">
+                            {totalGroups}
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
+                            Categorías
+                        </p>
+                        <p class="text-2xl font-bold text-white">
+                            {totalCategories}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Categories List -->
+        <main class="px-6 py-4 flex-grow">
+            {!groupsOk ? (
+                <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
+                    <p class="font-semibold">Error al cargar categorías</p>
+                    <p class="text-sm">{error || "Error desconocido"}</p>
+                </div>
+            ) : (
+                <div class="space-y-4">
+                    {/* Income Groups */}
+                    {incomeGroups.length > 0 && (
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-600 uppercase tracking-wide mb-2 px-2">
+                                Ingresos
+                            </h2>
+                            {incomeGroups.map(group => (
+                                <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-3">
+                                    <div class="bg-green-50 px-4 py-3 border-b border-green-100 flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                            </svg>
+                                            <h3 class="font-bold text-green-800 text-sm">{group.name}</h3>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button 
+                                                class="add-category-btn text-green-600 hover:text-green-700 transition"
+                                                data-group-id={group.id}
+                                                data-group-name={group.name}
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                class="edit-group-btn text-green-600 hover:text-green-700 transition"
+                                                data-group-id={group.id}
+                                                data-group-name={group.name}
+                                                data-is-income={group.is_income}
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {group.categories.length === 0 ? (
+                                        <div class="px-4 py-6 text-center text-sm text-slate-500">
+                                            No hay categorías en este grupo
+                                        </div>
+                                    ) : (
+                                        <div class="divide-y divide-slate-100">
+                                            {group.categories.map(category => (
+                                                <div class="px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-sm font-medium text-slate-700">{category.name}</span>
+                                                        {category.rollover_enabled && (
+                                                            <span class="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-semibold">
+                                                                Rollover
+                                                            </span>
+                                                        )}
+                                                        {category.goal_amount > 0 && (
+                                                            <span class="inline-block bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-semibold">
+                                                                Meta: {formatCurrency(category.goal_amount)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <button 
+                                                        class="edit-category-btn text-slate-400 hover:text-slate-600 transition"
+                                                        data-category-id={category.id}
+                                                        data-category-name={category.name}
+                                                        data-group-id={category.group_id}
+                                                        data-rollover={category.rollover_enabled}
+                                                        data-goal={category.goal_amount}
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Expense Groups */}
+                    {expenseGroups.length > 0 && (
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-600 uppercase tracking-wide mb-2 px-2">
+                                Gastos
+                            </h2>
+                            {expenseGroups.map(group => (
+                                <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-3">
+                                    <div class="bg-slate-100 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                            </svg>
+                                            <h3 class="font-bold text-slate-800 text-sm">{group.name}</h3>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button 
+                                                class="add-category-btn text-slate-600 hover:text-slate-700 transition"
+                                                data-group-id={group.id}
+                                                data-group-name={group.name}
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                                </svg>
+                                            </button>
+                                            <button 
+                                                class="edit-group-btn text-slate-600 hover:text-slate-700 transition"
+                                                data-group-id={group.id}
+                                                data-group-name={group.name}
+                                                data-is-income={group.is_income}
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {group.categories.length === 0 ? (
+                                        <div class="px-4 py-6 text-center text-sm text-slate-500">
+                                            No hay categorías en este grupo
+                                        </div>
+                                    ) : (
+                                        <div class="divide-y divide-slate-100">
+                                            {group.categories.map(category => (
+                                                <div class="px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition">
+                                                    <div class="flex items-center gap-2 flex-wrap">
+                                                        <span class="text-sm font-medium text-slate-700">{category.name}</span>
+                                                        {category.rollover_enabled && (
+                                                            <span class="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-semibold">
+                                                                Rollover
+                                                            </span>
+                                                        )}
+                                                        {category.goal_amount > 0 && (
+                                                            <span class="inline-block bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-semibold">
+                                                                Meta: {formatCurrency(category.goal_amount)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <button 
+                                                        class="edit-category-btn text-slate-400 hover:text-slate-600 transition"
+                                                        data-category-id={category.id}
+                                                        data-category-name={category.name}
+                                                        data-group-id={category.group_id}
+                                                        data-rollover={category.rollover_enabled}
+                                                        data-goal={category.goal_amount}
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {totalGroups === 0 && (
+                        <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                            <p class="text-slate-600 font-medium">No hay grupos de categorías</p>
+                            <p class="text-sm text-slate-500 mt-1">Crea tu primer grupo para empezar</p>
+                            <button 
+                                id="add-first-group-btn"
+                                class="inline-block mt-4 bg-primary-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary-700 transition"
+                            >
+                                Crear Grupo
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+        </main>
+
+        <BottomNav active="parent" role={user.role} lang={lang} />
+    </div>
+
+    <!-- Add/Edit Group Modal -->
+    <div id="group-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div class="bg-primary-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
+                <h2 id="group-modal-title" class="text-xl font-bold">Nuevo Grupo</h2>
+                <button id="close-group-modal" class="text-white hover:text-primary-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div>
+                        <label for="group-name" class="block text-sm font-semibold text-slate-700 mb-2">
+                            Nombre del Grupo *
+                        </label>
+                        <input
+                            type="text"
+                            id="group-name"
+                            placeholder="Ej: Gastos Fijos"
+                            class="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        />
+                    </div>
+                    <div>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                id="group-is-income"
+                                class="w-5 h-5 text-primary-600 border-slate-300 rounded focus:ring-2 focus:ring-primary-500"
+                            />
+                            <span class="text-sm font-medium text-slate-700">
+                                Grupo de ingresos
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button id="cancel-group-btn" class="flex-1 bg-slate-200 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-300 transition">
+                        Cancelar
+                    </button>
+                    <button id="save-group-btn" class="flex-1 bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition">
+                        Guardar
+                    </button>
+                </div>
+                <div id="group-error" class="hidden mt-4 bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Category Modal -->
+    <div id="category-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div class="bg-primary-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
+                <h2 id="category-modal-title" class="text-xl font-bold">Nueva Categoría</h2>
+                <button id="close-category-modal" class="text-white hover:text-primary-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <p id="category-group-name" class="text-sm text-slate-600 mb-4"></p>
+                <div class="space-y-4">
+                    <div>
+                        <label for="category-name" class="block text-sm font-semibold text-slate-700 mb-2">
+                            Nombre de la Categoría *
+                        </label>
+                        <input
+                            type="text"
+                            id="category-name"
+                            placeholder="Ej: Comida"
+                            class="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        />
+                    </div>
+                    <div>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                id="category-rollover"
+                                class="w-5 h-5 text-primary-600 border-slate-300 rounded focus:ring-2 focus:ring-primary-500"
+                            />
+                            <span class="text-sm font-medium text-slate-700">
+                                Habilitar rollover (arrastrar saldo al siguiente mes)
+                            </span>
+                        </label>
+                    </div>
+                    <div>
+                        <label for="category-goal" class="block text-sm font-semibold text-slate-700 mb-2">
+                            Meta de Ahorro (MXN, opcional)
+                        </label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                            <input
+                                type="number"
+                                id="category-goal"
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                class="w-full pl-8 pr-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            />
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button id="cancel-category-btn" class="flex-1 bg-slate-200 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-300 transition">
+                        Cancelar
+                    </button>
+                    <button id="save-category-btn" class="flex-1 bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition">
+                        Guardar
+                    </button>
+                </div>
+                <div id="category-error" class="hidden mt-4 bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm"></div>
+            </div>
+        </div>
+    </div>
+</Layout>
+
+<script>
+    // Category management functionality
+    const groupModal = document.getElementById('group-modal');
+    const categoryModal = document.getElementById('category-modal');
+    
+    let editingGroupId: string | null = null;
+    let editingCategoryId: string | null = null;
+    let selectedGroupId: string | null = null;
+
+    // Get token from cookie
+    function getToken() {
+        return document.cookie.split('access_token=')[1]?.split(';')[0];
+    }
+
+    // Group modal functions
+    function openGroupModal(groupId: string | null = null, groupName = '', isIncome = false) {
+        editingGroupId = groupId;
+        const title = document.getElementById('group-modal-title')!;
+        const nameInput = document.getElementById('group-name') as HTMLInputElement;
+        const isIncomeCheck = document.getElementById('group-is-income') as HTMLInputElement;
+
+        title.textContent = groupId ? 'Editar Grupo' : 'Nuevo Grupo';
+        nameInput.value = groupName;
+        isIncomeCheck.checked = isIncome;
+
+        groupModal?.classList.remove('hidden');
+        nameInput.focus();
+    }
+
+    function closeGroupModal() {
+        groupModal?.classList.add('hidden');
+        editingGroupId = null;
+        document.getElementById('group-error')?.classList.add('hidden');
+    }
+
+    async function saveGroup() {
+        const nameInput = document.getElementById('group-name') as HTMLInputElement;
+        const isIncomeCheck = document.getElementById('group-is-income') as HTMLInputElement;
+        const errorDiv = document.getElementById('group-error')!;
+
+        const name = nameInput.value.trim();
+        if (!name) {
+            errorDiv.textContent = 'El nombre es requerido';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            const url = editingGroupId
+                ? `/api/budget/categories/groups/${editingGroupId}`
+                : '/api/budget/categories/groups';
+            
+            const response = await fetch(url, {
+                method: editingGroupId ? 'PUT' : 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getToken()}`
+                },
+                body: JSON.stringify({
+                    name,
+                    is_income: isIncomeCheck.checked
+                })
+            });
+
+            if (!response.ok) throw new Error('Error al guardar grupo');
+
+            window.location.reload();
+        } catch (error: any) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('hidden');
+        }
+    }
+
+    // Category modal functions
+    function openCategoryModal(
+        groupId: string,
+        groupName: string,
+        categoryId: string | null = null,
+        categoryName = '',
+        rollover = false,
+        goal = 0
+    ) {
+        editingCategoryId = categoryId;
+        selectedGroupId = groupId;
+
+        const title = document.getElementById('category-modal-title')!;
+        const groupNameEl = document.getElementById('category-group-name')!;
+        const nameInput = document.getElementById('category-name') as HTMLInputElement;
+        const rolloverCheck = document.getElementById('category-rollover') as HTMLInputElement;
+        const goalInput = document.getElementById('category-goal') as HTMLInputElement;
+
+        title.textContent = categoryId ? 'Editar Categoría' : 'Nueva Categoría';
+        groupNameEl.textContent = `Grupo: ${groupName}`;
+        nameInput.value = categoryName;
+        rolloverCheck.checked = rollover;
+        goalInput.value = goal > 0 ? (goal / 100).toFixed(2) : '';
+
+        categoryModal?.classList.remove('hidden');
+        nameInput.focus();
+    }
+
+    function closeCategoryModal() {
+        categoryModal?.classList.add('hidden');
+        editingCategoryId = null;
+        selectedGroupId = null;
+        document.getElementById('category-error')?.classList.add('hidden');
+    }
+
+    async function saveCategory() {
+        const nameInput = document.getElementById('category-name') as HTMLInputElement;
+        const rolloverCheck = document.getElementById('category-rollover') as HTMLInputElement;
+        const goalInput = document.getElementById('category-goal') as HTMLInputElement;
+        const errorDiv = document.getElementById('category-error')!;
+
+        const name = nameInput.value.trim();
+        if (!name) {
+            errorDiv.textContent = 'El nombre es requerido';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        const goalStr = goalInput.value;
+        const goalCents = goalStr ? Math.round(parseFloat(goalStr) * 100) : 0;
+
+        try {
+            const url = editingCategoryId
+                ? `/api/budget/categories/${editingCategoryId}`
+                : '/api/budget/categories/';
+            
+            const body: any = {
+                name,
+                rollover_enabled: rolloverCheck.checked,
+                goal_amount: goalCents
+            };
+
+            if (!editingCategoryId) {
+                body.group_id = selectedGroupId;
+            }
+
+            const response = await fetch(url, {
+                method: editingCategoryId ? 'PUT' : 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getToken()}`
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) throw new Error('Error al guardar categoría');
+
+            window.location.reload();
+        } catch (error: any) {
+            errorDiv.textContent = error.message;
+            errorDiv.classList.remove('hidden');
+        }
+    }
+
+    // Event listeners
+    document.getElementById('add-group-btn')?.addEventListener('click', () => openGroupModal());
+    document.getElementById('add-first-group-btn')?.addEventListener('click', () => openGroupModal());
+    document.getElementById('close-group-modal')?.addEventListener('click', closeGroupModal);
+    document.getElementById('cancel-group-btn')?.addEventListener('click', closeGroupModal);
+    document.getElementById('save-group-btn')?.addEventListener('click', saveGroup);
+
+    document.getElementById('close-category-modal')?.addEventListener('click', closeCategoryModal);
+    document.getElementById('cancel-category-btn')?.addEventListener('click', closeCategoryModal);
+    document.getElementById('save-category-btn')?.addEventListener('click', saveCategory);
+
+    document.querySelectorAll('.edit-group-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const groupId = btn.getAttribute('data-group-id')!;
+            const groupName = btn.getAttribute('data-group-name')!;
+            const isIncome = btn.getAttribute('data-is-income') === 'true';
+            openGroupModal(groupId, groupName, isIncome);
+        });
+    });
+
+    document.querySelectorAll('.add-category-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const groupId = btn.getAttribute('data-group-id')!;
+            const groupName = btn.getAttribute('data-group-name')!;
+            openCategoryModal(groupId, groupName);
+        });
+    });
+
+    document.querySelectorAll('.edit-category-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const categoryId = btn.getAttribute('data-category-id')!;
+            const categoryName = btn.getAttribute('data-category-name')!;
+            const groupId = btn.getAttribute('data-group-id')!;
+            const rollover = btn.getAttribute('data-rollover') === 'true';
+            const goal = parseInt(btn.getAttribute('data-goal') || '0');
+            
+            // Get group name from the closest group div
+            const groupDiv = btn.closest('.bg-white');
+            const groupName = groupDiv?.querySelector('h3')?.textContent || '';
+            
+            openCategoryModal(groupId, groupName, categoryId, categoryName, rollover, goal);
+        });
+    });
+</script>
