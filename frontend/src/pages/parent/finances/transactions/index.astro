@@ -1,0 +1,218 @@
+---
+/**
+ * All Transactions Page
+ * Shows all budget transactions with filtering options
+ */
+
+import Layout from "../../../../layouts/Layout.astro";
+import BottomNav from "../../../../components/BottomNav.astro";
+import BudgetNav from "../../../../components/BudgetNav.astro";
+import { apiFetch } from "../../../../lib/api";
+import { getTransactions, getAccounts, getCategories, formatCurrency, formatDate } from "../../../../lib/api/budget";
+import type { BudgetTransaction, BudgetAccount, BudgetCategory } from "../../../../lib/api/budget";
+
+// Authentication check
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+// Get user info
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+// Only parents can view budget
+if (user.role !== "parent") {
+    return Astro.redirect("/dashboard");
+}
+
+// Get current month for default filter
+const now = new Date();
+const year = now.getFullYear();
+const month = now.getMonth() + 1;
+const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
+const endOfMonth = new Date(year, month, 0);
+const endDate = `${year}-${String(month).padStart(2, '0')}-${String(endOfMonth.getDate()).padStart(2, '0')}`;
+
+// Fetch transactions for current month
+const { data: transactions, ok: transOk, error: transError } = await getTransactions(token, {
+    startDate: startOfMonth,
+    endDate: endDate,
+    limit: 100
+});
+
+// Fetch accounts and categories for display
+const { data: accounts } = await getAccounts(token);
+const { data: categories } = await getCategories(token);
+
+// Create lookup maps
+const accountMap = new Map(accounts?.map(a => [a.id, a]) || []);
+const categoryMap = new Map(categories?.map(c => [c.id, c]) || []);
+
+// Sort transactions by date (newest first)
+const sortedTransactions = transactions?.sort((a, b) => 
+    new Date(b.date).getTime() - new Date(a.date).getTime()
+) || [];
+
+// Group by date
+const transactionsByDate = sortedTransactions.reduce((acc, t) => {
+    const dateKey = t.date;
+    if (!acc[dateKey]) acc[dateKey] = [];
+    acc[dateKey].push(t);
+    return acc;
+}, {} as Record<string, BudgetTransaction[]>);
+
+const dates = Object.keys(transactionsByDate).sort((a, b) => 
+    new Date(b).getTime() - new Date(a).getTime()
+);
+
+// Calculate totals
+const totalIncome = sortedTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+const totalExpenses = Math.abs(sortedTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
+const netAmount = totalIncome - totalExpenses;
+---
+
+<Layout title="Transacciones - Presupuesto">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+        <!-- Header -->
+        <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center justify-between mb-6">
+                <a href="/budget" class="text-white hover:text-primary-100 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="text-2xl font-bold">Transacciones</h1>
+                <a href="/parent/finances/transactions/new" class="text-white hover:text-primary-100 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Summary -->
+            <div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
+                            Ingresos
+                        </p>
+                        <p class="text-lg font-bold text-green-300">
+                            {formatCurrency(totalIncome)}
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
+                            Gastos
+                        </p>
+                        <p class="text-lg font-bold text-red-300">
+                            {formatCurrency(totalExpenses)}
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
+                            Neto
+                        </p>
+                        <p class={`text-lg font-bold ${netAmount >= 0 ? 'text-white' : 'text-red-300'}`}>
+                            {formatCurrency(netAmount)}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Budget Section Nav -->
+        <BudgetNav active="transactions" />
+
+        <!-- Transactions List -->
+        <main class="px-6 py-4 flex-grow">
+            {!transOk ? (
+                <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
+                    <p class="font-semibold">Error al cargar transacciones</p>
+                    <p class="text-sm">{transError || "Error desconocido"}</p>
+                </div>
+            ) : sortedTransactions.length === 0 ? (
+                <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p class="text-slate-600 font-medium">No hay transacciones</p>
+                    <p class="text-sm text-slate-500 mt-1">Agrega tu primera transacción</p>
+                    <a href="/parent/finances/transactions/new" class="inline-block mt-4 bg-primary-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary-700 transition">
+                        Nueva Transacción
+                    </a>
+                </div>
+            ) : (
+                <div class="space-y-4">
+                    {dates.map(date => {
+                        const dayTransactions = transactionsByDate[date];
+                        const dayTotal = dayTransactions.reduce((sum, t) => sum + t.amount, 0);
+                        
+                        return (
+                            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                                <div class="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
+                                    <h2 class="font-semibold text-slate-700 text-sm">
+                                        {formatDate(date, lang)}
+                                    </h2>
+                                    <span class={`text-sm font-bold ${dayTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {formatCurrency(dayTotal)}
+                                    </span>
+                                </div>
+                                <div class="divide-y divide-slate-100">
+                                    {dayTransactions.map(transaction => {
+                                        const account = accountMap.get(transaction.account_id);
+                                        const category = transaction.category_id ? categoryMap.get(transaction.category_id) : null;
+                                        const isIncome = transaction.amount > 0;
+                                        
+                                        return (
+                                            <a 
+                                                href={`/parent/finances/transactions/${transaction.id}`}
+                                                class="block px-4 py-3 hover:bg-slate-50 transition"
+                                            >
+                                                <div class="flex items-center justify-between mb-1">
+                                                    <div class="flex-1">
+                                                        <p class="text-sm font-medium text-slate-700">
+                                                            {category?.name || "Sin categoría"}
+                                                        </p>
+                                                        <p class="text-xs text-slate-500">
+                                                            {account?.name || "Cuenta desconocida"}
+                                                        </p>
+                                                    </div>
+                                                    <div class="text-right">
+                                                        <p class={`text-sm font-bold ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
+                                                            {isIncome ? '+' : ''}{formatCurrency(transaction.amount)}
+                                                        </p>
+                                                        {transaction.cleared && (
+                                                            <span class="inline-block w-2 h-2 bg-green-500 rounded-full" title="Conciliado"></span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {transaction.notes && (
+                                                    <p class="text-xs text-slate-400 mt-1">
+                                                        {transaction.notes}
+                                                    </p>
+                                                )}
+                                            </a>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            <!-- Filter/Month selector (future enhancement) -->
+            <div class="mt-6 text-center">
+                <p class="text-xs text-slate-500">
+                    Mostrando transacciones de {formatDate(startOfMonth, lang)} a {formatDate(endDate, lang)}
+                </p>
+            </div>
+        </main>
+
+        <BottomNav active="parent" role={user.role} lang={lang} />
+    </div>
+</Layout>

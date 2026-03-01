@@ -14,6 +14,7 @@ export const translations = {
         nav_tasks: "Tasks",
         nav_rewards: "Rewards",
         nav_profile: "Profile",
+        nav_budget: "Budget",
         nav_manage: "Manage",
         nav_logout: "Logout",
 

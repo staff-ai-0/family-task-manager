@@ -1,0 +1,259 @@
+---
+/**
+ * Family Finances Hub
+ * Central dashboard for all budget, account, and transaction management
+ */
+
+import Layout from "../../../layouts/Layout.astro";
+import BottomNav from "../../../components/BottomNav.astro";
+import { apiFetch } from "../../../lib/api";
+import { getMonthBudget, formatCurrency, getMonthName } from "../../../lib/api/budget";
+import { t } from "../../../lib/i18n";
+
+// Authentication check
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+// Get user info
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+// Only parents can view finances
+if (user.role !== "parent") {
+    return Astro.redirect("/dashboard");
+}
+
+// Get current month budget for quick stats
+const now = new Date();
+const currentYear = now.getFullYear();
+const currentMonth = now.getMonth() + 1;
+const monthName = getMonthName(currentMonth, lang);
+
+const { data: budget, ok: budgetOk } = await getMonthBudget(token, currentYear, currentMonth);
+
+// Calculate quick stats
+let readyToAssign = 0;
+let totalIncome = 0;
+let totalBudgeted = 0;
+let totalSpent = 0;
+
+if (budgetOk && budget) {
+    const incomeGroups = budget.category_groups.filter((g: any) => g.is_income) || [];
+    const expenseGroups = budget.category_groups.filter((g: any) => !g.is_income) || [];
+    
+    totalIncome = incomeGroups.reduce((sum: number, g: any) => sum + g.total_activity, 0);
+    totalBudgeted = expenseGroups.reduce((sum: number, g: any) => sum + g.total_budgeted, 0);
+    totalSpent = Math.abs(expenseGroups.reduce((sum: number, g: any) => sum + g.total_activity, 0));
+    readyToAssign = budget.ready_to_assign !== undefined ? budget.ready_to_assign : (totalIncome - totalBudgeted);
+}
+
+const { data: family } = await apiFetch<any>("/api/families/me", { token });
+---
+
+<Layout title={`${t(lang, "parent_finances_label")} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+        <!-- Header -->
+        <header class="bg-gradient-to-br from-emerald-600 to-emerald-700 text-white pt-12 pb-8 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center justify-between mb-6">
+                <a href="/parent" class="text-white hover:text-emerald-100 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="text-2xl font-bold">{t(lang, 'parent_finances_label')}</h1>
+                <div class="w-6"></div>
+            </div>
+            
+            <p class="text-emerald-100 text-sm mb-4">{monthName} {currentYear}</p>
+
+            <!-- Quick Stats -->
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-white/20 backdrop-blur-md rounded-xl p-3 border border-white/30">
+                    <p class="text-emerald-50 text-xs font-semibold uppercase tracking-wider mb-0.5">
+                        {t(lang, 'fin_ready_to_assign')}
+                    </p>
+                    <p class={`text-2xl font-extrabold ${readyToAssign < 0 ? 'text-red-300' : 'text-white'}`}>
+                        {formatCurrency(readyToAssign)}
+                    </p>
+                </div>
+                <div class="bg-white/20 backdrop-blur-md rounded-xl p-3 border border-white/30">
+                    <p class="text-emerald-50 text-xs font-semibold uppercase tracking-wider mb-0.5">
+                        {t(lang, 'fin_spent')}
+                    </p>
+                    <p class="text-2xl font-extrabold text-white">
+                        {formatCurrency(totalSpent)}
+                    </p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 px-4 py-6">
+            <!-- Navigation Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                <!-- Monthly Budget -->
+                <a
+                    href={`/parent/finances/month/${currentYear}/${currentMonth}`}
+                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-primary-200 transition-all flex flex-col items-center text-center gap-2"
+                >
+                    <div class="w-10 h-10 rounded-lg bg-primary-50 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800 text-sm">
+                            {lang === "es" ? "Presupuesto" : "Budget"}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {lang === "es" ? "Mensual" : "Monthly"}
+                        </p>
+                    </div>
+                </a>
+
+                <!-- Accounts -->
+                <a
+                    href="/parent/finances/accounts"
+                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-blue-200 transition-all flex flex-col items-center text-center gap-2"
+                >
+                    <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800 text-sm">
+                            {lang === "es" ? "Cuentas" : "Accounts"}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {lang === "es" ? "Bancarias" : "Banking"}
+                        </p>
+                    </div>
+                </a>
+
+                <!-- Categories -->
+                <a
+                    href="/parent/finances/categories"
+                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-amber-200 transition-all flex flex-col items-center text-center gap-2"
+                >
+                    <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800 text-sm">
+                            {lang === "es" ? "Categorías" : "Categories"}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {lang === "es" ? "Estructura" : "Structure"}
+                        </p>
+                    </div>
+                </a>
+
+                <!-- Transactions -->
+                <a
+                    href="/parent/finances/transactions"
+                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-violet-200 transition-all flex flex-col items-center text-center gap-2"
+                >
+                    <div class="w-10 h-10 rounded-lg bg-violet-50 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800 text-sm">
+                            {lang === "es" ? "Movimientos" : "Transactions"}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {lang === "es" ? "Historial" : "History"}
+                        </p>
+                    </div>
+                </a>
+
+                <!-- Reports -->
+                <a
+                    href="/parent/finances/reports/spending"
+                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-rose-200 transition-all flex flex-col items-center text-center gap-2"
+                >
+                    <div class="w-10 h-10 rounded-lg bg-rose-50 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800 text-sm">
+                            {lang === "es" ? "Reportes" : "Reports"}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {lang === "es" ? "Análisis" : "Analytics"}
+                        </p>
+                    </div>
+                </a>
+
+                <!-- Import Transactions (Future) -->
+                <a
+                    href="#"
+                    onclick="alert('Coming soon: CSV/OFX import')"
+                    class="bg-slate-100 rounded-2xl p-4 shadow-sm border border-slate-200 opacity-50 flex flex-col items-center text-center gap-2 cursor-not-allowed"
+                >
+                    <div class="w-10 h-10 rounded-lg bg-slate-200 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800 text-sm">
+                            {lang === "es" ? "Importar" : "Import"}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                            {lang === "es" ? "CSV/OFX" : "CSV/OFX"}
+                        </p>
+                    </div>
+                </a>
+            </div>
+
+            <!-- Quick Info -->
+            {budgetOk && budget && (
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                    <h2 class="font-bold text-slate-800 mb-3 text-sm">
+                        {lang === "es" ? "Este Mes" : "This Month"}
+                    </h2>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <p class="text-xs text-slate-500 font-semibold mb-1">
+                                {lang === "es" ? "Ingresos" : "Income"}
+                            </p>
+                            <p class="text-lg font-bold text-green-600">
+                                {formatCurrency(totalIncome)}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 font-semibold mb-1">
+                                {t(lang, 'fin_budgeted')}
+                            </p>
+                            <p class="text-lg font-bold text-blue-600">
+                                {formatCurrency(totalBudgeted)}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 font-semibold mb-1">
+                                {t(lang, 'fin_spent')}
+                            </p>
+                            <p class="text-lg font-bold text-red-600">
+                                {formatCurrency(totalSpent)}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </main>
+
+        <BottomNav active="parent" role={user.role} lang={lang} />
+    </div>
+</Layout>

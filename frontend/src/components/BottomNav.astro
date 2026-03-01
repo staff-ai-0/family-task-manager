@@ -80,7 +80,33 @@ const langLabel = lang === "es" ? "EN" : "ES";
             >
         </a>
 
-        <!-- Manage (parent only) -->
+        <!-- Budget (parent only) -->
+        {
+            role === "parent" && (
+                <a
+                    href="/parent/finances/month"
+                    class={`flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-xl transition-colors ${active === "budget" ? "text-primary-600" : "text-slate-400 hover:text-primary-500"}`}
+                >
+                    <svg
+                        class="h-6 w-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        ></path>
+                    </svg>
+                    <span class="text-[10px] font-medium">
+                        {t(lang, "nav_budget")}
+                    </span>
+                </a>
+            )
+        }
+
         {
             role === "parent" && (
                 <a

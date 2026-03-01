@@ -1,0 +1,294 @@
+---
+/**
+ * Income vs Expense Report Page
+ * Cashflow analysis over time
+ */
+
+import Layout from "../../../../layouts/Layout.astro";
+import BottomNav from "../../../../components/BottomNav.astro";
+import BudgetNav from "../../../../components/BudgetNav.astro";
+import { apiFetch } from "../../../../lib/api";
+import { getIncomeVsExpenseReport, formatCurrency, formatDate, getMonthName } from "../../../../lib/api/budget";
+import { t } from "../../../../lib/i18n";
+
+// Authentication check
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+// Get user info
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+// Only parents can view reports
+if (user.role !== "parent") {
+    return Astro.redirect("/dashboard");
+}
+
+// Get last 6 months for default filter
+const now = new Date();
+const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+const startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+const startDateStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-01`;
+const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+
+// Get query parameters
+const url = new URL(Astro.request.url);
+const startDateParam = url.searchParams.get("start_date") || startDateStr;
+const endDateParam = url.searchParams.get("end_date") || endDateStr;
+const groupByParam = (url.searchParams.get("group_by") || "month") as "month" | "week" | "day";
+
+// Fetch income vs expense report
+const { data: report, ok: reportOk, error } = await getIncomeVsExpenseReport(
+    token,
+    startDateParam,
+    endDateParam,
+    groupByParam
+);
+
+// Calculate totals
+const totalIncome = report?.items?.reduce((sum: number, item: any) => sum + item.income, 0) || 0;
+const totalExpense = report?.items?.reduce((sum: number, item: any) => sum + Math.abs(item.expense), 0) || 0;
+const totalNet = totalIncome - totalExpense;
+
+// Group by labels
+const groupByLabels: Record<string, string> = {
+    month: "Mes",
+    week: "Semana",
+    day: "Día",
+};
+---
+
+<Layout title="Ingresos vs Gastos - Presupuesto">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+        <!-- Header -->
+        <header class="bg-blue-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center justify-between mb-6">
+                <a href="/budget" class="text-white hover:text-blue-100 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="text-2xl font-bold">Ingresos vs Gastos</h1>
+                <div class="w-6"></div>
+            </div>
+
+            <!-- Summary -->
+            <div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <p class="text-blue-50 text-xs font-semibold uppercase tracking-wider mb-1">
+                            Ingresos
+                        </p>
+                        <p class="text-lg font-bold text-green-300">
+                            {formatCurrency(totalIncome)}
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-blue-50 text-xs font-semibold uppercase tracking-wider mb-1">
+                            Gastos
+                        </p>
+                        <p class="text-lg font-bold text-red-300">
+                            {formatCurrency(totalExpense)}
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-blue-50 text-xs font-semibold uppercase tracking-wider mb-1">
+                            Neto
+                        </p>
+                        <p class={`text-lg font-bold ${totalNet >= 0 ? 'text-white' : 'text-red-300'}`}>
+                            {formatCurrency(totalNet)}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <BudgetNav active="reports" />
+
+        <!-- Reports Sub-Nav -->
+        <div class="px-6 pt-4 pb-0">
+            <div class="flex rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+                <a href="/parent/finances/reports/spending" class="flex-1 py-2 text-sm font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
+                    {t(lang, 'fin_report_spending')}
+                </a>
+                <a href="/parent/finances/reports/income-vs-expense" class="flex-1 py-2 text-sm font-semibold text-center bg-blue-600 text-white transition">
+                    {t(lang, 'fin_report_cashflow')}
+                </a>
+                <a href="/parent/finances/reports/net-worth" class="flex-1 py-2 text-sm font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
+                    {t(lang, 'fin_report_net_worth')}
+                </a>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="px-6 py-4">
+            <form method="GET" class="bg-white rounded-xl shadow-sm p-4 space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label for="start_date" class="block text-xs font-semibold text-slate-700 mb-1">
+                            Fecha Inicio
+                        </label>
+                        <input
+                            type="date"
+                            id="start_date"
+                            name="start_date"
+                            value={startDateParam}
+                            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label for="end_date" class="block text-xs font-semibold text-slate-700 mb-1">
+                            Fecha Fin
+                        </label>
+                        <input
+                            type="date"
+                            id="end_date"
+                            name="end_date"
+                            value={endDateParam}
+                            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
+                </div>
+                <div>
+                    <label for="group_by" class="block text-xs font-semibold text-slate-700 mb-1">
+                        Agrupar Por
+                    </label>
+                    <select
+                        id="group_by"
+                        name="group_by"
+                        class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                        <option value="month" selected={groupByParam === "month"}>Mes</option>
+                        <option value="week" selected={groupByParam === "week"}>Semana</option>
+                        <option value="day" selected={groupByParam === "day"}>Día</option>
+                    </select>
+                </div>
+                <button
+                    type="submit"
+                    class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
+                >
+                    Aplicar Filtros
+                </button>
+            </form>
+        </div>
+
+        <!-- Report Data -->
+        <main class="px-6 pb-6 flex-grow">
+            {!reportOk ? (
+                <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
+                    <p class="font-semibold">Error al cargar reporte</p>
+                    <p class="text-sm">{error || "Error desconocido"}</p>
+                </div>
+            ) : !report?.items || report.items.length === 0 ? (
+                <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <p class="text-slate-600 font-medium">No hay datos</p>
+                    <p class="text-sm text-slate-500 mt-1">No se encontraron transacciones en este período</p>
+                </div>
+            ) : (
+                <div class="space-y-2">
+                    {report.items.map((item: any, index: number) => {
+                        const net = item.income - Math.abs(item.expense);
+                        const isPositive = net >= 0;
+                        
+                        // Format period label
+                        let periodLabel = item.period;
+                        if (groupByParam === "month") {
+                            const [year, month] = item.period.split('-');
+                            periodLabel = `${getMonthName(parseInt(month), lang)} ${year}`;
+                        }
+                        
+                        return (
+                            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                                <div class="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
+                                    <h3 class="font-semibold text-slate-800 text-sm">
+                                        {periodLabel}
+                                    </h3>
+                                    <span class={`font-bold text-sm ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                        {isPositive ? '+' : ''}{formatCurrency(net)}
+                                    </span>
+                                </div>
+                                <div class="p-4">
+                                    <div class="space-y-3">
+                                        <!-- Income Bar -->
+                                        <div>
+                                            <div class="flex items-center justify-between mb-1">
+                                                <span class="text-xs font-semibold text-slate-600">Ingresos</span>
+                                                <span class="text-sm font-bold text-green-600">
+                                                    {formatCurrency(item.income)}
+                                                </span>
+                                            </div>
+                                            <div class="bg-slate-200 rounded-full h-2 overflow-hidden">
+                                                <div 
+                                                    class="h-full bg-green-500 transition-all"
+                                                    style={`width: ${totalIncome > 0 ? (item.income / totalIncome) * 100 : 0}%`}
+                                                ></div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Expense Bar -->
+                                        <div>
+                                            <div class="flex items-center justify-between mb-1">
+                                                <span class="text-xs font-semibold text-slate-600">Gastos</span>
+                                                <span class="text-sm font-bold text-red-600">
+                                                    {formatCurrency(Math.abs(item.expense))}
+                                                </span>
+                                            </div>
+                                            <div class="bg-slate-200 rounded-full h-2 overflow-hidden">
+                                                <div 
+                                                    class="h-full bg-red-500 transition-all"
+                                                    style={`width: ${totalExpense > 0 ? (Math.abs(item.expense) / totalExpense) * 100 : 0}%`}
+                                                ></div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Net -->
+                                        <div class="pt-2 border-t border-slate-200">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-xs font-bold text-slate-700">Flujo Neto</span>
+                                                <span class={`text-base font-extrabold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {isPositive ? '+' : ''}{formatCurrency(net)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    <!-- Period Summary -->
+                    <div class="bg-slate-700 text-white rounded-xl p-4 mt-4">
+                        <p class="text-slate-300 text-xs font-semibold uppercase tracking-wider mb-2">
+                            Período: {formatDate(startDateParam, lang)} - {formatDate(endDateParam, lang)}
+                        </p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-slate-300 text-xs mb-1">Promedio Ingresos</p>
+                                <p class="text-xl font-bold text-green-300">
+                                    {report.items.length > 0 ? formatCurrency(Math.floor(totalIncome / report.items.length)) : formatCurrency(0)}
+                                </p>
+                            </div>
+                            <div>
+                                <p class="text-slate-300 text-xs mb-1">Promedio Gastos</p>
+                                <p class="text-xl font-bold text-red-300">
+                                    {report.items.length > 0 ? formatCurrency(Math.floor(totalExpense / report.items.length)) : formatCurrency(0)}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </main>
+
+        <BottomNav active="parent" role={user.role} lang={lang} />
+    </div>
+</Layout>
