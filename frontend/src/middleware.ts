@@ -41,10 +41,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
                     );
                 }
             } else {
-                // In production, strictly enforce same-origin
-                const expectedOrigin = `https://${host}`;
-                if (origin !== expectedOrigin) {
-                    console.error(`CSRF violation: origin ${origin} does not match ${expectedOrigin}`);
+                // In production, strictly enforce same-origin or allowed hosts
+                const allowedHosts = ["family.agent-ia.mx", host];
+                const originHost = origin.replace(/^https?:\/\//, "");
+                
+                if (!allowedHosts.includes(originHost)) {
+                    console.error(`CSRF violation: origin ${origin} (host: ${originHost}) does not match allowed hosts: ${allowedHosts.join(', ')}`);
                     return new Response(
                         JSON.stringify({ detail: "CSRF validation failed" }),
                         { status: 403, headers: { "Content-Type": "application/json" } }
@@ -60,7 +62,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
 
     // Public routes that don't require authentication
-    const publicRoutes = ["/", "/login", "/api/auth/login", "/api/oauth/google", "/api/lang"];
+    const publicRoutes = ["/", "/login", "/api/auth/login", "/api/oauth/google", "/api/lang", "/api/oauth/google/"];
     const isPublicRoute = publicRoutes.some(route => path === route || path.startsWith("/api/translate"));
 
     if (isPublicRoute) {
@@ -86,7 +88,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // For page routes, we'll let the page components handle token validation
     if (path.startsWith("/api/") && path !== "/api/auth/login") {
         try {
-            const apiUrl = process.env.PUBLIC_API_URL ?? "http://localhost:8002";
+            const apiUrl = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
             const response = await fetch(`${apiUrl}/api/auth/me`, {
                 headers: {
                     "Authorization": `Bearer ${token}`,
