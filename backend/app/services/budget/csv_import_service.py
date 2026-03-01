@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from app.models.budget import BudgetTransaction, BudgetPayee, BudgetAccount, BudgetCategory
 from app.services.budget.transaction_service import TransactionService
+from app.services.budget.categorization_rule_service import CategorizationRuleService
 from app.schemas.budget import TransactionCreate
 from app.core.type_utils import to_uuid_required
 
@@ -337,7 +338,11 @@ class CSVImportService:
                 continue
             
             # Get description/payee
-            description = row_data.get(description_col, "").strip() or "Imported Transaction"
+            description = ""
+            if description_col:
+                description = row_data.get(description_col, "").strip() or "Imported Transaction"
+            else:
+                description = "Imported Transaction"
             
             # Check for duplicates
             if prevent_duplicates and description:
@@ -377,7 +382,7 @@ class CSVImportService:
                     payee_id = new_payee.id
                     result.created_payees.append(description)
             
-            # Get category if specified
+            # Get category if specified, or use auto-categorization
             category_id: Optional[UUID] = None
             if category_col and row_data.get(category_col):
                 category_name = row_data.get(category_col, "").strip()
@@ -390,6 +395,15 @@ class CSVImportService:
                     category = cat_result.scalars().first()
                     if category:
                         category_id = category.id
+            
+            # If no category found, try auto-categorization based on payee/description
+            if not category_id:
+                category_id = await CategorizationRuleService.suggest_category(
+                    db,
+                    family_id,
+                    payee=description,  # Description is used as payee
+                    description=None,  # We don't have a separate description field from CSV
+                )
             
             # Get notes if specified
             notes = None

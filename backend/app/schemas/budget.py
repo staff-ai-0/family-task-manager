@@ -307,6 +307,61 @@ class CategoryWithActivity(CategoryResponse):
     available: int = Field(0, description="Remaining available in cents")
 
 
+# ============================================================================
+# CATEGORIZATION RULE SCHEMAS
+# ============================================================================
+
+class CategorizationRuleBase(BaseModel):
+    """Base categorization rule schema"""
+    category_id: UUID = Field(..., description="Target category for matching transactions")
+    rule_type: str = Field(
+        ..., 
+        description="Match type: 'exact', 'contains', 'startswith', 'regex'"
+    )
+    match_field: str = Field(
+        ...,
+        description="Field to match: 'payee', 'description', 'both'"
+    )
+    pattern: str = Field(..., min_length=1, max_length=500, description="Pattern to match (case-insensitive)")
+    enabled: bool = Field(True, description="Is this rule enabled?")
+    priority: int = Field(0, ge=-1000, le=1000, description="Higher priority rules match first")
+    notes: Optional[str] = Field(None, description="Optional notes about the rule")
+
+
+class CategorizationRuleCreate(CategorizationRuleBase):
+    """Schema for creating a categorization rule"""
+    pass
+
+
+class CategorizationRuleUpdate(BaseModel):
+    """Schema for updating a categorization rule"""
+    category_id: Optional[UUID] = None
+    rule_type: Optional[str] = None
+    match_field: Optional[str] = None
+    pattern: Optional[str] = Field(None, min_length=1, max_length=500)
+    enabled: Optional[bool] = None
+    priority: Optional[int] = Field(None, ge=-1000, le=1000)
+    notes: Optional[str] = None
+
+
+class CategorizationRuleResponse(CategorizationRuleBase):
+    """Categorization rule response with metadata"""
+    id: UUID
+    family_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CategorizationSuggestion(BaseModel):
+    """Suggested category for a transaction"""
+    category_id: Optional[UUID] = Field(None, description="Suggested category ID or None if no match")
+    rule_id: Optional[UUID] = Field(None, description="ID of the matching rule")
+    confidence: str = Field("low", description="Confidence level: 'low', 'medium', 'high'")
+
+
 # Rebuild models to resolve forward references
 CategoryWithGroup.model_rebuild()
 CategoryGroupWithCategories.model_rebuild()

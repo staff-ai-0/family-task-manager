@@ -180,3 +180,31 @@ class BudgetSyncState(Base):
     
     # Relationships
     family: Mapped["Family"] = relationship("Family", back_populates="budget_sync_state")
+
+
+class BudgetCategorizationRule(Base):
+    """Rules for automatically categorizing transactions based on payee or description patterns."""
+    
+    __tablename__ = "budget_categorization_rules"
+    
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
+    category_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_categories.id", ondelete="CASCADE"), nullable=False)
+    
+    # Rule matching criteria
+    rule_type: Mapped[str] = mapped_column(String(50), nullable=False, comment="'exact', 'contains', 'startswith', 'regex'")
+    match_field: Mapped[str] = mapped_column(String(50), nullable=False, comment="'payee', 'description', 'both'")
+    pattern: Mapped[str] = mapped_column(String(500), nullable=False, comment="Pattern to match (case-insensitive)")
+    
+    # Rule behavior
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False, comment="Higher priority rules match first")
+    
+    # Metadata
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Relationships
+    family: Mapped["Family"] = relationship("Family", back_populates="budget_categorization_rules")
+    category: Mapped["BudgetCategory"] = relationship("BudgetCategory", foreign_keys=[category_id])
