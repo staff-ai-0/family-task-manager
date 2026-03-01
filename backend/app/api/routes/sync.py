@@ -45,10 +45,8 @@ async def get_sync_status():
 @router.get("/health")
 async def check_sync_health():
     """DEPRECATED: Sync service has been decommissioned."""
-    return {
-        "healthy": False,
-        "status": "decommissioned",
-        "message": "Sync service has been decommissioned in Phase 10",
-        "migration_path": "Use /api/budget/* endpoints for budget management",
-        "timestamp": datetime.utcnow().isoformat(),
-    }
+    raise HTTPException(
+        status_code=410,
+        detail="Sync service has been decommissioned in Phase 10. "
+               "Use the internal PostgreSQL budget system instead via /api/budget/* endpoints."
+    )
