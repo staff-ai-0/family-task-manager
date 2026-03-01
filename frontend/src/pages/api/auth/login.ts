@@ -61,7 +61,7 @@ export const POST: APIRoute = async ({ request }) => {
             return new Response(null, { status: 302, headers });
         }
 
-        const apiUrl = process.env.PUBLIC_API_URL ?? "http://localhost:8002";
+        const apiUrl = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
         const response = await fetch(`${apiUrl}/api/auth/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },

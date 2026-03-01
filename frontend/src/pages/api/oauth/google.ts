@@ -36,8 +36,8 @@ export const POST: APIRoute = async ({ request }) => {
             );
         }
 
-        // Use runtime environment variable (SSR)
-        const apiUrl = process.env.PUBLIC_API_URL ?? "http://localhost:8002";
+        // Use internal backend URL for server-side requests
+        const apiUrl = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
         console.log(`[OAuth Google] Using API URL: ${apiUrl}`);
         const response = await fetch(`${apiUrl}/api/oauth/google`, {
             method: "POST",
