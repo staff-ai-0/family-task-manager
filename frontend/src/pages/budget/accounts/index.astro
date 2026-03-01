@@ -35,18 +35,34 @@ const { data: accounts, ok: accountsOk, error } = await getAccounts(token, {
 });
 
 // Get balances for all accounts
-const accountsWithBalances = await Promise.all(
-    (accounts || []).map(async (account) => {
-        const { data: balance } = await apiFetch<{ total: number; cleared: number; uncleared: number }>(
-            `/api/budget/accounts/${account.id}/balance`,
-            { token }
-        );
-        return {
-            ...account,
-            balance: balance || { total: 0, cleared: 0, uncleared: 0 },
-        };
-    })
-);
+    const accountsWithBalances = await Promise.all(
+        (accounts || []).map(async (account) => {
+            const { data: balanceResponse } = await apiFetch<{
+                balance: number;
+                balance_cents: number;
+                cleared_balance: number;
+                cleared_balance_cents: number;
+                uncleared_balance: number;
+                uncleared_balance_cents: number;
+            }>(
+                `/api/budget/accounts/${account.id}/balance`,
+                { token }
+            );
+
+            const normalizedBalance = balanceResponse
+                ? {
+                      total: balanceResponse.balance_cents,
+                      cleared: balanceResponse.cleared_balance_cents,
+                      uncleared: balanceResponse.uncleared_balance_cents,
+                  }
+                : { total: 0, cleared: 0, uncleared: 0 };
+
+            return {
+                ...account,
+                balance: normalizedBalance,
+            };
+        })
+    );
 
 // Group accounts by type
 const accountsByType = accountsWithBalances.reduce((acc, account) => {
