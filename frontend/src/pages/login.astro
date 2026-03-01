@@ -226,94 +226,105 @@ if (flashError) {
         };
 
         // Email/password login via fetch
-        document.getElementById('login-form')?.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const form = e.target as HTMLFormElement;
-            const emailInput = form.querySelector('#email') as HTMLInputElement;
-            const passwordInput = form.querySelector('#password') as HTMLInputElement;
-            const submitBtn = form.querySelector('#login-submit-btn') as HTMLButtonElement;
-            const errorDiv = document.getElementById('login-error');
-            
-            // Hide previous errors
-            if (errorDiv) {
-                errorDiv.classList.add('hidden');
-                errorDiv.textContent = '';
-            }
-            
-            // Disable button during request
-            const originalText = submitBtn.textContent;
-            submitBtn.disabled = true;
-            submitBtn.textContent = '...';
-            
-            try {
-                const response = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: emailInput.value,
-                        password: passwordInput.value,
-                    }),
-                });
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
                 
-                const data = await response.json();
+                const form = e.target;
+                const emailInput = form.querySelector('#email');
+                const passwordInput = form.querySelector('#password');
+                const submitBtn = form.querySelector('#login-submit-btn');
+                const errorDiv = document.getElementById('login-error');
                 
-                if (data.success && data.redirect) {
-                    // Cookie was set via Set-Cookie header, redirect client-side
-                    window.location.href = data.redirect;
-                } else {
-                    // Show error
+                // Hide previous errors
+                if (errorDiv) {
+                    errorDiv.classList.add('hidden');
+                    errorDiv.textContent = '';
+                }
+                
+                // Disable button during request
+                const originalText = submitBtn.textContent;
+                submitBtn.disabled = true;
+                submitBtn.textContent = '...';
+                
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: emailInput.value,
+                            password: passwordInput.value,
+                        }),
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success && data.redirect) {
+                        // Cookie was set via Set-Cookie header, redirect client-side
+                        window.location.href = data.redirect;
+                    } else {
+                        // Show error
+                        if (errorDiv) {
+                            errorDiv.textContent = data.error || 'Login failed. Please try again.';
+                            errorDiv.classList.remove('hidden');
+                        }
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
                     if (errorDiv) {
-                        errorDiv.textContent = data.error || 'Login failed. Please try again.';
+                        errorDiv.textContent = 'An error occurred. Please try again.';
                         errorDiv.classList.remove('hidden');
                     }
                     submitBtn.disabled = false;
                     submitBtn.textContent = originalText;
                 }
-            } catch (error) {
-                console.error('Login error:', error);
-                if (errorDiv) {
-                    errorDiv.textContent = 'An error occurred. Please try again.';
-                    errorDiv.classList.remove('hidden');
-                }
-                submitBtn.disabled = false;
-                submitBtn.textContent = originalText;
-            }
-        });
+            });
+        }
 
         // Toggle join code section
-        document.getElementById('toggle-join-code')?.addEventListener('click', () => {
-            const section = document.getElementById('join-code-section');
-            if (section) {
-                section.classList.toggle('hidden');
-                if (!section.classList.contains('hidden')) {
-                    document.getElementById('join-code-input')?.focus();
+        const toggleBtn = document.getElementById('toggle-join-code');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function() {
+                const section = document.getElementById('join-code-section');
+                if (section) {
+                    section.classList.toggle('hidden');
+                    if (!section.classList.contains('hidden')) {
+                        const input = document.getElementById('join-code-input');
+                        if (input) input.focus();
+                    }
                 }
-            }
-        });
+            });
+        }
 
         // Clear join code
-        document.getElementById('clear-join-code')?.addEventListener('click', () => {
-            const input = document.getElementById('join-code-input') as HTMLInputElement;
-            if (input) {
-                input.value = '';
-                document.getElementById('clear-join-code')?.classList.add('hidden');
-            }
-        });
-
-        // Show/hide clear button based on input
-        document.getElementById('join-code-input')?.addEventListener('input', (e) => {
-            const input = e.target as HTMLInputElement;
-            const clearBtn = document.getElementById('clear-join-code');
-            if (clearBtn) {
-                if (input.value.length > 0) {
-                    clearBtn.classList.remove('hidden');
-                } else {
+        const clearBtn = document.getElementById('clear-join-code');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function() {
+                const input = document.getElementById('join-code-input');
+                if (input) {
+                    input.value = '';
                     clearBtn.classList.add('hidden');
                 }
-            }
-        });
+            });
+        }
 
-
+        // Show/hide clear button based on input
+        const joinCodeInput = document.getElementById('join-code-input');
+        if (joinCodeInput) {
+            joinCodeInput.addEventListener('input', function(e) {
+                const input = e.target;
+                const cb = document.getElementById('clear-join-code');
+                if (cb) {
+                    if (input.value.length > 0) {
+                        cb.classList.remove('hidden');
+                    } else {
+                        cb.classList.add('hidden');
+                    }
+                }
+            });
+        }
      </script>
 </Layout>
