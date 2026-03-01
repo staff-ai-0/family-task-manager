@@ -24,7 +24,7 @@ from app.models.budget import (
     BudgetPayee,
     BudgetTransaction,
 )
-from app.schemas.families import FamilyCreate
+from app.schemas.family import FamilyCreate
 
 
 @pytest.fixture
