@@ -196,3 +196,82 @@ async def delete_category(
         category_id,
         to_uuid_required(current_user.family_id),
     )
+
+
+# ============================================================================
+# CATEGORY ARCHIVAL ENDPOINTS
+# ============================================================================
+
+@router.post("/{category_id}/archive", response_model=CategoryResponse)
+async def archive_category(
+    category_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Archive a category (hides from normal view but keeps data) - parent only"""
+    category = await CategoryService.archive(
+        db,
+        category_id,
+        to_uuid_required(current_user.family_id),
+    )
+    return category
+
+
+@router.post("/{category_id}/unarchive", response_model=CategoryResponse)
+async def unarchive_category(
+    category_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unarchive a category (restores to normal view) - parent only"""
+    category = await CategoryService.unarchive(
+        db,
+        category_id,
+        to_uuid_required(current_user.family_id),
+    )
+    return category
+
+
+@router.get("/archived/list-by-group", response_model=List[CategoryResponse])
+async def list_archived_categories(
+    group_id: UUID = Query(..., description="Group ID"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List archived categories in a specific group"""
+    categories = await CategoryService.list_archived(
+        db,
+        group_id,
+        to_uuid_required(current_user.family_id),
+    )
+    return categories
+
+
+@router.post("/groups/{group_id}/archive", response_model=CategoryGroupResponse)
+async def archive_category_group(
+    group_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Archive an entire category group and all its categories - parent only"""
+    group = await CategoryService.archive_group(
+        db,
+        group_id,
+        to_uuid_required(current_user.family_id),
+    )
+    return group
+
+
+@router.post("/groups/{group_id}/unarchive", response_model=CategoryGroupResponse)
+async def unarchive_category_group(
+    group_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unarchive an entire category group and all its categories - parent only"""
+    group = await CategoryService.unarchive_group(
+        db,
+        group_id,
+        to_uuid_required(current_user.family_id),
+    )
+    return group

@@ -282,3 +282,198 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
             raise NotFoundException("Category not found")
 
         return category
+
+    @classmethod
+    async def archive(
+        cls,
+        db: AsyncSession,
+        category_id: UUID,
+        family_id: UUID,
+    ) -> BudgetCategory:
+        """
+        Archive a category by setting hidden=True.
+        
+        Archived categories won't appear in normal lists but retain all history.
+
+        Args:
+            db: Database session
+            category_id: Category ID to archive
+            family_id: Family ID for verification
+
+        Returns:
+            Updated category
+
+        Raises:
+            NotFoundException: If category not found
+        """
+        return await cls.update_by_id(
+            db,
+            category_id,
+            family_id,
+            {"hidden": True},
+        )
+
+    @classmethod
+    async def unarchive(
+        cls,
+        db: AsyncSession,
+        category_id: UUID,
+        family_id: UUID,
+    ) -> BudgetCategory:
+        """
+        Unarchive a category by setting hidden=False.
+
+        Args:
+            db: Database session
+            category_id: Category ID to unarchive
+            family_id: Family ID for verification
+
+        Returns:
+            Updated category
+
+        Raises:
+            NotFoundException: If category not found
+        """
+        return await cls.update_by_id(
+            db,
+            category_id,
+            family_id,
+            {"hidden": False},
+        )
+
+    @classmethod
+    async def list_archived(
+        cls,
+        db: AsyncSession,
+        group_id: UUID,
+        family_id: UUID,
+    ) -> List[BudgetCategory]:
+        """
+        List archived categories in a group.
+
+        Args:
+            db: Database session
+            group_id: Group ID to filter by
+            family_id: Family ID for verification
+
+        Returns:
+            List of archived categories
+
+        Raises:
+            NotFoundException: If group not found
+        """
+        # Verify group exists
+        await CategoryGroupService.get_by_id(db, group_id, family_id)
+
+        query = (
+            select(BudgetCategory)
+            .where(
+                and_(
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategory.group_id == group_id,
+                    BudgetCategory.hidden == True,
+                )
+            )
+            .order_by(BudgetCategory.sort_order, BudgetCategory.name)
+        )
+
+        result = await db.execute(query)
+        return list(result.scalars().all())
+
+    @classmethod
+    async def archive_group(
+        cls,
+        db: AsyncSession,
+        group_id: UUID,
+        family_id: UUID,
+    ) -> BudgetCategoryGroup:
+        """
+        Archive an entire category group and all its categories.
+
+        Args:
+            db: Database session
+            group_id: Group ID to archive
+            family_id: Family ID for verification
+
+        Returns:
+            Updated category group
+
+        Raises:
+            NotFoundException: If group not found
+        """
+        # Archive the group itself
+        updated_group = await CategoryGroupService.update_by_id(
+            db,
+            group_id,
+            family_id,
+            {"hidden": True},
+        )
+
+        # Archive all categories in the group
+        query = (
+            select(BudgetCategory)
+            .where(
+                and_(
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategory.group_id == group_id,
+                )
+            )
+        )
+
+        result = await db.execute(query)
+        categories = list(result.scalars().all())
+
+        for category in categories:
+            category.hidden = True
+
+        await db.commit()
+        return updated_group
+
+    @classmethod
+    async def unarchive_group(
+        cls,
+        db: AsyncSession,
+        group_id: UUID,
+        family_id: UUID,
+    ) -> BudgetCategoryGroup:
+        """
+        Unarchive an entire category group and all its categories.
+
+        Args:
+            db: Database session
+            group_id: Group ID to unarchive
+            family_id: Family ID for verification
+
+        Returns:
+            Updated category group
+
+        Raises:
+            NotFoundException: If group not found
+        """
+        # Unarchive the group itself
+        updated_group = await CategoryGroupService.update_by_id(
+            db,
+            group_id,
+            family_id,
+            {"hidden": False},
+        )
+
+        # Unarchive all categories in the group
+        query = (
+            select(BudgetCategory)
+            .where(
+                and_(
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategory.group_id == group_id,
+                )
+            )
+        )
+
+        result = await db.execute(query)
+        categories = list(result.scalars().all())
+
+        for category in categories:
+            category.hidden = False
+
+        await db.commit()
+        return updated_group
