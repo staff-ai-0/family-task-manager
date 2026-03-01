@@ -13,7 +13,7 @@ from uuid import UUID
 from app.models.budget import BudgetAllocation, BudgetTransaction
 from app.schemas.budget import AllocationCreate, AllocationUpdate
 from app.services.base_service import BaseFamilyService
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, ValidationError
 
 
 class AllocationService(BaseFamilyService[BudgetAllocation]):
@@ -41,7 +41,12 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
 
         Raises:
             NotFoundException: If category not found
+            ValidationError: If month is closed
         """
+        # Check if month is closed
+        from app.services.budget.month_locking_service import MonthLockingService
+        await MonthLockingService.validate_month_not_closed(db, family_id, data.month)
+        
         # Verify category belongs to family
         from app.services.budget.category_service import CategoryService
         await CategoryService.get_by_id(db, data.category_id, family_id)
@@ -78,7 +83,17 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
 
         Returns:
             Updated allocation
+            
+        Raises:
+            ValidationError: If month is closed
         """
+        # Get existing allocation to check month
+        existing_allocation = await cls.get_by_id(db, allocation_id, family_id)
+        
+        # Check if month is closed
+        from app.services.budget.month_locking_service import MonthLockingService
+        await MonthLockingService.validate_month_not_closed(db, family_id, existing_allocation.month)
+        
         update_data = data.model_dump(exclude_unset=True)
         return await cls.update_by_id(db, allocation_id, family_id, update_data)
 

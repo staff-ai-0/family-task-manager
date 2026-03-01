@@ -13,7 +13,7 @@ from uuid import UUID
 from app.models.budget import BudgetTransaction
 from app.schemas.budget import TransactionCreate, TransactionUpdate
 from app.services.base_service import BaseFamilyService
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, ValidationError
 
 
 class TransactionService(BaseFamilyService[BudgetTransaction]):
@@ -41,7 +41,13 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
 
         Raises:
             NotFoundException: If account, category, or payee not found
+            ValidationError: If transaction month is closed
         """
+        # Check if transaction month is closed
+        from app.services.budget.month_locking_service import MonthLockingService
+        transaction_month = date(data.date.year, data.date.month, 1)
+        await MonthLockingService.validate_month_not_closed(db, family_id, transaction_month)
+        
         # Verify account belongs to family
         from app.services.budget.account_service import AccountService
         await AccountService.get_by_id(db, data.account_id, family_id)
@@ -100,7 +106,18 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
 
         Returns:
             Updated transaction
+            
+        Raises:
+            BadRequestException: If transaction month is closed
         """
+        # Get the existing transaction to check its date
+        existing_txn = await cls.get_by_id(db, transaction_id, family_id)
+        transaction_month = date(existing_txn.date.year, existing_txn.date.month, 1)
+        
+        # Check if transaction month is closed
+        from app.services.budget.month_locking_service import MonthLockingService
+        await MonthLockingService.validate_month_not_closed(db, family_id, transaction_month)
+        
         update_data = data.model_dump(exclude_unset=True)
 
         # Verify new account if provided

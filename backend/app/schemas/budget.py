@@ -486,6 +486,38 @@ class RecurringTransactionNextDate(BaseModel):
     occurrences_remaining: Optional[int] = Field(None, description="Estimated occurrences remaining (None if ongoing)")
 
 
+# ============================================================================
+# MONTH LOCKING SCHEMAS
+# ============================================================================
+
+class MonthClosureResponse(BaseModel):
+    """Response for closing a month"""
+    month: DateType = Field(..., description="Month that was closed")
+    closed_at: datetime = Field(..., description="When the month was closed")
+    allocation_count: int = Field(..., ge=0, description="Number of allocations closed")
+
+
+class MonthReopenResponse(BaseModel):
+    """Response for reopening a month"""
+    month: DateType = Field(..., description="Month that was reopened")
+    allocation_count: int = Field(..., ge=0, description="Number of allocations reopened")
+
+
+class MonthStatusResponse(BaseModel):
+    """Response with month closure status"""
+    month: DateType = Field(..., description="The month")
+    is_closed: bool = Field(..., description="Is this month closed?")
+    closed_at: Optional[datetime] = Field(None, description="When closed (null if open)")
+    allocation_count: int = Field(..., ge=0, description="Number of allocations")
+
+
+class ClosedMonthInfo(BaseModel):
+    """Information about a closed month"""
+    month: DateType = Field(..., description="The closed month")
+    closed_at: datetime = Field(..., description="When it was closed")
+    allocation_count: int = Field(..., ge=0, description="Number of allocations")
+
+
 # Rebuild models to resolve forward references
 CategoryWithGroup.model_rebuild()
 CategoryGroupWithCategories.model_rebuild()

@@ -75,6 +75,7 @@ class BudgetAllocation(Base):
     month: Mapped[date] = mapped_column(Date, nullable=False, comment="First day of the month")
     budgeted_amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False, comment="Amount in cents")
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Month close timestamp (null = open)")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
