@@ -21,7 +21,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
             return new Response(null, { status: 302, headers });
         }
 
-        const apiUrl = process.env.PUBLIC_API_URL ?? "http://localhost:8002";
+        const apiUrl = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
         const response = await fetch(`${apiUrl}/api/task-assignments/${assignmentId}/complete`, {
             method: "PATCH",
             headers: {

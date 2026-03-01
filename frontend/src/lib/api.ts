@@ -1,6 +1,6 @@
 /**
  * Central API helper for the Family Task Manager Astro frontend.
- * Uses runtime environment variable PUBLIC_API_URL for SSR.
+ * Uses runtime environment variable API_BASE_URL for SSR.
  */
 
 import type { ApiResponse } from "../types/api";

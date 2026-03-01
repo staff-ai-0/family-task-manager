@@ -85,6 +85,15 @@ class Task(Base):
     # ... other fields
 ```
 
+### Production Deployment (10.1.0.99)
+
+The application is deployed at `https://family.agent-ia.mx` behind a reverse proxy.
+
+**Security Requirements:**
+- **Auth Cookies**: MUST use `secure: true` and `httpOnly: true`.
+- **CSRF**: Middleware allows the `family.agent-ia.mx` origin.
+- **Backend Communication**: Frontend uses internal Docker URL `http://backend:8000` for SSR requests.
+
 ### Clean Architecture Layers
 
 ```
@@ -103,9 +112,9 @@ Models (Database Entities)
 Frontend (Port 3003)        Backend API (Port 8002)
 Astro 5 + Tailwind v4 ←→    FastAPI + SQLAlchemy
     ↓                              ↓
-  Sessions                    PostgreSQL (Port 5433)
+  Sessions                    PostgreSQL (Port 5434)
     ↓                              ↓
-  Redis (Port 6380)          Test DB (Port 5435)
+  Redis (Port 6382)          Test DB (Port 5438)
     
 Sync Service (Port 5008)    
 PostgreSQL-based Budget Sync
@@ -137,11 +146,10 @@ The **Budget System** is fully integrated with PostgreSQL:
 See `.github/copilot-instructions.md` for detailed instructions.
 
 For specific patterns:
-- Multi-tenant patterns: `.github/instructions/01-multi-tenant-patterns.md`
+- Multi-tenant patterns: `.github/instructions/05-multi-tenant-patterns.md`
 - Clean architecture: `.github/instructions/02-clean-architecture.md`
-- DDD patterns: `.github/instructions/03-domain-driven-design.md`
 - Testing standards: `.github/instructions/04-testing-standards.md`
-- API conventions: `.github/instructions/05-api-conventions.md`
+- Frontend logic: `.github/instructions/03-frontend-flowbite.instructions.md`
 
 ## Quick Start
 
@@ -150,8 +158,8 @@ For specific patterns:
 - **Backend API**: http://localhost:8002/docs
 - **Sync Service**: http://localhost:5008 (health check)
 - **Budget UI**: http://localhost:3003/budget
-- **Database**: localhost:5433 (production), localhost:5435 (test)
-- **Redis**: localhost:6380
+- **Database**: localhost:5434 (production), localhost:5438 (test)
+- **Redis**: localhost:6382
 
 ### Demo Users
 ```

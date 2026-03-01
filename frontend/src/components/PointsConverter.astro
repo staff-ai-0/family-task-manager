@@ -38,7 +38,7 @@ let error: string | null = null;
 if (token) {
     try {
         const response = await fetch(
-            `${import.meta.env.PUBLIC_API_URL || "http://localhost:8002"}/api/points-conversion/eligibility`,
+            `${import.meta.env.API_BASE_URL || import.meta.env.PUBLIC_API_BASE_URL || "http://localhost:8002"}/api/points-conversion/eligibility`,
             {
                 headers: {
                     Authorization: `Bearer ${token}`,

@@ -922,82 +922,61 @@ async def test_cannot_delete_other_family_task(
 
 ---
 
+## 6. Authentication & Security (Production Proxy)
+
+When running behind a reverse proxy (e.g., Nginx, Traefik) with HTTPS, special care must be taken with cookies and CSRF protection to avoid **infinite login loops**.
+
+### ✅ Auth Cookie Security Flags
+
+In production, authentication cookies (`access_token`) MUST be configured with:
+- `httpOnly: true` - Prevent XSS access
+- `secure: true` - **MANDATORY** for HTTPS/Proxy environments. If `false` or conditional, some browsers will reject the cookie when served over a proxy that doesn't propagate the protocol correctly.
+- `sameSite: "Lax"` - Standard for cross-site navigation
+
+```typescript
+// frontend/src/pages/api/auth/login.ts
+const tokenCookie = buildCookie("access_token", result.access_token, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "Lax",
+    maxAge: 60 * 60 * 24 * 7,
+    secure: true, // ALWAYS true in production behind proxy
+});
+```
+
+### ✅ CSRF Protection in Middleware
+
+Middleware MUST allow the specific production domain in the `Origin` header check. A common mistake is strictly checking against the internal `host` header, which might differ from the external proxy domain.
+
+```typescript
+// frontend/src/middleware.ts
+const allowedHosts = ["family.agent-ia.mx", host]; // Include production domain
+const originHost = origin.replace(/^https?:\/\//, "");
+
+if (!allowedHosts.includes(originHost)) {
+    // Block only if not in allowed list
+}
+```
+
+### ✅ Backend API URLs
+
+Internal server-side requests (Astro SSR to FastAPI) SHOULD use the **internal Docker network name** (e.g., `http://backend:8000`) instead of the public URL to avoid unnecessary round-trips and potential DNS/Proxy issues.
+
+```typescript
+// Use internal backend URL for server-side requests
+const apiUrl = process.env.API_BASE_URL || "http://backend:8000";
+```
+
+---
+
 ## 🚫 Common Mistakes
 
-### Mistake 1: Missing family_id in query
+### Mistake 4: Conditional `secure` flag based on `import.meta.env.PROD`
+Behind some proxies, `import.meta.env.PROD` might be true but the cookie still fails if the proxy-client handshake is HTTPS but the proxy-server is HTTP. **Fix**: Force `secure: true` if the site is intended for HTTPS.
 
-❌ **WRONG**:
-```python
-async def get_all_tasks(self) -> List[Task]:
-    query = select(Task)  # NO FAMILY FILTERING!
-    result = await self.db.execute(query)
-    return list(result.scalars().all())
-```
-
-✅ **CORRECT**:
-```python
-async def get_all_tasks(self, family_id: UUID) -> List[Task]:
-    query = select(Task).where(Task.family_id == family_id)
-    result = await self.db.execute(query)
-    return list(result.scalars().all())
-```
-
----
-
-### Mistake 2: Accepting family_id from client
-
-❌ **WRONG**:
-```python
-@router.get("/")
-async def get_tasks(
-    family_id: UUID,  # SECURITY VULNERABILITY!
-    task_service: TaskService = Depends(get_task_service)
-):
-    return await task_service.get_family_tasks(family_id)
-```
-
-✅ **CORRECT**:
-```python
-@router.get("/")
-async def get_tasks(
-    current_user: User = Depends(get_current_user),
-    task_service: TaskService = Depends(get_task_service)
-):
-    # Extract from authenticated user
-    family_id = current_user.family_id
-    return await task_service.get_family_tasks(family_id)
-```
-
----
-
-### Mistake 3: Not testing tenant isolation
-
-❌ **WRONG**:
-```python
-async def test_create_task(task_service, test_family):
-    task = await task_service.create_task(test_family, {"title": "Test"})
-    assert task.title == "Test"
-    # Missing: verification that other families can't see this!
-```
-
-✅ **CORRECT**:
-```python
-async def test_create_task(
-    task_service,
-    test_family_1,
-    test_family_2
-):
-    # Create for family 1
-    task = await task_service.create_task(test_family_1, {"title": "Test"})
-    
-    # Verify family 1 sees it
-    tasks_f1 = await task_service.get_family_tasks(test_family_1)
-    assert len(tasks_f1) == 1
-    
-    # CRITICAL: Verify family 2 does NOT see it
-    tasks_f2 = await task_service.get_family_tasks(test_family_2)
-    assert len(tasks_f2) == 0
-```
+### Mistake 5: Rigid CSRF check in Middleware
+❌ **WRONG**: `if (origin !== \`https://\${host}\`)` - This fails if `host` is "localhost:3000" but `origin` is "https://family.agent-ia.mx".
+✅ **CORRECT**: Use an allowed list of hosts including the production domain.
 
 ---
 

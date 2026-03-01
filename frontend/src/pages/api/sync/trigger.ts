@@ -5,7 +5,7 @@
  */
 import type { APIRoute } from "astro";
 
-const API_BASE_URL = process.env.PUBLIC_API_URL ?? "http://localhost:8002";
+const API_BASE_URL = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
 
 export const POST: APIRoute = async ({ request, cookies, url }) => {
     // Get token from cookies
