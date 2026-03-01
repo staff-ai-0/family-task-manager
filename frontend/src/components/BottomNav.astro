@@ -139,7 +139,7 @@ const langLabel = lang === "es" ? "EN" : "ES";
         </form>
 
         <!-- Logout -->
-        <form method="POST" action="/dashboard" class="inline">
+        <form method="POST" action="/api/auth/logout" class="inline">
             <input type="hidden" name="action" value="logout" />
             <button
                 type="submit"
