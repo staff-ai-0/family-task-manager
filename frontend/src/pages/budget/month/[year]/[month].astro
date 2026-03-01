@@ -54,7 +54,8 @@ const expenseGroups = budget?.category_groups.filter(g => !g.is_income) || [];
 const totalIncome = incomeGroups.reduce((sum, g) => sum + g.total_activity, 0);
 const totalBudgeted = expenseGroups.reduce((sum, g) => sum + g.total_budgeted, 0);
 const totalSpent = Math.abs(expenseGroups.reduce((sum, g) => sum + g.total_activity, 0));
-const toBudget = totalIncome - totalBudgeted;
+// Use backend calculated ready_to_assign if available, otherwise fall back to local calculation
+const readyToAssign = budget?.ready_to_assign !== undefined ? budget.ready_to_assign : (totalIncome - totalBudgeted);
 
 // Navigation helpers
 const prevMonth = monthNum === 1 ? 12 : monthNum - 1;
@@ -105,13 +106,13 @@ const isCurrentMonth = yearNum === now.getFullYear() && monthNum === now.getMont
                     </a>
                 </div>
 
-                <!-- To Budget Amount -->
+                <!-- To Budget Amount (Ready to Assign) -->
                 <div class="bg-white/30 rounded-xl p-4">
                     <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
-                        Por Presupuestar
+                        Por Presupuestar (Ready to Assign)
                     </p>
-                    <p class={`text-3xl font-extrabold tracking-tight ${toBudget < 0 ? 'text-red-300' : 'text-white'}`}>
-                        {formatCurrency(toBudget)}
+                    <p class={`text-3xl font-extrabold tracking-tight ${readyToAssign < 0 ? 'text-red-300' : 'text-white'}`}>
+                        {formatCurrency(readyToAssign)}
                     </p>
                 </div>
             </div>

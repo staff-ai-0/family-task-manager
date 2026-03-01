@@ -49,12 +49,16 @@ async def get_month_budget(
         "year": year,
         "month_num": month,
         "category_groups": [],
+        "ready_to_assign": 0,
         "totals": {
             "budgeted": 0,
             "activity": 0,
             "available": 0,
+            "income": 0,
         }
     }
+    
+    total_income = 0  # Track income separately
     
     for group in groups:
         group_data = {
@@ -90,11 +94,18 @@ async def get_month_budget(
         
         result["category_groups"].append(group_data)
         
-        # Add to grand totals
-        if not group.is_income:
+        # Track income and calculate ready to assign
+        if group.is_income:
+            total_income += group_data["total_activity"]
+            result["totals"]["income"] += group_data["total_activity"]
+        else:
+            # Add to grand totals
             result["totals"]["budgeted"] += group_data["total_budgeted"]
             result["totals"]["activity"] += group_data["total_activity"]
             result["totals"]["available"] += group_data["total_available"]
+    
+    # Ready to Assign = Total Income - Total Budgeted (for expenses)
+    result["ready_to_assign"] = total_income - result["totals"]["budgeted"]
     
     return result
 

@@ -111,10 +111,12 @@ export interface MonthBudgetView {
     year: number;
     month_num: number;
     category_groups: CategoryGroupWithActivity[];
+    ready_to_assign: number;
     totals: {
         budgeted: number;
         activity: number;
         available: number;
+        income: number;
     };
 }
 
