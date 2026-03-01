@@ -112,6 +112,11 @@ class BudgetAccount(Base):
         back_populates="transfer_account",
         foreign_keys="BudgetTransaction.transfer_account_id"
     )
+    recurring_transactions: Mapped[list["BudgetRecurringTransaction"]] = relationship(
+        "BudgetRecurringTransaction",
+        back_populates="account",
+        cascade="all, delete-orphan"
+    )
 
 
 class BudgetPayee(Base):
@@ -244,3 +249,60 @@ class BudgetGoal(Base):
     # Relationships
     family: Mapped["Family"] = relationship("Family", back_populates="budget_goals")
     category: Mapped["BudgetCategory"] = relationship("BudgetCategory", foreign_keys=[category_id])
+
+
+class BudgetRecurringTransaction(Base):
+    """Recurring/scheduled transaction templates.
+    
+    Templates for automatically generating transactions on a schedule:
+    - Daily: every N days
+    - Weekly: every N weeks on specific days (Mon-Sun)
+    - Monthly: every N months on specific day-of-month or day-of-week
+    """
+    
+    __tablename__ = "budget_recurring_transactions"
+    
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_accounts.id", ondelete="CASCADE"), nullable=False)
+    category_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_categories.id", ondelete="SET NULL"), nullable=True)
+    payee_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_payees.id", ondelete="SET NULL"), nullable=True)
+    
+    # Transaction template data
+    name: Mapped[str] = mapped_column(String(255), nullable=False, comment="Template name (e.g., 'Monthly Rent')")
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False, comment="Amount in cents (negative=expense, positive=income)")
+    
+    # Recurrence pattern
+    recurrence_type: Mapped[str] = mapped_column(
+        String(50), 
+        nullable=False, 
+        comment="'daily', 'weekly', 'monthly_dayofmonth', 'monthly_dayofweek'"
+    )
+    # Recurrence frequency: every N days/weeks/months
+    recurrence_interval: Mapped[int] = mapped_column(Integer, default=1, nullable=False, comment="Repeat every N periods")
+    
+    # Pattern-specific fields (JSON for flexibility)
+    # For weekly: list of day numbers (0=Mon, 1=Tue, ..., 6=Sun)
+    # For monthly_dayofweek: {"week": 0-4 or -1 (last), "day": 0-6}
+    # For monthly_dayofmonth: day number (1-31)
+    recurrence_pattern: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True, comment="Pattern-specific configuration")
+    
+    # Scheduling
+    start_date: Mapped[date] = mapped_column(Date, nullable=False, comment="First occurrence date")
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, comment="Last occurrence date (null = ongoing)")
+    
+    # Status
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_generated_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, comment="Last date a transaction was auto-generated")
+    next_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, comment="Next scheduled date")
+    
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Relationships
+    family: Mapped["Family"] = relationship("Family", back_populates="budget_recurring_transactions")
+    account: Mapped["BudgetAccount"] = relationship("BudgetAccount", back_populates="recurring_transactions")
+    category: Mapped[Optional["BudgetCategory"]] = relationship("BudgetCategory", foreign_keys=[category_id])
+    payee: Mapped[Optional["BudgetPayee"]] = relationship("BudgetPayee", foreign_keys=[payee_id])

@@ -422,6 +422,70 @@ class GoalProgress(BaseModel):
     percentage: float = Field(..., ge=0, le=100, description="Progress percentage (0-100)")
 
 
+# ============================================================================
+# RECURRING TRANSACTION SCHEMAS
+# ============================================================================
+
+class RecurringTransactionBase(BaseModel):
+    """Base recurring transaction schema"""
+    account_id: UUID = Field(..., description="Account ID")
+    category_id: Optional[UUID] = Field(None, description="Category ID (optional)")
+    payee_id: Optional[UUID] = Field(None, description="Payee ID (optional)")
+    name: str = Field(..., min_length=1, max_length=255, description="Template name (e.g., 'Monthly Rent')")
+    description: Optional[str] = Field(None, description="Optional description")
+    amount: int = Field(..., description="Amount in cents (negative=expense, positive=income)")
+    recurrence_type: str = Field(
+        ...,
+        description="'daily', 'weekly', 'monthly_dayofmonth', 'monthly_dayofweek'"
+    )
+    recurrence_interval: int = Field(1, ge=1, le=52, description="Repeat every N periods")
+    recurrence_pattern: Optional[dict] = Field(None, description="Pattern-specific configuration (JSON)")
+    start_date: DateType = Field(..., description="First occurrence date")
+    end_date: Optional[DateType] = Field(None, description="Last occurrence date (null = ongoing)")
+    is_active: bool = Field(True, description="Is template currently active?")
+
+
+class RecurringTransactionCreate(RecurringTransactionBase):
+    """Schema for creating a recurring transaction"""
+    pass
+
+
+class RecurringTransactionUpdate(BaseModel):
+    """Schema for updating a recurring transaction"""
+    account_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
+    payee_id: Optional[UUID] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    amount: Optional[int] = None
+    recurrence_type: Optional[str] = None
+    recurrence_interval: Optional[int] = Field(None, ge=1, le=52)
+    recurrence_pattern: Optional[dict] = None
+    start_date: Optional[DateType] = None
+    end_date: Optional[DateType] = None
+    is_active: Optional[bool] = None
+
+
+class RecurringTransactionResponse(RecurringTransactionBase):
+    """Recurring transaction response with metadata"""
+    id: UUID
+    family_id: UUID
+    last_generated_date: Optional[DateType] = None
+    next_due_date: Optional[DateType] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RecurringTransactionNextDate(BaseModel):
+    """Response with next due date for a recurring transaction"""
+    next_due_date: Optional[DateType] = Field(..., description="Next scheduled date or None if no more occurrences")
+    is_expired: bool = Field(..., description="True if end_date has passed")
+    occurrences_remaining: Optional[int] = Field(None, description="Estimated occurrences remaining (None if ongoing)")
+
+
 # Rebuild models to resolve forward references
 CategoryWithGroup.model_rebuild()
 CategoryGroupWithCategories.model_rebuild()
