@@ -6,6 +6,7 @@
 
 import Layout from "../../../layouts/Layout.astro";
 import BottomNav from "../../../components/BottomNav.astro";
+import BudgetNav from "../../../components/BudgetNav.astro";
 import { apiFetch } from "../../../lib/api";
 import { getSpendingReport, formatCurrency, formatDate } from "../../../lib/api/budget";
 
@@ -98,6 +99,8 @@ const groupByLabels: Record<string, string> = {
                 </div>
             </div>
         </header>
+
+        <BudgetNav active="reports" />
 
         <!-- Filters -->
         <div class="px-6 py-4">

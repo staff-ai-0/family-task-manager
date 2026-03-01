@@ -6,6 +6,7 @@
 
 import Layout from "../../layouts/Layout.astro";
 import BottomNav from "../../components/BottomNav.astro";
+import BudgetNav from "../../components/BudgetNav.astro";
 import { apiFetch } from "../../lib/api";
 import { getTransactions, getAccounts, getCategories, formatCurrency, formatDate } from "../../lib/api/budget";
 import type { BudgetTransaction, BudgetAccount, BudgetCategory } from "../../lib/api/budget";
@@ -122,6 +123,9 @@ const netAmount = totalIncome - totalExpenses;
                 </div>
             </div>
         </header>
+
+        <!-- Budget Section Nav -->
+        <BudgetNav active="transactions" />
 
         <!-- Transactions List -->
         <main class="px-6 py-4 flex-grow">

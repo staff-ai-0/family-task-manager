@@ -6,6 +6,7 @@
 
 import Layout from "../../../layouts/Layout.astro";
 import BottomNav from "../../../components/BottomNav.astro";
+import BudgetNav from "../../../components/BudgetNav.astro";
 import { apiFetch } from "../../../lib/api";
 import { getAccounts, formatCurrency } from "../../../lib/api/budget";
 import type { BudgetAccount } from "../../../lib/api/budget";
@@ -107,6 +108,9 @@ const typeIcons: Record<string, string> = {
                 </p>
             </div>
         </header>
+
+        <!-- Budget Section Nav -->
+        <BudgetNav active="accounts" />
 
         <!-- Accounts List -->
         <main class="px-6 py-4 flex-grow">

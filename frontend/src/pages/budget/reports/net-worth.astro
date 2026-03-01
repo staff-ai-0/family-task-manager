@@ -6,6 +6,7 @@
 
 import Layout from "../../../layouts/Layout.astro";
 import BottomNav from "../../../components/BottomNav.astro";
+import BudgetNav from "../../../components/BudgetNav.astro";
 import { apiFetch } from "../../../lib/api";
 import { getNetWorthReport, formatCurrency } from "../../../lib/api/budget";
 
@@ -100,6 +101,8 @@ const accountsByType = report?.accounts?.reduce((acc: any, account: any) => {
                 </div>
             </div>
         </header>
+
+        <BudgetNav active="reports" />
 
         <!-- Date Filter -->
         <div class="px-6 py-4">

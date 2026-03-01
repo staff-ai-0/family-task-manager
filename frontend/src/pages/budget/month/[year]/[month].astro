@@ -6,9 +6,10 @@
 
 import Layout from "../../../../layouts/Layout.astro";
 import BottomNav from "../../../../components/BottomNav.astro";
+import BudgetNav from "../../../../components/BudgetNav.astro";
 import { apiFetch } from "../../../../lib/api";
 import { getMonthBudget, formatCurrency, getMonthName } from "../../../../lib/api/budget";
-import type { MonthBudgetView } from "../../../lib/api/budget";
+import type { MonthBudgetView } from "../../../../lib/api/budget";
 
 // Authentication check
 const token = Astro.cookies.get("access_token")?.value;
@@ -117,6 +118,9 @@ const isCurrentMonth = yearNum === now.getFullYear() && monthNum === now.getMont
                 </div>
             </div>
         </header>
+
+        <!-- Budget Section Nav -->
+        <BudgetNav active="month" year={yearNum} month={monthNum} />
 
         <!-- Summary Cards -->
         <div class="px-6 py-4 grid grid-cols-3 gap-3">
@@ -283,7 +287,7 @@ const isCurrentMonth = yearNum === now.getFullYear() && monthNum === now.getMont
             )}
         </main>
 
-        <BottomNav />
+        <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 
     <!-- Edit Budget Modal -->

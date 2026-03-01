@@ -6,6 +6,7 @@
 
 import Layout from "../../../layouts/Layout.astro";
 import BottomNav from "../../../components/BottomNav.astro";
+import BudgetNav from "../../../components/BudgetNav.astro";
 import { apiFetch } from "../../../lib/api";
 import { getCategoryGroups, formatCurrency } from "../../../lib/api/budget";
 import type { CategoryGroupWithCategories } from "../../../lib/api/budget";
@@ -80,6 +81,9 @@ const totalCategories = categoryGroups?.reduce((sum, g) => sum + g.categories.le
                 </div>
             </div>
         </header>
+
+        <!-- Budget Section Nav -->
+        <BudgetNav active="categories" />
 
         <!-- Categories List -->
         <main class="px-6 py-4 flex-grow">
