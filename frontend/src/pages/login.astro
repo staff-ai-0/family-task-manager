@@ -192,7 +192,39 @@ if (flashError) {
         </div>
     </main>
 
-    <script>
+    <script is:inline>
+        // Make function globally available FIRST, before Google SDK loads
+        window.handleGoogleLogin = async function(response) {
+            try {
+                const credential = response.credential;
+                const joinCodeInput = document.getElementById('join-code-input');
+                const joinCode = joinCodeInput?.value?.trim() || null;
+                
+                // Send token to frontend proxy (sets httpOnly cookie server-side)
+                const result = await fetch('/api/oauth/google', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ token: credential, join_code: joinCode }),
+                });
+
+                const data = await result.json();
+
+                if (result.ok) {
+                    // Cookie was set server-side (httpOnly), redirect to dashboard
+                    window.location.href = '/dashboard';
+                } else {
+                    // Backend returns {error, message, status_code}
+                    const errorMsg = data.message || data.detail || 'Login failed. Please try again.';
+                    alert(errorMsg);
+                }
+            } catch (error) {
+                console.error('Google login error:', error);
+                alert('An error occurred during login. Please try again.');
+            }
+        };
+
         // Email/password login via fetch
         document.getElementById('login-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -282,39 +314,6 @@ if (flashError) {
             }
         });
 
-        // Google Sign-In callback
-        async function handleGoogleLogin(response) {
-            try {
-                const credential = response.credential;
-                const joinCodeInput = document.getElementById('join-code-input') as HTMLInputElement;
-                const joinCode = joinCodeInput?.value?.trim() || null;
-                
-                // Send token to frontend proxy (sets httpOnly cookie server-side)
-                const result = await fetch('/api/oauth/google', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ token: credential, join_code: joinCode }),
-                });
 
-                const data = await result.json();
-
-                if (result.ok) {
-                    // Cookie was set server-side (httpOnly), redirect to dashboard
-                    window.location.href = '/dashboard';
-                } else {
-                    // Backend returns {error, message, status_code}
-                    const errorMsg = data.message || data.detail || 'Login failed. Please try again.';
-                    alert(errorMsg);
-                }
-            } catch (error) {
-                console.error('Google login error:', error);
-                alert('An error occurred during login. Please try again.');
-            }
-        }
-
-        // Make function globally available
-        window.handleGoogleLogin = handleGoogleLogin;
-    </script>
+     </script>
 </Layout>
