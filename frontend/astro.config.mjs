@@ -19,6 +19,7 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    host: true
+    host: true,
+    allowedHosts: ["family.agent-ia.mx", "localhost", "127.0.0.1", "0.0.0.0"],
   }
 });
