@@ -1,0 +1,353 @@
+---
+/**
+ * CSV Transaction Import Page
+ * Allows importing transactions from CSV files with format detection and column mapping
+ */
+
+import Layout from "../../../../layouts/Layout.astro";
+import BottomNav from "../../../../components/BottomNav.astro";
+import BudgetNav from "../../../../components/BudgetNav.astro";
+import { apiFetch } from "../../../../lib/api";
+import { getAccounts } from "../../../../lib/api/budget";
+import type { BudgetAccount } from "../../../../lib/api/budget";
+import { t } from "../../../../lib/i18n";
+
+// Authentication check
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+// Get user info
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+// Only parents can import
+if (user.role !== "parent") {
+    return Astro.redirect("/dashboard");
+}
+
+// Get accounts for import target
+const { data: accounts, ok: accountsOk } = await getAccounts(token);
+---
+
+<Layout title="Importar Transacciones - Presupuesto">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+        <!-- Header -->
+        <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center justify-between mb-6">
+                <a href="/parent/finances" class="text-white hover:text-primary-100 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="text-2xl font-bold">{lang === "es" ? "Importar Movimientos" : "Import Transactions"}</h1>
+                <div class="w-6"></div>
+            </div>
+
+            <!-- Summary -->
+            <div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
+                <p class="text-primary-50 text-sm">
+                    {lang === "es" 
+                        ? "Importa transacciones desde archivos CSV con detección automática de formato"
+                        : "Import transactions from CSV files with automatic format detection"}
+                </p>
+            </div>
+        </header>
+
+        <!-- Budget Section Nav -->
+        <BudgetNav active="transactions" />
+
+        <!-- Main Content -->
+        <main class="px-6 py-6 flex-grow max-w-2xl mx-auto w-full">
+            <!-- Import Form -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                <form id="import-form" class="space-y-6">
+                    <!-- Target Account Selection -->
+                    <div>
+                        <label for="account-id" class="block text-sm font-semibold text-slate-700 mb-2">
+                            {lang === "es" ? "Cuenta Destino *" : "Target Account *"}
+                        </label>
+                        <select 
+                            id="account-id"
+                            required
+                            class="w-full px-4 py-3 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        >
+                            <option value="">{lang === "es" ? "Seleccionar cuenta..." : "Select account..."}</option>
+                            {accountsOk && accounts && accounts.map((account: BudgetAccount) => (
+                                <option value={account.id}>{account.name} ({account.type})</option>
+                            ))}
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">
+                            {lang === "es" 
+                                ? "Las transacciones se importarán a esta cuenta"
+                                : "Transactions will be imported to this account"}
+                        </p>
+                    </div>
+
+                    <!-- CSV File Upload -->
+                    <div>
+                        <label for="csv-file" class="block text-sm font-semibold text-slate-700 mb-2">
+                            {lang === "es" ? "Archivo CSV *" : "CSV File *"}
+                        </label>
+                        <div class="relative">
+                            <input 
+                                type="file"
+                                id="csv-file"
+                                accept=".csv,.txt"
+                                required
+                                class="block w-full px-4 py-3 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer file:hidden hover:border-primary-300 transition"
+                            />
+                            <div id="file-info" class="mt-2 text-xs text-slate-500"></div>
+                        </div>
+                    </div>
+
+                    <!-- CSV Settings -->
+                    <div class="space-y-4 bg-slate-50 p-4 rounded-lg">
+                        <p class="text-sm font-semibold text-slate-700">{lang === "es" ? "Configuración CSV" : "CSV Settings"}</p>
+                        
+                        <div>
+                            <label for="delimiter" class="block text-sm font-medium text-slate-700 mb-1">
+                                {lang === "es" ? "Delimitador" : "Delimiter"}
+                            </label>
+                            <select 
+                                id="delimiter"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                            >
+                                <option value=",">{lang === "es" ? "Coma (,)" : "Comma (,)"}</option>
+                                <option value=";">Punto y coma (;)</option>
+                                <option value="	">{lang === "es" ? "Tabulación" : "Tab"}</option>
+                                <option value="|">Barra vertical (|)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="skip-rows" class="block text-sm font-medium text-slate-700 mb-1">
+                                {lang === "es" ? "Filas a omitir" : "Skip rows"}
+                            </label>
+                            <input 
+                                type="number"
+                                id="skip-rows"
+                                min="0"
+                                max="10"
+                                value="0"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                            />
+                            <p class="text-xs text-slate-500 mt-1">
+                                {lang === "es" 
+                                    ? "Número de filas de encabezado a omitir antes del CSV"
+                                    : "Number of header rows to skip before CSV data"}
+                            </p>
+                        </div>
+
+                        <div class="flex gap-4">
+                            <label class="flex items-center gap-2 text-sm">
+                                <input 
+                                    type="checkbox"
+                                    id="create-payees"
+                                    checked
+                                    class="w-4 h-4 text-primary-600 border-slate-300 rounded"
+                                />
+                                <span class="text-slate-700">
+                                    {lang === "es" ? "Crear pagadores automáticamente" : "Create payees automatically"}
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="flex gap-4">
+                            <label class="flex items-center gap-2 text-sm">
+                                <input 
+                                    type="checkbox"
+                                    id="prevent-duplicates"
+                                    checked
+                                    class="w-4 h-4 text-primary-600 border-slate-300 rounded"
+                                />
+                                <span class="text-slate-700">
+                                    {lang === "es" ? "Evitar duplicados" : "Prevent duplicates"}
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button 
+                        type="submit"
+                        id="import-btn"
+                        class="w-full bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
+                    >
+                        {lang === "es" ? "Importar Transacciones" : "Import Transactions"}
+                    </button>
+                </form>
+
+                <!-- Results Section (hidden initially) -->
+                <div id="results" class="hidden mt-6 p-4 rounded-lg bg-slate-50 border border-slate-200">
+                    <h3 class="font-bold text-slate-800 mb-3">
+                        {lang === "es" ? "Resultados de la Importación" : "Import Results"}
+                    </h3>
+                    
+                    <div id="results-content"></div>
+
+                    <button 
+                        type="button"
+                        onclick="location.href='/parent/finances/transactions'"
+                        class="mt-4 w-full bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-700 transition"
+                    >
+                        {lang === "es" ? "Ver Movimientos Importados" : "View Imported Transactions"}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Help Section -->
+            <div class="mt-6 bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                <h3 class="font-bold text-blue-800 mb-2 text-sm">
+                    {lang === "es" ? "Formato CSV Soportado" : "Supported CSV Format"}
+                </h3>
+                <p class="text-xs text-blue-700 mb-2">
+                    {lang === "es" 
+                        ? "El archivo CSV debe contener las siguientes columnas:"
+                        : "Your CSV file should contain these columns:"}
+                </p>
+                <ul class="text-xs text-blue-700 space-y-1 ml-4 list-disc">
+                    <li>{lang === "es" ? "Fecha (date, fecha, transaction_date)" : "Date (date, fecha, transaction_date)"}</li>
+                    <li>{lang === "es" ? "Monto (amount, monto, value, quantity)" : "Amount (amount, monto, value, quantity)"}</li>
+                    <li>{lang === "es" ? "Descripción (description, payee, memo, descripción)" : "Description (description, payee, memo, descripción)"}</li>
+                    <li>{lang === "es" ? "Categoría (opcional)" : "Category (optional)"}</li>
+                </ul>
+            </div>
+        </main>
+
+        <BottomNav active="parent" role={user.role} lang={lang} />
+    </div>
+</Layout>
+
+<script>
+    const token = document.cookie.split('access_token=')[1]?.split(';')[0];
+    const lang = document.cookie.split('lang=')[1]?.split(';')[0] || 'en';
+    const formEl = document.getElementById('import-form') as HTMLFormElement;
+    const importBtn = document.getElementById('import-btn') as HTMLButtonElement;
+    const fileInput = document.getElementById('csv-file') as HTMLInputElement;
+    const resultsDiv = document.getElementById('results') as HTMLDivElement;
+    const resultsContent = document.getElementById('results-content') as HTMLDivElement;
+
+    // File info display
+    fileInput?.addEventListener('change', (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (file) {
+            const fileInfo = document.getElementById('file-info');
+            if (fileInfo) {
+                fileInfo.textContent = `Selected: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+            }
+        }
+    });
+
+    // Form submission
+    formEl?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const accountId = (document.getElementById('account-id') as HTMLSelectElement).value;
+        const csvFile = fileInput.files?.[0];
+        const delimiter = (document.getElementById('delimiter') as HTMLSelectElement).value;
+        const skipRows = parseInt((document.getElementById('skip-rows') as HTMLInputElement).value || '0');
+        const createPayees = (document.getElementById('create-payees') as HTMLInputElement).checked;
+        const preventDuplicates = (document.getElementById('prevent-duplicates') as HTMLInputElement).checked;
+
+        if (!accountId || !csvFile) {
+            alert(lang === 'es' ? 'Selecciona cuenta y archivo CSV' : 'Please select account and CSV file');
+            return;
+        }
+
+        // Read file and create FormData
+        const fileContent = await csvFile.text();
+        const formData = new FormData();
+        formData.append('file', csvFile);
+
+        // Build query parameters
+        const params = new URLSearchParams({
+            account_id: accountId,
+            delimiter: delimiter,
+            skip_header_rows: skipRows.toString(),
+            create_payees: createPayees.toString(),
+            prevent_duplicates: preventDuplicates.toString(),
+        });
+
+        importBtn.disabled = true;
+        importBtn.textContent = lang === 'es' ? 'Importando...' : 'Importing...';
+
+        try {
+            const response = await fetch(`/api/budget/transactions/import/csv?${params}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.result) {
+                displayResults(data.result);
+            } else {
+                alert(lang === 'es' 
+                    ? `Error: ${data.error}` 
+                    : `Error: ${data.error}`);
+            }
+        } catch (error) {
+            alert(lang === 'es' 
+                ? `Error de importación: ${error}` 
+                : `Import error: ${error}`);
+        } finally {
+            importBtn.disabled = false;
+            importBtn.textContent = lang === 'es' ? 'Importar Transacciones' : 'Import Transactions';
+        }
+    });
+
+    function displayResults(result: any) {
+        formEl.classList.add('hidden');
+        resultsDiv.classList.remove('hidden');
+
+        const html = `
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-white p-3 rounded border border-slate-200">
+                        <p class="text-xs text-slate-600">${lang === 'es' ? 'Total' : 'Total'}</p>
+                        <p class="text-lg font-bold text-slate-800">${result.total_rows}</p>
+                    </div>
+                    <div class="bg-green-50 p-3 rounded border border-green-200">
+                        <p class="text-xs text-green-600">${lang === 'es' ? 'Importados' : 'Imported'}</p>
+                        <p class="text-lg font-bold text-green-600">${result.successful_imports}</p>
+                    </div>
+                </div>
+
+                ${result.skipped_rows > 0 ? `
+                    <div class="bg-yellow-50 p-3 rounded border border-yellow-200">
+                        <p class="text-xs text-yellow-600">${lang === 'es' ? 'Omitidos (duplicados)' : 'Skipped (duplicates)'}</p>
+                        <p class="text-lg font-bold text-yellow-600">${result.skipped_rows}</p>
+                    </div>
+                ` : ''}
+
+                ${result.created_payees.length > 0 ? `
+                    <div class="bg-blue-50 p-3 rounded border border-blue-200">
+                        <p class="text-xs text-blue-600">${lang === 'es' ? 'Pagadores Creados' : 'Payees Created'}</p>
+                        <p class="text-xs text-blue-800 mt-1">${result.created_payees.slice(0, 3).join(', ')}${result.created_payees.length > 3 ? '...' : ''}</p>
+                    </div>
+                ` : ''}
+
+                ${result.failed_rows.length > 0 ? `
+                    <div class="bg-red-50 p-3 rounded border border-red-200">
+                        <p class="text-xs text-red-600 font-semibold">${lang === 'es' ? 'Errores' : 'Errors'}</p>
+                        <div class="mt-2 space-y-1 max-h-32 overflow-auto">
+                            ${result.failed_rows.map((row: any) => `
+                                <p class="text-xs text-red-700">Row ${row[0]}: ${row[1].join(', ')}</p>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+
+        resultsContent.innerHTML = html;
+    }
+</script>

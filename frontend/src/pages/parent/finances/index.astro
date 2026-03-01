@@ -196,14 +196,13 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                     </div>
                 </a>
 
-                <!-- Import Transactions (Future) -->
+                <!-- Import Transactions -->
                 <a
-                    href="#"
-                    onclick="alert('Coming soon: CSV/OFX import')"
-                    class="bg-slate-100 rounded-2xl p-4 shadow-sm border border-slate-200 opacity-50 flex flex-col items-center text-center gap-2 cursor-not-allowed"
+                    href="/parent/finances/import"
+                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-green-200 transition-all flex flex-col items-center text-center gap-2"
                 >
-                    <div class="w-10 h-10 rounded-lg bg-slate-200 flex items-center justify-center">
-                        <svg class="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
                     </div>

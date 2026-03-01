@@ -4,9 +4,9 @@ Transaction routes
 CRUD endpoints for budget transactions.
 """
 
-from fastapi import APIRouter, Depends, status, Query
+from fastapi import APIRouter, Depends, status, Query, File, UploadFile, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import date
 from uuid import UUID
 
@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.services.budget.transaction_service import TransactionService
+from app.services.budget.csv_import_service import CSVImportService
 from app.schemas.budget import TransactionCreate, TransactionUpdate, TransactionResponse
 from app.models import User
 
@@ -130,3 +131,89 @@ async def reconcile_transaction(
         reconciled=reconciled,
     )
     return transaction
+
+
+@router.post("/import/csv", status_code=status.HTTP_200_OK)
+async def import_csv_transactions(
+    file: UploadFile = File(..., description="CSV file containing transactions"),
+    account_id: UUID = Query(..., description="Target account for import"),
+    delimiter: str = Query(",", description="CSV delimiter (comma, semicolon, tab, etc.)"),
+    skip_header_rows: int = Query(0, ge=0, description="Number of header rows to skip"),
+    create_payees: bool = Query(True, description="Automatically create payees"),
+    prevent_duplicates: bool = Query(True, description="Prevent duplicate imports"),
+    column_mapping: Optional[str] = Query(None, description="JSON string with custom column mapping"),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Import transactions from a CSV file.
+    
+    Supports multiple CSV formats with automatic column detection.
+    
+    Query parameters:
+    - account_id: UUID of the account to import into
+    - delimiter: CSV field delimiter (default: comma)
+    - skip_header_rows: Number of header rows to skip (default: 0)
+    - create_payees: Create missing payees automatically (default: true)
+    - prevent_duplicates: Check for duplicates using imported_id (default: true)
+    - column_mapping: JSON mapping of field names, e.g. {"date":"Transaction Date","amount":"Value"}
+    
+    Returns import statistics and detailed error information.
+    """
+    try:
+        # Read CSV file content
+        csv_content = await file.read()
+        csv_text = csv_content.decode('utf-8')
+        
+        # Parse column mapping if provided
+        parsed_mapping: Optional[Dict[str, str]] = None
+        if column_mapping:
+            import json
+            try:
+                parsed_mapping = json.loads(column_mapping)
+            except json.JSONDecodeError:
+                return {
+                    "success": False,
+                    "error": "Invalid column_mapping JSON",
+                    "result": None
+                }
+        
+        # Validate account belongs to family
+        from app.services.budget.account_service import AccountService
+        account = await AccountService.get_by_id(
+            db,
+            account_id,
+            to_uuid_required(current_user.family_id),
+        )
+        if not account:
+            return {
+                "success": False,
+                "error": f"Account not found: {account_id}",
+                "result": None
+            }
+        
+        # Run import
+        result = await CSVImportService.import_csv(
+            db=db,
+            family_id=to_uuid_required(current_user.family_id),
+            csv_content=csv_text,
+            account_id=account_id,
+            column_mapping=parsed_mapping,
+            delimiter=delimiter,
+            skip_header_rows=skip_header_rows,
+            create_payees=create_payees,
+            prevent_duplicates=prevent_duplicates,
+        )
+        
+        return {
+            "success": len(result.import_errors) == 0,
+            "result": result.to_dict()
+        }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "result": None
+        }
+
