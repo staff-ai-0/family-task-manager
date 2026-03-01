@@ -117,38 +117,41 @@ services:
       - app_network
     command: npm run dev -- --host
 
-  # Sync Service (PostgreSQL-based sync for Family Task Manager budget)
-  sync-service:
-    build:
-      context: ./services/actual-budget
-      dockerfile: Dockerfile.sync
-    container_name: family_sync_service
-    environment:
-      # Database configuration
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: familyapp
-      DB_USER: familyapp
-      DB_PASSWORD: familyapp123
-      # Family API configuration
-      FAMILY_API_URL: http://backend:8000
-      FAMILY_API_EMAIL: ${FAMILY_API_EMAIL:-mom@demo.com}
-      FAMILY_API_PASSWORD: ${FAMILY_API_PASSWORD:-password123}
-      # Conversion rate
-      POINTS_TO_MONEY_RATE: ${POINTS_TO_MONEY_RATE:-0.10}
-      POINTS_TO_MONEY_CURRENCY: ${POINTS_TO_MONEY_CURRENCY:-MXN}
-    ports:
-      - "5008:5008"
-    depends_on:
-      backend:
-        condition: service_started
-      db:
-        condition: service_healthy
-    volumes:
-      - ./services/actual-budget:/app
-    restart: unless-stopped
-    networks:
-      - app_network
+  # Sync Service (DEPRECATED - PostgreSQL-based budget system replaces Actual Budget)
+  # This service has been decommissioned in Phase 10 as all Actual Budget
+  # functionality has been migrated to the internal PostgreSQL budget system.
+  # To re-enable: uncomment below and run: docker-compose up sync-service -d
+  # sync-service:
+  #   build:
+  #     context: ./services/actual-budget
+  #     dockerfile: Dockerfile.sync
+  #   container_name: family_sync_service
+  #   environment:
+  #     # Database configuration
+  #     DB_HOST: db
+  #     DB_PORT: 5432
+  #     DB_NAME: familyapp
+  #     DB_USER: familyapp
+  #     DB_PASSWORD: familyapp123
+  #     # Family API configuration
+  #     FAMILY_API_URL: http://backend:8000
+  #     FAMILY_API_EMAIL: ${FAMILY_API_EMAIL:-mom@demo.com}
+  #     FAMILY_API_PASSWORD: ${FAMILY_API_PASSWORD:-password123}
+  #     # Conversion rate
+  #     POINTS_TO_MONEY_RATE: ${POINTS_TO_MONEY_RATE:-0.10}
+  #     POINTS_TO_MONEY_CURRENCY: ${POINTS_TO_MONEY_CURRENCY:-MXN}
+  #   ports:
+  #     - "5008:5008"
+  #   depends_on:
+  #     backend:
+  #       condition: service_started
+  #     db:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./services/actual-budget:/app
+  #   restart: unless-stopped
+  #   networks:
+  #     - app_network
 
 volumes:
   postgres_data:

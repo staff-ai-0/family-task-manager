@@ -26,10 +26,6 @@ class Family(Base):
     join_code = Column(String(10), unique=True, nullable=True, index=True)  # Short code for family invites
     is_active = Column(Boolean, default=True, nullable=False)
     
-    # Actual Budget sync configuration
-    actual_budget_file_id = Column(String(255), nullable=True, comment="Actual Budget file ID for this family")
-    actual_budget_sync_enabled = Column(Boolean, default=False, nullable=False, comment="Enable sync with Actual Budget")
-    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     

@@ -31,8 +31,6 @@ class FamilyUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     is_active: Optional[bool] = None
-    actual_budget_file_id: Optional[str] = Field(None, max_length=255)
-    actual_budget_sync_enabled: Optional[bool] = None
 
 
 # Response schemas
@@ -42,8 +40,6 @@ class FamilyResponse(EntityResponse):
     name: str = Field(..., min_length=1, max_length=100)
     created_by: Optional[UUID] = None  # Optional for legacy data
     is_active: bool
-    actual_budget_file_id: Optional[str] = None
-    actual_budget_sync_enabled: bool = False
 
 
 class FamilyWithMembers(FamilyResponse):
