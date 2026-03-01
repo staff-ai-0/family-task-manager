@@ -76,12 +76,18 @@ const totalIncome = sortedTransactions.filter(t => t.amount > 0).reduce((sum, t)
 const totalExpenses = Math.abs(sortedTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
 
 // Account type labels
-const typeLabels: Record<string, string> = {
+const typeLabels: Record<string, string> = lang === "es" ? {
     checking: "Cuenta Corriente",
     savings: "Ahorro",
     credit: "Crédito",
     investment: "Inversión",
     other: "Otra",
+} : {
+    checking: "Checking",
+    savings: "Savings",
+    credit: "Credit",
+    investment: "Investment",
+    other: "Other",
 };
 ---
 
@@ -107,7 +113,7 @@ const typeLabels: Record<string, string> = {
                     </p>
                     {account.offbudget && (
                         <span class="bg-white/30 text-white text-xs px-2 py-1 rounded-full font-semibold">
-                            Fuera del presupuesto
+                            {lang === "es" ? "Fuera del presupuesto" : "Off budget"}
                         </span>
                     )}
                 </div>
@@ -116,9 +122,9 @@ const typeLabels: Record<string, string> = {
                 </p>
                 {balance && balance.uncleared !== 0 && (
                     <p class="text-primary-50 text-sm">
-                        {formatCurrency(balance.cleared)} conciliado
+                        {formatCurrency(balance.cleared)} {lang === "es" ? "conciliado" : "cleared"}
                         {balance.uncleared > 0 ? ' + ' : ' - '}
-                        {formatCurrency(Math.abs(balance.uncleared))} pendiente
+                        {formatCurrency(Math.abs(balance.uncleared))} {lang === "es" ? "pendiente" : "pending"}
                     </p>
                 )}
             </div>
@@ -127,7 +133,7 @@ const typeLabels: Record<string, string> = {
             <div class="grid grid-cols-2 gap-3 mt-3">
                 <div class="bg-white/20 backdrop-blur-md rounded-xl p-3 border border-white/30">
                     <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
-                        Ingresos
+                        {lang === "es" ? "Ingresos" : "Income"}
                     </p>
                     <p class="text-lg font-bold text-green-300">
                         {formatCurrency(totalIncome)}
@@ -135,7 +141,7 @@ const typeLabels: Record<string, string> = {
                 </div>
                 <div class="bg-white/20 backdrop-blur-md rounded-xl p-3 border border-white/30">
                     <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
-                        Gastos
+                        {lang === "es" ? "Gastos" : "Expenses"}
                     </p>
                     <p class="text-lg font-bold text-red-300">
                         {formatCurrency(totalExpenses)}
@@ -162,7 +168,7 @@ const typeLabels: Record<string, string> = {
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Conciliar
+                {lang === "es" ? "Conciliar" : "Reconcile"}
             </a>
         </div>
 
@@ -170,20 +176,20 @@ const typeLabels: Record<string, string> = {
         <main class="px-6 pb-6 flex-grow">
             {!transOk ? (
                 <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
-                    <p class="font-semibold">Error al cargar transacciones</p>
+                    <p class="font-semibold">{lang === "es" ? "Error al cargar transacciones" : "Error loading transactions"}</p>
                 </div>
             ) : sortedTransactions.length === 0 ? (
                 <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <p class="text-slate-600 font-medium">No hay transacciones</p>
-                    <p class="text-sm text-slate-500 mt-1">Agrega tu primera transacción en esta cuenta</p>
+                    <p class="text-slate-600 font-medium">{lang === "es" ? "No hay transacciones" : "No transactions yet"}</p>
+                    <p class="text-sm text-slate-500 mt-1">{lang === "es" ? "Agrega tu primera transacción en esta cuenta" : "Add your first transaction to this account"}</p>
                     <a 
                         href={`/budget/transactions/new?account=${id}`}
                         class="inline-block mt-4 bg-primary-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary-700 transition"
                     >
-                        Nueva Transacción
+                {lang === "es" ? "Nueva Transacción" : "New Transaction"}
                     </a>
                 </div>
             ) : (
@@ -215,7 +221,7 @@ const typeLabels: Record<string, string> = {
                                                 <div class="flex items-center justify-between mb-1">
                                                     <div class="flex-1">
                                                         <p class="text-sm font-medium text-slate-700">
-                                                            {category?.name || "Sin categoría"}
+                                                            {category?.name || (lang === "es" ? "Sin categoría" : "Uncategorized")}
                                                         </p>
                                                         {transaction.notes && (
                                                             <p class="text-xs text-slate-500 mt-0.5">
@@ -228,7 +234,7 @@ const typeLabels: Record<string, string> = {
                                                             {isIncome ? '+' : ''}{formatCurrency(transaction.amount)}
                                                         </p>
                                                         {transaction.cleared && (
-                                                            <span class="inline-block w-2 h-2 bg-green-500 rounded-full" title="Conciliado"></span>
+                                                            <span class="inline-block w-2 h-2 bg-green-500 rounded-full" title={lang === "es" ? "Conciliado" : "Cleared"}></span>
                                                         )}
                                                     </div>
                                                 </div>

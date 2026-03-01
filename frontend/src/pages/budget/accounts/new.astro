@@ -51,10 +51,10 @@ if (Astro.request.method === "POST") {
             // Redirect to the new account page
             return Astro.redirect(`/budget/accounts/${result.data.id}`);
         } else {
-            error = result.error || "Error al crear cuenta";
+            error = result.error || (lang === "es" ? "Error al crear cuenta" : "Error creating account");
         }
     } catch (e: any) {
-        error = e.message || "Error al procesar formulario";
+        error = e.message || (lang === "es" ? "Error al procesar formulario" : "Error processing form");
     }
 }
 ---
@@ -69,7 +69,7 @@ if (Astro.request.method === "POST") {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </a>
-                <h1 class="text-2xl font-bold">Nueva Cuenta</h1>
+                <h1 class="text-2xl font-bold">{lang === "es" ? "Nueva Cuenta" : "New Account"}</h1>
                 <div class="w-6"></div>
             </div>
         </header>
@@ -85,7 +85,7 @@ if (Astro.request.method === "POST") {
 
             {success && (
                 <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-green-700 mb-4">
-                    <p class="font-semibold">¡Cuenta creada!</p>
+                    <p class="font-semibold">{lang === "es" ? "¡Cuenta creada!" : "Account created!"}</p>
                 </div>
             )}
 
@@ -93,14 +93,14 @@ if (Astro.request.method === "POST") {
                 <!-- Account Name -->
                 <div class="bg-white rounded-xl p-4 shadow-sm">
                     <label for="name" class="block text-sm font-semibold text-slate-700 mb-2">
-                        Nombre de la Cuenta *
+                        {lang === "es" ? "Nombre de la Cuenta *" : "Account Name *"}
                     </label>
                     <input
                         type="text"
                         id="name"
                         name="name"
                         required
-                        placeholder="Ej: Cuenta de Cheques Principal"
+                        placeholder={lang === "es" ? "Ej: Cuenta de Cheques Principal" : "e.g. Main Checking Account"}
                         class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
                 </div>
@@ -108,7 +108,7 @@ if (Astro.request.method === "POST") {
                 <!-- Account Type -->
                 <div class="bg-white rounded-xl p-4 shadow-sm">
                     <label class="block text-sm font-semibold text-slate-700 mb-3">
-                        Tipo de Cuenta *
+                        {lang === "es" ? "Tipo de Cuenta *" : "Account Type *"}
                     </label>
                     <div class="grid grid-cols-2 gap-3">
                         <label class="relative">
@@ -123,7 +123,7 @@ if (Astro.request.method === "POST") {
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto mb-1 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                 </svg>
-                                <span class="block text-xs font-medium text-slate-700 text-center">Cheques</span>
+                                <span class="block text-xs font-medium text-slate-700 text-center">{lang === "es" ? "Cheques" : "Checking"}</span>
                             </div>
                         </label>
                         <label class="relative">
@@ -137,7 +137,7 @@ if (Astro.request.method === "POST") {
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto mb-1 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                                 </svg>
-                                <span class="block text-xs font-medium text-slate-700 text-center">Ahorros</span>
+                                <span class="block text-xs font-medium text-slate-700 text-center">{lang === "es" ? "Ahorros" : "Savings"}</span>
                             </div>
                         </label>
                         <label class="relative">
@@ -151,7 +151,7 @@ if (Astro.request.method === "POST") {
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto mb-1 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                 </svg>
-                                <span class="block text-xs font-medium text-slate-700 text-center">Crédito</span>
+                                <span class="block text-xs font-medium text-slate-700 text-center">{lang === "es" ? "Crédito" : "Credit"}</span>
                             </div>
                         </label>
                         <label class="relative">
@@ -165,7 +165,7 @@ if (Astro.request.method === "POST") {
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto mb-1 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                                 </svg>
-                                <span class="block text-xs font-medium text-slate-700 text-center">Inversión</span>
+                                <span class="block text-xs font-medium text-slate-700 text-center">{lang === "es" ? "Inversión" : "Investment"}</span>
                             </div>
                         </label>
                     </div>
@@ -178,7 +178,7 @@ if (Astro.request.method === "POST") {
                                 class="peer sr-only"
                             />
                             <div class="border-2 border-slate-200 rounded-lg p-3 cursor-pointer peer-checked:border-primary-500 peer-checked:bg-primary-50 transition text-center">
-                                <span class="text-sm font-medium text-slate-700">Otra</span>
+                                <span class="text-sm font-medium text-slate-700">{lang === "es" ? "Otra" : "Other"}</span>
                             </div>
                         </label>
                     </div>
@@ -194,10 +194,10 @@ if (Astro.request.method === "POST") {
                         />
                         <div class="flex-1">
                             <span class="block text-sm font-medium text-slate-700">
-                                Cuenta fuera del presupuesto
+                                {lang === "es" ? "Cuenta fuera del presupuesto" : "Off-budget account"}
                             </span>
                             <span class="block text-xs text-slate-500 mt-1">
-                                Las transacciones de esta cuenta no afectarán tu presupuesto mensual
+                                {lang === "es" ? "Las transacciones de esta cuenta no afectarán tu presupuesto mensual" : "Transactions in this account won't affect your monthly budget"}
                             </span>
                         </div>
                     </label>
@@ -206,13 +206,13 @@ if (Astro.request.method === "POST") {
                 <!-- Notes -->
                 <div class="bg-white rounded-xl p-4 shadow-sm">
                     <label for="notes" class="block text-sm font-semibold text-slate-700 mb-2">
-                        Notas
+                        {lang === "es" ? "Notas" : "Notes"}
                     </label>
                     <textarea
                         id="notes"
                         name="notes"
                         rows="3"
-                        placeholder="Información adicional sobre esta cuenta..."
+                        placeholder={lang === "es" ? "Información adicional sobre esta cuenta..." : "Additional information about this account..."}
                         class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     ></textarea>
                 </div>
@@ -223,13 +223,13 @@ if (Astro.request.method === "POST") {
                         href="/budget/accounts"
                         class="flex-1 bg-slate-200 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-300 transition text-center"
                     >
-                        Cancelar
+                        {lang === "es" ? "Cancelar" : "Cancel"}
                     </a>
                     <button
                         type="submit"
                         class="flex-1 bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
                     >
-                        Crear Cuenta
+                        {lang === "es" ? "Crear Cuenta" : "Create Account"}
                     </button>
                 </div>
             </form>

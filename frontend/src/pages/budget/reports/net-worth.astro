@@ -9,6 +9,7 @@ import BottomNav from "../../../components/BottomNav.astro";
 import BudgetNav from "../../../components/BudgetNav.astro";
 import { apiFetch } from "../../../lib/api";
 import { getNetWorthReport, formatCurrency } from "../../../lib/api/budget";
+import { t } from "../../../lib/i18n";
 
 // Authentication check
 const token = Astro.cookies.get("access_token")?.value;
@@ -39,12 +40,18 @@ const { data: report, ok: reportOk, error } = await getNetWorthReport(
 );
 
 // Account type labels and colors
-const typeLabels: Record<string, string> = {
+const typeLabels: Record<string, string> = lang === "es" ? {
     checking: "Cuentas Corrientes",
     savings: "Ahorros",
     credit: "Crédito",
     investment: "Inversión",
     other: "Otras",
+} : {
+    checking: "Checking",
+    savings: "Savings",
+    credit: "Credit",
+    investment: "Investment",
+    other: "Other",
 };
 
 const typeColors: Record<string, string> = {
@@ -73,27 +80,27 @@ const accountsByType = report?.accounts?.reduce((acc: any, account: any) => {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </a>
-                <h1 class="text-2xl font-bold">Valor Neto</h1>
+                <h1 class="text-2xl font-bold">{lang === "es" ? "Valor Neto" : "Net Worth"}</h1>
                 <div class="w-6"></div>
             </div>
 
             <!-- Net Worth -->
             <div class="bg-white/20 backdrop-blur-md rounded-2xl p-5 border border-white/30">
                 <p class="text-purple-50 text-xs font-semibold uppercase tracking-wider mb-2">
-                    Valor Neto Total
+                    {lang === "es" ? "Valor Neto Total" : "Total Net Worth"}
                 </p>
                 <p class={`text-4xl font-extrabold tracking-tight mb-4 ${(report?.net_worth || 0) >= 0 ? 'text-white' : 'text-red-300'}`}>
                     {formatCurrency(report?.net_worth || 0)}
                 </p>
                 <div class="grid grid-cols-2 gap-3">
                     <div class="bg-white/20 rounded-lg p-3">
-                        <p class="text-purple-50 text-xs mb-1">Activos</p>
+                        <p class="text-purple-50 text-xs mb-1">{lang === "es" ? "Activos" : "Assets"}</p>
                         <p class="text-lg font-bold text-green-300">
                             {formatCurrency(report?.total_assets || 0)}
                         </p>
                     </div>
                     <div class="bg-white/20 rounded-lg p-3">
-                        <p class="text-purple-50 text-xs mb-1">Pasivos</p>
+                        <p class="text-purple-50 text-xs mb-1">{lang === "es" ? "Pasivos" : "Liabilities"}</p>
                         <p class="text-lg font-bold text-red-300">
                             {formatCurrency(Math.abs(report?.total_liabilities || 0))}
                         </p>
@@ -104,11 +111,26 @@ const accountsByType = report?.accounts?.reduce((acc: any, account: any) => {
 
         <BudgetNav active="reports" />
 
+        <!-- Reports Sub-Nav -->
+        <div class="px-6 pt-4 pb-0">
+            <div class="flex rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+                <a href="/budget/reports/spending" class="flex-1 py-2 text-sm font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
+                    {t(lang, 'fin_report_spending')}
+                </a>
+                <a href="/budget/reports/income-vs-expense" class="flex-1 py-2 text-sm font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
+                    {t(lang, 'fin_report_cashflow')}
+                </a>
+                <a href="/budget/reports/net-worth" class="flex-1 py-2 text-sm font-semibold text-center bg-purple-600 text-white transition">
+                    {t(lang, 'fin_report_net_worth')}
+                </a>
+            </div>
+        </div>
+
         <!-- Date Filter -->
         <div class="px-6 py-4">
             <form method="GET" class="bg-white rounded-xl shadow-sm p-4">
                 <label for="as_of_date" class="block text-xs font-semibold text-slate-700 mb-2">
-                    Calcular al día (opcional)
+                    {lang === "es" ? "Calcular al día (opcional)" : "Calculate as of date (optional)"}
                 </label>
                 <div class="flex gap-2">
                     <input
@@ -122,7 +144,7 @@ const accountsByType = report?.accounts?.reduce((acc: any, account: any) => {
                         type="submit"
                         class="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-purple-700 transition text-sm"
                     >
-                        Aplicar
+                        {lang === "es" ? "Aplicar" : "Apply"}
                     </button>
                 </div>
             </form>
@@ -132,21 +154,21 @@ const accountsByType = report?.accounts?.reduce((acc: any, account: any) => {
         <main class="px-6 pb-6 flex-grow">
             {!reportOk ? (
                 <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
-                    <p class="font-semibold">Error al cargar reporte</p>
-                    <p class="text-sm">{error || "Error desconocido"}</p>
+                    <p class="font-semibold">{lang === "es" ? "Error al cargar reporte" : "Error loading report"}</p>
+                    <p class="text-sm">{error || (lang === "es" ? "Error desconocido" : "Unknown error")}</p>
                 </div>
             ) : !report?.accounts || report.accounts.length === 0 ? (
                 <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                     </svg>
-                    <p class="text-slate-600 font-medium">No hay cuentas</p>
-                    <p class="text-sm text-slate-500 mt-1">Crea cuentas para ver tu valor neto</p>
+                    <p class="text-slate-600 font-medium">{lang === "es" ? "No hay cuentas" : "No accounts yet"}</p>
+                    <p class="text-sm text-slate-500 mt-1">{lang === "es" ? "Crea cuentas para ver tu valor neto" : "Create accounts to see your net worth"}</p>
                     <a 
                         href="/budget/accounts/new"
                         class="inline-block mt-4 bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700 transition"
                     >
-                        Crear Cuenta
+                        {lang === "es" ? "Crear Cuenta" : "Create Account"}
                     </a>
                 </div>
             ) : (
@@ -156,7 +178,7 @@ const accountsByType = report?.accounts?.reduce((acc: any, account: any) => {
                         <div>
                             <div class="flex items-center justify-between mb-2 px-2">
                                 <h2 class="text-sm font-bold text-slate-600 uppercase tracking-wide">
-                                    Activos
+                                    {lang === "es" ? "Activos" : "Assets"}
                                 </h2>
                                 <span class="text-lg font-bold text-green-600">
                                     {formatCurrency(report.total_assets)}
@@ -212,7 +234,7 @@ const accountsByType = report?.accounts?.reduce((acc: any, account: any) => {
                         <div>
                             <div class="flex items-center justify-between mb-2 px-2">
                                 <h2 class="text-sm font-bold text-slate-600 uppercase tracking-wide">
-                                    Pasivos
+                                    {lang === "es" ? "Pasivos" : "Liabilities"}
                                 </h2>
                                 <span class="text-lg font-bold text-red-600">
                                     {formatCurrency(Math.abs(report.total_liabilities))}
@@ -266,23 +288,23 @@ const accountsByType = report?.accounts?.reduce((acc: any, account: any) => {
                     <!-- Summary Card -->
                     <div class="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl p-5 mt-4">
                         <p class="text-purple-100 text-xs font-semibold uppercase tracking-wider mb-3">
-                            Resumen Financiero
+                            {lang === "es" ? "Resumen Financiero" : "Financial Summary"}
                         </p>
                         <div class="space-y-2">
                             <div class="flex justify-between items-center">
-                                <span class="text-sm">Total de Cuentas</span>
+                                <span class="text-sm">{lang === "es" ? "Total de Cuentas" : "Total Accounts"}</span>
                                 <span class="text-lg font-bold">{report.accounts.length}</span>
                             </div>
                             <div class="flex justify-between items-center">
-                                <span class="text-sm">Activos Totales</span>
+                                <span class="text-sm">{lang === "es" ? "Activos Totales" : "Total Assets"}</span>
                                 <span class="text-lg font-bold">{formatCurrency(report.total_assets)}</span>
                             </div>
                             <div class="flex justify-between items-center">
-                                <span class="text-sm">Pasivos Totales</span>
+                                <span class="text-sm">{lang === "es" ? "Pasivos Totales" : "Total Liabilities"}</span>
                                 <span class="text-lg font-bold">{formatCurrency(Math.abs(report.total_liabilities))}</span>
                             </div>
                             <div class="border-t border-white/30 pt-2 mt-2 flex justify-between items-center">
-                                <span class="text-base font-semibold">Valor Neto</span>
+                                <span class="text-base font-semibold">{lang === "es" ? "Valor Neto" : "Net Worth"}</span>
                                 <span class="text-2xl font-extrabold">{formatCurrency(report.net_worth)}</span>
                             </div>
                         </div>

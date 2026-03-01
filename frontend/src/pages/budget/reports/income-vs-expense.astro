@@ -9,6 +9,7 @@ import BottomNav from "../../../components/BottomNav.astro";
 import BudgetNav from "../../../components/BudgetNav.astro";
 import { apiFetch } from "../../../lib/api";
 import { getIncomeVsExpenseReport, formatCurrency, formatDate, getMonthName } from "../../../lib/api/budget";
+import { t } from "../../../lib/i18n";
 
 // Authentication check
 const token = Astro.cookies.get("access_token")?.value;
@@ -109,6 +110,21 @@ const groupByLabels: Record<string, string> = {
         </header>
 
         <BudgetNav active="reports" />
+
+        <!-- Reports Sub-Nav -->
+        <div class="px-6 pt-4 pb-0">
+            <div class="flex rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+                <a href="/budget/reports/spending" class="flex-1 py-2 text-sm font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
+                    {t(lang, 'fin_report_spending')}
+                </a>
+                <a href="/budget/reports/income-vs-expense" class="flex-1 py-2 text-sm font-semibold text-center bg-blue-600 text-white transition">
+                    {t(lang, 'fin_report_cashflow')}
+                </a>
+                <a href="/budget/reports/net-worth" class="flex-1 py-2 text-sm font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
+                    {t(lang, 'fin_report_net_worth')}
+                </a>
+            </div>
+        </div>
 
         <!-- Filters -->
         <div class="px-6 py-4">

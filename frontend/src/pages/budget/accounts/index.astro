@@ -10,6 +10,7 @@ import BudgetNav from "../../../components/BudgetNav.astro";
 import { apiFetch } from "../../../lib/api";
 import { getAccounts, formatCurrency } from "../../../lib/api/budget";
 import type { BudgetAccount } from "../../../lib/api/budget";
+import { t } from "../../../lib/i18n";
 
 // Authentication check
 const token = Astro.cookies.get("access_token")?.value;
@@ -75,13 +76,19 @@ const accountsByType = accountsWithBalances.reduce((acc, account) => {
 const budgetAccounts = accountsWithBalances.filter(a => !a.offbudget);
 const totalNetWorth = budgetAccounts.reduce((sum, a) => sum + a.balance.total, 0);
 
-// Type labels in Spanish
-const typeLabels: Record<string, string> = {
+// Type labels (lang-aware)
+const typeLabels: Record<string, string> = lang === "es" ? {
     checking: "Cuentas Corrientes",
     savings: "Ahorros",
     credit: "Crédito",
     investment: "Inversión",
     other: "Otras",
+} : {
+    checking: "Checking",
+    savings: "Savings",
+    credit: "Credit",
+    investment: "Investment",
+    other: "Other",
 };
 
 const typeIcons: Record<string, string> = {
@@ -103,7 +110,7 @@ const typeIcons: Record<string, string> = {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </a>
-                <h1 class="text-2xl font-bold">Cuentas</h1>
+                <h1 class="text-2xl font-bold">{lang === "es" ? "Cuentas" : "Accounts"}</h1>
                 <a href="/budget/accounts/new" class="text-white hover:text-primary-100 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -114,13 +121,13 @@ const typeIcons: Record<string, string> = {
             <!-- Net Worth Summary -->
             <div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
                 <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
-                    Valor Neto Total
+                    {lang === "es" ? "Valor Neto Total" : "Total Net Worth"}
                 </p>
                 <p class="text-3xl font-extrabold tracking-tight text-white">
                     {formatCurrency(totalNetWorth)}
                 </p>
                 <p class="text-primary-50 text-xs mt-2">
-                    {budgetAccounts.length} {budgetAccounts.length === 1 ? 'cuenta' : 'cuentas'}
+                    {budgetAccounts.length} {lang === "es" ? (budgetAccounts.length === 1 ? 'cuenta' : 'cuentas') : (budgetAccounts.length === 1 ? 'account' : 'accounts')}
                 </p>
             </div>
         </header>
@@ -132,18 +139,18 @@ const typeIcons: Record<string, string> = {
         <main class="px-6 py-4 flex-grow">
             {!accountsOk ? (
                 <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
-                    <p class="font-semibold">Error al cargar cuentas</p>
-                    <p class="text-sm">{error || "Error desconocido"}</p>
+                    <p class="font-semibold">{lang === "es" ? "Error al cargar cuentas" : "Error loading accounts"}</p>
+                    <p class="text-sm">{error || (lang === "es" ? "Error desconocido" : "Unknown error")}</p>
                 </div>
             ) : accountsWithBalances.length === 0 ? (
                 <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                     </svg>
-                    <p class="text-slate-600 font-medium">No hay cuentas</p>
-                    <p class="text-sm text-slate-500 mt-1">Crea tu primera cuenta para empezar</p>
+                    <p class="text-slate-600 font-medium">{lang === "es" ? "No hay cuentas" : "No accounts yet"}</p>
+                    <p class="text-sm text-slate-500 mt-1">{lang === "es" ? "Crea tu primera cuenta para empezar" : "Create your first account to get started"}</p>
                     <a href="/budget/accounts/new" class="inline-block mt-4 bg-primary-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary-700 transition">
-                        Nueva Cuenta
+                        {lang === "es" ? "Nueva Cuenta" : "New Account"}
                     </a>
                 </div>
             ) : (
@@ -175,7 +182,7 @@ const typeIcons: Record<string, string> = {
                                                     </p>
                                                     {account.offbudget && (
                                                         <span class="inline-block mt-1 text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-semibold">
-                                                            Fuera del presupuesto
+                                                            {lang === "es" ? "Fuera del presupuesto" : "Off budget"}
                                                         </span>
                                                     )}
                                                 </div>
@@ -185,7 +192,7 @@ const typeIcons: Record<string, string> = {
                                                     </p>
                                                     {hasUncleared && (
                                                         <p class="text-xs text-slate-500 mt-0.5">
-                                                            {formatCurrency(account.balance.cleared)} conciliado
+                                                        {formatCurrency(account.balance.cleared)} {lang === "es" ? "conciliado" : "cleared"}
                                                         </p>
                                                     )}
                                                 </div>
