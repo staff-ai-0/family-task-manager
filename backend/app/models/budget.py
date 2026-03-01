@@ -208,3 +208,39 @@ class BudgetCategorizationRule(Base):
     # Relationships
     family: Mapped["Family"] = relationship("Family", back_populates="budget_categorization_rules")
     category: Mapped["BudgetCategory"] = relationship("BudgetCategory", foreign_keys=[category_id])
+
+
+class BudgetGoal(Base):
+    """Spending goals and targets for categories (monthly or annual).
+    
+    Goals track spending targets independent of allocations.
+    Example: "Spend no more than $200 on groceries this month"
+    """
+    
+    __tablename__ = "budget_goals"
+    
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
+    category_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_categories.id", ondelete="CASCADE"), nullable=False)
+    
+    # Goal specification
+    goal_type: Mapped[str] = mapped_column(String(50), nullable=False, comment="'spending_limit' or 'savings_target'")
+    target_amount: Mapped[int] = mapped_column(Integer, nullable=False, comment="Target amount in cents")
+    period: Mapped[str] = mapped_column(String(50), nullable=False, comment="'monthly', 'quarterly', 'annual'")
+    
+    # Time period
+    start_date: Mapped[date] = mapped_column(Date, nullable=False, comment="Goal start date")
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, comment="Goal end date (null = ongoing)")
+    
+    # Tracking
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, comment="Whether goal is currently active")
+    name: Mapped[str] = mapped_column(String(255), nullable=False, comment="Human-readable goal name")
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Relationships
+    family: Mapped["Family"] = relationship("Family", back_populates="budget_goals")
+    category: Mapped["BudgetCategory"] = relationship("BudgetCategory", foreign_keys=[category_id])

@@ -362,6 +362,66 @@ class CategorizationSuggestion(BaseModel):
     confidence: str = Field("low", description="Confidence level: 'low', 'medium', 'high'")
 
 
+# ============================================================================
+# GOAL SCHEMAS
+# ============================================================================
+
+class GoalBase(BaseModel):
+    """Base goal schema"""
+    category_id: UUID = Field(..., description="Category to track goal for")
+    goal_type: str = Field(..., description="Goal type: 'spending_limit' or 'savings_target'")
+    target_amount: int = Field(..., ge=0, description="Target amount in cents")
+    period: str = Field(..., description="Period: 'monthly', 'quarterly', 'annual'")
+    start_date: DateType = Field(..., description="Goal start date")
+    end_date: Optional[DateType] = Field(None, description="Goal end date (null = ongoing)")
+    is_active: bool = Field(True, description="Is goal currently active?")
+    name: str = Field(..., min_length=1, max_length=255, description="Human-readable goal name")
+    notes: Optional[str] = Field(None, description="Optional notes about the goal")
+
+
+class GoalCreate(GoalBase):
+    """Schema for creating a goal"""
+    pass
+
+
+class GoalUpdate(BaseModel):
+    """Schema for updating a goal"""
+    category_id: Optional[UUID] = None
+    goal_type: Optional[str] = None
+    target_amount: Optional[int] = Field(None, ge=0)
+    period: Optional[str] = None
+    start_date: Optional[DateType] = None
+    end_date: Optional[DateType] = None
+    is_active: Optional[bool] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    notes: Optional[str] = None
+
+
+class GoalResponse(GoalBase):
+    """Goal response with metadata"""
+    id: UUID
+    family_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class GoalProgress(BaseModel):
+    """Goal progress tracking"""
+    goal_id: UUID = Field(..., description="Goal ID")
+    goal_name: str = Field(..., description="Goal name")
+    goal_type: str = Field(..., description="Goal type: 'spending_limit' or 'savings_target'")
+    target_amount: int = Field(..., description="Target amount in cents")
+    actual_amount: int = Field(..., description="Actual amount in cents")
+    period: str = Field(..., description="Period: 'monthly', 'quarterly', 'annual'")
+    start_date: DateType = Field(..., description="Goal start date")
+    end_date: Optional[DateType] = Field(None, description="Goal end date (null = ongoing)")
+    on_track: bool = Field(..., description="Is goal on track?")
+    percentage: float = Field(..., ge=0, le=100, description="Progress percentage (0-100)")
+
+
 # Rebuild models to resolve forward references
 CategoryWithGroup.model_rebuild()
 CategoryGroupWithCategories.model_rebuild()

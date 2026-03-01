@@ -52,6 +52,7 @@ class Family(Base):
     budget_transactions = relationship("BudgetTransaction", back_populates="family", cascade="all, delete-orphan")
     budget_sync_state = relationship("BudgetSyncState", back_populates="family", uselist=False, cascade="all, delete-orphan")
     budget_categorization_rules = relationship("BudgetCategorizationRule", back_populates="family", cascade="all, delete-orphan")
+    budget_goals = relationship("BudgetGoal", back_populates="family", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Family(id={self.id}, name={self.name})>"
