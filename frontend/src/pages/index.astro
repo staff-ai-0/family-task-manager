@@ -1,509 +1,754 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import { t } from "../lib/i18n";
 
 const lang = Astro.cookies.get("lang")?.value ?? "es";
 
-// Si está autenticado, ir al dashboard
 if (Astro.cookies.has("access_token")) {
 	return Astro.redirect("/dashboard");
 }
+
+const es = lang === "es";
 ---
 
-<Layout title="Family Task Manager - Gestiona Tu Familia">
-	<style>
-		:root {
-			--cyan: #00D9FF;
-			--magenta: #B000FF;
-			--dark-bg: #0F0B1F;
-			--navy: #001A4D;
-			--light-text: #F0F0F0;
-		}
+<Layout title={es ? "Family Task Manager — Gestiona Tu Familia" : "Family Task Manager — Manage Your Family"}>
+<style>
+  /* ── Tokens ─────────────────────────────────────── */
+  :root {
+    --cyan:    #00D9FF;
+    --cyan-dim:#007A9A;
+    --mag:     #B000FF;
+    --mag-dim: #6B00AA;
+    --navy:    #05102A;
+    --navy2:   #0B1E4A;
+    --glass:   rgba(255,255,255,0.06);
+    --glass-border: rgba(255,255,255,0.12);
+    --text:    #E8F4FF;
+    --muted:   #8BA8C4;
+  }
 
-		.hero {
-			background: linear-gradient(135deg, var(--dark-bg) 0%, var(--navy) 100%);
-			color: var(--light-text);
-			padding: 120px 20px;
-			text-align: center;
-			position: relative;
-			overflow: hidden;
-		}
+  /* ── Reset for this page ────────────────────────── */
+  .lp * { box-sizing: border-box; }
+  .lp { font-family: 'Inter', system-ui, sans-serif; background: var(--navy); color: var(--text); }
 
-		.hero::before {
-			content: '';
-			position: absolute;
-			width: 400px;
-			height: 400px;
-			background: radial-gradient(circle, var(--cyan) 0%, transparent 70%);
-			opacity: 0.1;
-			border-radius: 50%;
-			top: -100px;
-			right: -100px;
-		}
+  /* ── NAV ─────────────────────────────────────────── */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 5vw;
+    height: 64px;
+    background: rgba(5,16,42,0.72);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--glass-border);
+  }
+  .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .nav-logo-mark {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--cyan), var(--mag));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 16px; color: white;
+  }
+  .nav-logo-text { font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: .5px; }
+  .nav-logo-sub  { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; }
+  .nav-actions { display: flex; gap: 12px; align-items: center; }
+  .btn-ghost {
+    padding: 8px 20px; border-radius: 8px; font-size: 14px; font-weight: 600;
+    color: var(--text); text-decoration: none; border: 1px solid var(--glass-border);
+    background: var(--glass); transition: all .2s;
+  }
+  .btn-ghost:hover { border-color: var(--cyan); color: var(--cyan); }
+  .btn-cta {
+    padding: 8px 22px; border-radius: 8px; font-size: 14px; font-weight: 700;
+    color: var(--navy); text-decoration: none;
+    background: linear-gradient(135deg, var(--cyan) 0%, #00B8D9 100%);
+    transition: all .2s; box-shadow: 0 0 20px rgba(0,217,255,.25);
+  }
+  .btn-cta:hover { transform: translateY(-1px); box-shadow: 0 0 32px rgba(0,217,255,.45); }
 
-		.hero::after {
-			content: '';
-			position: absolute;
-			width: 300px;
-			height: 300px;
-			background: radial-gradient(circle, var(--magenta) 0%, transparent 70%);
-			opacity: 0.1;
-			border-radius: 50%;
-			bottom: -50px;
-			left: -50px;
-		}
+  /* ── HERO ────────────────────────────────────────── */
+  .hero {
+    position: relative; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 120px 24px 80px;
+    overflow: hidden;
+  }
+  .hero-bg {
+    position: absolute; inset: 0; z-index: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0,217,255,.12) 0%, transparent 70%),
+                radial-gradient(ellipse 60% 50% at 80% 80%, rgba(176,0,255,.10) 0%, transparent 60%),
+                linear-gradient(180deg, var(--navy) 0%, var(--navy2) 100%);
+  }
+  /* grid lines */
+  .hero-bg::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,217,255,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,217,255,.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    mask-image: radial-gradient(ellipse 80% 80% at 50% 0%, black 0%, transparent 75%);
+  }
+  .hero-content { position: relative; z-index: 1; max-width: 820px; margin: 0 auto; }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px; border-radius: 100px; margin-bottom: 28px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass); backdrop-filter: blur(8px);
+    font-size: 12px; font-weight: 600; color: var(--cyan); letter-spacing: .8px;
+  }
+  .hero-badge-dot { width: 7px; height: 7px; background: var(--cyan); border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.5; transform:scale(1.4); } }
 
-		.hero-content {
-			position: relative;
-			z-index: 1;
-			max-width: 800px;
-			margin: 0 auto;
-		}
+  .hero h1 {
+    font-size: clamp(36px, 6vw, 72px);
+    font-weight: 900; line-height: 1.05; letter-spacing: -2px;
+    margin: 0 0 24px;
+  }
+  .hero h1 .grad {
+    background: linear-gradient(90deg, var(--cyan) 0%, #7B8FFF 50%, var(--mag) 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero-sub {
+    font-size: clamp(16px, 2vw, 20px); color: var(--muted); max-width: 560px;
+    margin: 0 auto 48px; line-height: 1.6;
+  }
+  .hero-btns { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .btn-primary {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 15px 36px; border-radius: 12px; font-size: 16px; font-weight: 700;
+    color: var(--navy); text-decoration: none;
+    background: linear-gradient(135deg, var(--cyan), #00B8D9);
+    box-shadow: 0 0 40px rgba(0,217,255,.3), inset 0 1px 0 rgba(255,255,255,.3);
+    transition: all .25s;
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 60px rgba(0,217,255,.5), inset 0 1px 0 rgba(255,255,255,.3); }
+  .btn-secondary {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 15px 36px; border-radius: 12px; font-size: 16px; font-weight: 600;
+    color: var(--text); text-decoration: none;
+    border: 1px solid var(--glass-border); background: var(--glass); backdrop-filter: blur(8px);
+    transition: all .25s;
+  }
+  .btn-secondary:hover { border-color: var(--cyan); color: var(--cyan); transform: translateY(-2px); }
 
-		.logo {
-			font-size: 24px;
-			font-weight: bold;
-			margin-bottom: 30px;
-		}
+  /* Floating stats bar */
+  .hero-stats {
+    display: flex; gap: 40px; justify-content: center; flex-wrap: wrap;
+    margin-top: 64px; padding-top: 48px;
+    border-top: 1px solid var(--glass-border);
+  }
+  .hero-stat { text-align: center; }
+  .hero-stat-num { font-size: 32px; font-weight: 900; color: var(--cyan); }
+  .hero-stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; letter-spacing: .5px; }
 
-		.logo-text {
-			color: var(--cyan);
-			letter-spacing: 2px;
-		}
+  /* ── SECTION commons ─────────────────────────────── */
+  .section { padding: 100px 5vw; }
+  .section-inner { max-width: 1200px; margin: 0 auto; }
+  .section-eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: 2.5px;
+    color: var(--cyan); text-transform: uppercase; margin-bottom: 16px;
+  }
+  .section-title {
+    font-size: clamp(28px, 4vw, 46px); font-weight: 900; letter-spacing: -1.5px;
+    line-height: 1.1; margin: 0 0 16px;
+  }
+  .section-sub { color: var(--muted); font-size: 17px; line-height: 1.6; max-width: 520px; }
 
-		.logo-sub {
-			color: var(--magenta);
-			font-size: 12px;
-			letter-spacing: 2px;
-		}
+  /* ── FEATURES ────────────────────────────────────── */
+  .features { background: var(--navy); }
+  .features-header { margin-bottom: 64px; }
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 24px;
+  }
+  .feature-card {
+    padding: 36px 32px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    backdrop-filter: blur(8px);
+    transition: all .3s;
+    position: relative; overflow: hidden;
+  }
+  .feature-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--cyan), var(--mag));
+    opacity: 0; transition: opacity .3s;
+  }
+  .feature-card:hover { transform: translateY(-4px); border-color: rgba(0,217,255,.25); }
+  .feature-card:hover::before { opacity: 1; }
+  .feature-icon-wrap {
+    width: 52px; height: 52px; border-radius: 14px; margin-bottom: 20px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgba(0,217,255,.15), rgba(176,0,255,.1));
+    border: 1px solid rgba(0,217,255,.2);
+  }
+  .feature-icon-wrap svg { width: 26px; height: 26px; color: var(--cyan); }
+  .feature-card h3 { font-size: 19px; font-weight: 700; margin: 0 0 10px; }
+  .feature-card p  { color: var(--muted); font-size: 14px; line-height: 1.7; margin: 0; }
 
-		.hero h1 {
-			font-size: 52px;
-			font-weight: 700;
-			margin-bottom: 20px;
-			color: var(--cyan);
-		}
+  /* ── MODULES – alternating ───────────────────────── */
+  .modules { background: linear-gradient(180deg, var(--navy) 0%, var(--navy2) 100%); }
+  .module-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 80px;
+    align-items: center; padding: 60px 0;
+    border-bottom: 1px solid var(--glass-border);
+  }
+  .module-row:last-child { border-bottom: none; }
+  .module-row.reverse { direction: rtl; }
+  .module-row.reverse > * { direction: ltr; }
+  .module-text {}
+  .module-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 2.5px; color: var(--cyan); text-transform: uppercase; margin-bottom: 12px; }
+  .module-title { font-size: clamp(24px, 3vw, 36px); font-weight: 900; letter-spacing: -1px; margin: 0 0 16px; }
+  .module-desc { color: var(--muted); font-size: 15px; line-height: 1.8; margin: 0 0 28px; }
+  .module-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .module-checks li {
+    display: flex; align-items: flex-start; gap: 12px;
+    font-size: 14px; color: var(--muted);
+  }
+  .module-checks li::before {
+    content: '';
+    width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--cyan), var(--mag));
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") center/contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") center/contain no-repeat;
+  }
+  /* Module visual card */
+  .module-visual {
+    border-radius: 24px; overflow: hidden;
+    border: 1px solid var(--glass-border);
+    background: var(--glass); backdrop-filter: blur(8px);
+    padding: 32px;
+    position: relative;
+  }
+  .module-visual::before {
+    content: ''; position: absolute; inset: 0; z-index: 0;
+    background: radial-gradient(ellipse 70% 60% at 60% 30%, rgba(0,217,255,.08), transparent 70%);
+  }
+  .mv-inner { position: relative; z-index: 1; }
+  .mv-title { font-size: 12px; color: var(--muted); letter-spacing: 1px; margin-bottom: 20px; text-transform: uppercase; }
+  /* Fake task list */
+  .mv-task {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; border-radius: 12px; margin-bottom: 8px;
+    background: rgba(255,255,255,.04); border: 1px solid var(--glass-border);
+  }
+  .mv-task-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .mv-task-dot.done { background: #22C55E; }
+  .mv-task-dot.todo { background: rgba(255,255,255,.2); border: 2px solid rgba(255,255,255,.2); }
+  .mv-task-text { font-size: 13px; flex: 1; }
+  .mv-task-pts { font-size: 11px; font-weight: 700; color: var(--cyan); }
+  .mv-task.done .mv-task-text { color: var(--muted); text-decoration: line-through; }
+  /* Fake budget row */
+  .mv-budget-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--glass-border);
+  }
+  .mv-budget-row:last-child { border-bottom: none; }
+  .mv-budget-cat { font-size: 13px; flex: 1; }
+  .mv-budget-bar-wrap { width: 100px; height: 5px; background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden; }
+  .mv-budget-bar { height: 100%; border-radius: 99px; }
+  .mv-budget-num { font-size: 12px; font-weight: 700; width: 60px; text-align: right; }
+  /* points summary */
+  .mv-points-ring {
+    display: flex; align-items: center; gap: 24px; padding: 20px 0;
+  }
+  .mv-ring {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: conic-gradient(var(--cyan) 0% 72%, rgba(255,255,255,.08) 72%);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+  .mv-ring::after { content: ''; position: absolute; width: 56px; height: 56px; background: var(--navy); border-radius: 50%; }
+  .mv-ring-num { position: relative; z-index: 1; font-size: 16px; font-weight: 900; color: var(--cyan); }
+  .mv-ring-info h4 { font-size: 16px; font-weight: 800; margin: 0 0 4px; }
+  .mv-ring-info p  { font-size: 12px; color: var(--muted); margin: 0; }
 
-		.hero p {
-			font-size: 20px;
-			margin-bottom: 40px;
-			opacity: 0.95;
-		}
+  /* ── SOCIAL PROOF ────────────────────────────────── */
+  .proof { background: var(--navy2); }
+  .proof-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; margin-top: 56px; }
+  .proof-card {
+    padding: 32px; border-radius: 20px;
+    border: 1px solid var(--glass-border); background: var(--glass); backdrop-filter: blur(8px);
+  }
+  .proof-stars { display: flex; gap: 4px; margin-bottom: 16px; }
+  .proof-stars span { color: #FFB800; font-size: 16px; }
+  .proof-text { font-size: 15px; color: var(--muted); line-height: 1.7; margin: 0 0 24px; font-style: italic; }
+  .proof-author { display: flex; align-items: center; gap: 12px; }
+  .proof-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px; color: var(--navy);
+    background: linear-gradient(135deg, var(--cyan), var(--mag));
+    flex-shrink: 0;
+  }
+  .proof-name { font-size: 14px; font-weight: 700; }
+  .proof-role { font-size: 12px; color: var(--muted); }
 
-		.cta-buttons {
-			display: flex;
-			gap: 20px;
-			justify-content: center;
-			flex-wrap: wrap;
-		}
+  /* ── FINAL CTA ───────────────────────────────────── */
+  .cta-section {
+    padding: 120px 5vw;
+    background: linear-gradient(135deg, var(--navy2), var(--navy));
+    text-align: center; position: relative; overflow: hidden;
+  }
+  .cta-section::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse 70% 80% at 50% 50%, rgba(0,217,255,.08), transparent 65%),
+                radial-gradient(ellipse 50% 60% at 80% 20%, rgba(176,0,255,.08), transparent 60%);
+  }
+  .cta-inner { position: relative; z-index: 1; max-width: 640px; margin: 0 auto; }
+  .cta-section h2 {
+    font-size: clamp(30px, 5vw, 54px); font-weight: 900; letter-spacing: -2px; margin: 0 0 20px;
+  }
+  .cta-section p { color: var(--muted); font-size: 18px; line-height: 1.6; margin: 0 0 48px; }
+  .cta-btns { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
 
-		.btn {
-			padding: 14px 32px;
-			border-radius: 8px;
-			font-size: 16px;
-			font-weight: 600;
-			text-decoration: none;
-			transition: all 0.3s ease;
-			border: 2px solid transparent;
-		}
+  /* ── FOOTER ──────────────────────────────────────── */
+  .footer {
+    padding: 60px 5vw 32px;
+    background: #030B1F;
+    border-top: 1px solid var(--glass-border);
+  }
+  .footer-inner { max-width: 1200px; margin: 0 auto; }
+  .footer-top { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 60px; margin-bottom: 48px; }
+  .footer-brand p { font-size: 13px; color: var(--muted); margin: 12px 0 0; line-height: 1.7; max-width: 280px; }
+  .footer-col h4 { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; color: var(--text); text-transform: uppercase; margin: 0 0 16px; }
+  .footer-col a { display: block; font-size: 13px; color: var(--muted); text-decoration: none; margin-bottom: 10px; transition: color .2s; }
+  .footer-col a:hover { color: var(--cyan); }
+  .footer-bottom {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+    padding-top: 28px; border-top: 1px solid var(--glass-border);
+    font-size: 12px; color: var(--muted);
+  }
+  /* Lang toggle pill */
+  .lang-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 14px; border-radius: 99px;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer;
+    transition: all .2s;
+  }
+  .lang-btn:hover { border-color: var(--cyan); color: var(--cyan); }
 
-		.btn-primary {
-			background: linear-gradient(135deg, var(--cyan) 0%, var(--magenta) 100%);
-			color: white;
-		}
+  /* ── RESPONSIVE ──────────────────────────────────── */
+  @media (max-width: 900px) {
+    .module-row { grid-template-columns: 1fr; gap: 40px; }
+    .module-row.reverse { direction: ltr; }
+    .footer-top { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 600px) {
+    .footer-top { grid-template-columns: 1fr; }
+    .hero-stats { gap: 24px; }
+    .nav-actions .btn-ghost { display: none; }
+  }
+</style>
 
-		.btn-primary:hover {
-			transform: translateY(-2px);
-			box-shadow: 0 10px 25px rgba(0, 217, 255, 0.3);
-		}
+<div class="lp">
 
-		.btn-secondary {
-			background: transparent;
-			color: var(--light-text);
-			border: 2px solid var(--cyan);
-		}
+  <!-- NAV -->
+  <nav class="nav">
+    <a href="/" class="nav-logo">
+      <div class="nav-logo-mark">F</div>
+      <div>
+        <div class="nav-logo-text">Family Task Manager</div>
+        <div class="nav-logo-sub">AGENTES DIGITALES</div>
+      </div>
+    </a>
+    <div class="nav-actions">
+      <form method="POST" action="/api/lang" style="margin:0;">
+        <input type="hidden" name="lang" value={es ? "en" : "es"} />
+        <button type="submit" class="lang-btn">
+          <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+          {es ? "EN" : "ES"}
+        </button>
+      </form>
+      <a href="/login" class="btn-ghost">{es ? "Iniciar Sesión" : "Sign In"}</a>
+      <a href="/login" class="btn-cta">{es ? "Comenzar Gratis" : "Get Started Free"}</a>
+    </div>
+  </nav>
 
-		.btn-secondary:hover {
-			background: var(--cyan);
-			color: var(--navy);
-		}
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="hero-badge-dot"></span>
+        {es ? "Plataforma Familiar N°1" : "The #1 Family Platform"}
+      </div>
+      <h1>
+        {es
+          ? <><span class="grad">Organiza, motiva</span><br />y administra tu familia</>
+          : <><span class="grad">Organize, motivate</span><br />and manage your family</>
+        }
+      </h1>
+      <p class="hero-sub">
+        {es
+          ? "Tareas automáticas, puntos canjeables y presupuesto por sobres — todo en un solo lugar para que tu familia funcione en armonía."
+          : "Automated tasks, redeemable points and envelope budgeting — all in one place so your family runs in harmony."
+        }
+      </p>
+      <div class="hero-btns">
+        <a href="/login" class="btn-primary">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          {es ? "Comenzar Ahora" : "Start Now"}
+        </a>
+        <a href="#features" class="btn-secondary">
+          {es ? "Ver cómo funciona" : "See how it works"}
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </a>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat-num">3</div>
+          <div class="hero-stat-label">{es ? "MÓDULOS INTEGRADOS" : "INTEGRATED MODULES"}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-num">ES/EN</div>
+          <div class="hero-stat-label">{es ? "BILINGÜE" : "BILINGUAL"}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-num">100%</div>
+          <div class="hero-stat-label">{es ? "CONTROL PARENTAL" : "PARENTAL CONTROL"}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-num">∞</div>
+          <div class="hero-stat-label">{es ? "MIEMBROS FAMILIA" : "FAMILY MEMBERS"}</div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-		/* Features Section */
-		.features {
-			padding: 80px 20px;
-			background: white;
-		}
+  <!-- FEATURES -->
+  <section class="section features" id="features">
+    <div class="section-inner">
+      <div class="features-header">
+        <div class="section-eyebrow">{es ? "Características" : "Features"}</div>
+        <h2 class="section-title">{es ? "Todo lo que necesita tu familia" : "Everything your family needs"}</h2>
+        <p class="section-sub">{es ? "Diseñado para que funcione el primer día — sin configuraciones complicadas." : "Designed to work on day one — no complicated setup."}</p>
+      </div>
+      <div class="features-grid">
 
-		.features-content {
-			max-width: 1200px;
-			margin: 0 auto;
-		}
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+          </div>
+          <h3>{es ? "Tareas Automáticas" : "Automated Tasks"}</h3>
+          <p>{es ? "Barajado semanal inteligente. El sistema asigna tareas según rotación, frecuencia y preferencias — sin que los padres tengan que hacerlo." : "Smart weekly shuffle. The system assigns tasks based on rotation, frequency, and preferences — no manual work for parents."}</p>
+        </div>
 
-		.section-title {
-			font-size: 40px;
-			font-weight: 700;
-			color: var(--navy);
-			margin-bottom: 50px;
-			text-align: center;
-		}
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+          </div>
+          <h3>{es ? "Sistema de Puntos" : "Points System"}</h3>
+          <p>{es ? "Gamifica la responsabilidad. Los hijos acumulan puntos por tareas completadas y los canjean por premios que la familia define." : "Gamify responsibility. Kids earn points for completed tasks and redeem them for rewards the family defines."}</p>
+        </div>
 
-		.feature-grid {
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-			gap: 30px;
-		}
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+          </div>
+          <h3>{es ? "Presupuesto por Sobres" : "Envelope Budgeting"}</h3>
+          <p>{es ? "El método probado del presupuesto por sobres. Asigna dinero a categorías, controla gastos en tiempo real y enseña finanzas a tus hijos." : "The proven envelope budgeting method. Assign money to categories, track spending in real time, and teach finances to your kids."}</p>
+        </div>
 
-		.feature-card {
-			padding: 30px;
-			background: #F5F7FA;
-			border-radius: 8px;
-			border-top: 4px solid var(--cyan);
-			text-align: center;
-		}
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          </div>
+          <h3>{es ? "Reportes & Analítica" : "Reports & Analytics"}</h3>
+          <p>{es ? "Gastos por categoría, flujo de caja mensual y patrimonio neto de la familia. Visualizaciones claras para tomar mejores decisiones." : "Spending by category, monthly cash flow, and family net worth. Clear visualizations for better financial decisions."}</p>
+        </div>
 
-		.feature-icon {
-			font-size: 40px;
-			margin-bottom: 15px;
-		}
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          </div>
+          <h3>{es ? "Multi-miembro" : "Multi-member"}</h3>
+          <p>{es ? "Roles diferenciados: Padres con control total, hijos con su propio panel. Cada quien ve exactamente lo que necesita." : "Differentiated roles: Parents with full control, kids with their own dashboard. Everyone sees exactly what they need."}</p>
+        </div>
 
-		.feature-card h3 {
-			font-size: 18px;
-			font-weight: 600;
-			color: var(--navy);
-			margin-bottom: 10px;
-		}
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+          </div>
+          <h3>{es ? "Bilingüe ES/EN" : "Bilingual ES/EN"}</h3>
+          <p>{es ? "Toda la plataforma en Español e Inglés. Cada miembro elige su idioma desde su perfil sin afectar a los demás." : "Entire platform in Spanish and English. Each member chooses their language from their profile without affecting others."}</p>
+        </div>
 
-		.feature-card p {
-			color: #666;
-			font-size: 14px;
-			line-height: 1.6;
-		}
+      </div>
+    </div>
+  </section>
 
-		/* Benefits Section */
-		.benefits {
-			padding: 80px 20px;
-			background: linear-gradient(135deg, #F0F8FF 0%, white 100%);
-		}
+  <!-- MODULES detail -->
+  <section class="section modules">
+    <div class="section-inner">
 
-		.benefits-content {
-			max-width: 1000px;
-			margin: 0 auto;
-		}
+      <!-- Task Manager -->
+      <div class="module-row">
+        <div class="module-text">
+          <div class="module-eyebrow">{es ? "Módulo 1" : "Module 1"}</div>
+          <h2 class="module-title">{es ? "Tareas que se organizan solas" : "Tasks that organize themselves"}</h2>
+          <p class="module-desc">{es ? "Olvídate de recordar quién hace qué. El sistema rota tareas automáticamente cada semana entre los miembros de la familia, con control total para los padres." : "Forget remembering who does what. The system automatically rotates tasks weekly among family members, with full parental control."}</p>
+          <ul class="module-checks">
+            <li>{es ? "Asignación automática ROTATE / FIXED / AUTO" : "Automatic ROTATE / FIXED / AUTO assignment"}</li>
+            <li>{es ? "Tareas bonus para motivar extra" : "Bonus tasks for extra motivation"}</li>
+            <li>{es ? "Historial de tareas por miembro" : "Task history per member"}</li>
+            <li>{es ? "Frecuencias: diaria, semanal, personalizada" : "Frequencies: daily, weekly, custom"}</li>
+          </ul>
+        </div>
+        <div class="module-visual">
+          <div class="mv-inner">
+            <div class="mv-title">{es ? "Esta semana — Emma" : "This week — Emma"}</div>
+            <div class="mv-task">
+              <div class="mv-task-dot done"></div>
+              <span class="mv-task-text">{es ? "Lavar los platos" : "Wash dishes"}</span>
+              <span class="mv-task-pts">+30 pts</span>
+            </div>
+            <div class="mv-task">
+              <div class="mv-task-dot done"></div>
+              <span class="mv-task-text">{es ? "Tender la cama" : "Make the bed"}</span>
+              <span class="mv-task-pts">+20 pts</span>
+            </div>
+            <div class="mv-task">
+              <div class="mv-task-dot todo"></div>
+              <span class="mv-task-text">{es ? "Sacar la basura" : "Take out trash"}</span>
+              <span class="mv-task-pts">+25 pts</span>
+            </div>
+            <div class="mv-task">
+              <div class="mv-task-dot todo"></div>
+              <span class="mv-task-text">{es ? "⭐ Limpiar el baño (bonus)" : "⭐ Clean bathroom (bonus)"}</span>
+              <span class="mv-task-pts">+60 pts</span>
+            </div>
+            <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--glass-border); display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:12px;color:var(--muted);">{es ? "Completado 2/4" : "Completed 2/4"}</span>
+              <div style="height:6px;width:120px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden;">
+                <div style="width:50%;height:100%;background:linear-gradient(90deg,var(--cyan),var(--mag));border-radius:99px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-		.benefit-grid {
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-			gap: 25px;
-		}
+      <!-- Points / Rewards -->
+      <div class="module-row reverse">
+        <div class="module-text">
+          <div class="module-eyebrow">{es ? "Módulo 2" : "Module 2"}</div>
+          <h2 class="module-title">{es ? "Puntos que motivan de verdad" : "Points that actually motivate"}</h2>
+          <p class="module-desc">{es ? "Los hijos acumulan puntos con cada tarea completada y los canjean por premios reales que la familia define. Transparente, justo y emocionante." : "Kids earn points with each completed task and redeem them for real rewards the family defines. Transparent, fair, and exciting."}</p>
+          <ul class="module-checks">
+            <li>{es ? "Balance de puntos en tiempo real" : "Real-time point balance"}</li>
+            <li>{es ? "Catálogo de premios configurable por padres" : "Reward catalog configurable by parents"}</li>
+            <li>{es ? "Historial completo de ganancias y canjes" : "Complete history of earnings and redemptions"}</li>
+            <li>{es ? "Ajuste manual de puntos con motivo" : "Manual point adjustments with reason"}</li>
+          </ul>
+        </div>
+        <div class="module-visual">
+          <div class="mv-inner">
+            <div class="mv-title">{es ? "Balance de puntos" : "Points balance"}</div>
+            <div class="mv-points-ring">
+              <div class="mv-ring"><span class="mv-ring-num">72%</span></div>
+              <div class="mv-ring-info">
+                <h4>Lucas — 280 pts</h4>
+                <p>{es ? "A 220 pts del próximo premio" : "220 pts from next reward"}</p>
+              </div>
+            </div>
+            <div style="margin-top:16px;">
+              <div class="mv-task" style="background:rgba(0,217,255,.06);border-color:rgba(0,217,255,.2);">
+                <span style="font-size:18px;">🎮</span>
+                <span class="mv-task-text">{es ? "Tiempo extra en videojuegos" : "Extra video game time"}</span>
+                <span class="mv-task-pts">300 pts</span>
+              </div>
+              <div class="mv-task">
+                <span style="font-size:18px;">🍕</span>
+                <span class="mv-task-text">{es ? "Cena a elegir" : "Dinner of choice"}</span>
+                <span class="mv-task-pts">500 pts</span>
+              </div>
+              <div class="mv-task">
+                <span style="font-size:18px;">🎬</span>
+                <span class="mv-task-text">{es ? "Película en el cine" : "Movie at the theater"}</span>
+                <span class="mv-task-pts">800 pts</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-		.benefit-item {
-			padding: 25px;
-			background: white;
-			border-left: 4px solid var(--magenta);
-			border-radius: 4px;
-			box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-		}
+      <!-- Finances -->
+      <div class="module-row">
+        <div class="module-text">
+          <div class="module-eyebrow">{es ? "Módulo 3" : "Module 3"}</div>
+          <h2 class="module-title">{es ? "Finanzas familiares bajo control" : "Family finances under control"}</h2>
+          <p class="module-desc">{es ? "Presupuesto por sobres de nivel profesional. Sabe exactamente cuánto tienes listo para asignar, cuánto has gastado y cuánto te queda en cada categoría." : "Professional-grade envelope budgeting. Know exactly how much you have ready to assign, how much you've spent, and how much remains in each category."}</p>
+          <ul class="module-checks">
+            <li>{es ? "Cuentas: corriente, ahorros, crédito, inversiones" : "Accounts: checking, savings, credit, investments"}</li>
+            <li>{es ? "'Listo para Asignar' en tiempo real" : "Real-time 'Ready to Assign'"}</li>
+            <li>{es ? "Importación de CSV desde tu banco" : "CSV import from your bank"}</li>
+            <li>{es ? "Reportes: gastos, flujo de caja, patrimonio neto" : "Reports: spending, cash flow, net worth"}</li>
+          </ul>
+        </div>
+        <div class="module-visual">
+          <div class="mv-inner">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+              <div>
+                <div class="mv-title" style="margin-bottom:4px;">{es ? "Listo para Asignar" : "Ready to Assign"}</div>
+                <div style="font-size:28px;font-weight:900;color:var(--cyan);">$68,234</div>
+              </div>
+              <div style="text-align:right;">
+                <div class="mv-title" style="margin-bottom:4px;">{es ? "Ingresos del mes" : "Monthly income"}</div>
+                <div style="font-size:18px;font-weight:700;color:#22C55E;">$120,000</div>
+              </div>
+            </div>
+            <div class="mv-budget-row">
+              <span class="mv-budget-cat">{es ? "Alimentación" : "Food"}</span>
+              <div class="mv-budget-bar-wrap"><div class="mv-budget-bar" style="width:75%;background:linear-gradient(90deg,var(--cyan),#00B8D9);"></div></div>
+              <span class="mv-budget-num" style="color:var(--cyan);">$3,000</span>
+            </div>
+            <div class="mv-budget-row">
+              <span class="mv-budget-cat">{es ? "Transporte" : "Transport"}</span>
+              <div class="mv-budget-bar-wrap"><div class="mv-budget-bar" style="width:90%;background:linear-gradient(90deg,#FFB800,#FF8C00);"></div></div>
+              <span class="mv-budget-num" style="color:#FFB800;">$1,800</span>
+            </div>
+            <div class="mv-budget-row">
+              <span class="mv-budget-cat">{es ? "Educación" : "Education"}</span>
+              <div class="mv-budget-bar-wrap"><div class="mv-budget-bar" style="width:40%;background:linear-gradient(90deg,#22C55E,#16A34A);"></div></div>
+              <span class="mv-budget-num" style="color:#22C55E;">$5,000</span>
+            </div>
+            <div class="mv-budget-row">
+              <span class="mv-budget-cat">{es ? "Entretenimiento" : "Entertainment"}</span>
+              <div class="mv-budget-bar-wrap"><div class="mv-budget-bar" style="width:55%;background:linear-gradient(90deg,var(--mag),var(--mag-dim));"></div></div>
+              <span class="mv-budget-num" style="color:var(--mag);">$1,200</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-		.benefit-item h4 {
-			color: var(--magenta);
-			font-size: 16px;
-			font-weight: 600;
-			margin-bottom: 10px;
-		}
+    </div>
+  </section>
 
-		.benefit-item p {
-			color: #555;
-			font-size: 14px;
-			line-height: 1.6;
-		}
+  <!-- SOCIAL PROOF -->
+  <section class="section proof">
+    <div class="section-inner">
+      <div class="section-eyebrow">{es ? "Testimonios" : "Testimonials"}</div>
+      <h2 class="section-title">{es ? "Familias que ya lo usan" : "Families already using it"}</h2>
+      <div class="proof-grid">
 
-		/* CTA Section */
-		.cta-section {
-			background: linear-gradient(135deg, var(--navy) 0%, var(--dark-bg) 100%);
-			color: var(--light-text);
-			padding: 80px 20px;
-			text-align: center;
-			position: relative;
-			overflow: hidden;
-		}
+        <div class="proof-card">
+          <div class="proof-stars"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div>
+          <p class="proof-text">{es ? "\"El barajado automático cambió todo. Antes era una pelea cada semana para asignar tareas. Ahora el sistema lo hace solo y los niños saben qué les toca sin preguntar.\"" : "\"The automatic shuffle changed everything. Before it was a fight every week to assign tasks. Now the system does it automatically and the kids know what to do without asking.\""}</p>
+          <div class="proof-author">
+            <div class="proof-avatar">S</div>
+            <div>
+              <div class="proof-name">Sandra M.</div>
+              <div class="proof-role">{es ? "Madre de 3 hijos" : "Mother of 3 kids"}</div>
+            </div>
+          </div>
+        </div>
 
-		.cta-section::before {
-			content: '';
-			position: absolute;
-			width: 300px;
-			height: 300px;
-			background: radial-gradient(circle, var(--cyan) 0%, transparent 70%);
-			opacity: 0.08;
-			border-radius: 50%;
-			top: -50px;
-			right: -50px;
-		}
+        <div class="proof-card">
+          <div class="proof-stars"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div>
+          <p class="proof-text">{es ? "\"Por primera vez en 10 años entiendo a dónde va el dinero de la familia. El módulo de finanzas es exactamente lo que necesitaba — sin complicaciones.\"" : "\"For the first time in 10 years I understand where the family's money goes. The finance module is exactly what I needed — without complications.\""}</p>
+          <div class="proof-author">
+            <div class="proof-avatar">R</div>
+            <div>
+              <div class="proof-name">Roberto K.</div>
+              <div class="proof-role">{es ? "Padre, CFO familiar" : "Father, family CFO"}</div>
+            </div>
+          </div>
+        </div>
 
-		.cta-content {
-			position: relative;
-			z-index: 1;
-			max-width: 600px;
-			margin: 0 auto;
-		}
+        <div class="proof-card">
+          <div class="proof-stars"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div>
+          <p class="proof-text">{es ? "\"Mis hijos compiten para ver quién acumula más puntos. No me lo creo todavía. La gamificación funciona mucho mejor de lo que esperaba.\"" : "\"My kids compete to see who earns more points. I still can't believe it. The gamification works much better than I expected.\""}</p>
+          <div class="proof-author">
+            <div class="proof-avatar">A</div>
+            <div>
+              <div class="proof-name">Ana L.</div>
+              <div class="proof-role">{es ? "Madre de gemelos (12 años)" : "Mother of twins (age 12)"}</div>
+            </div>
+          </div>
+        </div>
 
-		.cta-section h2 {
-			font-size: 40px;
-			font-weight: 700;
-			color: var(--cyan);
-			margin-bottom: 20px;
-		}
+      </div>
+    </div>
+  </section>
 
-		.cta-section p {
-			font-size: 16px;
-			margin-bottom: 30px;
-			opacity: 0.95;
-		}
+  <!-- FINAL CTA -->
+  <section class="cta-section">
+    <div class="cta-inner">
+      <h2>
+        {es ? <><span style="background:linear-gradient(90deg,var(--cyan),var(--mag));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">Empieza hoy.</span><br/>Tu familia lo notará.</> : <><span style="background:linear-gradient(90deg,var(--cyan),var(--mag));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">Start today.</span><br/>Your family will notice.</>}
+      </h2>
+      <p>{es ? "Sin tarjeta de crédito. Sin configuraciones interminables. Listo en minutos." : "No credit card. No endless setup. Ready in minutes."}</p>
+      <div class="cta-btns">
+        <a href="/login" class="btn-primary">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          {es ? "Comenzar Gratis" : "Get Started Free"}
+        </a>
+        <a href="/login" class="btn-secondary">
+          {es ? "Iniciar Sesión" : "Sign In"}
+        </a>
+      </div>
+    </div>
+  </section>
 
-		/* Footer */
-		footer {
-			background: var(--dark-bg);
-			color: var(--light-text);
-			padding: 40px 20px;
-			text-align: center;
-			border-top: 1px solid var(--navy);
-		}
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a href="/" class="nav-logo" style="text-decoration:none;">
+            <div class="nav-logo-mark">F</div>
+            <div>
+              <div class="nav-logo-text">Family Task Manager</div>
+              <div class="nav-logo-sub">AGENTES DIGITALES</div>
+            </div>
+          </a>
+          <p>{es ? "La plataforma más completa para gestionar tareas, puntos y finanzas de tu familia — en un solo lugar." : "The most complete platform to manage your family's tasks, points and finances — in one place."}</p>
+        </div>
+        <div class="footer-col">
+          <h4>{es ? "Producto" : "Product"}</h4>
+          <a href="#features">{es ? "Características" : "Features"}</a>
+          <a href="/login">{es ? "Iniciar sesión" : "Sign in"}</a>
+        </div>
+        <div class="footer-col">
+          <h4>{es ? "Empresa" : "Company"}</h4>
+          <a href="#">{es ? "Acerca de" : "About"}</a>
+          <a href="#">Blog</a>
+        </div>
+        <div class="footer-col">
+          <h4>{es ? "Legal" : "Legal"}</h4>
+          <a href="#">{es ? "Privacidad" : "Privacy"}</a>
+          <a href="#">{es ? "Términos" : "Terms"}</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 Family Task Manager. {es ? "Todos los derechos reservados." : "All rights reserved."}</span>
+        <form method="POST" action="/api/lang" style="margin:0;">
+          <input type="hidden" name="lang" value={es ? "en" : "es"} />
+          <button type="submit" class="lang-btn">
+            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+            {es ? "Switch to English" : "Cambiar a Español"}
+          </button>
+        </form>
+      </div>
+    </div>
+  </footer>
 
-		.footer-content {
-			max-width: 1200px;
-			margin: 0 auto;
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-			gap: 30px;
-			text-align: left;
-		}
+</div>
 
-		.footer-section h3 {
-			color: var(--cyan);
-			margin-bottom: 10px;
-			font-size: 14px;
-		}
+<script>
+  // Smooth scroll for anchor links
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+      e.preventDefault();
+      const target = document.querySelector(this.getAttribute('href') as string);
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+</script>
 
-		.footer-section p {
-			font-size: 13px;
-			opacity: 0.8;
-		}
-
-		.footer-bottom {
-			text-align: center;
-			margin-top: 30px;
-			padding-top: 30px;
-			border-top: 1px solid var(--navy);
-			font-size: 12px;
-			opacity: 0.7;
-		}
-	</style>
-
-	<main>
-		<!-- HERO SECTION -->
-		<section class="hero">
-			<div class="hero-content">
-				<div class="logo">
-					<div class="logo-text">FAMILY TASK MANAGER</div>
-					<div class="logo-sub">Solución Integral Familiar</div>
-				</div>
-				<h1>{lang === "es" ? "Gestiona Tu Familia" : "Manage Your Family"}</h1>
-				<p>
-					{lang === "es"
-						? "Tareas, Puntos y Finanzas en Un Solo Lugar"
-						: "Tasks, Points and Finances in One Place"}
-				</p>
-				<div class="cta-buttons">
-					<a href="/login" class="btn btn-primary">
-						{lang === "es" ? "Iniciar Sesión" : "Sign In"}
-					</a>
-					<a href="/login" class="btn btn-secondary">
-						{lang === "es" ? "Registrarse" : "Sign Up"}
-					</a>
-				</div>
-			</div>
-		</section>
-
-		<!-- FEATURES SECTION -->
-		<section class="features">
-			<div class="features-content">
-				<h2 class="section-title">
-					{lang === "es" ? "✨ Características Principales" : "✨ Key Features"}
-				</h2>
-				<div class="feature-grid">
-					<div class="feature-card">
-						<div class="feature-icon">📋</div>
-						<h3>{lang === "es" ? "Task Manager" : "Task Manager"}</h3>
-						<p>
-							{lang === "es"
-								? "Asigna tareas semanales automáticamente y motiva con puntos"
-								: "Assign weekly tasks automatically and motivate with points"}
-						</p>
-					</div>
-					<div class="feature-card">
-						<div class="feature-icon">⭐</div>
-						<h3>{lang === "es" ? "Sistema de Puntos" : "Points System"}</h3>
-						<p>
-							{lang === "es"
-								? "Gamifica responsabilidades y canjea por premios reales"
-								: "Gamify responsibilities and redeem for real rewards"}
-						</p>
-					</div>
-					<div class="feature-card">
-						<div class="feature-icon">💳</div>
-						<h3>{lang === "es" ? "Finanzas Familiares" : "Family Finances"}</h3>
-						<p>
-							{lang === "es"
-								? "Enseña educación financiera con envelope budgeting profesional"
-								: "Teach financial literacy with professional envelope budgeting"}
-						</p>
-					</div>
-					<div class="feature-card">
-						<div class="feature-icon">📊</div>
-						<h3>{lang === "es" ? "Reportes" : "Reports"}</h3>
-						<p>
-							{lang === "es"
-								? "Analiza gastos, flujo de caja y patrimonio neto"
-								: "Analyze spending, cash flow and net worth"}
-						</p>
-					</div>
-					<div class="feature-card">
-						<div class="feature-icon">🌍</div>
-						<h3>{lang === "es" ? "Bilingual" : "Bilingual"}</h3>
-						<p>
-							{lang === "es"
-								? "Soporta Español e Inglés para toda la familia"
-								: "Supports Spanish and English for the whole family"}
-						</p>
-					</div>
-					<div class="feature-card">
-						<div class="feature-icon">📱</div>
-						<h3>{lang === "es" ? "Responsive" : "Responsive"}</h3>
-						<p>
-							{lang === "es"
-								? "Funciona en smartphone, tablet y desktop"
-								: "Works on smartphone, tablet and desktop"}
-						</p>
-					</div>
-				</div>
-			</div>
-		</section>
-
-		<!-- BENEFITS SECTION -->
-		<section class="benefits">
-			<div class="benefits-content">
-				<h2 class="section-title">
-					{lang === "es" ? "🎁 Beneficios Clave" : "🎁 Key Benefits"}
-				</h2>
-				<div class="benefit-grid">
-					<div class="benefit-item">
-						<h4>{lang === "es" ? "👨‍👩‍👧‍👦 Para la Familia" : "👨‍👩‍👧‍👦 For Families"}</h4>
-						<p>
-							{lang === "es"
-								? "Comunicación clara, reglas justas y espacios compartidos"
-								: "Clear communication, fair rules and shared spaces"}
-						</p>
-					</div>
-					<div class="benefit-item">
-						<h4>{lang === "es" ? "👨‍👩‍💼 Para los Padres" : "👨‍👩‍💼 For Parents"}</h4>
-						<p>
-							{lang === "es"
-								? "Menos carga mental, automatización de tareas y transparencia"
-								: "Less mental load, task automation and transparency"}
-						</p>
-					</div>
-					<div class="benefit-item">
-						<h4>{lang === "es" ? "👧‍👦 Para los Hijos" : "👧‍👦 For Kids"}</h4>
-						<p>
-							{lang === "es"
-								? "Sistema justo, motivación gamificada e independencia"
-								: "Fair system, gamified motivation and independence"}
-						</p>
-					</div>
-					<div class="benefit-item">
-						<h4>{lang === "es" ? "💡 Educación Financiera" : "💡 Financial Literacy"}</h4>
-						<p>
-							{lang === "es"
-								? "Los hijos aprenden cómo funciona el dinero de verdad"
-								: "Kids learn how money really works"}
-						</p>
-					</div>
-				</div>
-			</div>
-		</section>
-
-		<!-- FINAL CTA SECTION -->
-		<section class="cta-section">
-			<div class="cta-content">
-				<h2>
-					{lang === "es" ? "¿Listo para Cambiar?" : "Ready to Transform?"}
-				</h2>
-				<p>
-					{lang === "es"
-						? "Comienza ahora y transforma la dinámica de tu familia"
-						: "Start now and transform your family dynamics"}
-				</p>
-				<div class="cta-buttons">
-					<a href="/login" class="btn btn-primary">
-						{lang === "es" ? "Iniciar Sesión" : "Sign In"}
-					</a>
-					<a href="/login" class="btn btn-secondary">
-						{lang === "es" ? "Más Información" : "Learn More"}
-					</a>
-				</div>
-			</div>
-		</section>
-	</main>
-
-	<!-- FOOTER -->
-	<footer>
-		<div class="footer-content">
-			<div class="footer-section">
-				<h3>{lang === "es" ? "PRODUCTO" : "PRODUCT"}</h3>
-				<p>{lang === "es" ? "Tareas y Puntos" : "Tasks and Points"}</p>
-				<p>{lang === "es" ? "Finanzas Familiares" : "Family Finances"}</p>
-			</div>
-			<div class="footer-section">
-				<h3>{lang === "es" ? "EMPRESA" : "COMPANY"}</h3>
-				<p>{lang === "es" ? "Acerca de" : "About"}</p>
-				<p>{lang === "es" ? "Blog" : "Blog"}</p>
-			</div>
-			<div class="footer-section">
-				<h3>{lang === "es" ? "LEGAL" : "LEGAL"}</h3>
-				<p>{lang === "es" ? "Privacidad" : "Privacy"}</p>
-				<p>{lang === "es" ? "Términos" : "Terms"}</p>
-			</div>
-			<div class="footer-section">
-				<h3>{lang === "es" ? "CONTACTO" : "CONTACT"}</h3>
-				<p>📧 contacto@family-task-manager.com</p>
-				<p>🌐 www.family-task-manager.com</p>
-			</div>
-		</div>
-		<div class="footer-bottom">
-			<p>
-				{lang === "es"
-					? "© 2026 Family Task Manager. Todos los derechos reservados."
-					: "© 2026 Family Task Manager. All rights reserved."}
-			</p>
-		</div>
-	</footer>
-
-	<!-- Language toggle (floating) -->
-	<form method="POST" action="/api/lang" class="fixed bottom-4 right-4 z-40">
-		<input type="hidden" name="lang" value={lang === "es" ? "en" : "es"} />
-		<button
-			type="submit"
-			class="p-3 rounded-full bg-cyan-500 hover:bg-cyan-600 text-white transition-all shadow-lg flex items-center gap-2"
-			title={lang === "es" ? "Cambiar idioma" : "Change language"}
-		>
-			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-				></path>
-			</svg>
-			<span class="text-sm font-medium">{lang === "es" ? "EN" : "ES"}</span>
-		</button>
-	</form>
 </Layout>
