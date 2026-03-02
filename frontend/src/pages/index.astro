@@ -1,7 +1,509 @@
 ---
+import Layout from "../layouts/Layout.astro";
+import { t } from "../lib/i18n";
+
+const lang = Astro.cookies.get("lang")?.value ?? "es";
+
+// Si está autenticado, ir al dashboard
 if (Astro.cookies.has("access_token")) {
 	return Astro.redirect("/dashboard");
-} else {
-	return Astro.redirect("/login");
 }
 ---
+
+<Layout title="Family Task Manager - Gestiona Tu Familia">
+	<style>
+		:root {
+			--cyan: #00D9FF;
+			--magenta: #B000FF;
+			--dark-bg: #0F0B1F;
+			--navy: #001A4D;
+			--light-text: #F0F0F0;
+		}
+
+		.hero {
+			background: linear-gradient(135deg, var(--dark-bg) 0%, var(--navy) 100%);
+			color: var(--light-text);
+			padding: 120px 20px;
+			text-align: center;
+			position: relative;
+			overflow: hidden;
+		}
+
+		.hero::before {
+			content: '';
+			position: absolute;
+			width: 400px;
+			height: 400px;
+			background: radial-gradient(circle, var(--cyan) 0%, transparent 70%);
+			opacity: 0.1;
+			border-radius: 50%;
+			top: -100px;
+			right: -100px;
+		}
+
+		.hero::after {
+			content: '';
+			position: absolute;
+			width: 300px;
+			height: 300px;
+			background: radial-gradient(circle, var(--magenta) 0%, transparent 70%);
+			opacity: 0.1;
+			border-radius: 50%;
+			bottom: -50px;
+			left: -50px;
+		}
+
+		.hero-content {
+			position: relative;
+			z-index: 1;
+			max-width: 800px;
+			margin: 0 auto;
+		}
+
+		.logo {
+			font-size: 24px;
+			font-weight: bold;
+			margin-bottom: 30px;
+		}
+
+		.logo-text {
+			color: var(--cyan);
+			letter-spacing: 2px;
+		}
+
+		.logo-sub {
+			color: var(--magenta);
+			font-size: 12px;
+			letter-spacing: 2px;
+		}
+
+		.hero h1 {
+			font-size: 52px;
+			font-weight: 700;
+			margin-bottom: 20px;
+			color: var(--cyan);
+		}
+
+		.hero p {
+			font-size: 20px;
+			margin-bottom: 40px;
+			opacity: 0.95;
+		}
+
+		.cta-buttons {
+			display: flex;
+			gap: 20px;
+			justify-content: center;
+			flex-wrap: wrap;
+		}
+
+		.btn {
+			padding: 14px 32px;
+			border-radius: 8px;
+			font-size: 16px;
+			font-weight: 600;
+			text-decoration: none;
+			transition: all 0.3s ease;
+			border: 2px solid transparent;
+		}
+
+		.btn-primary {
+			background: linear-gradient(135deg, var(--cyan) 0%, var(--magenta) 100%);
+			color: white;
+		}
+
+		.btn-primary:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 10px 25px rgba(0, 217, 255, 0.3);
+		}
+
+		.btn-secondary {
+			background: transparent;
+			color: var(--light-text);
+			border: 2px solid var(--cyan);
+		}
+
+		.btn-secondary:hover {
+			background: var(--cyan);
+			color: var(--navy);
+		}
+
+		/* Features Section */
+		.features {
+			padding: 80px 20px;
+			background: white;
+		}
+
+		.features-content {
+			max-width: 1200px;
+			margin: 0 auto;
+		}
+
+		.section-title {
+			font-size: 40px;
+			font-weight: 700;
+			color: var(--navy);
+			margin-bottom: 50px;
+			text-align: center;
+		}
+
+		.feature-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+			gap: 30px;
+		}
+
+		.feature-card {
+			padding: 30px;
+			background: #F5F7FA;
+			border-radius: 8px;
+			border-top: 4px solid var(--cyan);
+			text-align: center;
+		}
+
+		.feature-icon {
+			font-size: 40px;
+			margin-bottom: 15px;
+		}
+
+		.feature-card h3 {
+			font-size: 18px;
+			font-weight: 600;
+			color: var(--navy);
+			margin-bottom: 10px;
+		}
+
+		.feature-card p {
+			color: #666;
+			font-size: 14px;
+			line-height: 1.6;
+		}
+
+		/* Benefits Section */
+		.benefits {
+			padding: 80px 20px;
+			background: linear-gradient(135deg, #F0F8FF 0%, white 100%);
+		}
+
+		.benefits-content {
+			max-width: 1000px;
+			margin: 0 auto;
+		}
+
+		.benefit-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+			gap: 25px;
+		}
+
+		.benefit-item {
+			padding: 25px;
+			background: white;
+			border-left: 4px solid var(--magenta);
+			border-radius: 4px;
+			box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+		}
+
+		.benefit-item h4 {
+			color: var(--magenta);
+			font-size: 16px;
+			font-weight: 600;
+			margin-bottom: 10px;
+		}
+
+		.benefit-item p {
+			color: #555;
+			font-size: 14px;
+			line-height: 1.6;
+		}
+
+		/* CTA Section */
+		.cta-section {
+			background: linear-gradient(135deg, var(--navy) 0%, var(--dark-bg) 100%);
+			color: var(--light-text);
+			padding: 80px 20px;
+			text-align: center;
+			position: relative;
+			overflow: hidden;
+		}
+
+		.cta-section::before {
+			content: '';
+			position: absolute;
+			width: 300px;
+			height: 300px;
+			background: radial-gradient(circle, var(--cyan) 0%, transparent 70%);
+			opacity: 0.08;
+			border-radius: 50%;
+			top: -50px;
+			right: -50px;
+		}
+
+		.cta-content {
+			position: relative;
+			z-index: 1;
+			max-width: 600px;
+			margin: 0 auto;
+		}
+
+		.cta-section h2 {
+			font-size: 40px;
+			font-weight: 700;
+			color: var(--cyan);
+			margin-bottom: 20px;
+		}
+
+		.cta-section p {
+			font-size: 16px;
+			margin-bottom: 30px;
+			opacity: 0.95;
+		}
+
+		/* Footer */
+		footer {
+			background: var(--dark-bg);
+			color: var(--light-text);
+			padding: 40px 20px;
+			text-align: center;
+			border-top: 1px solid var(--navy);
+		}
+
+		.footer-content {
+			max-width: 1200px;
+			margin: 0 auto;
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+			gap: 30px;
+			text-align: left;
+		}
+
+		.footer-section h3 {
+			color: var(--cyan);
+			margin-bottom: 10px;
+			font-size: 14px;
+		}
+
+		.footer-section p {
+			font-size: 13px;
+			opacity: 0.8;
+		}
+
+		.footer-bottom {
+			text-align: center;
+			margin-top: 30px;
+			padding-top: 30px;
+			border-top: 1px solid var(--navy);
+			font-size: 12px;
+			opacity: 0.7;
+		}
+	</style>
+
+	<main>
+		<!-- HERO SECTION -->
+		<section class="hero">
+			<div class="hero-content">
+				<div class="logo">
+					<div class="logo-text">FAMILY TASK MANAGER</div>
+					<div class="logo-sub">Solución Integral Familiar</div>
+				</div>
+				<h1>{lang === "es" ? "Gestiona Tu Familia" : "Manage Your Family"}</h1>
+				<p>
+					{lang === "es"
+						? "Tareas, Puntos y Finanzas en Un Solo Lugar"
+						: "Tasks, Points and Finances in One Place"}
+				</p>
+				<div class="cta-buttons">
+					<a href="/login" class="btn btn-primary">
+						{lang === "es" ? "Iniciar Sesión" : "Sign In"}
+					</a>
+					<a href="/login" class="btn btn-secondary">
+						{lang === "es" ? "Registrarse" : "Sign Up"}
+					</a>
+				</div>
+			</div>
+		</section>
+
+		<!-- FEATURES SECTION -->
+		<section class="features">
+			<div class="features-content">
+				<h2 class="section-title">
+					{lang === "es" ? "✨ Características Principales" : "✨ Key Features"}
+				</h2>
+				<div class="feature-grid">
+					<div class="feature-card">
+						<div class="feature-icon">📋</div>
+						<h3>{lang === "es" ? "Task Manager" : "Task Manager"}</h3>
+						<p>
+							{lang === "es"
+								? "Asigna tareas semanales automáticamente y motiva con puntos"
+								: "Assign weekly tasks automatically and motivate with points"}
+						</p>
+					</div>
+					<div class="feature-card">
+						<div class="feature-icon">⭐</div>
+						<h3>{lang === "es" ? "Sistema de Puntos" : "Points System"}</h3>
+						<p>
+							{lang === "es"
+								? "Gamifica responsabilidades y canjea por premios reales"
+								: "Gamify responsibilities and redeem for real rewards"}
+						</p>
+					</div>
+					<div class="feature-card">
+						<div class="feature-icon">💳</div>
+						<h3>{lang === "es" ? "Finanzas Familiares" : "Family Finances"}</h3>
+						<p>
+							{lang === "es"
+								? "Enseña educación financiera con envelope budgeting profesional"
+								: "Teach financial literacy with professional envelope budgeting"}
+						</p>
+					</div>
+					<div class="feature-card">
+						<div class="feature-icon">📊</div>
+						<h3>{lang === "es" ? "Reportes" : "Reports"}</h3>
+						<p>
+							{lang === "es"
+								? "Analiza gastos, flujo de caja y patrimonio neto"
+								: "Analyze spending, cash flow and net worth"}
+						</p>
+					</div>
+					<div class="feature-card">
+						<div class="feature-icon">🌍</div>
+						<h3>{lang === "es" ? "Bilingual" : "Bilingual"}</h3>
+						<p>
+							{lang === "es"
+								? "Soporta Español e Inglés para toda la familia"
+								: "Supports Spanish and English for the whole family"}
+						</p>
+					</div>
+					<div class="feature-card">
+						<div class="feature-icon">📱</div>
+						<h3>{lang === "es" ? "Responsive" : "Responsive"}</h3>
+						<p>
+							{lang === "es"
+								? "Funciona en smartphone, tablet y desktop"
+								: "Works on smartphone, tablet and desktop"}
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- BENEFITS SECTION -->
+		<section class="benefits">
+			<div class="benefits-content">
+				<h2 class="section-title">
+					{lang === "es" ? "🎁 Beneficios Clave" : "🎁 Key Benefits"}
+				</h2>
+				<div class="benefit-grid">
+					<div class="benefit-item">
+						<h4>{lang === "es" ? "👨‍👩‍👧‍👦 Para la Familia" : "👨‍👩‍👧‍👦 For Families"}</h4>
+						<p>
+							{lang === "es"
+								? "Comunicación clara, reglas justas y espacios compartidos"
+								: "Clear communication, fair rules and shared spaces"}
+						</p>
+					</div>
+					<div class="benefit-item">
+						<h4>{lang === "es" ? "👨‍👩‍💼 Para los Padres" : "👨‍👩‍💼 For Parents"}</h4>
+						<p>
+							{lang === "es"
+								? "Menos carga mental, automatización de tareas y transparencia"
+								: "Less mental load, task automation and transparency"}
+						</p>
+					</div>
+					<div class="benefit-item">
+						<h4>{lang === "es" ? "👧‍👦 Para los Hijos" : "👧‍👦 For Kids"}</h4>
+						<p>
+							{lang === "es"
+								? "Sistema justo, motivación gamificada e independencia"
+								: "Fair system, gamified motivation and independence"}
+						</p>
+					</div>
+					<div class="benefit-item">
+						<h4>{lang === "es" ? "💡 Educación Financiera" : "💡 Financial Literacy"}</h4>
+						<p>
+							{lang === "es"
+								? "Los hijos aprenden cómo funciona el dinero de verdad"
+								: "Kids learn how money really works"}
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- FINAL CTA SECTION -->
+		<section class="cta-section">
+			<div class="cta-content">
+				<h2>
+					{lang === "es" ? "¿Listo para Cambiar?" : "Ready to Transform?"}
+				</h2>
+				<p>
+					{lang === "es"
+						? "Comienza ahora y transforma la dinámica de tu familia"
+						: "Start now and transform your family dynamics"}
+				</p>
+				<div class="cta-buttons">
+					<a href="/login" class="btn btn-primary">
+						{lang === "es" ? "Iniciar Sesión" : "Sign In"}
+					</a>
+					<a href="/login" class="btn btn-secondary">
+						{lang === "es" ? "Más Información" : "Learn More"}
+					</a>
+				</div>
+			</div>
+		</section>
+	</main>
+
+	<!-- FOOTER -->
+	<footer>
+		<div class="footer-content">
+			<div class="footer-section">
+				<h3>{lang === "es" ? "PRODUCTO" : "PRODUCT"}</h3>
+				<p>{lang === "es" ? "Tareas y Puntos" : "Tasks and Points"}</p>
+				<p>{lang === "es" ? "Finanzas Familiares" : "Family Finances"}</p>
+			</div>
+			<div class="footer-section">
+				<h3>{lang === "es" ? "EMPRESA" : "COMPANY"}</h3>
+				<p>{lang === "es" ? "Acerca de" : "About"}</p>
+				<p>{lang === "es" ? "Blog" : "Blog"}</p>
+			</div>
+			<div class="footer-section">
+				<h3>{lang === "es" ? "LEGAL" : "LEGAL"}</h3>
+				<p>{lang === "es" ? "Privacidad" : "Privacy"}</p>
+				<p>{lang === "es" ? "Términos" : "Terms"}</p>
+			</div>
+			<div class="footer-section">
+				<h3>{lang === "es" ? "CONTACTO" : "CONTACT"}</h3>
+				<p>📧 contacto@family-task-manager.com</p>
+				<p>🌐 www.family-task-manager.com</p>
+			</div>
+		</div>
+		<div class="footer-bottom">
+			<p>
+				{lang === "es"
+					? "© 2026 Family Task Manager. Todos los derechos reservados."
+					: "© 2026 Family Task Manager. All rights reserved."}
+			</p>
+		</div>
+	</footer>
+
+	<!-- Language toggle (floating) -->
+	<form method="POST" action="/api/lang" class="fixed bottom-4 right-4 z-40">
+		<input type="hidden" name="lang" value={lang === "es" ? "en" : "es"} />
+		<button
+			type="submit"
+			class="p-3 rounded-full bg-cyan-500 hover:bg-cyan-600 text-white transition-all shadow-lg flex items-center gap-2"
+			title={lang === "es" ? "Cambiar idioma" : "Change language"}
+		>
+			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+				></path>
+			</svg>
+			<span class="text-sm font-medium">{lang === "es" ? "EN" : "ES"}</span>
+		</button>
+	</form>
+</Layout>
