@@ -99,3 +99,18 @@ class ResetPasswordRequest(BaseModel):
 class VerifyEmailRequest(BaseModel):
     """Consume an email verification token"""
     token: str
+
+
+class RegisterFamilyRequest(BaseModel):
+    """Create a new family + founding PARENT user in one request"""
+    family_name: str = Field(..., min_length=1, max_length=100)
+    name: str = Field(..., min_length=1, max_length=100)
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=100)
+
+
+class RegisterFamilyResponse(BaseModel):
+    """Response after creating a family + user"""
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse

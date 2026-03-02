@@ -1,0 +1,195 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+if (Astro.cookies.has("access_token")) {
+    return Astro.redirect("/dashboard");
+}
+
+const lang = Astro.cookies.get("lang")?.value ?? "es";
+---
+
+<Layout title={lang === "es" ? "Crear cuenta - Family Task Manager" : "Create account - Family Task Manager"}>
+    <main class="flex flex-col items-center justify-center p-4">
+        <div class="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden p-8">
+            <div class="mb-8 text-center">
+                <h1 class="text-3xl font-bold tracking-tight text-slate-900 mb-2">
+                    {lang === "es" ? "Crear cuenta" : "Create account"}
+                </h1>
+                <p class="text-slate-500">
+                    {lang === "es"
+                        ? "Registra tu familia y empieza hoy"
+                        : "Register your family and get started today"}
+                </p>
+            </div>
+
+            <div id="register-error" class="hidden mb-4 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm"></div>
+
+            <form id="register-form" class="space-y-5">
+                <!-- Family name -->
+                <div>
+                    <label for="family_name" class="block text-sm font-medium text-slate-700 mb-1">
+                        {lang === "es" ? "Nombre de tu familia" : "Family name"}
+                    </label>
+                    <input
+                        type="text"
+                        id="family_name"
+                        name="family_name"
+                        required
+                        maxlength="100"
+                        placeholder={lang === "es" ? "Ej: Familia García" : "e.g. The Smiths"}
+                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
+                    />
+                </div>
+
+                <!-- Your name -->
+                <div>
+                    <label for="name" class="block text-sm font-medium text-slate-700 mb-1">
+                        {lang === "es" ? "Tu nombre" : "Your name"}
+                    </label>
+                    <input
+                        type="text"
+                        id="name"
+                        name="name"
+                        required
+                        maxlength="100"
+                        placeholder={lang === "es" ? "Ej: María" : "e.g. Maria"}
+                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
+                    />
+                </div>
+
+                <!-- Email -->
+                <div>
+                    <label for="email" class="block text-sm font-medium text-slate-700 mb-1">
+                        {lang === "es" ? "Correo electrónico" : "Email"}
+                    </label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        required
+                        placeholder="tu@correo.com"
+                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
+                    />
+                </div>
+
+                <!-- Password -->
+                <div>
+                    <label for="password" class="block text-sm font-medium text-slate-700 mb-1">
+                        {lang === "es" ? "Contraseña" : "Password"}
+                    </label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        required
+                        minlength="8"
+                        placeholder="••••••••"
+                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
+                    />
+                    <p class="text-xs text-slate-400 mt-1">
+                        {lang === "es" ? "Mínimo 8 caracteres" : "Minimum 8 characters"}
+                    </p>
+                </div>
+
+                <!-- Confirm password -->
+                <div>
+                    <label for="password_confirm" class="block text-sm font-medium text-slate-700 mb-1">
+                        {lang === "es" ? "Confirmar contraseña" : "Confirm password"}
+                    </label>
+                    <input
+                        type="password"
+                        id="password_confirm"
+                        name="password_confirm"
+                        required
+                        minlength="8"
+                        placeholder="••••••••"
+                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
+                    />
+                </div>
+
+                <button
+                    type="submit"
+                    id="register-submit-btn"
+                    class="w-full flex justify-center py-3 px-4 rounded-lg text-white font-medium bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors shadow-sm"
+                >
+                    {lang === "es" ? "Crear cuenta" : "Create account"}
+                </button>
+            </form>
+
+            <p class="mt-6 text-center text-sm text-slate-500">
+                {lang === "es" ? "¿Ya tienes cuenta?" : "Already have an account?"}
+                {" "}
+                <a href="/login" class="text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
+                    {lang === "es" ? "Iniciar sesión" : "Sign in"}
+                </a>
+            </p>
+        </div>
+    </main>
+
+    <script is:inline define:vars={{ lang }}>
+        const form = document.getElementById('register-form');
+        const errorDiv = document.getElementById('register-error');
+        const submitBtn = document.getElementById('register-submit-btn');
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const family_name = document.getElementById('family_name').value.trim();
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const passwordConfirm = document.getElementById('password_confirm').value;
+
+            // Hide previous error
+            errorDiv.classList.add('hidden');
+            errorDiv.textContent = '';
+
+            // Client-side validation
+            if (password !== passwordConfirm) {
+                errorDiv.textContent = lang === 'es'
+                    ? 'Las contraseñas no coinciden'
+                    : 'Passwords do not match';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+            if (password.length < 8) {
+                errorDiv.textContent = lang === 'es'
+                    ? 'La contraseña debe tener al menos 8 caracteres'
+                    : 'Password must be at least 8 characters';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = '...';
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ family_name, name, email, password }),
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.redirect) {
+                    window.location.href = data.redirect;
+                } else {
+                    errorDiv.textContent = data.error || (lang === 'es' ? 'Error al crear la cuenta' : 'Registration failed');
+                    errorDiv.classList.remove('hidden');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                }
+            } catch (err) {
+                console.error('Register error:', err);
+                errorDiv.textContent = lang === 'es'
+                    ? 'Error de conexión. Intenta de nuevo.'
+                    : 'Connection error. Please try again.';
+                errorDiv.classList.remove('hidden');
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
+    </script>
+</Layout>

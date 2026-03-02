@@ -26,8 +26,12 @@ from app.schemas.user import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
     VerifyEmailRequest,
+    RegisterFamilyRequest,
+    RegisterFamilyResponse,
 )
 from app.models import User
+from app.models.family import Family, generate_join_code
+from app.core.security import get_password_hash, create_access_token
 
 router = APIRouter()
 
@@ -46,6 +50,72 @@ async def register(
     base_url = settings.BASE_URL
     await EmailService.send_verification_email(db, user, base_url=base_url)
     return user
+
+
+@router.post(
+    "/register-family",
+    response_model=RegisterFamilyResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def register_family(
+    data: RegisterFamilyRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new family and its founding PARENT user in one step.
+    Returns an access token so the user is logged in immediately.
+    """
+    # Check email not already taken
+    existing = (await db.execute(
+        select(User).where(User.email == data.email)
+    )).scalar_one_or_none()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered",
+        )
+
+    # Create family
+    family = Family(
+        name=data.family_name,
+        join_code=generate_join_code(),
+    )
+    db.add(family)
+    await db.flush()  # get family.id before creating user
+
+    # Create founding PARENT user
+    from app.models.user import UserRole as UR
+    user = User(
+        email=data.email,
+        name=data.name,
+        password_hash=get_password_hash(data.password),
+        role=UR.PARENT,
+        family_id=family.id,
+        points=0,
+        is_active=True,
+    )
+    db.add(user)
+    await db.flush()
+
+    # Set family.created_by now that we have the user id
+    family.created_by = user.id
+    await db.commit()
+    await db.refresh(user)
+
+    # Send verification email (non-blocking)
+    try:
+        await EmailService.send_verification_email(db, user, base_url=settings.BASE_URL)
+    except Exception:
+        pass  # Don't block registration on email failure
+
+    # Issue access token
+    access_token = create_access_token(
+        data={"sub": str(user.id), "family_id": str(user.family_id), "role": user.role.value}
+    )
+    return RegisterFamilyResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserResponse.model_validate(user),
+    )
 
 
 @router.post("/login", response_model=TokenResponse)

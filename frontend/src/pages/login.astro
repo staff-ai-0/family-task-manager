@@ -164,6 +164,14 @@ if (flashError) {
                 </div>
             </form>
 
+            <p class="mt-6 text-center text-sm text-slate-500">
+                {lang === "es" ? "¿No tienes cuenta?" : "Don't have an account?"}
+                {" "}
+                <a href="/register" class="text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
+                    {lang === "es" ? "Crear cuenta" : "Create account"}
+                </a>
+            </p>
+
             <!-- Language toggle on login page -->
             <form
                 method="POST"
