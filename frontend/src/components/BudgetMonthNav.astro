@@ -75,13 +75,24 @@ const monthName = monthNames[lang][month - 1];
         </a>
     </div>
 
-    <!-- Ready to Assign -->
-    <div class="bg-white/30 rounded-xl p-4">
+    <!-- Ready to Assign — clickable to open assign funds modal -->
+    <button
+        id="open-assign-funds-modal"
+        class="w-full bg-white/30 hover:bg-white/40 active:bg-white/50 rounded-xl p-4 text-left transition cursor-pointer"
+        title={lang === "es" ? "Toca para asignar fondos a categorías" : "Tap to assign funds to categories"}
+    >
         <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
             {t(lang, 'fin_ready_to_assign')}
         </p>
-        <p class={`text-3xl font-extrabold tracking-tight ${readyToAssign < 0 ? 'text-red-300' : 'text-white'}`}>
-            {formatCurrency(readyToAssign)}
-        </p>
-    </div>
+        <div class="flex items-center justify-between">
+            <p class={`text-3xl font-extrabold tracking-tight ${readyToAssign < 0 ? 'text-red-300' : 'text-white'}`}>
+                {formatCurrency(readyToAssign)}
+            </p>
+            {readyToAssign > 0 && (
+                <span class="bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full">
+                    {lang === "es" ? "Asignar" : "Assign"}
+                </span>
+            )}
+        </div>
+    </button>
 </div>

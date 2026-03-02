@@ -135,21 +135,6 @@ const allExpenseCategories = (allGroups || [])
             </a>
         </div>
 
-        <!-- Assign Funds Button -->
-        {readyToAssign > 0 && (
-            <div class="px-6 pb-4">
-                <button
-                    id="open-assign-funds-modal"
-                    class="w-full bg-emerald-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-emerald-700 transition flex items-center justify-center gap-2"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m0 0h6m-6-6H6m0 0H0" />
-                    </svg>
-                    {lang === "es" ? "Asignar Fondos" : "Assign Funds"} ({formatCurrency(readyToAssign)})
-                </button>
-            </div>
-        )}
-
         <!-- Assignment Hint Banner -->
         {expenseGroups.length > 0 && (
             <div class="mx-6 mb-4 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-3">
