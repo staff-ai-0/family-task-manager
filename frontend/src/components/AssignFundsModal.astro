@@ -231,4 +231,35 @@ const {
             document.getElementById(`${baseRoute}-success`)?.classList.add('hidden');
         });
     });
+
+    // Pill buttons: open modal pre-selecting the clicked category
+    function openAssignModal(categoryId) {
+        const modal = document.getElementById(`${baseRoute}-modal`);
+        const categorySelect = document.getElementById(`${baseRoute}-category-select`);
+        const amountInput = document.getElementById(`${baseRoute}-amount-input`);
+        const errorEl = document.getElementById(`${baseRoute}-error`);
+        const successEl = document.getElementById(`${baseRoute}-success`);
+        const confirmBtn = document.getElementById(`${baseRoute}-confirm-btn`);
+
+        if (categoryId && categorySelect) categorySelect.value = categoryId;
+        if (amountInput) amountInput.value = '';
+        errorEl?.classList.add('hidden');
+        successEl?.classList.add('hidden');
+        if (confirmBtn) confirmBtn.disabled = false;
+
+        modal?.classList.remove('hidden');
+        amountInput?.focus();
+    }
+
+    document.querySelectorAll('.assign-pill-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openAssignModal(btn.dataset.categoryId);
+        });
+    });
+
+    // Also handle the global open-assign-funds-modal button (header button)
+    document.getElementById('open-assign-funds-modal')?.addEventListener('click', () => {
+        openAssignModal(null);
+    });
 </script>
