@@ -16,20 +16,28 @@
   --color-primary-950: #172554;
 }
 
-html, body {
+html {
   margin: 0;
   padding: 0;
-  height: 100%;
 }
 
-/* Prevent fixed BottomNav from overlapping page content */
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Prevent fixed BottomNav from overlapping page content.
+   The nav is ~64px tall + 16px gap = 80px. We add 100px to be safe. */
 :root {
-  --bottom-nav-height: 96px;
+  --bottom-nav-height: 100px;
 }
 
+/* Applied on the wrapper inside Layout.astro */
 .app-shell {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+  padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+}
+
+/* Fallback: catch any direct child of body that doesn't use app-shell */
+body > div {
   padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
 }
