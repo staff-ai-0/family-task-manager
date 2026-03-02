@@ -21,3 +21,8 @@ html, body {
   padding: 0;
   height: 100%;
 }
+
+/* Prevent fixed BottomNav from overlapping page content */
+body {
+  padding-bottom: 120px;
+}
