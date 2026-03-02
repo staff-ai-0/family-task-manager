@@ -261,7 +261,7 @@ export const translations = {
         fin_sync_backend_check: "Check that the backend is running at",
         fin_ready_to_assign: "Ready to Assign",
         fin_expenses: "Expenses",
-        fin_assign_hint: "Tap a category amount to assign money from your available balance",
+        fin_assign_hint: "Use the + Assign button on each category to assign money from your available balance",
         fin_budgeted_label: "budgeted",
         fin_spent_label: "spent",
         fin_prev_balance_label: "previous balance",
@@ -575,7 +575,7 @@ export const translations = {
         // Newly added budget keys
         fin_ready_to_assign: "Listo para Asignar",
         fin_expenses: "Gastos",
-        fin_assign_hint: "Toca el monto de una categoría para asignar dinero de tu saldo disponible",
+        fin_assign_hint: "Usa el botón + Asignar en cada categoría para distribuir tu saldo disponible",
         fin_budgeted_label: "presupuestado",
         fin_spent_label: "gastado",
         fin_prev_balance_label: "saldo anterior",
