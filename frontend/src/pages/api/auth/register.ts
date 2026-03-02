@@ -33,18 +33,13 @@ export const POST: APIRoute = async ({ request }) => {
         }
 
         const apiUrl = process.env.API_BASE_URL || "http://localhost:8002";
-        console.log("[REGISTER] API_BASE_URL:", apiUrl);
-        console.log("[REGISTER] Calling:", `${apiUrl}/api/auth/register-family`);
-        
         const response = await fetch(`${apiUrl}/api/auth/register-family`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ family_name, name, email, password }),
         });
 
-        console.log("[REGISTER] Response status:", response.status);
         const data = await response.json();
-        console.log("[REGISTER] Response data keys:", Object.keys(data));
 
         if (response.ok) {
             const tokenCookie = buildCookie("access_token", data.access_token, {
