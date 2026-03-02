@@ -757,8 +757,9 @@ const allExpenseCategories = (allGroups || [])
             });
 
             if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Error al crear categoría');
+                const err = await res.json().catch(() => ({}));
+                const msg = Array.isArray(err.detail) ? err.detail[0]?.msg : (err.detail || err.message);
+                throw new Error(msg || `Error ${res.status} al crear categoría`);
             }
 
             window.location.reload();
