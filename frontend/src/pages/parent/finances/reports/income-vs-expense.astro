@@ -1,5 +1,4 @@
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 /**
  * Income vs Expense Report Page
  * Cashflow analysis over time
@@ -64,7 +63,6 @@ const groupByLabels: Record<string, string> = {
     day: "Día",
 };
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title="Ingresos vs Gastos - Presupuesto">
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
@@ -291,7 +289,6 @@ import BottomSpacer from "@components/BottomSpacer.astro";
             )}
         </main>
 
-<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 </Layout>

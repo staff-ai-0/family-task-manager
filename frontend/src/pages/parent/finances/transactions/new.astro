@@ -1,5 +1,4 @@
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 /**
  * New Transaction Page
  * Form for creating a new budget transaction
@@ -76,7 +75,6 @@ const { data: payees } = await getPayees(token);
 // Get today's date for default
 const today = new Date().toISOString().split('T')[0];
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title="Nueva Transacción - Presupuesto">
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col">
@@ -267,7 +265,6 @@ import BottomSpacer from "@components/BottomSpacer.astro";
             </form>
         </main>
 
-<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 </Layout>

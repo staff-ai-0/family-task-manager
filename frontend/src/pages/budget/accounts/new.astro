@@ -1,5 +1,4 @@
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 /**
  * New Account Page
  * Form for creating a new budget account
@@ -59,7 +58,6 @@ if (Astro.request.method === "POST") {
     }
 }
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title="Nueva Cuenta - Presupuesto">
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
@@ -237,7 +235,6 @@ import BottomSpacer from "@components/BottomSpacer.astro";
             </form>
         </main>
 
-<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 </Layout>

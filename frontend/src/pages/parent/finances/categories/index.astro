@@ -1,5 +1,4 @@
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 /**
  * Category Management Page
  * Manage budget categories and category groups
@@ -47,7 +46,6 @@ const nowDate = new Date();
 const currentYear = nowDate.getFullYear();
 const currentMonth = nowDate.getMonth() + 1;
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title="Categorías - Presupuesto">
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
@@ -298,7 +296,6 @@ import BottomSpacer from "@components/BottomSpacer.astro";
             )}
         </main>
 
-<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 

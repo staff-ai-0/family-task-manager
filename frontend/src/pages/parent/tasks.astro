@@ -1,5 +1,4 @@
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 import Layout from "../../layouts/Layout.astro";
 import BottomNav from "../../components/BottomNav.astro";
 import { apiFetch } from "../../lib/api";
@@ -113,7 +112,6 @@ function freqLabel(interval: number): string {
     return (t(lang, "pt_every_n_days") as any)(interval);
 }
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title={`${t(lang, "pt_title")} - Family Task Manager`}>
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
@@ -395,7 +393,6 @@ import BottomSpacer from "@components/BottomSpacer.astro";
             </section>
         </main>
 
-<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
     

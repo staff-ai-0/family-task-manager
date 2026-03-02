@@ -1,5 +1,4 @@
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 /**
  * Net Worth Report Page
  * Shows total assets minus liabilities
@@ -70,7 +69,6 @@ const accountsByType = report?.accounts?.reduce((acc: any, account: any) => {
     return acc;
 }, {}) || {};
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title="Valor Neto - Presupuesto">
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
@@ -315,7 +313,6 @@ import BottomSpacer from "@components/BottomSpacer.astro";
             )}
         </main>
 
-<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 </Layout>

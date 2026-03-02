@@ -1,5 +1,4 @@
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 /**
  * CSV Transaction Import Page
  * Allows importing transactions from CSV files with format detection and column mapping
@@ -34,7 +33,6 @@ if (user.role !== "parent") {
 // Get accounts for import target
 const { data: accounts, ok: accountsOk } = await getAccounts(token);
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title="Importar Transacciones - Presupuesto">
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
@@ -221,7 +219,6 @@ import BottomSpacer from "@components/BottomSpacer.astro";
             </div>
         </main>
 
-<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 </Layout>

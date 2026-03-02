@@ -11,6 +11,9 @@ const nextLang = lang === "es" ? "en" : "es";
 const langLabel = lang === "es" ? "EN" : "ES";
 ---
 
+<!-- Spacer that reserves the exact height of the fixed nav so content is never hidden behind it -->
+<div class="bottom-nav-spacer" aria-hidden="true"></div>
+
 <nav
     class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 safe-area-bottom z-50"
 >
@@ -195,5 +198,17 @@ const langLabel = lang === "es" ? "EN" : "ES";
 <style>
     .safe-area-bottom {
         padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    /* This div sits in the normal document flow right before the fixed nav.
+       It reserves exactly the nav's rendered height so the last element
+       on any page is never hidden behind the fixed bar. */
+    .bottom-nav-spacer {
+        display: block;
+        width: 100%;
+        /* nav inner content ~64px + border 1px + safe-area + extra breathing room */
+        height: calc(64px + 24px + env(safe-area-inset-bottom, 0px));
+        flex-shrink: 0;
+        pointer-events: none;
     }
 </style>

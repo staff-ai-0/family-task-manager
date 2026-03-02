@@ -1,5 +1,4 @@
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 /**
  * Account Detail Page
  * Shows account details and transaction list
@@ -91,7 +90,6 @@ const typeLabels: Record<string, string> = lang === "es" ? {
     other: "Other",
 };
 ---
-import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title={`${account.name} - Cuentas`}>
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
@@ -251,7 +249,6 @@ import BottomSpacer from "@components/BottomSpacer.astro";
             )}
         </main>
 
-<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 </Layout>
