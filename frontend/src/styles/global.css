@@ -23,6 +23,13 @@ html, body {
 }
 
 /* Prevent fixed BottomNav from overlapping page content */
-body {
-  padding-bottom: 120px;
+:root {
+  --bottom-nav-height: 96px;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
 }

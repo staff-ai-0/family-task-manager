@@ -24,7 +24,10 @@ const {
 		<meta name="description" content={description} />
 		<title>{title}</title>
 	</head>
-	<body class="bg-slate-50 text-slate-900 antialiased h-full flex flex-col">
-		<slot />
-	</body>
+<body class="bg-slate-50 text-slate-900 antialiased">
+    <div class="app-shell">
+        <slot />
+    </div>
+    <slot name="overlays" />
+</body>
 </html>
