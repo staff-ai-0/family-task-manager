@@ -30,6 +30,10 @@ class AccountService(BaseFamilyService[BudgetAccount]):
         """
         Create a new account.
 
+        If data.starting_balance != 0, a synthetic "Starting Balance" transaction
+        is automatically created so the account balance is correct from day one.
+        This mirrors the Actual Budget approach.
+
         Args:
             db: Database session
             family_id: Family ID
@@ -46,9 +50,26 @@ class AccountService(BaseFamilyService[BudgetAccount]):
             closed=data.closed,
             notes=data.notes,
             sort_order=data.sort_order,
+            starting_balance=data.starting_balance,
         )
 
         db.add(account)
+        await db.flush()  # get account.id without committing yet
+
+        # Auto-create starting balance transaction if non-zero
+        if data.starting_balance != 0:
+            starting_txn = BudgetTransaction(
+                family_id=family_id,
+                account_id=account.id,
+                date=date.today(),
+                amount=data.starting_balance,
+                notes="Starting Balance",
+                cleared=True,
+                reconciled=False,
+                is_parent=False,
+            )
+            db.add(starting_txn)
+
         await db.commit()
         await db.refresh(account)
         return account
@@ -218,7 +239,60 @@ class AccountService(BaseFamilyService[BudgetAccount]):
             "cleared_balance": cleared_balance,
             "uncleared_balance": uncleared_balance,
         }
-    
+
+    @classmethod
+    async def get_total_on_budget_balance(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        as_of_date: Optional[date] = None,
+    ) -> int:
+        """
+        Calculate the total balance across ALL on-budget (non-offbudget, non-closed) accounts.
+
+        This is the core figure for envelope budgeting — the total real money available
+        to be assigned to categories. Mirrors Actual Budget's "Available Funds" total.
+
+        Formula:
+            SUM of all transaction amounts in on-budget accounts up to as_of_date
+
+        Args:
+            db: Database session
+            family_id: Family ID
+            as_of_date: Calculate balance as of this date (inclusive). Defaults to today.
+
+        Returns:
+            Total balance in cents
+        """
+        # Sub-query: IDs of all on-budget, non-closed accounts for this family
+        on_budget_accounts_query = (
+            select(BudgetAccount.id)
+            .where(
+                and_(
+                    BudgetAccount.family_id == family_id,
+                    BudgetAccount.offbudget == False,
+                    BudgetAccount.closed == False,
+                )
+            )
+        )
+
+        # Sum all transactions in those accounts
+        balance_query = (
+            select(func.coalesce(func.sum(BudgetTransaction.amount), 0))
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.account_id.in_(on_budget_accounts_query),
+                )
+            )
+        )
+
+        if as_of_date:
+            balance_query = balance_query.where(BudgetTransaction.date <= as_of_date)
+
+        result = await db.execute(balance_query)
+        return result.scalar() or 0
+
     @classmethod
     async def get_balances_for_all_accounts(
         cls,
@@ -239,10 +313,8 @@ class AccountService(BaseFamilyService[BudgetAccount]):
         Returns:
             Dict mapping account_id to balance info
         """
-        accounts = await cls.list_all(db, family_id)
-        if not include_closed:
-            accounts = [a for a in accounts if not a.closed]
-        
+        accounts = await cls.list_budget_accounts(db, family_id, include_closed=include_closed)
+
         balances = {}
         for account in accounts:
             balances[account.id] = await cls.get_balance(

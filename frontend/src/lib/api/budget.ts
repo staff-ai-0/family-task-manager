@@ -283,6 +283,7 @@ export async function createAccount(
         type: "checking" | "savings" | "credit" | "investment" | "other";
         offbudget?: boolean;
         notes?: string;
+        starting_balance?: number;
     }
 ): Promise<ApiResponse<BudgetAccount>> {
     return apiFetch<BudgetAccount>("/api/budget/accounts/", {

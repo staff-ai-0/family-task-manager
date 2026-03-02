@@ -49,7 +49,7 @@ class TaskTemplate(Base):
 
     # Assignment configuration
     assignment_type = Column(
-        SQLEnum(AssignmentType),
+        SQLEnum(AssignmentType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=AssignmentType.AUTO,
         server_default="auto"

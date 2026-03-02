@@ -12,7 +12,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -50,7 +50,7 @@ class BudgetCategory(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     rollover_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    goal_amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False, comment="Monthly goal in cents")
+    goal_amount: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False, comment="Monthly goal in cents")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
@@ -73,7 +73,7 @@ class BudgetAllocation(Base):
     family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
     category_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_categories.id", ondelete="CASCADE"), nullable=False)
     month: Mapped[date] = mapped_column(Date, nullable=False, comment="First day of the month")
-    budgeted_amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False, comment="Amount in cents")
+    budgeted_amount: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False, comment="Amount in cents")
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Month close timestamp (null = open)")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -97,6 +97,7 @@ class BudgetAccount(Base):
     closed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    starting_balance: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False, comment="Initial account balance in cents at creation time")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
@@ -146,7 +147,7 @@ class BudgetTransaction(Base):
     family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
     account_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_accounts.id", ondelete="CASCADE"), nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    amount: Mapped[int] = mapped_column(Integer, nullable=False, comment="Amount in cents (negative=expense, positive=income)")
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False, comment="Amount in cents (negative=expense, positive=income)")
     payee_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_payees.id", ondelete="SET NULL"), nullable=True)
     category_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_categories.id", ondelete="SET NULL"), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -272,7 +273,7 @@ class BudgetRecurringTransaction(Base):
     # Transaction template data
     name: Mapped[str] = mapped_column(String(255), nullable=False, comment="Template name (e.g., 'Monthly Rent')")
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    amount: Mapped[int] = mapped_column(Integer, nullable=False, comment="Amount in cents (negative=expense, positive=income)")
+    amount: Mapped[int] = mapped_column(BigInteger, nullable=False, comment="Amount in cents (negative=expense, positive=income)")
     
     # Recurrence pattern
     recurrence_type: Mapped[str] = mapped_column(

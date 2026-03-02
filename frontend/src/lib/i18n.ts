@@ -576,7 +576,7 @@ export const translations = {
         fin_ready_to_assign: "Listo para Asignar",
         fin_expenses: "Gastos",
         fin_assign_hint: "Usa el botón + Asignar en cada categoría para distribuir tu saldo disponible",
-        fin_budgeted_label: "presupuestado",
+        fin_budgeted_label: "presupuesto",
         fin_spent_label: "gastado",
         fin_prev_balance_label: "saldo anterior",
         fin_available_label: "Disponible",

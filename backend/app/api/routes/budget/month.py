@@ -6,7 +6,7 @@ Endpoints for comprehensive monthly budget views.
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import date
+from datetime import date, timedelta
 from typing import Dict, Any
 
 from app.core.database import get_db
@@ -14,6 +14,7 @@ from app.core.dependencies import get_current_user
 from app.core.type_utils import to_uuid_required
 from app.services.budget.category_service import CategoryGroupService
 from app.services.budget.allocation_service import AllocationService
+from app.services.budget.account_service import AccountService
 from app.models import User
 
 router = APIRouter()
@@ -58,8 +59,34 @@ async def get_month_budget(
         }
     }
     
-    total_income = 0  # Track income separately
-    
+    # Compute end-of-month date for balance snapshot
+    if month_date.month == 12:
+        end_of_month = date(month_date.year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_of_month = date(month_date.year, month_date.month + 1, 1) - timedelta(days=1)
+
+    # Envelope budgeting formula (Actual Budget style):
+    #   ready_to_assign = total_on_budget_balance
+    #                     - expense_budgeted_this_month
+    #                     - (prior_expense_budgeted + prior_expense_activity)
+    #
+    # prior_expense_budgeted + prior_expense_activity = net leftover already "used" from the pool
+    total_on_budget_balance = await AccountService.get_total_on_budget_balance(
+        db, family_id, end_of_month
+    )
+    expense_budgeted_this_month = await AllocationService.get_total_expense_budgeted_for_month(
+        db, family_id, month_date
+    )
+    prior_expense_budgeted = await AllocationService.get_total_expense_budgeted_before_month(
+        db, family_id, month_date
+    )
+    prior_expense_activity = await AllocationService.get_total_expense_activity_before_month(
+        db, family_id, month_date
+    )
+    prior_net = prior_expense_budgeted + prior_expense_activity
+
+    result["ready_to_assign"] = total_on_budget_balance - expense_budgeted_this_month - prior_net
+
     for group in groups:
         group_data = {
             "id": str(group.id),
@@ -94,18 +121,14 @@ async def get_month_budget(
         
         result["category_groups"].append(group_data)
         
-        # Track income and calculate ready to assign
+        # Track income for totals reporting
         if group.is_income:
-            total_income += group_data["total_activity"]
             result["totals"]["income"] += group_data["total_activity"]
         else:
             # Add to grand totals
             result["totals"]["budgeted"] += group_data["total_budgeted"]
             result["totals"]["activity"] += group_data["total_activity"]
             result["totals"]["available"] += group_data["total_available"]
-    
-    # Ready to Assign = Total Income - Total Budgeted (for expenses)
-    result["ready_to_assign"] = total_income - result["totals"]["budgeted"]
     
     return result
 

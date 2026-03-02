@@ -10,7 +10,7 @@ from typing import List
 from datetime import date
 from uuid import UUID
 
-from app.models.budget import BudgetAllocation, BudgetTransaction
+from app.models.budget import BudgetAllocation, BudgetTransaction, BudgetCategory, BudgetCategoryGroup
 from app.schemas.budget import AllocationCreate, AllocationUpdate
 from app.services.base_service import BaseFamilyService
 from app.core.exceptions import NotFoundException, ValidationError
@@ -392,3 +392,148 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                 "available": total_available,
             },
         }
+
+    @classmethod
+    async def get_total_expense_budgeted_for_month(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        month: date,
+    ) -> int:
+        """
+        Get total budgeted amount for all EXPENSE categories in a given month.
+
+        Income category groups (is_income=True) are excluded — their allocations
+        don't reduce the "Ready to Assign" pool.
+
+        Args:
+            db: Database session
+            family_id: Family ID
+            month: The month (first day)
+
+        Returns:
+            Total budgeted amount in cents for expense categories this month
+        """
+        # Sub-query: IDs of all expense (non-income) categories for this family
+        expense_category_ids_query = (
+            select(BudgetCategory.id)
+            .join(BudgetCategoryGroup, BudgetCategory.group_id == BudgetCategoryGroup.id)
+            .where(
+                and_(
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategoryGroup.is_income == False,
+                )
+            )
+        )
+
+        total_query = (
+            select(func.coalesce(func.sum(BudgetAllocation.budgeted_amount), 0))
+            .where(
+                and_(
+                    BudgetAllocation.family_id == family_id,
+                    BudgetAllocation.month == month,
+                    BudgetAllocation.category_id.in_(expense_category_ids_query),
+                )
+            )
+        )
+
+        result = await db.execute(total_query)
+        return result.scalar() or 0
+
+    @classmethod
+    async def get_total_expense_budgeted_before_month(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        month: date,
+    ) -> int:
+        """
+        Get total budgeted amount for all EXPENSE categories in ALL months BEFORE the given month.
+
+        This is used to calculate how much of the total account balance has already been
+        "spoken for" by previous months' budgets that weren't fully spent (i.e., rolled over).
+
+        Args:
+            db: Database session
+            family_id: Family ID
+            month: The reference month (first day); only prior months are counted
+
+        Returns:
+            Total budgeted amount in cents for expense categories before this month
+        """
+        expense_category_ids_query = (
+            select(BudgetCategory.id)
+            .join(BudgetCategoryGroup, BudgetCategory.group_id == BudgetCategoryGroup.id)
+            .where(
+                and_(
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategoryGroup.is_income == False,
+                )
+            )
+        )
+
+        total_query = (
+            select(func.coalesce(func.sum(BudgetAllocation.budgeted_amount), 0))
+            .where(
+                and_(
+                    BudgetAllocation.family_id == family_id,
+                    BudgetAllocation.month < month,
+                    BudgetAllocation.category_id.in_(expense_category_ids_query),
+                )
+            )
+        )
+
+        result = await db.execute(total_query)
+        return result.scalar() or 0
+
+    @classmethod
+    async def get_total_expense_activity_before_month(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        month: date,
+    ) -> int:
+        """
+        Get total transaction activity for all EXPENSE categories in ALL months BEFORE the given month.
+
+        Combined with get_total_expense_budgeted_before_month, this lets us compute the
+        net carried-forward balance from prior months:
+          prior_net = prior_budgeted + prior_activity  (activity is negative for expenses)
+
+        Args:
+            db: Database session
+            family_id: Family ID
+            month: Reference month (first day); only prior months are counted
+
+        Returns:
+            Total activity amount in cents (negative = spending)
+        """
+        from datetime import timedelta
+
+        # Last day of the month prior to `month`
+        end_of_prior = month - timedelta(days=1)
+
+        expense_category_ids_query = (
+            select(BudgetCategory.id)
+            .join(BudgetCategoryGroup, BudgetCategory.group_id == BudgetCategoryGroup.id)
+            .where(
+                and_(
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategoryGroup.is_income == False,
+                )
+            )
+        )
+
+        total_query = (
+            select(func.coalesce(func.sum(BudgetTransaction.amount), 0))
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.category_id.in_(expense_category_ids_query),
+                    BudgetTransaction.date <= end_of_prior,
+                )
+            )
+        )
+
+        result = await db.execute(total_query)
+        return result.scalar() or 0

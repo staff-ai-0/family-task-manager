@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.pool import NullPool
 from httpx import AsyncClient, ASGITransport
 import os
+import asyncpg
 
 from app.main import app
 from app.core.database import Base, get_db
@@ -19,27 +20,66 @@ TEST_DATABASE_URL = os.getenv(
     "postgresql+asyncpg://familyapp:familyapp123@localhost:5433/familyapp_test",
 )
 
+# Pure asyncpg DSN (no +asyncpg prefix, no SQLAlchemy)
+_PG_DSN = TEST_DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+
+
+async def _drop_all_pg(pg: asyncpg.Connection) -> None:
+    """Drop all tables and custom enum types via a raw asyncpg connection."""
+    await pg.execute("SET client_min_messages TO WARNING")
+    # Drop each user table individually (handles empty schema gracefully)
+    tables = await pg.fetch(
+        "SELECT tablename FROM pg_tables "
+        "WHERE schemaname = 'public' AND tablename != 'alembic_version'"
+    )
+    for row in tables:
+        await pg.execute(f'DROP TABLE IF EXISTS "{row["tablename"]}" CASCADE')
+    # Drop leftover custom enum types
+    types_ = await pg.fetch(
+        "SELECT typname FROM pg_type "
+        "JOIN pg_namespace ON pg_namespace.oid = pg_type.typnamespace "
+        "WHERE typtype = 'e' AND nspname = 'public'"
+    )
+    for row in types_:
+        await pg.execute(f'DROP TYPE IF EXISTS "{row["typname"]}" CASCADE')
+
 
 @pytest_asyncio.fixture(scope="function")
 async def test_engine():
-    """Create test database engine"""
+    """Create test database engine with clean schema."""
+    # Step 1: Clean up old tables/types using a direct asyncpg connection
+    # (outside any transaction; asyncpg connections are in autocommit by default)
+    pg = await asyncpg.connect(_PG_DSN)
+    try:
+        await _drop_all_pg(pg)
+    finally:
+        await pg.close()
+
+    # Step 2: Create schema via SQLAlchemy with AUTOCOMMIT isolation.
+    # This is critical: asyncpg's prepared-statement cache does not see a
+    # freshly-created enum type if CREATE TYPE and CREATE TABLE run inside the
+    # same transaction.  Using AUTOCOMMIT commits each DDL statement immediately
+    # so that the next statement sees the new type.
     engine = create_async_engine(
         TEST_DATABASE_URL,
         echo=False,
         poolclass=NullPool,
     )
-
-    # Create all tables
-    async with engine.begin() as conn:
+    async with engine.connect() as conn:
+        await conn.execution_options(isolation_level="AUTOCOMMIT")
         await conn.run_sync(Base.metadata.create_all)
 
     yield engine
 
-    # Drop all tables after tests
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    # Teardown: clean up again
+    pg2 = await asyncpg.connect(_PG_DSN)
+    try:
+        await _drop_all_pg(pg2)
+    finally:
+        await pg2.close()
 
     await engine.dispose()
+
 
 
 @pytest_asyncio.fixture
@@ -179,3 +219,18 @@ async def test_reward(db_session: AsyncSession, test_family, test_parent_user):
     await db_session.commit()
     await db_session.refresh(reward)
     return reward
+
+
+# Budget test convenience aliases
+# These match the parameter names used in test_budget_allocation.py
+
+@pytest_asyncio.fixture
+async def db(db_session: AsyncSession) -> AsyncSession:
+    """Alias for db_session, used in budget tests."""
+    return db_session
+
+
+@pytest_asyncio.fixture
+async def family_id(test_family):
+    """Return just the family UUID, used in budget tests."""
+    return test_family.id

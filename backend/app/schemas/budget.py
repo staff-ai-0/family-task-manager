@@ -98,6 +98,7 @@ class AccountBase(BaseModel):
     closed: bool = Field(False, description="Is this account closed?")
     notes: Optional[str] = Field(None, description="Optional notes")
     sort_order: int = Field(0, ge=0, description="Display order")
+    starting_balance: int = Field(0, description="Initial account balance in cents at creation time")
 
     @field_validator('type')
     @classmethod
@@ -121,6 +122,7 @@ class AccountUpdate(BaseModel):
     closed: Optional[bool] = None
     notes: Optional[str] = None
     sort_order: Optional[int] = Field(None, ge=0)
+    starting_balance: Optional[int] = Field(None, description="Initial account balance in cents")
 
     @field_validator('type')
     @classmethod
