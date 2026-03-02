@@ -11,6 +11,19 @@ const {
 	title = "Family Task Manager",
 	description = t(lang, "meta_description") as string,
 } = Astro.props;
+
+const bannerCopy = {
+  es: {
+    msg: "Por favor verifica tu correo electrónico para activar todas las funciones.",
+    resend: "Reenviar correo",
+    sent: "¡Enviado!",
+  },
+  en: {
+    msg: "Please verify your email address to unlock all features.",
+    resend: "Resend email",
+    sent: "Sent!",
+  },
+}[lang] ?? { msg: "", resend: "", sent: "" };
 ---
 
 <!doctype html>
@@ -25,9 +38,53 @@ const {
 		<title>{title}</title>
 	</head>
 <body class="bg-slate-50 text-slate-900 antialiased">
+    <!-- Email verification banner (hidden by default, shown client-side if needed) -->
+    <div
+        id="verify-banner"
+        class="hidden w-full bg-amber-50 border-b border-amber-200 px-4 py-2.5 text-sm text-amber-800 flex items-center justify-center gap-3"
+    >
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{bannerCopy.msg}</span>
+        <button
+            id="resend-verify-btn"
+            class="underline font-medium hover:text-amber-900 transition-colors whitespace-nowrap"
+        >
+            {bannerCopy.resend}
+        </button>
+    </div>
+
     <div class="app-shell">
         <slot />
     </div>
     <slot name="overlays" />
+
+    <script define:vars={{ sentLabel: bannerCopy.sent, resendLabel: bannerCopy.resend }}>
+        (async () => {
+            try {
+                const res = await fetch("/api/auth/me-status");
+                if (!res.ok) return;
+                const { verified } = await res.json();
+                if (!verified) {
+                    document.getElementById("verify-banner")?.classList.remove("hidden");
+                }
+            } catch { /* silently ignore */ }
+        })();
+
+        document.getElementById("resend-verify-btn")?.addEventListener("click", async (e) => {
+            const btn = e.target;
+            btn.disabled = true;
+            btn.textContent = "...";
+            try {
+                await fetch("/api/auth/resend-verification", { method: "POST" });
+                btn.textContent = sentLabel;
+            } catch {
+                btn.textContent = resendLabel;
+                btn.disabled = false;
+            }
+        });
+    </script>
 </body>
 </html>

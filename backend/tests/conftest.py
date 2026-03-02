@@ -225,6 +225,17 @@ async def test_reward(db_session: AsyncSession, test_family, test_parent_user):
 # These match the parameter names used in test_budget_allocation.py
 
 @pytest_asyncio.fixture
+async def auth_headers(client: AsyncClient, test_parent_user) -> dict:
+    """Return Authorization headers for test_parent_user (email_verified=True)."""
+    response = await client.post(
+        "/api/auth/login",
+        json={"email": "parent@test.com", "password": "password123"},
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
 async def db(db_session: AsyncSession) -> AsyncSession:
     """Alias for db_session, used in budget tests."""
     return db_session

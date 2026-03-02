@@ -154,6 +154,14 @@ if (flashError) {
                 >
                     {t(lang, "login_submit")}
                 </button>
+                <div class="text-right mt-2">
+                    <a
+                        href="/forgot-password"
+                        class="text-sm text-indigo-600 hover:text-indigo-800 transition-colors"
+                    >
+                        {lang === "es" ? "¿Olvidaste tu contraseña?" : "Forgot your password?"}
+                    </a>
+                </div>
             </form>
 
             <!-- Language toggle on login page -->

@@ -82,3 +82,20 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+# Email / password-reset schemas
+class ForgotPasswordRequest(BaseModel):
+    """Request to send a password reset email"""
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Consume a password reset token and set a new password"""
+    token: str
+    new_password: str = Field(..., min_length=8, max_length=100)
+
+
+class VerifyEmailRequest(BaseModel):
+    """Consume an email verification token"""
+    token: str

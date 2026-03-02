@@ -1,0 +1,102 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+const token = Astro.url.searchParams.get("token") ?? "";
+
+// Server-side: attempt verification immediately when token is present
+let serverResult: "success" | "invalid" | "pending" = "pending";
+
+if (token) {
+  try {
+    const apiBase = import.meta.env.API_BASE_URL ?? "http://backend:8000";
+    const res = await fetch(`${apiBase}/api/auth/verify-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    serverResult = res.ok ? "success" : "invalid";
+  } catch {
+    serverResult = "invalid";
+  }
+}
+
+const copy = {
+  es: {
+    title: "Verificar correo",
+    success_heading: "¡Correo verificado!",
+    success_body: "Tu cuenta ha sido verificada correctamente. Ya puedes usar todas las funciones.",
+    invalid_heading: "Enlace no válido",
+    invalid_body: "Este enlace de verificación no es válido o ha expirado.",
+    no_token_heading: "Revisa tu correo",
+    no_token_body: "Te enviamos un enlace de verificación al registrarte. Revisa tu bandeja de entrada y carpeta de spam.",
+    login: "Ir al inicio de sesión",
+    resend: "Reenviar verificación",
+  },
+  en: {
+    title: "Verify email",
+    success_heading: "Email verified!",
+    success_body: "Your account has been verified. You can now use all features.",
+    invalid_heading: "Invalid link",
+    invalid_body: "This verification link is invalid or has expired.",
+    no_token_heading: "Check your inbox",
+    no_token_body: "We sent a verification link when you registered. Check your inbox and spam folder.",
+    login: "Go to login",
+    resend: "Resend verification",
+  },
+}[lang] ?? {};
+---
+
+<Layout title={`${copy.title} — Family Task Manager`}>
+  <main class="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center">
+
+      {serverResult === "success" && (
+        <>
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-50 mb-4">
+            <svg class="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h1 class="text-2xl font-bold text-slate-900 mb-2">{copy.success_heading}</h1>
+          <p class="text-slate-500 mb-6">{copy.success_body}</p>
+          <a href="/login" class="inline-block px-6 py-3 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors">
+            {copy.login}
+          </a>
+        </>
+      )}
+
+      {serverResult === "invalid" && (
+        <>
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-50 mb-4">
+            <svg class="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <h1 class="text-2xl font-bold text-slate-900 mb-2">{copy.invalid_heading}</h1>
+          <p class="text-slate-500 mb-6">{copy.invalid_body}</p>
+          <a href="/login" class="inline-block px-6 py-3 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors">
+            {copy.login}
+          </a>
+        </>
+      )}
+
+      {serverResult === "pending" && (
+        <>
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 mb-4">
+            <svg class="w-8 h-8 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h1 class="text-2xl font-bold text-slate-900 mb-2">{copy.no_token_heading}</h1>
+          <p class="text-slate-500 mb-6">{copy.no_token_body}</p>
+          <a href="/login" class="inline-block px-6 py-3 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors">
+            {copy.login}
+          </a>
+        </>
+      )}
+
+    </div>
+  </main>
+</Layout>

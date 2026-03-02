@@ -78,6 +78,11 @@ services:
       PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
       PAYPAL_MODE: ${PAYPAL_MODE:-sandbox}
       PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID:-}
+      # Email (Resend)
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@agent-ia.mx}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Family Task Manager}
+      BASE_URL: ${BASE_URL:-https://family.agent-ia.mx}
     ports:
       - "8002:8000"
     depends_on:
