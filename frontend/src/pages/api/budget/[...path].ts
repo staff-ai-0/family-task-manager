@@ -10,6 +10,9 @@ const BACKEND_URL = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL 
  * DELETE, PATCH) transparently, preserving headers, body, and status codes.
  *
  * Route: /api/budget/[...path]  →  <BACKEND>/api/budget/<path>
+ *
+ * Redirect handling: FastAPI redirects e.g. POST /categories → /categories/
+ * We follow 3xx redirects manually so the body is re-sent correctly on POST.
  */
 async function proxy({ request, params }: { request: Request; params: Record<string, string | undefined> }): Promise<Response> {
     const path = params.path ?? "";
@@ -37,12 +40,25 @@ async function proxy({ request, params }: { request: Request; params: Record<str
     const hasBody = !["GET", "HEAD"].includes(request.method.toUpperCase());
     const body = hasBody ? await request.arrayBuffer() : undefined;
 
-    try {
-        const backendRes = await fetch(backendUrl, {
+    async function doFetch(targetUrl: string): Promise<Response> {
+        const backendRes = await fetch(targetUrl, {
             method: request.method,
             headers: forwardHeaders,
             body: body,
+            redirect: "manual", // handle redirects ourselves so POST body is preserved
         });
+
+        // Follow 3xx redirects manually (preserves method + body)
+        if (backendRes.status >= 300 && backendRes.status < 400) {
+            const location = backendRes.headers.get("location");
+            if (location) {
+                // location may be absolute (http://backend:8000/...) or relative
+                const redirectUrl = location.startsWith("http")
+                    ? location
+                    : `${BACKEND_URL}${location}`;
+                return doFetch(redirectUrl);
+            }
+        }
 
         // Stream the response back as-is
         const responseHeaders = new Headers();
@@ -57,6 +73,10 @@ async function proxy({ request, params }: { request: Request; params: Record<str
             statusText: backendRes.statusText,
             headers: responseHeaders,
         });
+    }
+
+    try {
+        return await doFetch(backendUrl);
     } catch (e: any) {
         console.error(`[api/budget proxy] Error forwarding to ${backendUrl}:`, e?.message ?? e);
         return new Response(
