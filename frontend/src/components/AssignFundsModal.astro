@@ -159,6 +159,62 @@ const {
         document.getElementById(`${baseRoute}-modal`).classList.add('hidden');
     });
 
+    // Confirm button — POST to /api/budget/allocations/set via proxy
+    document.getElementById(`${baseRoute}-confirm-btn`)?.addEventListener('click', async () => {
+        const categorySelect = document.getElementById(`${baseRoute}-category-select`);
+        const amountInput = document.getElementById(`${baseRoute}-amount-input`);
+        const errorEl = document.getElementById(`${baseRoute}-error`);
+        const successEl = document.getElementById(`${baseRoute}-success`);
+        const confirmBtn = document.getElementById(`${baseRoute}-confirm-btn`);
+        const availableDisplay = document.getElementById(`${baseRoute}-available-display`);
+
+        const categoryId = categorySelect?.value;
+        const amountRaw = parseFloat(amountInput?.value || '');
+        const amountCents = Math.round(amountRaw * 100);
+
+        errorEl?.classList.add('hidden');
+        successEl?.classList.add('hidden');
+
+        if (!categoryId) {
+            if (errorEl) { errorEl.textContent = lang === 'es' ? 'Selecciona una categoría' : 'Please select a category'; errorEl.classList.remove('hidden'); }
+            return;
+        }
+        if (isNaN(amountCents) || amountCents <= 0) {
+            if (errorEl) { errorEl.textContent = lang === 'es' ? 'Ingresa una cantidad válida' : 'Please enter a valid amount'; errorEl.classList.remove('hidden'); }
+            return;
+        }
+
+        confirmBtn.disabled = true;
+        try {
+            // Get current month from page URL: /parent/finances/month/YYYY/MM
+            const parts = window.location.pathname.split('/');
+            const yearIdx = parts.indexOf('month') + 1;
+            const monthStr = yearIdx > 0
+                ? `${parts[yearIdx]}-${String(parts[yearIdx + 1]).padStart(2, '0')}-01`
+                : new Date().toISOString().slice(0, 7) + '-01';
+
+            const res = await fetch('/api/budget/allocations/set', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ category_id: categoryId, month: monthStr, amount: amountCents })
+            });
+
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || data.message || (lang === 'es' ? 'Error al asignar fondos' : 'Failed to assign funds'));
+            }
+
+            successEl?.classList.remove('hidden');
+            if (amountInput) amountInput.value = '';
+            if (categorySelect) categorySelect.value = '';
+
+            setTimeout(() => { window.location.reload(); }, 800);
+        } catch (err) {
+            if (errorEl) { errorEl.textContent = err.message; errorEl.classList.remove('hidden'); }
+            confirmBtn.disabled = false;
+        }
+    });
+
     // Close button
     document.getElementById(`${baseRoute}-close-btn`)?.addEventListener('click', () => {
         document.getElementById(`${baseRoute}-modal`).classList.add('hidden');
