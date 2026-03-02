@@ -1,0 +1,16 @@
+---
+/**
+ * BottomSpacer.astro
+ * A reusable component to guarantee clear space at the bottom of pages
+ * to prevent BottomNav from overlapping content/buttons.
+ */
+---
+
+<div class="h-32 w-full flex-shrink-0 safe-area-bottom"></div>
+
+<style>
+    .safe-area-bottom {
+        /* Adds extra height for iOS home indicator if present */
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+</style>

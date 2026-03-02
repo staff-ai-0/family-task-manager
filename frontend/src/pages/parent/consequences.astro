@@ -1,4 +1,5 @@
 ---
+import BottomSpacer from "@components/BottomSpacer.astro";
 import Layout from "../../layouts/Layout.astro";
 import BottomNav from "../../components/BottomNav.astro";
 import { apiFetch } from "../../lib/api";
@@ -76,9 +77,10 @@ const consequences: any[] = Array.isArray(consequencesRaw)
     : [];
 const members: any[] = family?.members ?? [];
 ---
+import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title={`${t(lang, "pc_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
         <header
             class="bg-gradient-to-br from-rose-700 to-red-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md"
         >
@@ -303,6 +305,7 @@ const members: any[] = family?.members ?? [];
             </section>
         </main>
 
+<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 </Layout>

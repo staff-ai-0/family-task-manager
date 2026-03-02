@@ -19,25 +19,29 @@
 html {
   margin: 0;
   padding: 0;
+  height: 100%;
 }
 
 body {
   margin: 0;
   padding: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Prevent fixed BottomNav from overlapping page content.
-   The nav is ~64px tall + 16px gap = 80px. We add 100px to be safe. */
-:root {
-  --bottom-nav-height: 100px;
-}
-
-/* Applied on the wrapper inside Layout.astro */
+/* Base app layout wrapper */
 .app-shell {
-  padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
-/* Fallback: catch any direct child of body that doesn't use app-shell */
-body > div {
-  padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+/* Ensure BottomNav stays pinned but page scrolls behind it */
+nav.fixed.bottom-0 {
+  backdrop-filter: blur(8px);
+  background-color: rgba(255, 255, 255, 0.9);
 }

@@ -1,4 +1,5 @@
 ---
+import BottomSpacer from "@components/BottomSpacer.astro";
 /**
  * Accounts List Page
  * Shows all budget accounts with current balances
@@ -99,9 +100,10 @@ const typeIcons: Record<string, string> = {
     other: "M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10",
 };
 ---
+import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title="Cuentas - Presupuesto">
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
         <!-- Header -->
         <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
             <div class="flex items-center justify-between mb-6">
@@ -225,6 +227,7 @@ const typeIcons: Record<string, string> = {
             )}
         </main>
 
+<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 </Layout>

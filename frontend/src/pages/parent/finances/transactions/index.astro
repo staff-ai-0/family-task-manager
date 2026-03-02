@@ -1,4 +1,5 @@
 ---
+import BottomSpacer from "@components/BottomSpacer.astro";
 /**
  * All Transactions Page
  * Shows all budget transactions with filtering options
@@ -74,9 +75,10 @@ const totalIncome = sortedTransactions.filter(t => t.amount > 0).reduce((sum, t)
 const totalExpenses = Math.abs(sortedTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
 const netAmount = totalIncome - totalExpenses;
 ---
+import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title="Transacciones - Presupuesto">
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
         <!-- Header -->
         <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
             <div class="flex items-center justify-between mb-6">
@@ -213,6 +215,7 @@ const netAmount = totalIncome - totalExpenses;
             </div>
         </main>
 
+<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 </Layout>

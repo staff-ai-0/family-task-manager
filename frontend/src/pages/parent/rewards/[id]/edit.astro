@@ -1,4 +1,5 @@
 ---
+import BottomSpacer from "@components/BottomSpacer.astro";
 import Layout from "../../../../layouts/Layout.astro";
 import BottomNav from "../../../../components/BottomNav.astro";
 import { apiFetch } from "../../../../lib/api";
@@ -42,9 +43,10 @@ if (Astro.request.method === "POST") {
 const { data: reward } = await apiFetch<any>(`/api/rewards/${id}`, { token });
 if (!reward) return Astro.redirect("/parent/rewards");
 ---
+import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title={`${t(lang, "pr_edit_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
         <header
             class="bg-gradient-to-br from-amber-600 to-orange-500 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md"
         >
@@ -162,6 +164,7 @@ if (!reward) return Astro.redirect("/parent/rewards");
                 </button>
             </form>
         </main>
+<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 </Layout>

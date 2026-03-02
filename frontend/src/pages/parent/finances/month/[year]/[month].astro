@@ -1,4 +1,5 @@
 ---
+import BottomSpacer from "@components/BottomSpacer.astro";
 /**
  * Monthly Budget View Page
  * Shows budget allocations, spending, and available amounts for a specific month
@@ -84,9 +85,10 @@ const allExpenseCategories = (allGroups || [])
     .filter(g => !g.is_income)
     .flatMap(g => g.categories.map(c => ({ id: c.id, name: c.name, groupName: g.name })));
 ---
+import BottomSpacer from "@components/BottomSpacer.astro";
 
 <Layout title={`${monthName} ${yearNum} - ${t(lang, 'fin_budgeted')}`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
         <!-- Header with Month Navigation -->
         <BudgetHeader title={t(lang, 'fin_budgeted')}>
             <BudgetMonthNav 
@@ -213,6 +215,7 @@ const allExpenseCategories = (allGroups || [])
             )}
         </main>
 
+<BottomSpacer />
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 
