@@ -426,11 +426,6 @@ const currentMonth = nowDate.getMonth() + 1;
     let editingCategoryId: string | null = null;
     let selectedGroupId: string | null = null;
 
-    // Get token from cookie
-    function getToken() {
-        return document.cookie.split('access_token=')[1]?.split(';')[0];
-    }
-
     // Group modal functions
     function openGroupModal(groupId: string | null = null, groupName = '', isIncome = false) {
         editingGroupId = groupId;
@@ -473,7 +468,6 @@ const currentMonth = nowDate.getMonth() + 1;
                 method: editingGroupId ? 'PUT' : 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${getToken()}`
                 },
                 body: JSON.stringify({
                     name,
@@ -481,7 +475,11 @@ const currentMonth = nowDate.getMonth() + 1;
                 })
             });
 
-            if (!response.ok) throw new Error('Error al guardar grupo');
+            if (!response.ok) {
+                let errMsg = 'Error al guardar grupo';
+                try { const d = await response.json(); errMsg = d?.detail || d?.message || errMsg; } catch {}
+                throw new Error(errMsg);
+            }
 
             window.location.reload();
         } catch (error: any) {
@@ -560,12 +558,15 @@ const currentMonth = nowDate.getMonth() + 1;
                 method: editingCategoryId ? 'PUT' : 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${getToken()}`
                 },
                 body: JSON.stringify(body)
             });
 
-            if (!response.ok) throw new Error('Error al guardar categoría');
+            if (!response.ok) {
+                let errMsg = 'Error al guardar categoría';
+                try { const d = await response.json(); errMsg = d?.detail || d?.message || errMsg; } catch {}
+                throw new Error(errMsg);
+            }
 
             window.location.reload();
         } catch (error: any) {

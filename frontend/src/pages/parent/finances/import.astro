@@ -224,7 +224,6 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
 </Layout>
 
 <script>
-    const token = document.cookie.split('access_token=')[1]?.split(';')[0];
     const lang = document.cookie.split('lang=')[1]?.split(';')[0] || 'en';
     const formEl = document.getElementById('import-form') as HTMLFormElement;
     const importBtn = document.getElementById('import-btn') as HTMLButtonElement;
@@ -279,9 +278,6 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
         try {
             const response = await fetch(`/api/budget/transactions/import/csv?${params}`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
                 body: formData
             });
 
