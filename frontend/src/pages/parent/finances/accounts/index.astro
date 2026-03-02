@@ -46,7 +46,7 @@ const { data: accounts, ok: accountsOk, error } = await getAccounts(token, {
                 uncleared_balance: number;
                 uncleared_balance_cents: number;
             }>(
-                `/api/parent/finances/accounts/${account.id}/balance`,
+                `/api/budget/accounts/${account.id}/balance`,
                 { token }
             );
 

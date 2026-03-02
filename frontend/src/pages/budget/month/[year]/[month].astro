@@ -65,7 +65,7 @@ const monthName = getMonthName(monthNum, lang);
 const incomeGroups = budget?.category_groups.filter(g => g.is_income) || [];
 const expenseGroups = budget?.category_groups.filter(g => !g.is_income) || [];
 
-const totalIncome = incomeGroups.reduce((sum, g) => sum + g.total_activity, 0);
+const totalIncome = budget?.totals?.income ?? incomeGroups.reduce((sum, g) => sum + g.total_activity, 0);
 const totalBudgeted = expenseGroups.reduce((sum, g) => sum + g.total_budgeted, 0);
 const totalSpent = Math.abs(expenseGroups.reduce((sum, g) => sum + g.total_activity, 0));
 const readyToAssign = budget?.ready_to_assign !== undefined ? budget.ready_to_assign : (totalIncome - totalBudgeted);

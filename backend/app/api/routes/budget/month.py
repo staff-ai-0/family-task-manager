@@ -16,6 +16,8 @@ from app.services.budget.category_service import CategoryGroupService
 from app.services.budget.allocation_service import AllocationService
 from app.services.budget.account_service import AccountService
 from app.models import User
+from app.models.budget import BudgetAccount, BudgetTransaction
+from sqlalchemy import select, and_, func
 
 router = APIRouter()
 
@@ -86,6 +88,33 @@ async def get_month_budget(
     prior_net = prior_expense_budgeted + prior_expense_activity
 
     result["ready_to_assign"] = total_on_budget_balance - expense_budgeted_this_month - prior_net
+
+    # Total income this month = all positive transactions in on-budget accounts for this month.
+    # This includes uncategorized income (category_id=NULL) like payroll deposits.
+    # Income-category activity is a subset of this; we use the raw account-level figure
+    # so the summary cards always reflect real money received, not just categorized income.
+    income_query = (
+        select(func.coalesce(func.sum(BudgetTransaction.amount), 0))
+        .where(
+            and_(
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.amount > 0,
+                BudgetTransaction.date >= month_date,
+                BudgetTransaction.date <= end_of_month,
+                BudgetTransaction.account_id.in_(
+                    select(BudgetAccount.id).where(
+                        and_(
+                            BudgetAccount.family_id == family_id,
+                            BudgetAccount.offbudget == False,
+                            BudgetAccount.closed == False,
+                        )
+                    )
+                ),
+            )
+        )
+    )
+    income_result = await db.execute(income_query)
+    result["totals"]["income"] = income_result.scalar() or 0
 
     for group in groups:
         group_data = {

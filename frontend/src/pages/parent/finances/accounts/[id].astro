@@ -39,10 +39,21 @@ if (!accountOk || !account) {
 }
 
 // Get account balance
-const { data: balance } = await apiFetch<{ total: number; cleared: number; uncleared: number }>(
-    `/api/parent/finances/accounts/${id}/balance`,
+const { data: balanceRaw } = await apiFetch<{
+    balance_cents: number;
+    cleared_balance_cents: number;
+    uncleared_balance_cents: number;
+}>(
+    `/api/budget/accounts/${id}/balance`,
     { token }
 );
+const balance = balanceRaw
+    ? {
+          total: balanceRaw.balance_cents,
+          cleared: balanceRaw.cleared_balance_cents,
+          uncleared: balanceRaw.uncleared_balance_cents,
+      }
+    : null;
 
 // Fetch transactions for this account
 const { data: transactions, ok: transOk } = await getTransactions(token, {
