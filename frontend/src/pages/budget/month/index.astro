@@ -1,0 +1,15 @@
+---
+/**
+ * Redirect to current month budget view
+ * Handles direct access to /budget/month by redirecting to current month
+ */
+
+// Redirect to current month
+const now = new Date();
+const currentYear = now.getFullYear();
+const currentMonth = now.getMonth() + 1;
+
+export const prerender = false;
+
+return Astro.redirect(`/budget/month/${currentYear}/${currentMonth}`);
+---

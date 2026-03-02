@@ -1,0 +1,170 @@
+---
+import Layout from "../../layouts/Layout.astro";
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+const accessToken = Astro.cookies.get("access_token")?.value;
+
+// Get payment details from URL params
+const url = new URL(Astro.request.url);
+const paymentId = url.searchParams.get("paymentId");
+const payerId = url.searchParams.get("PayerID");
+
+let error = "";
+let success = false;
+let paymentDetails = null;
+
+// Execute payment if we have the required params
+if (paymentId && payerId && accessToken) {
+    try {
+        const response = await fetch(`${Astro.url.origin}/api/payment/execute`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+                payment_id: paymentId,
+                payer_id: payerId,
+            }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            success = true;
+            paymentDetails = data.payment;
+        } else {
+            error = data.detail || "Failed to process payment";
+        }
+    } catch (e) {
+        error = "An error occurred while processing your payment";
+        console.error(e);
+    }
+}
+---
+
+<Layout title="Payment Success - Family Task Manager">
+    <main class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center px-4">
+        <div class="max-w-2xl w-full bg-white rounded-2xl shadow-xl p-8">
+            {
+                success ? (
+                    <>
+                        {/* Success State */}
+                        <div class="text-center">
+                            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6">
+                                <svg
+                                    class="h-10 w-10 text-green-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M5 13l4 4L19 7"
+                                    />
+                                </svg>
+                            </div>
+                            
+                            <h1 class="text-3xl font-bold text-slate-900 mb-4">
+                                Payment Successful!
+                            </h1>
+                            
+                            <p class="text-lg text-slate-600 mb-8">
+                                Thank you for your payment. Your subscription is now active.
+                            </p>
+
+                            {paymentDetails && (
+                                <div class="bg-slate-50 rounded-lg p-6 mb-8 text-left">
+                                    <h2 class="text-lg font-semibold text-slate-900 mb-4">
+                                        Payment Details
+                                    </h2>
+                                    <dl class="space-y-2">
+                                        <div class="flex justify-between">
+                                            <dt class="text-slate-600">Payment ID:</dt>
+                                            <dd class="font-mono text-sm text-slate-900">
+                                                {paymentDetails.payment_id}
+                                            </dd>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <dt class="text-slate-600">Amount:</dt>
+                                            <dd class="font-semibold text-slate-900">
+                                                {paymentDetails.amount} {paymentDetails.currency}
+                                            </dd>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <dt class="text-slate-600">Status:</dt>
+                                            <dd class="text-green-600 font-medium capitalize">
+                                                {paymentDetails.status}
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                            )}
+
+                            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                                <a
+                                    href="/dashboard"
+                                    class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium transition-colors shadow-sm"
+                                >
+                                    Go to Dashboard
+                                </a>
+                                <a
+                                    href="/"
+                                    class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium transition-colors"
+                                >
+                                    Back to Home
+                                </a>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        {/* Error State */}
+                        <div class="text-center">
+                            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-6">
+                                <svg
+                                    class="h-10 w-10 text-red-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12"
+                                    />
+                                </svg>
+                            </div>
+                            
+                            <h1 class="text-3xl font-bold text-slate-900 mb-4">
+                                Payment Error
+                            </h1>
+                            
+                            <p class="text-lg text-slate-600 mb-8">
+                                {error || "We couldn't process your payment. Please try again."}
+                            </p>
+
+                            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                                <a
+                                    href="/payment"
+                                    class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium transition-colors shadow-sm"
+                                >
+                                    Try Again
+                                </a>
+                                <a
+                                    href="/dashboard"
+                                    class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium transition-colors"
+                                >
+                                    Back to Dashboard
+                                </a>
+                            </div>
+                        </div>
+                    </>
+                )
+            }
+        </div>
+    </main>
+</Layout>
