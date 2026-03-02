@@ -1,7 +1,7 @@
 """Phase 10: Remove Actual Budget integration columns
 
 Revision ID: phase10_remove_actual
-Revises: 2026_02_28_budget_sync_state
+Revises: 29e1dd571bef
 Create Date: 2026-03-01 12:00:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'phase10_remove_actual'
-down_revision = '2026_02_28_budget_sync_state'
+down_revision = '29e1dd571bef'
 branch_labels = None
 depends_on = None
 
