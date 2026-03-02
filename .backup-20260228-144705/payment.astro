@@ -1,0 +1,256 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { t } from "../lib/i18n";
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+const accessToken = Astro.cookies.get("access_token")?.value;
+
+// Redirect to login if not authenticated
+if (!accessToken) {
+    return Astro.redirect("/login");
+}
+
+// Payment plans (you can customize these)
+const plans = [
+    {
+        id: "basic",
+        name: "Basic Plan",
+        price: 9.99,
+        currency: "USD",
+        features: [
+            "Up to 10 family members",
+            "Unlimited tasks",
+            "Points system",
+            "Email notifications",
+        ],
+    },
+    {
+        id: "premium",
+        name: "Premium Plan",
+        price: 19.99,
+        currency: "USD",
+        features: [
+            "Unlimited family members",
+            "Unlimited tasks",
+            "Points system",
+            "Email & SMS notifications",
+            "Actual Budget integration",
+            "Priority support",
+        ],
+        recommended: true,
+    },
+    {
+        id: "enterprise",
+        name: "Enterprise Plan",
+        price: 49.99,
+        currency: "USD",
+        features: [
+            "Everything in Premium",
+            "Multiple families",
+            "Custom integrations",
+            "Dedicated support",
+            "White-label option",
+        ],
+    },
+];
+---
+
+<Layout title="Payment - Family Task Manager">
+    <main class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-12 px-4">
+        <div class="max-w-7xl mx-auto">
+            <!-- Header -->
+            <div class="text-center mb-12">
+                <h1 class="text-4xl font-bold text-slate-900 mb-4">
+                    Choose Your Plan
+                </h1>
+                <p class="text-lg text-slate-600">
+                    Select the perfect plan for your family
+                </p>
+            </div>
+
+            <!-- Payment Plans -->
+            <div class="grid md:grid-cols-3 gap-8 mb-12">
+                {
+                    plans.map((plan) => (
+                        <div
+                            class={`relative bg-white rounded-2xl shadow-lg p-8 transition-all hover:shadow-xl ${
+                                plan.recommended
+                                    ? "ring-2 ring-primary-500 scale-105"
+                                    : ""
+                            }`}
+                        >
+                            {plan.recommended && (
+                                <div class="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                                    <span class="bg-primary-500 text-white px-4 py-1 rounded-full text-sm font-medium">
+                                        Recommended
+                                    </span>
+                                </div>
+                            )}
+
+                            <div class="text-center mb-6">
+                                <h3 class="text-2xl font-bold text-slate-900 mb-2">
+                                    {plan.name}
+                                </h3>
+                                <div class="flex items-baseline justify-center">
+                                    <span class="text-5xl font-extrabold text-primary-600">
+                                        ${plan.price}
+                                    </span>
+                                    <span class="text-slate-500 ml-2">/month</span>
+                                </div>
+                            </div>
+
+                            <ul class="space-y-3 mb-8">
+                                {plan.features.map((feature) => (
+                                    <li class="flex items-start">
+                                        <svg
+                                            class="h-6 w-6 text-green-500 mr-2 flex-shrink-0"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M5 13l4 4L19 7"
+                                            />
+                                        </svg>
+                                        <span class="text-slate-700">{feature}</span>
+                                    </li>
+                                ))}
+                            </ul>
+
+                            <button
+                                data-plan-id={plan.id}
+                                data-amount={plan.price}
+                                data-currency={plan.currency}
+                                data-description={`${plan.name} Subscription`}
+                                class="paypal-button w-full py-3 px-6 rounded-lg font-medium transition-colors bg-primary-600 hover:bg-primary-700 text-white shadow-sm"
+                            >
+                                Subscribe with PayPal
+                            </button>
+                        </div>
+                    ))
+                }
+            </div>
+
+            <!-- Payment Security Info -->
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center justify-center space-x-8">
+                    <div class="flex items-center text-slate-600">
+                        <svg
+                            class="h-6 w-6 mr-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                            ></path>
+                        </svg>
+                        <span>Secure Payment</span>
+                    </div>
+                    <div class="flex items-center text-slate-600">
+                        <svg
+                            class="h-6 w-6 mr-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            ></path>
+                        </svg>
+                        <span>Money-Back Guarantee</span>
+                    </div>
+                    <div class="flex items-center text-slate-600">
+                        <svg
+                            class="h-6 w-6 mr-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                            ></path>
+                        </svg>
+                        <span>Cancel Anytime</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // PayPal payment handling
+        document.querySelectorAll(".paypal-button").forEach((button) => {
+            button.addEventListener("click", async (e) => {
+                const target = e.currentTarget as HTMLButtonElement;
+                const amount = parseFloat(target.dataset.amount || "0");
+                const currency = target.dataset.currency || "USD";
+                const description = target.dataset.description || "Payment";
+
+                // Disable button
+                target.disabled = true;
+                target.textContent = "Processing...";
+
+                try {
+                    // Get access token from cookie
+                    const accessToken = document.cookie
+                        .split("; ")
+                        .find((row) => row.startsWith("access_token="))
+                        ?.split("=")[1];
+
+                    if (!accessToken) {
+                        alert("Please log in to continue");
+                        window.location.href = "/login";
+                        return;
+                    }
+
+                    // Create payment
+                    const response = await fetch("/api/payment/create", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${accessToken}`,
+                        },
+                        body: JSON.stringify({
+                            amount,
+                            currency,
+                            description,
+                            return_url: `${window.location.origin}/payment/success`,
+                            cancel_url: `${window.location.origin}/payment/cancel`,
+                        }),
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.approval_url) {
+                        // Redirect to PayPal for payment approval
+                        window.location.href = data.approval_url;
+                    } else {
+                        throw new Error(data.detail || "Failed to create payment");
+                    }
+                } catch (error) {
+                    console.error("Payment error:", error);
+                    alert(
+                        error instanceof Error
+                            ? error.message
+                            : "An error occurred. Please try again."
+                    );
+                    target.disabled = false;
+                    target.textContent = "Subscribe with PayPal";
+                }
+            });
+        });
+    </script>
+</Layout>
