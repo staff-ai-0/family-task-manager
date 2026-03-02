@@ -1,0 +1,87 @@
+---
+/**
+ * BudgetMonthNav Component
+ * Reusable month navigation with Ready to Assign balance display
+ * 
+ * Props:
+ * - year: number - current year
+ * - month: number - current month (1-12)
+ * - readyToAssign: number - amount ready to be assigned to categories
+ * - lang: 'en' | 'es' - language code
+ * - t: translation function
+ * - formatCurrency: currency formatter function
+ * - baseRoute: string - base route for month links (e.g., '/parent/finances/month' or '/budget/month')
+ */
+
+interface Props {
+    year: number;
+    month: number;
+    readyToAssign: number;
+    lang: 'en' | 'es';
+    t: (lang: string, key: string) => string;
+    formatCurrency: (amount: number) => string;
+    baseRoute?: string;
+}
+
+const { 
+    year, 
+    month, 
+    readyToAssign, 
+    lang, 
+    t,
+    formatCurrency,
+    baseRoute = '/parent/finances/month'
+} = Astro.props;
+
+// Calculate month navigation
+const prevMonth = month === 1 ? 12 : month - 1;
+const prevYear = month === 1 ? year - 1 : year;
+const nextMonth = month === 12 ? 1 : month + 1;
+const nextYear = month === 12 ? year + 1 : year;
+
+// Check if current month
+const now = new Date();
+const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
+
+// Get month name
+const monthNames = {
+    en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    es: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+};
+const monthName = monthNames[lang][month - 1];
+---
+
+<div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
+    <div class="flex items-center justify-between mb-4">
+        <a href={`${baseRoute}/${prevYear}/${prevMonth}`} class="text-white hover:text-primary-100 transition p-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+        </a>
+        <div class="text-center">
+            <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
+                {monthName} {year}
+            </p>
+            {isCurrentMonth && (
+                <span class="inline-block bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full">
+                    {lang === "es" ? "Mes Actual" : "Current Month"}
+                </span>
+            )}
+        </div>
+        <a href={`${baseRoute}/${nextYear}/${nextMonth}`} class="text-white hover:text-primary-100 transition p-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+        </a>
+    </div>
+
+    <!-- Ready to Assign -->
+    <div class="bg-white/30 rounded-xl p-4">
+        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
+            {t(lang, 'fin_ready_to_assign')}
+        </p>
+        <p class={`text-3xl font-extrabold tracking-tight ${readyToAssign < 0 ? 'text-red-300' : 'text-white'}`}>
+            {formatCurrency(readyToAssign)}
+        </p>
+    </div>
+</div>

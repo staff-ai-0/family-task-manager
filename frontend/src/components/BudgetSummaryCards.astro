@@ -1,0 +1,40 @@
+---
+/**
+ * BudgetSummaryCards Component
+ * Displays summary cards for Income, Budgeted, and Spent amounts
+ * 
+ * Props:
+ * - income: number - total income
+ * - budgeted: number - total budgeted
+ * - spent: number - total spent
+ * - lang: 'en' | 'es' - language code
+ * - t: translation function
+ * - formatCurrency: currency formatter function
+ */
+
+interface Props {
+    income: number;
+    budgeted: number;
+    spent: number;
+    lang: 'en' | 'es';
+    t: (lang: string, key: string) => string;
+    formatCurrency: (amount: number) => string;
+}
+
+const { income, budgeted, spent, lang, t, formatCurrency } = Astro.props;
+---
+
+<div class="px-6 py-4 grid grid-cols-3 gap-3">
+    <div class="bg-white rounded-xl p-4 shadow-sm">
+        <p class="text-xs text-slate-500 font-semibold mb-1">{lang === "es" ? "Ingresos" : "Income"}</p>
+        <p class="text-lg font-bold text-green-600">{formatCurrency(income)}</p>
+    </div>
+    <div class="bg-white rounded-xl p-4 shadow-sm">
+        <p class="text-xs text-slate-500 font-semibold mb-1">{t(lang, 'fin_budgeted')}</p>
+        <p class="text-lg font-bold text-blue-600">{formatCurrency(budgeted)}</p>
+    </div>
+    <div class="bg-white rounded-xl p-4 shadow-sm">
+        <p class="text-xs text-slate-500 font-semibold mb-1">{t(lang, 'fin_spent')}</p>
+        <p class="text-lg font-bold text-red-600">{formatCurrency(spent)}</p>
+    </div>
+</div>

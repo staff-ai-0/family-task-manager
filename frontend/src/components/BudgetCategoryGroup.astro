@@ -1,0 +1,181 @@
+---
+/**
+ * BudgetCategoryGroup Component
+ * Displays a category group (income or expense) with categories, inline edit, and transfer modal
+ * 
+ * Props:
+ * - group: CategoryGroup - the category group to display
+ * - isIncome: boolean - whether this is an income or expense group
+ * - lang: 'en' | 'es' - language code
+ * - t: translation function
+ * - formatCurrency: currency formatter function
+ * - token: string - authentication token (optional, for inline edit calls)
+ * - allExpenseCategories: Category[] - all expense categories for transfer modal dropdown
+ */
+
+interface Category {
+    id: string;
+    name: string;
+    budgeted: number;
+    activity: number;
+    available: number;
+    previous_balance?: number;
+}
+
+interface CategoryGroup {
+    id: string;
+    name: string;
+    is_income: boolean;
+    total_available: number;
+    total_activity: number;
+    total_budgeted: number;
+    categories: Category[];
+}
+
+interface Props {
+    group: CategoryGroup;
+    isIncome?: boolean;
+    lang: 'en' | 'es';
+    t: (lang: string, key: string) => string;
+    formatCurrency: (amount: number) => string;
+    token?: string;
+    allExpenseCategories?: any[];
+}
+
+const { 
+    group, 
+    isIncome = false,
+    lang, 
+    t, 
+    formatCurrency,
+    token,
+    allExpenseCategories = []
+} = Astro.props;
+
+const groupColor = isIncome ? 'green' : 'slate';
+const groupBgColor = isIncome ? 'bg-green-50' : 'bg-slate-100';
+const groupTextColor = isIncome ? 'text-green-800' : 'text-slate-800';
+const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
+---
+
+<div class="bg-white rounded-xl shadow-sm overflow-hidden">
+    <div class={`${groupBgColor} px-4 py-3 border-b ${groupBorderColor}`}>
+        <div class="flex items-center justify-between">
+            <h2 class={`font-bold ${groupTextColor} text-sm uppercase tracking-wide`}>
+                {group.name}
+            </h2>
+            {!isIncome && (
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-slate-600">
+                        {formatCurrency(group.total_available)} {lang === "es" ? "disponible" : "available"}
+                    </span>
+                    <button
+                        class="quick-add-btn text-slate-600 hover:text-primary-600 transition p-1"
+                        data-group-id={group.id}
+                        data-group-name={group.name}
+                        title={lang === "es" ? "Agregar categoría" : "Add category"}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </button>
+                </div>
+            )}
+        </div>
+    </div>
+    <div class="divide-y divide-slate-100">
+        {group.categories.map(category => {
+            const percentUsed = category.budgeted > 0 
+                ? Math.abs((category.activity / category.budgeted) * 100)
+                : 0;
+            const isOverBudget = category.available < 0;
+            
+            return (
+                <div 
+                    class="px-4 py-3 hover:bg-slate-50 transition category-row"
+                    data-category-id={category.id}
+                    data-category-name={category.name}
+                    data-budgeted={category.budgeted}
+                    data-activity={category.activity}
+                    data-available={category.available}
+                    data-previous-balance={category.previous_balance || 0}
+                >
+                    <!-- Row top: name | available -->
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm font-medium text-slate-700">{category.name}</span>
+                        <!-- Available balance — clickable for transfers (income categories don't show available button) -->
+                        {!isIncome && (
+                            <button
+                                class="available-btn text-sm font-bold rounded-lg px-2 py-0.5 transition hover:ring-2 focus:outline-none focus:ring-2 focus:ring-offset-1"
+                                class:list={[
+                                    isOverBudget
+                                        ? 'text-red-600 hover:ring-red-400 focus:ring-red-400'
+                                        : category.available > 0
+                                            ? 'text-green-600 hover:ring-green-400 focus:ring-green-400'
+                                            : 'text-slate-900 hover:ring-slate-300 focus:ring-slate-300'
+                                ]}
+                                data-category-id={category.id}
+                                data-category-name={category.name}
+                                data-available={category.available}
+                                title={lang === "es" ? "Transferir / cubrir sobregasto" : "Transfer / cover overspending"}
+                            >
+                                {formatCurrency(category.available)}
+                            </button>
+                        )}
+                        {isIncome && (
+                            <span class="text-sm font-bold text-green-600">
+                                {formatCurrency(category.activity)}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Previous balance row */}
+                    {category.previous_balance > 0 && (
+                        <div class="text-xs text-green-600 font-semibold mb-1">
+                            {formatCurrency(category.previous_balance)} {t(lang, 'fin_prev_balance_label')}
+                        </div>
+                    )}
+
+                    {/* Row bottom: inline budgeted input | spent (only for expense categories) */}
+                    {!isIncome && (
+                        <div class="flex items-center justify-between text-xs text-slate-500">
+                            <!-- Inline editable budgeted cell -->
+                            <div class="inline-edit-cell flex items-center gap-1" data-category-id={category.id}>
+                                <span class="inline-display text-slate-500">
+                                    {formatCurrency(category.budgeted)}
+                                </span>
+                                <span class="text-slate-400">{t(lang, 'fin_budgeted_label')}</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="edit-icon h-3 w-3 text-slate-400 opacity-0 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                <div class="inline-input-wrap hidden items-center gap-1">
+                                    <span class="text-slate-500">$</span>
+                                    <input
+                                        type="number"
+                                        class="inline-budget-input w-24 border-b-2 border-primary-500 bg-transparent text-slate-900 font-semibold text-sm focus:outline-none px-0.5"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder={t(lang, 'fin_inline_placeholder')}
+                                        data-original=""
+                                    />
+                                    <span class="saving-indicator hidden text-primary-500 text-xs">{t(lang, 'fin_saving')}</span>
+                                </div>
+                            </div>
+                            <span>{formatCurrency(Math.abs(category.activity))} {t(lang, 'fin_spent_label')}</span>
+                        </div>
+                    )}
+
+                    {/* Progress bar (only for expense categories with budget) */}
+                    {!isIncome && category.budgeted > 0 && (
+                        <div class="mt-2 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                            <div 
+                                class={`h-full transition-all ${isOverBudget ? 'bg-red-500' : 'bg-blue-500'}`}
+                                style={`width: ${Math.min(percentUsed, 100)}%`}
+                            ></div>
+                        </div>
+                    )}
+                </div>
+            );
+        })}
+    </div>
+</div>

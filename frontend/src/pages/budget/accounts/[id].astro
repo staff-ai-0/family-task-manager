@@ -4,11 +4,11 @@
  * Shows account details and transaction list
  */
 
-import Layout from "../../../layouts/Layout.astro";
-import BottomNav from "../../../components/BottomNav.astro";
-import { apiFetch } from "../../../lib/api";
-import { getAccount, getTransactions, getCategories, formatCurrency, formatDate } from "../../../lib/api/budget";
-import type { BudgetTransaction, BudgetCategory } from "../../../lib/api/budget";
+import Layout from "@layouts/Layout.astro";
+import BottomNav from "@components/BottomNav.astro";
+import { apiFetch } from "@lib/api";
+import { getAccount, getTransactions, getCategories, formatCurrency, formatDate } from "@lib/api/budget";
+import type { BudgetTransaction, BudgetCategory } from "@lib/api/budget";
 
 // Authentication check
 const token = Astro.cookies.get("access_token")?.value;

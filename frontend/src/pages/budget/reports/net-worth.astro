@@ -4,12 +4,12 @@
  * Shows total assets minus liabilities
  */
 
-import Layout from "../../../layouts/Layout.astro";
-import BottomNav from "../../../components/BottomNav.astro";
-import BudgetNav from "../../../components/BudgetNav.astro";
-import { apiFetch } from "../../../lib/api";
-import { getNetWorthReport, formatCurrency } from "../../../lib/api/budget";
-import { t } from "../../../lib/i18n";
+import Layout from "@layouts/Layout.astro";
+import BottomNav from "@components/BottomNav.astro";
+import BudgetNav from "@components/BudgetNav.astro";
+import { apiFetch } from "@lib/api";
+import { getNetWorthReport, formatCurrency } from "@lib/api/budget";
+import { t } from "@lib/i18n";
 
 // Authentication check
 const token = Astro.cookies.get("access_token")?.value;

@@ -1,0 +1,31 @@
+---
+/**
+ * BudgetHeader Component
+ * Reusable header for budget pages with back button and title
+ * 
+ * Props:
+ * - title: string - page title
+ * - lang: 'en' | 'es' - language code
+ */
+
+interface Props {
+    title: string;
+    lang: 'en' | 'es';
+}
+
+const { title, lang } = Astro.props;
+---
+
+<header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+    <div class="flex items-center justify-between mb-6">
+        <a href="/dashboard" class="text-white hover:text-primary-100 transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+        </a>
+        <h1 class="text-2xl font-bold">{title}</h1>
+        <div class="w-6"></div>
+    </div>
+
+    <slot />
+</header>

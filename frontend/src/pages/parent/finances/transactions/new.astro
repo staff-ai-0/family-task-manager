@@ -4,10 +4,10 @@
  * Form for creating a new budget transaction
  */
 
-import Layout from "../../../../layouts/Layout.astro";
-import BottomNav from "../../../../components/BottomNav.astro";
-import { apiFetch } from "../../../../lib/api";
-import { getAccounts, getCategories, getCategoryGroups, getPayees, createTransaction } from "../../../../lib/api/budget";
+import Layout from "@layouts/Layout.astro";
+import BottomNav from "@components/BottomNav.astro";
+import { apiFetch } from "@lib/api";
+import { getAccounts, getCategories, getCategoryGroups, getPayees, createTransaction } from "@lib/api/budget";
 
 // Authentication check
 const token = Astro.cookies.get("access_token")?.value;

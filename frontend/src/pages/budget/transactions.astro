@@ -4,12 +4,12 @@
  * Shows all budget transactions with filtering options
  */
 
-import Layout from "../../layouts/Layout.astro";
-import BottomNav from "../../components/BottomNav.astro";
-import BudgetNav from "../../components/BudgetNav.astro";
-import { apiFetch } from "../../lib/api";
-import { getTransactions, getAccounts, getCategories, formatCurrency, formatDate } from "../../lib/api/budget";
-import type { BudgetTransaction, BudgetAccount, BudgetCategory } from "../../lib/api/budget";
+import Layout from "@layouts/Layout.astro";
+import BottomNav from "@components/BottomNav.astro";
+import BudgetNav from "@components/BudgetNav.astro";
+import { apiFetch } from "@lib/api";
+import { getTransactions, getAccounts, getCategories, formatCurrency, formatDate } from "@lib/api/budget";
+import type { BudgetTransaction, BudgetAccount, BudgetCategory } from "@lib/api/budget";
 
 // Authentication check
 const token = Astro.cookies.get("access_token")?.value;
