@@ -55,8 +55,9 @@ export async function apiFetch<T = unknown>(
             };
         }
         return { data: data as T, ok: true, status: res.status };
-    } catch (e) {
-        console.error("API fetch error:", e);
-        return { data: null, ok: false, status: 0, error: "Network error" };
+    } catch (e: any) {
+        const detail = e?.cause?.message ?? e?.message ?? String(e);
+        console.error(`API fetch error [${options.method ?? "GET"} ${baseUrl}${path}]:`, detail, e);
+        return { data: null, ok: false, status: 0, error: `Network error: ${detail}` };
     }
 }
