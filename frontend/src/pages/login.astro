@@ -9,8 +9,6 @@ if (Astro.cookies.has("access_token")) {
     return Astro.redirect("/dashboard");
 }
 
-// Handle POST request by checking for error flash cookie
-// The actual login is handled by /api/auth/login endpoint
 const flashError = Astro.cookies.get("login_error")?.value;
 if (flashError) {
     error = flashError;
@@ -19,248 +17,230 @@ if (flashError) {
 ---
 
 <Layout title={`${t(lang, "login_submit")} - Family Task Manager`}>
-    <!-- Google Sign-In SDK -->
     <script src="https://accounts.google.com/gsi/client" async></script>
     
-    <main class="flex  flex-col items-center justify-center p-4">
-        <div
-            class="w-full max-w-md md:max-w-4xl lg:max-w-6xl bg-white rounded-2xl shadow-xl overflow-hidden p-8"
-        >
-            <div class="mb-8 text-center">
-                <h1
-                    class="text-3xl font-bold tracking-tight text-slate-900 mb-2"
-                >
-                    {t(lang, "login_welcome")}
-                </h1>
-                <p class="text-slate-500">{t(lang, "login_subtitle")}</p>
-            </div>
+    <main class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+        <div class="w-full max-w-5xl">
+            <div class="bg-white rounded-3xl shadow-2xl overflow-hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-0">
+                    <!-- Left column: Hero / Value Proposition -->
+                    <div class="hidden md:flex md:flex-col md:justify-center md:items-start p-12 lg:p-16 bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-white">
+                        <div class="mb-8">
+                            <h2 class="text-5xl font-black leading-tight mb-4">
+                                {lang === "es" ? "Gestiona tu familia" : "Manage your family"}
+                            </h2>
+                            <p class="text-xl text-indigo-100 leading-relaxed">
+                                {lang === "es" 
+                                    ? "Tareas, recompensas y control parental en un solo lugar" 
+                                    : "Tasks, rewards, and parental control in one place"}
+                            </p>
+                        </div>
 
-            {
-                error && (
-                    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
-                        {error}
+                        <div class="space-y-6 mt-12">
+                            <div class="flex items-start gap-4">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-6 w-6 text-indigo-200" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-semibold">{lang === "es" ? "Asignación de tareas" : "Task assignment"}</p>
+                                    <p class="text-sm text-indigo-100">{lang === "es" ? "Crea y asigna tareas con puntos" : "Create and assign tasks with points"}</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start gap-4">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-6 w-6 text-indigo-200" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-semibold">{lang === "es" ? "Sistema de recompensas" : "Reward system"}</p>
+                                    <p class="text-sm text-indigo-100">{lang === "es" ? "Motiva con recompensas atractivas" : "Motivate with attractive rewards"}</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start gap-4">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-6 w-6 text-indigo-200" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-semibold">{lang === "es" ? "Finanzas familiares" : "Family finances"}</p>
+                                    <p class="text-sm text-indigo-100">{lang === "es" ? "Presupuesto y control de gastos" : "Budget and expense tracking"}</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                )
-            }
 
-            <!-- Join Code Section (for joining an existing family via Google) -->
-            <div class="mb-4">
-                <button
-                    id="toggle-join-code"
-                    type="button"
-                    class="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors flex items-center gap-1"
-                >
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {lang === "es" ? "Tengo un codigo de familia" : "I have a family code"}
-                </button>
-                <div id="join-code-section" class="mt-3 hidden">
-                    <div class="flex gap-2 items-center">
-                        <input
-                            type="text"
-                            id="join-code-input"
-                            maxlength="6"
-                            placeholder={lang === "es" ? "Ej: ABC123" : "e.g. ABC123"}
-                            class="flex-1 px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow text-center font-mono text-lg tracking-widest uppercase"
-                        />
-                        <button
-                            id="clear-join-code"
-                            type="button"
-                            class="px-3 py-3 rounded-lg text-slate-400 hover:text-red-500 transition-colors hidden"
-                            title={lang === "es" ? "Limpiar" : "Clear"}
-                        >
-                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
+                    <!-- Right column: Login form -->
+                    <div class="p-8 lg:p-12 flex flex-col justify-center">
+                        <div class="mb-8">
+                            <h1 class="text-3xl lg:text-4xl font-bold text-slate-900 mb-2">
+                                {t(lang, "login_welcome")}
+                            </h1>
+                            <p class="text-slate-500 text-lg">
+                                {t(lang, "login_subtitle")}
+                            </p>
+                        </div>
+
+                        {
+                            error && (
+                                <div class="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium">
+                                    {error}
+                                </div>
+                            )
+                        }
+
+                        <!-- Google Sign-In Button -->
+                        <div class="mb-6">
+                            <div 
+                                id="g_id_onload"
+                                data-client_id="436801934159-r2klrd5n7b4da2q806c58utd24h9f71v.apps.googleusercontent.com"
+                                data-callback="handleGoogleLogin"
+                                data-auto_prompt="false">
+                            </div>
+                            <div 
+                                class="g_id_signin" 
+                                data-type="standard"
+                                data-size="large"
+                                data-theme="outline"
+                                data-text="signin_with"
+                                data-shape="rectangular"
+                                data-logo_alignment="left"
+                                data-width="100%">
+                            </div>
+                        </div>
+
+                        <!-- Divider -->
+                        <div class="relative my-6">
+                            <div class="absolute inset-0 flex items-center">
+                                <div class="w-full border-t border-slate-300"></div>
+                            </div>
+                            <div class="relative flex justify-center text-sm">
+                                <span class="px-3 bg-white text-slate-500 font-medium">
+                                    {lang === "es" ? "O continúa con correo" : "Or continue with email"}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Email/Password Form -->
+                        <form id="login-form" class="space-y-5">
+                            <div>
+                                <label for="email" class="block text-sm font-semibold text-slate-700 mb-2">
+                                    {t(lang, "login_email")}
+                                </label>
+                                <input
+                                    type="email"
+                                    id="email"
+                                    name="email"
+                                    required
+                                    placeholder="parent@demo.com"
+                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                />
+                            </div>
+
+                            <div>
+                                <label for="password" class="block text-sm font-semibold text-slate-700 mb-2">
+                                    {t(lang, "login_password")}
+                                </label>
+                                <input
+                                    type="password"
+                                    id="password"
+                                    name="password"
+                                    required
+                                    placeholder="••••••••"
+                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                />
+                            </div>
+
+                            <div class="flex items-center justify-between">
+                                <a
+                                    href="/forgot-password"
+                                    class="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+                                >
+                                    {lang === "es" ? "¿Olvidaste tu contraseña?" : "Forgot password?"}
+                                </a>
+                            </div>
+
+                            <button
+                                type="submit"
+                                id="login-submit-btn"
+                                class="w-full py-3 px-4 rounded-lg text-white font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all shadow-lg hover:shadow-xl active:scale-95"
+                            >
+                                {t(lang, "login_submit")}
+                            </button>
+                        </form>
+
+                        <!-- Register Link -->
+                        <p class="mt-8 text-center text-sm text-slate-600">
+                            {lang === "es" ? "¿No tienes cuenta?" : "Don't have an account?"}
+                            {" "}
+                            <a href="/register" class="font-bold text-indigo-600 hover:text-indigo-700 transition-colors">
+                                {lang === "es" ? "Crear cuenta" : "Create one"}
+                            </a>
+                        </p>
+
+                        <!-- Language Toggle -->
+                        <form method="POST" action="/api/lang" class="mt-6 flex justify-center">
+                            <input type="hidden" name="lang" value={lang === "es" ? "en" : "es"} />
+                            <button
+                                type="submit"
+                                class="text-xs text-slate-400 hover:text-indigo-600 font-medium flex items-center gap-1.5 transition-colors"
+                            >
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                                </svg>
+                                {lang === "es" ? "English" : "Español"}
+                            </button>
+                        </form>
                     </div>
-                    <p class="text-xs text-slate-400 mt-1">
-                        {lang === "es" 
-                            ? "Ingresa el codigo que te compartio tu familia para unirte a su grupo" 
-                            : "Enter the code shared by your family to join their group"}
-                    </p>
                 </div>
             </div>
 
-            <!-- Google Sign-In Button -->
-            <div class="mb-6">
-                <div 
-                    id="g_id_onload"
-                    data-client_id="436801934159-r2klrd5n7b4da2q806c58utd24h9f71v.apps.googleusercontent.com"
-                    data-callback="handleGoogleLogin"
-                    data-auto_prompt="false">
-                </div>
-                <div 
-                    class="g_id_signin" 
-                    data-type="standard"
-                    data-size="large"
-                    data-theme="outline"
-                    data-text="signin_with"
-                    data-shape="rectangular"
-                    data-logo_alignment="left"
-                    data-width="100%">
-                </div>
+            <!-- Demo credentials hint (mobile) -->
+            <div class="mt-6 text-center text-xs text-slate-500 md:hidden">
+                <p>{lang === "es" ? "Demo: parent@demo.com / password123" : "Demo: parent@demo.com / password123"}</p>
             </div>
-
-            <!-- Divider -->
-            <div class="relative my-6">
-                <div class="absolute inset-0 flex items-center">
-                    <div class="w-full border-t border-slate-300"></div>
-                </div>
-                <div class="relative flex justify-center text-sm">
-                    <span class="px-2 bg-white text-slate-500">
-                        {lang === "es" ? "O continuar con correo" : "Or continue with email"}
-                    </span>
-                </div>
-            </div>
-
-            <form id="login-form" class="space-y-6">
-                <div id="login-error" class="hidden mb-4 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm"></div>
-                <div>
-                    <label
-                        for="email"
-                        class="block text-sm font-medium text-slate-700 mb-1"
-                        >{t(lang, "login_email")}</label
-                    >
-                    <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        required
-                        placeholder="parent@demo.com"
-                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-shadow"
-                    />
-                </div>
-                <div>
-                    <label
-                        for="password"
-                        class="block text-sm font-medium text-slate-700 mb-1"
-                        >{t(lang, "login_password")}</label
-                    >
-                    <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        required
-                        placeholder="••••••••"
-                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-shadow"
-                    />
-                </div>
-                <button
-                    type="submit"
-                    id="login-submit-btn"
-                    class="w-full flex justify-center py-3 px-4 rounded-lg text-white font-medium bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors shadow-sm"
-                >
-                    {t(lang, "login_submit")}
-                </button>
-                <div class="text-right mt-2">
-                    <a
-                        href="/forgot-password"
-                        class="text-sm text-indigo-600 hover:text-indigo-800 transition-colors"
-                    >
-                        {lang === "es" ? "¿Olvidaste tu contraseña?" : "Forgot your password?"}
-                    </a>
-                </div>
-            </form>
-
-            <p class="mt-6 text-center text-sm text-slate-500">
-                {lang === "es" ? "¿No tienes cuenta?" : "Don't have an account?"}
-                {" "}
-                <a href="/register" class="text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
-                    {lang === "es" ? "Crear cuenta" : "Create account"}
-                </a>
-            </p>
-
-            <!-- Language toggle on login page -->
-            <form
-                method="POST"
-                action="/api/lang"
-                class="mt-4 flex justify-center"
-            >
-                <input
-                    type="hidden"
-                    name="lang"
-                    value={lang === "es" ? "en" : "es"}
-                />
-                <button
-                    type="submit"
-                    class="text-xs text-slate-400 hover:text-indigo-500 flex items-center gap-1 transition-colors"
-                >
-                    <svg
-                        class="h-3.5 w-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-                        ></path>
-                    </svg>
-                    {t(lang, "lang_toggle")}
-                </button>
-            </form>
-
-            <!-- Demo credentials removed for production -->
         </div>
     </main>
 
     <script is:inline>
-        // Make function globally available FIRST, before Google SDK loads
         window.handleGoogleLogin = async function(response) {
             try {
                 const credential = response.credential;
-                const joinCodeInput = document.getElementById('join-code-input');
-                const joinCode = joinCodeInput?.value?.trim() || null;
-                
-                // Send token to frontend proxy (sets httpOnly cookie server-side)
                 const result = await fetch('/api/oauth/google', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ token: credential, join_code: joinCode }),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: credential, join_code: null }),
                 });
 
                 const data = await result.json();
 
                 if (result.ok) {
-                    // Cookie was set server-side (httpOnly), redirect to dashboard
                     window.location.href = '/dashboard';
                 } else {
-                    // Backend returns {error, message, status_code}
-                    const errorMsg = data.message || data.detail || 'Login failed. Please try again.';
+                    const errorMsg = data.message || data.detail || 'Login failed';
                     alert(errorMsg);
                 }
             } catch (error) {
                 console.error('Google login error:', error);
-                alert('An error occurred during login. Please try again.');
+                alert('An error occurred during login');
             }
         };
 
-        // Email/password login via fetch
         const loginForm = document.getElementById('login-form');
         if (loginForm) {
             loginForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 
-                const form = e.target;
-                const emailInput = form.querySelector('#email');
-                const passwordInput = form.querySelector('#password');
-                const submitBtn = form.querySelector('#login-submit-btn');
-                const errorDiv = document.getElementById('login-error');
-                
-                // Hide previous errors
-                if (errorDiv) {
-                    errorDiv.classList.add('hidden');
-                    errorDiv.textContent = '';
-                }
-                
-                // Disable button during request
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                const submitBtn = document.getElementById('login-submit-btn');
                 const originalText = submitBtn.textContent;
+                
                 submitBtn.disabled = true;
                 submitBtn.textContent = '...';
                 
@@ -268,79 +248,25 @@ if (flashError) {
                     const response = await fetch('/api/auth/login', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            email: emailInput.value,
-                            password: passwordInput.value,
-                        }),
+                        body: JSON.stringify({ email, password }),
                     });
                     
                     const data = await response.json();
                     
                     if (data.success && data.redirect) {
-                        // Cookie was set via Set-Cookie header, redirect client-side
                         window.location.href = data.redirect;
                     } else {
-                        // Show error
-                        if (errorDiv) {
-                            errorDiv.textContent = data.error || 'Login failed. Please try again.';
-                            errorDiv.classList.remove('hidden');
-                        }
+                        alert(data.error || 'Login failed');
                         submitBtn.disabled = false;
                         submitBtn.textContent = originalText;
                     }
                 } catch (error) {
                     console.error('Login error:', error);
-                    if (errorDiv) {
-                        errorDiv.textContent = 'An error occurred. Please try again.';
-                        errorDiv.classList.remove('hidden');
-                    }
+                    alert('An error occurred');
                     submitBtn.disabled = false;
                     submitBtn.textContent = originalText;
                 }
             });
         }
-
-        // Toggle join code section
-        const toggleBtn = document.getElementById('toggle-join-code');
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', function() {
-                const section = document.getElementById('join-code-section');
-                if (section) {
-                    section.classList.toggle('hidden');
-                    if (!section.classList.contains('hidden')) {
-                        const input = document.getElementById('join-code-input');
-                        if (input) input.focus();
-                    }
-                }
-            });
-        }
-
-        // Clear join code
-        const clearBtn = document.getElementById('clear-join-code');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', function() {
-                const input = document.getElementById('join-code-input');
-                if (input) {
-                    input.value = '';
-                    clearBtn.classList.add('hidden');
-                }
-            });
-        }
-
-        // Show/hide clear button based on input
-        const joinCodeInput = document.getElementById('join-code-input');
-        if (joinCodeInput) {
-            joinCodeInput.addEventListener('input', function(e) {
-                const input = e.target;
-                const cb = document.getElementById('clear-join-code');
-                if (cb) {
-                    if (input.value.length > 0) {
-                        cb.classList.remove('hidden');
-                    } else {
-                        cb.classList.add('hidden');
-                    }
-                }
-            });
-        }
-     </script>
+    </script>
 </Layout>

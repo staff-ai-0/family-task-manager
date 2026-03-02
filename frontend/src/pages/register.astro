@@ -9,120 +9,192 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
 ---
 
 <Layout title={lang === "es" ? "Crear cuenta - Family Task Manager" : "Create account - Family Task Manager"}>
-    <main class="flex flex-col items-center justify-center p-4">
-        <div class="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden p-8">
-            <div class="mb-8 text-center">
-                <h1 class="text-3xl font-bold tracking-tight text-slate-900 mb-2">
-                    {lang === "es" ? "Crear cuenta" : "Create account"}
-                </h1>
-                <p class="text-slate-500">
-                    {lang === "es"
-                        ? "Registra tu familia y empieza hoy"
-                        : "Register your family and get started today"}
-                </p>
+    <main class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+        <div class="w-full max-w-5xl">
+            <div class="bg-white rounded-3xl shadow-2xl overflow-hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-0">
+                    <!-- Left column: Hero -->
+                    <div class="hidden md:flex md:flex-col md:justify-center md:items-start p-12 lg:p-16 bg-gradient-to-br from-purple-600 via-purple-500 to-pink-600 text-white">
+                        <h2 class="text-5xl font-black leading-tight mb-6">
+                            {lang === "es" ? "¡Bienvenido!" : "Welcome!"}
+                        </h2>
+                        <p class="text-xl text-purple-100 leading-relaxed mb-12">
+                            {lang === "es" 
+                                ? "Crea tu familia y empieza a organizar tareas, recompensas y finanzas hoy mismo" 
+                                : "Create your family and start organizing tasks, rewards, and finances today"}
+                        </p>
+
+                        <div class="space-y-6">
+                            <div class="flex items-start gap-4">
+                                <div class="flex-shrink-0 bg-white bg-opacity-20 rounded-full p-3">
+                                    <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-lg">{lang === "es" ? "Gratis y fácil" : "Free & easy"}</p>
+                                    <p class="text-sm text-purple-100">{lang === "es" ? "Sin tarjeta de crédito requerida" : "No credit card needed"}</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start gap-4">
+                                <div class="flex-shrink-0 bg-white bg-opacity-20 rounded-full p-3">
+                                    <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-lg">{lang === "es" ? "Seguro" : "Secure"}</p>
+                                    <p class="text-sm text-purple-100">{lang === "es" ? "Tus datos protegidos en todo momento" : "Your data protected at all times"}</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start gap-4">
+                                <div class="flex-shrink-0 bg-white bg-opacity-20 rounded-full p-3">
+                                    <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-lg">{lang === "es" ? "Escalable" : "Scalable"}</p>
+                                    <p class="text-sm text-purple-100">{lang === "es" ? "Invita a toda tu familia a participar" : "Invite your whole family to join"}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right column: Register form -->
+                    <div class="p-8 lg:p-12 flex flex-col justify-center">
+                        <div class="mb-8">
+                            <h1 class="text-3xl lg:text-4xl font-bold text-slate-900 mb-2">
+                                {lang === "es" ? "Crear cuenta" : "Create account"}
+                            </h1>
+                            <p class="text-slate-500 text-lg">
+                                {lang === "es"
+                                    ? "Registra tu familia en segundos"
+                                    : "Register your family in seconds"}
+                            </p>
+                        </div>
+
+                        <div id="register-error" class="hidden mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium"></div>
+
+                        <form id="register-form" class="space-y-5">
+                            <!-- Family name -->
+                            <div>
+                                <label for="family_name" class="block text-sm font-semibold text-slate-700 mb-2">
+                                    {lang === "es" ? "Nombre de tu familia" : "Family name"}
+                                </label>
+                                <input
+                                    type="text"
+                                    id="family_name"
+                                    name="family_name"
+                                    required
+                                    maxlength="100"
+                                    placeholder={lang === "es" ? "Ej: Familia García" : "e.g. The Smiths"}
+                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                />
+                            </div>
+
+                            <!-- Your name -->
+                            <div>
+                                <label for="name" class="block text-sm font-semibold text-slate-700 mb-2">
+                                    {lang === "es" ? "Tu nombre" : "Your name"}
+                                </label>
+                                <input
+                                    type="text"
+                                    id="name"
+                                    name="name"
+                                    required
+                                    maxlength="100"
+                                    placeholder={lang === "es" ? "Ej: María" : "e.g. Maria"}
+                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                />
+                            </div>
+
+                            <!-- Email -->
+                            <div>
+                                <label for="email" class="block text-sm font-semibold text-slate-700 mb-2">
+                                    {lang === "es" ? "Correo electrónico" : "Email address"}
+                                </label>
+                                <input
+                                    type="email"
+                                    id="email"
+                                    name="email"
+                                    required
+                                    placeholder="you@example.com"
+                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                />
+                            </div>
+
+                            <!-- Password -->
+                            <div>
+                                <label for="password" class="block text-sm font-semibold text-slate-700 mb-2">
+                                    {lang === "es" ? "Contraseña" : "Password"}
+                                </label>
+                                <input
+                                    type="password"
+                                    id="password"
+                                    name="password"
+                                    required
+                                    minlength="8"
+                                    placeholder="••••••••"
+                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                />
+                                <p class="text-xs text-slate-400 mt-1">
+                                    {lang === "es" ? "Mínimo 8 caracteres" : "Minimum 8 characters"}
+                                </p>
+                            </div>
+
+                            <!-- Confirm password -->
+                            <div>
+                                <label for="password_confirm" class="block text-sm font-semibold text-slate-700 mb-2">
+                                    {lang === "es" ? "Confirmar contraseña" : "Confirm password"}
+                                </label>
+                                <input
+                                    type="password"
+                                    id="password_confirm"
+                                    name="password_confirm"
+                                    required
+                                    minlength="8"
+                                    placeholder="••••••••"
+                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                id="register-submit-btn"
+                                class="w-full py-3 px-4 rounded-lg text-white font-bold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all shadow-lg hover:shadow-xl active:scale-95"
+                            >
+                                {lang === "es" ? "Crear mi cuenta" : "Create my account"}
+                            </button>
+                        </form>
+
+                        <!-- Login Link -->
+                        <p class="mt-8 text-center text-sm text-slate-600">
+                            {lang === "es" ? "¿Ya tienes cuenta?" : "Already have an account?"}
+                            {" "}
+                            <a href="/login" class="font-bold text-purple-600 hover:text-purple-700 transition-colors">
+                                {lang === "es" ? "Inicia sesión aquí" : "Sign in"}
+                            </a>
+                        </p>
+
+                        <!-- Language Toggle -->
+                        <form method="POST" action="/api/lang" class="mt-6 flex justify-center">
+                            <input type="hidden" name="lang" value={lang === "es" ? "en" : "es"} />
+                            <button
+                                type="submit"
+                                class="text-xs text-slate-400 hover:text-purple-600 font-medium flex items-center gap-1.5 transition-colors"
+                            >
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                                </svg>
+                                {lang === "es" ? "English" : "Español"}
+                            </button>
+                        </form>
+                    </div>
+                </div>
             </div>
-
-            <div id="register-error" class="hidden mb-4 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm"></div>
-
-            <form id="register-form" class="space-y-5">
-                <!-- Family name -->
-                <div>
-                    <label for="family_name" class="block text-sm font-medium text-slate-700 mb-1">
-                        {lang === "es" ? "Nombre de tu familia" : "Family name"}
-                    </label>
-                    <input
-                        type="text"
-                        id="family_name"
-                        name="family_name"
-                        required
-                        maxlength="100"
-                        placeholder={lang === "es" ? "Ej: Familia García" : "e.g. The Smiths"}
-                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
-                    />
-                </div>
-
-                <!-- Your name -->
-                <div>
-                    <label for="name" class="block text-sm font-medium text-slate-700 mb-1">
-                        {lang === "es" ? "Tu nombre" : "Your name"}
-                    </label>
-                    <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        required
-                        maxlength="100"
-                        placeholder={lang === "es" ? "Ej: María" : "e.g. Maria"}
-                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
-                    />
-                </div>
-
-                <!-- Email -->
-                <div>
-                    <label for="email" class="block text-sm font-medium text-slate-700 mb-1">
-                        {lang === "es" ? "Correo electrónico" : "Email"}
-                    </label>
-                    <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        required
-                        placeholder="tu@correo.com"
-                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
-                    />
-                </div>
-
-                <!-- Password -->
-                <div>
-                    <label for="password" class="block text-sm font-medium text-slate-700 mb-1">
-                        {lang === "es" ? "Contraseña" : "Password"}
-                    </label>
-                    <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        required
-                        minlength="8"
-                        placeholder="••••••••"
-                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
-                    />
-                    <p class="text-xs text-slate-400 mt-1">
-                        {lang === "es" ? "Mínimo 8 caracteres" : "Minimum 8 characters"}
-                    </p>
-                </div>
-
-                <!-- Confirm password -->
-                <div>
-                    <label for="password_confirm" class="block text-sm font-medium text-slate-700 mb-1">
-                        {lang === "es" ? "Confirmar contraseña" : "Confirm password"}
-                    </label>
-                    <input
-                        type="password"
-                        id="password_confirm"
-                        name="password_confirm"
-                        required
-                        minlength="8"
-                        placeholder="••••••••"
-                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow"
-                    />
-                </div>
-
-                <button
-                    type="submit"
-                    id="register-submit-btn"
-                    class="w-full flex justify-center py-3 px-4 rounded-lg text-white font-medium bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors shadow-sm"
-                >
-                    {lang === "es" ? "Crear cuenta" : "Create account"}
-                </button>
-            </form>
-
-            <p class="mt-6 text-center text-sm text-slate-500">
-                {lang === "es" ? "¿Ya tienes cuenta?" : "Already have an account?"}
-                {" "}
-                <a href="/login" class="text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
-                    {lang === "es" ? "Iniciar sesión" : "Sign in"}
-                </a>
-            </p>
         </div>
     </main>
 
@@ -140,11 +212,9 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
             const password = document.getElementById('password').value;
             const passwordConfirm = document.getElementById('password_confirm').value;
 
-            // Hide previous error
             errorDiv.classList.add('hidden');
             errorDiv.textContent = '';
 
-            // Client-side validation
             if (password !== passwordConfirm) {
                 errorDiv.textContent = lang === 'es'
                     ? 'Las contraseñas no coinciden'
