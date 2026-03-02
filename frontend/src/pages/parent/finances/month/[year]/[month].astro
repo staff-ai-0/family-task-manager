@@ -8,6 +8,11 @@
 import Layout from "@layouts/Layout.astro";
 import BottomNav from "@components/BottomNav.astro";
 import BudgetNav from "@components/BudgetNav.astro";
+import BudgetHeader from "@components/BudgetHeader.astro";
+import BudgetMonthNav from "@components/BudgetMonthNav.astro";
+import BudgetSummaryCards from "@components/BudgetSummaryCards.astro";
+import BudgetCategoryGroup from "@components/BudgetCategoryGroup.astro";
+import AssignFundsModal from "@components/AssignFundsModal.astro";
 import { apiFetch } from "@lib/api";
 import { getMonthBudget, getCategoryGroups, formatCurrency, getMonthName } from "@lib/api/budget";
 import type { MonthBudgetView } from "@lib/api/budget";
@@ -82,75 +87,33 @@ const allExpenseCategories = (allGroups || [])
 
 <Layout title={`${monthName} ${yearNum} - ${t(lang, 'fin_budgeted')}`}>
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto min-h-screen bg-slate-50 flex flex-col pb-24">
-        <!-- Header -->
-        <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
-            <div class="flex items-center justify-between mb-6">
-                <a href="/dashboard" class="text-white hover:text-primary-100 transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </a>
-                <h1 class="text-2xl font-bold">{t(lang, 'fin_budgeted')}</h1>
-                <div class="w-6"></div>
-            </div>
-
-            <!-- Month Navigation -->
-            <div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
-                <div class="flex items-center justify-between mb-4">
-                    <a href={`/parent/finances/month/${prevYear}/${prevMonth}`} class="text-white hover:text-primary-100 transition p-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                        </svg>
-                    </a>
-                    <div class="text-center">
-                        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
-                            {monthName} {yearNum}
-                        </p>
-                        {isCurrentMonth && (
-                            <span class="inline-block bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full">
-                                {lang === "es" ? "Mes Actual" : "Current Month"}
-                            </span>
-                        )}
-                    </div>
-                    <a href={`/parent/finances/month/${nextYear}/${nextMonth}`} class="text-white hover:text-primary-100 transition p-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                        </svg>
-                    </a>
-                </div>
-
-                <!-- Ready to Assign -->
-                <div class="bg-white/30 rounded-xl p-4">
-                    <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
-                        {t(lang, 'fin_ready_to_assign')}
-                    </p>
-                    <p class={`text-3xl font-extrabold tracking-tight ${readyToAssign < 0 ? 'text-red-300' : 'text-white'}`}>
-                        {formatCurrency(readyToAssign)}
-                    </p>
-                </div>
-            </div>
-        </header>
+        <!-- Header with Month Navigation -->
+        <BudgetHeader title={t(lang, 'fin_budgeted')}>
+            <BudgetMonthNav 
+                year={yearNum}
+                month={monthNum}
+                readyToAssign={readyToAssign}
+                lang={lang}
+                t={t}
+                formatCurrency={formatCurrency}
+                baseRoute="/parent/finances/month"
+            />
+        </BudgetHeader>
 
         <!-- Budget Section Nav -->
         <BudgetNav active="month" year={yearNum} month={monthNum} />
 
         <!-- Summary Cards -->
-        <div class="px-6 py-4 grid grid-cols-3 gap-3">
-            <div class="bg-white rounded-xl p-4 shadow-sm">
-                <p class="text-xs text-slate-500 font-semibold mb-1">{lang === "es" ? "Ingresos" : "Income"}</p>
-                <p class="text-lg font-bold text-green-600">{formatCurrency(totalIncome)}</p>
-            </div>
-            <div class="bg-white rounded-xl p-4 shadow-sm">
-                <p class="text-xs text-slate-500 font-semibold mb-1">{t(lang, 'fin_budgeted')}</p>
-                <p class="text-lg font-bold text-blue-600">{formatCurrency(totalBudgeted)}</p>
-            </div>
-            <div class="bg-white rounded-xl p-4 shadow-sm">
-                <p class="text-xs text-slate-500 font-semibold mb-1">{t(lang, 'fin_spent')}</p>
-                <p class="text-lg font-bold text-red-600">{formatCurrency(totalSpent)}</p>
-            </div>
-        </div>
+        <BudgetSummaryCards 
+            income={totalIncome}
+            budgeted={totalBudgeted}
+            spent={totalSpent}
+            lang={lang}
+            t={t}
+            formatCurrency={formatCurrency}
+        />
 
-        <!-- Quick Actions -->
+        <!-- Quick Actions with Assign Funds Button -->
         <div class="px-6 pb-4 flex gap-3">
             <a
                 href="/parent/finances/transactions/new"
@@ -171,6 +134,21 @@ const allExpenseCategories = (allGroups || [])
                 {lang === "es" ? "Ver Todas" : "All Transactions"}
             </a>
         </div>
+
+        <!-- Assign Funds Button -->
+        {readyToAssign > 0 && (
+            <div class="px-6 pb-4">
+                <button
+                    id="open-assign-funds-modal"
+                    class="w-full bg-emerald-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-emerald-700 transition flex items-center justify-center gap-2"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m0 0h6m-6-6H6m0 0H0" />
+                    </svg>
+                    {lang === "es" ? "Asignar Fondos" : "Assign Funds"} ({formatCurrency(readyToAssign)})
+                </button>
+            </div>
+        )}
 
         <!-- Assignment Hint Banner -->
         {expenseGroups.length > 0 && (
@@ -193,143 +171,29 @@ const allExpenseCategories = (allGroups || [])
                 </div>
             ) : (
                 <div class="space-y-4">
-                    {/* Income Section */}
+                    {/* Income Section - Single Group */}
                     {incomeGroups.length > 0 && (
-                        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-                            <div class="bg-green-50 px-4 py-3 border-b border-green-100">
-                                <h2 class="font-bold text-green-800 text-sm uppercase tracking-wide">
-                                    {lang === "es" ? "Ingresos" : "Income"}
-                                </h2>
-                            </div>
-                            {incomeGroups.map(group => (
-                                <div class="divide-y divide-slate-100">
-                                    {group.categories.map(category => (
-                                        <div class="px-4 py-3 hover:bg-slate-50 transition">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-sm font-medium text-slate-700">{category.name}</span>
-                                                <span class="text-sm font-bold text-green-600">
-                                                    {formatCurrency(category.activity)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ))}
-                        </div>
+                        <BudgetCategoryGroup
+                            group={incomeGroups[0]}
+                            isIncome={true}
+                            lang={lang}
+                            t={t}
+                            formatCurrency={formatCurrency}
+                            token={token}
+                        />
                     )}
 
                     {/* Expense Groups */}
                     {expenseGroups.map(group => (
-                        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-                            <div class="bg-slate-100 px-4 py-3 border-b border-slate-200">
-                                <div class="flex items-center justify-between">
-                                    <h2 class="font-bold text-slate-800 text-sm uppercase tracking-wide">
-                                        {group.name}
-                                    </h2>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-xs font-semibold text-slate-600">
-                                            {formatCurrency(group.total_available)} {lang === "es" ? "disponible" : "available"}
-                                        </span>
-                                        <button
-                                            class="quick-add-btn text-slate-600 hover:text-primary-600 transition p-1"
-                                            data-group-id={group.id}
-                                            data-group-name={group.name}
-                                            title={lang === "es" ? "Agregar categoría" : "Add category"}
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="divide-y divide-slate-100">
-                                {group.categories.map(category => {
-                                    const percentUsed = category.budgeted > 0 
-                                        ? Math.abs((category.activity / category.budgeted) * 100)
-                                        : 0;
-                                    const isOverBudget = category.available < 0;
-                                    
-                                    return (
-                                        <div 
-                                            class="px-4 py-3 hover:bg-slate-50 transition category-row"
-                                            data-category-id={category.id}
-                                            data-category-name={category.name}
-                                            data-budgeted={category.budgeted}
-                                            data-activity={category.activity}
-                                            data-available={category.available}
-                                            data-previous-balance={category.previous_balance || 0}
-                                        >
-                                            <!-- Row top: name | available -->
-                                            <div class="flex items-center justify-between mb-1">
-                                                <span class="text-sm font-medium text-slate-700">{category.name}</span>
-                                                <!-- Available balance — clickable for transfers -->
-                                                <button
-                                                    class="available-btn text-sm font-bold rounded-lg px-2 py-0.5 transition hover:ring-2 focus:outline-none focus:ring-2 focus:ring-offset-1"
-                                                    class:list={[
-                                                        isOverBudget
-                                                            ? 'text-red-600 hover:ring-red-400 focus:ring-red-400'
-                                                            : category.available > 0
-                                                                ? 'text-green-600 hover:ring-green-400 focus:ring-green-400'
-                                                                : 'text-slate-900 hover:ring-slate-300 focus:ring-slate-300'
-                                                    ]}
-                                                    data-category-id={category.id}
-                                                    data-category-name={category.name}
-                                                    data-available={category.available}
-                                                    title={lang === "es" ? "Transferir / cubrir sobregasto" : "Transfer / cover overspending"}
-                                                >
-                                                    {formatCurrency(category.available)}
-                                                </button>
-                                            </div>
-
-                                            {/* Previous balance row */}
-                                            {category.previous_balance > 0 && (
-                                                <div class="text-xs text-green-600 font-semibold mb-1">
-                                                    {formatCurrency(category.previous_balance)} {t(lang, 'fin_prev_balance_label')}
-                                                </div>
-                                            )}
-
-                                            <!-- Row bottom: inline budgeted input | spent -->
-                                            <div class="flex items-center justify-between text-xs text-slate-500">
-                                                <!-- Inline editable budgeted cell -->
-                                                <div class="inline-edit-cell flex items-center gap-1" data-category-id={category.id}>
-                                                    <span class="inline-display text-slate-500">
-                                                        {formatCurrency(category.budgeted)}
-                                                    </span>
-                                                    <span class="text-slate-400">{t(lang, 'fin_budgeted_label')}</span>
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="edit-icon h-3 w-3 text-slate-400 opacity-0 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                    </svg>
-                                                    <div class="inline-input-wrap hidden items-center gap-1">
-                                                        <span class="text-slate-500">$</span>
-                                                        <input
-                                                            type="number"
-                                                            class="inline-budget-input w-24 border-b-2 border-primary-500 bg-transparent text-slate-900 font-semibold text-sm focus:outline-none px-0.5"
-                                                            step="0.01"
-                                                            min="0"
-                                                            placeholder={t(lang, 'fin_inline_placeholder')}
-                                                            data-original=""
-                                                        />
-                                                        <span class="saving-indicator hidden text-primary-500 text-xs">{t(lang, 'fin_saving')}</span>
-                                                    </div>
-                                                </div>
-                                                <span>{formatCurrency(Math.abs(category.activity))} {t(lang, 'fin_spent_label')}</span>
-                                            </div>
-
-                                            {/* Progress bar */}
-                                            {category.budgeted > 0 && (
-                                                <div class="mt-2 bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                                                    <div 
-                                                        class={`h-full transition-all ${isOverBudget ? 'bg-red-500' : 'bg-blue-500'}`}
-                                                        style={`width: ${Math.min(percentUsed, 100)}%`}
-                                                    ></div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <BudgetCategoryGroup
+                            group={group}
+                            isIncome={false}
+                            lang={lang}
+                            t={t}
+                            formatCurrency={formatCurrency}
+                            token={token}
+                            allExpenseCategories={allExpenseCategories}
+                        />
                     ))}
 
                     {expenseGroups.length === 0 && incomeGroups.length === 0 && (
@@ -351,6 +215,16 @@ const allExpenseCategories = (allGroups || [])
 
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
+
+    <!-- Assign Funds Modal -->
+    <AssignFundsModal
+        readyToAssign={readyToAssign}
+        categories={allExpenseCategories}
+        lang={lang}
+        t={t}
+        formatCurrency={formatCurrency}
+        baseRoute="assign-funds"
+    />
 
     <!-- Transfer / Cover Modal -->
     <div id="transfer-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
@@ -491,6 +365,14 @@ const allExpenseCategories = (allGroups || [])
 </Layout>
 
 <script define:vars={{ yearNum, monthNum }}>
+    // ── Open Assign Funds Modal ───────────────────────────────────────────────
+    document.getElementById('open-assign-funds-modal')?.addEventListener('click', () => {
+        const modal = document.getElementById('assign-funds-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+    });
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     function formatCurrency(cents) {
