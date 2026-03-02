@@ -62,7 +62,23 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
 
     // Public routes that don't require authentication
-    const publicRoutes = ["/", "/login", "/api/auth/login", "/api/oauth/google", "/api/lang", "/api/oauth/google/"];
+    const publicRoutes = [
+        "/",
+        "/login",
+        "/register",
+        "/forgot-password",
+        "/verify-email",
+        "/reset-password",
+        "/api/auth/login",
+        "/api/auth/register",
+        "/api/auth/verify-email",
+        "/api/auth/resend-verification",
+        "/api/auth/forgot-password",
+        "/api/auth/reset-password",
+        "/api/oauth/google",
+        "/api/lang",
+        "/api/oauth/google/"
+    ];
     const isPublicRoute = publicRoutes.some(route => path === route || path.startsWith("/api/translate"));
 
     if (isPublicRoute) {
