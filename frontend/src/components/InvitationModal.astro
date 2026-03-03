@@ -126,14 +126,11 @@ const {
 
             <!-- Pending invitations section -->
             <div class="pt-4 border-t border-slate-200">
-                <h3 class="text-sm font-bold text-slate-900 mb-3">
-                    {lang === "es" ? "Invitaciones pendientes" : "Pending invitations"}
-                </h3>
-                <div id="pending-invitations" class="space-y-2 max-h-64 overflow-y-auto">
-                    <p class="text-xs text-slate-500 text-center py-4">
-                        {lang === "es" ? "Cargando..." : "Loading..."}
-                    </p>
-                </div>
+                <p class="text-xs text-slate-500 text-center py-3">
+                    {lang === "es" 
+                        ? "Las invitaciones pendientes aparecerán en la sección principal después de ser enviadas."
+                        : "Pending invitations will appear in the main section after being sent."}
+                </p>
             </div>
         </div>
     </div>
@@ -147,12 +144,10 @@ const {
     const successDiv = document.getElementById("invitation-success");
     const submitBtn = document.getElementById("invitation-submit");
     const submitText = document.getElementById("invitation-submit-text");
-    const pendingDiv = document.getElementById("pending-invitations");
 
     // Open/Close modal functionality
     window.openInvitationModal = () => {
         modal.classList.remove("hidden");
-        loadPendingInvitations();
     };
 
     window.closeInvitationModal = () => {
@@ -163,81 +158,6 @@ const {
     modal.addEventListener("click", (e) => {
         if (e.target === modal) window.closeInvitationModal();
     });
-
-    // Load pending invitations
-    async function loadPendingInvitations() {
-        try {
-            console.log("Loading pending invitations for family:", familyId);
-            const response = await fetch(`/api/invitations/pending?family_id=${familyId}`, {
-                credentials: 'include'
-            });
-            
-            console.log("Pending invitations response status:", response.status);
-            const data = await response.json();
-            console.log("Pending invitations response data:", data);
-
-            if (data.success && data.data && data.data.pending_invitations) {
-                const invitations = data.data.pending_invitations;
-                
-                if (invitations.length === 0) {
-                    pendingDiv.innerHTML = `<p class="text-xs text-slate-500 text-center py-4">${lang === "es" ? "No hay invitaciones pendientes" : "No pending invitations"}</p>`;
-                } else {
-                    pendingDiv.innerHTML = invitations.map(inv => `
-                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-slate-900 break-all">${inv.invited_email}</p>
-                                <p class="text-xs text-slate-500">
-                                    ${lang === "es" ? "Invitado por" : "Invited by"} ${inv.invited_by_user_name}
-                                </p>
-                                <p class="text-xs text-slate-600 mt-1">
-                                    ${lang === "es" ? "Rol: " : "Role: "}<span class="font-semibold">${inv.role}</span>
-                                </p>
-                            </div>
-                            <button 
-                                onclick="cancelInvitation('${inv.id}')"
-                                class="ml-2 flex-shrink-0 p-1 text-red-600 hover:bg-red-50 rounded transition"
-                                title="${lang === "es" ? "Cancelar" : "Cancel"}"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                            </button>
-                        </div>
-                    `).join("");
-                }
-            } else {
-                const errorMsg = data.error || (lang === "es" ? "Error al cargar invitaciones" : "Error loading invitations");
-                console.error("Pending invitations error:", errorMsg);
-                pendingDiv.innerHTML = `<p class="text-xs text-red-500 text-center py-4">${errorMsg}</p>`;
-            }
-        } catch (error) {
-            console.error("Error loading pending invitations:", error);
-            pendingDiv.innerHTML = `<p class="text-xs text-red-500 text-center py-4">${lang === "es" ? "Error al cargar invitaciones" : "Error loading invitations"}</p>`;
-        }
-    }
-
-    // Cancel invitation
-    window.cancelInvitation = async (invitationId) => {
-        if (!confirm(lang === "es" ? "¿Cancelar esta invitación?" : "Cancel this invitation?")) {
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/invitations/${familyId}/${invitationId}`, {
-                method: "DELETE",
-                credentials: 'include'
-            });
-
-            if (response.ok) {
-                loadPendingInvitations();
-            } else {
-                alert(lang === "es" ? "Error al cancelar la invitación" : "Error canceling invitation");
-            }
-        } catch (error) {
-            console.error("Error canceling invitation:", error);
-            alert(lang === "es" ? "Error al cancelar la invitación" : "Error canceling invitation");
-        }
-    };
 
     // Submit form
     form.addEventListener("submit", async (e) => {
@@ -288,15 +208,12 @@ const {
                 successDiv.classList.remove("hidden");
                 form.reset();
                 
-                // Reload pending invitations
-                setTimeout(() => {
-                    loadPendingInvitations();
-                }, 500);
-                
-                // Close modal after 2 seconds
+                // Close modal after 1.5 seconds
                 setTimeout(() => {
                     window.closeInvitationModal();
-                }, 2000);
+                    // Reload page to refresh the pending invitations list on the main page
+                    window.location.reload();
+                }, 1500);
             } else {
                 errorDiv.textContent = data.error || (lang === "es" ? "Error al enviar la invitación" : "Error sending invitation");
                 errorDiv.classList.remove("hidden");
