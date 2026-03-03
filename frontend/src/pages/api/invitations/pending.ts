@@ -40,12 +40,12 @@ export const GET: APIRoute = async ({ request, url, locals }) => {
 
         if (response.ok) {
             return new Response(
-                JSON.stringify({ success: true, data }),
+                JSON.stringify({ success: true, data: { pending_invitations: data } }),
                 { status: 200, headers: { "Content-Type": "application/json" } }
             );
         }
 
-        const errorMessage = data.detail || "Failed to fetch pending invitations";
+        const errorMessage = typeof data === 'string' ? data : data.detail || "Failed to fetch pending invitations";
         return new Response(
             JSON.stringify({ success: false, error: errorMessage }),
             { status: response.status, headers: { "Content-Type": "application/json" } }
