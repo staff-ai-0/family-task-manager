@@ -98,8 +98,8 @@ async def get_pending_invitations(
         results.append(PendingInvitationResponse(
             id=inv.id,
             invited_email=inv.invited_email,
-            status=inv.status,
-            role=inv.role,
+            status=inv.status.value if hasattr(inv.status, 'value') else inv.status,
+            role=inv.role.value if hasattr(inv.role, 'value') else inv.role,
             created_at=inv.created_at,
             expires_at=inv.expires_at,
             invited_by_user_name=invited_by.name if invited_by else "Unknown",

@@ -167,12 +167,16 @@ const {
     // Load pending invitations
     async function loadPendingInvitations() {
         try {
+            console.log("Loading pending invitations for family:", familyId);
             const response = await fetch(`/api/invitations/pending?family_id=${familyId}`, {
                 credentials: 'include'
             });
+            
+            console.log("Pending invitations response status:", response.status);
             const data = await response.json();
+            console.log("Pending invitations response data:", data);
 
-            if (data.success && data.data.pending_invitations) {
+            if (data.success && data.data && data.data.pending_invitations) {
                 const invitations = data.data.pending_invitations;
                 
                 if (invitations.length === 0) {
@@ -202,7 +206,9 @@ const {
                     `).join("");
                 }
             } else {
-                pendingDiv.innerHTML = `<p class="text-xs text-red-500 text-center py-4">${data.error || (lang === "es" ? "Error al cargar invitaciones" : "Error loading invitations")}</p>`;
+                const errorMsg = data.error || (lang === "es" ? "Error al cargar invitaciones" : "Error loading invitations");
+                console.error("Pending invitations error:", errorMsg);
+                pendingDiv.innerHTML = `<p class="text-xs text-red-500 text-center py-4">${errorMsg}</p>`;
             }
         } catch (error) {
             console.error("Error loading pending invitations:", error);

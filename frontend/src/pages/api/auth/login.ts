@@ -76,7 +76,7 @@ export const POST: APIRoute = async ({ request }) => {
                 httpOnly: true,
                 sameSite: "Lax",
                 maxAge: 60 * 60 * 24 * 7, // 7 days
-                secure: true, // Always secure in prod/behind proxy
+                secure: !import.meta.env.DEV, // Only secure in production
             });
 
             if (isJsonRequest) {

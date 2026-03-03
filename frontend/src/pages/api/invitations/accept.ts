@@ -48,7 +48,7 @@ export const POST: APIRoute = async ({ request }) => {
                 httpOnly: true,
                 sameSite: "Lax",
                 maxAge: 60 * 60 * 24 * 7, // 7 days
-                secure: true,
+                secure: !import.meta.env.DEV,
             });
             const headers = new Headers({ "Content-Type": "application/json" });
             headers.append("Set-Cookie", tokenCookie);
