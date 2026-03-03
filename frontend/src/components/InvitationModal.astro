@@ -167,7 +167,9 @@ const {
     // Load pending invitations
     async function loadPendingInvitations() {
         try {
-            const response = await fetch(`/api/invitations/pending?family_id=${familyId}`);
+            const response = await fetch(`/api/invitations/pending?family_id=${familyId}`, {
+                credentials: 'include'
+            });
             const data = await response.json();
 
             if (data.success && data.data.pending_invitations) {
@@ -199,6 +201,8 @@ const {
                         </div>
                     `).join("");
                 }
+            } else {
+                pendingDiv.innerHTML = `<p class="text-xs text-red-500 text-center py-4">${data.error || (lang === "es" ? "Error al cargar invitaciones" : "Error loading invitations")}</p>`;
             }
         } catch (error) {
             console.error("Error loading pending invitations:", error);
@@ -214,7 +218,8 @@ const {
 
         try {
             const response = await fetch(`/api/invitations/${familyId}/${invitationId}`, {
-                method: "DELETE"
+                method: "DELETE",
+                credentials: 'include'
             });
 
             if (response.ok) {
@@ -259,6 +264,7 @@ const {
             const response = await fetch("/api/invitations/send", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                credentials: 'include',
                 body: JSON.stringify({
                     email,
                     message: message || undefined,
