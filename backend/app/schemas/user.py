@@ -57,6 +57,7 @@ class UserResponse(EntityResponse):
     points: int
     is_active: bool
     preferred_lang: str = "en"
+    email_verified: bool = False
 
 
 class UserWithStats(UserResponse):
