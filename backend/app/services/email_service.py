@@ -318,3 +318,63 @@ class EmailService:
 
         await db.commit()
         return user
+
+    # ------------------------------------------------------------------
+    # Family Invitation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def send_invitation_email(
+        db: AsyncSession,
+        invitation,  # FamilyInvitation model
+        inviting_user: User,
+        base_url: str = "https://family.agent-ia.mx",
+    ) -> bool:
+        """Send a family invitation email."""
+        from app.models.family import Family
+        from sqlalchemy import select
+        
+        # Get family name
+        family_result = await db.execute(
+            select(Family).where(Family.id == invitation.family_id)
+        )
+        family = family_result.scalar_one_or_none()
+        family_name = family.name if family else "Tu Familia"
+        
+        # Build acceptance link
+        acceptance_link = f"{base_url}/accept-invitation?code={invitation.invitation_code}"
+        
+        # Format expiration date
+        expiration_date = invitation.expires_at.strftime("%d de %B de %Y")
+        
+        # Load and render HTML template
+        import os
+        template_path = os.path.join(
+            os.path.dirname(__file__),
+            "email_templates",
+            "invitation.html"
+        )
+        
+        try:
+            with open(template_path, "r", encoding="utf-8") as f:
+                html_template = f.read()
+        except FileNotFoundError:
+            # Fallback if template not found
+            html_template = """<html><body>
+            <h2>¡Te han invitado a unirte a una familia!</h2>
+            <p>{{ invited_by_name }} te ha invitado a unirte a {{ family_name }}</p>
+            <p><a href="{{ acceptance_link }}">Aceptar invitación</a></p>
+            </body></html>"""
+        
+        # Replace template variables
+        html = html_template.replace("{{ invited_by_name }}", inviting_user.name)
+        html = html.replace("{{ family_name }}", family_name)
+        html = html.replace("{{ acceptance_link }}", acceptance_link)
+        html = html.replace("{{ invitation_code }}", invitation.invitation_code)
+        html = html.replace("{{ expiration_date }}", expiration_date)
+        
+        return EmailService._send(
+            to=invitation.invited_email,
+            subject=f"¡{inviting_user.name} te ha invitado a unirte a {family_name}!",
+            html=html,
+        )
