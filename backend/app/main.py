@@ -49,7 +49,6 @@ app = FastAPI(
 
 # CORS Middleware - Allow frontend to connect
 allowed_origins = settings.ALLOWED_ORIGINS if isinstance(settings.ALLOWED_ORIGINS, list) else [settings.ALLOWED_ORIGINS]
-allowed_origins.extend(["http://localhost:3000", "http://localhost:3003", "http://localhost:8080"])  # Add common frontend ports
 
 app.add_middleware(
     CORSMiddleware,

@@ -289,7 +289,7 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                     body.family_name = family_name;
                 }
 
-                const response = await fetch('/api/auth/register-family', {
+                const response = await fetch('/api/auth/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body),

@@ -71,8 +71,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/reset-password",
         "/accept-invitation",
         "/api/auth/login",
-        "/api/auth/register",
-        "/api/auth/register-family",
+        "/api/auth/register",  // Frontend API route for registration (calls backend /api/auth/register-family)
+        "/api/auth/register-family",  // Backend API route (for direct calls)
         "/api/auth/verify-email",
         "/api/auth/resend-verification",
         "/api/auth/forgot-password",

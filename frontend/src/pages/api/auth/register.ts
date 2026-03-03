@@ -23,20 +23,37 @@ function buildCookie(name: string, value: string, options: {
 export const POST: APIRoute = async ({ request }) => {
     try {
         const body = await request.json();
-        const { family_name, name, email, password } = body;
+        const { family_name, family_code, name, email, password } = body;
 
-        if (!family_name || !name || !email || !password) {
+        // Validate required fields
+        if (!name || !email || !password) {
             return new Response(
                 JSON.stringify({ success: false, error: "All fields are required" }),
                 { status: 400, headers: { "Content-Type": "application/json" } }
             );
         }
 
+        // Either family_code or family_name must be provided
+        if (!family_code && !family_name) {
+            return new Response(
+                JSON.stringify({ success: false, error: "Family code or family name is required" }),
+                { status: 400, headers: { "Content-Type": "application/json" } }
+            );
+        }
+
         const apiUrl = process.env.API_BASE_URL || "http://localhost:8002";
+        const registerBody: Record<string, string> = { name, email, password };
+        
+        if (family_code) {
+            registerBody.family_code = family_code;
+        } else {
+            registerBody.family_name = family_name;
+        }
+
         const response = await fetch(`${apiUrl}/api/auth/register-family`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ family_name, name, email, password }),
+            body: JSON.stringify(registerBody),
         });
 
         const data = await response.json();

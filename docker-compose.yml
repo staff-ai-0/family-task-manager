@@ -68,7 +68,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret-key}
       DEBUG: ${DEBUG:-true}
-      ALLOWED_ORIGINS: http://localhost:3003,http://localhost:8080
+      ALLOWED_ORIGINS: http://localhost:3003,http://localhost:8000,https://family.agent-ia.mx
       # Google OAuth
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
