@@ -103,8 +103,13 @@ class VerifyEmailRequest(BaseModel):
 
 
 class RegisterFamilyRequest(BaseModel):
-    """Create a new family + founding PARENT user in one request"""
-    family_name: str = Field(..., min_length=1, max_length=100)
+    """Create a new family + founding PARENT user in one request
+    
+    Either provide family_name to create new family, or family_code to join existing.
+    If family_code is provided, family_name is ignored.
+    """
+    family_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    family_code: Optional[str] = Field(None, min_length=1, max_length=10)
     name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)

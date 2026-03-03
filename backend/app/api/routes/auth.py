@@ -61,7 +61,11 @@ async def register_family(
     data: RegisterFamilyRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new family and its founding PARENT user in one step.
+    """Create a new family + founding PARENT user, or join existing family.
+    
+    - If family_code is provided: join the existing family with that code
+    - If family_code is not provided: create a new family using family_name
+    
     Returns an access token so the user is logged in immediately.
     """
     # Check email not already taken
@@ -74,16 +78,43 @@ async def register_family(
             detail="Email already registered",
         )
 
-    # Create family
-    family = Family(
-        name=data.family_name,
-        join_code=generate_join_code(),
-    )
-    db.add(family)
-    await db.flush()  # get family.id before creating user
-
-    # Create founding PARENT user
     from app.models.user import UserRole as UR
+    
+    # Determine which family to use
+    if data.family_code:
+        # Join existing family by code
+        family_code = data.family_code.strip().upper()
+        family = (await db.execute(
+            select(Family).where(Family.join_code == family_code)
+        )).scalar_one_or_none()
+        
+        if not family:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Family code not found. Please check the code and try again.",
+            )
+        
+        if not family.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail="This family is no longer active.",
+            )
+    else:
+        # Create new family
+        if not data.family_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Provide either a family_code or family_name.",
+            )
+        
+        family = Family(
+            name=data.family_name,
+            join_code=generate_join_code(),
+        )
+        db.add(family)
+        await db.flush()  # get family.id before creating user
+
+    # Create PARENT user
     user = User(
         email=data.email,
         name=data.name,
@@ -96,8 +127,10 @@ async def register_family(
     db.add(user)
     await db.flush()
 
-    # Set family.created_by now that we have the user id
-    family.created_by = user.id
+    # If we created a new family, set created_by
+    if not data.family_code:
+        family.created_by = user.id
+    
     await db.commit()
     await db.refresh(user)
 
