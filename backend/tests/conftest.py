@@ -17,7 +17,7 @@ from app.core.database import Base, get_db
 # Test database URL
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql+asyncpg://familyapp:familyapp123@localhost:5433/familyapp_test",
+    "postgresql+asyncpg://familyapp:familyapp123@localhost:5435/familyapp_test",
 )
 
 # Pure asyncpg DSN (no +asyncpg prefix, no SQLAlchemy)

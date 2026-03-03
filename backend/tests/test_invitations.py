@@ -54,6 +54,7 @@ async def test_send_invitation_duplicate_email(client, test_family, test_parent_
         json={
             "email": "newmember@example.com",
             "family_id": str(test_family.id),
+            "role": "parent",
         },
         headers=auth_headers,
     )
@@ -65,6 +66,7 @@ async def test_send_invitation_duplicate_email(client, test_family, test_parent_
         json={
             "email": "newmember@example.com",
             "family_id": str(test_family.id),
+            "role": "parent",
         },
         headers=auth_headers,
     )
@@ -83,6 +85,7 @@ async def test_accept_invitation_success(client, test_family, test_parent_user, 
         json={
             "email": "newmember@example.com",
             "family_id": str(test_family.id),
+            "role": "parent",
         },
         headers=auth_headers,
     )
@@ -160,6 +163,7 @@ async def test_get_pending_invitations(client, test_family, test_parent_user, db
             json={
                 "email": email,
                 "family_id": str(test_family.id),
+                "role": "parent",
             },
             headers=auth_headers,
         )
@@ -198,6 +202,7 @@ async def test_cancel_invitation(client, test_family, test_parent_user, db_sessi
         json={
             "email": "member@example.com",
             "family_id": str(test_family.id),
+            "role": "parent",
         },
         headers=auth_headers,
     )
@@ -206,7 +211,7 @@ async def test_cancel_invitation(client, test_family, test_parent_user, db_sessi
     
     # Cancel invitation
     cancel_response = await client.delete(
-        f"/api/invitations/{test_family.id}/invitations/{invitation_id}",
+        f"/api/invitations/{test_family.id}/{invitation_id}",
         headers=auth_headers,
     )
     
@@ -232,6 +237,7 @@ async def test_invitation_code_generation(client, test_family, test_parent_user,
             json={
                 "email": f"member{i}@example.com",
                 "family_id": str(test_family.id),
+                "role": "parent",
             },
             headers=auth_headers,
         )

@@ -135,7 +135,7 @@ async def accept_invitation(
         )
         
         # Validate that only PARENT role can accept invitations
-        if user.role.value != "PARENT":
+        if user.role.value.lower() != "parent":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Only parents or adults (18+) can accept family invitations. Please contact a family administrator."
