@@ -78,9 +78,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/api/auth/reset-password",
         "/api/oauth/google",
         "/api/lang",
-        "/api/oauth/google/"
+        "/api/oauth/google/",
+        "/api/invitations/accept" // Only public endpoint is accepting an invitation (no auth needed)
     ];
-    const isPublicRoute = publicRoutes.some(route => path === route || path.startsWith("/api/translate") || path.startsWith("/api/invitations"));
+    const isPublicRoute = publicRoutes.some(route => path === route || path.startsWith("/api/translate"));
 
     if (isPublicRoute) {
         return next();
