@@ -7,8 +7,17 @@ import type { APIRoute } from "astro";
  */
 export const GET: APIRoute = async ({ request, url, locals }) => {
     try {
-        // Check authentication
-        const token = locals.token;
+        // Get token from context or request headers
+        let token = locals.token;
+        
+        // Fallback: try to get from Authorization header
+        if (!token) {
+            const authHeader = request.headers.get("authorization");
+            if (authHeader?.startsWith("Bearer ")) {
+                token = authHeader.substring(7);
+            }
+        }
+        
         if (!token) {
             return new Response(
                 JSON.stringify({ detail: "Unauthorized" }),

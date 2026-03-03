@@ -168,7 +168,6 @@ const {
     async function loadPendingInvitations() {
         try {
             console.log("Loading pending invitations for family:", familyId);
-            console.log("Available cookies:", document.cookie);
             const response = await fetch(`/api/invitations/pending?family_id=${familyId}`, {
                 credentials: 'include'
             });
