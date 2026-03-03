@@ -113,9 +113,12 @@ if (Astro.request.method === "POST") {
 const { data: family } = await apiFetch<any>("/api/families/me", { token });
 const members: any[] = family?.members ?? [];
 
-// Fetch join code
-const { data: joinCodeData } = await apiFetch<any>("/api/families/join-code/current", { token });
-const joinCode: string | null = joinCodeData?.join_code ?? null;
+// Fetch join code via proxy endpoint to ensure auth is applied correctly
+const { data: joinCodeResult, ok: joinCodeOk, error: joinCodeError } = await apiFetch<any>("/api/families/join-code/current", { token });
+const joinCode: string | null = joinCodeOk ? joinCodeResult?.join_code ?? null : null;
+if (!joinCodeOk && joinCodeError) {
+  errorMsg = joinCodeError || errorMsg;
+}
 ---
 
 <Layout title={`${t(lang, "pm_title")} - Family Task Manager`}>
