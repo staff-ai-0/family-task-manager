@@ -19,6 +19,7 @@ from app.schemas.points import (
     ParentAdjustment,
 )
 from app.models import User
+from app.models.user import UserRole
 
 router = APIRouter()
 
@@ -87,6 +88,42 @@ async def activate_user(
     """Activate a user account (parent only)"""
     user = await AuthService.activate_user(db, user.id)
     return user
+
+
+@router.put("/{user_id}/role", response_model=UserResponse)
+async def update_user_role(
+    user: User = Depends(get_family_user),
+    current_user: User = Depends(require_parent_role),
+    role: str = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update user role (parent only)
+    
+    Valid roles: parent, teen, child
+    """
+    from app.core.exceptions import ValidationException
+    
+    if role is None:
+        raise ValidationException("Role is required")
+    
+    # Validate role is valid
+    try:
+        UserRole[role.upper()]
+    except KeyError:
+        raise ValidationException(f"Invalid role. Must be one of: {', '.join([r.value for r in UserRole])}")
+    
+    # Prevent parent from changing their own role to non-parent
+    if user.id == current_user.id and role.lower() != "parent":
+        raise ValidationException("Cannot change your own role to non-parent")
+    
+    # Update the role
+    updated_user = await AuthService.update_profile(
+        db,
+        user.id,
+        {"role": role.lower()}
+    )
+    
+    return updated_user
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
