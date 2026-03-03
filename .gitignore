@@ -144,7 +144,15 @@ cookies*.txt
 *.old.*
 
 # E2E Tests & Playwright
-e2e-tests/
+e2e-tests/node_modules/
+e2e-tests/.playwright/
+e2e-tests/test-results/
+e2e-tests/playwright-report/
+!e2e-tests/*.spec.js
+!e2e-tests/playwright.config.js
+!e2e-tests/package.json
+!e2e-tests/package-lock.json
+!e2e-tests/README.md
 *.png
 *.jpg
 *.jpeg

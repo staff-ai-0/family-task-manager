@@ -1,0 +1,26 @@
+{
+  "name": "e2e-tests",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:auth": "playwright test auth",
+    "test:tasks": "playwright test tasks",
+    "test:rewards": "playwright test rewards",
+    "test:assignments": "playwright test assignments",
+    "test:members": "playwright test members",
+    "test:budget": "playwright test budget"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "playwright": "^1.58.2"
+  }
+}
