@@ -127,28 +127,33 @@ if (!reward) return Astro.redirect("/parent/rewards");
                         >
                             <option value="">{t(lang, "pr_none_cat")}</option>
                             <option
-                                value="SCREEN_TIME"
-                                selected={reward.category === "SCREEN_TIME"}
+                                value="screen_time"
+                                selected={reward.category === "screen_time"}
                                 >{t(lang, "pr_cat_screen_time")}</option
                             >
                             <option
-                                value="FOOD"
-                                selected={reward.category === "FOOD"}
+                                value="treats"
+                                selected={reward.category === "treats"}
                                 >{t(lang, "pr_cat_food")}</option
                             >
                             <option
-                                value="ACTIVITY"
-                                selected={reward.category === "ACTIVITY"}
+                                value="activities"
+                                selected={reward.category === "activities"}
                                 >{t(lang, "pr_cat_activity")}</option
                             >
                             <option
-                                value="PRIVILEGE"
-                                selected={reward.category === "PRIVILEGE"}
+                                value="privileges"
+                                selected={reward.category === "privileges"}
                                 >{t(lang, "pr_cat_privilege")}</option
                             >
                             <option
-                                value="ITEM"
-                                selected={reward.category === "ITEM"}
+                                value="money"
+                                selected={reward.category === "money"}
+                                >{t(lang, "pr_cat_money")}</option
+                            >
+                            <option
+                                value="toys"
+                                selected={reward.category === "toys"}
                                 >{t(lang, "pr_cat_item")}</option
                             >
                         </select>

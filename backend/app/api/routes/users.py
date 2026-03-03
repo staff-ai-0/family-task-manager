@@ -71,10 +71,38 @@ async def adjust_user_points(
 @router.put("/{user_id}/deactivate", response_model=UserResponse)
 async def deactivate_user(
     user: User = Depends(get_family_user),
-    _: User = Depends(require_parent_role),
+    current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Deactivate a user account (parent only)"""
+    """Deactivate a user account (parent only)
+    
+    Cannot deactivate a parent if they are the only active parent in the family.
+    """
+    from sqlalchemy import select, and_, func
+    from app.core.exceptions import ValidationException
+    
+    # Prevent self-deactivation
+    if user.id == current_user.id:
+        raise ValidationException("Cannot deactivate your own account")
+    
+    # If the user to deactivate is a parent, check if they're the last one
+    if user.role == UserRole.PARENT:
+        # Count active parents in the family (excluding the user being deactivated)
+        result = await db.execute(
+            select(func.count(User.id)).where(
+                and_(
+                    User.family_id == user.family_id,
+                    User.role == UserRole.PARENT,
+                    User.is_active == True,
+                    User.id != user.id
+                )
+            )
+        )
+        active_parent_count = result.scalar() or 0
+        
+        if active_parent_count == 0:
+            raise ValidationException("Cannot deactivate the only active parent in the family")
+    
     user = await AuthService.deactivate_user(db, user.id)
     return user
 
