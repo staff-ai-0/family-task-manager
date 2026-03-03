@@ -24,7 +24,7 @@ if (Astro.request.method === "POST") {
 
     if (action === "create") {
         const payload: any = {
-            name: data.get("name"),
+            title: data.get("name"),
             description: data.get("description") || null,
             points_cost: Number(data.get("points_cost")) || 50,
         };
@@ -186,7 +186,7 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
                                 <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center gap-3">
                                     <div class="flex-1">
                                         <h3 class="font-bold text-slate-800 text-sm">
-                                            {reward.name}
+                                            {reward.title}
                                         </h3>
                                         {reward.description && (
                                             <p class="text-xs text-slate-500 line-clamp-1 mt-0.5">
