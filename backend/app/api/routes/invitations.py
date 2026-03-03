@@ -98,8 +98,8 @@ async def get_pending_invitations(
         results.append(PendingInvitationResponse(
             id=inv.id,
             invited_email=inv.invited_email,
-            status=inv.status.value,
-            role=inv.role.value if hasattr(inv.role, 'value') else inv.role,
+            status=inv.status,
+            role=inv.role,
             created_at=inv.created_at,
             expires_at=inv.expires_at,
             invited_by_user_name=invited_by.name if invited_by else "Unknown",
@@ -155,10 +155,10 @@ async def accept_invitation(
         )
 
 
-@router.delete("/{family_id}/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{family_id}/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_invitation(
+    invitation_id: UUID,
     family_id: UUID = Depends(verify_family_id),
-    invitation_id: UUID = None,
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
@@ -166,17 +166,11 @@ async def cancel_invitation(
     Cancel a pending invitation (parent only).
     
     Args:
-        family_id: Family ID
         invitation_id: Invitation to cancel
+        family_id: Family ID
         current_user: Current authenticated parent user
         db: Database session
     """
-    if invitation_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="invitation_id required"
-        )
-    
     try:
         await InvitationService.cancel_invitation(db, invitation_id, family_id)
         await db.commit()

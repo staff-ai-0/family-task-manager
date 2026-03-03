@@ -32,7 +32,7 @@ export const DELETE: APIRoute = async ({ request, params, locals }) => {
 
         const apiUrl = process.env.API_BASE_URL || "http://localhost:8002";
         const response = await fetch(
-            `${apiUrl}/api/invitations/${familyId}/invitations/${invitationId}`,
+            `${apiUrl}/api/invitations/${familyId}/${invitationId}`,
             {
                 method: "DELETE",
                 headers: {
