@@ -7,7 +7,7 @@ import type { APIRoute } from "astro";
 export const POST: APIRoute = async ({ request }) => {
     // Delete cookie both with and without Secure flag to handle HTTP and HTTPS environments
     const headers = new Headers({ Location: "/login" });
-    headers.append("Set-Cookie", "access_token=; Path=/; HttpOnly; SameSite=None; Max-Age=0");
-    headers.append("Set-Cookie", "access_token=; Path=/; HttpOnly; SameSite=None; Max-Age=0; Secure");
+    headers.append("Set-Cookie", "access_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+    headers.append("Set-Cookie", "access_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure");
     return new Response(null, { status: 302, headers });
 };
