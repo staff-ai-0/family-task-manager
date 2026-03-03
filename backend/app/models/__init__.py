@@ -19,6 +19,7 @@ from app.models.consequence import Consequence, ConsequenceSeverity, Restriction
 from app.models.point_transaction import PointTransaction, TransactionType
 from app.models.password_reset import PasswordResetToken
 from app.models.email_verification import EmailVerificationToken
+from app.models.invitation import FamilyInvitation, InvitationStatus
 from app.models.budget import (
     BudgetCategoryGroup,
     BudgetCategory,
@@ -42,6 +43,7 @@ __all__ = [
     "PointTransaction",
     "PasswordResetToken",
     "EmailVerificationToken",
+    "FamilyInvitation",
     # Budget Models
     "BudgetCategoryGroup",
     "BudgetCategory",
@@ -59,5 +61,6 @@ __all__ = [
     "ConsequenceSeverity",
     "RestrictionType",
     "TransactionType",
+    "InvitationStatus",
 ]
 
