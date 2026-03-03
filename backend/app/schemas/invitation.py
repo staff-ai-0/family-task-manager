@@ -13,6 +13,7 @@ from typing import Optional
 class SendFamilyInvitationRequest(BaseModel):
     """Request to send a family invitation"""
     email: EmailStr = Field(..., description="Email address to invite")
+    family_id: str = Field(..., description="Family ID to invite to")
     message: Optional[str] = Field(None, description="Optional custom message")
 
 

@@ -69,6 +69,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/forgot-password",
         "/verify-email",
         "/reset-password",
+        "/accept-invitation",
         "/api/auth/login",
         "/api/auth/register",
         "/api/auth/verify-email",
@@ -79,7 +80,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/api/lang",
         "/api/oauth/google/"
     ];
-    const isPublicRoute = publicRoutes.some(route => path === route || path.startsWith("/api/translate"));
+    const isPublicRoute = publicRoutes.some(route => path === route || path.startsWith("/api/translate") || path.startsWith("/api/invitations"));
 
     if (isPublicRoute) {
         return next();

@@ -1,0 +1,270 @@
+---
+/**
+ * InvitationModal Component
+ * Modal for sending family invitations
+ * 
+ * Props:
+ * - familyId: string - The family ID
+ * - familyName: string - The family name
+ * - lang: 'en' | 'es' - language code
+ */
+
+interface Props {
+    familyId: string;
+    familyName: string;
+    lang: 'en' | 'es';
+}
+
+const {
+    familyId,
+    familyName,
+    lang
+} = Astro.props;
+---
+
+<div id="invitation-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+        <div class="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-6 py-4 rounded-t-2xl">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-bold">
+                    {lang === "es" ? "Invitar a la familia" : "Invite to family"}
+                </h2>
+                <button id="invitation-close-btn" class="text-white hover:text-cyan-100 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <div class="p-6 space-y-4">
+            <!-- Family name display -->
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <p class="text-xs text-blue-600 font-semibold mb-1 uppercase tracking-wider">
+                    {lang === "es" ? "Tu familia" : "Your family"}
+                </p>
+                <p class="text-lg font-bold text-blue-700">
+                    {familyName}
+                </p>
+            </div>
+
+            <!-- Error message -->
+            <div id="invitation-error" class="hidden p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm"></div>
+
+            <!-- Success message -->
+            <div id="invitation-success" class="hidden p-3 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm"></div>
+
+            <!-- Invite form -->
+            <form id="invitation-form" class="space-y-4">
+                <!-- Email input -->
+                <div>
+                    <label for="invite-email" class="block text-xs font-semibold text-slate-700 mb-2">
+                        {lang === "es" ? "Email de la persona a invitar" : "Email to invite"}
+                    </label>
+                    <input
+                        type="email"
+                        id="invite-email"
+                        name="email"
+                        required
+                        placeholder={lang === "es" ? "ejemplo@correo.com" : "example@email.com"}
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all"
+                    />
+                </div>
+
+                <!-- Optional message -->
+                <div>
+                    <label for="invite-message" class="block text-xs font-semibold text-slate-700 mb-2">
+                        {lang === "es" ? "Mensaje (opcional)" : "Message (optional)"}
+                    </label>
+                    <textarea
+                        id="invite-message"
+                        name="message"
+                        rows="3"
+                        placeholder={lang === "es" 
+                            ? "¡Únete a nuestra familia! Podemos organizar tareas juntos..." 
+                            : "Join us! We can organize tasks together..."}
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all resize-none"
+                    ></textarea>
+                </div>
+
+                <!-- Submit button -->
+                <button
+                    type="submit"
+                    id="invitation-submit"
+                    class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold py-2 rounded-lg transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                >
+                    <span id="invitation-submit-text">
+                        {lang === "es" ? "Enviar invitación" : "Send invitation"}
+                    </span>
+                </button>
+            </form>
+
+            <!-- Pending invitations section -->
+            <div class="pt-4 border-t border-slate-200">
+                <h3 class="text-sm font-bold text-slate-900 mb-3">
+                    {lang === "es" ? "Invitaciones pendientes" : "Pending invitations"}
+                </h3>
+                <div id="pending-invitations" class="space-y-2 max-h-64 overflow-y-auto">
+                    <p class="text-xs text-slate-500 text-center py-4">
+                        {lang === "es" ? "Cargando..." : "Loading..."}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script define:vars={{ familyId, lang }}>
+    const modal = document.getElementById("invitation-modal");
+    const form = document.getElementById("invitation-form");
+    const closeBtn = document.getElementById("invitation-close-btn");
+    const errorDiv = document.getElementById("invitation-error");
+    const successDiv = document.getElementById("invitation-success");
+    const submitBtn = document.getElementById("invitation-submit");
+    const submitText = document.getElementById("invitation-submit-text");
+    const pendingDiv = document.getElementById("pending-invitations");
+
+    // Open/Close modal functionality
+    window.openInvitationModal = () => {
+        modal.classList.remove("hidden");
+        loadPendingInvitations();
+    };
+
+    window.closeInvitationModal = () => {
+        modal.classList.add("hidden");
+    };
+
+    closeBtn.addEventListener("click", window.closeInvitationModal);
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) window.closeInvitationModal();
+    });
+
+    // Load pending invitations
+    async function loadPendingInvitations() {
+        try {
+            const response = await fetch(`/api/invitations/pending?family_id=${familyId}`);
+            const data = await response.json();
+
+            if (data.success && data.data.pending_invitations) {
+                const invitations = data.data.pending_invitations;
+                
+                if (invitations.length === 0) {
+                    pendingDiv.innerHTML = `<p class="text-xs text-slate-500 text-center py-4">${lang === "es" ? "No hay invitaciones pendientes" : "No pending invitations"}</p>`;
+                } else {
+                    pendingDiv.innerHTML = invitations.map(inv => `
+                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-slate-900 break-all">${inv.invited_email}</p>
+                                <p class="text-xs text-slate-500">
+                                    ${lang === "es" ? "Invitado por" : "Invited by"} ${inv.invited_by_user_name}
+                                </p>
+                            </div>
+                            <button 
+                                onclick="cancelInvitation('${inv.id}')"
+                                class="ml-2 flex-shrink-0 p-1 text-red-600 hover:bg-red-50 rounded transition"
+                                title="${lang === "es" ? "Cancelar" : "Cancel"}"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </div>
+                    `).join("");
+                }
+            }
+        } catch (error) {
+            console.error("Error loading pending invitations:", error);
+            pendingDiv.innerHTML = `<p class="text-xs text-red-500 text-center py-4">${lang === "es" ? "Error al cargar invitaciones" : "Error loading invitations"}</p>`;
+        }
+    }
+
+    // Cancel invitation
+    window.cancelInvitation = async (invitationId) => {
+        if (!confirm(lang === "es" ? "¿Cancelar esta invitación?" : "Cancel this invitation?")) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/invitations/${familyId}/${invitationId}`, {
+                method: "DELETE"
+            });
+
+            if (response.ok) {
+                loadPendingInvitations();
+            } else {
+                alert(lang === "es" ? "Error al cancelar la invitación" : "Error canceling invitation");
+            }
+        } catch (error) {
+            console.error("Error canceling invitation:", error);
+            alert(lang === "es" ? "Error al cancelar la invitación" : "Error canceling invitation");
+        }
+    };
+
+    // Submit form
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const emailInput = document.getElementById("invite-email");
+        const messageInput = document.getElementById("invite-message");
+
+        const email = emailInput.value.trim();
+        const message = messageInput.value.trim();
+
+        // Clear messages
+        errorDiv.classList.add("hidden");
+        successDiv.classList.add("hidden");
+
+        // Validation
+        if (!email) {
+            errorDiv.textContent = lang === "es" ? "El email es requerido" : "Email is required";
+            errorDiv.classList.remove("hidden");
+            return;
+        }
+
+        // Submit
+        submitBtn.disabled = true;
+        submitText.textContent = lang === "es" ? "Enviando..." : "Sending...";
+
+        try {
+            const response = await fetch("/api/invitations/send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email,
+                    message: message || undefined,
+                    family_id: familyId
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                successDiv.textContent = lang === "es" 
+                    ? "¡Invitación enviada a " + email + "!" 
+                    : "Invitation sent to " + email + "!";
+                successDiv.classList.remove("hidden");
+                form.reset();
+                
+                // Reload pending invitations
+                setTimeout(() => {
+                    loadPendingInvitations();
+                }, 500);
+                
+                // Close modal after 2 seconds
+                setTimeout(() => {
+                    window.closeInvitationModal();
+                }, 2000);
+            } else {
+                errorDiv.textContent = data.error || (lang === "es" ? "Error al enviar la invitación" : "Error sending invitation");
+                errorDiv.classList.remove("hidden");
+            }
+        } catch (error) {
+            console.error("Error:", error);
+            errorDiv.textContent = lang === "es" ? "Error de conexión. Intenta de nuevo." : "Connection error. Please try again.";
+            errorDiv.classList.remove("hidden");
+        } finally {
+            submitBtn.disabled = false;
+            submitText.textContent = lang === "es" ? "Enviar invitación" : "Send invitation";
+        }
+    });
+</script>
