@@ -144,7 +144,7 @@ async def accept_invitation(
             success=True,
             access_token=access_token,
             token_type="bearer",
-            message=f"Welcome to {invitation.family.name}!"
+            message=f"Welcome to the family!"
         )
     except Exception as e:
         raise HTTPException(
