@@ -140,7 +140,7 @@ class EmailService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _send(*, to: str, subject: str, html: str) -> bool:
+    async def _send(*, to: str, subject: str, html: str) -> bool:
         """Send email via Resend SDK. Returns True on success."""
         if not settings.RESEND_API_KEY:
             print("WARNING: RESEND_API_KEY not configured. Email not sent.")
@@ -202,7 +202,7 @@ class EmailService:
             expiry_note=_t("verify_expiry", lang),
             ignore_note=_t("verify_ignore", lang),
         )
-        return EmailService._send(
+        return await EmailService._send(
             to=user.email,
             subject=_t("verify_subject", lang),
             html=html,
@@ -274,7 +274,7 @@ class EmailService:
             expiry_note=_t("reset_expiry", lang),
             ignore_note=_t("reset_ignore", lang),
         )
-        return EmailService._send(
+        return await EmailService._send(
             to=user.email,
             subject=_t("reset_subject", lang),
             html=html,
@@ -373,7 +373,7 @@ class EmailService:
         html = html.replace("{{ invitation_code }}", invitation.invitation_code)
         html = html.replace("{{ expiration_date }}", expiration_date)
         
-        return EmailService._send(
+        return await EmailService._send(
             to=invitation.invited_email,
             subject=f"¡{inviting_user.name} te ha invitado a unirte a {family_name}!",
             html=html,
