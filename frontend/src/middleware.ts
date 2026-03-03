@@ -93,6 +93,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (!token) {
         if (import.meta.env.DEV) {
             console.log(`No token found for protected route: ${path}`);
+        } else {
+            // In production, log the available cookies for debugging
+            const availableCookies = [...cookies].map(c => c[0]).join(", ");
+            console.log(`No access_token for ${path}. Available cookies: [${availableCookies}]`);
         }
         // Redirect to login for HTML pages
         if (!path.startsWith("/api/")) {
