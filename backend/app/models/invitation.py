@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
 from app.core.database import Base
+from app.models.user import UserRole
 
 
 class InvitationStatus(str, enum.Enum):
@@ -31,6 +32,7 @@ class FamilyInvitation(Base):
     invited_by_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
     invitation_code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
     status: Mapped[str] = mapped_column(SQLEnum(InvitationStatus), default=InvitationStatus.PENDING, nullable=False)
+    role: Mapped[str] = mapped_column(SQLEnum(UserRole), default=UserRole.CHILD, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)  # 30 days from creation
     accepted_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)

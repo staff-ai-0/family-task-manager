@@ -57,6 +57,7 @@ async def send_invitation(
             family_id=family_id,
             invited_email=request_data.email,
             inviting_user=current_user,
+            role=request_data.role,
             base_url=settings.BASE_URL,
         )
         return invitation
@@ -98,6 +99,7 @@ async def get_pending_invitations(
             id=inv.id,
             invited_email=inv.invited_email,
             status=inv.status.value,
+            role=inv.role.value if hasattr(inv.role, 'value') else inv.role,
             created_at=inv.created_at,
             expires_at=inv.expires_at,
             invited_by_user_name=invited_by.name if invited_by else "Unknown",

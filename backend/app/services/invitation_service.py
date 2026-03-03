@@ -25,6 +25,7 @@ class InvitationService:
         family_id: UUID,
         invited_email: str,
         inviting_user: User,
+        role: UserRole = UserRole.CHILD,
         base_url: str = "https://family.agent-ia.mx"
     ) -> FamilyInvitation:
         """
@@ -76,6 +77,7 @@ class InvitationService:
             invited_by_user_id=inviting_user.id,
             invitation_code=invitation_code,
             status=InvitationStatus.PENDING,
+            role=role,
             expires_at=datetime.utcnow() + timedelta(days=30)
         )
         
@@ -149,7 +151,7 @@ class InvitationService:
                 email=invitation.invited_email,
                 name=user_name,
                 password_hash=get_password_hash(user_password),
-                role=UserRole.CHILD,  # Default role for invited members
+                role=invitation.role,  # Use role specified in invitation
                 family_id=invitation.family_id,
                 points=0,
                 is_active=True,

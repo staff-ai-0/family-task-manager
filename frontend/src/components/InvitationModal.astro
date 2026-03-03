@@ -87,7 +87,32 @@ const {
                     ></textarea>
                 </div>
 
-                <!-- Submit button -->
+                <!-- Role selector -->
+                <div>
+                    <label for="invite-role" class="block text-xs font-semibold text-slate-700 mb-2">
+                        {lang === "es" ? "Rol en la familia" : "Role in family"}
+                    </label>
+                    <select
+                        id="invite-role"
+                        name="role"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all bg-white"
+                    >
+                        <option value="child">
+                            {lang === "es" ? "Niño (Child)" : "Child"}
+                        </option>
+                        <option value="teen">
+                            {lang === "es" ? "Adolescente (Teen)" : "Teen"}
+                        </option>
+                        <option value="parent">
+                            {lang === "es" ? "Padre/Madre (Parent)" : "Parent"}
+                        </option>
+                    </select>
+                    <p class="text-xs text-slate-500 mt-1">
+                        {lang === "es" 
+                            ? "El rol puede ser cambiado después"
+                            : "Role can be changed later"}
+                    </p>
+                </div>
                 <button
                     type="submit"
                     id="invitation-submit"
@@ -158,6 +183,9 @@ const {
                                 <p class="text-xs text-slate-500">
                                     ${lang === "es" ? "Invitado por" : "Invited by"} ${inv.invited_by_user_name}
                                 </p>
+                                <p class="text-xs text-slate-600 mt-1">
+                                    ${lang === "es" ? "Rol: " : "Role: "}<span class="font-semibold">${inv.role}</span>
+                                </p>
                             </div>
                             <button 
                                 onclick="cancelInvitation('${inv.id}')"
@@ -206,9 +234,11 @@ const {
 
         const emailInput = document.getElementById("invite-email");
         const messageInput = document.getElementById("invite-message");
+        const roleInput = document.getElementById("invite-role");
 
         const email = emailInput.value.trim();
         const message = messageInput.value.trim();
+        const role = roleInput.value;
 
         // Clear messages
         errorDiv.classList.add("hidden");
@@ -232,6 +262,7 @@ const {
                 body: JSON.stringify({
                     email,
                     message: message || undefined,
+                    role,
                     family_id: familyId
                 })
             });

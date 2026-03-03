@@ -8,12 +8,14 @@ from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from uuid import UUID
 from typing import Optional
+from app.models.user import UserRole
 
 
 class SendFamilyInvitationRequest(BaseModel):
     """Request to send a family invitation"""
     email: EmailStr = Field(..., description="Email address to invite")
     family_id: str = Field(..., description="Family ID to invite to")
+    role: UserRole = Field(default=UserRole.CHILD, description="Role for the invited user")
     message: Optional[str] = Field(None, description="Optional custom message")
 
 
@@ -23,6 +25,7 @@ class InvitationResponse(BaseModel):
     family_id: UUID
     invited_email: str
     status: str
+    role: str
     created_at: datetime
     expires_at: datetime
     invitation_code: str
@@ -52,6 +55,7 @@ class PendingInvitationResponse(BaseModel):
     id: UUID
     invited_email: str
     status: str
+    role: str
     created_at: datetime
     expires_at: datetime
     invited_by_user_name: str
