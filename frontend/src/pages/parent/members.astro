@@ -1,6 +1,7 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import BottomNav from "../../components/BottomNav.astro";
+import InvitationModal from "../../components/InvitationModal.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 
@@ -218,6 +219,34 @@ const joinCode: string | null = joinCodeData?.join_code ?? null;
         )}
       </section>
 
+      <!-- Invite Family Members Section -->
+      <section class="bg-white rounded-2xl p-5 shadow-sm border border-cyan-100">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2 flex-1">
+            <svg class="h-5 w-5 text-cyan-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+            </svg>
+            <div>
+              <h2 class="font-bold text-slate-800">
+                {lang === "es" ? "Invitar Miembros" : "Invite Members"}
+              </h2>
+              <p class="text-xs text-slate-500 mt-1">
+                {lang === "es" 
+                  ? "Envía una invitación por correo electrónico para que otros se unan a tu familia." 
+                  : "Send email invitations for others to join your family."}
+              </p>
+            </div>
+          </div>
+          <button 
+            id="open-invitation-modal"
+            type="button"
+            class="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold text-sm transition-all transform hover:scale-105 active:scale-95 whitespace-nowrap"
+          >
+            {lang === "es" ? "Invitar" : "Invite"}
+          </button>
+        </div>
+      </section>
+
       {
         members.map((m: any) => (
           <div
@@ -349,7 +378,18 @@ const joinCode: string | null = joinCodeData?.join_code ?? null;
     <BottomNav active="parent" role={user.role} lang={lang} />
   </div>
 
+  <!-- Invitation Modal -->
+  <InvitationModal familyId={user.family_id} familyName={user.family?.name || "Family"} lang={lang} />
+
   <script>
+    // Open invitation modal
+    document.getElementById('open-invitation-modal')?.addEventListener('click', () => {
+      const modal = document.getElementById('invitation-modal');
+      if (modal) {
+        modal.classList.remove('hidden');
+      }
+    });
+
     document.getElementById('copy-code-btn')?.addEventListener('click', () => {
       const code = document.getElementById('join-code-display')?.textContent?.trim();
       if (code) {
