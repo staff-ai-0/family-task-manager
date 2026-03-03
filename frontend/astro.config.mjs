@@ -8,6 +8,9 @@ export default defineConfig({
   adapter: node({
     mode: 'standalone',
   }),
+  devToolbar: {
+    enabled: false,
+  },
   security: {
     // Disable origin check for CSRF — the app runs behind a reverse proxy
     // (e.g. https://fam-stage.a-ai4all.com -> localhost:3000) so the Origin
