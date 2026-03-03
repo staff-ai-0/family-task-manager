@@ -72,6 +72,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/accept-invitation",
         "/api/auth/login",
         "/api/auth/register",
+        "/api/auth/register-family",
         "/api/auth/verify-email",
         "/api/auth/resend-verification",
         "/api/auth/forgot-password",
