@@ -17,7 +17,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         }
 
         const body = await request.json();
-        const { email, message, family_id } = body;
+        const { email, message, family_id, role } = body;
 
         if (!email || !family_id) {
             return new Response(
@@ -33,7 +33,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${token}`,
             },
-            body: JSON.stringify({ email, message, family_id }),
+            body: JSON.stringify({ email, message, family_id, role: role || "child" }),
         });
 
         const data = await response.json();
