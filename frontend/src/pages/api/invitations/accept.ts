@@ -46,7 +46,7 @@ export const POST: APIRoute = async ({ request }) => {
             const tokenCookie = buildCookie("access_token", data.access_token, {
                 path: "/",
                 httpOnly: true,
-                sameSite: "Lax",
+                sameSite: "None",
                 maxAge: 60 * 60 * 24 * 7, // 7 days
                 secure: !import.meta.env.DEV,
             });
