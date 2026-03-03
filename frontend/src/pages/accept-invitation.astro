@@ -135,20 +135,36 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
                             </div>
 
                             <!-- Confirm password -->
-                            <div>
-                                <label for="confirm_password" class="block text-sm font-semibold text-slate-700 mb-2">
-                                    {lang === "es" ? "Confirmar contraseña" : "Confirm password"}
-                                </label>
-                                <input
-                                    type="password"
-                                    id="confirm_password"
-                                    name="confirm_password"
-                                    required
-                                    minlength="8"
-                                    placeholder={lang === "es" ? "Repite tu contraseña" : "Repeat your password"}
-                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
-                                />
-                            </div>
+                             <div>
+                                 <label for="confirm_password" class="block text-sm font-semibold text-slate-700 mb-2">
+                                     {lang === "es" ? "Confirmar contraseña" : "Confirm password"}
+                                 </label>
+                                 <input
+                                     type="password"
+                                     id="confirm_password"
+                                     name="confirm_password"
+                                     required
+                                     minlength="8"
+                                     placeholder={lang === "es" ? "Repite tu contraseña" : "Repeat your password"}
+                                     class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                 />
+                             </div>
+
+                             <!-- Age verification checkbox -->
+                             <div class="flex items-start gap-3 p-4 rounded-lg bg-slate-50 border border-slate-200">
+                                 <input
+                                     type="checkbox"
+                                     id="age_confirmation"
+                                     name="age_confirmation"
+                                     required
+                                     class="w-5 h-5 mt-0.5 rounded border-slate-300 text-cyan-600 focus:ring-2 focus:ring-cyan-500 cursor-pointer"
+                                 />
+                                 <label for="age_confirmation" class="text-sm text-slate-700 cursor-pointer flex-1">
+                                     {lang === "es" 
+                                         ? "Confirmo que tengo 18 años o más y soy un padre o adulto responsable"
+                                         : "I confirm that I am 18+ and a parent or responsible adult"}
+                                 </label>
+                             </div>
 
                             <!-- Submit button -->
                             <button
@@ -188,11 +204,13 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
             const passwordInput = document.getElementById("password");
             const confirmPasswordInput = document.getElementById("confirm_password");
             const invitationCodeInput = document.getElementById("invitation_code");
+            const ageConfirmationInput = document.getElementById("age_confirmation");
 
             const name = nameInput.value.trim();
             const password = passwordInput.value;
             const confirmPassword = confirmPasswordInput.value;
             const code = invitationCode || (invitationCodeInput?.value?.trim() || "");
+            const ageConfirmed = ageConfirmationInput?.checked || false;
 
             // Clear messages
             errorDiv.classList.add("hidden");
@@ -219,6 +237,14 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
 
             if (password !== confirmPassword) {
                 errorDiv.textContent = lang === "es" ? "Las contraseñas no coinciden" : "Passwords don't match";
+                errorDiv.classList.remove("hidden");
+                return;
+            }
+
+            if (!ageConfirmed) {
+                errorDiv.textContent = lang === "es" 
+                    ? "Debes confirmar que tienes 18 años o más"
+                    : "You must confirm that you are 18 or older";
                 errorDiv.classList.remove("hidden");
                 return;
             }

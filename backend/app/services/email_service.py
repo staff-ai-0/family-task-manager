@@ -76,6 +76,26 @@ _COPY = {
         "es": "Si no solicitaste este cambio, ignora este correo. Tu contraseña no cambiará.",
         "en": "If you did not request this, ignore this email. Your password will remain unchanged.",
     },
+    "welcome_subject": {
+        "es": "¡Bienvenido a Family Task Manager!",
+        "en": "Welcome to Family Task Manager!",
+    },
+    "welcome_heading": {
+        "es": "¡Te damos la bienvenida a tu familia!",
+        "en": "Welcome to your family!",
+    },
+    "welcome_body": {
+        "es": "Hola {name}, ¡te has unido exitosamente a {family_name}! Ahora puedes colaborar con tu familia en tareas, recompensas y finanzas.",
+        "en": "Hi {name}, you've successfully joined {family_name}! You can now collaborate with your family on tasks, rewards, and finances.",
+    },
+    "welcome_btn": {
+        "es": "Ir al Dashboard",
+        "en": "Go to Dashboard",
+    },
+    "welcome_features": {
+        "es": "Aquí hay algunas cosas que puedes hacer:",
+        "en": "Here are some things you can do:",
+    },
 }
 
 
@@ -320,8 +340,57 @@ class EmailService:
         return user
 
     # ------------------------------------------------------------------
-    # Family Invitation
+    # Welcome email (sent when invitation is accepted)
     # ------------------------------------------------------------------
+
+    @staticmethod
+    async def send_welcome_email(
+        db: AsyncSession,
+        user: User,
+        family_name: str,
+        base_url: str = "https://family.agent-ia.mx",
+    ) -> bool:
+        """Send a welcome email to a newly onboarded family member."""
+        lang = getattr(user, "preferred_lang", "en") or "en"
+        dashboard_link = f"{base_url}/dashboard"
+        
+        html = _build_html(
+            heading=_t("welcome_heading", lang),
+            body=_t("welcome_body", lang).format(name=user.name, family_name=family_name),
+            btn_text=_t("welcome_btn", lang),
+            btn_url=dashboard_link,
+            link_label=_t("welcome_features", lang),
+            expiry_note="",
+            ignore_note="",
+        )
+        
+        # Customize HTML to show features instead of expiry
+        if lang == "es":
+            features = """
+            <ul style="margin: 15px 0; padding-left: 20px; color: #cbd5e1;">
+                <li style="margin-bottom: 8px;">📋 Gestiona tareas familiares y asignaciones</li>
+                <li style="margin-bottom: 8px;">🎁 Gana y canjea recompensas</li>
+                <li style="margin-bottom: 8px;">💰 Colabora en presupuesto familiar</li>
+                <li style="margin-bottom: 8px;">👥 Conecta con tu familia</li>
+            </ul>
+            """
+        else:
+            features = """
+            <ul style="margin: 15px 0; padding-left: 20px; color: #cbd5e1;">
+                <li style="margin-bottom: 8px;">📋 Manage family tasks and assignments</li>
+                <li style="margin-bottom: 8px;">🎁 Earn and redeem rewards</li>
+                <li style="margin-bottom: 8px;">💰 Collaborate on family budget</li>
+                <li style="margin-bottom: 8px;">👥 Connect with your family</li>
+            </ul>
+            """
+        
+        html = html.replace('<p class="note">' + _t("welcome_features", lang) + '</p>', features)
+        
+        return await EmailService._send(
+            to=user.email,
+            subject=_t("welcome_subject", lang),
+            html=html,
+        )
 
     @staticmethod
     async def send_invitation_email(

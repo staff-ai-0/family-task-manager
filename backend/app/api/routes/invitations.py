@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.type_utils import to_uuid_required
 from app.core.security import create_access_token
 from app.services.invitation_service import InvitationService
+from app.services.email_service import EmailService
 from app.schemas.invitation import (
     SendFamilyInvitationRequest,
     InvitationResponse,
@@ -22,6 +23,8 @@ from app.schemas.invitation import (
     PendingInvitationResponse,
 )
 from app.models import User, FamilyInvitation
+from app.models.family import Family
+from sqlalchemy import select
 
 router = APIRouter()
 
@@ -131,6 +134,13 @@ async def accept_invitation(
             user_password=request_data.password,
         )
         
+        # Validate that only PARENT role can accept invitations
+        if user.role.value != "PARENT":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only parents or adults (18+) can accept family invitations. Please contact a family administrator."
+            )
+        
         # Create access token
         access_token = create_access_token(
             data={
@@ -142,12 +152,29 @@ async def accept_invitation(
         
         await db.commit()
         
+        # Get family name for welcome email
+        family_result = await db.execute(
+            select(Family).where(Family.id == user.family_id)
+        )
+        family = family_result.scalar_one_or_none()
+        family_name = family.name if family else "tu familia"
+        
+        # Send welcome email
+        await EmailService.send_welcome_email(
+            db=db,
+            user=user,
+            family_name=family_name,
+            base_url=settings.BASE_URL,
+        )
+        
         return AcceptInvitationResponse(
             success=True,
             access_token=access_token,
             token_type="bearer",
             message=f"Welcome to the family!"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
