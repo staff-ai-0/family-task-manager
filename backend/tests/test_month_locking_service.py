@@ -5,6 +5,7 @@ Tests for closing/reopening months and preventing edits to closed months.
 """
 
 import pytest
+import pytest_asyncio
 from datetime import date, datetime
 from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,7 @@ from app.models.budget import BudgetAllocation, BudgetTransaction
 from app.services.budget.month_locking_service import MonthLockingService
 from app.services.budget.allocation_service import AllocationService
 from app.services.budget.transaction_service import TransactionService
-from app.services.budget.category_service import CategoryService
+from app.services.budget.category_service import CategoryService, CategoryGroupService
 from app.services.budget.account_service import AccountService
 from app.core.exceptions import NotFoundException, ValidationError
 from app.schemas.budget import (
@@ -25,23 +26,36 @@ from app.schemas.budget import (
 )
 
 
-@pytest.mark.asyncio
-async def test_close_month_basic(db_session: AsyncSession, test_family):
-    """Test basic month closing functionality"""
-    month_date = date(2024, 3, 1)
-    test_family_id = test_family.id
+@pytest_asyncio.fixture
+async def category_with_group(db_session: AsyncSession, test_family):
+    """Helper fixture to create a category with its group"""
+    group = await CategoryGroupService.create(
+        db_session,
+        test_family.id,
+        CategoryGroupCreate(name="Test Group", is_income=False, sort_order=0),
+    )
     
-    # Create a test allocation for the month
     category = await CategoryService.create(
         db_session,
-        test_family_id,
+        test_family.id,
         CategoryCreate(
             name="Test Category",
-            group_id=uuid4(),
+            group_id=group.id,
             sort_order=0,
         ),
     )
     
+    return category
+
+
+@pytest.mark.asyncio
+async def test_close_month_basic(db_session: AsyncSession, test_family, category_with_group):
+    """Test basic month closing functionality"""
+    month_date = date(2024, 3, 1)
+    test_family_id = test_family.id
+    category = category_with_group
+    
+    # Create a test allocation for the month
     allocation = await AllocationService.create(
         db_session,
         test_family_id,
@@ -76,21 +90,12 @@ async def test_close_month_not_found(db_session: AsyncSession, test_family):
 
 
 @pytest.mark.asyncio
-async def test_reopen_month(db_session: AsyncSession, test_family):
+async def test_reopen_month(db_session: AsyncSession, test_family, category_with_group):
     """Test reopening a closed month"""
     month_date = date(2024, 3, 1)
     test_family_id = test_family.id
     
-    # Create and close a month
-    category = await CategoryService.create(
-        db_session,
-        test_family_id,
-        CategoryCreate(
-            name="Test Category",
-            group_id=uuid4(),
-            sort_order=0,
-        ),
-    )
+    category = category_with_group
     
     allocation = await AllocationService.create(
         db_session,
@@ -126,21 +131,13 @@ async def test_reopen_month_not_found(db_session: AsyncSession, test_family):
 
 
 @pytest.mark.asyncio
-async def test_is_month_closed(db_session: AsyncSession, test_family):
+async def test_is_month_closed(db_session: AsyncSession, test_family, category_with_group):
     """Test checking if month is closed"""
     month_date = date(2024, 3, 1)
     test_family_id = test_family.id
     
     # Create allocation
-    category = await CategoryService.create(
-        db_session,
-        test_family_id,
-        CategoryCreate(
-            name="Test Category",
-            group_id=uuid4(),
-            sort_order=0,
-        ),
-    )
+    category = category_with_group
     
     await AllocationService.create(
         db_session,
@@ -165,21 +162,13 @@ async def test_is_month_closed(db_session: AsyncSession, test_family):
 
 
 @pytest.mark.asyncio
-async def test_get_month_status(db_session: AsyncSession, test_family):
+async def test_get_month_status(db_session: AsyncSession, test_family, category_with_group):
     """Test getting month status details"""
     month_date = date(2024, 3, 1)
     test_family_id = test_family.id
     
     # Create allocation
-    category = await CategoryService.create(
-        db_session,
-        test_family_id,
-        CategoryCreate(
-            name="Test Category",
-            group_id=uuid4(),
-            sort_order=0,
-        ),
-    )
+    category = category_with_group
     
     await AllocationService.create(
         db_session,
@@ -209,20 +198,11 @@ async def test_get_month_status(db_session: AsyncSession, test_family):
 
 
 @pytest.mark.asyncio
-async def test_get_closed_months(db_session: AsyncSession, test_family):
+async def test_get_closed_months(db_session: AsyncSession, test_family, category_with_group):
     """Test listing closed months"""
     test_family_id = test_family.id
     
-    # Create and close multiple months
-    category = await CategoryService.create(
-        db_session,
-        test_family_id,
-        CategoryCreate(
-            name="Test Category",
-            group_id=uuid4(),
-            sort_order=0,
-        ),
-    )
+    category = category_with_group
     
     for month_num in [1, 2, 3]:
         month_date = date(2024, month_num, 1)
@@ -247,20 +227,12 @@ async def test_get_closed_months(db_session: AsyncSession, test_family):
 
 
 @pytest.mark.asyncio
-async def test_get_closed_months_pagination(db_session: AsyncSession, test_family):
+async def test_get_closed_months_pagination(db_session: AsyncSession, test_family, category_with_group):
     """Test pagination of closed months"""
     test_family_id = test_family.id
     
     # Create and close 5 months
-    category = await CategoryService.create(
-        db_session,
-        test_family_id,
-        CategoryCreate(
-            name="Test Category",
-            group_id=uuid4(),
-            sort_order=0,
-        ),
-    )
+    category = category_with_group
     
     for month_num in range(1, 6):
         month_date = date(2024, month_num, 1)
@@ -289,21 +261,12 @@ async def test_get_closed_months_pagination(db_session: AsyncSession, test_famil
 
 
 @pytest.mark.asyncio
-async def test_validate_month_not_closed(db_session: AsyncSession, test_family):
+async def test_validate_month_not_closed(db_session: AsyncSession, test_family, category_with_group):
     """Test validation of closed months"""
     month_date = date(2024, 3, 1)
     test_family_id = test_family.id
     
-    # Create and close a month
-    category = await CategoryService.create(
-        db_session,
-        test_family_id,
-        CategoryCreate(
-            name="Test Category",
-            group_id=uuid4(),
-            sort_order=0,
-        ),
-    )
+    category = category_with_group
     
     await AllocationService.create(
         db_session,
@@ -327,7 +290,7 @@ async def test_validate_month_not_closed(db_session: AsyncSession, test_family):
 
 
 @pytest.mark.asyncio
-async def test_cannot_create_transaction_in_closed_month(db_session: AsyncSession, test_family):
+async def test_cannot_create_transaction_in_closed_month(db_session: AsyncSession, test_family, category_with_group):
     """Test that transactions cannot be created in closed months"""
     month_date = date(2024, 3, 1)
     transaction_date = date(2024, 3, 15)
@@ -343,15 +306,7 @@ async def test_cannot_create_transaction_in_closed_month(db_session: AsyncSessio
         ),
     )
     
-    category = await CategoryService.create(
-        db_session,
-        test_family_id,
-        CategoryCreate(
-            name="Test Category",
-            group_id=uuid4(),
-            sort_order=0,
-        ),
-    )
+    category = category_with_group
     
     # Create and close the month
     await AllocationService.create(
@@ -382,21 +337,12 @@ async def test_cannot_create_transaction_in_closed_month(db_session: AsyncSessio
 
 
 @pytest.mark.asyncio
-async def test_cannot_update_allocation_in_closed_month(db_session: AsyncSession, test_family):
+async def test_cannot_update_allocation_in_closed_month(db_session: AsyncSession, test_family, category_with_group):
     """Test that allocations cannot be updated in closed months"""
     month_date = date(2024, 3, 1)
     test_family_id = test_family.id
     
-    # Create and close a month
-    category = await CategoryService.create(
-        db_session,
-        test_family_id,
-        CategoryCreate(
-            name="Test Category",
-            group_id=uuid4(),
-            sort_order=0,
-        ),
-    )
+    category = category_with_group
     
     allocation = await AllocationService.create(
         db_session,
@@ -422,7 +368,7 @@ async def test_cannot_update_allocation_in_closed_month(db_session: AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_can_create_transaction_after_reopen(db_session: AsyncSession, test_family):
+async def test_can_create_transaction_after_reopen(db_session: AsyncSession, test_family, category_with_group):
     """Test that transactions can be created after reopening a month"""
     month_date = date(2024, 3, 1)
     transaction_date = date(2024, 3, 15)
@@ -438,15 +384,7 @@ async def test_can_create_transaction_after_reopen(db_session: AsyncSession, tes
         ),
     )
     
-    category = await CategoryService.create(
-        db_session,
-        test_family_id,
-        CategoryCreate(
-            name="Test Category",
-            group_id=uuid4(),
-            sort_order=0,
-        ),
-    )
+    category = category_with_group
     
     # Create and close the month
     await AllocationService.create(

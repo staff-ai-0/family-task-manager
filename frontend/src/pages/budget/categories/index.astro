@@ -33,6 +33,13 @@ if (user.role !== "parent") {
 // Fetch category groups with categories
 const { data: categoryGroups, ok: groupsOk, error } = await getCategoryGroups(token);
 
+// Fetch existing goals (keyed by category_id for quick lookup)
+const { data: goalsRaw = [] } = await apiFetch<any[]>("/api/budget/goals/", { token });
+const goalsByCategory: Record<string, any> = {};
+for (const g of (goalsRaw ?? [])) {
+    goalsByCategory[g.category_id] = g;
+}
+
 // Separate income and expense groups
 const incomeGroups = categoryGroups?.filter(g => g.is_income) || [];
 const expenseGroups = categoryGroups?.filter(g => !g.is_income) || [];
@@ -45,6 +52,9 @@ const totalCategories = categoryGroups?.reduce((sum, g) => sum + g.categories.le
 const nowDate = new Date();
 const currentYear = nowDate.getFullYear();
 const currentMonth = nowDate.getMonth() + 1;
+const todayISO = nowDate.toISOString().slice(0, 10);
+
+const isEs = lang === "es";
 ---
 
 <Layout title="Categorías - Presupuesto">
@@ -162,37 +172,66 @@ const currentMonth = nowDate.getMonth() + 1;
                                         </div>
                                     ) : (
                                         <div class="divide-y divide-slate-100">
-                                            {group.categories.map(category => (
+                                            {group.categories.map(category => {
+                                                const existingGoal = goalsByCategory[category.id];
+                                                return (
                                                 <div class="px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition">
-                                                    <div class="flex items-center gap-2">
+                                                    <div class="flex items-center gap-2 flex-wrap">
                                                         <span class="text-sm font-medium text-slate-700">{category.name}</span>
                                                         {category.rollover_enabled && (
                                                             <span class="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-semibold">
                                                                 Rollover
                                                             </span>
                                                         )}
-                                                        {category.goal_amount > 0 && (
+                                                        {existingGoal ? (
+                                                            <span class="inline-block bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-semibold">
+                                                                {existingGoal.goal_type === "spending_limit" ? (isEs ? "Límite" : "Limit") : (isEs ? "Meta" : "Goal")}: {formatCurrency(existingGoal.target_amount)} / {existingGoal.period}
+                                                            </span>
+                                                        ) : category.goal_amount > 0 ? (
                                                             <span class="inline-block bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-semibold">
                                                                 Meta: {formatCurrency(category.goal_amount)}
                                                             </span>
-                                                        )}
+                                                        ) : null}
                                                     </div>
-                                                    <button 
-                                                        class="edit-category-btn text-slate-400 hover:text-slate-600 transition"
-                                                        data-category-id={category.id}
-                                                        data-category-name={category.name}
-                                                        data-group-id={category.group_id}
-                                                        data-rollover={category.rollover_enabled}
-                                                        data-goal={category.goal_amount}
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                        </svg>
-                                                    </button>
+                                                    <div class="flex items-center gap-1 shrink-0">
+                                                        <!-- Goal button -->
+                                                        <button
+                                                            class="goal-btn p-1 rounded transition"
+                                                            class:list={[existingGoal ? "text-purple-500 hover:text-purple-700" : "text-slate-300 hover:text-purple-500"]}
+                                                            data-category-id={category.id}
+                                                            data-category-name={category.name}
+                                                            data-goal-id={existingGoal?.id ?? ""}
+                                                            data-goal-name={existingGoal?.name ?? ""}
+                                                            data-goal-type={existingGoal?.goal_type ?? "spending_limit"}
+                                                            data-goal-amount={existingGoal ? (existingGoal.target_amount / 100).toFixed(2) : ""}
+                                                            data-goal-period={existingGoal?.period ?? "monthly"}
+                                                            data-goal-start={existingGoal?.start_date ?? todayISO}
+                                                            data-goal-end={existingGoal?.end_date ?? ""}
+                                                            title={isEs ? "Configurar meta" : "Set goal"}
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                                            </svg>
+                                                        </button>
+                                                        <!-- Edit button -->
+                                                        <button 
+                                                            class="edit-category-btn text-slate-400 hover:text-slate-600 transition p-1"
+                                                            data-category-id={category.id}
+                                                            data-category-name={category.name}
+                                                            data-group-id={category.group_id}
+                                                            data-rollover={category.rollover_enabled}
+                                                            data-goal={category.goal_amount}
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
-                                    )}
+                                    ) }
                                 </div>
                             ))}
                         </div>
@@ -241,7 +280,9 @@ const currentMonth = nowDate.getMonth() + 1;
                                         </div>
                                     ) : (
                                         <div class="divide-y divide-slate-100">
-                                            {group.categories.map(category => (
+                                            {group.categories.map(category => {
+                                                const existingGoal = goalsByCategory[category.id];
+                                                return (
                                                 <div class="px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition">
                                                     <div class="flex items-center gap-2 flex-wrap">
                                                         <span class="text-sm font-medium text-slate-700">{category.name}</span>
@@ -250,26 +291,53 @@ const currentMonth = nowDate.getMonth() + 1;
                                                                 Rollover
                                                             </span>
                                                         )}
-                                                        {category.goal_amount > 0 && (
+                                                        {existingGoal ? (
+                                                            <span class="inline-block bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-semibold">
+                                                                {existingGoal.goal_type === "spending_limit" ? (isEs ? "Límite" : "Limit") : (isEs ? "Meta" : "Goal")}: {formatCurrency(existingGoal.target_amount)} / {existingGoal.period}
+                                                            </span>
+                                                        ) : category.goal_amount > 0 ? (
                                                             <span class="inline-block bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-semibold">
                                                                 Meta: {formatCurrency(category.goal_amount)}
                                                             </span>
-                                                        )}
+                                                        ) : null}
                                                     </div>
-                                                    <button 
-                                                        class="edit-category-btn text-slate-400 hover:text-slate-600 transition"
-                                                        data-category-id={category.id}
-                                                        data-category-name={category.name}
-                                                        data-group-id={category.group_id}
-                                                        data-rollover={category.rollover_enabled}
-                                                        data-goal={category.goal_amount}
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                        </svg>
-                                                    </button>
+                                                    <div class="flex items-center gap-1 shrink-0">
+                                                        <!-- Goal button -->
+                                                        <button
+                                                            class="goal-btn p-1 rounded transition"
+                                                            class:list={[existingGoal ? "text-purple-500 hover:text-purple-700" : "text-slate-300 hover:text-purple-500"]}
+                                                            data-category-id={category.id}
+                                                            data-category-name={category.name}
+                                                            data-goal-id={existingGoal?.id ?? ""}
+                                                            data-goal-name={existingGoal?.name ?? ""}
+                                                            data-goal-type={existingGoal?.goal_type ?? "spending_limit"}
+                                                            data-goal-amount={existingGoal ? (existingGoal.target_amount / 100).toFixed(2) : ""}
+                                                            data-goal-period={existingGoal?.period ?? "monthly"}
+                                                            data-goal-start={existingGoal?.start_date ?? todayISO}
+                                                            data-goal-end={existingGoal?.end_date ?? ""}
+                                                            title={isEs ? "Configurar meta" : "Set goal"}
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                                            </svg>
+                                                        </button>
+                                                        <!-- Edit button -->
+                                                        <button 
+                                                            class="edit-category-btn text-slate-400 hover:text-slate-600 transition p-1"
+                                                            data-category-id={category.id}
+                                                            data-category-name={category.name}
+                                                            data-group-id={category.group_id}
+                                                            data-rollover={category.rollover_enabled}
+                                                            data-goal={category.goal_amount}
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>
@@ -412,6 +480,94 @@ const currentMonth = nowDate.getMonth() + 1;
                     </button>
                 </div>
                 <div id="category-error" class="hidden mt-4 bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Goal Modal -->
+    <div id="goal-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div class="bg-purple-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
+                <h2 id="goal-modal-title" class="text-xl font-bold">{isEs ? "Configurar Meta" : "Set Goal"}</h2>
+                <button id="close-goal-modal" class="text-white hover:text-purple-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p id="goal-category-label" class="text-sm text-slate-500"></p>
+                <div id="goal-error" class="hidden bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700"></div>
+
+                <input type="hidden" id="goal-id" />
+                <input type="hidden" id="goal-category-id" />
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">{isEs ? "Nombre" : "Name"}</label>
+                    <input type="text" id="goal-name"
+                        placeholder={isEs ? "ej: Ahorro mensual comida" : "e.g. Monthly food budget"}
+                        class="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        required />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">{isEs ? "Tipo de Meta" : "Goal Type"}</label>
+                    <select id="goal-type"
+                        class="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        <option value="spending_limit">{isEs ? "Límite de gasto" : "Spending Limit"}</option>
+                        <option value="savings_target">{isEs ? "Meta de ahorro" : "Savings Target"}</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">{isEs ? "Monto objetivo" : "Target Amount"}</label>
+                    <div class="relative">
+                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                        <input type="number" id="goal-amount" step="0.01" min="0.01"
+                            placeholder="0.00"
+                            class="w-full pl-8 pr-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            required />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">{isEs ? "Periodo" : "Period"}</label>
+                    <select id="goal-period"
+                        class="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        <option value="monthly">{isEs ? "Mensual" : "Monthly"}</option>
+                        <option value="quarterly">{isEs ? "Trimestral" : "Quarterly"}</option>
+                        <option value="annual">{isEs ? "Anual" : "Annual"}</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-2">{isEs ? "Fecha inicio" : "Start Date"}</label>
+                        <input type="date" id="goal-start"
+                            class="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            required />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-2">{isEs ? "Fecha fin (opcional)" : "End Date (optional)"}</label>
+                        <input type="date" id="goal-end"
+                            class="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" />
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <button id="goal-cancel"
+                        class="flex-1 bg-slate-200 text-slate-700 px-4 py-3 rounded-lg font-semibold hover:bg-slate-300 transition">
+                        {isEs ? "Cancelar" : "Cancel"}
+                    </button>
+                    <button id="goal-delete"
+                        class="hidden px-4 py-3 bg-red-100 hover:bg-red-200 text-red-700 font-semibold rounded-lg transition">
+                        {isEs ? "Eliminar" : "Delete"}
+                    </button>
+                    <button id="goal-save"
+                        class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-3 rounded-lg transition">
+                        {isEs ? "Guardar" : "Save"}
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -617,5 +773,145 @@ const currentMonth = nowDate.getMonth() + 1;
             
             openCategoryModal(groupId, groupName, categoryId, categoryName, rollover, goal);
         });
+    });
+
+    // ── Goal Modal ───────────────────────────────────────────────────────────
+
+    const goalModal = document.getElementById('goal-modal');
+    let currentGoalCategoryId: string | null = null;
+    let currentGoalId: string | null = null;
+
+    function openGoalModal(btn: Element) {
+        currentGoalCategoryId = btn.getAttribute('data-category-id');
+        currentGoalId = btn.getAttribute('data-goal-id') || null;
+
+        const label = document.getElementById('goal-category-label')!;
+        const nameInput = document.getElementById('goal-name') as HTMLInputElement;
+        const typeSelect = document.getElementById('goal-type') as HTMLSelectElement;
+        const amountInput = document.getElementById('goal-amount') as HTMLInputElement;
+        const periodSelect = document.getElementById('goal-period') as HTMLSelectElement;
+        const startInput = document.getElementById('goal-start') as HTMLInputElement;
+        const endInput = document.getElementById('goal-end') as HTMLInputElement;
+        const deleteBtn = document.getElementById('goal-delete')!;
+        const errDiv = document.getElementById('goal-error')!;
+
+        label.textContent = btn.getAttribute('data-category-name') || '';
+        nameInput.value = btn.getAttribute('data-goal-name') || '';
+        typeSelect.value = btn.getAttribute('data-goal-type') || 'spending_limit';
+        amountInput.value = btn.getAttribute('data-goal-amount') || '';
+        periodSelect.value = btn.getAttribute('data-goal-period') || 'monthly';
+        startInput.value = btn.getAttribute('data-goal-start') || '';
+        endInput.value = btn.getAttribute('data-goal-end') || '';
+
+        deleteBtn.classList.toggle('hidden', !currentGoalId);
+        errDiv.classList.add('hidden');
+
+        goalModal?.classList.remove('hidden');
+        nameInput.focus();
+    }
+
+    function closeGoalModal() {
+        goalModal?.classList.add('hidden');
+        currentGoalCategoryId = null;
+        currentGoalId = null;
+        document.getElementById('goal-error')?.classList.add('hidden');
+    }
+
+    async function saveGoal() {
+        const nameInput = document.getElementById('goal-name') as HTMLInputElement;
+        const typeSelect = document.getElementById('goal-type') as HTMLSelectElement;
+        const amountInput = document.getElementById('goal-amount') as HTMLInputElement;
+        const periodSelect = document.getElementById('goal-period') as HTMLSelectElement;
+        const startInput = document.getElementById('goal-start') as HTMLInputElement;
+        const endInput = document.getElementById('goal-end') as HTMLInputElement;
+        const errDiv = document.getElementById('goal-error')!;
+
+        const name = nameInput.value.trim();
+        const amountStr = amountInput.value;
+        const startDate = startInput.value;
+
+        if (!name) {
+            errDiv.textContent = 'El nombre es requerido';
+            errDiv.classList.remove('hidden');
+            return;
+        }
+        if (!amountStr || parseFloat(amountStr) <= 0) {
+            errDiv.textContent = 'El monto debe ser mayor a 0';
+            errDiv.classList.remove('hidden');
+            return;
+        }
+        if (!startDate) {
+            errDiv.textContent = 'La fecha de inicio es requerida';
+            errDiv.classList.remove('hidden');
+            return;
+        }
+
+        const amountCents = Math.round(parseFloat(amountStr) * 100);
+        const body: any = {
+            name,
+            category_id: currentGoalCategoryId,
+            goal_type: typeSelect.value,
+            target_amount: amountCents,
+            period: periodSelect.value,
+            start_date: startDate,
+        };
+        if (endInput.value) body.end_date = endInput.value;
+
+        try {
+            const url = currentGoalId
+                ? `/api/budget/goals/${currentGoalId}`
+                : '/api/budget/goals/';
+            const res = await fetch(url, {
+                method: currentGoalId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+                let msg = 'Error al guardar meta';
+                try { const d = await res.json(); msg = d?.detail || d?.message || msg; } catch {}
+                throw new Error(msg);
+            }
+            window.location.reload();
+        } catch (err: any) {
+            errDiv.textContent = err.message;
+            errDiv.classList.remove('hidden');
+        }
+    }
+
+    async function deleteGoal() {
+        if (!currentGoalId) return;
+        if (!confirm('¿Eliminar esta meta?')) return;
+        const errDiv = document.getElementById('goal-error')!;
+        try {
+            const res = await fetch(`/api/budget/goals/${currentGoalId}`, { method: 'DELETE' });
+            if (!res.ok) {
+                let msg = 'Error al eliminar meta';
+                try { const d = await res.json(); msg = d?.detail || d?.message || msg; } catch {}
+                throw new Error(msg);
+            }
+            window.location.reload();
+        } catch (err: any) {
+            errDiv.textContent = err.message;
+            errDiv.classList.remove('hidden');
+        }
+    }
+
+    document.getElementById('close-goal-modal')?.addEventListener('click', closeGoalModal);
+    document.getElementById('goal-cancel')?.addEventListener('click', closeGoalModal);
+    document.getElementById('goal-save')?.addEventListener('click', saveGoal);
+    document.getElementById('goal-delete')?.addEventListener('click', deleteGoal);
+    goalModal?.addEventListener('click', (e) => { if (e.target === goalModal) closeGoalModal(); });
+
+    document.querySelectorAll('.goal-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openGoalModal(btn);
+        });
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && goalModal && !goalModal.classList.contains('hidden')) {
+            closeGoalModal();
+        }
     });
 </script>

@@ -7,8 +7,8 @@
 import Layout from "@layouts/Layout.astro";
 import BottomNav from "@components/BottomNav.astro";
 import { apiFetch } from "@lib/api";
-import { getAccount, getTransactions, getCategories, formatCurrency, formatDate } from "@lib/api/budget";
-import type { BudgetTransaction, BudgetCategory } from "@lib/api/budget";
+import { getAccount, getTransactions, getCategories, getAccounts, formatCurrency, formatDate } from "@lib/api/budget";
+import type { BudgetTransaction, BudgetCategory, BudgetAccount } from "@lib/api/budget";
 
 // Authentication check
 const token = Astro.cookies.get("access_token")?.value;
@@ -44,6 +44,10 @@ const { data: balance } = await apiFetch<{ total: number; cleared: number; uncle
     { token }
 );
 
+// Fetch all accounts for transfer dropdown
+const { data: allAccounts = [] } = await getAccounts(token);
+const otherAccounts = (allAccounts ?? []).filter((a: BudgetAccount) => a.id !== id);
+
 // Fetch transactions for this account
 const { data: transactions, ok: transOk } = await getTransactions(token, {
     accountId: id,
@@ -74,6 +78,9 @@ const dates = Object.keys(transactionsByDate).sort((a, b) =>
 // Calculate statistics
 const totalIncome = sortedTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
 const totalExpenses = Math.abs(sortedTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
+
+// Today's ISO date for transfer default
+const todayISO = new Date().toISOString().slice(0, 10);
 
 // Account type labels
 const typeLabels: Record<string, string> = lang === "es" ? {
@@ -161,6 +168,17 @@ const typeLabels: Record<string, string> = lang === "es" ? {
                 </svg>
                 Nueva Transacción
             </a>
+            {otherAccounts.length > 0 && (
+                <button
+                    id="open-transfer-btn"
+                    class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 transition text-center text-sm flex items-center justify-center gap-2"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    {lang === "es" ? "Transferir" : "Transfer"}
+                </button>
+            )}
             <a
                 href={`/budget/accounts/${id}/reconcile`}
                 class="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition text-center text-sm flex items-center justify-center gap-2"
@@ -251,4 +269,142 @@ const typeLabels: Record<string, string> = lang === "es" ? {
 
         <BottomNav active="budget" role={user.role} lang={lang} />
     </div>
+
+    <!-- Account Transfer Modal -->
+    {otherAccounts.length > 0 && (
+    <div id="account-transfer-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div class="bg-indigo-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
+                <h2 class="text-xl font-bold">{lang === "es" ? "Transferir entre Cuentas" : "Transfer Between Accounts"}</h2>
+                <button id="close-account-transfer" class="text-white hover:text-indigo-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">{lang === "es" ? "Desde" : "From"}</label>
+                    <div class="px-4 py-2 bg-slate-100 rounded-lg text-sm font-medium text-slate-700">{account.name}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">{lang === "es" ? "Hacia" : "To"}</label>
+                    <select id="transfer-to-account" class="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                        {otherAccounts.map((a: BudgetAccount) => (
+                            <option value={a.id}>{a.name}</option>
+                        ))}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">{lang === "es" ? "Monto" : "Amount"}</label>
+                    <div class="relative">
+                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+                        <input type="number" id="transfer-amount" step="0.01" min="0.01" placeholder="0.00"
+                            class="w-full pl-8 pr-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">{lang === "es" ? "Fecha" : "Date"}</label>
+                    <input type="date" id="transfer-date" value={todayISO}
+                        class="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">{lang === "es" ? "Notas (opcional)" : "Notes (optional)"}</label>
+                    <input type="text" id="transfer-notes" placeholder={lang === "es" ? "ej. Ahorro mensual" : "e.g. Monthly savings"}
+                        class="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                </div>
+                <div id="account-transfer-error" class="hidden bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700"></div>
+                <div class="flex gap-3 pt-2">
+                    <button id="cancel-account-transfer"
+                        class="flex-1 bg-slate-200 text-slate-700 px-4 py-3 rounded-lg font-semibold hover:bg-slate-300 transition">
+                        {lang === "es" ? "Cancelar" : "Cancel"}
+                    </button>
+                    <button id="confirm-account-transfer"
+                        class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-3 rounded-lg transition">
+                        {lang === "es" ? "Transferir" : "Transfer"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    )}
 </Layout>
+
+<script define:vars={{ accountId: id }}>
+    const transferModal = document.getElementById('account-transfer-modal');
+    const openBtn = document.getElementById('open-transfer-btn');
+    const closeBtn = document.getElementById('close-account-transfer');
+    const cancelBtn = document.getElementById('cancel-account-transfer');
+    const confirmBtn = document.getElementById('confirm-account-transfer');
+    const errorDiv = document.getElementById('account-transfer-error');
+
+    function openModal() {
+        if (!transferModal) return;
+        const amountInput = document.getElementById('transfer-amount');
+        const notesInput = document.getElementById('transfer-notes');
+        if (amountInput) amountInput.value = '';
+        if (notesInput) notesInput.value = '';
+        if (errorDiv) errorDiv.classList.add('hidden');
+        transferModal.classList.remove('hidden');
+        if (amountInput) amountInput.focus();
+    }
+
+    function closeModal() {
+        if (transferModal) transferModal.classList.add('hidden');
+        if (errorDiv) errorDiv.classList.add('hidden');
+    }
+
+    async function confirmTransfer() {
+        const toAccount = document.getElementById('transfer-to-account').value;
+        const amountStr = document.getElementById('transfer-amount').value;
+        const dateVal = document.getElementById('transfer-date').value;
+        const notes = document.getElementById('transfer-notes').value.trim();
+
+        if (!amountStr || parseFloat(amountStr) <= 0) {
+            errorDiv.textContent = 'El monto debe ser mayor a 0';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+        if (!dateVal) {
+            errorDiv.textContent = 'La fecha es requerida';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        const amountCents = Math.round(parseFloat(amountStr) * 100);
+
+        try {
+            const res = await fetch('/api/budget/transfers/accounts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    from_account_id: accountId,
+                    to_account_id: toAccount,
+                    amount: amountCents,
+                    date: dateVal,
+                    notes: notes || null,
+                }),
+            });
+            if (!res.ok) {
+                let msg = 'Error al realizar transferencia';
+                try { const d = await res.json(); msg = d?.detail || d?.message || msg; } catch {}
+                throw new Error(msg);
+            }
+            window.location.reload();
+        } catch (err) {
+            if (errorDiv) {
+                errorDiv.textContent = err.message;
+                errorDiv.classList.remove('hidden');
+            }
+        }
+    }
+
+    openBtn?.addEventListener('click', openModal);
+    closeBtn?.addEventListener('click', closeModal);
+    cancelBtn?.addEventListener('click', closeModal);
+    confirmBtn?.addEventListener('click', confirmTransfer);
+    transferModal?.addEventListener('click', (e) => { if (e.target === transferModal) closeModal(); });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && transferModal && !transferModal.classList.contains('hidden')) closeModal();
+    });
+</script>

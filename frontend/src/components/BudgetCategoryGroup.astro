@@ -11,6 +11,7 @@
  * - formatCurrency: currency formatter function
  * - token: string - authentication token (optional, for inline edit calls)
  * - allExpenseCategories: Category[] - all expense categories for transfer modal dropdown
+ * - goalsByCategory: Record<string, any> - map of category_id → goal object (optional)
  */
 
 interface Category {
@@ -40,6 +41,7 @@ interface Props {
     formatCurrency: (amount: number) => string;
     token?: string;
     allExpenseCategories?: any[];
+    goalsByCategory?: Record<string, any>;
 }
 
 const { 
@@ -49,7 +51,8 @@ const {
     t, 
     formatCurrency,
     token,
-    allExpenseCategories = []
+    allExpenseCategories = [],
+    goalsByCategory = {},
 } = Astro.props;
 
 const groupColor = isIncome ? 'green' : 'slate';
@@ -89,6 +92,16 @@ const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
                 ? Math.abs((category.activity / category.budgeted) * 100)
                 : 0;
             const isOverBudget = category.available < 0;
+            const goal = goalsByCategory[category.id];
+            // For goal progress: spending_limit uses |activity| vs target; savings_target uses budgeted vs target
+            const goalTarget = goal ? goal.target_amount : 0;
+            const goalCurrent = goal
+                ? (goal.goal_type === 'spending_limit'
+                    ? Math.abs(category.activity)
+                    : category.budgeted)
+                : 0;
+            const goalPct = goal && goalTarget > 0 ? Math.min((goalCurrent / goalTarget) * 100, 100) : 0;
+            const isGoalOver = goal && goal.goal_type === 'spending_limit' && Math.abs(category.activity) > goalTarget;
             
             return (
                 <div 
@@ -166,6 +179,29 @@ const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
                                 class={`h-full transition-all ${isOverBudget ? 'bg-red-500' : 'bg-blue-500'}`}
                                 style={`width: ${Math.min(percentUsed, 100)}%`}
                             ></div>
+                        </div>
+                    )}
+
+                    {/* Goal progress bar */}
+                    {!isIncome && goal && goalTarget > 0 && (
+                        <div class="mt-1.5">
+                            <div class="flex items-center justify-between mb-0.5">
+                                <span class="text-xs text-purple-600 font-semibold">
+                                    {goal.goal_type === 'spending_limit'
+                                        ? (lang === 'es' ? 'Límite' : 'Limit')
+                                        : (lang === 'es' ? 'Meta' : 'Goal')}:
+                                    {formatCurrency(goalCurrent)} / {formatCurrency(goalTarget)}
+                                </span>
+                                <span class={`text-xs font-bold ${isGoalOver ? 'text-red-600' : 'text-purple-600'}`}>
+                                    {Math.round(goalPct)}%
+                                </span>
+                            </div>
+                            <div class="bg-purple-100 rounded-full h-1.5 overflow-hidden">
+                                <div
+                                    class={`h-full transition-all ${isGoalOver ? 'bg-red-500' : 'bg-purple-500'}`}
+                                    style={`width: ${goalPct}%`}
+                                ></div>
+                            </div>
                         </div>
                     )}
                 </div>

@@ -14,7 +14,7 @@ import BudgetSummaryCards from "@components/BudgetSummaryCards.astro";
 import BudgetCategoryGroup from "@components/BudgetCategoryGroup.astro";
 import AssignFundsModal from "@components/AssignFundsModal.astro";
 import { apiFetch } from "@lib/api";
-import { getMonthBudget, getCategoryGroups, formatCurrency, getMonthName } from "@lib/api/budget";
+import { getMonthBudget, getCategoryGroups, formatCurrency, getMonthName, getMonthStatus } from "@lib/api/budget";
 import type { MonthBudgetView } from "@lib/api/budget";
 import { t } from "@lib/i18n";
 
@@ -49,11 +49,22 @@ if (isNaN(yearNum) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
 // Fetch budget data and category groups (for transfer dropdown)
 const [
     { data: budget, ok: budgetOk, error },
-    { data: allGroups }
+    { data: allGroups },
+    { data: goalsRaw = [] },
+    { data: monthStatus },
 ] = await Promise.all([
     getMonthBudget(token, yearNum, monthNum),
     getCategoryGroups(token),
+    apiFetch<any[]>("/api/budget/goals/", { token }),
+    getMonthStatus(token, yearNum, monthNum),
 ]);
+
+const goalsByCategory: Record<string, any> = {};
+for (const g of (goalsRaw ?? [])) {
+    goalsByCategory[g.category_id] = g;
+}
+
+const isLocked = monthStatus?.is_locked ?? false;
 
 if (!budgetOk || !budget) {
     console.error("Failed to fetch budget:", error);
@@ -135,6 +146,44 @@ const allExpenseCategories = (allGroups || [])
             </a>
         </div>
 
+        <!-- Lock/Reopen button (parents only, visible for all months) -->
+        <div class="px-6 pb-2 flex justify-end">
+            {isLocked ? (
+                <button
+                    id="reopen-month-btn"
+                    class="inline-flex items-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 font-semibold text-sm px-4 py-2 rounded-lg transition border border-amber-300"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                    </svg>
+                    {lang === "es" ? "Reabrir Mes" : "Reopen Month"}
+                </button>
+            ) : (
+                <button
+                    id="close-month-btn"
+                    class="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm px-4 py-2 rounded-lg transition border border-slate-300"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zM10 11V7a2 2 0 114 0v4" />
+                    </svg>
+                    {lang === "es" ? "Cerrar Mes" : "Close Month"}
+                </button>
+            )}
+        </div>
+        <div id="lock-error" class="hidden mx-6 mb-3 bg-red-50 border border-red-200 rounded-xl px-4 py-2 text-sm text-red-700"></div>
+
+        <!-- Locked Banner -->
+        {isLocked && (
+            <div class="mx-6 mb-4 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zM10 11V7a2 2 0 114 0v4" />
+                </svg>
+                <p class="text-sm font-semibold text-amber-800">
+                    {lang === "es" ? "Este mes está cerrado. Las asignaciones y transacciones no se pueden modificar." : "This month is closed. Allocations and transactions cannot be modified."}
+                </p>
+            </div>
+        )}
+
         <!-- Assignment Hint Banner -->
         {expenseGroups.length > 0 && (
             <div class="mx-6 mb-4 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-3">
@@ -178,6 +227,7 @@ const allExpenseCategories = (allGroups || [])
                             formatCurrency={formatCurrency}
                             token={token}
                             allExpenseCategories={allExpenseCategories}
+                            goalsByCategory={goalsByCategory}
                         />
                     ))}
 
@@ -634,4 +684,31 @@ const allExpenseCategories = (allGroups || [])
             if (!createModal.classList.contains('hidden')) closeCreateModal();
         }
     });
+
+    // ── Month locking ────────────────────────────────────────────────────────
+
+    const lockErrorDiv = document.getElementById('lock-error');
+
+    async function toggleMonthLock(action) {
+        if (lockErrorDiv) lockErrorDiv.classList.add('hidden');
+        try {
+            const res = await fetch(`/api/budget/months/${yearNum}/${monthNum}/${action}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                throw new Error(d?.detail || d?.message || `Error ${res.status}`);
+            }
+            window.location.reload();
+        } catch (err) {
+            if (lockErrorDiv) {
+                lockErrorDiv.textContent = err.message;
+                lockErrorDiv.classList.remove('hidden');
+            }
+        }
+    }
+
+    document.getElementById('close-month-btn')?.addEventListener('click', () => toggleMonthLock('close'));
+    document.getElementById('reopen-month-btn')?.addEventListener('click', () => toggleMonthLock('reopen'));
 </script>

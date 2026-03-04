@@ -15,6 +15,7 @@ from app.models.budget import (
     BudgetCategory,
     BudgetCategoryGroup,
     BudgetTransaction,
+    BudgetAccount,
 )
 from app.models.family import Family
 from app.services.budget.goal_service import GoalService
@@ -48,9 +49,19 @@ async def family_with_category(db_session: AsyncSession):
         name="Groceries",
     )
     db_session.add(category)
+    await db_session.flush()
+
+    account = BudgetAccount(
+        id=uuid4(),
+        family_id=family.id,
+        name="Test Account",
+        type="checking",
+        starting_balance=100000,  # $1000
+    )
+    db_session.add(account)
     await db_session.commit()
 
-    return family, category
+    return family, category, account
 
 
 @pytest.mark.asyncio
@@ -58,7 +69,7 @@ async def test_create_spending_limit_goal(
     db_session: AsyncSession, family_with_category
 ):
     """Test creating a spending limit goal"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     goal_data = GoalCreate(
         category_id=category.id,
@@ -89,7 +100,7 @@ async def test_create_savings_target_goal(
     db_session: AsyncSession, family_with_category
 ):
     """Test creating a savings target goal"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     goal_data = GoalCreate(
         category_id=category.id,
@@ -114,7 +125,7 @@ async def test_create_savings_target_goal(
 @pytest.mark.asyncio
 async def test_get_goal_by_id(db_session: AsyncSession, family_with_category):
     """Test retrieving a goal by ID"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     goal_data = GoalCreate(
         category_id=category.id,
@@ -138,7 +149,7 @@ async def test_get_goal_by_id(db_session: AsyncSession, family_with_category):
 @pytest.mark.asyncio
 async def test_get_goal_wrong_family(db_session: AsyncSession, family_with_category):
     """Test that getting a goal from wrong family raises error"""
-    family, category = family_with_category
+    family, category, account = family_with_category
     wrong_family_id = uuid4()
 
     goal_data = GoalCreate(
@@ -160,7 +171,7 @@ async def test_get_goal_wrong_family(db_session: AsyncSession, family_with_categ
 @pytest.mark.asyncio
 async def test_update_goal(db_session: AsyncSession, family_with_category):
     """Test updating a goal"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     goal_data = GoalCreate(
         category_id=category.id,
@@ -194,7 +205,7 @@ async def test_update_goal(db_session: AsyncSession, family_with_category):
 @pytest.mark.asyncio
 async def test_delete_goal(db_session: AsyncSession, family_with_category):
     """Test deleting a goal"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     goal_data = GoalCreate(
         category_id=category.id,
@@ -220,7 +231,7 @@ async def test_list_goals_by_category(
     db_session: AsyncSession, family_with_category
 ):
     """Test listing goals for a specific category"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     # Create multiple goals
     for i in range(3):
@@ -245,7 +256,7 @@ async def test_list_goals_by_category(
 @pytest.mark.asyncio
 async def test_list_active_goals(db_session: AsyncSession, family_with_category):
     """Test listing active goals"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     # Create an active goal
     active_goal_data = GoalCreate(
@@ -283,7 +294,7 @@ async def test_list_active_goals_with_date_filtering(
     db_session: AsyncSession, family_with_category
 ):
     """Test that date ranges are respected when listing active goals"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     # Goal that started in past and ends in future
     valid_goal_data = GoalCreate(
@@ -334,7 +345,7 @@ async def test_calculate_progress_spending_limit_under_budget(
     db_session: AsyncSession, family_with_category
 ):
     """Test progress calculation for spending limit when under budget"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     # Create goal for $200/month
     goal_data = GoalCreate(
@@ -353,7 +364,7 @@ async def test_calculate_progress_spending_limit_under_budget(
         id=uuid4(),
         family_id=family.id,
         category_id=category.id,
-        account_id=uuid4(),
+        account_id=account.id,
         payee_id=None,
         amount=-10000,  # -$100 (expense)
         date=date(2026, 3, 15),
@@ -376,7 +387,7 @@ async def test_calculate_progress_spending_limit_over_budget(
     db_session: AsyncSession, family_with_category
 ):
     """Test progress calculation for spending limit when over budget"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     goal_data = GoalCreate(
         category_id=category.id,
@@ -394,7 +405,7 @@ async def test_calculate_progress_spending_limit_over_budget(
         id=uuid4(),
         family_id=family.id,
         category_id=category.id,
-        account_id=uuid4(),
+        account_id=account.id,
         payee_id=None,
         amount=-30000,  # -$300 (expense)
         date=date(2026, 3, 15),
@@ -415,7 +426,7 @@ async def test_calculate_progress_savings_target_under_goal(
     db_session: AsyncSession, family_with_category
 ):
     """Test progress calculation for savings target below goal"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     goal_data = GoalCreate(
         category_id=category.id,
@@ -433,7 +444,7 @@ async def test_calculate_progress_savings_target_under_goal(
         id=uuid4(),
         family_id=family.id,
         category_id=category.id,
-        account_id=uuid4(),
+        account_id=account.id,
         payee_id=None,
         amount=30000,  # +$300 (income)
         date=date(2026, 2, 15),
@@ -456,7 +467,7 @@ async def test_calculate_progress_savings_target_met(
     db_session: AsyncSession, family_with_category
 ):
     """Test progress calculation for savings target when met"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     goal_data = GoalCreate(
         category_id=category.id,
@@ -474,7 +485,7 @@ async def test_calculate_progress_savings_target_met(
         id=uuid4(),
         family_id=family.id,
         category_id=category.id,
-        account_id=uuid4(),
+        account_id=account.id,
         payee_id=None,
         amount=60000,  # +$600 (income)
         date=date(2026, 6, 15),
@@ -495,7 +506,7 @@ async def test_calculate_progress_no_transactions(
     db_session: AsyncSession, family_with_category
 ):
     """Test progress when there are no transactions"""
-    family, category = family_with_category
+    family, category, account = family_with_category
 
     goal_data = GoalCreate(
         category_id=category.id,

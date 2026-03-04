@@ -74,7 +74,7 @@ async def test_engine_session():
             ("taskfrequency", ["DAILY", "WEEKLY", "MONTHLY", "ONE_TIME"]),
             ("transactiontype", ["TASK_COMPLETED", "REWARD_REDEEMED", "PARENT_ADJUSTMENT", "BONUS", "PENALTY", "TRANSFER"]),
             ("rewardcategory", ["SCREEN_TIME", "TREATS", "ACTIVITIES", "PRIVILEGES", "MONEY", "TOYS"]),
-            ("assignmentstatus", ["PENDING", "COMPLETED", "OVERDUE", "CANCELLED"]),
+            ("assignmentstatus", ["pending", "completed", "overdue", "cancelled"]),
             ("invitationstatus", ["PENDING", "ACCEPTED", "REJECTED", "EXPIRED"]),
             ("restrictiontype", ["SCREEN_TIME", "REWARDS", "EXTRA_TASKS", "ALLOWANCE", "ACTIVITIES", "CUSTOM"]),
             ("consequenceseverity", ["LOW", "MEDIUM", "HIGH"]),

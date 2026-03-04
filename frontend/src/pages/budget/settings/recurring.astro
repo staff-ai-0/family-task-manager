@@ -27,21 +27,23 @@ if (user.role !== "parent") {
 }
 
 // Fetch recurring transactions
-const { data: recurring = [], ok: recurringOk } = await apiFetch<any[]>(
-    "/api/budget/recurring-transactions",
+const { data: recurring = [] } = await apiFetch<any[]>(
+    "/api/budget/recurring-transactions/",
     { token }
 );
 
 // Fetch accounts and categories for form
-const { data: accounts = [], ok: accountsOk } = await apiFetch<any[]>(
-    "/api/budget/accounts",
+const { data: accounts = [] } = await apiFetch<any[]>(
+    "/api/budget/accounts/",
     { token }
 );
 
-const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
-    "/api/budget/categories",
+const { data: categories = [] } = await apiFetch<any[]>(
+    "/api/budget/categories/",
     { token }
 );
+
+const isEs = lang === "es";
 ---
 
 <Layout title={`${t(lang, 'fin_settings_recurring')} - Budget`}>
@@ -65,31 +67,34 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
             <!-- Create Recurring Transaction -->
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-4">
                 <div>
-                    <h2 class="text-lg font-bold text-slate-900">{lang === "es" ? "Nueva Transacción Recurrente" : "Create New Recurring Transaction"}</h2>
-                    <p class="text-sm text-slate-600">{lang === "es" ? "Configurar ingresos y gastos automáticos" : "Set up automatic income and expenses"}</p>
+                    <h2 class="text-lg font-bold text-slate-900">{isEs ? "Nueva Transacción Recurrente" : "Create New Recurring Transaction"}</h2>
+                    <p class="text-sm text-slate-600">{isEs ? "Configurar ingresos y gastos automáticos" : "Set up automatic income and expenses"}</p>
                 </div>
+
+                <!-- Error display -->
+                <div id="create-error" class="hidden bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700"></div>
 
                 <form id="recurring-form" class="space-y-4">
                     <!-- Description -->
                     <div>
                         <label for="description" class="block text-sm font-semibold text-slate-800 mb-1">
-                            {lang === "es" ? "Descripción" : "Description"}
+                            {isEs ? "Descripción" : "Description"}
                         </label>
                         <input 
                             type="text" 
                             id="description" 
                             name="description" 
-                            placeholder={lang === "es" ? "ej: Salario, Alquiler..." : "e.g. Salary, Rent..."}
+                            placeholder={isEs ? "ej: Salario, Alquiler..." : "e.g. Salary, Rent..."}
                             class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             required
                         />
                     </div>
 
-                    <!-- Amount -->
+                    <!-- Amount + Type -->
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label for="amount" class="block text-sm font-semibold text-slate-800 mb-1">
-                                {lang === "es" ? "Monto" : "Amount"}
+                                {isEs ? "Monto" : "Amount"}
                             </label>
                             <div class="relative">
                                 <span class="absolute left-3 top-2 text-slate-600">$</span>
@@ -98,6 +103,7 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                                     id="amount" 
                                     name="amount"
                                     step="0.01"
+                                    min="0.01"
                                     placeholder="0.00"
                                     class="w-full pl-8 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     required
@@ -107,7 +113,7 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
 
                         <div>
                             <label for="type" class="block text-sm font-semibold text-slate-800 mb-1">
-                                {lang === "es" ? "Tipo" : "Type"}
+                                {isEs ? "Tipo" : "Type"}
                             </label>
                             <select 
                                 id="type" 
@@ -115,8 +121,8 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                                 class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 required
                             >
-                                <option value="income">{lang === "es" ? "Ingreso" : "Income"}</option>
-                                <option value="expense">{lang === "es" ? "Gasto" : "Expense"}</option>
+                                <option value="income">{isEs ? "Ingreso" : "Income"}</option>
+                                <option value="expense">{isEs ? "Gasto" : "Expense"}</option>
                             </select>
                         </div>
                     </div>
@@ -124,7 +130,7 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                     <!-- Account -->
                     <div>
                         <label for="account_id" class="block text-sm font-semibold text-slate-800 mb-1">
-                            {lang === "es" ? "Cuenta" : "Account"}
+                            {isEs ? "Cuenta" : "Account"}
                         </label>
                         <select 
                             id="account_id" 
@@ -132,7 +138,7 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                             class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             required
                         >
-                            <option value="">{lang === "es" ? "Selecciona una cuenta..." : "Select an account..."}</option>
+                            <option value="">{isEs ? "Selecciona una cuenta..." : "Select an account..."}</option>
                             {accounts.map((acc: any) => (
                                 <option value={acc.id}>{acc.name}</option>
                             ))}
@@ -142,14 +148,14 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                     <!-- Category (Optional) -->
                     <div>
                         <label for="category_id" class="block text-sm font-semibold text-slate-800 mb-1">
-                            {lang === "es" ? "Categoría (Opcional)" : "Category (Optional)"}
+                            {isEs ? "Categoría (Opcional)" : "Category (Optional)"}
                         </label>
                         <select 
                             id="category_id" 
                             name="category_id"
                             class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                            <option value="">{lang === "es" ? "Sin categoría" : "No category"}</option>
+                            <option value="">{isEs ? "Sin categoría" : "No category"}</option>
                             {categories.map((cat: any) => (
                                 <option value={cat.id}>{cat.name}</option>
                             ))}
@@ -159,7 +165,7 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                     <!-- Frequency -->
                     <div>
                         <label for="frequency" class="block text-sm font-semibold text-slate-800 mb-1">
-                            {lang === "es" ? "Frecuencia" : "Frequency"}
+                            {isEs ? "Frecuencia" : "Frequency"}
                         </label>
                         <select 
                             id="frequency" 
@@ -167,19 +173,19 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                             class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             required
                         >
-                            <option value="daily">{lang === "es" ? "Diaria" : "Daily"}</option>
-                            <option value="weekly">{lang === "es" ? "Semanal" : "Weekly"}</option>
-                            <option value="biweekly">{lang === "es" ? "Quincenal" : "Biweekly"}</option>
-                            <option value="monthly" selected>{lang === "es" ? "Mensual" : "Monthly"}</option>
-                            <option value="quarterly">{lang === "es" ? "Trimestral" : "Quarterly"}</option>
-                            <option value="annual">{lang === "es" ? "Anual" : "Annual"}</option>
+                            <option value="daily">{isEs ? "Diaria" : "Daily"}</option>
+                            <option value="weekly">{isEs ? "Semanal" : "Weekly"}</option>
+                            <option value="biweekly">{isEs ? "Quincenal" : "Biweekly"}</option>
+                            <option value="monthly" selected>{isEs ? "Mensual" : "Monthly"}</option>
+                            <option value="quarterly">{isEs ? "Trimestral" : "Quarterly"}</option>
+                            <option value="annual">{isEs ? "Anual" : "Annual"}</option>
                         </select>
                     </div>
 
                     <!-- Next Due Date -->
                     <div>
                         <label for="next_due_date" class="block text-sm font-semibold text-slate-800 mb-1">
-                            {lang === "es" ? "Próxima Fecha" : "Next Due Date"}
+                            {isEs ? "Próxima Fecha" : "Next Due Date"}
                         </label>
                         <input 
                             type="date" 
@@ -193,9 +199,10 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                     <!-- Submit -->
                     <button 
                         type="submit"
+                        id="create-btn"
                         class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition"
                     >
-                        {lang === "es" ? "Crear Transacción Recurrente" : "Create Recurring Transaction"}
+                        {isEs ? "Crear Transacción Recurrente" : "Create Recurring Transaction"}
                     </button>
                 </form>
             </div>
@@ -203,36 +210,58 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
             <!-- Recurring Transactions List -->
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-4">
                 <div>
-                    <h2 class="text-lg font-bold text-slate-900">{lang === "es" ? "Transacciones Recurrentes" : "Scheduled Transactions"}</h2>
-                    <p class="text-sm text-slate-600">{recurring.length} {lang === "es" ? "transacción(es)" : "transaction(s)"}</p>
+                    <h2 class="text-lg font-bold text-slate-900">{isEs ? "Transacciones Recurrentes" : "Scheduled Transactions"}</h2>
+                    <p class="text-sm text-slate-600">{recurring.length} {isEs ? "transacción(es)" : "transaction(s)"}</p>
                 </div>
 
                 {recurring && recurring.length > 0 ? (
                     <div class="space-y-3">
                         {recurring.map((txn: any) => (
-                            <div class="border border-slate-200 rounded-lg p-4 flex items-between justify-between hover:bg-slate-50">
+                            <div class="border border-slate-200 rounded-lg p-4 flex items-start justify-between hover:bg-slate-50">
                                 <div class="flex-1">
                                     <div class="flex items-center gap-2 mb-1">
-                                        <span class={`px-2 py-1 text-xs font-semibold rounded-full ${txn.amount >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                            {txn.amount >= 0 ? (lang === "es" ? "Ingreso" : "Income") : (lang === "es" ? "Gasto" : "Expense")}
+                                        <span class={`px-2 py-1 text-xs font-semibold rounded-full ${txn.transaction_type === 'income' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            {txn.transaction_type === 'income' ? (isEs ? "Ingreso" : "Income") : (isEs ? "Gasto" : "Expense")}
                                         </span>
                                         <span class="px-2 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700">
                                             {txn.frequency}
                                         </span>
+                                        {!txn.is_active && (
+                                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700">
+                                                {isEs ? "Inactivo" : "Inactive"}
+                                            </span>
+                                        )}
                                     </div>
                                     <p class="font-semibold text-slate-900">{txn.description}</p>
-                                    <p class="text-sm text-slate-600">{txn.account?.name || "Unknown Account"} · {lang === "es" ? "Próxima:" : "Next:"} {txn.next_due_date}</p>
+                                    <p class="text-sm text-slate-600">
+                                        {txn.account?.name || (isEs ? "Cuenta desconocida" : "Unknown Account")} · {isEs ? "Próxima:" : "Next:"} {txn.next_due_date}
+                                    </p>
                                 </div>
-                                <div class="text-right flex flex-col items-end gap-2">
-                                    <p class={`font-bold ${txn.amount >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                        {txn.amount >= 0 ? `+$${(txn.amount / 100).toFixed(2)}` : `-$${Math.abs(txn.amount / 100).toFixed(2)}`}
+                                <div class="text-right flex flex-col items-end gap-2 ml-4">
+                                    <p class={`font-bold ${txn.transaction_type === 'income' ? 'text-green-700' : 'text-red-700'}`}>
+                                        {txn.transaction_type === 'income' ? '+' : '-'}${(Math.abs(txn.amount) / 100).toFixed(2)}
                                     </p>
                                     <div class="flex gap-2">
-                                        <button class="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 rounded transition">
-                                            {lang === "es" ? "Editar" : "Edit"}
+                                        <button
+                                            class="edit-btn px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 rounded transition"
+                                            data-id={txn.id}
+                                            data-description={txn.description}
+                                            data-amount={Math.abs(txn.amount / 100)}
+                                            data-type={txn.transaction_type}
+                                            data-account={txn.account_id}
+                                            data-category={txn.category_id ?? ""}
+                                            data-frequency={txn.frequency}
+                                            data-due={txn.next_due_date}
+                                            data-active={txn.is_active ? "true" : "false"}
+                                        >
+                                            {isEs ? "Editar" : "Edit"}
                                         </button>
-                                        <button class="px-3 py-1 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded transition">
-                                            {lang === "es" ? "Borrar" : "Delete"}
+                                        <button
+                                            class="delete-btn px-3 py-1 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded transition"
+                                            data-id={txn.id}
+                                            data-description={txn.description}
+                                        >
+                                            {isEs ? "Borrar" : "Delete"}
                                         </button>
                                     </div>
                                 </div>
@@ -241,67 +270,257 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                     </div>
                 ) : (
                     <div class="text-center py-8 text-slate-600">
-                        <p>{lang === "es" ? "No hay transacciones recurrentes" : "No recurring transactions yet"}</p>
-                        <p class="text-sm mt-1">{lang === "es" ? "Crea tu primera arriba para empezar" : "Create your first one above to get started"}</p>
+                        <p>{isEs ? "No hay transacciones recurrentes" : "No recurring transactions yet"}</p>
+                        <p class="text-sm mt-1">{isEs ? "Crea tu primera arriba para empezar" : "Create your first one above to get started"}</p>
                     </div>
                 )}
             </div>
 
             <!-- How It Works -->
             <div class="bg-green-50 border border-green-200 rounded-xl p-6 space-y-3 text-sm">
-                <p class="font-semibold text-green-900">{lang === "es" ? "¿Cómo funcionan?" : "How it works"}</p>
+                <p class="font-semibold text-green-900">{isEs ? "¿Cómo funcionan?" : "How it works"}</p>
                 <ul class="list-disc list-inside space-y-2 text-green-800 text-xs">
-                    <li>{lang === "es" ? "Se crean automáticamente en la fecha programada" : "Automatically created on the scheduled date"}</li>
-                    <li>{lang === "es" ? "Puedes omitir o editar antes de que se publiquen" : "You can skip or edit before they post"}</li>
-                    <li>{lang === "es" ? "Apoyamos frecuencias diarias, semanales, mensuales y anuales" : "We support daily, weekly, monthly, and annual frequencies"}</li>
-                    <li>{lang === "es" ? "Perfecto para salarios, alquileres, suscripciones, etc." : "Perfect for salary, rent, subscriptions, etc."}</li>
+                    <li>{isEs ? "Se crean automáticamente en la fecha programada" : "Automatically created on the scheduled date"}</li>
+                    <li>{isEs ? "Puedes omitir o editar antes de que se publiquen" : "You can skip or edit before they post"}</li>
+                    <li>{isEs ? "Apoyamos frecuencias diarias, semanales, mensuales y anuales" : "We support daily, weekly, monthly, and annual frequencies"}</li>
+                    <li>{isEs ? "Perfecto para salarios, alquileres, suscripciones, etc." : "Perfect for salary, rent, subscriptions, etc."}</li>
                 </ul>
             </div>
         </main>
 
         <BottomNav active="budget" role={user.role} lang={lang} />
     </div>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div class="bg-slate-700 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
+                <h2 class="text-lg font-bold">{isEs ? "Editar Transacción Recurrente" : "Edit Recurring Transaction"}</h2>
+                <button id="edit-close" class="text-white hover:text-slate-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div id="edit-error" class="hidden bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700"></div>
+
+                <input type="hidden" id="edit-id" />
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-800 mb-1">{isEs ? "Descripción" : "Description"}</label>
+                    <input type="text" id="edit-description"
+                        class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required />
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-800 mb-1">{isEs ? "Monto" : "Amount"}</label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-2 text-slate-600">$</span>
+                            <input type="number" id="edit-amount" step="0.01" min="0.01"
+                                class="w-full pl-8 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                required />
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-800 mb-1">{isEs ? "Tipo" : "Type"}</label>
+                        <select id="edit-type"
+                            class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="income">{isEs ? "Ingreso" : "Income"}</option>
+                            <option value="expense">{isEs ? "Gasto" : "Expense"}</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-800 mb-1">{isEs ? "Cuenta" : "Account"}</label>
+                    <select id="edit-account"
+                        class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {accounts.map((acc: any) => (
+                            <option value={acc.id}>{acc.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-800 mb-1">{isEs ? "Categoría (Opcional)" : "Category (Optional)"}</label>
+                    <select id="edit-category"
+                        class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">{isEs ? "Sin categoría" : "No category"}</option>
+                        {categories.map((cat: any) => (
+                            <option value={cat.id}>{cat.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-800 mb-1">{isEs ? "Frecuencia" : "Frequency"}</label>
+                    <select id="edit-frequency"
+                        class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="daily">{isEs ? "Diaria" : "Daily"}</option>
+                        <option value="weekly">{isEs ? "Semanal" : "Weekly"}</option>
+                        <option value="biweekly">{isEs ? "Quincenal" : "Biweekly"}</option>
+                        <option value="monthly">{isEs ? "Mensual" : "Monthly"}</option>
+                        <option value="quarterly">{isEs ? "Trimestral" : "Quarterly"}</option>
+                        <option value="annual">{isEs ? "Anual" : "Annual"}</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-800 mb-1">{isEs ? "Próxima Fecha" : "Next Due Date"}</label>
+                    <input type="date" id="edit-due"
+                        class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required />
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="edit-active" class="w-4 h-4 rounded" />
+                    <label for="edit-active" class="text-sm font-semibold text-slate-800">{isEs ? "Activo" : "Active"}</label>
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <button id="edit-cancel"
+                        class="flex-1 px-4 py-2 border border-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition">
+                        {isEs ? "Cancelar" : "Cancel"}
+                    </button>
+                    <button id="edit-save"
+                        class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition">
+                        {isEs ? "Guardar" : "Save"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </Layout>
 
 <script>
-    const form = document.getElementById("recurring-form");
-    if (form) {
-        form.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            
-            const formData = new FormData(form);
-            const amount = parseFloat(formData.get("amount") as string);
-            const isExpense = formData.get("type") === "expense";
-            
-            const data = {
-                description: formData.get("description"),
-                amount: Math.round((isExpense ? -amount : amount) * 100), // Convert to cents
-                frequency: formData.get("frequency"),
-                next_due_date: formData.get("next_due_date"),
-                account_id: formData.get("account_id"),
-                category_id: formData.get("category_id") || null,
-                enabled: true,
-            };
-            
-            try {
-                const response = await fetch("/api/budget/recurring-transactions", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(data),
-                });
-                
-                if (response.ok) {
-                    // Reload page to show new transaction
-                    window.location.reload();
-                } else {
-                    alert("Failed to create recurring transaction");
-                }
-            } catch (error) {
-                console.error("Error creating recurring transaction:", error);
-                alert("Error creating recurring transaction");
+    // ── Create form ──────────────────────────────────────────────────────────────
+    const form = document.getElementById("recurring-form") as HTMLFormElement;
+    const createError = document.getElementById("create-error") as HTMLDivElement;
+
+    form?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        createError.classList.add("hidden");
+
+        const formData = new FormData(form);
+        const amount = parseFloat(formData.get("amount") as string);
+        const type = formData.get("type") as string;
+
+        const data = {
+            description: formData.get("description"),
+            amount: Math.round(amount * 100),
+            transaction_type: type,
+            frequency: formData.get("frequency"),
+            next_due_date: formData.get("next_due_date"),
+            account_id: formData.get("account_id"),
+            category_id: formData.get("category_id") || null,
+        };
+
+        const res = await fetch("/api/budget/recurring-transactions/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        });
+
+        if (res.ok) {
+            window.location.reload();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            createError.textContent = err.detail ?? "Error al crear la transacción recurrente";
+            createError.classList.remove("hidden");
+        }
+    });
+
+    // ── Edit modal ───────────────────────────────────────────────────────────────
+    const editModal = document.getElementById("edit-modal") as HTMLDivElement;
+    const editError = document.getElementById("edit-error") as HTMLDivElement;
+    const editId = document.getElementById("edit-id") as HTMLInputElement;
+    const editDescription = document.getElementById("edit-description") as HTMLInputElement;
+    const editAmount = document.getElementById("edit-amount") as HTMLInputElement;
+    const editType = document.getElementById("edit-type") as HTMLSelectElement;
+    const editAccount = document.getElementById("edit-account") as HTMLSelectElement;
+    const editCategory = document.getElementById("edit-category") as HTMLSelectElement;
+    const editFrequency = document.getElementById("edit-frequency") as HTMLSelectElement;
+    const editDue = document.getElementById("edit-due") as HTMLInputElement;
+    const editActive = document.getElementById("edit-active") as HTMLInputElement;
+
+    function openEditModal(btn: HTMLButtonElement) {
+        editError.classList.add("hidden");
+        editId.value = btn.dataset.id!;
+        editDescription.value = btn.dataset.description!;
+        editAmount.value = btn.dataset.amount!;
+        editType.value = btn.dataset.type!;
+        editAccount.value = btn.dataset.account!;
+        editCategory.value = btn.dataset.category ?? "";
+        editFrequency.value = btn.dataset.frequency!;
+        editDue.value = btn.dataset.due!;
+        editActive.checked = btn.dataset.active === "true";
+        editModal.classList.remove("hidden");
+    }
+
+    function closeEditModal() {
+        editModal.classList.add("hidden");
+    }
+
+    document.getElementById("edit-close")?.addEventListener("click", closeEditModal);
+    document.getElementById("edit-cancel")?.addEventListener("click", closeEditModal);
+    editModal.addEventListener("click", (e) => { if (e.target === editModal) closeEditModal(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeEditModal(); });
+
+    document.querySelectorAll(".edit-btn").forEach((btn) => {
+        btn.addEventListener("click", () => openEditModal(btn as HTMLButtonElement));
+    });
+
+    document.getElementById("edit-save")?.addEventListener("click", async () => {
+        editError.classList.add("hidden");
+        const id = editId.value;
+        const amount = parseFloat(editAmount.value);
+
+        const data = {
+            description: editDescription.value.trim(),
+            amount: Math.round(amount * 100),
+            transaction_type: editType.value,
+            account_id: editAccount.value,
+            category_id: editCategory.value || null,
+            frequency: editFrequency.value,
+            next_due_date: editDue.value,
+            is_active: editActive.checked,
+        };
+
+        const res = await fetch(`/api/budget/recurring-transactions/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        });
+
+        if (res.ok) {
+            window.location.reload();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            editError.textContent = err.detail ?? "Error al guardar los cambios";
+            editError.classList.remove("hidden");
+        }
+    });
+
+    // ── Delete buttons ───────────────────────────────────────────────────────────
+    document.querySelectorAll(".delete-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+            const b = btn as HTMLButtonElement;
+            const description = b.dataset.description ?? "esta transacción";
+            if (!confirm(`¿Eliminar "${description}"?`)) return;
+
+            const res = await fetch(`/api/budget/recurring-transactions/${b.dataset.id}`, {
+                method: "DELETE",
+            });
+
+            if (res.ok || res.status === 204) {
+                window.location.reload();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(err.detail ?? "Error al eliminar la transacción");
             }
         });
-    }
+    });
 </script>

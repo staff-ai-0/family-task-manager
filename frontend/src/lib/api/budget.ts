@@ -573,3 +573,322 @@ export async function getNetWorthReport(
 export async function getImportLogs(token: string): Promise<ApiResponse<BudgetImportLog[]>> {
     return apiFetch<BudgetImportLog[]>("/api/budget/imports", { token });
 }
+
+// ─── Recurring Transactions ───────────────────────────────────────────────────
+
+export interface RecurringTransaction {
+    id: string;
+    family_id: string;
+    account_id: string;
+    category_id?: string;
+    payee_id?: string;
+    description: string;
+    amount: number;
+    transaction_type: "income" | "expense";
+    frequency: "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "annual";
+    next_due_date: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export async function getRecurringTransactions(
+    token: string,
+    options?: { accountId?: string; activeOnly?: boolean }
+): Promise<ApiResponse<RecurringTransaction[]>> {
+    const params = new URLSearchParams();
+    if (options?.accountId) params.set("account_id", options.accountId);
+    if (options?.activeOnly !== undefined) params.set("active_only", options.activeOnly.toString());
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return apiFetch<RecurringTransaction[]>(`/api/budget/recurring-transactions/${query}`, { token });
+}
+
+export async function createRecurringTransaction(
+    token: string,
+    data: {
+        description: string;
+        amount: number;
+        transaction_type: "income" | "expense";
+        account_id: string;
+        category_id?: string;
+        frequency: string;
+        next_due_date: string;
+    }
+): Promise<ApiResponse<RecurringTransaction>> {
+    return apiFetch<RecurringTransaction>("/api/budget/recurring-transactions/", {
+        token,
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}
+
+export async function updateRecurringTransaction(
+    token: string,
+    id: string,
+    data: Partial<{
+        description: string;
+        amount: number;
+        transaction_type: "income" | "expense";
+        account_id: string;
+        category_id: string;
+        frequency: string;
+        next_due_date: string;
+        is_active: boolean;
+    }>
+): Promise<ApiResponse<RecurringTransaction>> {
+    return apiFetch<RecurringTransaction>(`/api/budget/recurring-transactions/${id}`, {
+        token,
+        method: "PUT",
+        body: JSON.stringify(data),
+    });
+}
+
+export async function deleteRecurringTransaction(token: string, id: string): Promise<ApiResponse<void>> {
+    return apiFetch<void>(`/api/budget/recurring-transactions/${id}`, {
+        token,
+        method: "DELETE",
+    });
+}
+
+export async function postRecurringTransaction(
+    token: string,
+    id: string,
+    transactionDate?: string
+): Promise<ApiResponse<BudgetTransaction>> {
+    const query = transactionDate ? `?transaction_date=${transactionDate}` : "";
+    return apiFetch<BudgetTransaction>(`/api/budget/recurring-transactions/${id}/post${query}`, {
+        token,
+        method: "POST",
+    });
+}
+
+// ─── Categorization Rules ─────────────────────────────────────────────────────
+
+export interface CategorizationRule {
+    id: string;
+    family_id: string;
+    pattern: string;
+    match_field: "payee" | "description" | "both";
+    rule_type: "exact" | "contains" | "startswith" | "regex";
+    category_id: string;
+    priority: number;
+    enabled: boolean;
+    created_at: string;
+    updated_at: string;
+    category?: BudgetCategory;
+}
+
+export async function getCategorizationRules(token: string): Promise<ApiResponse<CategorizationRule[]>> {
+    return apiFetch<CategorizationRule[]>("/api/budget/categorization-rules/", { token });
+}
+
+export async function createCategorizationRule(
+    token: string,
+    data: {
+        pattern: string;
+        match_field: "payee" | "description" | "both";
+        rule_type: "exact" | "contains" | "startswith" | "regex";
+        category_id: string;
+        priority?: number;
+        enabled?: boolean;
+    }
+): Promise<ApiResponse<CategorizationRule>> {
+    return apiFetch<CategorizationRule>("/api/budget/categorization-rules/", {
+        token,
+        method: "POST",
+        body: JSON.stringify({ enabled: true, priority: 0, ...data }),
+    });
+}
+
+export async function updateCategorizationRule(
+    token: string,
+    id: string,
+    data: Partial<{
+        pattern: string;
+        match_field: "payee" | "description" | "both";
+        rule_type: "exact" | "contains" | "startswith" | "regex";
+        category_id: string;
+        priority: number;
+        enabled: boolean;
+    }>
+): Promise<ApiResponse<CategorizationRule>> {
+    return apiFetch<CategorizationRule>(`/api/budget/categorization-rules/${id}`, {
+        token,
+        method: "PUT",
+        body: JSON.stringify(data),
+    });
+}
+
+export async function deleteCategorizationRule(token: string, id: string): Promise<ApiResponse<void>> {
+    return apiFetch<void>(`/api/budget/categorization-rules/${id}`, {
+        token,
+        method: "DELETE",
+    });
+}
+
+// ─── Goals ────────────────────────────────────────────────────────────────────
+
+export interface BudgetGoal {
+    id: string;
+    family_id: string;
+    category_id: string;
+    goal_type: "spending_limit" | "savings_target";
+    target_amount: number;
+    period: "monthly" | "quarterly" | "annual";
+    name: string;
+    notes?: string;
+    start_date: string;
+    end_date?: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface GoalProgress {
+    goal_id: string;
+    goal_type: string;
+    target_amount: number;
+    current_amount: number;
+    progress_percentage: number;
+    period: string;
+    is_on_track: boolean;
+}
+
+export async function getGoals(
+    token: string,
+    options?: { categoryId?: string; activeOnly?: boolean }
+): Promise<ApiResponse<BudgetGoal[]>> {
+    const params = new URLSearchParams();
+    if (options?.categoryId) params.set("category_id", options.categoryId);
+    if (options?.activeOnly !== undefined) params.set("active_only", options.activeOnly.toString());
+    const query = params.toString() ? `?${params.toString()}` : "";
+    return apiFetch<BudgetGoal[]>(`/api/budget/goals/${query}`, { token });
+}
+
+export async function createGoal(
+    token: string,
+    data: {
+        category_id: string;
+        goal_type: "spending_limit" | "savings_target";
+        target_amount: number;
+        period: "monthly" | "quarterly" | "annual";
+        name: string;
+        notes?: string;
+        start_date: string;
+        end_date?: string;
+        is_active?: boolean;
+    }
+): Promise<ApiResponse<BudgetGoal>> {
+    return apiFetch<BudgetGoal>("/api/budget/goals/", {
+        token,
+        method: "POST",
+        body: JSON.stringify({ is_active: true, ...data }),
+    });
+}
+
+export async function updateGoal(
+    token: string,
+    id: string,
+    data: Partial<{
+        goal_type: "spending_limit" | "savings_target";
+        target_amount: number;
+        period: "monthly" | "quarterly" | "annual";
+        name: string;
+        notes: string;
+        start_date: string;
+        end_date: string;
+        is_active: boolean;
+    }>
+): Promise<ApiResponse<BudgetGoal>> {
+    return apiFetch<BudgetGoal>(`/api/budget/goals/${id}`, {
+        token,
+        method: "PUT",
+        body: JSON.stringify(data),
+    });
+}
+
+export async function deleteGoal(token: string, id: string): Promise<ApiResponse<void>> {
+    return apiFetch<void>(`/api/budget/goals/${id}`, {
+        token,
+        method: "DELETE",
+    });
+}
+
+export async function getGoalProgress(token: string, id: string): Promise<ApiResponse<GoalProgress>> {
+    return apiFetch<GoalProgress>(`/api/budget/goals/${id}/progress`, { token });
+}
+
+// ─── Month Locking ────────────────────────────────────────────────────────────
+
+export interface MonthStatus {
+    year: number;
+    month: number;
+    is_locked: boolean;
+    locked_at?: string;
+}
+
+export interface ClosedMonth {
+    year: number;
+    month: number;
+    locked_at: string;
+}
+
+export async function getMonthStatus(
+    token: string,
+    year: number,
+    month: number
+): Promise<ApiResponse<MonthStatus>> {
+    return apiFetch<MonthStatus>(`/api/budget/months/${year}/${month}/status`, { token });
+}
+
+export async function closeMonth(
+    token: string,
+    year: number,
+    month: number
+): Promise<ApiResponse<{ message: string }>> {
+    return apiFetch<{ message: string }>(`/api/budget/months/${year}/${month}/close`, {
+        token,
+        method: "POST",
+    });
+}
+
+export async function reopenMonth(
+    token: string,
+    year: number,
+    month: number
+): Promise<ApiResponse<{ message: string }>> {
+    return apiFetch<{ message: string }>(`/api/budget/months/${year}/${month}/reopen`, {
+        token,
+        method: "POST",
+    });
+}
+
+export async function getClosedMonths(
+    token: string,
+    limit: number = 50,
+    offset: number = 0
+): Promise<ApiResponse<ClosedMonth[]>> {
+    return apiFetch<ClosedMonth[]>(
+        `/api/budget/months/closed?limit=${limit}&offset=${offset}`,
+        { token }
+    );
+}
+
+// ─── Account Transfers ────────────────────────────────────────────────────────
+
+export async function transferBetweenAccounts(
+    token: string,
+    data: {
+        from_account_id: string;
+        to_account_id: string;
+        amount: number;
+        date: string;
+        notes?: string;
+    }
+): Promise<ApiResponse<BudgetTransaction[]>> {
+    return apiFetch<BudgetTransaction[]>("/api/budget/transfers/accounts", {
+        token,
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}

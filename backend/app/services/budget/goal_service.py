@@ -299,15 +299,15 @@ class GoalService(BaseFamilyService[BudgetGoal]):
             .where(
                 and_(
                     BudgetTransaction.category_id == category_id,
-                    BudgetTransaction.transaction_date >= start_date,
-                    BudgetTransaction.transaction_date <= end_date,
+                    BudgetTransaction.date >= start_date,
+                    BudgetTransaction.date <= end_date,
                     BudgetTransaction.amount < 0,  # Only expenses for spending_limit, income for savings_target
                 )
                 if goal_type == "spending_limit"
                 else and_(
                     BudgetTransaction.category_id == category_id,
-                    BudgetTransaction.transaction_date >= start_date,
-                    BudgetTransaction.transaction_date <= end_date,
+                    BudgetTransaction.date >= start_date,
+                    BudgetTransaction.date <= end_date,
                     BudgetTransaction.amount > 0,  # Income only for savings targets
                 )
             )

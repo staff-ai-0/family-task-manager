@@ -28,16 +28,18 @@ if (user.role !== "parent") {
 }
 
 // Fetch existing rules
-const { data: rules = [], ok: rulesOk } = await apiFetch<any[]>(
-    "/api/budget/categorization-rules",
+const { data: rules = [] } = await apiFetch<any[]>(
+    "/api/budget/categorization-rules/",
     { token }
 );
 
 // Fetch categories for rule creation
-const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
-    "/api/budget/categories",
+const { data: categories = [] } = await apiFetch<any[]>(
+    "/api/budget/categories/",
     { token }
 );
+
+const isEs = lang === "es";
 ---
 
 <Layout title={`${t(lang, 'fin_settings_rules')} - Budget`}>
@@ -61,31 +63,33 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
             <!-- Create Rule Section -->
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-4">
                 <div>
-                    <h2 class="text-lg font-bold text-slate-900">{lang === "es" ? "Nueva Regla" : "Create New Rule"}</h2>
-                    <p class="text-sm text-slate-600">{lang === "es" ? "Configurar categorización automática de transacciones" : "Set up automatic transaction categorization"}</p>
+                    <h2 class="text-lg font-bold text-slate-900">{isEs ? "Nueva Regla" : "Create New Rule"}</h2>
+                    <p class="text-sm text-slate-600">{isEs ? "Configurar categorización automática de transacciones" : "Set up automatic transaction categorization"}</p>
                 </div>
+
+                <div id="create-error" class="hidden bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700"></div>
 
                 <form id="rule-form" class="space-y-4">
                     <!-- Pattern Input -->
                     <div>
                         <label for="pattern" class="block text-sm font-semibold text-slate-800 mb-1">
-                            {lang === "es" ? "Patrón" : "Pattern"}
+                            {isEs ? "Patrón" : "Pattern"}
                         </label>
                         <input 
                             type="text" 
                             id="pattern" 
                             name="pattern" 
-                            placeholder={lang === "es" ? "ej: Starbucks, Netflix..." : "e.g. Starbucks, Netflix..."}
+                            placeholder={isEs ? "ej: Starbucks, Netflix..." : "e.g. Starbucks, Netflix..."}
                             class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             required
                         />
-                        <p class="text-xs text-slate-500 mt-1">{lang === "es" ? "Buscar texto exacto o contiene" : "Exact text or contains"}</p>
+                        <p class="text-xs text-slate-500 mt-1">{isEs ? "Buscar texto exacto o contiene" : "Exact text or contains"}</p>
                     </div>
 
                     <!-- Match Field -->
                     <div>
                         <label for="match_field" class="block text-sm font-semibold text-slate-800 mb-1">
-                            {lang === "es" ? "Buscar en" : "Search Field"}
+                            {isEs ? "Buscar en" : "Search Field"}
                         </label>
                         <select 
                             id="match_field" 
@@ -93,16 +97,16 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                             class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             required
                         >
-                            <option value="payee">{lang === "es" ? "Beneficiario" : "Payee"}</option>
-                            <option value="description">{lang === "es" ? "Descripción" : "Description"}</option>
-                            <option value="both">{lang === "es" ? "Ambos" : "Both"}</option>
+                            <option value="payee">{isEs ? "Beneficiario" : "Payee"}</option>
+                            <option value="description">{isEs ? "Descripción" : "Description"}</option>
+                            <option value="both">{isEs ? "Ambos" : "Both"}</option>
                         </select>
                     </div>
 
                     <!-- Rule Type -->
                     <div>
                         <label for="rule_type" class="block text-sm font-semibold text-slate-800 mb-1">
-                            {lang === "es" ? "Tipo de Regla" : "Rule Type"}
+                            {isEs ? "Tipo de Regla" : "Rule Type"}
                         </label>
                         <select 
                             id="rule_type" 
@@ -110,16 +114,16 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                             class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             required
                         >
-                            <option value="exact">{lang === "es" ? "Coincidencia Exacta" : "Exact Match"}</option>
-                            <option value="contains">{lang === "es" ? "Contiene" : "Contains"}</option>
-                            <option value="startswith">{lang === "es" ? "Comienza con" : "Starts With"}</option>
+                            <option value="exact">{isEs ? "Coincidencia Exacta" : "Exact Match"}</option>
+                            <option value="contains">{isEs ? "Contiene" : "Contains"}</option>
+                            <option value="startswith">{isEs ? "Comienza con" : "Starts With"}</option>
                         </select>
                     </div>
 
                     <!-- Category -->
                     <div>
                         <label for="category_id" class="block text-sm font-semibold text-slate-800 mb-1">
-                            {lang === "es" ? "Categoría" : "Category"}
+                            {isEs ? "Categoría" : "Category"}
                         </label>
                         <select 
                             id="category_id" 
@@ -127,7 +131,7 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                             class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             required
                         >
-                            <option value="">{lang === "es" ? "Selecciona una categoría..." : "Select a category..."}</option>
+                            <option value="">{isEs ? "Selecciona una categoría..." : "Select a category..."}</option>
                             {categories.map((cat: any) => (
                                 <option value={cat.id}>{cat.name}</option>
                             ))}
@@ -137,7 +141,7 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                     <!-- Priority -->
                     <div>
                         <label for="priority" class="block text-sm font-semibold text-slate-800 mb-1">
-                            {lang === "es" ? "Prioridad (Mayor = Primero)" : "Priority (Higher = First)"}
+                            {isEs ? "Prioridad (Mayor = Primero)" : "Priority (Higher = First)"}
                         </label>
                         <input 
                             type="number" 
@@ -153,7 +157,7 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                         type="submit"
                         class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition"
                     >
-                        {lang === "es" ? "Crear Regla" : "Create Rule"}
+                        {isEs ? "Crear Regla" : "Create Rule"}
                     </button>
                 </form>
             </div>
@@ -161,32 +165,55 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
             <!-- Rules List -->
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-4">
                 <div>
-                    <h2 class="text-lg font-bold text-slate-900">{lang === "es" ? "Reglas Activas" : "Active Rules"}</h2>
-                    <p class="text-sm text-slate-600">{rules.length} {lang === "es" ? "regla(s)" : "rule(s)"}</p>
+                    <h2 class="text-lg font-bold text-slate-900">{isEs ? "Reglas Activas" : "Active Rules"}</h2>
+                    <p class="text-sm text-slate-600">{rules.length} {isEs ? "regla(s)" : "rule(s)"}</p>
                 </div>
 
                 {rules && rules.length > 0 ? (
                     <div class="space-y-2">
                         {rules.map((rule: any) => (
-                            <div class="border border-slate-200 rounded-lg p-4 flex items-between justify-between hover:bg-slate-50">
+                            <div class="border border-slate-200 rounded-lg p-4 flex items-start justify-between hover:bg-slate-50">
                                 <div class="flex-1">
-                                    <div class="flex items-center gap-2 mb-1">
+                                    <div class="flex items-center gap-2 mb-1 flex-wrap">
                                         <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">
                                             {rule.match_field}
                                         </span>
                                         <span class="px-2 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700">
                                             {rule.rule_type}
                                         </span>
+                                        {rule.priority > 0 && (
+                                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">
+                                                {isEs ? "Prioridad" : "Priority"}: {rule.priority}
+                                            </span>
+                                        )}
+                                        {!rule.enabled && (
+                                            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-500">
+                                                {isEs ? "Desactivada" : "Disabled"}
+                                            </span>
+                                        )}
                                     </div>
                                     <p class="font-semibold text-slate-900">{rule.pattern}</p>
-                                    <p class="text-sm text-slate-600">→ {rule.category?.name || "Unknown Category"}</p>
+                                    <p class="text-sm text-slate-600">→ {rule.category?.name || (isEs ? "Categoría desconocida" : "Unknown Category")}</p>
                                 </div>
-                                <div class="flex gap-2">
-                                    <button class="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 rounded transition">
-                                        {lang === "es" ? "Editar" : "Edit"}
+                                <div class="flex gap-2 ml-4 shrink-0">
+                                    <button
+                                        class="edit-rule-btn px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 rounded transition"
+                                        data-id={rule.id}
+                                        data-pattern={rule.pattern}
+                                        data-match-field={rule.match_field}
+                                        data-rule-type={rule.rule_type}
+                                        data-category={rule.category_id}
+                                        data-priority={rule.priority}
+                                        data-enabled={rule.enabled ? "true" : "false"}
+                                    >
+                                        {isEs ? "Editar" : "Edit"}
                                     </button>
-                                    <button class="px-3 py-1 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded transition">
-                                        {lang === "es" ? "Borrar" : "Delete"}
+                                    <button
+                                        class="delete-rule-btn px-3 py-1 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded transition"
+                                        data-id={rule.id}
+                                        data-pattern={rule.pattern}
+                                    >
+                                        {isEs ? "Borrar" : "Delete"}
                                     </button>
                                 </div>
                             </div>
@@ -194,63 +221,222 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                     </div>
                 ) : (
                     <div class="text-center py-8 text-slate-600">
-                        <p>{lang === "es" ? "No hay reglas creadas aún" : "No rules created yet"}</p>
-                        <p class="text-sm mt-1">{lang === "es" ? "Crea tu primera regla arriba para empezar" : "Create your first rule above to get started"}</p>
+                        <p>{isEs ? "No hay reglas creadas aún" : "No rules created yet"}</p>
+                        <p class="text-sm mt-1">{isEs ? "Crea tu primera regla arriba para empezar" : "Create your first rule above to get started"}</p>
                     </div>
                 )}
             </div>
 
             <!-- How It Works -->
             <div class="bg-blue-50 border border-blue-200 rounded-xl p-6 space-y-3 text-sm">
-                <p class="font-semibold text-blue-900">{lang === "es" ? "¿Cómo funcionan las reglas?" : "How rules work"}</p>
+                <p class="font-semibold text-blue-900">{isEs ? "¿Cómo funcionan las reglas?" : "How rules work"}</p>
                 <ul class="list-disc list-inside space-y-2 text-blue-800 text-xs">
-                    <li>{lang === "es" ? "Cada nueva transacción se compara con tus reglas en orden de prioridad" : "Each new transaction is matched against your rules in priority order"}</li>
-                    <li>{lang === "es" ? "Si coincide, se asigna automáticamente a la categoría especificada" : "If it matches, the transaction is automatically assigned to the specified category"}</li>
-                    <li>{lang === "es" ? "Puedes editar transacciones categorizadas manualmente después" : "You can manually edit categorized transactions afterward"}</li>
-                    <li>{lang === "es" ? "Las reglas mayores prioridad se aplican primero, más específicas primero" : "Higher priority rules are applied first, most specific first"}</li>
+                    <li>{isEs ? "Cada nueva transacción se compara con tus reglas en orden de prioridad" : "Each new transaction is matched against your rules in priority order"}</li>
+                    <li>{isEs ? "Si coincide, se asigna automáticamente a la categoría especificada" : "If it matches, the transaction is automatically assigned to the specified category"}</li>
+                    <li>{isEs ? "Puedes editar transacciones categorizadas manualmente después" : "You can manually edit categorized transactions afterward"}</li>
+                    <li>{isEs ? "Las reglas mayores prioridad se aplican primero, más específicas primero" : "Higher priority rules are applied first, most specific first"}</li>
                 </ul>
             </div>
         </main>
 
         <BottomNav active="budget" role={user.role} lang={lang} />
     </div>
+
+    <!-- Edit Rule Modal -->
+    <div id="edit-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div class="bg-slate-700 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
+                <h2 class="text-lg font-bold">{isEs ? "Editar Regla" : "Edit Rule"}</h2>
+                <button id="edit-close" class="text-white hover:text-slate-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div id="edit-error" class="hidden bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700"></div>
+
+                <input type="hidden" id="edit-id" />
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-800 mb-1">{isEs ? "Patrón" : "Pattern"}</label>
+                    <input type="text" id="edit-pattern"
+                        class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-800 mb-1">{isEs ? "Buscar en" : "Search Field"}</label>
+                    <select id="edit-match-field"
+                        class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="payee">{isEs ? "Beneficiario" : "Payee"}</option>
+                        <option value="description">{isEs ? "Descripción" : "Description"}</option>
+                        <option value="both">{isEs ? "Ambos" : "Both"}</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-800 mb-1">{isEs ? "Tipo de Regla" : "Rule Type"}</label>
+                    <select id="edit-rule-type"
+                        class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="exact">{isEs ? "Coincidencia Exacta" : "Exact Match"}</option>
+                        <option value="contains">{isEs ? "Contiene" : "Contains"}</option>
+                        <option value="startswith">{isEs ? "Comienza con" : "Starts With"}</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-800 mb-1">{isEs ? "Categoría" : "Category"}</label>
+                    <select id="edit-category"
+                        class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">{isEs ? "Selecciona una categoría..." : "Select a category..."}</option>
+                        {categories.map((cat: any) => (
+                            <option value={cat.id}>{cat.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-800 mb-1">{isEs ? "Prioridad" : "Priority"}</label>
+                    <input type="number" id="edit-priority" value="0"
+                        class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="edit-enabled" class="w-4 h-4 rounded" />
+                    <label for="edit-enabled" class="text-sm font-semibold text-slate-800">{isEs ? "Activa" : "Enabled"}</label>
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <button id="edit-cancel"
+                        class="flex-1 px-4 py-2 border border-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition">
+                        {isEs ? "Cancelar" : "Cancel"}
+                    </button>
+                    <button id="edit-save"
+                        class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition">
+                        {isEs ? "Guardar" : "Save"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </Layout>
 
 <script>
-    const form = document.getElementById("rule-form");
-    if (form) {
-        form.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            
-            const formData = new FormData(form);
-            const data = {
-                pattern: formData.get("pattern"),
-                match_field: formData.get("match_field"),
-                rule_type: formData.get("rule_type"),
-                category_id: formData.get("category_id"),
-                priority: parseInt(formData.get("priority") || "0"),
-                enabled: true,
-            };
-            
-            try {
-                const response = await fetch("/api/budget/categorization-rules", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(data),
-                });
-                
-                if (response.ok) {
-                    // Reload page to show new rule
-                    window.location.reload();
-                } else {
-                    alert("Failed to create rule");
-                }
-            } catch (error) {
-                console.error("Error creating rule:", error);
-                alert("Error creating rule");
+    // ── Create form ──────────────────────────────────────────────────────────────
+    const form = document.getElementById("rule-form") as HTMLFormElement;
+    const createError = document.getElementById("create-error") as HTMLDivElement;
+
+    form?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        createError.classList.add("hidden");
+
+        const formData = new FormData(form);
+        const data = {
+            pattern: formData.get("pattern"),
+            match_field: formData.get("match_field"),
+            rule_type: formData.get("rule_type"),
+            category_id: formData.get("category_id"),
+            priority: parseInt((formData.get("priority") as string) || "0"),
+            enabled: true,
+        };
+
+        const res = await fetch("/api/budget/categorization-rules/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        });
+
+        if (res.ok) {
+            window.location.reload();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            createError.textContent = err.detail ?? "Error al crear la regla";
+            createError.classList.remove("hidden");
+        }
+    });
+
+    // ── Edit modal ───────────────────────────────────────────────────────────────
+    const editModal = document.getElementById("edit-modal") as HTMLDivElement;
+    const editError = document.getElementById("edit-error") as HTMLDivElement;
+    const editId = document.getElementById("edit-id") as HTMLInputElement;
+    const editPattern = document.getElementById("edit-pattern") as HTMLInputElement;
+    const editMatchField = document.getElementById("edit-match-field") as HTMLSelectElement;
+    const editRuleType = document.getElementById("edit-rule-type") as HTMLSelectElement;
+    const editCategory = document.getElementById("edit-category") as HTMLSelectElement;
+    const editPriority = document.getElementById("edit-priority") as HTMLInputElement;
+    const editEnabled = document.getElementById("edit-enabled") as HTMLInputElement;
+
+    function openEditModal(btn: HTMLButtonElement) {
+        editError.classList.add("hidden");
+        editId.value = btn.dataset.id!;
+        editPattern.value = btn.dataset.pattern!;
+        editMatchField.value = btn.dataset.matchField!;
+        editRuleType.value = btn.dataset.ruleType!;
+        editCategory.value = btn.dataset.category ?? "";
+        editPriority.value = btn.dataset.priority ?? "0";
+        editEnabled.checked = btn.dataset.enabled === "true";
+        editModal.classList.remove("hidden");
+    }
+
+    function closeEditModal() {
+        editModal.classList.add("hidden");
+    }
+
+    document.getElementById("edit-close")?.addEventListener("click", closeEditModal);
+    document.getElementById("edit-cancel")?.addEventListener("click", closeEditModal);
+    editModal.addEventListener("click", (e) => { if (e.target === editModal) closeEditModal(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeEditModal(); });
+
+    document.querySelectorAll(".edit-rule-btn").forEach((btn) => {
+        btn.addEventListener("click", () => openEditModal(btn as HTMLButtonElement));
+    });
+
+    document.getElementById("edit-save")?.addEventListener("click", async () => {
+        editError.classList.add("hidden");
+        const id = editId.value;
+
+        const data = {
+            pattern: editPattern.value.trim(),
+            match_field: editMatchField.value,
+            rule_type: editRuleType.value,
+            category_id: editCategory.value,
+            priority: parseInt(editPriority.value || "0"),
+            enabled: editEnabled.checked,
+        };
+
+        const res = await fetch(`/api/budget/categorization-rules/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        });
+
+        if (res.ok) {
+            window.location.reload();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            editError.textContent = err.detail ?? "Error al guardar los cambios";
+            editError.classList.remove("hidden");
+        }
+    });
+
+    // ── Delete buttons ───────────────────────────────────────────────────────────
+    document.querySelectorAll(".delete-rule-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+            const b = btn as HTMLButtonElement;
+            const pattern = b.dataset.pattern ?? "esta regla";
+            if (!confirm(`¿Eliminar la regla "${pattern}"?`)) return;
+
+            const res = await fetch(`/api/budget/categorization-rules/${b.dataset.id}`, {
+                method: "DELETE",
+            });
+
+            if (res.ok || res.status === 204) {
+                window.location.reload();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(err.detail ?? "Error al eliminar la regla");
             }
         });
-    }
+    });
 </script>
