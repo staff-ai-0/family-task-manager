@@ -356,8 +356,8 @@ async def test_calculate_progress_spending_limit_under_budget(
         account_id=uuid4(),
         payee_id=None,
         amount=-10000,  # -$100 (expense)
-        transaction_date=date(2026, 3, 15),
-        description="Grocery shopping",
+        date=date(2026, 3, 15),
+        notes="Grocery shopping",
     )
     db_session.add(transaction)
     await db_session.commit()
@@ -397,8 +397,8 @@ async def test_calculate_progress_spending_limit_over_budget(
         account_id=uuid4(),
         payee_id=None,
         amount=-30000,  # -$300 (expense)
-        transaction_date=date(2026, 3, 15),
-        description="Grocery shopping",
+        date=date(2026, 3, 15),
+        notes="Grocery shopping",
     )
     db_session.add(transaction)
     await db_session.commit()
@@ -436,8 +436,8 @@ async def test_calculate_progress_savings_target_under_goal(
         account_id=uuid4(),
         payee_id=None,
         amount=30000,  # +$300 (income)
-        transaction_date=date(2026, 2, 15),
-        description="Savings deposit",
+        date=date(2026, 2, 15),
+        notes="Savings deposit",
     )
     db_session.add(transaction)
     await db_session.commit()
@@ -477,8 +477,8 @@ async def test_calculate_progress_savings_target_met(
         account_id=uuid4(),
         payee_id=None,
         amount=60000,  # +$600 (income)
-        transaction_date=date(2026, 6, 15),
-        description="Savings deposit",
+        date=date(2026, 6, 15),
+        notes="Savings deposit",
     )
     db_session.add(transaction)
     await db_session.commit()

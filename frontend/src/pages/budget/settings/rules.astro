@@ -1,6 +1,9 @@
 ---
 /**
- * Budget rules stub (coming soon)
+ * Budget Rules Management Page
+ * 
+ * Manage automatic transaction categorization rules.
+ * Rules automatically assign categories to new transactions based on payee or description patterns.
  */
 
 import Layout from "@layouts/Layout.astro";
@@ -24,11 +27,17 @@ if (user.role !== "parent") {
     return Astro.redirect("/dashboard");
 }
 
-const sampleRollover = [
-    { group: "Essentials", rule: "Rollover surplus" },
-    { group: "Savings", rule: "Keep goals strict" },
-    { group: "Fun", rule: "Reset each month" },
-];
+// Fetch existing rules
+const { data: rules = [], ok: rulesOk } = await apiFetch<any[]>(
+    "/api/budget/categorization-rules",
+    { token }
+);
+
+// Fetch categories for rule creation
+const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
+    "/api/budget/categories",
+    { token }
+);
 ---
 
 <Layout title={`${t(lang, 'fin_settings_rules')} - Budget`}>
@@ -48,40 +57,200 @@ const sampleRollover = [
 
         <BudgetNav active="settings" />
 
-        <main class="px-6 py-6 flex-1 space-y-4">
-            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-3">
-                <p class="text-sm font-semibold text-slate-800">{t(lang, 'fin_settings_rules')}</p>
-                <p class="text-sm text-slate-600">{t(lang, 'fin_settings_rules_desc')}</p>
+        <main class="px-6 py-6 flex-1 space-y-6">
+            <!-- Create Rule Section -->
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">{lang === "es" ? "Nueva Regla" : "Create New Rule"}</h2>
+                    <p class="text-sm text-slate-600">{lang === "es" ? "Configurar categorización automática de transacciones" : "Set up automatic transaction categorization"}</p>
+                </div>
 
-                <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-xs font-semibold text-slate-700">Rollover policy</p>
-                            <p class="text-xs text-slate-500">Plan how leftover funds behave per group.</p>
-                        </div>
-                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700">Coming soon</span>
+                <form id="rule-form" class="space-y-4">
+                    <!-- Pattern Input -->
+                    <div>
+                        <label for="pattern" class="block text-sm font-semibold text-slate-800 mb-1">
+                            {lang === "es" ? "Patrón" : "Pattern"}
+                        </label>
+                        <input 
+                            type="text" 
+                            id="pattern" 
+                            name="pattern" 
+                            placeholder={lang === "es" ? "ej: Starbucks, Netflix..." : "e.g. Starbucks, Netflix..."}
+                            class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            required
+                        />
+                        <p class="text-xs text-slate-500 mt-1">{lang === "es" ? "Buscar texto exacto o contiene" : "Exact text or contains"}</p>
                     </div>
-                    <div class="grid md:grid-cols-3 gap-3 text-xs">
-                        {sampleRollover.map((item) => (
-                            <div class="border border-slate-200 rounded-lg p-3 bg-white">
-                                <p class="font-semibold text-slate-800">{item.group}</p>
-                                <p class="text-slate-600">{item.rule}</p>
+
+                    <!-- Match Field -->
+                    <div>
+                        <label for="match_field" class="block text-sm font-semibold text-slate-800 mb-1">
+                            {lang === "es" ? "Buscar en" : "Search Field"}
+                        </label>
+                        <select 
+                            id="match_field" 
+                            name="match_field"
+                            class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            required
+                        >
+                            <option value="payee">{lang === "es" ? "Beneficiario" : "Payee"}</option>
+                            <option value="description">{lang === "es" ? "Descripción" : "Description"}</option>
+                            <option value="both">{lang === "es" ? "Ambos" : "Both"}</option>
+                        </select>
+                    </div>
+
+                    <!-- Rule Type -->
+                    <div>
+                        <label for="rule_type" class="block text-sm font-semibold text-slate-800 mb-1">
+                            {lang === "es" ? "Tipo de Regla" : "Rule Type"}
+                        </label>
+                        <select 
+                            id="rule_type" 
+                            name="rule_type"
+                            class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            required
+                        >
+                            <option value="exact">{lang === "es" ? "Coincidencia Exacta" : "Exact Match"}</option>
+                            <option value="contains">{lang === "es" ? "Contiene" : "Contains"}</option>
+                            <option value="startswith">{lang === "es" ? "Comienza con" : "Starts With"}</option>
+                        </select>
+                    </div>
+
+                    <!-- Category -->
+                    <div>
+                        <label for="category_id" class="block text-sm font-semibold text-slate-800 mb-1">
+                            {lang === "es" ? "Categoría" : "Category"}
+                        </label>
+                        <select 
+                            id="category_id" 
+                            name="category_id"
+                            class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            required
+                        >
+                            <option value="">{lang === "es" ? "Selecciona una categoría..." : "Select a category..."}</option>
+                            {categories.map((cat: any) => (
+                                <option value={cat.id}>{cat.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <!-- Priority -->
+                    <div>
+                        <label for="priority" class="block text-sm font-semibold text-slate-800 mb-1">
+                            {lang === "es" ? "Prioridad (Mayor = Primero)" : "Priority (Higher = First)"}
+                        </label>
+                        <input 
+                            type="number" 
+                            id="priority" 
+                            name="priority"
+                            value="0"
+                            class="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+
+                    <!-- Submit -->
+                    <button 
+                        type="submit"
+                        class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition"
+                    >
+                        {lang === "es" ? "Crear Regla" : "Create Rule"}
+                    </button>
+                </form>
+            </div>
+
+            <!-- Rules List -->
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">{lang === "es" ? "Reglas Activas" : "Active Rules"}</h2>
+                    <p class="text-sm text-slate-600">{rules.length} {lang === "es" ? "regla(s)" : "rule(s)"}</p>
+                </div>
+
+                {rules && rules.length > 0 ? (
+                    <div class="space-y-2">
+                        {rules.map((rule: any) => (
+                            <div class="border border-slate-200 rounded-lg p-4 flex items-between justify-between hover:bg-slate-50">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">
+                                            {rule.match_field}
+                                        </span>
+                                        <span class="px-2 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700">
+                                            {rule.rule_type}
+                                        </span>
+                                    </div>
+                                    <p class="font-semibold text-slate-900">{rule.pattern}</p>
+                                    <p class="text-sm text-slate-600">→ {rule.category?.name || "Unknown Category"}</p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button class="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 rounded transition">
+                                        {lang === "es" ? "Editar" : "Edit"}
+                                    </button>
+                                    <button class="px-3 py-1 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded transition">
+                                        {lang === "es" ? "Borrar" : "Delete"}
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
-                </div>
+                ) : (
+                    <div class="text-center py-8 text-slate-600">
+                        <p>{lang === "es" ? "No hay reglas creadas aún" : "No rules created yet"}</p>
+                        <p class="text-sm mt-1">{lang === "es" ? "Crea tu primera regla arriba para empezar" : "Create your first rule above to get started"}</p>
+                    </div>
+                )}
+            </div>
 
-                <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2 text-sm text-amber-800">
-                    <p class="font-semibold">What’s coming</p>
-                    <ul class="list-disc list-inside space-y-1 text-amber-900 text-xs">
-                        <li>Per-group rollover behaviors (reset, cap, carry).</li>
-                        <li>Goals with guardrails and alerts.</li>
-                        <li>Safe-to-spend hints and overspending covers.</li>
-                    </ul>
-                </div>
+            <!-- How It Works -->
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-6 space-y-3 text-sm">
+                <p class="font-semibold text-blue-900">{lang === "es" ? "¿Cómo funcionan las reglas?" : "How rules work"}</p>
+                <ul class="list-disc list-inside space-y-2 text-blue-800 text-xs">
+                    <li>{lang === "es" ? "Cada nueva transacción se compara con tus reglas en orden de prioridad" : "Each new transaction is matched against your rules in priority order"}</li>
+                    <li>{lang === "es" ? "Si coincide, se asigna automáticamente a la categoría especificada" : "If it matches, the transaction is automatically assigned to the specified category"}</li>
+                    <li>{lang === "es" ? "Puedes editar transacciones categorizadas manualmente después" : "You can manually edit categorized transactions afterward"}</li>
+                    <li>{lang === "es" ? "Las reglas mayores prioridad se aplican primero, más específicas primero" : "Higher priority rules are applied first, most specific first"}</li>
+                </ul>
             </div>
         </main>
 
         <BottomNav active="budget" role={user.role} lang={lang} />
     </div>
 </Layout>
+
+<script>
+    const form = document.getElementById("rule-form");
+    if (form) {
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(form);
+            const data = {
+                pattern: formData.get("pattern"),
+                match_field: formData.get("match_field"),
+                rule_type: formData.get("rule_type"),
+                category_id: formData.get("category_id"),
+                priority: parseInt(formData.get("priority") || "0"),
+                enabled: true,
+            };
+            
+            try {
+                const response = await fetch("/api/budget/categorization-rules", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(data),
+                });
+                
+                if (response.ok) {
+                    // Reload page to show new rule
+                    window.location.reload();
+                } else {
+                    alert("Failed to create rule");
+                }
+            } catch (error) {
+                console.error("Error creating rule:", error);
+                alert("Error creating rule");
+            }
+        });
+    }
+</script>
