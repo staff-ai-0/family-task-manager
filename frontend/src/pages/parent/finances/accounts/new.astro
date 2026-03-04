@@ -52,7 +52,7 @@ if (Astro.request.method === "POST") {
         if (result.ok && result.data) {
             success = true;
             // Redirect to the new account page
-            return Astro.redirect(`/parent/finances/accounts/${result.data.id}`);
+            return Astro.redirect(`/budget/accounts/${result.data.id}`);
         } else {
             error = result.error || (lang === "es" ? "Error al crear cuenta" : "Error creating account");
         }
@@ -67,7 +67,7 @@ if (Astro.request.method === "POST") {
         <!-- Header -->
         <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
             <div class="flex items-center justify-between">
-                <a href="/parent/finances/accounts" class="text-white hover:text-primary-100 transition">
+                <a href="/budget/accounts" class="text-white hover:text-primary-100 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
@@ -245,7 +245,7 @@ if (Astro.request.method === "POST") {
                 <!-- Submit Button -->
                 <div class="flex gap-3 pt-4">
                     <a
-                        href="/parent/finances/accounts"
+                        href="/budget/accounts"
                         class="flex-1 bg-slate-200 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-300 transition text-center"
                     >
                         {lang === "es" ? "Cancelar" : "Cancel"}

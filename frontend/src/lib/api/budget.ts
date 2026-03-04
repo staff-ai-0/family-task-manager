@@ -5,6 +5,7 @@
 
 import { apiFetch } from "../api";
 import type { ApiResponse } from "../../types/api";
+import type { BudgetImportLog } from "@lib/types/budget";
 
 // Budget Types
 export interface BudgetCategoryGroup {
@@ -84,6 +85,8 @@ export interface BudgetAllocation {
     created_at: string;
     updated_at: string;
 }
+
+export interface ImportLogsResponse extends ApiResponse<BudgetImportLog[]> {}
 
 export interface CategoryWithActivity {
     id: string;
@@ -562,4 +565,11 @@ export async function getNetWorthReport(
     const params = asOfDate ? new URLSearchParams({ as_of_date: asOfDate }) : new URLSearchParams();
     const query = params.toString() ? `?${params.toString()}` : '';
     return apiFetch<any>(`/api/budget/reports/net-worth${query}`, { token });
+}
+
+/**
+ * Get import history
+ */
+export async function getImportLogs(token: string): Promise<ApiResponse<BudgetImportLog[]>> {
+    return apiFetch<BudgetImportLog[]>("/api/budget/imports", { token });
 }

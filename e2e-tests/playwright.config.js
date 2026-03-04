@@ -14,12 +14,14 @@ module.exports = {
     ['list'],
     ['junit', { outputFile: 'test-results/results.xml' }],
   ],
-  webServer: {
-    command: 'npm run dev',
-    port: 3003,
-    timeout: 120000,
-    reuseExistingServer: true,
-  },
+  // webServer is disabled since we're using the Docker-based dev stack
+  // Uncomment and adjust if running locally without Docker
+  // webServer: {
+  //   command: 'npm run dev',
+  //   port: 3003,
+  //   timeout: 120000,
+  //   reuseExistingServer: true,
+  // },
   use: {
     headless: true,
     viewport: { width: 1280, height: 720 },

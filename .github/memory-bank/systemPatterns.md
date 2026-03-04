@@ -2,7 +2,7 @@
 
 **Purpose**: Established code patterns with complete, copy-paste-able examples from the Family Task Manager codebase.
 
-**Last Updated**: January 25, 2026
+**Last Updated**: March 3, 2026
 
 ---
 
@@ -560,14 +560,9 @@ class User(Base):
 
 These patterns are **mandatory** for all new code:
 
-1. **Multi-tenant**: Every entity has `family_id`, every query filters by `family_id`
-2. **Clean Architecture**: API → Service → Repository → Models
-3. **Tenant Isolation Tests**: Every test verifies data isolation
-4. **Type Safety**: Use `Mapped[]` syntax, explicit conversions
+1. **Multi-tenant**: Every entity has `family_id`, every query filters by `family_id`.
+2. **Clean Architecture**: API → Service → Repository → Models.
+3. **Tenant Isolation Tests**: Every test verifies data isolation.
+4. **Type Safety**: Use `Mapped[]` syntax, explicit conversions.
 
-For detailed implementation guides, see:
-- `.github/instructions/01-multi-tenant-patterns.md`
-- `.github/instructions/02-clean-architecture.md`
-- `.github/instructions/03-domain-driven-design.md`
-- `.github/instructions/04-testing-standards.md`
-- `.github/instructions/04-python-type-safety.instructions.md`
+For detailed guides, keep only current instruction files in `.github/instructions/` that align with production.

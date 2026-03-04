@@ -98,7 +98,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
             <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                 <!-- Monthly Budget -->
                 <a
-                    href={`/parent/finances/month/${currentYear}/${currentMonth}`}
+                    href={`/budget/month/${currentYear}/${currentMonth}`}
                     class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-primary-200 transition-all flex flex-col items-center text-center gap-2"
                 >
                     <div class="w-10 h-10 rounded-lg bg-primary-50 flex items-center justify-center">
@@ -118,7 +118,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
                 <!-- Accounts -->
                 <a
-                    href="/parent/finances/accounts"
+                    href="/budget/accounts"
                     class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-blue-200 transition-all flex flex-col items-center text-center gap-2"
                 >
                     <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -138,7 +138,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
                 <!-- Categories -->
                 <a
-                    href="/parent/finances/categories"
+                    href="/budget/categories"
                     class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-amber-200 transition-all flex flex-col items-center text-center gap-2"
                 >
                     <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
@@ -158,7 +158,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
                 <!-- Transactions -->
                 <a
-                    href="/parent/finances/transactions"
+                    href="/budget/transactions"
                     class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-violet-200 transition-all flex flex-col items-center text-center gap-2"
                 >
                     <div class="w-10 h-10 rounded-lg bg-violet-50 flex items-center justify-center">
@@ -178,7 +178,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
                 <!-- Reports -->
                 <a
-                    href="/parent/finances/reports/spending"
+                    href="/budget/reports/spending"
                     class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-rose-200 transition-all flex flex-col items-center text-center gap-2"
                 >
                     <div class="w-10 h-10 rounded-lg bg-rose-50 flex items-center justify-center">
@@ -198,7 +198,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
                 <!-- Import Transactions -->
                 <a
-                    href="/parent/finances/import"
+                    href="/budget/settings"
                     class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-green-200 transition-all flex flex-col items-center text-center gap-2"
                 >
                     <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">

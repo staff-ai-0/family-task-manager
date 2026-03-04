@@ -1,0 +1,90 @@
+---
+/**
+ * Budget backups stub (coming soon)
+ */
+
+import Layout from "@layouts/Layout.astro";
+import BudgetNav from "@components/BudgetNav.astro";
+import BottomNav from "@components/BottomNav.astro";
+import { t } from "@lib/i18n";
+import { apiFetch } from "@lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user, ok } = await apiFetch<any>("/api/auth/me", { token });
+if (!ok) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+if (user.role !== "parent") {
+    return Astro.redirect("/dashboard");
+}
+
+const backupPlan = [
+    { name: "Weekly snapshot", status: "Active", target: "Secure download" },
+    { name: "Monthly offsite", status: "Planned", target: "Cloud vault" },
+];
+---
+
+<Layout title={`${t(lang, 'fin_settings_backups')} - Budget`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen flex flex-col">
+        <header class="bg-slate-700 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center justify-between mb-4">
+                <a href="/budget/settings" class="text-white hover:text-slate-200 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="text-2xl font-bold">{t(lang, 'fin_settings_backups')}</h1>
+                <div class="w-6"></div>
+            </div>
+            <p class="text-slate-100 text-sm">{t(lang, 'fin_settings_backups_body')}</p>
+        </header>
+
+        <BudgetNav active="settings" />
+
+        <main class="px-6 py-6 flex-1 space-y-4">
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-semibold text-slate-800">{t(lang, 'fin_settings_backups')}</p>
+                        <p class="text-sm text-slate-600">{t(lang, 'fin_settings_backups_desc')}</p>
+                    </div>
+                    <span class="px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700">Coming soon</span>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-3">
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
+                        <p class="text-xs font-semibold text-slate-700">Planned backups</p>
+                        <div class="space-y-2 text-xs">
+                            {backupPlan.map((item) => (
+                                <div class="border border-slate-200 rounded-lg p-3 bg-white flex justify-between items-center">
+                                    <div>
+                                        <p class="font-semibold text-slate-800">{item.name}</p>
+                                        <p class="text-slate-600">{item.target}</p>
+                                    </div>
+                                    <span class="px-2 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">{item.status}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 space-y-2 text-sm text-emerald-800">
+                        <p class="font-semibold">What’s coming</p>
+                        <ul class="list-disc list-inside space-y-1 text-emerald-900 text-xs">
+                            <li>Encrypted snapshots with download links.</li>
+                            <li>Automatic schedules (weekly/monthly) with retention.</li>
+                            <li>Offsite export targets and integrity checks.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <BottomNav active="budget" role={user.role} lang={lang} />
+    </div>
+</Layout>

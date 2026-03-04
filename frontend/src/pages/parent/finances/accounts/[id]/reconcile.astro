@@ -30,12 +30,12 @@ if (user.role !== "parent") {
 
 // Get account ID from URL
 const { id } = Astro.params;
-if (!id) return Astro.redirect("/parent/finances/accounts");
+if (!id) return Astro.redirect("/budget/accounts");
 
 // Fetch account details
 const { data: account, ok: accountOk } = await getAccount(token, id);
 if (!accountOk || !account) {
-    return Astro.redirect("/parent/finances/accounts");
+    return Astro.redirect("/budget/accounts");
 }
 
 // Handle form submission
@@ -55,7 +55,7 @@ if (Astro.request.method === "POST") {
                 success = true;
                 reconciledCount = result.data.updated_count;
                 // Redirect back to account detail
-                return Astro.redirect(`/parent/finances/accounts/${id}`);
+                return Astro.redirect(`/budget/accounts/${id}`);
             } else {
                 error = result.error || "Error al conciliar transacciones";
             }
@@ -69,7 +69,7 @@ if (Astro.request.method === "POST") {
 
 // Get account balance
 const { data: balance } = await apiFetch<{ total: number; cleared: number; uncleared: number }>(
-    `/api/parent/finances/accounts/${id}/balance`,
+    `/api/budget/accounts/${id}/balance`,
     { token }
 );
 
@@ -100,7 +100,7 @@ const totalUncleared = sortedTransactions.reduce((sum, t) => sum + t.amount, 0);
         <!-- Header -->
         <header class="bg-green-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
             <div class="flex items-center justify-between mb-6">
-                <a href={`/parent/finances/accounts/${id}`} class="text-white hover:text-green-100 transition">
+                 <a href={`/budget/accounts/${id}`} class="text-white hover:text-green-100 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
@@ -171,7 +171,7 @@ const totalUncleared = sortedTransactions.reduce((sum, t) => sum + t.amount, 0);
                     <p class="text-slate-700 font-medium text-lg">¡Todas las transacciones conciliadas!</p>
                     <p class="text-sm text-slate-500 mt-1">No hay transacciones pendientes por conciliar</p>
                     <a 
-                        href={`/parent/finances/accounts/${id}`}
+                         href={`/budget/accounts/${id}`}
                         class="inline-block mt-4 bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 transition"
                     >
                         Volver a la Cuenta
@@ -232,7 +232,7 @@ const totalUncleared = sortedTransactions.reduce((sum, t) => sum + t.amount, 0);
                     <!-- Action Buttons -->
                     <div class="flex gap-3">
                         <a
-                            href={`/parent/finances/accounts/${id}`}
+                         href={`/budget/accounts/${id}`}
                             class="flex-1 bg-slate-200 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-300 transition text-center"
                         >
                             Cancelar

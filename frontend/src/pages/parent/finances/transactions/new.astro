@@ -58,7 +58,7 @@ if (Astro.request.method === "POST") {
         if (result.ok) {
             success = true;
             // Redirect after short delay to show success message
-            return Astro.redirect("/parent/finances/transactions");
+            return Astro.redirect("/budget/transactions");
         } else {
             error = result.error || "Error al crear transacción";
         }
@@ -81,7 +81,7 @@ const today = new Date().toISOString().split('T')[0];
         <!-- Header -->
         <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
             <div class="flex items-center justify-between">
-                <a href="/parent/finances/transactions" class="text-white hover:text-primary-100 transition">
+                <a href="/budget/transactions" class="text-white hover:text-primary-100 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
@@ -250,7 +250,7 @@ const today = new Date().toISOString().split('T')[0];
                 <!-- Submit Button -->
                 <div class="flex gap-3 pt-4">
                     <a
-                        href="/parent/finances/transactions"
+                        href="/budget/transactions"
                         class="flex-1 bg-slate-200 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-300 transition text-center"
                     >
                         Cancelar

@@ -2,23 +2,22 @@
 
 **Purpose**: OpenCode-specific workflows and best practices for Family Task Manager
 
-**Last Updated**: January 25, 2026
+**Last Updated**: March 3, 2026
 
 ---
 
-## 🔄 Standard Workflows
+## 🔄 Standard Workflows (Production Maintenance)
 
-### Adding a New Feature
+### Adding a New Feature (only if aligned with budget system)
 
 1. **Read Context**
-   - Check `.github/memory-bank/activeContext.md` for current sprint
-   - Review `.github/memory-bank/systemPatterns.md` for established patterns
-   - Check relevant instruction file in `.github/instructions/`
+   - `.github/memory-bank/activeContext.md` (current production state)
+   - `.github/memory-bank/systemPatterns.md` (mandatory patterns)
+   - `.github/instructions/*` (keep only current guides)
 
 2. **Plan Implementation**
-   - Use OpenCode's TodoWrite tool to create task list
-   - Break feature into: Model → Repository → Service → API → Tests
-   - Estimate: 1 layer = 1 todo item
+   - Use TodoWrite sparingly; keep tasks minimal
+   - Flow: Model → Repository → Service → API → Tests (only if needed)
 
 3. **Implement Layers (Bottom-Up)**
    ```
@@ -45,8 +44,7 @@
    - Do tests verify tenant isolation?
 
 6. **Commit**
-   - Use conventional commit format
-   - Example: `feat(tasks): add recurring task functionality`
+   - Only when requested; follow repo style if committing
 
 ---
 

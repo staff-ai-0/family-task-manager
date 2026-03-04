@@ -1,0 +1,125 @@
+---
+/**
+ * Budget Settings Hub
+ * Entry point for budget settings (rules, recurring, imports, backups)
+ */
+
+import Layout from "@layouts/Layout.astro";
+import BottomNav from "@components/BottomNav.astro";
+import BudgetNav from "@components/BudgetNav.astro";
+import ImportHistoryTable from "@components/ImportHistoryTable.astro";
+import { t } from "@lib/i18n";
+import { apiFetch } from "@lib/api";
+import { apiFetchWithAuth, getImportLogs } from "@lib/api/budget";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user, ok } = await apiFetch<any>("/api/auth/me", { token });
+if (!ok) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+if (user.role !== "parent") {
+    return Astro.redirect("/dashboard");
+}
+
+const { data: importLogs = [] } = await getImportLogs(token);
+---
+
+<Layout title={`${t(lang, 'fin_nav_settings')} - Budget`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen flex flex-col">
+        <header class="bg-slate-700 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center justify-between mb-4">
+                <a href="/budget" class="text-white hover:text-slate-200 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="text-2xl font-bold">{t(lang, 'fin_nav_settings')}</h1>
+                <div class="w-6"></div>
+            </div>
+            <p class="text-slate-100 text-sm">
+                {t(lang, 'fin_nav_settings_desc')}
+            </p>
+        </header>
+
+        <BudgetNav active="settings" />
+
+        <main class="px-6 py-6 flex-1 space-y-5">
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+                <p class="font-semibold mb-1">{t(lang, 'fin_settings_coming_title')}</p>
+                <p>{t(lang, 'fin_settings_coming_body')}</p>
+            </div>
+
+            <section class="grid md:grid-cols-2 gap-4">
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-semibold text-slate-800">{t(lang, 'fin_settings_rules')}</p>
+                            <p class="text-sm text-slate-600">{t(lang, 'fin_settings_rules_desc')}</p>
+                        </div>
+                        <a href="/budget/settings/rules" class="px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition">{t(lang, 'fin_settings_soon')}</a>
+                    </div>
+                    <a href="/budget/settings/rules" class="w-full bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold text-center hover:bg-slate-300 transition">{t(lang, 'fin_settings_rules')}</a>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-semibold text-slate-800">{t(lang, 'fin_settings_recurring')}</p>
+                            <p class="text-sm text-slate-600">{t(lang, 'fin_settings_recurring_desc')}</p>
+                        </div>
+                        <a href="/budget/settings/recurring" class="px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition">{t(lang, 'fin_settings_soon')}</a>
+                    </div>
+                    <a href="/budget/settings/recurring" class="w-full bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold text-center hover:bg-slate-300 transition">{t(lang, 'fin_settings_recurring')}</a>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col gap-3 md:col-span-2">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-semibold text-slate-800">{t(lang, 'fin_settings_imports')}</p>
+                            <p class="text-sm text-slate-600">{t(lang, 'fin_settings_imports_desc')}</p>
+                        </div>
+                        <a href="/budget/import" class="px-3 py-1 text-xs font-semibold rounded-full bg-primary-50 text-primary-700 border border-primary-100">Go</a>
+                    </div>
+                    <a href="/budget/import" class="w-full bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-semibold text-center hover:bg-primary-700 transition">{t(lang, 'fin_settings_imports')}</a>
+
+                    <div class="pt-2 border-t border-slate-100">
+                        <div class="flex items-start justify-between mb-2">
+                            <div>
+                                <p class="text-sm font-semibold text-slate-800">{t(lang, 'fin_settings_import_history_title')}</p>
+                                <p class="text-xs text-slate-600">{t(lang, 'fin_settings_import_history_desc')}</p>
+                            </div>
+                        </div>
+                        <ImportHistoryTable logs={importLogs} lang={lang} />
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-semibold text-slate-800">{t(lang, 'fin_settings_backups')}</p>
+                            <p class="text-sm text-slate-600">{t(lang, 'fin_settings_backups_desc')}</p>
+                        </div>
+                        <a href="/budget/settings/backups" class="px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition">{t(lang, 'fin_settings_soon')}</a>
+                    </div>
+                    <a href="/budget/settings/backups" class="w-full bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold text-center hover:bg-slate-300 transition">{t(lang, 'fin_settings_backups')}</a>
+                </div>
+            </section>
+
+            <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">
+                <p class="font-semibold mb-1">{t(lang, 'fin_workflow_title')}</p>
+                <p class="text-blue-700">{t(lang, 'fin_workflow_step1')}</p>
+                <p class="text-blue-700">{t(lang, 'fin_workflow_step2')}</p>
+                <p class="text-blue-700">{t(lang, 'fin_workflow_step3')}</p>
+                <p class="text-blue-700">{t(lang, 'fin_workflow_step4')}</p>
+            </div>
+        </main>
+
+        <BottomNav active="budget" role={user.role} lang={lang} />
+    </div>
+</Layout>

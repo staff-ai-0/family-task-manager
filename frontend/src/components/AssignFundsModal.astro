@@ -186,7 +186,7 @@ const {
 
         confirmBtn.disabled = true;
         try {
-            // Get current month from page URL: /parent/finances/month/YYYY/MM
+            // Get current month from page URL: /budget/month/YYYY/MM
             const parts = window.location.pathname.split('/');
             const yearIdx = parts.indexOf('month') + 1;
             const monthStr = yearIdx > 0

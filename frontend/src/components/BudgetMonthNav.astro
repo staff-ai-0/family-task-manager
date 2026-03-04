@@ -10,7 +10,7 @@
  * - lang: 'en' | 'es' - language code
  * - t: translation function
  * - formatCurrency: currency formatter function
- * - baseRoute: string - base route for month links (e.g., '/parent/finances/month' or '/budget/month')
+ * - baseRoute: string - base route for month links (e.g., '/budget/month')
  */
 
 interface Props {
@@ -30,7 +30,7 @@ const {
     lang, 
     t,
     formatCurrency,
-    baseRoute = '/parent/finances/month'
+    baseRoute = '/budget/month'
 } = Astro.props;
 
 // Calculate month navigation

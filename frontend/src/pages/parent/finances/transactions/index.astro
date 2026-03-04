@@ -86,7 +86,7 @@ const netAmount = totalIncome - totalExpenses;
                     </svg>
                 </a>
                 <h1 class="text-2xl font-bold">Transacciones</h1>
-                <a href="/parent/finances/transactions/new" class="text-white hover:text-primary-100 transition">
+                <a href="/budget/transactions/new" class="text-white hover:text-primary-100 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                     </svg>
@@ -141,7 +141,7 @@ const netAmount = totalIncome - totalExpenses;
                     </svg>
                     <p class="text-slate-600 font-medium">No hay transacciones</p>
                     <p class="text-sm text-slate-500 mt-1">Agrega tu primera transacción</p>
-                    <a href="/parent/finances/transactions/new" class="inline-block mt-4 bg-primary-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary-700 transition">
+                    <a href="/budget/transactions/new" class="inline-block mt-4 bg-primary-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary-700 transition">
                         Nueva Transacción
                     </a>
                 </div>
@@ -169,7 +169,7 @@ const netAmount = totalIncome - totalExpenses;
                                         
                                         return (
                                             <a 
-                                                href={`/parent/finances/transactions/${transaction.id}`}
+                                                href={`/budget/transactions/${transaction.id}`}
                                                 class="block px-4 py-3 hover:bg-slate-50 transition"
                                             >
                                                 <div class="flex items-center justify-between mb-1">

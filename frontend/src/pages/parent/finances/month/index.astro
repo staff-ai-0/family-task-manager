@@ -1,7 +1,7 @@
 ---
 /**
  * Redirect to current month budget view
- * Handles direct access to /parent/finances/month by redirecting to current month
+ * Handles direct access to /budget/month by redirecting to current month
  */
 
 // Redirect to current month
@@ -11,5 +11,5 @@ const currentMonth = now.getMonth() + 1;
 
 export const prerender = false;
 
-return Astro.redirect(`/parent/finances/month/${currentYear}/${currentMonth}`);
+return Astro.redirect(`/budget/month/${currentYear}/${currentMonth}`);
 ---

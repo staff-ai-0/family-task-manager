@@ -114,13 +114,13 @@ const accountsByType = report?.accounts?.reduce((acc: any, account: any) => {
         <!-- Reports Sub-Nav -->
         <div class="px-6 pt-4 pb-0">
             <div class="flex rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
-                <a href="/parent/finances/reports/spending" class="flex-1 py-2 text-sm font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
+                <a href="/budget/reports/spending" class="flex-1 py-2 text-sm font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
                     {t(lang, 'fin_report_spending')}
                 </a>
-                <a href="/parent/finances/reports/income-vs-expense" class="flex-1 py-2 text-sm font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
+                <a href="/budget/reports/income-vs-expense" class="flex-1 py-2 text-sm font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
                     {t(lang, 'fin_report_cashflow')}
                 </a>
-                <a href="/parent/finances/reports/net-worth" class="flex-1 py-2 text-sm font-semibold text-center bg-purple-600 text-white transition">
+                <a href="/budget/reports/net-worth" class="flex-1 py-2 text-sm font-semibold text-center bg-purple-600 text-white transition">
                     {t(lang, 'fin_report_net_worth')}
                 </a>
             </div>
@@ -165,7 +165,7 @@ const accountsByType = report?.accounts?.reduce((acc: any, account: any) => {
                     <p class="text-slate-600 font-medium">{lang === "es" ? "No hay cuentas" : "No accounts yet"}</p>
                     <p class="text-sm text-slate-500 mt-1">{lang === "es" ? "Crea cuentas para ver tu valor neto" : "Create accounts to see your net worth"}</p>
                     <a 
-                        href="/parent/finances/accounts/new"
+                         href="/budget/accounts/new"
                         class="inline-block mt-4 bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700 transition"
                     >
                         {lang === "es" ? "Crear Cuenta" : "Create Account"}

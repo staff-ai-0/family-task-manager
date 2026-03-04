@@ -111,7 +111,7 @@ const typeIcons: Record<string, string> = {
                     </svg>
                 </a>
                 <h1 class="text-2xl font-bold">{lang === "es" ? "Cuentas" : "Accounts"}</h1>
-                <a href="/parent/finances/accounts/new" class="text-white hover:text-primary-100 transition">
+                <a href="/budget/accounts/new" class="text-white hover:text-primary-100 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                     </svg>
@@ -138,7 +138,7 @@ const typeIcons: Record<string, string> = {
         <!-- New Account Button -->
         <div class="px-6 py-4">
             <a
-                href="/parent/finances/accounts/new"
+                href="/budget/accounts/new"
                 class="w-full bg-primary-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-primary-700 transition flex items-center justify-center gap-2"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -162,7 +162,7 @@ const typeIcons: Record<string, string> = {
                     </svg>
                     <p class="text-slate-600 font-medium">{lang === "es" ? "No hay cuentas" : "No accounts yet"}</p>
                     <p class="text-sm text-slate-500 mt-1">{lang === "es" ? "Crea tu primera cuenta para empezar" : "Create your first account to get started"}</p>
-                    <a href="/parent/finances/accounts/new" class="inline-block mt-4 bg-primary-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary-700 transition">
+                    <a href="/budget/accounts/new" class="inline-block mt-4 bg-primary-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary-700 transition">
                         {lang === "es" ? "Nueva Cuenta" : "New Account"}
                     </a>
                 </div>
@@ -185,7 +185,7 @@ const typeIcons: Record<string, string> = {
                                     
                                     return (
                                         <a
-                                            href={`/parent/finances/accounts/${account.id}`}
+                                            href={`/budget/accounts/${account.id}`}
                                             class="block px-4 py-3 hover:bg-slate-50 transition"
                                         >
                                             <div class="flex items-center justify-between mb-1">

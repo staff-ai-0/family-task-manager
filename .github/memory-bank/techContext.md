@@ -1,6 +1,6 @@
 # Family Task Manager - Technical Context
 
-**Last Updated**: December 12, 2025
+**Last Updated**: March 3, 2026
 
 ## Technology Stack Decisions
 
@@ -78,23 +78,23 @@
 - Avoid direct Column comparisons; use explicit type conversion
 - Use `UUID(as_uuid=True)` for proper UUID handling
 
-### Deployment: Render
+### Deployment: TrueNAS + Docker Compose (production)
 
-**Why Render?**
-- Simple deployment process
-- Free tier for development
-- PostgreSQL hosting included
-- Automatic SSL certificates
-- GitHub integration for CI/CD
-- Easy scaling when needed
+**Why this stack?**
+- Self-hosted control, reliable storage (ZFS)
+- Simple docker compose restart/redeploy flow
+- Reverse proxy terminating TLS for `https://family.agent-ia.mx`
 
-**Alternatives Considered**:
-- Heroku: More expensive, less features
-- AWS: Too complex for MVP
-- DigitalOcean: Requires more DevOps work
-- Vercel: Better for frontend, not ideal for Python
+**Ports (external → internal)**:
+- Frontend 3003 → 3000 (Astro SSR)
+- Backend 8002 → 8000 (FastAPI)
+- PostgreSQL 5437 (primary), 5435 (test)
+- Redis 6380
 
-**Decision**: Render provides the best balance of simplicity, cost, and features for a FastAPI + PostgreSQL application.
+**Ops commands** (see AGENTS.md):
+- `docker compose ps`
+- `docker compose logs -f backend|frontend`
+- `docker compose down && docker compose up -d backend frontend`
 
 ### Authentication: Session-Based with OAuth Support
 
@@ -142,29 +142,20 @@
 - Custom primary color palette (50-950) defined in `@theme`
 - Mobile-first approach with responsive utilities
 
-### Actual Budget Integration
+### Budget System (Current)
 
-**Why Actual Budget?**
-- Open-source, privacy-focused budgeting tool
-- Self-hosted via Docker (no cloud dependency)
-- Python library (`actualpy`) for programmatic access
-- Bridges the family task/points system with real financial management
+**Status**: Native budget system only; Actual Budget deprecated (Phase 10).
 
-**Architecture**:
-- Actual Budget Server (Docker, port 5006): Official `actualbudget/actual-server` image
-- Finance API (FastAPI, port 5007): Wrapper service exposing Actual Budget data as JSON REST
-- Sync Service (`sync.py`): CLI tool that converts children's earned points into allowance transactions
-- Frontend pages: `parent/finances.astro` and `parent/finances/[id].astro` consume the Finance API via SSR
+**Endpoints**:
+- `/api/budget/categories`
+- `/api/budget/accounts`
+- `/api/budget/transactions`
+- `/api/budget/allocations`
+- `/api/budget/reports/*`
 
-**Security**:
-- Finance API secured with API key (`X-API-Key` header)
-- CORS restricted to frontend origins
-- Credentials stored in environment variables (not committed to git)
-- Parent-only access enforced at the Astro page level via auth checks
-
-**Key Dependencies**:
-- `actualpy>=0.9.0` (Python client for Actual Budget)
-- `httpx>=0.26.0` (HTTP client for sync service)
+**Notes**:
+- All `/api/sync/*` endpoints return 410 Gone with deprecation message.
+- Remove/ignore any legacy Actual Budget artifacts.
 
 ## Database Schema Design
 

@@ -44,41 +44,69 @@ async def _drop_all_pg(pg: asyncpg.Connection) -> None:
         await pg.execute(f'DROP TYPE IF EXISTS "{row["typname"]}" CASCADE')
 
 
-@pytest_asyncio.fixture(scope="function")
-async def test_engine():
-    """Create test database engine with clean schema."""
+@pytest_asyncio.fixture(scope="session")
+async def test_engine_session():
+    """Create test database engine at session scope with proper enum handling."""
     # Step 1: Clean up old tables/types using a direct asyncpg connection
-    # (outside any transaction; asyncpg connections are in autocommit by default)
     pg = await asyncpg.connect(_PG_DSN)
     try:
         await _drop_all_pg(pg)
     finally:
         await pg.close()
 
-    # Step 2: Create schema via SQLAlchemy with AUTOCOMMIT isolation.
-    # This is critical: asyncpg's prepared-statement cache does not see a
-    # freshly-created enum type if CREATE TYPE and CREATE TABLE run inside the
-    # same transaction.  Using AUTOCOMMIT commits each DDL statement immediately
-    # so that the next statement sees the new type.
+    # Step 2: Create schema via SQLAlchemy with proper enum type creation
     engine = create_async_engine(
         TEST_DATABASE_URL,
         echo=False,
         poolclass=NullPool,
     )
+    
+    # Create all enum types first before creating tables
     async with engine.connect() as conn:
+        # Enable AUTOCOMMIT mode so each DDL statement commits immediately
+        # This is needed so asyncpg's prepared-statement cache sees the enum types
         await conn.execution_options(isolation_level="AUTOCOMMIT")
+        
+        # Create enum types explicitly
+        enum_types = [
+            ("userrole", ["PARENT", "CHILD", "TEEN"]),
+            ("taskstatus", ["PENDING", "COMPLETED", "OVERDUE", "CANCELLED"]),
+            ("taskfrequency", ["DAILY", "WEEKLY", "MONTHLY", "ONE_TIME"]),
+            ("transactiontype", ["TASK_COMPLETED", "REWARD_REDEEMED", "PARENT_ADJUSTMENT", "BONUS", "PENALTY", "TRANSFER"]),
+            ("rewardcategory", ["SCREEN_TIME", "TREATS", "ACTIVITIES", "PRIVILEGES", "MONEY", "TOYS"]),
+            ("assignmentstatus", ["PENDING", "COMPLETED", "OVERDUE", "CANCELLED"]),
+            ("invitationstatus", ["PENDING", "ACCEPTED", "REJECTED", "EXPIRED"]),
+            ("restrictiontype", ["SCREEN_TIME", "REWARDS", "EXTRA_TASKS", "ALLOWANCE", "ACTIVITIES", "CUSTOM"]),
+            ("consequenceseverity", ["LOW", "MEDIUM", "HIGH"]),
+        ]
+        
+        for enum_name, values in enum_types:
+            try:
+                values_sql = ", ".join(f"'{v}'" for v in values)
+                from sqlalchemy import text
+                await conn.execute(text(f"CREATE TYPE {enum_name} AS ENUM ({values_sql})"))
+            except Exception:
+                # Enum might already exist, that's OK
+                pass
+        
+        # Now create all tables
         await conn.run_sync(Base.metadata.create_all)
 
     yield engine
 
-    # Teardown: clean up again
+    # Teardown: clean up
+    await engine.dispose()
     pg2 = await asyncpg.connect(_PG_DSN)
     try:
         await _drop_all_pg(pg2)
     finally:
         await pg2.close()
 
-    await engine.dispose()
+
+@pytest_asyncio.fixture(scope="function")
+async def test_engine(test_engine_session):
+    """Per-function engine that yields the session engine."""
+    yield test_engine_session
 
 
 
@@ -95,10 +123,15 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
         yield session
         # Rollback any uncommitted changes
         await session.rollback()
-        # Clean up all data after test
+        # Clean up all data after test (keep schema intact)
         for table in reversed(Base.metadata.sorted_tables):
+            # Skip alembic_version table; it tracks migrations
             if table.name != "alembic_version":
-                await session.execute(table.delete())
+                try:
+                    await session.execute(table.delete())
+                except Exception:
+                    # Table might not exist if schema is being rebuilt
+                    pass
         await session.commit()
 
 
