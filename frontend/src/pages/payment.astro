@@ -191,65 +191,66 @@ const plans = [
     </main>
 
     <script>
-        // PayPal payment handling
-        document.querySelectorAll(".paypal-button").forEach((button) => {
-            button.addEventListener("click", async (e) => {
-                const target = e.currentTarget as HTMLButtonElement;
-                const amount = parseFloat(target.dataset.amount || "0");
-                const currency = target.dataset.currency || "USD";
-                const description = target.dataset.description || "Payment";
+        import { showToast } from '../lib/toast';
 
-                // Disable button
-                target.disabled = true;
-                target.textContent = "Processing...";
+        document.addEventListener('astro:page-load', () => {
+            document.querySelectorAll(".paypal-button").forEach((button) => {
+                button.addEventListener("click", async (e) => {
+                    const target = e.currentTarget as HTMLButtonElement;
+                    const amount = parseFloat(target.dataset.amount || "0");
+                    const currency = target.dataset.currency || "USD";
+                    const description = target.dataset.description || "Payment";
 
-                try {
-                    // Get access token from cookie
-                    const accessToken = document.cookie
-                        .split("; ")
-                        .find((row) => row.startsWith("access_token="))
-                        ?.split("=")[1];
+                    const originalHTML = target.innerHTML;
+                    target.disabled = true;
+                    target.innerHTML = '<svg class="animate-spin h-4 w-4 mx-auto" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>';
 
-                    if (!accessToken) {
-                        alert("Please log in to continue");
-                        window.location.href = "/login";
-                        return;
+                    try {
+                        const accessToken = document.cookie
+                            .split("; ")
+                            .find((row) => row.startsWith("access_token="))
+                            ?.split("=")[1];
+
+                        if (!accessToken) {
+                            showToast("Please log in to continue", 'error');
+                            window.location.href = "/login";
+                            return;
+                        }
+
+                        const response = await fetch("/api/payment/create", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${accessToken}`,
+                            },
+                            body: JSON.stringify({
+                                amount,
+                                currency,
+                                description,
+                                return_url: `${window.location.origin}/payment/success`,
+                                cancel_url: `${window.location.origin}/payment/cancel`,
+                            }),
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok && data.approval_url) {
+                            window.location.href = data.approval_url;
+                        } else {
+                            throw new Error(data.detail || "Failed to create payment");
+                        }
+                    } catch (error) {
+                        console.error("Payment error:", error);
+                        showToast(
+                            error instanceof Error
+                                ? error.message
+                                : "An error occurred. Please try again.",
+                            'error'
+                        );
+                        target.disabled = false;
+                        target.innerHTML = originalHTML;
                     }
-
-                    // Create payment
-                    const response = await fetch("/api/payment/create", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            Authorization: `Bearer ${accessToken}`,
-                        },
-                        body: JSON.stringify({
-                            amount,
-                            currency,
-                            description,
-                            return_url: `${window.location.origin}/payment/success`,
-                            cancel_url: `${window.location.origin}/payment/cancel`,
-                        }),
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok && data.approval_url) {
-                        // Redirect to PayPal for payment approval
-                        window.location.href = data.approval_url;
-                    } else {
-                        throw new Error(data.detail || "Failed to create payment");
-                    }
-                } catch (error) {
-                    console.error("Payment error:", error);
-                    alert(
-                        error instanceof Error
-                            ? error.message
-                            : "An error occurred. Please try again."
-                    );
-                    target.disabled = false;
-                    target.textContent = "Subscribe with PayPal";
-                }
+                });
             });
         });
     </script>

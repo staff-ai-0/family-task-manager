@@ -192,10 +192,12 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
     </main>
 
     <script define:vars={{ invitationCode, lang }}>
+        document.addEventListener('astro:page-load', () => {
         const form = document.getElementById("accept-form");
         const errorDiv = document.getElementById("error-message");
         const successDiv = document.getElementById("success-message");
         const submitBtn = document.getElementById("submit-btn");
+        if (!form) return;
 
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -291,6 +293,7 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
                 submitBtn.disabled = false;
                 submitBtn.textContent = lang === "es" ? "Aceptar invitación" : "Accept invitation";
             }
+        });
         });
     </script>
 </Layout>

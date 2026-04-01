@@ -207,8 +207,10 @@ if (flashError) {
         </div>
     </main>
 
-    <script is:inline>
-        window.handleGoogleLogin = async function(response) {
+    <script>
+        import { showToast } from '../lib/toast';
+
+        window.handleGoogleLogin = async function(response: any) {
             try {
                 const credential = response.credential;
                 const result = await fetch('/api/oauth/google', {
@@ -223,50 +225,53 @@ if (flashError) {
                     window.location.href = '/dashboard';
                 } else {
                     const errorMsg = data.message || data.detail || 'Login failed';
-                    alert(errorMsg);
+                    showToast(errorMsg, 'error');
                 }
             } catch (error) {
                 console.error('Google login error:', error);
-                alert('An error occurred during login');
+                showToast('An error occurred during login', 'error');
             }
         };
 
-        const loginForm = document.getElementById('login-form');
-        if (loginForm) {
-            loginForm.addEventListener('submit', async function(e) {
-                e.preventDefault();
-                
-                const email = document.getElementById('email').value;
-                const password = document.getElementById('password').value;
-                const submitBtn = document.getElementById('login-submit-btn');
-                const originalText = submitBtn.textContent;
-                
-                submitBtn.disabled = true;
-                submitBtn.textContent = '...';
-                
-                try {
-                    const response = await fetch('/api/auth/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email, password }),
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success && data.redirect) {
-                        window.location.href = data.redirect;
-                    } else {
-                        alert(data.error || 'Login failed');
+        document.addEventListener('astro:page-load', () => {
+            const loginForm = document.getElementById('login-form');
+            if (loginForm) {
+                loginForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+
+                    const email = (document.getElementById('email') as HTMLInputElement)?.value;
+                    const password = (document.getElementById('password') as HTMLInputElement)?.value;
+                    const submitBtn = document.getElementById('login-submit-btn') as HTMLButtonElement;
+                    if (!submitBtn) return;
+                    const originalHTML = submitBtn.innerHTML;
+
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<svg class="animate-spin h-4 w-4 mx-auto" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>';
+
+                    try {
+                        const response = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email, password }),
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success && data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            showToast(data.error || 'Login failed', 'error');
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = originalHTML;
+                        }
+                    } catch (error) {
+                        console.error('Login error:', error);
+                        showToast('An error occurred', 'error');
                         submitBtn.disabled = false;
-                        submitBtn.textContent = originalText;
+                        submitBtn.innerHTML = originalHTML;
                     }
-                } catch (error) {
-                    console.error('Login error:', error);
-                    alert('An error occurred');
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = originalText;
-                }
-            });
-        }
+                });
+            }
+        });
     </script>
 </Layout>
