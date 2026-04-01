@@ -397,7 +397,8 @@ function freqLabel(interval: number): string {
     </div>
     
     <script>
-        function toggleUserSelection(assignmentType: string) {
+        document.addEventListener('astro:page-load', () => {
+        (window as any).toggleUserSelection = function(assignmentType: string) {
             const container = document.getElementById('user_selection_container');
             if (container) {
                 if (assignmentType === 'fixed' || assignmentType === 'rotate') {
@@ -406,6 +407,7 @@ function freqLabel(interval: number): string {
                     container.classList.add('hidden');
                 }
             }
-        }
+        };
+        });
     </script>
 </Layout>
