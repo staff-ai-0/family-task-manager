@@ -264,25 +264,28 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
 </Layout>
 
 <script>
+    import { showToast } from '../../../lib/toast';
+
+    document.addEventListener('astro:page-load', () => {
     const form = document.getElementById("recurring-form");
     if (form) {
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
-            
-            const formData = new FormData(form);
+
+            const formData = new FormData(form as HTMLFormElement);
             const amount = parseFloat(formData.get("amount") as string);
             const isExpense = formData.get("type") === "expense";
-            
+
             const data = {
                 description: formData.get("description"),
-                amount: Math.round((isExpense ? -amount : amount) * 100), // Convert to cents
+                amount: Math.round((isExpense ? -amount : amount) * 100),
                 frequency: formData.get("frequency"),
                 next_due_date: formData.get("next_due_date"),
                 account_id: formData.get("account_id"),
                 category_id: formData.get("category_id") || null,
                 enabled: true,
             };
-            
+
             try {
                 const response = await fetch("/api/budget/recurring-transactions", {
                     method: "POST",
@@ -291,17 +294,17 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                     },
                     body: JSON.stringify(data),
                 });
-                
+
                 if (response.ok) {
-                    // Reload page to show new transaction
                     window.location.reload();
                 } else {
-                    alert("Failed to create recurring transaction");
+                    showToast("Failed to create recurring transaction", 'error');
                 }
             } catch (error) {
                 console.error("Error creating recurring transaction:", error);
-                alert("Error creating recurring transaction");
+                showToast("Error creating recurring transaction", 'error');
             }
         });
     }
+    });
 </script>

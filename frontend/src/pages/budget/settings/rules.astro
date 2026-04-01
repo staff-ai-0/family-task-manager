@@ -217,21 +217,24 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
 </Layout>
 
 <script>
+    import { showToast } from '../../../lib/toast';
+
+    document.addEventListener('astro:page-load', () => {
     const form = document.getElementById("rule-form");
     if (form) {
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
-            
-            const formData = new FormData(form);
+
+            const formData = new FormData(form as HTMLFormElement);
             const data = {
                 pattern: formData.get("pattern"),
                 match_field: formData.get("match_field"),
                 rule_type: formData.get("rule_type"),
                 category_id: formData.get("category_id"),
-                priority: parseInt(formData.get("priority") || "0"),
+                priority: parseInt(formData.get("priority") as string || "0"),
                 enabled: true,
             };
-            
+
             try {
                 const response = await fetch("/api/budget/categorization-rules", {
                     method: "POST",
@@ -240,17 +243,17 @@ const { data: categories = [], ok: categoriesOk } = await apiFetch<any[]>(
                     },
                     body: JSON.stringify(data),
                 });
-                
+
                 if (response.ok) {
-                    // Reload page to show new rule
                     window.location.reload();
                 } else {
-                    alert("Failed to create rule");
+                    showToast("Failed to create rule", 'error');
                 }
             } catch (error) {
                 console.error("Error creating rule:", error);
-                alert("Error creating rule");
+                showToast("Error creating rule", 'error');
             }
         });
     }
+    });
 </script>
