@@ -418,6 +418,7 @@ const currentMonth = nowDate.getMonth() + 1;
 </Layout>
 
 <script>
+    document.addEventListener('astro:page-load', () => {
     // Category management functionality
     const groupModal = document.getElementById('group-modal');
     const categoryModal = document.getElementById('category-modal');
@@ -617,5 +618,6 @@ const currentMonth = nowDate.getMonth() + 1;
             
             openCategoryModal(groupId, groupName, categoryId, categoryName, rollover, goal);
         });
+    });
     });
 </script>
