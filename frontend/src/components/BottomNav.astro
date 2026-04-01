@@ -12,10 +12,11 @@ const langLabel = lang === "es" ? "EN" : "ES";
 ---
 
 <!-- Spacer that reserves the exact height of the fixed nav so content is never hidden behind it -->
-<div class="bottom-nav-spacer" aria-hidden="true"></div>
+<div class="bottom-nav-spacer" aria-hidden="true" transition:persist="bottom-nav-spacer"></div>
 
 <nav
     class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 safe-area-bottom z-50"
+    transition:persist="bottom-nav"
 >
     <div class="max-w-md mx-auto flex justify-around items-center px-1 py-2">
         <!-- Tasks -->
