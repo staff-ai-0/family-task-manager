@@ -1,5 +1,3 @@
-const SPINNER_SVG = `<svg class="animate-spin h-4 w-4 mx-auto" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>`;
-
 type ToastType = 'success' | 'error' | 'info';
 
 const ICONS: Record<ToastType, string> = {
@@ -44,9 +42,26 @@ export function showToast(message: string, type: ToastType = 'info', durationMs:
   // Click to dismiss
   toast.querySelector('button')!.addEventListener('click', () => remove(toast));
 
-  // Auto-dismiss
-  const timer = setTimeout(() => remove(toast), durationMs);
-  toast.addEventListener('mouseenter', () => clearTimeout(timer));
+  // Auto-dismiss with pause-on-hover
+  let remaining = durationMs;
+  let start = Date.now();
+  let timer = setTimeout(() => remove(toast), remaining);
+
+  toast.addEventListener('mouseenter', () => {
+    clearTimeout(timer);
+    remaining -= Date.now() - start;
+    toast.style.animationPlayState = 'paused';
+    const bar = toast.querySelector<HTMLElement>('.animate-countdown');
+    if (bar) bar.style.animationPlayState = 'paused';
+  });
+
+  toast.addEventListener('mouseleave', () => {
+    start = Date.now();
+    timer = setTimeout(() => remove(toast), remaining);
+    toast.style.animationPlayState = 'running';
+    const bar = toast.querySelector<HTMLElement>('.animate-countdown');
+    if (bar) bar.style.animationPlayState = 'running';
+  });
 
   container.appendChild(toast);
 }
@@ -63,6 +78,3 @@ function escapeHtml(s: string): string {
   div.textContent = s;
   return div.innerHTML;
 }
-
-/** Spinner HTML constant for button loading states */
-export { SPINNER_SVG };
