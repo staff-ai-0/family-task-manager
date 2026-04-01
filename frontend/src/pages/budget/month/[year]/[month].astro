@@ -350,6 +350,7 @@ const allExpenseCategories = (allGroups || [])
 </Layout>
 
 <script define:vars={{ yearNum, monthNum }}>
+    document.addEventListener('astro:page-load', () => {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     function formatCurrency(cents) {
@@ -633,5 +634,6 @@ const allExpenseCategories = (allGroups || [])
             if (!transferModal.classList.contains('hidden')) closeTransferModal();
             if (!createModal.classList.contains('hidden')) closeCreateModal();
         }
+    });
     });
 </script>
