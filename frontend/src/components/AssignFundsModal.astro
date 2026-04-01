@@ -140,6 +140,7 @@ const {
 </div>
 
 <script define:vars={{ readyToAssign, baseRoute, lang }}>
+    document.addEventListener('astro:page-load', () => {
     // Quick amount button handlers
     document.querySelectorAll(`.${baseRoute}-quick-amount`).forEach(btn => {
         btn.addEventListener('click', () => {
@@ -261,5 +262,6 @@ const {
     // Also handle the global open-assign-funds-modal button (header button)
     document.getElementById('open-assign-funds-modal')?.addEventListener('click', () => {
         openAssignModal(null);
+    });
     });
 </script>

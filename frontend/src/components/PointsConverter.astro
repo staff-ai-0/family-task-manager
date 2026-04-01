@@ -218,6 +218,7 @@ if (isEligible) {
 </div>
 
 <script define:vars={{ maxPoints, conversionRate, lang }}>
+    document.addEventListener('astro:page-load', () => {
     const pointsInput = document.getElementById('points-input');
     const checkingPreview = document.getElementById('checking-preview');
     const savingsPreview = document.getElementById('savings-preview');
@@ -257,10 +258,12 @@ if (isEligible) {
         const points = parseInt(pointsInput.value);
         
         if (points <= 0 || points > maxPoints) {
-            alert(lang === 'es' 
+            conversionResult.className = 'bg-red-100 border border-red-300 rounded-xl p-4 mt-4';
+            conversionResult.innerHTML = `<p class="text-red-800 text-sm">${lang === 'es'
                 ? `Ingresa un valor entre 1 y ${maxPoints} puntos.`
                 : `Enter a value between 1 and ${maxPoints} points.`
-            );
+            }</p>`;
+            conversionResult.classList.remove('hidden');
             return;
         }
         
@@ -338,6 +341,7 @@ if (isEligible) {
             convertButton.disabled = false;
             convertButton.textContent = lang === 'es' ? '💸 Convertir Ahora' : '💸 Convert Now';
         }
+    });
     });
 </script>
 )}
