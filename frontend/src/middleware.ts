@@ -134,6 +134,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
             // Attach user to context for use in endpoints
             context.locals.user = user;
             context.locals.token = token;
+
+            // Fetch family plan for premium gating
+            try {
+                const planResponse = await fetch(`${apiUrl}/api/subscriptions/current`, {
+                    headers: { "Authorization": `Bearer ${token}` },
+                });
+                if (planResponse.ok) {
+                    context.locals.plan = await planResponse.json();
+                }
+            } catch {
+                // Plan fetch failure is non-fatal — default to free
+            }
         } catch (error) {
             console.error("Token validation error:", error);
             cookies.delete("access_token", { path: "/" });
