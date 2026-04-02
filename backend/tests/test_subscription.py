@@ -315,3 +315,93 @@ async def test_require_feature_denies_numeric_at_limit(
     assert detail["error"] == "upgrade_required"
     assert detail["current_usage"] == 15
     assert detail["limit"] == 15
+
+
+# ---------------------------------------------------------------------------
+# API endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def pro_plan(db_session):
+    """Create a Pro plan in the DB."""
+    plan = SubscriptionPlan(
+        name="pro",
+        display_name="Pro",
+        display_name_es="Pro",
+        price_monthly_cents=999,
+        price_annual_cents=9990,
+        limits={
+            "max_family_members": -1,
+            "max_budget_accounts": -1,
+            "max_budget_transactions_per_month": -1,
+            "max_recurring_transactions": -1,
+            "budget_reports": True,
+            "budget_goals": True,
+            "csv_import": True,
+            "max_receipt_scans_per_month": -1,
+            "ai_features": True,
+        },
+        sort_order=2,
+    )
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+    return plan
+
+
+@pytest.mark.asyncio
+async def test_list_plans_endpoint(client, auth_headers, free_plan, plus_plan, pro_plan):
+    """GET /api/subscriptions/plans should return all active plans sorted by sort_order."""
+    response = await client.get("/api/subscriptions/plans", headers=auth_headers)
+    assert response.status_code == 200
+
+    plans = response.json()
+    assert len(plans) == 3
+    assert plans[0]["name"] == "free"
+    assert plans[1]["name"] == "plus"
+    assert plans[2]["name"] == "pro"
+    # Verify structure
+    assert "limits" in plans[0]
+    assert "price_monthly_cents" in plans[0]
+    assert "display_name_es" in plans[0]
+
+
+@pytest.mark.asyncio
+async def test_get_current_returns_free_by_default(client, auth_headers):
+    """GET /api/subscriptions/current with no subscription should return free plan info."""
+    response = await client.get("/api/subscriptions/current", headers=auth_headers)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["plan_name"] == "free"
+    assert data["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_get_usage_endpoint(client, auth_headers):
+    """GET /api/subscriptions/usage should return usage for numeric features."""
+    response = await client.get("/api/subscriptions/usage", headers=auth_headers)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert isinstance(data, list)
+    # Should contain numeric features like budget_transaction
+    features = [item["feature"] for item in data]
+    assert "budget_transaction" in features
+    # Should NOT contain boolean features like budget_reports
+    assert "budget_reports" not in features
+    # Each item should have the right structure
+    for item in data:
+        assert "feature" in item
+        assert "current" in item
+        assert "limit" in item
+        assert "period" in item
+
+
+@pytest.mark.asyncio
+async def test_cancel_without_subscription_returns_404(client, auth_headers):
+    """POST /api/subscriptions/cancel with no active subscription should return 404."""
+    response = await client.post("/api/subscriptions/cancel", headers=auth_headers)
+    assert response.status_code == 404
+    assert "No active subscription" in response.json()["detail"]
