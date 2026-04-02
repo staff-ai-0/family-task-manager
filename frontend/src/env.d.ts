@@ -4,5 +4,6 @@ declare namespace App {
     interface Locals {
         user?: import("./types/api").User;
         token?: string;
+        plan?: Record<string, any>;
     }
 }
