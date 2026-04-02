@@ -171,26 +171,26 @@ if (user.role !== "parent") {
 </Layout>
 
 <script>
-    function exportAsCSV() {
-        alert("CSV export feature coming soon");
-        // TODO: Implement CSV export via API
-    }
+    import { showToast } from '../../../lib/toast';
 
-    function exportAsJSON() {
-        alert("JSON export feature coming soon");
-        // TODO: Implement JSON export via API
-    }
+    document.addEventListener('astro:page-load', () => {
+    (window as any).exportAsCSV = function() {
+        showToast("CSV export feature coming soon", 'info');
+    };
 
-    function createManualBackup() {
-        alert("Manual backup feature coming soon");
-        // TODO: Implement manual backup creation
-    }
+    (window as any).exportAsJSON = function() {
+        showToast("JSON export feature coming soon", 'info');
+    };
 
-    function importBackup(event) {
-        const file = event.target.files[0];
+    (window as any).createManualBackup = function() {
+        showToast("Manual backup feature coming soon", 'info');
+    };
+
+    (window as any).importBackup = function(event: Event) {
+        const file = (event.target as HTMLInputElement).files?.[0];
         if (file) {
-            alert(`Import feature coming soon for ${file.name}`);
-            // TODO: Implement backup import
+            showToast(`Import feature coming soon for ${file.name}`, 'info');
         }
-    }
+    };
+    });
 </script>

@@ -461,6 +461,9 @@ if (!joinCodeOk && joinCodeError) {
   <InvitationModal familyId={user.family_id} familyName={user.family?.name || "Family"} lang={lang} />
 
   <script>
+    import { showToast } from '../../lib/toast';
+
+    document.addEventListener('astro:page-load', () => {
     // Open invitation modal
     document.getElementById('open-invitation-modal')?.addEventListener('click', () => {
       const modal = document.getElementById('invitation-modal');
@@ -502,7 +505,7 @@ if (!joinCodeOk && joinCodeError) {
           ?.split('=')[1];
 
         if (!token) {
-          alert(lang === "es" ? "Error de autenticación" : "Authentication error");
+          showToast(lang === "es" ? "Error de autenticación" : "Authentication error", 'error');
           return;
         }
 
@@ -522,13 +525,14 @@ if (!joinCodeOk && joinCodeError) {
           window.location.reload();
         } else {
           const data = await response.json();
-          alert(data.error || (lang === "es" ? "Error al cancelar la invitación" : "Error canceling invitation"));
+          showToast(data.error || (lang === "es" ? "Error al cancelar la invitación" : "Error canceling invitation"), 'error');
         }
       } catch (error) {
         console.error("Error canceling invitation:", error);
-        alert(lang === "es" ? "Error de conexión" : "Connection error");
+        showToast(lang === "es" ? "Error de conexión" : "Connection error", 'error');
       }
     };
+    });
   </script>
 </Layout>
 

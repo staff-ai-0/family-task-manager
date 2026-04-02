@@ -223,12 +223,16 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
 </Layout>
 
 <script>
+    import { showToast } from '../../lib/toast';
+
+    document.addEventListener('astro:page-load', () => {
     const lang = document.cookie.split('lang=')[1]?.split(';')[0] || 'en';
     const formEl = document.getElementById('import-form') as HTMLFormElement;
     const importBtn = document.getElementById('import-btn') as HTMLButtonElement;
     const fileInput = document.getElementById('csv-file') as HTMLInputElement;
     const resultsDiv = document.getElementById('results') as HTMLDivElement;
     const resultsContent = document.getElementById('results-content') as HTMLDivElement;
+    if (!formEl) return;
 
     // File info display
     fileInput?.addEventListener('change', (e) => {
@@ -253,7 +257,7 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
         const preventDuplicates = (document.getElementById('prevent-duplicates') as HTMLInputElement).checked;
 
         if (!accountId || !csvFile) {
-            alert(lang === 'es' ? 'Selecciona cuenta y archivo CSV' : 'Please select account and CSV file');
+            showToast(lang === 'es' ? 'Selecciona cuenta y archivo CSV' : 'Please select account and CSV file', 'error');
             return;
         }
 
@@ -285,14 +289,12 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
             if (data.success && data.result) {
                 displayResults(data.result);
             } else {
-                alert(lang === 'es' 
-                    ? `Error: ${data.error}` 
-                    : `Error: ${data.error}`);
+                showToast(`Error: ${data.error}`, 'error');
             }
         } catch (error) {
-            alert(lang === 'es' 
-                ? `Error de importación: ${error}` 
-                : `Import error: ${error}`);
+            showToast(lang === 'es'
+                ? `Error de importación: ${error}`
+                : `Import error: ${error}`, 'error');
         } finally {
             importBtn.disabled = false;
             importBtn.textContent = lang === 'es' ? 'Importar Transacciones' : 'Import Transactions';
@@ -345,4 +347,5 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
 
         resultsContent.innerHTML = html;
     }
+    });
 </script>

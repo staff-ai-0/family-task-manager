@@ -323,6 +323,9 @@ const isEs = lang === "es";
 </Layout>
 
 <script>
+    import { showToast } from '../../../lib/toast';
+
+    document.addEventListener('astro:page-load', () => {
     // ── Create form ──────────────────────────────────────────────────────────────
     const form = document.getElementById("rule-form") as HTMLFormElement;
     const createError = document.getElementById("create-error") as HTMLDivElement;
@@ -435,8 +438,9 @@ const isEs = lang === "es";
                 window.location.reload();
             } else {
                 const err = await res.json().catch(() => ({}));
-                alert(err.detail ?? "Error al eliminar la regla");
+                showToast(err.detail ?? "Error al eliminar la regla", 'error');
             }
         });
+    });
     });
 </script>

@@ -96,6 +96,7 @@ const { lang } = Astro.props;
 </div>
 
 <script define:vars={{ lang }}>
+    document.addEventListener('astro:page-load', () => {
     const modal = document.getElementById("edit-member-modal");
     const form = document.getElementById("edit-member-form");
     const closeBtn = document.getElementById("edit-member-close-btn");
@@ -179,5 +180,6 @@ const { lang } = Astro.props;
             submitBtn.disabled = false;
             submitText.textContent = lang === "es" ? "Guardar cambios" : "Save changes";
         }
+    });
     });
 </script>
