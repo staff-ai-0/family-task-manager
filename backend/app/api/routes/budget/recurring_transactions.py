@@ -13,6 +13,8 @@ from datetime import date
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
+from app.core.premium import require_feature
+from app.services.usage_service import UsageService
 from app.services.budget.recurring_transaction_service import RecurringTransactionService
 from app.schemas.budget import (
     RecurringTransactionCreate,
@@ -54,11 +56,13 @@ async def create_recurring_transaction(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new recurring transaction template (parent only)"""
+    await require_feature("recurring_transaction", db, current_user)
     template = await RecurringTransactionService.create(
         db,
         family_id=to_uuid_required(current_user.family_id),
         data=data,
     )
+    await UsageService.increment(db, current_user.family_id, "recurring_transaction")
     return template
 
 

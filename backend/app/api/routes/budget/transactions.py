@@ -13,7 +13,9 @@ from uuid import UUID
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
+from app.core.premium import require_feature
 from app.services.budget.transaction_service import TransactionService
+from app.services.usage_service import UsageService
 from app.services.budget.csv_import_service import CSVImportService
 from app.schemas.budget import TransactionCreate, TransactionUpdate, TransactionResponse
 from app.models import User
@@ -58,11 +60,13 @@ async def create_transaction(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new transaction (parent only)"""
+    await require_feature("budget_transaction", db, current_user)
     transaction = await TransactionService.create(
         db,
         family_id=to_uuid_required(current_user.family_id),
         data=data,
     )
+    await UsageService.increment(db, current_user.family_id, "budget_transaction")
     return transaction
 
 
