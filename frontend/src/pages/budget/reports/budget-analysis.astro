@@ -1,0 +1,284 @@
+---
+/**
+ * Budget Analysis Report
+ * Shows budgeted vs actual spending by category for a given month
+ */
+
+import Layout from "@layouts/Layout.astro";
+import BottomNav from "@components/BottomNav.astro";
+import BudgetNav from "@components/BudgetNav.astro";
+import { apiFetch } from "@lib/api";
+import { formatCurrency } from "@lib/api/budget";
+import { t } from "@lib/i18n";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+const isEs = lang === "es";
+
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+// Default to current month
+const now = new Date();
+const urlParams = new URL(Astro.request.url).searchParams;
+const monthParam = urlParams.get("month") || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+const { data: report, ok: reportOk, error } = await apiFetch<any>(
+    `/api/budget/reports/budget-vs-actual?month=${monthParam}`,
+    { token }
+);
+
+const groups: any[] = report?.groups || [];
+const totals = report?.totals || { budgeted: 0, actual: 0, variance: 0 };
+
+// Format month label
+const [y, m] = monthParam.split("-");
+const monthLabel = new Date(parseInt(y), parseInt(m) - 1, 1).toLocaleDateString(
+    isEs ? "es-MX" : "en-US",
+    { month: "long", year: "numeric" }
+);
+---
+
+<Layout title={`${isEs ? "Análisis de Presupuesto" : "Budget Analysis"} - ${monthLabel}`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 flex flex-col">
+        <!-- Header -->
+        <header class="bg-emerald-700 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center justify-between mb-4">
+                <a href="/budget" class="text-white hover:text-emerald-100 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="text-xl font-bold">{isEs ? "Análisis de Presupuesto" : "Budget Analysis"}</h1>
+                <div class="w-6"></div>
+            </div>
+
+            <!-- Month summary -->
+            <div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
+                <p class="text-emerald-100 text-xs font-semibold uppercase tracking-wider mb-3 capitalize">{monthLabel}</p>
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                        <p class="text-emerald-100 text-xs mb-1">{isEs ? "Presupuestado" : "Budgeted"}</p>
+                        <p class="text-base font-bold text-white">{formatCurrency(totals.budgeted)}</p>
+                    </div>
+                    <div>
+                        <p class="text-emerald-100 text-xs mb-1">{isEs ? "Gastado" : "Spent"}</p>
+                        <p class="text-base font-bold text-white">{formatCurrency(totals.actual)}</p>
+                    </div>
+                    <div>
+                        <p class="text-emerald-100 text-xs mb-1">{isEs ? "Varianza" : "Variance"}</p>
+                        <p class={`text-base font-bold ${totals.variance >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+                            {totals.variance >= 0 ? '+' : ''}{formatCurrency(totals.variance)}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Budget Section Nav -->
+        <BudgetNav active="reports" />
+
+        <!-- Reports Sub-Nav -->
+        <div class="px-6 pt-4 pb-0">
+            <div class="flex rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+                <a href="/budget/reports/spending" class="flex-1 py-2 text-xs font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
+                    {t(lang, 'fin_report_spending')}
+                </a>
+                <a href="/budget/reports/income-vs-expense" class="flex-1 py-2 text-xs font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
+                    {t(lang, 'fin_report_cashflow')}
+                </a>
+                <a href="/budget/reports/net-worth" class="flex-1 py-2 text-xs font-semibold text-center text-slate-600 hover:bg-slate-50 transition">
+                    {t(lang, 'fin_report_net_worth')}
+                </a>
+                <a href="/budget/reports/budget-analysis" class="flex-1 py-2 text-xs font-semibold text-center bg-emerald-700 text-white transition">
+                    {isEs ? "Análisis" : "Analysis"}
+                </a>
+            </div>
+        </div>
+
+        <!-- Month Selector -->
+        <div class="px-6 py-4">
+            <form method="GET" class="bg-white rounded-xl shadow-sm p-3 flex gap-2 items-end">
+                <div class="flex-1">
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">{isEs ? "Mes" : "Month"}</label>
+                    <input
+                        type="month"
+                        name="month_picker"
+                        id="month-picker"
+                        value={`${y}-${m}`}
+                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-400"
+                    />
+                    <input type="hidden" name="month" id="month-hidden" value={monthParam} />
+                </div>
+                <button type="submit" class="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-800 transition">
+                    {isEs ? "Ver" : "View"}
+                </button>
+            </form>
+        </div>
+
+        <!-- Report Content -->
+        <main class="px-6 pb-6 flex-grow">
+            {!reportOk ? (
+                <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
+                    <p class="font-semibold">{isEs ? "Error al cargar" : "Error loading"}</p>
+                    <p class="text-sm">{error}</p>
+                </div>
+            ) : groups.length === 0 ? (
+                <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center">
+                    <p class="text-slate-600 font-medium">{isEs ? "Sin datos para este mes" : "No data for this month"}</p>
+                    <p class="text-sm text-slate-500 mt-1">{isEs ? "Asigna presupuesto o registra transacciones" : "Assign budget or record transactions"}</p>
+                </div>
+            ) : (
+                <div class="space-y-4">
+                    {groups.map((group: any) => {
+                        const grpVariance = group.total_budgeted - group.total_actual;
+                        const grpPct = group.total_budgeted > 0
+                            ? Math.min(100, Math.round(group.total_actual / group.total_budgeted * 100))
+                            : 0;
+                        const overBudget = group.total_actual > group.total_budgeted && group.total_budgeted > 0;
+
+                        return (
+                            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                                <!-- Group header -->
+                                <div class="bg-slate-100 px-4 py-3 border-b border-slate-200">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <h2 class="font-bold text-slate-800 text-sm">{group.group_name}</h2>
+                                        <span class={`text-sm font-bold ${grpVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {grpVariance >= 0 ? '+' : ''}{formatCurrency(grpVariance)}
+                                        </span>
+                                    </div>
+                                    <!-- Group progress bar -->
+                                    <div class="w-full bg-slate-200 rounded-full h-1.5 mt-2">
+                                        <div
+                                            class={`h-1.5 rounded-full transition-all ${overBudget ? 'bg-red-500' : 'bg-emerald-500'}`}
+                                            style={`width: ${grpPct}%`}
+                                        ></div>
+                                    </div>
+                                    <div class="flex justify-between text-xs text-slate-500 mt-1">
+                                        <span>{formatCurrency(group.total_actual)} {isEs ? "gastado" : "spent"}</span>
+                                        <span>{formatCurrency(group.total_budgeted)} {isEs ? "presupuestado" : "budgeted"} · {grpPct}%</span>
+                                    </div>
+                                </div>
+
+                                <!-- Category rows -->
+                                <div class="divide-y divide-slate-100">
+                                    {group.categories.map((cat: any) => {
+                                        const pct = cat.pct_used ?? 0;
+                                        const over = pct > 100;
+                                        const barWidth = Math.min(100, pct);
+                                        const barColor = over ? 'bg-red-500' : pct >= 90 ? 'bg-amber-500' : 'bg-emerald-500';
+
+                                        return (
+                                            <div class="px-4 py-3">
+                                                <div class="flex items-center justify-between mb-1">
+                                                    <span class="text-sm font-medium text-slate-700">{cat.category_name}</span>
+                                                    <div class="text-right">
+                                                        <span class={`text-sm font-bold ${cat.variance >= 0 ? 'text-slate-700' : 'text-red-600'}`}>
+                                                            {formatCurrency(cat.actual_currency * 100)}
+                                                        </span>
+                                                        <span class="text-xs text-slate-400 ml-1">/ {formatCurrency(cat.budgeted_currency * 100)}</span>
+                                                    </div>
+                                                </div>
+                                                {cat.budgeted > 0 && (
+                                                    <div class="w-full bg-slate-100 rounded-full h-1 mt-1">
+                                                        <div
+                                                            class={`h-1 rounded-full ${barColor}`}
+                                                            style={`width: ${barWidth}%`}
+                                                        ></div>
+                                                    </div>
+                                                )}
+                                                {cat.budgeted === 0 && cat.actual > 0 && (
+                                                    <p class="text-xs text-amber-600 mt-0.5">{isEs ? "Sin presupuesto asignado" : "No budget set"}</p>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    <!-- Grand total card -->
+                    <div class="bg-gradient-to-r from-emerald-700 to-teal-600 text-white rounded-xl p-5">
+                        <p class="text-emerald-100 text-xs font-semibold uppercase tracking-wider mb-3">
+                            {isEs ? "Total del Mes" : "Month Total"}
+                        </p>
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span>{isEs ? "Presupuestado" : "Budgeted"}</span>
+                                <span class="font-bold">{formatCurrency(totals.budgeted)}</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span>{isEs ? "Gastado" : "Spent"}</span>
+                                <span class="font-bold">{formatCurrency(totals.actual)}</span>
+                            </div>
+                            <div class="border-t border-white/30 pt-2 flex justify-between">
+                                <span class="font-semibold">{isEs ? "Diferencia" : "Difference"}</span>
+                                <span class={`text-xl font-extrabold ${totals.variance >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+                                    {totals.variance >= 0 ? '+' : ''}{formatCurrency(totals.variance)}
+                                </span>
+                            </div>
+                        </div>
+                        <!-- Email digest button -->
+                        <div class="mt-4 pt-3 border-t border-white/20">
+                            <button
+                                id="send-digest-btn"
+                                data-month={monthParam}
+                                class="w-full flex items-center justify-center gap-2 text-sm font-semibold text-emerald-100 hover:text-white transition"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                {isEs ? "Enviarme este resumen por correo" : "Email me this summary"}
+                            </button>
+                            <p id="digest-feedback" class="hidden mt-2 text-xs text-center text-emerald-200"></p>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </main>
+
+        <BottomNav active="budget" role={user.role} lang={lang} />
+    </div>
+</Layout>
+
+<script>
+    // Sync the month picker hidden input for form submission
+    document.getElementById('month-picker')?.addEventListener('change', (e) => {
+        const val = (e.target as HTMLInputElement).value; // "YYYY-MM"
+        const hidden = document.getElementById('month-hidden') as HTMLInputElement;
+        if (hidden && val) hidden.value = val + '-01';
+    });
+
+    // Send digest email
+    const digestBtn = document.getElementById('send-digest-btn') as HTMLButtonElement | null;
+    digestBtn?.addEventListener('click', async () => {
+        const month = digestBtn.dataset.month;
+        const token = document.cookie.split('; ').find(r => r.startsWith('access_token='))?.split('=')[1];
+        digestBtn.disabled = true;
+        const feedback = document.getElementById('digest-feedback');
+        try {
+            const res = await fetch(`/api/budget/reports/send-digest?month=${month}`, {
+                method: 'POST',
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            const data = await res.json().catch(() => ({}));
+            if (feedback) {
+                feedback.classList.remove('hidden');
+                feedback.textContent = res.ok
+                    ? `✓ Enviado a ${data.email}`
+                    : (data.detail || 'Error al enviar');
+            }
+        } catch {
+            if (feedback) { feedback.classList.remove('hidden'); feedback.textContent = 'Error de red'; }
+        } finally {
+            digestBtn.disabled = false;
+        }
+    });
+</script>
