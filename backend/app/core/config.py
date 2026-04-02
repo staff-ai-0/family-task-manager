@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     PAYPAL_CLIENT_SECRET: str = ""
     PAYPAL_MODE: str = "sandbox"  # sandbox or live
     PAYPAL_WEBHOOK_ID: str = ""
+
+    # PayPal Subscription Plan IDs
+    PAYPAL_PLAN_ID_PLUS_MONTHLY: str = ""
+    PAYPAL_PLAN_ID_PLUS_ANNUAL: str = ""
+    PAYPAL_PLAN_ID_PRO_MONTHLY: str = ""
+    PAYPAL_PLAN_ID_PRO_ANNUAL: str = ""
     
     # Email Configuration (Resend)
     RESEND_API_KEY: str = ""
