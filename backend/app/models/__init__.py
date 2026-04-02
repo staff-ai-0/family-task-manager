@@ -29,6 +29,11 @@ from app.models.budget import (
     BudgetTransaction,
     BudgetSyncState,
 )
+from app.models.subscription import (
+    SubscriptionPlan,
+    FamilySubscription,
+    UsageTracking,
+)
 
 __all__ = [
     "Base",
@@ -52,6 +57,10 @@ __all__ = [
     "BudgetPayee",
     "BudgetTransaction",
     "BudgetSyncState",
+    # Subscription Models
+    "SubscriptionPlan",
+    "FamilySubscription",
+    "UsageTracking",
     # Enums
     "UserRole",
     "TaskStatus",
