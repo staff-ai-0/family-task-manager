@@ -405,3 +405,39 @@ async def test_cancel_without_subscription_returns_404(client, auth_headers):
     response = await client.post("/api/subscriptions/cancel", headers=auth_headers)
     assert response.status_code == 404
     assert "No active subscription" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_transaction_create_blocked_at_limit(
+    client, auth_headers, db_session, test_family, free_plan
+):
+    from app.models.budget import BudgetAccount
+    account = BudgetAccount(
+        family_id=test_family.id, name="Test Checking",
+        type="checking", starting_balance=0,
+    )
+    db_session.add(account)
+    await db_session.commit()
+    await db_session.refresh(account)
+
+    # Max out usage
+    from app.models.subscription import UsageTracking
+    from datetime import date
+    usage = UsageTracking(
+        family_id=test_family.id, feature="budget_transaction",
+        period_start=date.today().replace(day=1), count=30,
+    )
+    db_session.add(usage)
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/budget/transactions/",
+        headers=auth_headers,
+        json={
+            "account_id": str(account.id),
+            "date": date.today().isoformat(),
+            "amount": -5000,
+        },
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"]["error"] == "upgrade_required"

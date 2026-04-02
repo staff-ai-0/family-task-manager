@@ -12,6 +12,7 @@ from uuid import UUID
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.type_utils import to_uuid_required
+from app.core.premium import require_feature
 from app.services.budget.report_service import ReportService
 from app.models import User
 
@@ -28,9 +29,10 @@ async def get_spending_report(
 ):
     """
     Get spending report grouped by category, group, month, or payee.
-    
+
     Returns transaction totals and counts for the specified period.
     """
+    await require_feature("budget_reports", db, current_user)
     family_id = to_uuid_required(current_user.family_id)
     
     report = await ReportService.get_spending_report(
@@ -50,9 +52,10 @@ async def get_income_vs_expense_report(
 ):
     """
     Get income vs expense report over time.
-    
+
     Returns income, expense, and net amounts grouped by time period.
     """
+    await require_feature("budget_reports", db, current_user)
     family_id = to_uuid_required(current_user.family_id)
     
     report = await ReportService.get_income_vs_expense(
@@ -70,9 +73,10 @@ async def get_net_worth_report(
 ):
     """
     Get net worth report (total assets minus liabilities).
-    
+
     Returns account balances, total assets, total liabilities, and net worth.
     """
+    await require_feature("budget_reports", db, current_user)
     family_id = to_uuid_required(current_user.family_id)
     
     report = await ReportService.get_net_worth(

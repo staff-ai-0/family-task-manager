@@ -13,6 +13,7 @@ from datetime import date
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
+from app.core.premium import require_feature
 from app.services.budget.goal_service import GoalService
 from app.schemas.budget import (
     GoalCreate,
@@ -54,6 +55,7 @@ async def create_goal(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new budget goal (parent only)"""
+    await require_feature("budget_goals", db, current_user)
     goal = await GoalService.create(
         db,
         family_id=to_uuid_required(current_user.family_id),
@@ -83,6 +85,7 @@ async def update_goal(
     db: AsyncSession = Depends(get_db),
 ):
     """Update a budget goal (parent only)"""
+    await require_feature("budget_goals", db, current_user)
     goal = await GoalService.update(
         db,
         goal_id,
