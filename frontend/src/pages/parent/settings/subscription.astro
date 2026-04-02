@@ -1,0 +1,331 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import BottomNav from "../../../components/BottomNav.astro";
+import { apiFetch } from "../../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+// Fetch subscription data in parallel
+const [plansRes, currentRes, usageRes] = await Promise.all([
+    apiFetch<any[]>("/api/subscriptions/plans", { token }),
+    apiFetch<any>("/api/subscriptions/current", { token }),
+    apiFetch<any>("/api/subscriptions/usage", { token }),
+]);
+
+const plans = plansRes.data ?? [];
+const current = currentRes.data;
+const usage = usageRes.data;
+
+const currentPlanName = current?.plan_name?.toLowerCase() ?? "free";
+const isActive = current?.status === "active";
+const isCancelled = current?.status === "cancelled";
+const isPaid = currentPlanName !== "free";
+
+const i18n = {
+    en: {
+        title: "Subscription",
+        back: "Settings",
+        current_plan: "Current Plan",
+        active: "Active",
+        cancelled: "Cancelled",
+        usage_title: "Current Usage",
+        of: "of",
+        unlimited: "Unlimited",
+        this_month: "this month",
+        plan_comparison: "Plan Comparison",
+        feature: "Feature",
+        free: "Free",
+        plus: "Plus",
+        pro: "Pro",
+        month: "/mo",
+        year: "/yr",
+        upgrade: "Upgrade",
+        coming_soon: "Coming soon — PayPal integration pending",
+        cancel: "Cancel Subscription",
+        cancel_confirm: "Are you sure you want to cancel your subscription?",
+        features: {
+            tasks_rewards: "Tasks & Rewards",
+            family_members: "Family Members",
+            budget_accounts: "Budget Accounts",
+            transactions_month: "Transactions / month",
+            reports_goals: "Reports & Goals",
+            recurring_transactions: "Recurring Transactions",
+            csv_import: "CSV Import",
+            ai_receipt_scan: "AI Receipt Scanning",
+            future_ai: "Future AI Features",
+        },
+    },
+    es: {
+        title: "Suscripci\u00f3n",
+        back: "Configuraci\u00f3n",
+        current_plan: "Plan Actual",
+        active: "Activo",
+        cancelled: "Cancelado",
+        usage_title: "Uso Actual",
+        of: "de",
+        unlimited: "Ilimitado",
+        this_month: "este mes",
+        plan_comparison: "Comparaci\u00f3n de Planes",
+        feature: "Caracter\u00edstica",
+        free: "Gratis",
+        plus: "Plus",
+        pro: "Pro",
+        month: "/mes",
+        year: "/a\u00f1o",
+        upgrade: "Mejorar Plan",
+        coming_soon: "Pr\u00f3ximamente \u2014 integraci\u00f3n con PayPal pendiente",
+        cancel: "Cancelar Suscripci\u00f3n",
+        cancel_confirm: "\u00bfEst\u00e1s seguro de que quieres cancelar tu suscripci\u00f3n?",
+        features: {
+            tasks_rewards: "Tareas y Recompensas",
+            family_members: "Miembros de Familia",
+            budget_accounts: "Cuentas de Presupuesto",
+            transactions_month: "Transacciones / mes",
+            reports_goals: "Reportes y Metas",
+            recurring_transactions: "Transacciones Recurrentes",
+            csv_import: "Importar CSV",
+            ai_receipt_scan: "Escaneo de Recibos con IA",
+            future_ai: "Futuras Funciones IA",
+        },
+    },
+};
+
+const l = i18n[lang] ?? i18n.en;
+
+// Feature comparison table data
+const featureRows = [
+    { label: l.features.tasks_rewards, free: { en: "Full", es: "Completo" }[lang], plus: { en: "Full", es: "Completo" }[lang], pro: { en: "Full", es: "Completo" }[lang] },
+    { label: l.features.family_members, free: "4", plus: "8", pro: l.unlimited },
+    { label: l.features.budget_accounts, free: "2", plus: "5", pro: l.unlimited },
+    { label: l.features.transactions_month, free: "30", plus: "200", pro: l.unlimited },
+    { label: l.features.reports_goals, free: null, plus: true, pro: true },
+    { label: l.features.recurring_transactions, free: null, plus: "5", pro: l.unlimited },
+    { label: l.features.csv_import, free: null, plus: true, pro: true },
+    { label: l.features.ai_receipt_scan, free: null, plus: `15/${lang === "es" ? "mes" : "mo"}`, pro: l.unlimited },
+    { label: l.features.future_ai, free: null, plus: { en: "Limited", es: "Limitado" }[lang], pro: { en: "Full", es: "Completo" }[lang] },
+];
+
+// Usage meters
+const usageMeters: Array<{ label: string; current: number; limit: number | null }> = [];
+if (usage) {
+    if (usage.family_members !== undefined) {
+        usageMeters.push({
+            label: l.features.family_members,
+            current: usage.family_members?.current ?? 0,
+            limit: usage.family_members?.limit,
+        });
+    }
+    if (usage.budget_accounts !== undefined) {
+        usageMeters.push({
+            label: l.features.budget_accounts,
+            current: usage.budget_accounts?.current ?? 0,
+            limit: usage.budget_accounts?.limit,
+        });
+    }
+    if (usage.monthly_transactions !== undefined) {
+        usageMeters.push({
+            label: l.features.transactions_month,
+            current: usage.monthly_transactions?.current ?? 0,
+            limit: usage.monthly_transactions?.limit,
+        });
+    }
+    if (usage.recurring_transactions !== undefined) {
+        usageMeters.push({
+            label: l.features.recurring_transactions,
+            current: usage.recurring_transactions?.current ?? 0,
+            limit: usage.recurring_transactions?.limit,
+        });
+    }
+}
+
+function renderCell(value: any): string {
+    if (value === true) return "\u2713";
+    if (value === null || value === false) return "\u2717";
+    return String(value);
+}
+
+function cellClass(value: any): string {
+    if (value === true) return "text-green-600 font-bold";
+    if (value === null || value === false) return "text-slate-300";
+    return "text-slate-700 font-medium";
+}
+---
+
+<Layout title={`${l.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 flex flex-col min-h-screen">
+        <header class="bg-gradient-to-br from-amber-600 to-orange-600 text-white pt-12 pb-8 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center gap-3 mb-2">
+                <a href="/parent/settings" class="text-amber-200 hover:text-white transition-colors">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <p class="text-amber-200 text-sm">{l.back}</p>
+            </div>
+            <h1 class="text-2xl font-bold">{l.title}</h1>
+        </header>
+
+        <main class="flex-1 px-4 py-6 space-y-6">
+            <!-- Current Plan -->
+            <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-slate-500">{l.current_plan}</p>
+                        <h2 class="text-xl font-bold text-slate-800 capitalize">{currentPlanName}</h2>
+                    </div>
+                    {isActive && (
+                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700 border border-green-200">
+                            {l.active}
+                        </span>
+                    )}
+                    {isCancelled && (
+                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700 border border-red-200">
+                            {l.cancelled}
+                        </span>
+                    )}
+                </div>
+            </section>
+
+            <!-- Usage Meters -->
+            {usageMeters.length > 0 && (
+                <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+                    <h2 class="text-lg font-bold text-slate-800 mb-4">{l.usage_title}</h2>
+                    <div class="space-y-4">
+                        {usageMeters.map((meter) => {
+                            const isUnlimited = meter.limit === null || meter.limit === -1;
+                            const pct = isUnlimited ? 0 : Math.min(100, Math.round((meter.current / meter.limit!) * 100));
+                            const barColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-blue-500";
+                            return (
+                                <div>
+                                    <div class="flex justify-between text-sm mb-1">
+                                        <span class="text-slate-600">{meter.label}</span>
+                                        <span class="font-medium text-slate-800">
+                                            {meter.current} {l.of} {isUnlimited ? l.unlimited : meter.limit}
+                                            {" "}<span class="text-slate-400 text-xs">{l.this_month}</span>
+                                        </span>
+                                    </div>
+                                    <div class="w-full bg-slate-100 rounded-full h-2.5">
+                                        <div
+                                            class={`h-2.5 rounded-full transition-all ${barColor}`}
+                                            style={`width: ${isUnlimited ? 5 : pct}%`}
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
+
+            <!-- Plan Comparison Table -->
+            <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 overflow-x-auto">
+                <h2 class="text-lg font-bold text-slate-800 mb-4">{l.plan_comparison}</h2>
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-200">
+                            <th class="text-left py-3 px-2 text-slate-500 font-medium">{l.feature}</th>
+                            <th class={`text-center py-3 px-2 ${currentPlanName === "free" ? "bg-blue-50 rounded-t-xl" : ""}`}>
+                                <div class="font-bold text-slate-800">{l.free}</div>
+                                <div class="text-xs text-slate-400">{l.free}</div>
+                                {currentPlanName === "free" && (
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-blue-100 text-blue-700">
+                                        {l.current_plan}
+                                    </span>
+                                )}
+                            </th>
+                            <th class={`text-center py-3 px-2 ${currentPlanName === "plus" ? "bg-blue-50 rounded-t-xl" : ""}`}>
+                                <div class="font-bold text-slate-800">{l.plus}</div>
+                                <div class="text-xs text-slate-400">$5{l.month} ($50{l.year})</div>
+                                {currentPlanName === "plus" && (
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-blue-100 text-blue-700">
+                                        {l.current_plan}
+                                    </span>
+                                )}
+                            </th>
+                            <th class={`text-center py-3 px-2 ${currentPlanName === "pro" ? "bg-blue-50 rounded-t-xl" : ""}`}>
+                                <div class="font-bold text-slate-800">{l.pro}</div>
+                                <div class="text-xs text-slate-400">$15{l.month} ($150{l.year})</div>
+                                {currentPlanName === "pro" && (
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-blue-100 text-blue-700">
+                                        {l.current_plan}
+                                    </span>
+                                )}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {featureRows.map((row, i) => (
+                            <tr class={`border-b border-slate-100 ${i % 2 === 0 ? "bg-slate-50/50" : ""}`}>
+                                <td class="py-3 px-2 text-slate-700">{row.label}</td>
+                                <td class={`py-3 px-2 text-center ${cellClass(row.free)} ${currentPlanName === "free" ? "bg-blue-50/50" : ""}`}>
+                                    {renderCell(row.free)}
+                                </td>
+                                <td class={`py-3 px-2 text-center ${cellClass(row.plus)} ${currentPlanName === "plus" ? "bg-blue-50/50" : ""}`}>
+                                    {renderCell(row.plus)}
+                                </td>
+                                <td class={`py-3 px-2 text-center ${cellClass(row.pro)} ${currentPlanName === "pro" ? "bg-blue-50/50" : ""}`}>
+                                    {renderCell(row.pro)}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                <!-- Upgrade / Cancel Buttons -->
+                <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                    {currentPlanName !== "pro" && (
+                        <div class="relative group">
+                            <button
+                                disabled
+                                class="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg opacity-60 cursor-not-allowed"
+                            >
+                                {l.upgrade}
+                            </button>
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                {l.coming_soon}
+                            </div>
+                        </div>
+                    )}
+                    {isPaid && isActive && (
+                        <button
+                            id="cancel-sub-btn"
+                            class="px-6 py-2.5 bg-white border border-red-200 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 transition-colors"
+                        >
+                            {l.cancel}
+                        </button>
+                    )}
+                </div>
+            </section>
+        </main>
+
+        <BottomNav active="parent" role={user.role} lang={lang} />
+    </div>
+</Layout>
+
+<script define:vars={{ cancelConfirm: l.cancel_confirm }}>
+    document.addEventListener('astro:page-load', () => {
+        const cancelBtn = document.getElementById('cancel-sub-btn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', async () => {
+                if (!confirm(cancelConfirm)) return;
+                try {
+                    const res = await fetch('/api/subscriptions/cancel', { method: 'POST' });
+                    if (res.ok) {
+                        window.location.reload();
+                    }
+                } catch {
+                    // silently fail
+                }
+            });
+        }
+    });
+</script>

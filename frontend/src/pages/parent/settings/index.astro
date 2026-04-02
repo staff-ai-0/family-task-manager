@@ -1,0 +1,79 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import BottomNav from "../../../components/BottomNav.astro";
+import { apiFetch } from "../../../lib/api";
+import { t } from "../../../lib/i18n";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+const labels = {
+    en: {
+        title: "Settings",
+        subscription: "Subscription",
+        subscription_desc: "Manage your plan and billing",
+        back: "Back",
+    },
+    es: {
+        title: "Configuraci\u00f3n",
+        subscription: "Suscripci\u00f3n",
+        subscription_desc: "Administra tu plan y facturaci\u00f3n",
+        back: "Volver",
+    },
+}[lang] ?? {
+    title: "Settings",
+    subscription: "Subscription",
+    subscription_desc: "Manage your plan and billing",
+    back: "Back",
+};
+---
+
+<Layout title={`${labels.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 flex flex-col">
+        <header class="bg-gradient-to-br from-slate-800 to-slate-700 text-white pt-12 pb-8 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center gap-3 mb-2">
+                <a href="/parent" class="text-slate-400 hover:text-white transition-colors">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <p class="text-slate-400 text-sm">{labels.back}</p>
+            </div>
+            <h1 class="text-2xl font-bold">{labels.title}</h1>
+        </header>
+
+        <main class="flex-1 px-4 py-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <a
+                    href="/parent/settings/subscription"
+                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-amber-200 transition-all flex items-center gap-4"
+                >
+                    <div class="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                        <svg class="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M5 3l3.057-3 3.943 4 3.943-4L19 3l-4 4 4 4-3.057 3-3.943-4-3.943 4L5 11l4-4-4-4z"
+                            />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-800">{labels.subscription}</p>
+                        <p class="text-xs text-slate-500">{labels.subscription_desc}</p>
+                    </div>
+                    <svg class="w-5 h-5 text-slate-400 ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </a>
+            </div>
+        </main>
+
+        <BottomNav active="parent" role={user.role} lang={lang} />
+    </div>
+</Layout>
