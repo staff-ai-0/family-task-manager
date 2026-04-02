@@ -164,3 +164,4 @@ test_startup.py
 send_test_email.py
 send_frontend_credentials.py
 .superpowers/
+.claude/
