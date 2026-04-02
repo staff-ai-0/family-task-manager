@@ -400,6 +400,7 @@ const allExpenseCategories = (allGroups || [])
 </Layout>
 
 <script define:vars={{ yearNum, monthNum }}>
+    document.addEventListener('astro:page-load', () => {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     function formatCurrency(cents) {
@@ -711,4 +712,5 @@ const allExpenseCategories = (allGroups || [])
 
     document.getElementById('close-month-btn')?.addEventListener('click', () => toggleMonthLock('close'));
     document.getElementById('reopen-month-btn')?.addEventListener('click', () => toggleMonthLock('reopen'));
+    });
 </script>

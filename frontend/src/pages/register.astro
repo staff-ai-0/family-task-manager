@@ -229,9 +229,11 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
     </main>
 
     <script is:inline define:vars={{ lang }}>
+        document.addEventListener('astro:page-load', () => {
         const form = document.getElementById('register-form');
         const errorDiv = document.getElementById('register-error');
         const submitBtn = document.getElementById('register-submit-btn');
+        if (!form) return;
 
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -314,6 +316,7 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;
             }
+        });
         });
     </script>
 </Layout>

@@ -1,0 +1,37 @@
+---
+// SkeletonLoader.astro — reusable loading placeholder.
+// Uses Tailwind's built-in animate-pulse.
+interface Props {
+  variant?: 'line' | 'card' | 'row';
+  count?: number;
+}
+const { variant = 'line', count = 3 } = Astro.props;
+---
+
+{variant === 'line' && (
+  <div class="space-y-3">
+    {Array.from({ length: count }).map((_, i) => (
+      <div class={`h-4 bg-slate-200 rounded animate-pulse ${i % 2 === 0 ? 'w-3/4' : 'w-1/2'}`}></div>
+    ))}
+  </div>
+)}
+
+{variant === 'card' && (
+  <div class="space-y-3">
+    {Array.from({ length: count }).map(() => (
+      <div class="h-24 bg-slate-200 rounded-lg animate-pulse"></div>
+    ))}
+  </div>
+)}
+
+{variant === 'row' && (
+  <div class="space-y-2">
+    {Array.from({ length: count }).map(() => (
+      <div class="flex gap-4 items-center py-3">
+        <div class="h-4 bg-slate-200 rounded animate-pulse w-24"></div>
+        <div class="h-4 bg-slate-200 rounded animate-pulse flex-1"></div>
+        <div class="h-4 bg-slate-200 rounded animate-pulse w-20"></div>
+      </div>
+    ))}
+  </div>
+)}

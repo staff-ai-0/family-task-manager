@@ -189,6 +189,7 @@ const { session } = Astro.props;
 </div>
 
 <script define:vars={{ token: session.token }}>
+  document.addEventListener('astro:page-load', () => {
   let allItems = [];
   let currentFilter = null;
   let pendingAction = null;
@@ -437,4 +438,5 @@ const { session } = Astro.props;
 
   // Load items on mount
   loadDeletedItems();
+  });
 </script>

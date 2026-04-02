@@ -574,6 +574,7 @@ const isEs = lang === "es";
 </Layout>
 
 <script>
+    document.addEventListener('astro:page-load', () => {
     // Category management functionality
     const groupModal = document.getElementById('group-modal');
     const categoryModal = document.getElementById('category-modal');
@@ -913,5 +914,6 @@ const isEs = lang === "es";
         if (e.key === 'Escape' && goalModal && !goalModal.classList.contains('hidden')) {
             closeGoalModal();
         }
+    });
     });
 </script>

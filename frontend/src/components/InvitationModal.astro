@@ -137,6 +137,7 @@ const {
 </div>
 
 <script define:vars={{ familyId, lang }}>
+    document.addEventListener('astro:page-load', () => {
     const modal = document.getElementById("invitation-modal");
     const form = document.getElementById("invitation-form");
     const closeBtn = document.getElementById("invitation-close-btn");
@@ -226,5 +227,6 @@ const {
             submitBtn.disabled = false;
             submitText.textContent = lang === "es" ? "Enviar invitación" : "Send invitation";
         }
+    });
     });
 </script>

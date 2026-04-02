@@ -264,7 +264,8 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
 </Layout>
 
 <script>
-    function toggleUserSelection(assignmentType: string) {
+    document.addEventListener('astro:page-load', () => {
+    (window as any).toggleUserSelection = function(assignmentType: string) {
         const container = document.getElementById('user_selection_container');
         if (container) {
             if (assignmentType === 'fixed' || assignmentType === 'rotate') {
@@ -273,7 +274,7 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                 container.classList.add('hidden');
             }
         }
-    }
+    };
 
     const btnTranslate = document.getElementById("btn-translate");
     const statusDiv = document.getElementById("translate-status");
@@ -329,4 +330,5 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
             }
         });
     }
+    });
 </script>

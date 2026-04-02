@@ -272,7 +272,7 @@ const totalUncleared = sortedTransactions.reduce((sum, t) => sum + t.amount, 0);
 
 <script>
     // Select/Deselect all functionality
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('astro:page-load', () => {
         const checkboxes = document.querySelectorAll('input[name="transaction_id"]') as NodeListOf<HTMLInputElement>;
         
         document.getElementById('select-all')?.addEventListener('click', () => {

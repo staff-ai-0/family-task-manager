@@ -1,6 +1,8 @@
 ---
 import "../styles/global.css";
+import { ClientRouter } from "astro:transitions";
 import { t } from "../lib/i18n";
+import ToastContainer from "../components/ToastContainer.astro";
 interface Props {
 	title?: string;
 	description?: string;
@@ -36,8 +38,11 @@ const bannerCopy = {
 		<meta name="generator" content={Astro.generator} />
 		<meta name="description" content={description} />
 		<title>{title}</title>
+		<ClientRouter />
 	</head>
 <body class="bg-slate-50 text-slate-900 antialiased">
+    <ToastContainer />
+
     <!-- Email verification banner (hidden by default, shown client-side if needed) -->
     <div
         id="verify-banner"
@@ -56,34 +61,36 @@ const bannerCopy = {
         </button>
     </div>
 
-    <div class="app-shell">
+    <div class="app-shell" transition:animate="fade">
         <slot />
     </div>
     <slot name="overlays" />
 
     <script define:vars={{ sentLabel: bannerCopy.sent, resendLabel: bannerCopy.resend }}>
-        (async () => {
-            try {
-                const res = await fetch("/api/auth/me-status");
-                if (!res.ok) return;
-                const { verified } = await res.json();
-                if (!verified) {
-                    document.getElementById("verify-banner")?.classList.remove("hidden");
-                }
-            } catch { /* silently ignore */ }
-        })();
+        document.addEventListener('astro:page-load', () => {
+            (async () => {
+                try {
+                    const res = await fetch("/api/auth/me-status");
+                    if (!res.ok) return;
+                    const { verified } = await res.json();
+                    if (!verified) {
+                        document.getElementById("verify-banner")?.classList.remove("hidden");
+                    }
+                } catch { /* silently ignore */ }
+            })();
 
-        document.getElementById("resend-verify-btn")?.addEventListener("click", async (e) => {
-            const btn = e.target;
-            btn.disabled = true;
-            btn.textContent = "...";
-            try {
-                await fetch("/api/auth/resend-verification", { method: "POST" });
-                btn.textContent = sentLabel;
-            } catch {
-                btn.textContent = resendLabel;
-                btn.disabled = false;
-            }
+            document.getElementById("resend-verify-btn")?.addEventListener("click", async (e) => {
+                const btn = e.target;
+                btn.disabled = true;
+                btn.textContent = "...";
+                try {
+                    await fetch("/api/auth/resend-verification", { method: "POST" });
+                    btn.textContent = sentLabel;
+                } catch {
+                    btn.textContent = resendLabel;
+                    btn.disabled = false;
+                }
+            });
         });
     </script>
 </body>

@@ -271,7 +271,7 @@ const today = new Date().toISOString().split('T')[0];
 
 <script>
     // Auto-submit on account/category change for better UX (optional)
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('astro:page-load', () => {
         const form = document.querySelector('form');
         const amountInput = document.getElementById('amount') as HTMLInputElement;
         
