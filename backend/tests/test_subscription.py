@@ -1,10 +1,65 @@
 """
-Tests for subscription models: SubscriptionPlan, FamilySubscription, UsageTracking.
+Tests for subscription models, UsageService, and premium gating.
 """
 import pytest
+import pytest_asyncio
 from datetime import date, datetime, timezone
 
+from fastapi import HTTPException
+
 from app.models.subscription import SubscriptionPlan, FamilySubscription, UsageTracking
+from app.services.usage_service import UsageService
+from app.core.premium import get_family_plan, require_feature, FamilyPlan, DEFAULT_FREE_LIMITS
+
+
+# ---------------------------------------------------------------------------
+# Plan fixtures
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture
+async def free_plan(db_session):
+    """Create a free plan in the DB."""
+    plan = SubscriptionPlan(
+        name="free",
+        display_name="Free",
+        display_name_es="Gratis",
+        price_monthly_cents=0,
+        price_annual_cents=0,
+        limits=dict(DEFAULT_FREE_LIMITS),
+        sort_order=0,
+    )
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+    return plan
+
+
+@pytest_asyncio.fixture
+async def plus_plan(db_session):
+    """Create a Plus plan in the DB."""
+    plan = SubscriptionPlan(
+        name="plus",
+        display_name="Plus",
+        display_name_es="Plus",
+        price_monthly_cents=499,
+        price_annual_cents=4990,
+        limits={
+            "max_family_members": 8,
+            "max_budget_accounts": 10,
+            "max_budget_transactions_per_month": -1,
+            "max_recurring_transactions": 20,
+            "budget_reports": True,
+            "budget_goals": True,
+            "csv_import": True,
+            "max_receipt_scans_per_month": 15,
+            "ai_features": False,
+        },
+        sort_order=1,
+    )
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+    return plan
 
 
 @pytest.mark.asyncio
@@ -100,3 +155,163 @@ async def test_create_usage_tracking(db_session, test_family):
     assert usage.period_start == date(2026, 4, 1)
     assert usage.count == 5
     assert usage.created_at is not None
+
+
+# ---------------------------------------------------------------------------
+# UsageService tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_usage_returns_zero_when_no_record(db_session, test_family):
+    """get_usage should return 0 when there is no tracking record."""
+    count = await UsageService.get_usage(db_session, test_family.id, "budget_transaction")
+    assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_increment_creates_record_and_returns_count(db_session, test_family):
+    """increment should create a record on first call and increment on subsequent calls."""
+    first = await UsageService.increment(db_session, test_family.id, "budget_transaction")
+    assert first == 1
+
+    second = await UsageService.increment(db_session, test_family.id, "budget_transaction")
+    assert second == 2
+
+
+@pytest.mark.asyncio
+async def test_check_limit_allows_under_limit(db_session, test_family):
+    """check_limit should return True when usage is below the limit."""
+    allowed = await UsageService.check_limit(db_session, test_family.id, "budget_transaction", 10)
+    assert allowed is True
+
+
+@pytest.mark.asyncio
+async def test_check_limit_denies_at_limit(db_session, test_family):
+    """check_limit should return False when usage equals the limit."""
+    usage = UsageTracking(
+        family_id=test_family.id,
+        feature="receipt_scan",
+        period_start=date.today().replace(day=1),
+        count=15,
+    )
+    db_session.add(usage)
+    await db_session.commit()
+
+    allowed = await UsageService.check_limit(db_session, test_family.id, "receipt_scan", 15)
+    assert allowed is False
+
+
+@pytest.mark.asyncio
+async def test_check_limit_unlimited_always_allows(db_session, test_family):
+    """check_limit with limit=-1 should always return True regardless of count."""
+    usage = UsageTracking(
+        family_id=test_family.id,
+        feature="budget_transaction",
+        period_start=date.today().replace(day=1),
+        count=9999,
+    )
+    db_session.add(usage)
+    await db_session.commit()
+
+    allowed = await UsageService.check_limit(db_session, test_family.id, "budget_transaction", -1)
+    assert allowed is True
+
+
+# ---------------------------------------------------------------------------
+# Premium gating tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_family_plan_defaults_to_free(db_session, test_parent_user):
+    """Without any subscription, get_family_plan should return free plan defaults."""
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "free"
+    assert plan.limits["max_family_members"] == 4
+    assert plan.limits["budget_reports"] is False
+
+
+@pytest.mark.asyncio
+async def test_get_family_plan_returns_active_subscription(
+    db_session, test_family, test_parent_user, plus_plan
+):
+    """An active Plus subscription should return plus plan limits."""
+    sub = FamilySubscription(
+        family_id=test_family.id,
+        plan_id=plus_plan.id,
+        billing_cycle="monthly",
+        status="active",
+    )
+    db_session.add(sub)
+    await db_session.commit()
+
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "plus"
+    assert plan.limits["budget_reports"] is True
+    assert plan.limits["max_family_members"] == 8
+
+
+@pytest.mark.asyncio
+async def test_require_feature_allows_boolean_feature(
+    db_session, test_family, test_parent_user, plus_plan
+):
+    """Plus plan should allow boolean features like budget_reports."""
+    sub = FamilySubscription(
+        family_id=test_family.id,
+        plan_id=plus_plan.id,
+        billing_cycle="monthly",
+        status="active",
+    )
+    db_session.add(sub)
+    await db_session.commit()
+
+    plan = await require_feature("budget_reports", db_session, test_parent_user)
+    assert plan.name == "plus"
+
+
+@pytest.mark.asyncio
+async def test_require_feature_denies_boolean_feature_on_free(
+    db_session, test_parent_user
+):
+    """Free plan should deny budget_reports with HTTP 403."""
+    with pytest.raises(HTTPException) as exc_info:
+        await require_feature("budget_reports", db_session, test_parent_user)
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["error"] == "upgrade_required"
+    assert exc_info.value.detail["feature"] == "budget_reports"
+
+
+@pytest.mark.asyncio
+async def test_require_feature_denies_numeric_at_limit(
+    db_session, test_family, test_parent_user, plus_plan
+):
+    """Plus plan should deny receipt_scan when usage is at the limit (15/15)."""
+    sub = FamilySubscription(
+        family_id=test_family.id,
+        plan_id=plus_plan.id,
+        billing_cycle="monthly",
+        status="active",
+    )
+    db_session.add(sub)
+    await db_session.commit()
+
+    # Seed usage at the limit
+    usage = UsageTracking(
+        family_id=test_family.id,
+        feature="receipt_scan",
+        period_start=date.today().replace(day=1),
+        count=15,
+    )
+    db_session.add(usage)
+    await db_session.commit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await require_feature("receipt_scan", db_session, test_parent_user)
+
+    assert exc_info.value.status_code == 403
+    detail = exc_info.value.detail
+    assert detail["error"] == "upgrade_required"
+    assert detail["current_usage"] == 15
+    assert detail["limit"] == 15
