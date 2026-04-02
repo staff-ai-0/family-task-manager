@@ -46,6 +46,7 @@ from app.models.budget import (
     BudgetRecurringTransaction,
     BudgetTransaction,
 )
+from app.models.subscription import SubscriptionPlan, FamilySubscription, UsageTracking
 from app.core.security import get_password_hash
 
 DATABASE_URL = os.getenv(
@@ -73,6 +74,9 @@ async def clear_all(session: AsyncSession):
         "budget_payees",
         "budget_accounts",
         "budget_sync_state",
+        "usage_tracking",
+        "family_subscriptions",
+        "subscription_plans",
         "point_transactions",
         "consequences",
         "task_assignments",
@@ -768,6 +772,54 @@ async def create_recurring_transactions(session: AsyncSession, family, accounts,
     return recs
 
 
+async def create_subscription_plans(session):
+    print("\nCreating subscription plans...")
+    plans_data = [
+        {"name": "free", "display_name": "Free", "display_name_es": "Gratis",
+         "price_monthly_cents": 0, "price_annual_cents": 0, "sort_order": 0,
+         "limits": {"max_family_members": 4, "max_budget_accounts": 2,
+                    "max_budget_transactions_per_month": 30, "max_recurring_transactions": 0,
+                    "budget_reports": False, "budget_goals": False, "csv_import": False,
+                    "max_receipt_scans_per_month": 0, "ai_features": False}},
+        {"name": "plus", "display_name": "Plus", "display_name_es": "Plus",
+         "price_monthly_cents": 500, "price_annual_cents": 5000, "sort_order": 1,
+         "limits": {"max_family_members": 8, "max_budget_accounts": 5,
+                    "max_budget_transactions_per_month": 200, "max_recurring_transactions": 5,
+                    "budget_reports": True, "budget_goals": True, "csv_import": True,
+                    "max_receipt_scans_per_month": 15, "ai_features": True}},
+        {"name": "pro", "display_name": "Pro", "display_name_es": "Pro",
+         "price_monthly_cents": 1500, "price_annual_cents": 15000, "sort_order": 2,
+         "limits": {"max_family_members": -1, "max_budget_accounts": -1,
+                    "max_budget_transactions_per_month": -1, "max_recurring_transactions": -1,
+                    "budget_reports": True, "budget_goals": True, "csv_import": True,
+                    "max_receipt_scans_per_month": -1, "ai_features": True}},
+    ]
+    plans = [SubscriptionPlan(**d) for d in plans_data]
+    session.add_all(plans)
+    await session.commit()
+    print(f"  {len(plans)} plans (Free, Plus, Pro)")
+    return plans
+
+
+async def create_demo_subscription(session, family, plans):
+    print("\nCreating demo subscription...")
+    plus = next(p for p in plans if p.name == "plus")
+    now = datetime.now(timezone.utc)
+    sub = FamilySubscription(
+        family_id=family.id, plan_id=plus.id,
+        billing_cycle="monthly", status="active",
+        current_period_start=now, current_period_end=now + timedelta(days=30),
+    )
+    session.add(sub)
+    usage = UsageTracking(
+        family_id=family.id, feature="budget_transaction",
+        period_start=TODAY.replace(day=1), count=42,
+    )
+    session.add(usage)
+    await session.commit()
+    print(f"  Demo family on Plus plan (monthly)")
+
+
 async def main():
     print("=" * 60)
     print("Family Task Manager — Full Seed Data")
@@ -806,6 +858,9 @@ async def main():
         await create_budget_goals(session, family, categories)
         await create_categorization_rules(session, family, categories)
         await create_recurring_transactions(session, family, accounts, payees, categories)
+
+        plans = await create_subscription_plans(session)
+        await create_demo_subscription(session, family, plans)
 
     await engine.dispose()
 
