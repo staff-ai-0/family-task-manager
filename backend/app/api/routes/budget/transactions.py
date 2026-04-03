@@ -17,6 +17,7 @@ from app.core.premium import require_feature
 from app.services.budget.transaction_service import TransactionService
 from app.services.usage_service import UsageService
 from app.services.budget.csv_import_service import CSVImportService
+from app.services.budget.file_import_service import import_file_transactions
 from app.schemas.budget import TransactionCreate, TransactionUpdate, TransactionResponse
 from app.models import User
 
@@ -220,4 +221,40 @@ async def import_csv_transactions(
             "error": str(e),
             "result": None
         }
+
+
+@router.post("/import/file", status_code=status.HTTP_200_OK)
+async def import_file_transactions_endpoint(
+    file: UploadFile = File(..., description="OFX, QFX, QIF, or CAMT.053 XML file"),
+    account_id: UUID = Form(..., description="Target account for import"),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Import transactions from an OFX/QFX, QIF, or CAMT.053 XML file (parent only).
+
+    Automatically detects format, parses transactions, creates payees,
+    applies categorization rules, and deduplicates via imported_id.
+
+    Returns:
+        {imported: int, skipped: int, errors: list}
+    """
+    try:
+        # Validate account belongs to family
+        from app.services.budget.account_service import AccountService
+        await AccountService.get_by_id(
+            db, account_id, to_uuid_required(current_user.family_id)
+        )
+
+        file_bytes = await file.read()
+        result = await import_file_transactions(
+            db=db,
+            family_id=to_uuid_required(current_user.family_id),
+            account_id=account_id,
+            filename=file.filename or "unknown",
+            file_bytes=file_bytes,
+        )
+        return result
+    except Exception as e:
+        return {"imported": 0, "skipped": 0, "errors": [str(e)]}
 
