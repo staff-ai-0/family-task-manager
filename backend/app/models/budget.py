@@ -12,7 +12,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -206,12 +206,18 @@ class BudgetCategorizationRule(Base):
     # Rule behavior
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False, comment="Higher priority rules match first")
-    
+
+    # Advanced actions (Wave 2)
+    actions: Mapped[Optional[list]] = mapped_column(
+        JSONB, nullable=True, default=None,
+        comment="Multi-field actions: [{field, operation, value}, ...]"
+    )
+
     # Metadata
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    
+
     # Relationships
     family: Mapped["Family"] = relationship("Family", back_populates="budget_categorization_rules")
     category: Mapped["BudgetCategory"] = relationship("BudgetCategory", foreign_keys=[category_id])
@@ -308,3 +314,53 @@ class BudgetRecurringTransaction(Base):
     account: Mapped["BudgetAccount"] = relationship("BudgetAccount", back_populates="recurring_transactions")
     category: Mapped[Optional["BudgetCategory"]] = relationship("BudgetCategory", foreign_keys=[category_id])
     payee: Mapped[Optional["BudgetPayee"]] = relationship("BudgetPayee", foreign_keys=[payee_id])
+
+
+class BudgetSavedFilter(Base):
+    """Saved transaction filter presets for quick access."""
+
+    __tablename__ = "budget_saved_filters"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    conditions: Mapped[list] = mapped_column(JSONB, nullable=False, comment="[{field, operator, value}, ...]")
+    conditions_op: Mapped[str] = mapped_column(String(10), default="and", nullable=False, comment="'and' or 'or'")
+    created_by: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    family: Mapped["Family"] = relationship("Family")
+
+
+class BudgetTag(Base):
+    """Tags for labeling transactions."""
+
+    __tablename__ = "budget_tags"
+    __table_args__ = (
+        UniqueConstraint("family_id", "name", name="uq_tag_family_name"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    color: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    family: Mapped["Family"] = relationship("Family")
+
+
+class BudgetTransactionTag(Base):
+    """Many-to-many link between transactions and tags."""
+
+    __tablename__ = "budget_transaction_tags"
+    __table_args__ = (
+        UniqueConstraint("transaction_id", "tag_id", name="uq_transaction_tag"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    transaction_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_transactions.id", ondelete="CASCADE"), nullable=False, index=True)
+    tag_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_tags.id", ondelete="CASCADE"), nullable=False, index=True)
