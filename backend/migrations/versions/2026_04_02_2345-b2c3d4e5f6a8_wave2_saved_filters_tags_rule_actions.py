@@ -1,7 +1,7 @@
 """wave2: saved filters, tags, rule actions
 
-Revision ID: a1b2c3d4e5f7
-Revises: 586649b5ef22
+Revision ID: b2c3d4e5f6a8
+Revises: a1b2c3d4e5f7
 Create Date: 2026-04-02 23:30:00.000000
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 # revision identifiers, used by Alembic.
-revision = 'a1b2c3d4e5f7'
-down_revision = '586649b5ef22'
+revision = 'b2c3d4e5f6a8'
+down_revision = 'a1b2c3d4e5f7'
 branch_labels = None
 depends_on = None
 
