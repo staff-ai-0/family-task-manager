@@ -12,7 +12,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
-from app.models.budget import BudgetCategorizationRule, BudgetCategory
+from app.models.budget import BudgetCategorizationRule, BudgetCategory, BudgetTransaction
 from app.schemas.budget import (
     CategorizationRuleCreate,
     CategorizationRuleUpdate,
@@ -82,6 +82,11 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
         if not category:
             raise NotFoundException("Category not found or does not belong to this family")
 
+        # Serialize actions if present
+        actions_data = None
+        if hasattr(data, "actions") and data.actions is not None:
+            actions_data = [a.model_dump() for a in data.actions]
+
         rule = BudgetCategorizationRule(
             family_id=family_id,
             category_id=data.category_id,
@@ -91,6 +96,7 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
             enabled=data.enabled,
             priority=data.priority,
             notes=data.notes,
+            actions=actions_data,
         )
 
         db.add(rule)
@@ -166,6 +172,12 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
 
         # Only include non-None values in update
         update_data = data.model_dump(exclude_unset=True)
+        # Serialize RuleAction objects to dicts for JSONB storage
+        if "actions" in update_data and update_data["actions"] is not None:
+            update_data["actions"] = [
+                a if isinstance(a, dict) else a.model_dump()
+                for a in update_data["actions"]
+            ]
         return await cls.update_by_id(db, rule_id, family_id, update_data)
 
     @classmethod
@@ -235,6 +247,46 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
                 return rule.category_id
 
         return None
+
+    @classmethod
+    async def apply_rule(
+        cls,
+        db: AsyncSession,
+        transaction: BudgetTransaction,
+        rule: BudgetCategorizationRule,
+    ) -> BudgetTransaction:
+        """
+        Apply a rule's actions to a transaction.
+
+        When the rule has no `actions` list, fall back to the legacy behavior
+        of setting category_id from the rule.  When `actions` is populated,
+        each action is applied in order.
+
+        Returns the (modified but uncommitted) transaction.
+        """
+        if not rule.actions:
+            # Legacy backward-compat: just set category
+            transaction.category_id = rule.category_id
+            return transaction
+
+        for action in rule.actions:
+            field = action.get("field")
+            operation = action.get("operation", "set")
+            value = action.get("value", "")
+
+            if field == "category" and operation == "set":
+                transaction.category_id = UUID(value) if value else None
+            elif field == "payee" and operation == "set":
+                transaction.payee_id = UUID(value) if value else None
+            elif field == "notes":
+                if operation == "set":
+                    transaction.notes = value
+                elif operation == "append":
+                    transaction.notes = (transaction.notes or "") + value
+                elif operation == "prepend":
+                    transaction.notes = value + (transaction.notes or "")
+
+        return transaction
 
     @staticmethod
     def _match_rule(

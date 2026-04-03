@@ -330,9 +330,16 @@ class CategorizationRuleBase(BaseModel):
     notes: Optional[str] = Field(None, description="Optional notes about the rule")
 
 
+class RuleAction(BaseModel):
+    """Single action for advanced rule processing"""
+    field: str = Field(..., description="'category', 'payee', 'notes'")
+    operation: str = Field(..., description="'set', 'append', 'prepend'")
+    value: str = Field(..., description="Value to set/append/prepend (UUID string for category/payee)")
+
+
 class CategorizationRuleCreate(CategorizationRuleBase):
     """Schema for creating a categorization rule"""
-    pass
+    actions: Optional[List[RuleAction]] = Field(None, description="Advanced multi-field actions")
 
 
 class CategorizationRuleUpdate(BaseModel):
@@ -344,12 +351,14 @@ class CategorizationRuleUpdate(BaseModel):
     enabled: Optional[bool] = None
     priority: Optional[int] = Field(None, ge=-1000, le=1000)
     notes: Optional[str] = None
+    actions: Optional[List[RuleAction]] = Field(None, description="Advanced multi-field actions")
 
 
 class CategorizationRuleResponse(CategorizationRuleBase):
     """Categorization rule response with metadata"""
     id: UUID
     family_id: UUID
+    actions: Optional[List[RuleAction]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -518,6 +527,73 @@ class ClosedMonthInfo(BaseModel):
     month: DateType = Field(..., description="The closed month")
     closed_at: datetime = Field(..., description="When it was closed")
     allocation_count: int = Field(..., ge=0, description="Number of allocations")
+
+
+# ============================================================================
+# SAVED FILTER SCHEMAS
+# ============================================================================
+
+class SavedFilterCreate(BaseModel):
+    """Schema for creating a saved transaction filter"""
+    name: str = Field(..., min_length=1, max_length=200)
+    conditions: list = Field(..., description="[{field, operator, value}]")
+    conditions_op: str = Field("and", description="'and' or 'or'")
+
+
+class SavedFilterUpdate(BaseModel):
+    """Schema for updating a saved filter"""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    conditions: Optional[list] = None
+    conditions_op: Optional[str] = None
+
+
+class SavedFilterResponse(BaseModel):
+    """Saved filter response with metadata"""
+    id: UUID
+    family_id: UUID
+    name: str
+    conditions: list
+    conditions_op: str
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
+# TAG SCHEMAS
+# ============================================================================
+
+class TagCreate(BaseModel):
+    """Schema for creating a tag"""
+    name: str = Field(..., min_length=1, max_length=100)
+    color: Optional[str] = Field(None, max_length=20)
+
+
+class TagUpdate(BaseModel):
+    """Schema for updating a tag"""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    color: Optional[str] = None
+
+
+class TagResponse(BaseModel):
+    """Tag response with metadata"""
+    id: UUID
+    family_id: UUID
+    name: str
+    color: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TransactionTagsUpdate(BaseModel):
+    """Schema for setting tags on a transaction"""
+    tag_ids: List[UUID]
 
 
 # Rebuild models to resolve forward references
