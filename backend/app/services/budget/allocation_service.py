@@ -10,6 +10,8 @@ from typing import List
 from datetime import date
 from uuid import UUID
 
+from dateutil.relativedelta import relativedelta
+
 from app.models.budget import BudgetAllocation, BudgetTransaction, BudgetCategory, BudgetCategoryGroup
 from app.schemas.budget import AllocationCreate, AllocationUpdate
 from app.services.base_service import BaseFamilyService
@@ -537,3 +539,205 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
 
         result = await db.execute(total_query)
         return result.scalar() or 0
+
+    # ------------------------------------------------------------------
+    # Auto-fill / budget template methods
+    # ------------------------------------------------------------------
+
+    @classmethod
+    async def auto_fill(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        target_month: date,
+        strategy: str,
+        overwrite_existing: bool = False,
+    ) -> dict:
+        """Dispatch to the appropriate auto-fill strategy.
+
+        Args:
+            db: Database session
+            family_id: Family ID
+            target_month: First day of the month to fill
+            strategy: One of "copy_previous", "average_3", "average_6", "average_12", "from_goals"
+            overwrite_existing: If True, overwrite existing allocations; otherwise skip them.
+
+        Returns:
+            {"filled_count": int, "skipped_count": int}
+        """
+        if strategy == "copy_previous":
+            return await cls._copy_previous_month(db, family_id, target_month, overwrite_existing)
+        elif strategy.startswith("average_"):
+            try:
+                n = int(strategy.split("_")[1])
+            except (IndexError, ValueError):
+                raise ValidationError(f"Invalid average strategy: {strategy}")
+            return await cls._average_n_months(db, family_id, target_month, n, overwrite_existing)
+        elif strategy == "from_goals":
+            return await cls._fill_from_goals(db, family_id, target_month, overwrite_existing)
+        else:
+            raise ValidationError(f"Unknown strategy: {strategy}")
+
+    @classmethod
+    async def _copy_previous_month(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        target_month: date,
+        overwrite_existing: bool,
+    ) -> dict:
+        """Copy all allocations from the previous month."""
+        prev_month = target_month - relativedelta(months=1)
+        prev_allocations = await cls.list_by_month(db, family_id, prev_month)
+
+        filled = 0
+        skipped = 0
+        for alloc in prev_allocations:
+            existing = await cls._get_allocation_for_category_month(
+                db, family_id, alloc.category_id, target_month
+            )
+            if existing and not overwrite_existing:
+                skipped += 1
+                continue
+
+            if existing:
+                existing.budgeted_amount = alloc.budgeted_amount
+            else:
+                new_alloc = BudgetAllocation(
+                    family_id=family_id,
+                    category_id=alloc.category_id,
+                    month=target_month,
+                    budgeted_amount=alloc.budgeted_amount,
+                )
+                db.add(new_alloc)
+            filled += 1
+
+        await db.commit()
+        return {"filled_count": filled, "skipped_count": skipped}
+
+    @classmethod
+    async def _average_n_months(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        target_month: date,
+        n: int,
+        overwrite_existing: bool,
+    ) -> dict:
+        """Set allocations to average of last N months' actual spending per category."""
+        from app.services.budget.category_service import CategoryService
+
+        categories = await CategoryService.list_by_family(db, family_id)
+
+        # Date range: N months before target_month
+        start_month = target_month - relativedelta(months=n)
+
+        filled = 0
+        skipped = 0
+
+        for cat in categories:
+            if cat.hidden:
+                continue
+
+            # Get actual spending for this category over the N months
+            activity_query = (
+                select(func.coalesce(func.sum(BudgetTransaction.amount), 0))
+                .where(
+                    and_(
+                        BudgetTransaction.family_id == family_id,
+                        BudgetTransaction.category_id == cat.id,
+                        BudgetTransaction.date >= start_month,
+                        BudgetTransaction.date < target_month,
+                    )
+                )
+            )
+            activity_result = await db.execute(activity_query)
+            total_spent = activity_result.scalar() or 0
+
+            # Average: total_spent is negative for expenses, we want positive budget
+            avg_amount = abs(int(total_spent / n)) if n > 0 else 0
+            if avg_amount == 0:
+                continue
+
+            existing = await cls._get_allocation_for_category_month(
+                db, family_id, cat.id, target_month
+            )
+            if existing and not overwrite_existing:
+                skipped += 1
+                continue
+
+            if existing:
+                existing.budgeted_amount = avg_amount
+            else:
+                new_alloc = BudgetAllocation(
+                    family_id=family_id,
+                    category_id=cat.id,
+                    month=target_month,
+                    budgeted_amount=avg_amount,
+                )
+                db.add(new_alloc)
+            filled += 1
+
+        await db.commit()
+        return {"filled_count": filled, "skipped_count": skipped}
+
+    @classmethod
+    async def _fill_from_goals(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        target_month: date,
+        overwrite_existing: bool,
+    ) -> dict:
+        """Set allocations from each category's goal_amount field."""
+        from app.services.budget.category_service import CategoryService
+
+        categories = await CategoryService.list_by_family(db, family_id)
+
+        filled = 0
+        skipped = 0
+
+        for cat in categories:
+            if cat.hidden or cat.goal_amount <= 0:
+                continue
+
+            existing = await cls._get_allocation_for_category_month(
+                db, family_id, cat.id, target_month
+            )
+            if existing and not overwrite_existing:
+                skipped += 1
+                continue
+
+            if existing:
+                existing.budgeted_amount = cat.goal_amount
+            else:
+                new_alloc = BudgetAllocation(
+                    family_id=family_id,
+                    category_id=cat.id,
+                    month=target_month,
+                    budgeted_amount=cat.goal_amount,
+                )
+                db.add(new_alloc)
+            filled += 1
+
+        await db.commit()
+        return {"filled_count": filled, "skipped_count": skipped}
+
+    @classmethod
+    async def _get_allocation_for_category_month(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        category_id: UUID,
+        month: date,
+    ) -> BudgetAllocation | None:
+        """Get existing allocation for a category/month, or None."""
+        query = select(BudgetAllocation).where(
+            and_(
+                BudgetAllocation.family_id == family_id,
+                BudgetAllocation.category_id == category_id,
+                BudgetAllocation.month == month,
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
