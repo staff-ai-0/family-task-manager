@@ -84,7 +84,7 @@ services:
       EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Family Task Manager}
       BASE_URL: ${BASE_URL:-https://family.agent-ia.mx}
     ports:
-      - "8002:8000"
+       - "8003:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -109,7 +109,7 @@ services:
     container_name: family_app_frontend
     environment:
       API_BASE_URL: http://backend:8000
-      PUBLIC_API_BASE_URL: http://localhost:8002
+      PUBLIC_API_BASE_URL: http://localhost:8003
       PORT: 3000
     ports:
       - "3003:3000"
