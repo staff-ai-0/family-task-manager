@@ -1,0 +1,463 @@
+---
+/**
+ * Receipt Scanner Page
+ * Allows scanning receipts with camera or file upload to create transactions automatically
+ * Premium feature (Plus/Pro plans)
+ */
+
+import Layout from "@layouts/Layout.astro";
+import BottomNav from "@components/BottomNav.astro";
+import BudgetNav from "@components/BudgetNav.astro";
+import { apiFetch } from "@lib/api";
+import { getAccounts } from "@lib/api/budget";
+import type { BudgetAccount } from "@lib/api/budget";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+if (user.role !== "parent") {
+    return Astro.redirect("/dashboard");
+}
+
+const { data: accounts, ok: accountsOk } = await getAccounts(token);
+
+const l = {
+    en: {
+        title: "Scan Receipt",
+        subtitle: "Take a photo or upload a receipt to create a transaction automatically",
+        account: "Target Account",
+        accountPlaceholder: "Select account...",
+        accountHelp: "Transaction will be added to this account",
+        takePhoto: "Take Photo",
+        uploadFile: "Upload Image",
+        or: "or",
+        scanning: "Analyzing receipt...",
+        scanBtn: "Scan Receipt",
+        success: "Transaction Created!",
+        lowConfidence: "Low confidence - please review",
+        date: "Date",
+        amount: "Amount",
+        payee: "Payee",
+        items: "Items",
+        confidence: "Confidence",
+        viewTransaction: "View Transactions",
+        tryAgain: "Scan Another",
+        premiumRequired: "Receipt scanning requires a Plus or Pro plan",
+        upgrade: "Upgrade Plan",
+        noImage: "Please select or capture a receipt image",
+        noAccount: "Please select a target account",
+        error: "Error scanning receipt",
+        dragDrop: "Drag & drop receipt here",
+        maxSize: "Max 10MB - JPEG, PNG, or WebP",
+    },
+    es: {
+        title: "Escanear Recibo",
+        subtitle: "Toma una foto o sube un recibo para crear una transaccion automaticamente",
+        account: "Cuenta Destino",
+        accountPlaceholder: "Seleccionar cuenta...",
+        accountHelp: "La transaccion se agregara a esta cuenta",
+        takePhoto: "Tomar Foto",
+        uploadFile: "Subir Imagen",
+        or: "o",
+        scanning: "Analizando recibo...",
+        scanBtn: "Escanear Recibo",
+        success: "Transaccion Creada!",
+        lowConfidence: "Baja confianza - por favor revisa",
+        date: "Fecha",
+        amount: "Monto",
+        payee: "Beneficiario",
+        items: "Articulos",
+        confidence: "Confianza",
+        viewTransaction: "Ver Transacciones",
+        tryAgain: "Escanear Otro",
+        premiumRequired: "El escaneo de recibos requiere un plan Plus o Pro",
+        upgrade: "Mejorar Plan",
+        noImage: "Por favor selecciona o captura una imagen del recibo",
+        noAccount: "Por favor selecciona una cuenta destino",
+        error: "Error al escanear recibo",
+        dragDrop: "Arrastra y suelta el recibo aqui",
+        maxSize: "Max 10MB - JPEG, PNG o WebP",
+    },
+};
+const t = l[lang as keyof typeof l] || l.en;
+---
+
+<Layout title={`${t.title} - Budget`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 flex flex-col min-h-screen">
+        <!-- Header -->
+        <header class="bg-gradient-to-br from-violet-600 to-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center justify-between mb-6">
+                <a href="/budget/transactions" class="text-white hover:text-primary-100 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="text-2xl font-bold">{t.title}</h1>
+                <div class="w-6"></div>
+            </div>
+
+            <div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
+                <div class="flex items-center gap-3">
+                    <div class="bg-white/30 rounded-full p-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    </div>
+                    <p class="text-white/90 text-sm">{t.subtitle}</p>
+                </div>
+            </div>
+        </header>
+
+        <BudgetNav active="transactions" />
+
+        <!-- Main Content -->
+        <main class="px-6 py-6 flex-grow max-w-lg mx-auto w-full">
+            <!-- Scan Form -->
+            <div id="scan-form" class="space-y-5">
+                <!-- Account Selection -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                    <label for="account-id" class="block text-sm font-semibold text-slate-700 mb-2">
+                        {t.account}
+                    </label>
+                    <select
+                        id="account-id"
+                        required
+                        class="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 bg-slate-50"
+                    >
+                        <option value="">{t.accountPlaceholder}</option>
+                        {accountsOk && accounts && accounts.map((account: BudgetAccount) => (
+                            <option value={account.id}>{account.name} ({account.type})</option>
+                        ))}
+                    </select>
+                    <p class="text-xs text-slate-500 mt-1.5">{t.accountHelp}</p>
+                </div>
+
+                <!-- Image Capture/Upload -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                    <!-- Preview Area -->
+                    <div
+                        id="drop-zone"
+                        class="relative border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-violet-400 transition cursor-pointer"
+                    >
+                        <div id="placeholder-content">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <p class="text-sm font-medium text-slate-600">{t.dragDrop}</p>
+                            <p class="text-xs text-slate-400 mt-1">{t.maxSize}</p>
+                        </div>
+                        <img id="preview-image" class="hidden max-h-64 mx-auto rounded-lg" alt="Receipt preview" />
+                        <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" class="hidden" />
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex gap-3 mt-4">
+                        <button
+                            id="camera-btn"
+                            type="button"
+                            class="flex-1 flex items-center justify-center gap-2 bg-violet-600 text-white px-4 py-3 rounded-xl font-semibold hover:bg-violet-700 transition"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span class="text-sm">{t.takePhoto}</span>
+                        </button>
+                        <button
+                            id="upload-btn"
+                            type="button"
+                            class="flex-1 flex items-center justify-center gap-2 bg-slate-100 text-slate-700 px-4 py-3 rounded-xl font-semibold hover:bg-slate-200 transition border border-slate-200"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span class="text-sm">{t.uploadFile}</span>
+                        </button>
+                    </div>
+                    <!-- Camera capture input (hidden, for mobile) -->
+                    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" />
+                </div>
+
+                <!-- Scan Button -->
+                <button
+                    id="scan-btn"
+                    type="button"
+                    disabled
+                    class="w-full bg-gradient-to-r from-violet-600 to-primary-600 text-white px-6 py-4 rounded-xl font-bold text-lg hover:from-violet-700 hover:to-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                >
+                    {t.scanBtn}
+                </button>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-state" class="hidden">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center">
+                    <div class="animate-pulse">
+                        <div class="bg-violet-100 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-violet-600 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                        </div>
+                        <p class="text-lg font-semibold text-slate-700">{t.scanning}</p>
+                        <p class="text-sm text-slate-500 mt-2">AI is reading your receipt...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div id="results-state" class="hidden space-y-4">
+                <div id="result-card" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                    <!-- Filled by JS -->
+                </div>
+
+                <div class="flex gap-3">
+                    <a
+                        href="/budget/transactions"
+                        class="flex-1 text-center bg-violet-600 text-white px-4 py-3 rounded-xl font-semibold hover:bg-violet-700 transition"
+                    >
+                        {t.viewTransaction}
+                    </a>
+                    <button
+                        id="try-again-btn"
+                        type="button"
+                        class="flex-1 bg-slate-100 text-slate-700 px-4 py-3 rounded-xl font-semibold hover:bg-slate-200 transition border border-slate-200"
+                    >
+                        {t.tryAgain}
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <BottomNav active="budget" role={user.role} lang={lang} />
+    </div>
+</Layout>
+
+<script define:vars={{ t }}>
+    document.addEventListener('astro:page-load', () => {
+        const fileInput = document.getElementById('file-input');
+        const cameraInput = document.getElementById('camera-input');
+        const cameraBtn = document.getElementById('camera-btn');
+        const uploadBtn = document.getElementById('upload-btn');
+        const scanBtn = document.getElementById('scan-btn');
+        const dropZone = document.getElementById('drop-zone');
+        const previewImage = document.getElementById('preview-image');
+        const placeholderContent = document.getElementById('placeholder-content');
+        const scanForm = document.getElementById('scan-form');
+        const loadingState = document.getElementById('loading-state');
+        const resultsState = document.getElementById('results-state');
+        const resultCard = document.getElementById('result-card');
+        const tryAgainBtn = document.getElementById('try-again-btn');
+
+        if (!fileInput || !scanBtn) return;
+
+        let selectedFile = null;
+
+        // Camera button
+        cameraBtn?.addEventListener('click', () => {
+            cameraInput?.click();
+        });
+
+        // Upload button
+        uploadBtn?.addEventListener('click', () => {
+            fileInput?.click();
+        });
+
+        // Drop zone click
+        dropZone?.addEventListener('click', () => {
+            fileInput?.click();
+        });
+
+        // Drag and drop
+        dropZone?.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-violet-400', 'bg-violet-50');
+        });
+
+        dropZone?.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-violet-400', 'bg-violet-50');
+        });
+
+        dropZone?.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-violet-400', 'bg-violet-50');
+            const files = e.dataTransfer?.files;
+            if (files?.[0]) handleFileSelect(files[0]);
+        });
+
+        // File selection handlers
+        fileInput?.addEventListener('change', (e) => {
+            const file = e.target?.files?.[0];
+            if (file) handleFileSelect(file);
+        });
+
+        cameraInput?.addEventListener('change', (e) => {
+            const file = e.target?.files?.[0];
+            if (file) handleFileSelect(file);
+        });
+
+        function handleFileSelect(file) {
+            selectedFile = file;
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImage.src = e.target.result;
+                previewImage.classList.remove('hidden');
+                placeholderContent.classList.add('hidden');
+            };
+            reader.readAsDataURL(file);
+
+            // Enable scan button
+            scanBtn.disabled = false;
+        }
+
+        // Scan button
+        scanBtn?.addEventListener('click', async () => {
+            const accountId = document.getElementById('account-id')?.value;
+
+            if (!accountId) {
+                alert(t.noAccount);
+                return;
+            }
+
+            if (!selectedFile) {
+                alert(t.noImage);
+                return;
+            }
+
+            // Show loading
+            scanForm.classList.add('hidden');
+            loadingState.classList.remove('hidden');
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('account_id', accountId);
+
+                const response = await fetch('/api/budget/transactions/scan-receipt', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const data = await response.json();
+
+                if (response.status === 403) {
+                    // Premium required
+                    loadingState.classList.add('hidden');
+                    scanForm.classList.remove('hidden');
+                    alert(t.premiumRequired);
+                    return;
+                }
+
+                // Show results
+                loadingState.classList.add('hidden');
+                resultsState.classList.remove('hidden');
+                displayResults(data);
+
+            } catch (error) {
+                loadingState.classList.add('hidden');
+                scanForm.classList.remove('hidden');
+                alert(t.error + ': ' + error.message);
+            }
+        });
+
+        // Try again
+        tryAgainBtn?.addEventListener('click', () => {
+            resultsState.classList.add('hidden');
+            scanForm.classList.remove('hidden');
+            selectedFile = null;
+            previewImage.classList.add('hidden');
+            previewImage.src = '';
+            placeholderContent.classList.remove('hidden');
+            scanBtn.disabled = true;
+            fileInput.value = '';
+            cameraInput.value = '';
+        });
+
+        function displayResults(data) {
+            const scanned = data.scanned_data || {};
+            const isSuccess = data.success;
+            const confidence = Math.round((data.confidence || 0) * 100);
+
+            const confidenceColor = confidence >= 80 ? 'text-green-600 bg-green-50' :
+                                   confidence >= 50 ? 'text-yellow-600 bg-yellow-50' :
+                                   'text-red-600 bg-red-50';
+
+            const amount = scanned.total_amount != null
+                ? (scanned.total_amount / 100).toFixed(2)
+                : '—';
+
+            let itemsHtml = '';
+            if (scanned.items?.length > 0) {
+                itemsHtml = `
+                    <div class="mt-3 pt-3 border-t border-slate-100">
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">${t.items}</p>
+                        <div class="space-y-1">
+                            ${scanned.items.map(item => `
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-slate-600">${item.name}</span>
+                                    <span class="text-slate-800 font-medium">$${(item.amount_cents / 100).toFixed(2)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            resultCard.innerHTML = `
+                <div class="flex items-center gap-3 mb-4">
+                    ${isSuccess
+                        ? `<div class="bg-green-100 rounded-full p-2">
+                               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                               </svg>
+                           </div>
+                           <div>
+                               <p class="font-bold text-green-700">${t.success}</p>
+                               <p class="text-xs text-slate-500">${data.message || ''}</p>
+                           </div>`
+                        : `<div class="bg-yellow-100 rounded-full p-2">
+                               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                               </svg>
+                           </div>
+                           <div>
+                               <p class="font-bold text-yellow-700">${t.lowConfidence}</p>
+                               <p class="text-xs text-slate-500">${data.message || ''}</p>
+                           </div>`
+                    }
+                </div>
+
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-slate-500">${t.confidence}</span>
+                        <span class="text-sm font-bold px-2.5 py-0.5 rounded-full ${confidenceColor}">${confidence}%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-slate-500">${t.date}</span>
+                        <span class="text-sm font-medium text-slate-800">${scanned.date || '—'}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-slate-500">${t.amount}</span>
+                        <span class="text-lg font-bold text-red-600">$${amount} ${scanned.currency || ''}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-slate-500">${t.payee}</span>
+                        <span class="text-sm font-medium text-slate-800">${scanned.payee_name || '—'}</span>
+                    </div>
+                </div>
+
+                ${itemsHtml}
+            `;
+        }
+    });
+</script>

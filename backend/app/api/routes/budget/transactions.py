@@ -18,6 +18,7 @@ from app.services.budget.transaction_service import TransactionService
 from app.services.usage_service import UsageService
 from app.services.budget.csv_import_service import CSVImportService
 from app.services.budget.file_import_service import import_file_transactions
+from app.services.budget.receipt_scanner_service import scan_and_create_transaction
 from app.schemas.budget import TransactionCreate, TransactionUpdate, TransactionResponse
 from app.models import User
 
@@ -257,4 +258,62 @@ async def import_file_transactions_endpoint(
         return result
     except Exception as e:
         return {"imported": 0, "skipped": 0, "errors": [str(e)]}
+
+
+@router.post("/scan-receipt", status_code=status.HTTP_200_OK)
+async def scan_receipt_endpoint(
+    file: UploadFile = File(..., description="Receipt photo (JPEG, PNG, WebP)"),
+    account_id: UUID = Form(..., description="Target account for the transaction"),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Scan a receipt photo and create a transaction (parent only, premium feature).
+
+    Uses Claude Vision to extract date, amount, payee, and line items from the receipt.
+    Auto-creates payee if new, applies categorization rules, and creates the transaction.
+
+    Returns scanned data, confidence score, and created transaction ID.
+    """
+    family_id = to_uuid_required(current_user.family_id)
+
+    # Gate behind premium
+    await require_feature("receipt_scan", db, current_user)
+
+    # Track usage
+    await UsageService.increment(db, family_id, "receipt_scan")
+
+    # Validate account belongs to family
+    from app.services.budget.account_service import AccountService
+    await AccountService.get_by_id(db, account_id, family_id)
+
+    # Validate file type
+    allowed_types = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    content_type = file.content_type or "image/jpeg"
+    if content_type not in allowed_types:
+        return {
+            "success": False,
+            "message": f"Unsupported image type: {content_type}. Use JPEG, PNG, or WebP.",
+            "scanned_data": None,
+            "transaction_id": None,
+        }
+
+    image_bytes = await file.read()
+
+    # Max 10MB
+    if len(image_bytes) > 10 * 1024 * 1024:
+        return {
+            "success": False,
+            "message": "Image too large. Maximum size is 10MB.",
+            "scanned_data": None,
+            "transaction_id": None,
+        }
+
+    result = await scan_and_create_transaction(
+        db=db,
+        family_id=family_id,
+        account_id=account_id,
+        image_bytes=image_bytes,
+        media_type=content_type,
+    )
+    return result
 
