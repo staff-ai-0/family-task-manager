@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.services.budget.allocation_service import AllocationService
-from app.schemas.budget import AllocationCreate, AllocationUpdate, AllocationResponse
+from app.schemas.budget import AllocationCreate, AllocationUpdate, AllocationResponse, AutoFillRequest, AutoFillResponse
 from app.models import User
 
 router = APIRouter()
@@ -118,3 +118,26 @@ async def set_category_budget(
         amount=amount,
     )
     return allocation
+
+
+@router.post("/auto-fill", response_model=AutoFillResponse)
+async def auto_fill_allocations(
+    data: AutoFillRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Auto-fill budget allocations using a strategy (parent only).
+
+    Strategies:
+    - copy_previous: Copy allocations from the previous month
+    - average_3/6/12: Average of last N months' actual spending per category
+    - from_goals: Use each category's goal_amount field
+    """
+    result = await AllocationService.auto_fill(
+        db,
+        family_id=to_uuid_required(current_user.family_id),
+        target_month=data.target_month,
+        strategy=data.strategy,
+        overwrite_existing=data.overwrite_existing,
+    )
+    return AutoFillResponse(**result)
