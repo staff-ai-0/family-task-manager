@@ -46,6 +46,9 @@ flake8==7.0.0
 mypy==1.8.0
 isort==5.13.2
 
+# AI / Vision
+anthropic>=0.39.0
+
 # Utilities
 python-dotenv==1.0.1
 email-validator==2.1.0.post1

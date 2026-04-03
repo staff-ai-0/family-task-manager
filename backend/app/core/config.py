@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     LITELLM_API_BASE: str = "http://10.1.0.99:4000"
     LITELLM_API_KEY: str = ""
     LITELLM_MODEL: str = "mistral-nemo"
+
+    # Anthropic API (for receipt scanning via Claude Vision)
+    ANTHROPIC_API_KEY: str = ""
     
     # Logging
     LOG_LEVEL: str = "INFO"

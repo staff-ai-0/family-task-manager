@@ -83,6 +83,8 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:-noreply@agent-ia.mx}
       EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Family Task Manager}
       BASE_URL: ${BASE_URL:-https://family.agent-ia.mx}
+      # AI (Receipt Scanner)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
        - "8003:8000"
     depends_on:
