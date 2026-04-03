@@ -130,12 +130,14 @@ class BudgetPayee(Base):
     family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_favorite: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    
+
     # Relationships
     family: Mapped["Family"] = relationship("Family", back_populates="budget_payees")
     transactions: Mapped[list["BudgetTransaction"]] = relationship("BudgetTransaction", back_populates="payee")
+    recurring_transactions: Mapped[list["BudgetRecurringTransaction"]] = relationship("BudgetRecurringTransaction", back_populates="payee")
 
 
 class BudgetTransaction(Base):
@@ -279,7 +281,7 @@ class BudgetRecurringTransaction(Base):
     recurrence_type: Mapped[str] = mapped_column(
         String(50), 
         nullable=False, 
-        comment="'daily', 'weekly', 'monthly_dayofmonth', 'monthly_dayofweek'"
+        comment="'daily', 'weekly', 'monthly_dayofmonth', 'monthly_dayofweek', 'yearly'"
     )
     # Recurrence frequency: every N days/weeks/months
     recurrence_interval: Mapped[int] = mapped_column(Integer, default=1, nullable=False, comment="Repeat every N periods")
@@ -293,7 +295,13 @@ class BudgetRecurringTransaction(Base):
     # Scheduling
     start_date: Mapped[date] = mapped_column(Date, nullable=False, comment="First occurrence date")
     end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, comment="Last occurrence date (null = ongoing)")
-    
+
+    # Schedule end modes
+    end_mode: Mapped[str] = mapped_column(String(20), default="never", nullable=False, comment="'never', 'on_date', 'after_n'")
+    occurrence_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment="Max occurrences for after_n mode")
+    occurrence_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False, comment="Current posted count")
+    weekend_behavior: Mapped[str] = mapped_column(String(20), default="none", nullable=False, comment="'none', 'before' (Fri), 'after' (Mon)")
+
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_generated_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, comment="Last date a transaction was auto-generated")

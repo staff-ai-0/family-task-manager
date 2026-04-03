@@ -153,6 +153,7 @@ class PayeeBase(BaseModel):
     """Base payee schema"""
     name: str = Field(..., min_length=1, max_length=200, description="Payee name (e.g., 'Oxxo', 'CFE')")
     notes: Optional[str] = Field(None, description="Optional notes")
+    is_favorite: bool = Field(False, description="Mark as favorite payee")
 
 
 class PayeeCreate(PayeeBase):
@@ -164,6 +165,13 @@ class PayeeUpdate(BaseModel):
     """Schema for updating a payee"""
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     notes: Optional[str] = None
+    is_favorite: Optional[bool] = None
+
+
+class PayeeMergeRequest(BaseModel):
+    """Schema for merging payees"""
+    target_id: UUID = Field(..., description="Payee to keep (merge target)")
+    source_ids: List[UUID] = Field(..., min_length=1, description="Payees to merge into target (will be deleted)")
 
 
 class PayeeResponse(PayeeBase):
@@ -438,13 +446,17 @@ class RecurringTransactionBase(BaseModel):
     amount: int = Field(..., description="Amount in cents (negative=expense, positive=income)")
     recurrence_type: str = Field(
         ...,
-        description="'daily', 'weekly', 'monthly_dayofmonth', 'monthly_dayofweek'"
+        description="'daily', 'weekly', 'monthly_dayofmonth', 'monthly_dayofweek', 'yearly'"
     )
     recurrence_interval: int = Field(1, ge=1, le=52, description="Repeat every N periods")
     recurrence_pattern: Optional[dict] = Field(None, description="Pattern-specific configuration (JSON)")
     start_date: DateType = Field(..., description="First occurrence date")
     end_date: Optional[DateType] = Field(None, description="Last occurrence date (null = ongoing)")
     is_active: bool = Field(True, description="Is template currently active?")
+    end_mode: str = Field("never", description="'never', 'on_date', 'after_n'")
+    occurrence_limit: Optional[int] = Field(None, ge=1, description="Max occurrences for after_n mode")
+    occurrence_count: int = Field(0, ge=0, description="Current posted count")
+    weekend_behavior: str = Field("none", description="'none', 'before' (shift to Fri), 'after' (shift to Mon)")
 
 
 class RecurringTransactionCreate(RecurringTransactionBase):
@@ -466,6 +478,10 @@ class RecurringTransactionUpdate(BaseModel):
     start_date: Optional[DateType] = None
     end_date: Optional[DateType] = None
     is_active: Optional[bool] = None
+    end_mode: Optional[str] = None
+    occurrence_limit: Optional[int] = Field(None, ge=1)
+    occurrence_count: Optional[int] = Field(None, ge=0)
+    weekend_behavior: Optional[str] = None
 
 
 class RecurringTransactionResponse(RecurringTransactionBase):
@@ -474,6 +490,7 @@ class RecurringTransactionResponse(RecurringTransactionBase):
     family_id: UUID
     last_generated_date: Optional[DateType] = None
     next_due_date: Optional[DateType] = None
+    occurrence_count: int = 0
     created_at: datetime
     updated_at: datetime
 
