@@ -3,6 +3,7 @@ PayPal Payment Service
 
 Handles PayPal payment processing and webhook events.
 """
+
 import paypalrestsdk
 from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,11 +24,13 @@ class PayPalService:
 
     def __init__(self):
         """Initialize PayPal SDK"""
-        paypalrestsdk.configure({
-            "mode": settings.PAYPAL_MODE,  # "sandbox" or "live"
-            "client_id": settings.PAYPAL_CLIENT_ID,
-            "client_secret": settings.PAYPAL_CLIENT_SECRET
-        })
+        paypalrestsdk.configure(
+            {
+                "mode": settings.PAYPAL_MODE,  # "sandbox" or "live"
+                "client_id": settings.PAYPAL_CLIENT_ID,
+                "client_secret": settings.PAYPAL_CLIENT_SECRET,
+            }
+        )
 
     @staticmethod
     def create_payment(
@@ -39,17 +42,17 @@ class PayPalService:
     ) -> Dict[str, Any]:
         """
         Create a PayPal payment
-        
+
         Args:
             amount: Payment amount
             currency: Currency code (USD, EUR, etc.)
             description: Payment description
             return_url: URL to redirect after successful payment
             cancel_url: URL to redirect if payment is cancelled
-            
+
         Returns:
             Dict with payment info including approval_url
-            
+
         Raises:
             ValidationException: If payment creation fails
         """
@@ -58,33 +61,31 @@ class PayPalService:
             return_url = f"{settings.BASE_URL}/payment/success"
         if not cancel_url:
             cancel_url = f"{settings.BASE_URL}/payment/cancel"
-        
-        payment = paypalrestsdk.Payment({
-            "intent": "sale",
-            "payer": {
-                "payment_method": "paypal"
-            },
-            "redirect_urls": {
-                "return_url": return_url,
-                "cancel_url": cancel_url
-            },
-            "transactions": [{
-                "item_list": {
-                    "items": [{
-                        "name": description,
-                        "sku": "subscription",
-                        "price": str(amount),
-                        "currency": currency,
-                        "quantity": 1
-                    }]
-                },
-                "amount": {
-                    "total": str(amount),
-                    "currency": currency
-                },
-                "description": description
-            }]
-        })
+
+        payment = paypalrestsdk.Payment(
+            {
+                "intent": "sale",
+                "payer": {"payment_method": "paypal"},
+                "redirect_urls": {"return_url": return_url, "cancel_url": cancel_url},
+                "transactions": [
+                    {
+                        "item_list": {
+                            "items": [
+                                {
+                                    "name": description,
+                                    "sku": "subscription",
+                                    "price": str(amount),
+                                    "currency": currency,
+                                    "quantity": 1,
+                                }
+                            ]
+                        },
+                        "amount": {"total": str(amount), "currency": currency},
+                        "description": description,
+                    }
+                ],
+            }
+        )
 
         if payment.create():
             # Get approval URL
@@ -93,27 +94,29 @@ class PayPalService:
                 if link.rel == "approval_url":
                     approval_url = link.href
                     break
-            
+
             return {
                 "payment_id": payment.id,
                 "approval_url": approval_url,
                 "status": payment.state,
             }
         else:
-            raise ValidationException(f"PayPal payment creation failed: {payment.error}")
+            raise ValidationException(
+                f"PayPal payment creation failed: {payment.error}"
+            )
 
     @staticmethod
     def execute_payment(payment_id: str, payer_id: str) -> Dict[str, Any]:
         """
         Execute/confirm a PayPal payment
-        
+
         Args:
             payment_id: PayPal payment ID
             payer_id: Payer ID from PayPal redirect
-            
+
         Returns:
             Dict with payment execution result
-            
+
         Raises:
             ValidationException: If payment execution fails
         """
@@ -128,33 +131,41 @@ class PayPalService:
                 "currency": payment.transactions[0].amount.currency,
             }
         else:
-            raise ValidationException(f"PayPal payment execution failed: {payment.error}")
+            raise ValidationException(
+                f"PayPal payment execution failed: {payment.error}"
+            )
 
     @staticmethod
     def get_payment_details(payment_id: str) -> Dict[str, Any]:
         """
         Get details of a PayPal payment
-        
+
         Args:
             payment_id: PayPal payment ID
-            
+
         Returns:
             Dict with payment details
-            
+
         Raises:
             NotFoundException: If payment not found
         """
         try:
             payment = paypalrestsdk.Payment.find(payment_id)
-            
+
             return {
                 "payment_id": payment.id,
                 "status": payment.state,
                 "create_time": payment.create_time,
                 "update_time": payment.update_time,
-                "amount": payment.transactions[0].amount.total if payment.transactions else None,
-                "currency": payment.transactions[0].amount.currency if payment.transactions else None,
-                "payer_email": payment.payer.payer_info.email if payment.payer and payment.payer.payer_info else None,
+                "amount": payment.transactions[0].amount.total
+                if payment.transactions
+                else None,
+                "currency": payment.transactions[0].amount.currency
+                if payment.transactions
+                else None,
+                "payer_email": payment.payer.payer_info.email
+                if payment.payer and payment.payer.payer_info
+                else None,
             }
         except paypalrestsdk.ResourceNotFound:
             raise NotFoundException(f"Payment {payment_id} not found")
@@ -167,15 +178,15 @@ class PayPalService:
     ) -> Dict[str, Any]:
         """
         Create a PayPal subscription
-        
+
         Args:
             plan_id: PayPal billing plan ID
             return_url: URL to redirect after successful subscription
             cancel_url: URL to redirect if subscription is cancelled
-            
+
         Returns:
             Dict with subscription info including approval_url
-            
+
         Raises:
             ValidationException: If subscription creation fails
         """
@@ -184,11 +195,77 @@ class PayPalService:
             return_url = f"{settings.BASE_URL}/subscription/success"
         if not cancel_url:
             cancel_url = f"{settings.BASE_URL}/subscription/cancel"
-        
-        # Note: PayPal subscriptions require PayPal REST SDK v2
-        # For now, returning a placeholder
-        # You'll need to implement this using the v2 API
-        raise NotImplementedError("PayPal subscriptions require REST API v2")
+
+        # Create AgreementStateDescriptor with redirect URLs
+        agreement = paypalrestsdk.BillingAgreement(
+            {
+                "name": "Family Task Manager Subscription",
+                "description": "Subscription to Family Task Manager premium features",
+                "start_date": datetime.now().isoformat() + "Z",
+                "agreement_type": "regular",
+                "payer": {"payment_method": "paypal"},
+                "plan": {"id": plan_id},
+                "override_merchant_preferences": {
+                    "return_url": return_url,
+                    "cancel_url": cancel_url,
+                    "notify_url": f"{settings.BASE_URL}/api/subscriptions/webhook",
+                    "max_fail_attempts": "2",
+                    "initial_fail_amount_action": "CONTINUE",
+                    "valid": "1",
+                },
+            }
+        )
+
+        if agreement.create():
+            # Get approval URL
+            approval_url = None
+            for link in agreement.links:
+                if link.rel == "approval_url":
+                    approval_url = link.href
+                    break
+
+            return {
+                "subscription_id": agreement.id,
+                "approval_url": approval_url,
+                "status": "approval_pending",
+            }
+        else:
+            raise ValidationException(
+                f"Failed to create PayPal subscription: {agreement.error['message']}"
+            )
+
+    @staticmethod
+    def execute_subscription(
+        billing_agreement_id: str,
+        token: str,
+    ) -> Dict[str, Any]:
+        """
+        Execute (activate) a PayPal billing agreement after user approval
+
+        Args:
+            billing_agreement_id: The billing agreement ID
+            token: The token returned by PayPal after user approval
+
+        Returns:
+            Dict with execution result
+
+        Raises:
+            ValidationException: If execution fails
+        """
+        agreement = paypalrestsdk.BillingAgreement.find(billing_agreement_id)
+
+        if agreement.execute(token):
+            return {
+                "status": "active",
+                "subscription_id": billing_agreement_id,
+                "start_date": agreement.agreement_details.get(
+                    "outstanding_balance", {}
+                ).get("value"),
+            }
+        else:
+            raise ValidationException(
+                f"Failed to execute PayPal subscription: {agreement.error['message']}"
+            )
 
     @staticmethod
     def verify_webhook_signature(
@@ -202,7 +279,7 @@ class PayPalService:
     ) -> bool:
         """
         Verify PayPal webhook signature
-        
+
         Args:
             transmission_id: Transmission ID from webhook headers
             transmission_time: Transmission time from webhook headers
@@ -211,7 +288,7 @@ class PayPalService:
             transmission_sig: Transmission signature from webhook headers
             webhook_id: Your webhook ID from PayPal dashboard
             event_body: Webhook event body
-            
+
         Returns:
             True if signature is valid, False otherwise
         """
