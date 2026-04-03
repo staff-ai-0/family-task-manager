@@ -48,13 +48,13 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         """
         # Verify the account exists and belongs to the family
         from app.services.budget.account_service import AccountService
-        
+
         await AccountService.get_by_id(db, data.account_id, family_id)
 
         # Verify category if provided
         if data.category_id:
             from app.services.budget.category_service import CategoryService
-            
+
             await CategoryService.get_by_id(db, data.category_id, family_id)
 
         # Calculate next due date
@@ -64,6 +64,10 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
             data.recurrence_interval,
             data.recurrence_pattern,
             data.end_date,
+            end_mode=data.end_mode,
+            occurrence_limit=data.occurrence_limit,
+            occurrence_count=data.occurrence_count,
+            weekend_behavior=data.weekend_behavior,
         )
 
         recurring_tx = BudgetRecurringTransaction(
@@ -81,6 +85,10 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
             end_date=data.end_date,
             is_active=data.is_active,
             next_due_date=next_due_date,
+            end_mode=data.end_mode,
+            occurrence_limit=data.occurrence_limit,
+            occurrence_count=data.occurrence_count,
+            weekend_behavior=data.weekend_behavior,
         )
 
         db.add(recurring_tx)
@@ -115,27 +123,41 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         update_data = data.model_dump(exclude_unset=True)
         if "account_id" in update_data:
             from app.services.budget.account_service import AccountService
-            
+
             await AccountService.get_by_id(db, update_data["account_id"], family_id)
 
         # Verify new category if provided
         if "category_id" in update_data and update_data["category_id"]:
             from app.services.budget.category_service import CategoryService
-            
+
             await CategoryService.get_by_id(db, update_data["category_id"], family_id)
 
         # Recalculate next_due_date if any recurrence fields changed
         recurring = await cls.get_by_id(db, recurring_id, family_id)
-        
+
         start_date = update_data.get("start_date", recurring.start_date)
         recurrence_type = update_data.get("recurrence_type", recurring.recurrence_type)
         recurrence_interval = update_data.get("recurrence_interval", recurring.recurrence_interval)
         recurrence_pattern = update_data.get("recurrence_pattern", recurring.recurrence_pattern)
         end_date = update_data.get("end_date", recurring.end_date)
-        
-        if any(k in update_data for k in ["start_date", "recurrence_type", "recurrence_interval", "recurrence_pattern", "end_date"]):
+        end_mode = update_data.get("end_mode", recurring.end_mode)
+        occurrence_limit = update_data.get("occurrence_limit", recurring.occurrence_limit)
+        occurrence_count = update_data.get("occurrence_count", recurring.occurrence_count)
+        weekend_behavior = update_data.get("weekend_behavior", recurring.weekend_behavior)
+
+        recurrence_fields = [
+            "start_date", "recurrence_type", "recurrence_interval",
+            "recurrence_pattern", "end_date", "end_mode",
+            "occurrence_limit", "occurrence_count", "weekend_behavior",
+        ]
+        if any(k in update_data for k in recurrence_fields):
             next_due_date = cls._calculate_next_occurrence(
-                start_date, recurrence_type, recurrence_interval, recurrence_pattern, end_date
+                start_date, recurrence_type, recurrence_interval,
+                recurrence_pattern, end_date,
+                end_mode=end_mode,
+                occurrence_limit=occurrence_limit,
+                occurrence_count=occurrence_count,
+                weekend_behavior=weekend_behavior,
             )
             update_data["next_due_date"] = next_due_date
 
@@ -214,6 +236,33 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         result = await db.execute(query)
         return list(result.scalars().all())
 
+    @staticmethod
+    def _adjust_weekend(d: date, weekend_behavior: str) -> date:
+        """
+        Adjust a date if it falls on a weekend.
+
+        Args:
+            d: The date to adjust
+            weekend_behavior: 'none', 'before' (shift to Fri), 'after' (shift to Mon)
+
+        Returns:
+            Adjusted date
+        """
+        if weekend_behavior == "none":
+            return d
+        weekday = d.weekday()  # 0=Mon ... 6=Sun
+        if weekday == 5:  # Saturday
+            if weekend_behavior == "before":
+                return d - timedelta(days=1)  # Friday
+            elif weekend_behavior == "after":
+                return d + timedelta(days=2)  # Monday
+        elif weekday == 6:  # Sunday
+            if weekend_behavior == "before":
+                return d - timedelta(days=2)  # Friday
+            elif weekend_behavior == "after":
+                return d + timedelta(days=1)  # Monday
+        return d
+
     @classmethod
     def _calculate_next_occurrence(
         cls,
@@ -223,6 +272,10 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         recurrence_pattern: Optional[dict],
         end_date: Optional[date],
         from_date: Optional[date] = None,
+        end_mode: str = "never",
+        occurrence_limit: Optional[int] = None,
+        occurrence_count: int = 0,
+        weekend_behavior: str = "none",
     ) -> Optional[date]:
         """
         Calculate the next occurrence date for a recurring transaction.
@@ -234,16 +287,28 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
             recurrence_pattern: Pattern-specific config
             end_date: Template end date (None = ongoing)
             from_date: Calculate next date from this date (defaults to today)
+            end_mode: 'never', 'on_date', 'after_n'
+            occurrence_limit: Max occurrences for after_n mode
+            occurrence_count: Current posted count
+            weekend_behavior: 'none', 'before', 'after'
 
         Returns:
-            Next occurrence date or None if template has expired
+            Next occurrence date or None if template has expired/exhausted
         """
         if from_date is None:
             from_date = date.today()
 
-        # If start date is in future, return start date
+        # Check if after_n limit reached
+        if end_mode == "after_n" and occurrence_limit is not None:
+            if occurrence_count >= occurrence_limit:
+                return None
+
+        # If start date is in future, return start date (with weekend adjustment)
         if start_date > from_date:
-            return start_date
+            result = cls._adjust_weekend(start_date, weekend_behavior)
+            if end_date and result > end_date:
+                return None
+            return result
 
         # Check if already expired
         if end_date and from_date > end_date:
@@ -265,8 +330,6 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
             else:
                 target_days = recurrence_pattern["days"]
 
-            weeks_since_start = (from_date - start_date).days // 7
-            
             # Find next occurrence on target days
             current_check = from_date
             for _ in range(14):  # Check up to 2 weeks ahead
@@ -290,7 +353,7 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
             months_offset = 0
             while months_offset < 24:  # Check up to 2 years
                 target_date = (current_date + relativedelta(months=months_offset)).replace(day=1)
-                
+
                 # Handle months with fewer days
                 try:
                     target_date = target_date.replace(day=target_day)
@@ -345,9 +408,24 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
 
                 months_offset += recurrence_interval
 
+        elif recurrence_type == "yearly":
+            # Every N years from start_date
+            years_since_start = from_date.year - start_date.year
+            intervals_passed = years_since_start // recurrence_interval
+            # Try next interval
+            for attempt in range(intervals_passed + 1, intervals_passed + 10):
+                candidate = start_date + relativedelta(years=attempt * recurrence_interval)
+                if candidate > from_date:
+                    next_date = candidate
+                    break
+
         # Verify within end date
         if next_date and end_date and next_date > end_date:
             return None
+
+        # Apply weekend adjustment
+        if next_date:
+            next_date = cls._adjust_weekend(next_date, weekend_behavior)
 
         return next_date
 
@@ -380,19 +458,33 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         recurring = await cls.get_by_id(db, recurring_id, family_id)
 
         # Create transaction from template
+        # BudgetTransaction uses 'date' and 'notes', not 'transaction_date' and 'description'
         transaction = BudgetTransaction(
             family_id=family_id,
             account_id=recurring.account_id,
             category_id=recurring.category_id,
             payee_id=recurring.payee_id,
             amount=recurring.amount,
-            transaction_date=transaction_date,
-            description=recurring.description or recurring.name,
+            date=transaction_date,
+            notes=recurring.description or recurring.name,
             cleared=False,
             reconciled=False,
         )
 
         db.add(transaction)
+
+        # Increment occurrence count
+        recurring.occurrence_count += 1
+
+        # Auto-deactivate if after_n limit reached
+        if recurring.end_mode == "after_n" and recurring.occurrence_limit is not None:
+            if recurring.occurrence_count >= recurring.occurrence_limit:
+                recurring.is_active = False
+                recurring.next_due_date = None
+                recurring.last_generated_date = transaction_date
+                await db.commit()
+                await db.refresh(transaction)
+                return transaction
 
         # Update recurring transaction's last_generated_date and next_due_date
         recurring.last_generated_date = transaction_date
@@ -403,6 +495,10 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
             recurring.recurrence_pattern,
             recurring.end_date,
             from_date=transaction_date,
+            end_mode=recurring.end_mode,
+            occurrence_limit=recurring.occurrence_limit,
+            occurrence_count=recurring.occurrence_count,
+            weekend_behavior=recurring.weekend_behavior,
         )
 
         await db.commit()
