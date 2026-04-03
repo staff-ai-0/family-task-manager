@@ -61,7 +61,7 @@ TWO_MONTHS_AGO = (LAST_MONTH - timedelta(days=1)).replace(day=1)
 
 
 async def clear_all(session: AsyncSession):
-    """Clear all data in FK-safe order"""
+    """Clear all data using TRUNCATE CASCADE to handle FK constraints"""
     print("Clearing existing data...")
     tables = [
         "budget_recurring_transactions",
@@ -89,11 +89,8 @@ async def clear_all(session: AsyncSession):
         "users",
         "families",
     ]
-    for table in tables:
-        try:
-            await session.execute(text(f"DELETE FROM {table}"))
-        except Exception as e:
-            print(f"  Warning: {table}: {e}")
+    all_tables = ", ".join(tables)
+    await session.execute(text(f"TRUNCATE {all_tables} CASCADE"))
     await session.commit()
     print("  Done.\n")
 
