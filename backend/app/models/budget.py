@@ -308,3 +308,20 @@ class BudgetRecurringTransaction(Base):
     account: Mapped["BudgetAccount"] = relationship("BudgetAccount", back_populates="recurring_transactions")
     category: Mapped[Optional["BudgetCategory"]] = relationship("BudgetCategory", foreign_keys=[category_id])
     payee: Mapped[Optional["BudgetPayee"]] = relationship("BudgetPayee", foreign_keys=[payee_id])
+
+
+class BudgetCustomReport(Base):
+    """Saved custom report configurations for reusable budget analytics."""
+
+    __tablename__ = "budget_custom_reports"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, comment="Report configuration: graph_type, group_by, date_range, etc.")
+    created_by: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    family: Mapped["Family"] = relationship("Family", back_populates="budget_custom_reports")

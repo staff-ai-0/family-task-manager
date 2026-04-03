@@ -520,6 +520,68 @@ class ClosedMonthInfo(BaseModel):
     allocation_count: int = Field(..., ge=0, description="Number of allocations")
 
 
+# ============================================================================
+# AUTO-FILL SCHEMAS
+# ============================================================================
+
+class AutoFillRequest(BaseModel):
+    """Request for auto-filling budget allocations"""
+    target_month: DateType = Field(..., description="First day of the month to fill")
+    strategy: str = Field(..., description="Strategy: 'copy_previous', 'average_3', 'average_6', 'average_12', 'from_goals'")
+    overwrite_existing: bool = Field(False, description="Overwrite existing allocations?")
+
+    @field_validator('target_month')
+    @classmethod
+    def validate_month(cls, v):
+        if v.day != 1:
+            raise ValueError('target_month must be the first day of the month')
+        return v
+
+    @field_validator('strategy')
+    @classmethod
+    def validate_strategy(cls, v):
+        allowed = ['copy_previous', 'average_3', 'average_6', 'average_12', 'from_goals']
+        if v not in allowed:
+            raise ValueError(f'strategy must be one of: {", ".join(allowed)}')
+        return v
+
+
+class AutoFillResponse(BaseModel):
+    """Response for auto-fill operation"""
+    filled_count: int
+    skipped_count: int
+
+
+# ============================================================================
+# CUSTOM REPORT SCHEMAS
+# ============================================================================
+
+class CustomReportCreate(BaseModel):
+    """Schema for creating a custom report"""
+    name: str = Field(..., min_length=1, max_length=200)
+    config: dict = Field(...)
+
+
+class CustomReportUpdate(BaseModel):
+    """Schema for updating a custom report"""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    config: Optional[dict] = None
+
+
+class CustomReportResponse(BaseModel):
+    """Custom report response with metadata"""
+    id: UUID
+    family_id: UUID
+    name: str
+    config: dict
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # Rebuild models to resolve forward references
 CategoryWithGroup.model_rebuild()
 CategoryGroupWithCategories.model_rebuild()
