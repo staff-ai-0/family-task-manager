@@ -4,7 +4,7 @@ Payee routes
 CRUD endpoints for budget payees.
 """
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from uuid import UUID
@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.services.budget.payee_service import PayeeService
-from app.schemas.budget import PayeeCreate, PayeeUpdate, PayeeResponse
+from app.schemas.budget import PayeeCreate, PayeeUpdate, PayeeMergeRequest, PayeeResponse
 from app.models import User
 
 router = APIRouter()
@@ -21,13 +21,15 @@ router = APIRouter()
 
 @router.get("/", response_model=List[PayeeResponse])
 async def list_payees(
+    favorites_only: bool = Query(False, description="Only return favorite payees"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all payees"""
-    payees = await PayeeService.list_by_family(
+    """List all payees, optionally filtered to favorites only"""
+    payees = await PayeeService.list_by_family_filtered(
         db,
         to_uuid_required(current_user.family_id),
+        favorites_only=favorites_only,
     )
     return payees
 
@@ -40,6 +42,21 @@ async def create_payee(
 ):
     """Create a new payee (parent only)"""
     payee = await PayeeService.create(
+        db,
+        family_id=to_uuid_required(current_user.family_id),
+        data=data,
+    )
+    return payee
+
+
+@router.post("/merge", response_model=PayeeResponse)
+async def merge_payees(
+    data: PayeeMergeRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Merge source payees into target payee (parent only)"""
+    payee = await PayeeService.merge(
         db,
         family_id=to_uuid_required(current_user.family_id),
         data=data,
