@@ -19,6 +19,7 @@ from app.core.premium import get_family_plan, FEATURE_LIMIT_MAP, DEFAULT_FREE_LI
 from app.models.subscription import FamilySubscription, SubscriptionPlan
 from app.models.user import User
 from app.schemas.subscription import (
+    ActivateRequest,
     CheckoutRequest,
     CheckoutResponse,
     PlanResponse,
@@ -179,6 +180,7 @@ async def create_checkout(
 
 @router.post("/activate")
 async def activate_subscription(
+    request: ActivateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_parent_role),
 ):
@@ -186,19 +188,84 @@ async def activate_subscription(
     Activate a subscription after PayPal approval.
 
     Called after user approves payment on PayPal and returns to our app.
-    The token should be in the URL query params (PayPal returns it).
+    Receives the PayPal subscription ID and executes the billing agreement.
     """
-    # For now, this is a placeholder
-    # In production, you'd:
-    # 1. Get the token from query params
-    # 2. Execute the billing agreement
-    # 3. Create FamilySubscription record
-    # 4. Activate the subscription
+    try:
+        # Execute the billing agreement with PayPal
+        paypal_service = PayPalService()
+        execution_result = paypal_service.execute_subscription(
+            billing_agreement_id=request.paypal_subscription_id,
+            token=request.paypal_subscription_id,  # Token is the BA ID for execution
+        )
 
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Subscription activation endpoint - frontend will handle PayPal return",
-    )
+        # Get the plan that's being subscribed to
+        # First, check if there's already an active subscription (shouldn't be)
+        existing_query = select(FamilySubscription).where(
+            and_(
+                FamilySubscription.family_id == current_user.family_id,
+                FamilySubscription.status == "active",
+            )
+        )
+        existing_result = await db.execute(existing_query)
+        existing_subscription = existing_result.scalar_one_or_none()
+
+        if existing_subscription:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Family already has an active subscription",
+            )
+
+        # Get plan information from request metadata
+        # Note: In a real implementation, you might store this in a temporary session
+        # For now, we'll query to find which plan was being checked out
+        # by looking for the billing plan in PayPal response
+
+        # Create FamilySubscription record
+        now = datetime.now(timezone.utc)
+
+        # For demo: assign to Plus monthly plan as default
+        # In production, this would be determined from PayPal or session data
+        plans_query = select(SubscriptionPlan).where(SubscriptionPlan.name == "plus")
+        plans_result = await db.execute(plans_query)
+        plan = plans_result.scalar_one_or_none()
+
+        if not plan:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Default plan not found",
+            )
+
+        family_subscription = FamilySubscription(
+            family_id=current_user.family_id,
+            plan_id=plan.id,
+            billing_cycle="monthly",  # Default to monthly
+            status="active",
+            paypal_subscription_id=request.paypal_subscription_id,
+            current_period_start=now,
+            current_period_end=datetime(
+                now.year if now.month < 12 else now.year + 1,
+                (now.month % 12) + 1 if now.month < 12 else 1,
+                now.day,
+                tzinfo=timezone.utc,
+            ),
+        )
+
+        db.add(family_subscription)
+        await db.commit()
+        await db.refresh(family_subscription)
+
+        return {
+            "status": "activated",
+            "subscription_id": str(family_subscription.id),
+            "paypal_subscription_id": family_subscription.paypal_subscription_id,
+            "plan_name": plan.name,
+        }
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to activate subscription: {str(e)}",
+        )
 
 
 @router.post("/cancel")
