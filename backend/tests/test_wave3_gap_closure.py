@@ -88,8 +88,8 @@ async def budget_account(db_session: AsyncSession, test_family):
     acct = BudgetAccount(
         family_id=test_family.id,
         name="Checking",
-        account_type="checking",
-        is_on_budget=True,
+        type="checking",
+        offbudget=False,
     )
     db_session.add(acct)
     await db_session.commit()
