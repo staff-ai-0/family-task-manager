@@ -13,6 +13,10 @@ interface Props {
 }
 
 const { lang, token, accounts, categories } = Astro.props;
+
+const errAmount = lang === "es" ? "Ingresa un monto" : "Enter an amount";
+const errCategory = lang === "es" ? "Selecciona una categoría" : "Select a category";
+const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account";
 ---
 
 <!-- Backdrop -->
@@ -24,6 +28,8 @@ const { lang, token, accounts, categories } = Astro.props;
 <!-- Bottom sheet -->
 <div
     id="fab-modal"
+    role="dialog"
+    aria-modal="true"
     class="fixed bottom-0 left-0 right-0 z-50 translate-y-full transition-transform duration-300 ease-out"
 >
     <div class="max-w-md mx-auto bg-white rounded-t-2xl shadow-2xl max-h-[85vh] overflow-y-auto">
@@ -73,13 +79,13 @@ const { lang, token, accounts, categories } = Astro.props;
                     ⌨️ {t(lang, "fab_manual")}
                 </button>
                 <a
-                    href={`/${lang}/budget/scan-receipt`}
+                    href={`/budget/scan-receipt`}
                     class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-center transition-colors"
                 >
                     📸 {t(lang, "fab_photo")}
                 </a>
                 <a
-                    href={`/${lang}/budget/import`}
+                    href={`/budget/import`}
                     class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-center transition-colors"
                 >
                     📄 {t(lang, "fab_scan")}
@@ -177,7 +183,7 @@ const { lang, token, accounts, categories } = Astro.props;
     </div>
 </div>
 
-<script define:vars={{ token }}>
+<script define:vars={{ token, errAmount, errCategory, errAccount }}>
 (function initFABModal() {
     const fabBtn = document.getElementById("fab-button");
     const backdrop = document.getElementById("fab-backdrop");
@@ -236,6 +242,11 @@ const { lang, token, accounts, categories } = Astro.props;
     fabBtn.addEventListener("click", openModal);
     backdrop.addEventListener("click", closeModal);
     if (doneBtn) doneBtn.addEventListener("click", closeModal);
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !backdrop.classList.contains("hidden")) {
+            closeModal();
+        }
+    });
 
     // --- Quick amounts ---
     document.querySelectorAll(".fab-quick-amount").forEach((chip) => {
@@ -282,15 +293,15 @@ const { lang, token, accounts, categories } = Astro.props;
 
             // Validate
             if (!amount || amount <= 0) {
-                showError("Amount is required");
+                showError(errAmount);
                 return;
             }
             if (!categoryId) {
-                showError("Category is required");
+                showError(errCategory);
                 return;
             }
             if (!accountId) {
-                showError("Account is required");
+                showError(errAccount);
                 return;
             }
 
