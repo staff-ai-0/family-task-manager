@@ -1,0 +1,74 @@
+---
+/**
+ * BudgetNavNew - 3-tab navigation bar for budget pages
+ * Replaces the old 6-tab BudgetNav with a cleaner layout:
+ * hamburger (left) | 3 centered tabs | spacer (right)
+ */
+
+interface Props {
+    active: "month" | "transactions" | "reports";
+    lang: "en" | "es";
+}
+
+const { active, lang } = Astro.props;
+const es = lang === "es";
+
+const tabs = [
+    {
+        id: "month" as const,
+        label: es ? "Mes" : "Month",
+        href: "/budget/",
+        icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
+    },
+    {
+        id: "transactions" as const,
+        label: es ? "Movimientos" : "Transactions",
+        href: "/budget/transactions",
+        icon: "M4 6h16M4 10h16M4 14h16M4 18h16",
+    },
+    {
+        id: "reports" as const,
+        label: es ? "Reportes" : "Reports",
+        href: "/budget/reports",
+        icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+    },
+];
+---
+
+<div class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-20">
+    <div class="max-w-md md:max-w-4xl lg:max-w-6xl mx-auto flex items-center">
+        <!-- Hamburger button -->
+        <button
+            id="drawer-toggle"
+            type="button"
+            class="p-3 text-slate-500 hover:text-slate-700 transition-colors"
+            aria-label={es ? "Abrir menú" : "Open menu"}
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        </button>
+
+        <!-- Centered tabs -->
+        <nav class="flex flex-1 justify-center">
+            {tabs.map(tab => (
+                <a
+                    href={tab.href}
+                    class={`flex flex-col items-center gap-1 px-4 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
+                        active === tab.id
+                            ? "border-primary-600 text-primary-600"
+                            : "border-transparent text-slate-400 hover:text-slate-600"
+                    }`}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={tab.icon} />
+                    </svg>
+                    {tab.label}
+                </a>
+            ))}
+        </nav>
+
+        <!-- Spacer to balance hamburger -->
+        <div class="w-12"></div>
+    </div>
+</div>
