@@ -6,7 +6,8 @@
 
 import Layout from "@layouts/Layout.astro";
 import BottomNav from "@components/BottomNav.astro";
-import BudgetNav from "@components/BudgetNav.astro";
+import BudgetNavNew from "@components/BudgetNavNew.astro";
+import DrawerMenu from "@components/DrawerMenu.astro";
 import { apiFetch } from "@lib/api";
 import { getAccounts } from "@lib/api/budget";
 import type { BudgetAccount } from "@lib/api/budget";
@@ -58,7 +59,8 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
         </header>
 
         <!-- Budget Section Nav -->
-        <BudgetNav active="transactions" />
+        <BudgetNavNew active="month" lang={lang} />
+        <DrawerMenu lang={lang} />
 
         <!-- Main Content -->
         <main class="px-6 py-6 flex-grow max-w-2xl mx-auto w-full">
