@@ -6,15 +6,16 @@
 
 interface Props {
     activePeriod: "1m" | "3m" | "6m" | "1y";
+    lang: "en" | "es";
 }
 
-const { activePeriod } = Astro.props;
+const { activePeriod, lang } = Astro.props;
 
 const periods = [
     { id: "1m" as const, label: "1M" },
     { id: "3m" as const, label: "3M" },
     { id: "6m" as const, label: "6M" },
-    { id: "1y" as const, label: "1A" },
+    { id: "1y" as const, label: lang === "es" ? "1A" : "1Y" },
 ];
 ---
 

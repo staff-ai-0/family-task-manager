@@ -51,15 +51,11 @@ const startD = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1, 1);
 const startDate = startD.toISOString().split("T")[0].slice(0, 7) + "-01";
 const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-// Current month string for budget-vs-actual
-const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-
 // --- Fetch ALL reports in parallel ---
-const [spendingRes, cashflowRes, networthRes, analysisRes, accountsRes, groupsRes] = await Promise.all([
+const [spendingRes, cashflowRes, networthRes, accountsRes, groupsRes] = await Promise.all([
     getSpendingReport(token, startDate, endDate, "category"),
     getIncomeVsExpenseReport(token, startDate, endDate, "month"),
     getNetWorthReport(token),
-    apiFetch<any>(`/api/budget/reports/budget-vs-actual?month=${currentMonthStr}`, { token }),
     apiFetch<any[]>("/api/budget/accounts/", { token }),
     getCategoryGroups(token),
 ]);
@@ -75,19 +71,11 @@ const totalExpense = cashflowItems.reduce((s: number, i: any) => s + Math.abs(i.
 const networth = networthRes.data || { net_worth: 0, total_assets: 0, total_liabilities: 0, accounts: [] };
 const nwAccounts: any[] = networth.accounts || [];
 
-const analysisGroups: any[] = analysisRes.data?.groups || [];
-const analysisTotals = analysisRes.data?.totals || { budgeted: 0, actual: 0, variance: 0 };
-
 const accounts: any[] = accountsRes.data || [];
 const allGroups: any[] = groupsRes.data || [];
 const allCategories = allGroups
     .flatMap((g: any) => (g.categories || []).map((c: any) => ({ id: c.id, name: c.name, group_name: g.name })));
 
-// Month label for analysis section
-const analysisMonthLabel = new Date(now.getFullYear(), now.getMonth(), 1).toLocaleDateString(
-    es ? "es-MX" : "en-US",
-    { month: "long", year: "numeric" }
-);
 ---
 
 <Layout title={es ? "Reportes - Presupuesto" : "Reports - Budget"}>
@@ -95,7 +83,7 @@ const analysisMonthLabel = new Date(now.getFullYear(), now.getMonth(), 1).toLoca
         <BudgetNavNew active="reports" lang={lang} />
         <DrawerMenu lang={lang} />
         <ReportSubTabs active={tab} lang={lang} />
-        <PeriodSelector activePeriod={period} />
+        <PeriodSelector activePeriod={period} lang={lang} />
 
         <!-- ==================== SPENDING ==================== -->
         <div id="report-spending" class={tab !== "spending" ? "hidden" : ""}>
@@ -277,94 +265,13 @@ const analysisMonthLabel = new Date(now.getFullYear(), now.getMonth(), 1).toLoca
         <!-- ==================== BUDGET vs ACTUAL ==================== -->
         <div id="report-analysis" class={tab !== "analysis" ? "hidden" : ""}>
             <main class="px-4 pb-6">
-                {analysisGroups.length === 0 ? (
-                    <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center mt-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                        <p class="text-slate-600 font-medium">{es ? "Sin datos para este periodo" : "No data for this period"}</p>
-                    </div>
-                ) : (
-                    <div class="space-y-3 mt-2">
-                        {/* Month label + totals */}
-                        <div class="bg-white rounded-xl shadow-sm p-4 text-center">
-                            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 capitalize">{analysisMonthLabel}</p>
-                            <div class="flex justify-center gap-6 text-sm mt-2">
-                                <div>
-                                    <span class="text-slate-500">{es ? "Presupuestado" : "Budgeted"}: </span>
-                                    <span class="font-bold text-slate-800">{formatCurrency(analysisTotals.budgeted)}</span>
-                                </div>
-                                <div>
-                                    <span class="text-slate-500">{es ? "Gastado" : "Spent"}: </span>
-                                    <span class="font-bold text-slate-800">{formatCurrency(analysisTotals.actual)}</span>
-                                </div>
-                            </div>
-                            <p class={`text-lg font-extrabold mt-1 ${analysisTotals.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {analysisTotals.variance >= 0 ? '+' : ''}{formatCurrency(analysisTotals.variance)}
-                            </p>
-                        </div>
-
-                        {/* Category groups */}
-                        {analysisGroups.map((group: any) => {
-                            const grpPct = group.total_budgeted > 0
-                                ? Math.min(100, Math.round(group.total_actual / group.total_budgeted * 100))
-                                : 0;
-                            const overBudget = group.total_actual > group.total_budgeted && group.total_budgeted > 0;
-
-                            return (
-                                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-                                    <div class="bg-slate-100 px-4 py-2.5 border-b border-slate-200">
-                                        <div class="flex items-center justify-between mb-1">
-                                            <h2 class="font-bold text-slate-800 text-sm">{group.group_name}</h2>
-                                            <span class={`text-xs font-bold ${overBudget ? 'text-red-600' : 'text-green-600'}`}>
-                                                {grpPct}%
-                                            </span>
-                                        </div>
-                                        <div class="w-full bg-slate-200 rounded-full h-1.5">
-                                            <div
-                                                class={`h-1.5 rounded-full transition-all ${overBudget ? 'bg-red-500' : 'bg-emerald-500'}`}
-                                                style={`width: ${grpPct}%`}
-                                            ></div>
-                                        </div>
-                                    </div>
-                                    <div class="divide-y divide-slate-100">
-                                        {(group.categories || []).map((cat: any) => {
-                                            const pct = cat.pct_used ?? 0;
-                                            const over = pct > 100;
-                                            const barWidth = Math.min(100, pct);
-                                            const barColor = over ? 'bg-red-500' : pct >= 90 ? 'bg-amber-500' : 'bg-emerald-500';
-
-                                            return (
-                                                <div class="px-4 py-3">
-                                                    <div class="flex items-center justify-between mb-1">
-                                                        <span class="text-sm font-medium text-slate-700">{cat.category_name}</span>
-                                                        <div class="text-right">
-                                                            <span class={`text-sm font-bold ${cat.variance >= 0 ? 'text-slate-700' : 'text-red-600'}`}>
-                                                                {formatCurrency(cat.actual_currency * 100)}
-                                                            </span>
-                                                            <span class="text-xs text-slate-400 ml-1">/ {formatCurrency(cat.budgeted_currency * 100)}</span>
-                                                        </div>
-                                                    </div>
-                                                    {cat.budgeted > 0 && (
-                                                        <div class="w-full bg-slate-100 rounded-full h-1 mt-1">
-                                                            <div
-                                                                class={`h-1 rounded-full ${barColor}`}
-                                                                style={`width: ${barWidth}%`}
-                                                            ></div>
-                                                        </div>
-                                                    )}
-                                                    {cat.budgeted === 0 && cat.actual > 0 && (
-                                                        <p class="text-xs text-amber-600 mt-0.5">{es ? "Sin presupuesto asignado" : "No budget set"}</p>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
+                <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center mt-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <p class="text-slate-600 font-medium">{es ? "Proximamente" : "Coming soon"}</p>
+                    <p class="text-sm text-slate-500 mt-1">{es ? "El analisis de presupuesto vs. real estara disponible pronto." : "Budget vs. actual analysis will be available soon."}</p>
+                </div>
             </main>
         </div>
 

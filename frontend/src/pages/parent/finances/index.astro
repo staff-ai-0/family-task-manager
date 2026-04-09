@@ -98,7 +98,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
             <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                 <!-- Monthly Budget -->
                 <a
-                    href={`/budget/month/${currentYear}/${currentMonth}`}
+                    href="/budget/"
                     class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-primary-200 transition-all flex flex-col items-center text-center gap-2"
                 >
                     <div class="w-10 h-10 rounded-lg bg-primary-50 flex items-center justify-center">
@@ -118,7 +118,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
                 <!-- Accounts -->
                 <a
-                    href="/budget/accounts"
+                    href="/budget/settings#accounts"
                     class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-blue-200 transition-all flex flex-col items-center text-center gap-2"
                 >
                     <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -138,7 +138,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
                 <!-- Categories -->
                 <a
-                    href="/budget/categories"
+                    href="/budget/settings#categories"
                     class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-amber-200 transition-all flex flex-col items-center text-center gap-2"
                 >
                     <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
@@ -178,7 +178,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
                 <!-- Reports -->
                 <a
-                    href="/budget/reports/spending"
+                    href="/budget/reports"
                     class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-rose-200 transition-all flex flex-col items-center text-center gap-2"
                 >
                     <div class="w-10 h-10 rounded-lg bg-rose-50 flex items-center justify-center">

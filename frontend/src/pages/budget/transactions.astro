@@ -120,11 +120,6 @@ const netAmount = totalIncome - totalExpenses;
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
                     </a>
-                    <a href="/budget/transactions/new" class="text-white hover:text-primary-100 transition" title={lang === "es" ? "Nueva transaccion" : "New transaction"}>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                    </a>
                 </div>
             </div>
 
@@ -199,10 +194,9 @@ const netAmount = totalIncome - totalExpenses;
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <p class="text-slate-600 font-medium">No hay transacciones</p>
-                    <p class="text-sm text-slate-500 mt-1">Agrega tu primera transacción</p>
-                    <a href="/budget/transactions/new" class="inline-block mt-4 bg-primary-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary-700 transition">
-                        Nueva Transacción
-                    </a>
+                    <p class="text-sm text-slate-500 mt-1">
+                        {lang === "es" ? "Usa el botón + para agregar tu primera transacción" : "Use the + button to add your first transaction"}
+                    </p>
                 </div>
             ) : (
                 <div class="space-y-4">
@@ -227,8 +221,7 @@ const netAmount = totalIncome - totalExpenses;
                                         const isIncome = transaction.amount > 0;
 
                                         return (
-                                            <a
-                                                href={`/budget/transactions/${transaction.id}`}
+                                            <div
                                                 class="block px-4 py-3 hover:bg-slate-50 transition"
                                             >
                                                 <div class="flex items-center justify-between mb-1">
@@ -254,7 +247,7 @@ const netAmount = totalIncome - totalExpenses;
                                                         {transaction.notes}
                                                     </p>
                                                 )}
-                                            </a>
+                                            </div>
                                         );
                                     })}
                                 </div>
