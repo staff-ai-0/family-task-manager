@@ -1,0 +1,4 @@
+---
+const { year, month } = Astro.params;
+return Astro.redirect(`/budget/?year=${year}&month=${month}`, 301);
+---
