@@ -1,0 +1,25 @@
+---
+interface Props {
+    spent: number;
+    budgeted: number;
+    formatCurrency: (amount: number) => string;
+}
+
+const { spent, budgeted, formatCurrency } = Astro.props;
+
+const percentage = budgeted > 0 ? Math.min((Math.abs(spent) / budgeted) * 100, 100) : 0;
+const overBudget = Math.abs(spent) > budgeted && budgeted > 0;
+
+const barColor = overBudget || percentage > 95
+    ? "bg-red-500"
+    : percentage >= 75
+        ? "bg-amber-500"
+        : "bg-green-500";
+---
+
+<div class="w-full bg-slate-200 rounded-full h-1.5">
+    <div
+        class:list={["h-1.5 rounded-full transition-all duration-300", barColor]}
+        style={`width: ${percentage}%`}
+    ></div>
+</div>

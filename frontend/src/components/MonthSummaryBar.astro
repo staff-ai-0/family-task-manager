@@ -1,0 +1,56 @@
+---
+interface Props {
+    income: number;
+    spent: number;
+    budgeted: number;
+    lang: "en" | "es";
+    formatCurrency: (amount: number) => string;
+}
+
+const { income, spent, budgeted, lang, formatCurrency } = Astro.props;
+
+const available = income - Math.abs(spent);
+const usagePercent = income > 0 ? Math.min((Math.abs(spent) / income) * 100, 100) : 0;
+const usageRounded = Math.round(usagePercent);
+
+const barColor = usagePercent > 95
+    ? "bg-red-500"
+    : usagePercent >= 75
+        ? "bg-amber-500"
+        : "bg-green-500";
+
+const labels = {
+    income: lang === "es" ? "Ingresos" : "Income",
+    spent: lang === "es" ? "Gastado" : "Spent",
+    available: lang === "es" ? "Disponible" : "Available",
+    usage: lang === "es"
+        ? `${usageRounded}% del presupuesto usado`
+        : `${usageRounded}% of budget used`,
+};
+---
+
+<div class="bg-white rounded-xl shadow-sm p-4 mx-4 mt-3">
+    <div class="flex text-center">
+        <div class="flex-1">
+            <div class="text-[10px] text-slate-400 uppercase">{labels.income}</div>
+            <div class="text-sm font-bold text-green-600">{formatCurrency(income)}</div>
+        </div>
+        <div class="flex-1">
+            <div class="text-[10px] text-slate-400 uppercase">{labels.spent}</div>
+            <div class="text-sm font-bold text-red-500">{formatCurrency(Math.abs(spent))}</div>
+        </div>
+        <div class="flex-1">
+            <div class="text-[10px] text-slate-400 uppercase">{labels.available}</div>
+            <div class:list={["text-sm font-bold", available >= 0 ? "text-green-600" : "text-red-500"]}>
+                {formatCurrency(available)}
+            </div>
+        </div>
+    </div>
+    <div class="w-full bg-slate-200 rounded-full h-2 mt-3">
+        <div
+            class:list={["h-2 rounded-full transition-all duration-300", barColor]}
+            style={`width: ${usagePercent}%`}
+        ></div>
+    </div>
+    <div class="text-[10px] text-slate-400 text-right mt-1">{labels.usage}</div>
+</div>
