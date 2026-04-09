@@ -7,7 +7,8 @@
 
 import Layout from "@layouts/Layout.astro";
 import BottomNav from "@components/BottomNav.astro";
-import BudgetNav from "@components/BudgetNav.astro";
+import BudgetNavNew from "@components/BudgetNavNew.astro";
+import DrawerMenu from "@components/DrawerMenu.astro";
 import { apiFetch } from "@lib/api";
 import { getAccounts } from "@lib/api/budget";
 import type { BudgetAccount } from "@lib/api/budget";
@@ -117,7 +118,8 @@ const t = l[lang as keyof typeof l] || l.en;
             </div>
         </header>
 
-        <BudgetNav active="transactions" />
+        <BudgetNavNew active="month" lang={lang} />
+        <DrawerMenu lang={lang} />
 
         <!-- Main Content -->
         <main class="px-6 py-6 flex-grow max-w-lg mx-auto w-full">
