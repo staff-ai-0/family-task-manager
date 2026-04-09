@@ -1,0 +1,101 @@
+---
+/**
+ * SettingsAccordion - Collapsible accordion section for the unified settings page
+ * Supports URL hash auto-open (e.g. /budget/settings#rules opens that section)
+ */
+
+interface Props {
+    id: string;
+    title: string;
+    icon: string;
+    defaultOpen?: boolean;
+}
+
+const { id, title, icon, defaultOpen = false } = Astro.props;
+---
+
+<div class="bg-white rounded-xl shadow-sm overflow-hidden mb-3">
+    <button
+        class="accordion-toggle w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+        data-target={`accordion-content-${id}`}
+        aria-expanded={defaultOpen ? "true" : "false"}
+    >
+        <span class="flex items-center gap-3">
+            <span class="text-xl">{icon}</span>
+            <span class="font-semibold text-slate-800">{title}</span>
+        </span>
+        <svg
+            class:list={[
+                "accordion-chevron h-5 w-5 text-slate-400 transition-transform duration-200",
+                { "rotate-180": defaultOpen },
+            ]}
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+        >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+    </button>
+    <div
+        id={`accordion-content-${id}`}
+        class:list={[
+            "border-t border-slate-100 px-4 py-4",
+            { hidden: !defaultOpen },
+        ]}
+    >
+        <slot />
+    </div>
+</div>
+
+<script>
+    function initAccordions() {
+        document.querySelectorAll<HTMLButtonElement>(".accordion-toggle").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const targetId = btn.dataset.target;
+                if (!targetId) return;
+                const content = document.getElementById(targetId);
+                if (!content) return;
+
+                const chevron = btn.querySelector(".accordion-chevron");
+                const isHidden = content.classList.contains("hidden");
+
+                if (isHidden) {
+                    content.classList.remove("hidden");
+                    chevron?.classList.add("rotate-180");
+                    btn.setAttribute("aria-expanded", "true");
+                } else {
+                    content.classList.add("hidden");
+                    chevron?.classList.remove("rotate-180");
+                    btn.setAttribute("aria-expanded", "false");
+                }
+            });
+        });
+
+        // Auto-open section from URL hash
+        const hash = window.location.hash?.replace("#", "");
+        if (hash) {
+            const content = document.getElementById(`accordion-content-${hash}`);
+            if (content) {
+                content.classList.remove("hidden");
+                const btn = document.querySelector<HTMLButtonElement>(
+                    `[data-target="accordion-content-${hash}"]`
+                );
+                if (btn) {
+                    btn.querySelector(".accordion-chevron")?.classList.add("rotate-180");
+                    btn.setAttribute("aria-expanded", "true");
+                }
+                // Scroll to it after a short delay to allow layout
+                setTimeout(() => {
+                    content.scrollIntoView({ behavior: "smooth", block: "start" });
+                }, 100);
+            }
+        }
+    }
+
+    // Init on first load
+    initAccordions();
+
+    // Re-init on Astro view transitions
+    document.addEventListener("astro:after-swap", initAccordions);
+</script>
