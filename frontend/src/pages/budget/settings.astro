@@ -1,21 +1,23 @@
 ---
 /**
- * Budget Settings Hub
- * Entry point for budget settings (rules, recurring, imports, backups)
+ * Budget Settings - Unified accordion page
+ * Consolidates accounts, payees, rules, recurring transactions, and backups
+ * into a single page with collapsible sections.
  */
 
 import Layout from "@layouts/Layout.astro";
 import BottomNav from "@components/BottomNav.astro";
-import BudgetNav from "@components/BudgetNav.astro";
-import ImportHistoryTable from "@components/ImportHistoryTable.astro";
-import { t } from "@lib/i18n";
+import BudgetNavNew from "@components/BudgetNavNew.astro";
+import DrawerMenu from "@components/DrawerMenu.astro";
+import SettingsAccordion from "@components/SettingsAccordion.astro";
 import { apiFetch } from "@lib/api";
-import { apiFetchWithAuth, getImportLogs } from "@lib/api/budget";
+import { formatCurrency } from "@lib/api/budget";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
+const es = lang === "es";
 
 const { data: user, ok } = await apiFetch<any>("/api/auth/me", { token });
 if (!ok) {
@@ -27,98 +29,224 @@ if (user.role !== "parent") {
     return Astro.redirect("/dashboard");
 }
 
-const { data: importLogs = [] } = await getImportLogs(token);
+// Parallel fetch all settings data
+const [accountsRes, payeesRes, rulesRes, recurringRes] = await Promise.all([
+    apiFetch<any[]>("/api/budget/accounts/", { token }),
+    apiFetch<any[]>("/api/budget/payees/", { token }),
+    apiFetch<any[]>("/api/budget/categorization-rules/", { token }),
+    apiFetch<any[]>("/api/budget/recurring-transactions/", { token }),
+]);
+
+const accounts = accountsRes.data || [];
+const payees = payeesRes.data || [];
+const rules = rulesRes.data || [];
+const recurring = recurringRes.data || [];
+
+// Account type labels
+const accountTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+        checking: es ? "Cheques" : "Checking",
+        savings: es ? "Ahorros" : "Savings",
+        credit_card: es ? "Tarjeta de crédito" : "Credit Card",
+        cash: es ? "Efectivo" : "Cash",
+        investment: es ? "Inversión" : "Investment",
+        loan: es ? "Préstamo" : "Loan",
+        other: es ? "Otro" : "Other",
+    };
+    return labels[type] || type;
+};
+
+// Frequency labels
+const frequencyLabel = (freq: string) => {
+    const labels: Record<string, string> = {
+        daily: es ? "Diaria" : "Daily",
+        weekly: es ? "Semanal" : "Weekly",
+        biweekly: es ? "Quincenal" : "Biweekly",
+        monthly: es ? "Mensual" : "Monthly",
+        quarterly: es ? "Trimestral" : "Quarterly",
+        annual: es ? "Anual" : "Annual",
+    };
+    return labels[freq] || freq;
+};
 ---
 
-<Layout title={`${t(lang, 'fin_nav_settings')} - Budget`}>
+<Layout title={`${es ? "Configuración" : "Settings"} - Budget`}>
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen flex flex-col">
-        <header class="bg-slate-700 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
-            <div class="flex items-center justify-between mb-4">
-                <a href="/budget" class="text-white hover:text-slate-200 transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </a>
-                <h1 class="text-2xl font-bold">{t(lang, 'fin_nav_settings')}</h1>
-                <div class="w-6"></div>
-            </div>
-            <p class="text-slate-100 text-sm">
-                {t(lang, 'fin_nav_settings_desc')}
+        <BudgetNavNew active="month" lang={lang} />
+        <DrawerMenu lang={lang} />
+
+        <div class="px-4 pt-6 pb-2">
+            <h1 class="text-xl font-bold text-slate-800">
+                {es ? "Configuracion" : "Settings"}
+            </h1>
+            <p class="text-sm text-slate-500 mt-1">
+                {es ? "Gestiona cuentas, beneficiarios, reglas y mas" : "Manage accounts, payees, rules & more"}
             </p>
-        </header>
+        </div>
 
-        <BudgetNav active="settings" />
-
-        <main class="px-6 py-6 flex-1 space-y-5">
-            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                <p class="font-semibold mb-1">{t(lang, 'fin_settings_coming_title')}</p>
-                <p>{t(lang, 'fin_settings_coming_body')}</p>
-            </div>
-
-            <section class="grid md:grid-cols-2 gap-4">
-                <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col gap-2">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-semibold text-slate-800">{t(lang, 'fin_settings_rules')}</p>
-                            <p class="text-sm text-slate-600">{t(lang, 'fin_settings_rules_desc')}</p>
-                        </div>
-                        <a href="/budget/settings/rules" class="px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition">{t(lang, 'fin_settings_soon')}</a>
+        <div class="px-4 py-4 flex-1">
+            <!-- Accounts -->
+            <SettingsAccordion id="accounts" title={es ? "Cuentas" : "Accounts"} icon="🏦">
+                {accounts.length === 0 ? (
+                    <p class="text-sm text-slate-500 text-center py-4">
+                        {es ? "No hay cuentas creadas" : "No accounts yet"}
+                    </p>
+                ) : (
+                    <div class="divide-y divide-slate-100">
+                        {accounts.map((acc: any) => (
+                            <a href={`/budget/accounts/${acc.id}`} class="flex items-center justify-between py-3 hover:bg-slate-50 transition -mx-4 px-4">
+                                <div>
+                                    <p class="text-sm font-medium text-slate-800">{acc.name}</p>
+                                    <p class="text-xs text-slate-500">{accountTypeLabel(acc.account_type)}</p>
+                                </div>
+                                <span class="text-sm font-semibold text-slate-700">
+                                    {formatCurrency(acc.balance_cents ?? acc.balance ?? 0)}
+                                </span>
+                            </a>
+                        ))}
                     </div>
-                    <a href="/budget/settings/rules" class="w-full bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold text-center hover:bg-slate-300 transition">{t(lang, 'fin_settings_rules')}</a>
+                )}
+                <div class="mt-3 pt-3 border-t border-slate-100">
+                    <a
+                        href="/budget/accounts/new"
+                        class="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        {es ? "Agregar cuenta" : "Add account"}
+                    </a>
                 </div>
+            </SettingsAccordion>
 
-                <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col gap-2">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-semibold text-slate-800">{t(lang, 'fin_settings_recurring')}</p>
-                            <p class="text-sm text-slate-600">{t(lang, 'fin_settings_recurring_desc')}</p>
-                        </div>
-                        <a href="/budget/settings/recurring" class="px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition">{t(lang, 'fin_settings_soon')}</a>
-                    </div>
-                    <a href="/budget/settings/recurring" class="w-full bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold text-center hover:bg-slate-300 transition">{t(lang, 'fin_settings_recurring')}</a>
-                </div>
-
-                <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col gap-3 md:col-span-2">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-semibold text-slate-800">{t(lang, 'fin_settings_imports')}</p>
-                            <p class="text-sm text-slate-600">{t(lang, 'fin_settings_imports_desc')}</p>
-                        </div>
-                        <a href="/budget/import" class="px-3 py-1 text-xs font-semibold rounded-full bg-primary-50 text-primary-700 border border-primary-100">Go</a>
-                    </div>
-                    <a href="/budget/import" class="w-full bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-semibold text-center hover:bg-primary-700 transition">{t(lang, 'fin_settings_imports')}</a>
-
-                    <div class="pt-2 border-t border-slate-100">
-                        <div class="flex items-start justify-between mb-2">
-                            <div>
-                                <p class="text-sm font-semibold text-slate-800">{t(lang, 'fin_settings_import_history_title')}</p>
-                                <p class="text-xs text-slate-600">{t(lang, 'fin_settings_import_history_desc')}</p>
+            <!-- Payees -->
+            <SettingsAccordion id="payees" title={es ? "Beneficiarios" : "Payees"} icon="👤">
+                {payees.length === 0 ? (
+                    <p class="text-sm text-slate-500 text-center py-4">
+                        {es ? "No hay beneficiarios" : "No payees yet"}
+                    </p>
+                ) : (
+                    <div class="divide-y divide-slate-100">
+                        {payees.map((p: any) => (
+                            <div class="flex items-center justify-between py-2.5">
+                                <span class="text-sm text-slate-700">{p.name}</span>
+                                {p.is_favorite && (
+                                    <span class="text-amber-400 text-base" title={es ? "Favorito" : "Favorite"}>&#9733;</span>
+                                )}
                             </div>
-                        </div>
-                        <ImportHistoryTable logs={importLogs} lang={lang} />
+                        ))}
                     </div>
+                )}
+                <div class="mt-3 pt-3 border-t border-slate-100">
+                    <a
+                        href="/budget/settings/payees"
+                        class="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700"
+                    >
+                        {es ? "Gestionar beneficiarios" : "Manage payees"}
+                    </a>
                 </div>
+            </SettingsAccordion>
 
-                <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 flex flex-col gap-2">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-semibold text-slate-800">{t(lang, 'fin_settings_backups')}</p>
-                            <p class="text-sm text-slate-600">{t(lang, 'fin_settings_backups_desc')}</p>
-                        </div>
-                        <a href="/budget/settings/backups" class="px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition">{t(lang, 'fin_settings_soon')}</a>
+            <!-- Categorization Rules -->
+            <SettingsAccordion id="rules" title={es ? "Reglas de categorizacion" : "Categorization Rules"} icon="🤖">
+                {rules.length === 0 ? (
+                    <p class="text-sm text-slate-500 text-center py-4">
+                        {es ? "No hay reglas creadas" : "No rules yet"}
+                    </p>
+                ) : (
+                    <div class="divide-y divide-slate-100">
+                        {rules.map((rule: any) => (
+                            <div class="py-2.5">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="text-sm font-medium text-slate-800">"{rule.pattern}"</span>
+                                    <span class="text-xs text-slate-400">&rarr;</span>
+                                    <span class="text-sm text-slate-600">{rule.category?.name || (es ? "Sin categoria" : "No category")}</span>
+                                    <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 uppercase">
+                                        {rule.rule_type}
+                                    </span>
+                                    {!rule.enabled && (
+                                        <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-yellow-100 text-yellow-700">
+                                            {es ? "Inactiva" : "Disabled"}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                    <a href="/budget/settings/backups" class="w-full bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold text-center hover:bg-slate-300 transition">{t(lang, 'fin_settings_backups')}</a>
+                )}
+                <div class="mt-3 pt-3 border-t border-slate-100">
+                    <a
+                        href="/budget/settings/rules"
+                        class="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700"
+                    >
+                        {es ? "Gestionar reglas" : "Manage rules"}
+                    </a>
                 </div>
-            </section>
+            </SettingsAccordion>
 
-            <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">
-                <p class="font-semibold mb-1">{t(lang, 'fin_workflow_title')}</p>
-                <p class="text-blue-700">{t(lang, 'fin_workflow_step1')}</p>
-                <p class="text-blue-700">{t(lang, 'fin_workflow_step2')}</p>
-                <p class="text-blue-700">{t(lang, 'fin_workflow_step3')}</p>
-                <p class="text-blue-700">{t(lang, 'fin_workflow_step4')}</p>
-            </div>
-        </main>
+            <!-- Recurring Transactions -->
+            <SettingsAccordion id="recurring" title={es ? "Transacciones recurrentes" : "Recurring Transactions"} icon="🔄">
+                {recurring.length === 0 ? (
+                    <p class="text-sm text-slate-500 text-center py-4">
+                        {es ? "No hay transacciones recurrentes" : "No recurring transactions yet"}
+                    </p>
+                ) : (
+                    <div class="divide-y divide-slate-100">
+                        {recurring.map((txn: any) => (
+                            <div class="flex items-center justify-between py-2.5">
+                                <div>
+                                    <p class="text-sm font-medium text-slate-800">{txn.description}</p>
+                                    <p class="text-xs text-slate-500">
+                                        {frequencyLabel(txn.frequency)}
+                                        {txn.next_due_date && (
+                                            <span> &middot; {es ? "Prox:" : "Next:"} {txn.next_due_date}</span>
+                                        )}
+                                    </p>
+                                </div>
+                                <span class:list={[
+                                    "text-sm font-semibold",
+                                    txn.transaction_type === "income" ? "text-green-600" : "text-red-600",
+                                ]}>
+                                    {txn.transaction_type === "income" ? "+" : "-"}{formatCurrency(Math.abs(txn.amount))}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                <div class="mt-3 pt-3 border-t border-slate-100">
+                    <a
+                        href="/budget/settings/recurring"
+                        class="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700"
+                    >
+                        {es ? "Gestionar recurrentes" : "Manage recurring"}
+                    </a>
+                </div>
+            </SettingsAccordion>
+
+            <!-- Backups -->
+            <SettingsAccordion id="backups" title={es ? "Respaldos" : "Backups"} icon="💾">
+                <p class="text-sm text-slate-600 mb-4">
+                    {es ? "Descarga una copia de seguridad de tu presupuesto." : "Download a backup of your budget data."}
+                </p>
+                <div class="flex flex-col gap-2">
+                    <a
+                        href="/api/budget/export"
+                        class="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg transition"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                        </svg>
+                        {es ? "Exportar datos (ZIP)" : "Export data (ZIP)"}
+                    </a>
+                    <a
+                        href="/budget/settings/backups"
+                        class="text-center text-sm text-blue-600 hover:text-blue-700 font-semibold"
+                    >
+                        {es ? "Mas opciones de respaldo" : "More backup options"}
+                    </a>
+                </div>
+            </SettingsAccordion>
+        </div>
 
         <BottomNav active="budget" role={user.role} lang={lang} />
     </div>
