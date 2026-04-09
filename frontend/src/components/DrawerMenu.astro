@@ -1,0 +1,134 @@
+---
+/**
+ * DrawerMenu - Slide-out navigation drawer for budget pages
+ * Opened via #drawer-toggle button in BudgetNavNew
+ */
+
+interface Props {
+    lang: "en" | "es";
+}
+
+const { lang } = Astro.props;
+const es = lang === "es";
+
+const sections = [
+    {
+        title: es ? "Principal" : "Main",
+        links: [
+            { emoji: "📅", label: es ? "Vista del mes" : "Month view", href: "/budget/" },
+            { emoji: "📋", label: es ? "Movimientos" : "Transactions", href: "/budget/transactions" },
+            { emoji: "📊", label: es ? "Reportes" : "Reports", href: "/budget/reports" },
+        ],
+    },
+    {
+        title: es ? "Gestión" : "Management",
+        links: [
+            { emoji: "🏦", label: es ? "Cuentas" : "Accounts", href: "/budget/settings#accounts" },
+            { emoji: "🏷️", label: es ? "Categorías" : "Categories", href: "/budget/settings#categories" },
+            { emoji: "👤", label: es ? "Beneficiarios" : "Payees", href: "/budget/settings#payees" },
+        ],
+    },
+    {
+        title: es ? "Herramientas" : "Tools",
+        links: [
+            { emoji: "📸", label: es ? "Escanear ticket" : "Scan receipt", href: "/budget/scan-receipt" },
+            { emoji: "📥", label: es ? "Importar CSV" : "Import CSV", href: "/budget/import" },
+            { emoji: "🔄", label: es ? "Recurrentes" : "Recurring", href: "/budget/settings#recurring" },
+            { emoji: "⚡", label: es ? "Reglas auto" : "Auto rules", href: "/budget/settings#rules" },
+        ],
+    },
+    {
+        title: es ? "Sistema" : "System",
+        links: [
+            { emoji: "💾", label: es ? "Respaldos" : "Backups", href: "/budget/settings#backups" },
+            { emoji: "⚙️", label: es ? "Configuración" : "Settings", href: "/budget/settings" },
+        ],
+    },
+];
+---
+
+<!-- Backdrop -->
+<div
+    id="drawer-backdrop"
+    class="fixed inset-0 bg-black/50 z-30 hidden opacity-0 transition-opacity duration-300"
+></div>
+
+<!-- Panel -->
+<div
+    id="drawer-panel"
+    class="fixed top-0 left-0 h-full w-72 bg-white z-40 shadow-xl transform -translate-x-full transition-transform duration-300"
+>
+    <!-- Header -->
+    <div class="flex items-center justify-between p-4 border-b border-slate-200">
+        <span class="text-lg font-bold text-slate-800">
+            {es ? "Menú" : "Menu"}
+        </span>
+        <button
+            id="drawer-close"
+            type="button"
+            class="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label={es ? "Cerrar menú" : "Close menu"}
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+    </div>
+
+    <!-- Sections -->
+    <nav class="overflow-y-auto h-[calc(100%-57px)] py-2">
+        {sections.map(section => (
+            <div class="mb-2">
+                <h3 class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    {section.title}
+                </h3>
+                {section.links.map(link => (
+                    <a
+                        href={link.href}
+                        class="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                        <span class="text-lg">{link.emoji}</span>
+                        {link.label}
+                    </a>
+                ))}
+            </div>
+        ))}
+    </nav>
+</div>
+
+<script>
+    function initDrawer() {
+        const toggle = document.getElementById("drawer-toggle");
+        const close = document.getElementById("drawer-close");
+        const backdrop = document.getElementById("drawer-backdrop");
+        const panel = document.getElementById("drawer-panel");
+
+        if (!toggle || !close || !backdrop || !panel) return;
+
+        function openDrawer() {
+            backdrop.classList.remove("hidden");
+            // Force reflow so the transition plays
+            backdrop.offsetHeight;
+            backdrop.classList.remove("opacity-0");
+            panel.classList.remove("-translate-x-full");
+        }
+
+        function closeDrawer() {
+            backdrop.classList.add("opacity-0");
+            panel.classList.add("-translate-x-full");
+            setTimeout(() => {
+                backdrop.classList.add("hidden");
+            }, 300);
+        }
+
+        toggle.addEventListener("click", openDrawer);
+        close.addEventListener("click", closeDrawer);
+        backdrop.addEventListener("click", closeDrawer);
+    }
+
+    // Init on first load
+    initDrawer();
+
+    // Re-init after Astro view transitions
+    document.addEventListener("astro:after-swap", initDrawer);
+</script>
