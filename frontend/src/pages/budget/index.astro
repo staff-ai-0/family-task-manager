@@ -1,19 +1,31 @@
 ---
 /**
- * Budget Hub Page
- * Entry point to all budget features
+ * Budget Hub + Month View Page
+ * Main budget view showing monthly budget with category groups,
+ * summary bar, FAB for quick expense, and assign-funds modal.
  */
 
 import Layout from "@layouts/Layout.astro";
 import BottomNav from "@components/BottomNav.astro";
+import BudgetNavNew from "@components/BudgetNavNew.astro";
+import DrawerMenu from "@components/DrawerMenu.astro";
+import BudgetMonthNav from "@components/BudgetMonthNav.astro";
+import MonthSummaryBar from "@components/MonthSummaryBar.astro";
+import BudgetCategoryGroup from "@components/BudgetCategoryGroup.astro";
+import AssignFundsModal from "@components/AssignFundsModal.astro";
+import FABButton from "@components/FABButton.astro";
+import FABModal from "@components/FABModal.astro";
+import { apiFetch } from "@lib/api";
+import { getMonthBudget, getCategoryGroups, formatCurrency, getMonthStatus } from "@lib/api/budget";
 import { t } from "@lib/i18n";
 
+// --- Auth ---
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
-const { data: user, ok } = await (await import("@lib/api")).apiFetch<any>("/api/auth/me", { token });
+const { data: user, ok } = await apiFetch<any>("/api/auth/me", { token });
 if (!ok) {
     Astro.cookies.delete("access_token", { path: "/" });
     return Astro.redirect("/login");
@@ -23,140 +35,141 @@ if (user.role !== "parent") {
     return Astro.redirect("/dashboard");
 }
 
+// --- Month params from query string (default to current month) ---
 const now = new Date();
-const year = now.getFullYear();
-const month = now.getMonth() + 1;
+const yearParam = Astro.url.searchParams.get("year");
+const monthParam = Astro.url.searchParams.get("month");
+const year = yearParam ? parseInt(yearParam, 10) : now.getFullYear();
+const month = monthParam ? parseInt(monthParam, 10) : now.getMonth() + 1;
+
+// --- Parallel data fetching ---
+const [budgetRes, allGroupsRes, accountsRes, goalsRes, monthStatusRes] = await Promise.all([
+    getMonthBudget(token, year, month),
+    getCategoryGroups(token),
+    apiFetch<any[]>("/api/budget/accounts/", { token }),
+    apiFetch<any[]>("/api/budget/goals/", { token }),
+    getMonthStatus(token, year, month),
+]);
+
+const budget = budgetRes.data;
+const allGroups = allGroupsRes.data;
+const accounts = accountsRes.data || [];
+const goals = goalsRes.data || [];
+
+// --- Derived calculations ---
+const incomeGroups = budget?.category_groups?.filter((g: any) => g.is_income) || [];
+const expenseGroups = budget?.category_groups?.filter((g: any) => !g.is_income) || [];
+
+const totalIncome = budget?.totals?.income ?? incomeGroups.reduce((sum: number, g: any) => sum + g.total_activity, 0);
+const totalBudgeted = expenseGroups.reduce((sum: number, g: any) => sum + g.total_budgeted, 0);
+const totalSpent = Math.abs(expenseGroups.reduce((sum: number, g: any) => sum + g.total_activity, 0));
+const readyToAssign = budget?.ready_to_assign !== undefined ? budget.ready_to_assign : (totalIncome - totalBudgeted);
+
+// --- Goals by category map ---
+const goalsByCategory: Record<string, any> = {};
+for (const goal of goals) {
+    if (goal.category_id) {
+        goalsByCategory[goal.category_id] = goal;
+    }
+}
+
+// --- All expense categories (flat list for FAB & AssignFunds) ---
+const allExpenseCategories = (allGroups || [])
+    .filter((g: any) => !g.is_income)
+    .flatMap((g: any) => g.categories.map((c: any) => ({ id: c.id, name: c.name, groupName: g.name, group_name: g.name })));
+
+// --- All categories for FAB modal ---
+const allCategories = (allGroups || [])
+    .flatMap((g: any) => g.categories.map((c: any) => ({ id: c.id, name: c.name, group_name: g.name })));
 ---
 
 <Layout title={t(lang, 'fin_budget_home')}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen flex flex-col">
-        <header class="bg-primary-600 text-white pt-12 pb-8 px-6 rounded-b-3xl shadow-md">
-            <div class="flex items-center justify-between mb-4">
-                <h1 class="text-2xl font-bold">{t(lang, 'fin_budget_home')}</h1>
-                <span class="text-sm text-primary-100 font-semibold">{user.email}</span>
-            </div>
-            <p class="text-primary-100 text-sm">
-                {t(lang, 'fin_budget_home_sub')}
-            </p>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen pb-20">
+        <!-- Top nav: 3 tabs -->
+        <BudgetNavNew active="month" lang={lang} />
+
+        <!-- Drawer menu (hidden, toggled by hamburger) -->
+        <DrawerMenu lang={lang} />
+
+        <!-- Header with month nav + ready to assign -->
+        <header class="bg-primary-600 text-white pt-3 pb-5 px-4 rounded-b-3xl shadow-md">
+            <BudgetMonthNav
+                year={year}
+                month={month}
+                readyToAssign={readyToAssign}
+                lang={lang}
+                t={t}
+                formatCurrency={formatCurrency}
+                baseRoute="/budget"
+            />
         </header>
 
-        <main class="px-6 py-6 flex-1 space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <a href={`/budget/month/${year}/${month}`} class="hub-card bg-white hover:-translate-y-0.5">
-                    <div class="hub-icon bg-blue-50 text-blue-600">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="hub-title">{t(lang, 'fin_nav_month')}</p>
-                        <p class="hub-desc">{t(lang, 'fin_nav_month_desc')}</p>
-                    </div>
-                </a>
+        <!-- Month summary bar -->
+        <MonthSummaryBar
+            income={totalIncome}
+            spent={totalSpent}
+            budgeted={totalBudgeted}
+            lang={lang}
+            formatCurrency={formatCurrency}
+        />
 
-                <a href="/budget/accounts" class="hub-card bg-white hover:-translate-y-0.5">
-                    <div class="hub-icon bg-green-50 text-green-600">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="hub-title">{t(lang, 'fin_nav_accounts')}</p>
-                        <p class="hub-desc">{t(lang, 'fin_nav_accounts_desc')}</p>
-                    </div>
-                </a>
+        <!-- Category groups -->
+        <main class="px-4 py-4 space-y-3">
+            {/* Income groups */}
+            {incomeGroups.map((group: any) => (
+                <BudgetCategoryGroup
+                    group={group}
+                    isIncome={true}
+                    lang={lang}
+                    t={t}
+                    formatCurrency={formatCurrency}
+                    token={token}
+                    allExpenseCategories={allExpenseCategories}
+                    goalsByCategory={goalsByCategory}
+                />
+            ))}
 
-                <a href="/budget/transactions" class="hub-card bg-white hover:-translate-y-0.5">
-                    <div class="hub-icon bg-slate-50 text-slate-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="hub-title">{t(lang, 'fin_nav_transactions')}</p>
-                        <p class="hub-desc">{t(lang, 'fin_nav_transactions_desc')}</p>
-                    </div>
-                </a>
+            {/* Expense groups */}
+            {expenseGroups.map((group: any) => (
+                <BudgetCategoryGroup
+                    group={group}
+                    isIncome={false}
+                    lang={lang}
+                    t={t}
+                    formatCurrency={formatCurrency}
+                    token={token}
+                    allExpenseCategories={allExpenseCategories}
+                    goalsByCategory={goalsByCategory}
+                />
+            ))}
 
-                <a href="/budget/categories" class="hub-card bg-white hover:-translate-y-0.5">
-                    <div class="hub-icon bg-amber-50 text-amber-600">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="hub-title">{t(lang, 'fin_nav_categories')}</p>
-                        <p class="hub-desc">{t(lang, 'fin_nav_categories_desc')}</p>
-                    </div>
-                </a>
-
-                <a href="/budget/reports/spending" class="hub-card bg-white hover:-translate-y-0.5">
-                    <div class="hub-icon bg-purple-50 text-purple-600">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="hub-title">{t(lang, 'fin_nav_reports')}</p>
-                        <p class="hub-desc">{t(lang, 'fin_nav_reports_desc')}</p>
-                    </div>
-                </a>
-
-                <a href="/budget/settings" class="hub-card bg-white hover:-translate-y-0.5">
-                    <div class="hub-icon bg-slate-100 text-slate-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="hub-title">{t(lang, 'fin_nav_settings')}</p>
-                        <p class="hub-desc">{t(lang, 'fin_nav_settings_desc')}</p>
-                    </div>
-                </a>
-            </div>
-
-            <div class="bg-slate-100 border border-slate-200 rounded-xl p-4">
-                <p class="text-sm font-semibold text-slate-700 mb-1">{t(lang, 'fin_workflow_title')}</p>
-                <ol class="text-sm text-slate-600 list-decimal list-inside space-y-1">
-                    <li>{t(lang, 'fin_workflow_step1')}</li>
-                    <li>{t(lang, 'fin_workflow_step2')}</li>
-                    <li>{t(lang, 'fin_workflow_step3')}</li>
-                    <li>{t(lang, 'fin_workflow_step4')}</li>
-                </ol>
-            </div>
+            {/* Empty state */}
+            {incomeGroups.length === 0 && expenseGroups.length === 0 && (
+                <div class="text-center py-12">
+                    <p class="text-slate-400 text-sm">
+                        {lang === "es" ? "No hay categorias configuradas para este mes." : "No categories set up for this month."}
+                    </p>
+                    <a href="/budget/categories" class="text-primary-600 font-semibold text-sm mt-2 inline-block">
+                        {lang === "es" ? "Crear categorias" : "Create categories"}
+                    </a>
+                </div>
+            )}
         </main>
 
+        <!-- Bottom nav -->
         <BottomNav active="budget" role={user.role} lang={lang} />
+
+        <!-- FAB + modal -->
+        <FABButton />
+        <FABModal lang={lang} token={token} accounts={accounts} categories={allCategories} />
+
+        <!-- Assign Funds modal (triggered from BudgetMonthNav ready-to-assign button) -->
+        <AssignFundsModal
+            readyToAssign={readyToAssign}
+            categories={allExpenseCategories}
+            lang={lang}
+            t={t}
+            formatCurrency={formatCurrency}
+        />
     </div>
 </Layout>
-
-<style>
-    .hub-card {
-        display: flex;
-        gap: 0.75rem;
-        align-items: flex-start;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 1rem;
-        background: #fff;
-        box-shadow: 0 10px 25px -15px rgba(15, 23, 42, 0.2);
-        transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
-    }
-    .hub-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 12px 30px -12px rgba(15, 23, 42, 0.25);
-        border-color: #cbd5e1;
-    }
-    .hub-icon {
-        width: 2.5rem;
-        height: 2.5rem;
-        border-radius: 10px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-    }
-    .hub-title { font-size: 0.95rem; font-weight: 600; color: #0f172a; }
-    .hub-desc { font-size: 0.82rem; color: #475569; margin-top: 0.15rem; }
-</style>
----
