@@ -1,0 +1,362 @@
+---
+/**
+ * Bottom-sheet modal for quick expense entry.
+ * Opened by FABButton, posts transactions to the API.
+ */
+import { t } from "@lib/i18n";
+
+interface Props {
+    lang: "en" | "es";
+    token: string;
+    accounts: Array<{ id: string; name: string; type: string }>;
+    categories: Array<{ id: string; name: string; group_name: string }>;
+}
+
+const { lang, token, accounts, categories } = Astro.props;
+---
+
+<!-- Backdrop -->
+<div
+    id="fab-backdrop"
+    class="fixed inset-0 bg-black/50 z-40 hidden opacity-0 transition-opacity duration-300"
+></div>
+
+<!-- Bottom sheet -->
+<div
+    id="fab-modal"
+    class="fixed bottom-0 left-0 right-0 z-50 translate-y-full transition-transform duration-300 ease-out"
+>
+    <div class="max-w-md mx-auto bg-white rounded-t-2xl shadow-2xl max-h-[85vh] overflow-y-auto">
+        <!-- Drag handle -->
+        <div class="flex justify-center pt-3 pb-2">
+            <div class="w-10 h-1 bg-slate-300 rounded-full"></div>
+        </div>
+
+        <!-- Step 1: Entry -->
+        <div id="fab-step-entry" class="px-5 pb-6">
+            <h2 class="text-lg font-semibold text-slate-800 mb-4">{t(lang, "fab_register_expense")}</h2>
+
+            <!-- Amount -->
+            <div class="mb-4">
+                <label for="fab-amount" class="block text-sm font-medium text-slate-500 mb-1">{t(lang, "fab_amount")}</label>
+                <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-400">$</span>
+                    <input
+                        id="fab-amount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        inputmode="decimal"
+                        placeholder="0.00"
+                        class="w-full text-3xl font-bold text-center py-3 pl-8 pr-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                    />
+                </div>
+                <!-- Quick amount chips -->
+                <div class="flex gap-2 mt-2 justify-center">
+                    {[50, 100, 200, 500].map((amt) => (
+                        <button
+                            class="fab-quick-amount px-3 py-1 text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors"
+                            data-amount={amt}
+                        >
+                            ${amt}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <!-- Mode buttons -->
+            <div class="flex gap-2 mb-4">
+                <button
+                    id="fab-mode-manual"
+                    class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-primary-500 bg-primary-50 text-primary-700 transition-colors"
+                >
+                    ⌨️ {t(lang, "fab_manual")}
+                </button>
+                <a
+                    href={`/${lang}/budget/scan-receipt`}
+                    class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-center transition-colors"
+                >
+                    📸 {t(lang, "fab_photo")}
+                </a>
+                <a
+                    href={`/${lang}/budget/import`}
+                    class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-center transition-colors"
+                >
+                    📄 {t(lang, "fab_scan")}
+                </a>
+            </div>
+
+            <!-- Payee -->
+            <div class="mb-3">
+                <label for="fab-payee" class="block text-sm font-medium text-slate-500 mb-1">{t(lang, "fab_payee")}</label>
+                <div class="relative">
+                    <input
+                        id="fab-payee"
+                        type="text"
+                        autocomplete="off"
+                        class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-sm"
+                    />
+                    <span id="fab-rule-indicator" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-xs text-emerald-600 font-medium">
+                        {t(lang, "fab_auto_rule")}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Category -->
+            <div class="mb-3">
+                <label for="fab-category" class="block text-sm font-medium text-slate-500 mb-1">{t(lang, "fab_category")}</label>
+                <select
+                    id="fab-category"
+                    class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-sm bg-white"
+                >
+                    <option value="">--</option>
+                    {categories.map((cat) => (
+                        <option value={cat.id}>{cat.group_name} → {cat.name}</option>
+                    ))}
+                </select>
+            </div>
+
+            <!-- Account -->
+            <div class="mb-3">
+                <label for="fab-account" class="block text-sm font-medium text-slate-500 mb-1">{t(lang, "fab_account")}</label>
+                <select
+                    id="fab-account"
+                    class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-sm bg-white"
+                >
+                    <option value="">--</option>
+                    {accounts.map((acc) => (
+                        <option value={acc.id}>{acc.name}</option>
+                    ))}
+                </select>
+            </div>
+
+            <!-- Note -->
+            <div class="mb-4">
+                <label for="fab-note" class="block text-sm font-medium text-slate-500 mb-1">{t(lang, "fab_note")}</label>
+                <input
+                    id="fab-note"
+                    type="text"
+                    placeholder={t(lang, "fab_note_placeholder")}
+                    class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-sm"
+                />
+            </div>
+
+            <!-- Error -->
+            <div id="fab-error" class="hidden text-sm text-red-600 mb-3 px-1"></div>
+
+            <!-- Save -->
+            <button
+                id="fab-save"
+                class="w-full py-3 bg-primary-600 hover:bg-primary-700 active:scale-[0.98] text-white font-semibold rounded-xl shadow transition-all duration-150"
+            >
+                {t(lang, "fab_save")}
+            </button>
+        </div>
+
+        <!-- Step 2: Confirmation -->
+        <div id="fab-step-confirm" class="hidden px-5 pb-6 text-center">
+            <div class="text-5xl mb-3 mt-2">✅</div>
+            <h2 class="text-xl font-bold text-slate-800 mb-2">{t(lang, "fab_saved")}</h2>
+            <div id="fab-confirm-summary" class="text-sm text-slate-600 mb-3"></div>
+            <div id="fab-confirm-impact" class="text-sm text-slate-500 mb-5"></div>
+            <div class="flex gap-3">
+                <button
+                    id="fab-another"
+                    class="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow transition-colors"
+                >
+                    {t(lang, "fab_another")}
+                </button>
+                <button
+                    id="fab-done"
+                    class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors"
+                >
+                    {t(lang, "fab_close")}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script define:vars={{ token }}>
+(function initFABModal() {
+    const fabBtn = document.getElementById("fab-button");
+    const backdrop = document.getElementById("fab-backdrop");
+    const modal = document.getElementById("fab-modal");
+    const stepEntry = document.getElementById("fab-step-entry");
+    const stepConfirm = document.getElementById("fab-step-confirm");
+    const amountInput = document.getElementById("fab-amount");
+    const payeeInput = document.getElementById("fab-payee");
+    const categorySelect = document.getElementById("fab-category");
+    const accountSelect = document.getElementById("fab-account");
+    const noteInput = document.getElementById("fab-note");
+    const saveBtn = document.getElementById("fab-save");
+    const errorDiv = document.getElementById("fab-error");
+    const ruleIndicator = document.getElementById("fab-rule-indicator");
+    const confirmSummary = document.getElementById("fab-confirm-summary");
+    const confirmImpact = document.getElementById("fab-confirm-impact");
+    const anotherBtn = document.getElementById("fab-another");
+    const doneBtn = document.getElementById("fab-done");
+
+    if (!fabBtn || !backdrop || !modal) return;
+
+    // --- Open / Close ---
+    function openModal() {
+        backdrop.classList.remove("hidden");
+        requestAnimationFrame(() => {
+            backdrop.classList.remove("opacity-0");
+            backdrop.classList.add("opacity-100");
+            modal.classList.remove("translate-y-full");
+        });
+        setTimeout(() => amountInput?.focus(), 350);
+    }
+
+    function closeModal() {
+        backdrop.classList.remove("opacity-100");
+        backdrop.classList.add("opacity-0");
+        modal.classList.add("translate-y-full");
+        setTimeout(() => {
+            backdrop.classList.add("hidden");
+            resetForm();
+        }, 300);
+    }
+
+    function resetForm() {
+        if (amountInput) amountInput.value = "";
+        if (payeeInput) payeeInput.value = "";
+        if (categorySelect) categorySelect.value = "";
+        if (accountSelect) accountSelect.value = "";
+        if (noteInput) noteInput.value = "";
+        if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+        if (ruleIndicator) ruleIndicator.classList.add("hidden");
+        if (stepEntry) stepEntry.classList.remove("hidden");
+        if (stepConfirm) stepConfirm.classList.add("hidden");
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = saveBtn.dataset.originalText || saveBtn.textContent; }
+    }
+
+    fabBtn.addEventListener("click", openModal);
+    backdrop.addEventListener("click", closeModal);
+    if (doneBtn) doneBtn.addEventListener("click", closeModal);
+
+    // --- Quick amounts ---
+    document.querySelectorAll(".fab-quick-amount").forEach((chip) => {
+        chip.addEventListener("click", () => {
+            if (amountInput) amountInput.value = chip.dataset.amount;
+        });
+    });
+
+    // --- Auto-categorization (debounced) ---
+    let catTimer = null;
+    if (payeeInput) {
+        payeeInput.addEventListener("input", () => {
+            if (catTimer) clearTimeout(catTimer);
+            if (ruleIndicator) ruleIndicator.classList.add("hidden");
+            const val = payeeInput.value.trim();
+            if (val.length < 2) return;
+            catTimer = setTimeout(async () => {
+                try {
+                    const res = await fetch(
+                        `/api/budget/categorization-rules/match?payee=${encodeURIComponent(val)}`,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.category_id && categorySelect) {
+                            categorySelect.value = data.category_id;
+                            if (ruleIndicator) ruleIndicator.classList.remove("hidden");
+                        }
+                    }
+                } catch (_) { /* silent */ }
+            }, 400);
+        });
+    }
+
+    // --- Save ---
+    if (saveBtn) {
+        saveBtn.dataset.originalText = saveBtn.textContent;
+        saveBtn.addEventListener("click", async () => {
+            if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+
+            const amount = parseFloat(amountInput?.value || "0");
+            const categoryId = categorySelect?.value;
+            const accountId = accountSelect?.value;
+
+            // Validate
+            if (!amount || amount <= 0) {
+                showError("Amount is required");
+                return;
+            }
+            if (!categoryId) {
+                showError("Category is required");
+                return;
+            }
+            if (!accountId) {
+                showError("Account is required");
+                return;
+            }
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = "...";
+
+            try {
+                const today = new Date().toISOString().split("T")[0];
+                const body = {
+                    amount: Math.round(amount * -100),
+                    date: today,
+                    payee_name: payeeInput?.value?.trim() || "",
+                    category_id: categoryId,
+                    account_id: accountId,
+                    notes: noteInput?.value?.trim() || "",
+                };
+
+                const res = await fetch("/api/budget/transactions/", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify(body),
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.detail || `Error ${res.status}`);
+                }
+
+                const tx = await res.json();
+
+                // Show confirmation
+                if (confirmSummary) {
+                    const catText = categorySelect?.selectedOptions?.[0]?.textContent || "";
+                    confirmSummary.textContent = `$${amount.toFixed(2)} — ${payeeInput?.value || ""} ${catText ? "(" + catText + ")" : ""}`;
+                }
+                if (confirmImpact) confirmImpact.textContent = "";
+
+                if (stepEntry) stepEntry.classList.add("hidden");
+                if (stepConfirm) stepConfirm.classList.remove("hidden");
+            } catch (err) {
+                showError(err.message || "Error saving transaction");
+                saveBtn.disabled = false;
+                saveBtn.textContent = saveBtn.dataset.originalText;
+            }
+        });
+    }
+
+    // --- Another ---
+    if (anotherBtn) {
+        anotherBtn.addEventListener("click", () => {
+            resetForm();
+            setTimeout(() => amountInput?.focus(), 100);
+        });
+    }
+
+    function showError(msg) {
+        if (errorDiv) {
+            errorDiv.textContent = msg;
+            errorDiv.classList.remove("hidden");
+        }
+    }
+
+    // Re-init on Astro page swap (View Transitions)
+    document.addEventListener("astro:after-swap", initFABModal);
+})();
+</script>

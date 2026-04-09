@@ -384,6 +384,25 @@ export const translations = {
         profile_lang_es: "Spanish",
         profile_lang_saved: "Language preference saved!",
         profile_lang_error: "Failed to save language preference.",
+
+        // FAB Quick Expense
+        fab_register_expense: "Register expense",
+        fab_amount: "Amount",
+        fab_manual: "Manual",
+        fab_photo: "Photo",
+        fab_scan: "Scan",
+        fab_payee: "Payee",
+        fab_category: "Category",
+        fab_account: "Account",
+        fab_note: "Note",
+        fab_note_placeholder: "Optional note...",
+        fab_save: "Save expense",
+        fab_saved: "Saved!",
+        fab_in_category: "in",
+        fab_available: "available",
+        fab_another: "+ Another",
+        fab_close: "Close",
+        fab_auto_rule: "rule ✓",
     },
     es: {
         // Common / Nav
@@ -764,6 +783,25 @@ export const translations = {
         profile_lang_es: "Espanol",
         profile_lang_saved: "Preferencia de idioma guardada!",
         profile_lang_error: "Error al guardar preferencia de idioma.",
+
+        // FAB Quick Expense
+        fab_register_expense: "Registrar gasto",
+        fab_amount: "Monto",
+        fab_manual: "Manual",
+        fab_photo: "Foto",
+        fab_scan: "Scan",
+        fab_payee: "Beneficiario",
+        fab_category: "Categoría",
+        fab_account: "Cuenta",
+        fab_note: "Nota",
+        fab_note_placeholder: "Nota opcional...",
+        fab_save: "Guardar gasto",
+        fab_saved: "¡Registrado!",
+        fab_in_category: "en",
+        fab_available: "libre",
+        fab_another: "+ Otro gasto",
+        fab_close: "Cerrar",
+        fab_auto_rule: "regla ✓",
     },
 } as const;
 
