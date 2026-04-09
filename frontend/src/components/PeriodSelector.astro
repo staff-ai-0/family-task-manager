@@ -1,0 +1,52 @@
+---
+/**
+ * PeriodSelector - Horizontal bar with prev/next arrows and period pills (1M, 3M, 6M, 1A).
+ * Used on the unified /budget/reports page.
+ */
+
+interface Props {
+    activePeriod: "1m" | "3m" | "6m" | "1y";
+}
+
+const { activePeriod } = Astro.props;
+
+const periods = [
+    { id: "1m" as const, label: "1M" },
+    { id: "3m" as const, label: "3M" },
+    { id: "6m" as const, label: "6M" },
+    { id: "1y" as const, label: "1A" },
+];
+---
+
+<div class="px-4 py-2 flex items-center justify-center gap-2">
+    <!-- Prev arrow -->
+    <button type="button" id="period-prev" class="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+    </button>
+
+    <!-- Period pills -->
+    <div class="flex gap-1.5">
+        {periods.map(p => (
+            <button
+                type="button"
+                class={`period-btn px-3 py-1 rounded-full text-xs font-bold transition-colors ${
+                    activePeriod === p.id
+                        ? "bg-primary-600 text-white"
+                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                }`}
+                data-period={p.id}
+            >
+                {p.label}
+            </button>
+        ))}
+    </div>
+
+    <!-- Next arrow -->
+    <button type="button" id="period-next" class="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+    </button>
+</div>
