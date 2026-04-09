@@ -6,9 +6,12 @@
 
 import Layout from "@layouts/Layout.astro";
 import BottomNav from "@components/BottomNav.astro";
-import BudgetNav from "@components/BudgetNav.astro";
+import BudgetNavNew from "@components/BudgetNavNew.astro";
+import DrawerMenu from "@components/DrawerMenu.astro";
+import FABButton from "@components/FABButton.astro";
+import FABModal from "@components/FABModal.astro";
 import { apiFetch } from "@lib/api";
-import { getTransactions, getAccounts, getCategories, formatCurrency, formatDate } from "@lib/api/budget";
+import { getTransactions, getAccounts, getCategories, getCategoryGroups, formatCurrency, formatDate } from "@lib/api/budget";
 import type { BudgetTransaction, BudgetAccount, BudgetCategory } from "@lib/api/budget";
 
 // Authentication check
@@ -29,6 +32,11 @@ if (user.role !== "parent") {
     return Astro.redirect("/dashboard");
 }
 
+// Read filter params from URL
+const accountFilter = Astro.url.searchParams.get("account") || "";
+const categoryFilter = Astro.url.searchParams.get("category") || "";
+const searchFilter = Astro.url.searchParams.get("search") || "";
+
 // Get current month for default filter
 const now = new Date();
 const year = now.getFullYear();
@@ -37,41 +45,60 @@ const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
 const endOfMonth = new Date(year, month, 0);
 const endDate = `${year}-${String(month).padStart(2, '0')}-${String(endOfMonth.getDate()).padStart(2, '0')}`;
 
-// Fetch transactions for current month
-const { data: transactions, ok: transOk, error: transError } = await getTransactions(token, {
-    startDate: startOfMonth,
-    endDate: endDate,
-    limit: 100
-});
+// Build transaction fetch params with filters
+let txParams: any = { startDate: startOfMonth, endDate: endDate, limit: 100 };
+if (accountFilter) txParams.accountId = accountFilter;
+if (categoryFilter) txParams.categoryId = categoryFilter;
 
-// Fetch accounts and categories for display
+// Fetch transactions for current month (with optional account/category filters)
+const { data: transactions, ok: transOk, error: transError } = await getTransactions(token, txParams);
+
+// Fetch accounts, categories, and category groups
 const { data: accounts } = await getAccounts(token);
 const { data: categories } = await getCategories(token);
+const { data: groups } = await getCategoryGroups(token);
+
+// Build flat category list for FAB modal
+const allCategories = (groups || [])
+    .filter((g: any) => !g.is_income)
+    .flatMap((g: any) => (g.categories || []).map((c: any) => ({
+        id: c.id, name: c.name, group_name: g.name,
+    })));
 
 // Create lookup maps
 const accountMap = new Map(accounts?.map(a => [a.id, a]) || []);
 const categoryMap = new Map(categories?.map(c => [c.id, c]) || []);
 
 // Sort transactions by date (newest first)
-const sortedTransactions = transactions?.sort((a, b) => 
+const sortedTransactions = transactions?.sort((a, b) =>
     new Date(b.date).getTime() - new Date(a.date).getTime()
 ) || [];
 
+// Client-side search filtering (API doesn't support text search)
+let filteredTransactions = sortedTransactions;
+if (searchFilter) {
+    const q = searchFilter.toLowerCase();
+    filteredTransactions = sortedTransactions.filter(tx =>
+        (tx.payee_name || "").toLowerCase().includes(q) ||
+        (tx.notes || "").toLowerCase().includes(q)
+    );
+}
+
 // Group by date
-const transactionsByDate = sortedTransactions.reduce((acc, t) => {
+const transactionsByDate = filteredTransactions.reduce((acc, t) => {
     const dateKey = t.date;
     if (!acc[dateKey]) acc[dateKey] = [];
     acc[dateKey].push(t);
     return acc;
 }, {} as Record<string, BudgetTransaction[]>);
 
-const dates = Object.keys(transactionsByDate).sort((a, b) => 
+const dates = Object.keys(transactionsByDate).sort((a, b) =>
     new Date(b).getTime() - new Date(a).getTime()
 );
 
 // Calculate totals
-const totalIncome = sortedTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
-const totalExpenses = Math.abs(sortedTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
+const totalIncome = filteredTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+const totalExpenses = Math.abs(filteredTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
 const netAmount = totalIncome - totalExpenses;
 ---
 
@@ -133,7 +160,31 @@ const netAmount = totalIncome - totalExpenses;
         </header>
 
         <!-- Budget Section Nav -->
-        <BudgetNav active="transactions" />
+        <BudgetNavNew active="transactions" lang={lang} />
+        <DrawerMenu lang={lang} />
+
+        <!-- Filter Bar -->
+        <div class="px-4 py-3 bg-white border-b border-slate-200 flex flex-wrap gap-2">
+            <select id="filter-account" class="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 flex-1 min-w-[100px]">
+                <option value="">{lang === "es" ? "Todas las cuentas" : "All accounts"}</option>
+                {(accounts || []).map((acc) => (
+                    <option value={acc.id} selected={acc.id === accountFilter}>{acc.name}</option>
+                ))}
+            </select>
+            <select id="filter-category" class="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 flex-1 min-w-[100px]">
+                <option value="">{lang === "es" ? "Todas las categorías" : "All categories"}</option>
+                {(categories || []).map((cat) => (
+                    <option value={cat.id} selected={cat.id === categoryFilter}>{cat.name}</option>
+                ))}
+            </select>
+            <input
+                id="filter-search"
+                type="text"
+                placeholder={lang === "es" ? "Buscar..." : "Search..."}
+                value={searchFilter}
+                class="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 flex-1 min-w-[120px]"
+            />
+        </div>
 
         <!-- Transactions List -->
         <main class="px-6 py-4 flex-grow">
@@ -142,7 +193,7 @@ const netAmount = totalIncome - totalExpenses;
                     <p class="font-semibold">Error al cargar transacciones</p>
                     <p class="text-sm">{transError || "Error desconocido"}</p>
                 </div>
-            ) : sortedTransactions.length === 0 ? (
+            ) : filteredTransactions.length === 0 ? (
                 <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -158,7 +209,7 @@ const netAmount = totalIncome - totalExpenses;
                     {dates.map(date => {
                         const dayTransactions = transactionsByDate[date];
                         const dayTotal = dayTransactions.reduce((sum, t) => sum + t.amount, 0);
-                        
+
                         return (
                             <div class="bg-white rounded-xl shadow-sm overflow-hidden">
                                 <div class="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
@@ -174,9 +225,9 @@ const netAmount = totalIncome - totalExpenses;
                                         const account = accountMap.get(transaction.account_id);
                                         const category = transaction.category_id ? categoryMap.get(transaction.category_id) : null;
                                         const isIncome = transaction.amount > 0;
-                                        
+
                                         return (
-                                            <a 
+                                            <a
                                                 href={`/budget/transactions/${transaction.id}`}
                                                 class="block px-4 py-3 hover:bg-slate-50 transition"
                                             >
@@ -221,6 +272,37 @@ const netAmount = totalIncome - totalExpenses;
             </div>
         </main>
 
+        <FABButton />
+        <FABModal lang={lang} token={token} accounts={accounts || []} categories={allCategories} />
+
         <BottomNav active="budget" role={user.role} lang={lang} />
     </div>
 </Layout>
+
+<script>
+function initFilters() {
+    const account = document.getElementById("filter-account") as HTMLSelectElement | null;
+    const category = document.getElementById("filter-category") as HTMLSelectElement | null;
+    const search = document.getElementById("filter-search") as HTMLInputElement | null;
+
+    function applyFilters() {
+        const params = new URLSearchParams();
+        if (account?.value) params.set("account", account.value);
+        if (category?.value) params.set("category", category.value);
+        if (search?.value) params.set("search", search.value);
+        const qs = params.toString();
+        window.location.href = "/budget/transactions" + (qs ? "?" + qs : "");
+    }
+
+    account?.addEventListener("change", applyFilters);
+    category?.addEventListener("change", applyFilters);
+
+    let searchTimer: ReturnType<typeof setTimeout>;
+    search?.addEventListener("input", () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(applyFilters, 500);
+    });
+}
+initFilters();
+document.addEventListener("astro:after-swap", initFilters);
+</script>
