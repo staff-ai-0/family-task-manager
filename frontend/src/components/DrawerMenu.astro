@@ -56,7 +56,10 @@ const sections = [
 <!-- Panel -->
 <div
     id="drawer-panel"
-    class="fixed top-0 left-0 h-full w-72 bg-white z-40 shadow-xl transform -translate-x-full transition-transform duration-300"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Navigation menu"
+    class="fixed top-0 left-0 h-full w-72 bg-white z-40 shadow-xl transform -translate-x-full transition-transform duration-300 flex flex-col"
 >
     <!-- Header -->
     <div class="flex items-center justify-between p-4 border-b border-slate-200">
@@ -76,7 +79,7 @@ const sections = [
     </div>
 
     <!-- Sections -->
-    <nav class="overflow-y-auto h-[calc(100%-57px)] py-2">
+    <nav class="overflow-y-auto flex-1 py-2">
         {sections.map(section => (
             <div class="mb-2">
                 <h3 class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -107,15 +110,17 @@ const sections = [
 
         function openDrawer() {
             backdrop.classList.remove("hidden");
-            // Force reflow so the transition plays
-            backdrop.offsetHeight;
-            backdrop.classList.remove("opacity-0");
-            panel.classList.remove("-translate-x-full");
+            requestAnimationFrame(() => {
+                backdrop.classList.remove("opacity-0");
+                panel.classList.remove("-translate-x-full");
+            });
+            toggle.setAttribute("aria-expanded", "true");
         }
 
         function closeDrawer() {
             backdrop.classList.add("opacity-0");
             panel.classList.add("-translate-x-full");
+            toggle.setAttribute("aria-expanded", "false");
             setTimeout(() => {
                 backdrop.classList.add("hidden");
             }, 300);
@@ -124,6 +129,12 @@ const sections = [
         toggle.addEventListener("click", openDrawer);
         close.addEventListener("click", closeDrawer);
         backdrop.addEventListener("click", closeDrawer);
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && !backdrop.classList.contains("hidden")) {
+                closeDrawer();
+                toggle.focus();
+            }
+        });
     }
 
     // Init on first load
