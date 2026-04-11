@@ -77,6 +77,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/api/auth/resend-verification",
         "/api/auth/forgot-password",
         "/api/auth/reset-password",
+        "/api/auth/check-methods",  // Used by login form to detect Google-only accounts before prompting for password
         "/api/oauth/google",
         "/api/lang",
         "/api/oauth/google/",
