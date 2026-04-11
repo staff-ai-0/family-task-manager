@@ -52,6 +52,7 @@ anthropic>=0.39.0
 # Utilities
 python-dotenv==1.0.1
 email-validator==2.1.0.post1
+hvac==2.1.0  # HashiCorp Vault client — runtime secrets loading via vault_bootstrap
 
 # Date and Time
 python-dateutil==2.8.2
