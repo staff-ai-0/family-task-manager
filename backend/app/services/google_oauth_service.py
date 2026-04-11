@@ -190,14 +190,14 @@ class GoogleOAuthService:
         
         db.add(user)
         await db.flush()
-        
+
         # Set created_by on family if we just created it
         if not family_id and not join_code and family:
             family.created_by = user.id
-        
+
         await db.commit()
         await db.refresh(user)
-        
+
         # Create access token
         access_token = create_access_token(
             data={
@@ -206,5 +206,23 @@ class GoogleOAuthService:
                 "role": user.role.value
             }
         )
-        
+
+        # Fire welcome email for this brand-new Google user. Google has
+        # already vouched for email ownership (email_verified=true in
+        # the ID token), so no verification step gates the welcome —
+        # we send it right at account-creation time. Idempotent and
+        # fire-and-forget: a failure here must never block the OAuth
+        # sign-in flow returning a valid token to the frontend.
+        try:
+            from app.services.email_service import EmailService
+            await EmailService.send_welcome_if_not_sent(
+                db=db, user=user, base_url=settings.BASE_URL
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"welcome dispatch after OAuth signup failed for {user.email}",
+                exc_info=True,
+            )
+
         return user, access_token, True
