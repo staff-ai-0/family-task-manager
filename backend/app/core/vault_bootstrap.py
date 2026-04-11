@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 
 try:
     import hvac  # type: ignore
@@ -29,6 +30,28 @@ except ImportError:  # pragma: no cover — covered by the missing-hvac path
     hvac = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
+
+
+def _early_log(level: str, msg: str) -> None:
+    """
+    Write a startup-visible message.
+
+    populate_env_from_vault() runs at import time of app.core.config, which
+    is BEFORE uvicorn (or any framework) has configured Python logging. At
+    that point the root logger's effective level is WARNING, so plain
+    logger.info() calls disappear into the void. We still emit via logging
+    for structured consumers, but also print to stderr so humans tailing
+    `docker logs` see the vault bootstrap outcome.
+    """
+    getattr(logger, level.lower())(msg)
+    print(f"[vault_bootstrap] {level.upper()}: {msg}", file=sys.stderr, flush=True)
+
+
+def _strip_quotes(value: str) -> str:
+    """Strip a single pair of matching surrounding quotes, as python-dotenv would."""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        return value[1:-1]
+    return value
 
 
 def populate_env_from_vault() -> None:
@@ -39,20 +62,24 @@ def populate_env_from_vault() -> None:
     vault_mount = os.getenv("VAULT_MOUNT", "secret")
 
     if not vault_addr or not vault_token:
-        logger.info(
-            "Vault not configured (VAULT_ADDR/VAULT_TOKEN missing), using .env only"
+        _early_log(
+            "info",
+            "Vault not configured (VAULT_ADDR/VAULT_TOKEN missing), using .env only",
         )
         return
 
     if hvac is None:
-        logger.warning("hvac not installed — cannot read from Vault, using .env only")
+        _early_log(
+            "warning", "hvac not installed — cannot read from Vault, using .env only"
+        )
         return
 
     try:
         client = hvac.Client(url=vault_addr, token=vault_token)
         if not client.is_authenticated():
-            logger.warning(
-                f"Vault authentication failed at {vault_addr}, using .env fallback"
+            _early_log(
+                "warning",
+                f"Vault authentication failed at {vault_addr}, using .env fallback",
             )
             return
 
@@ -61,9 +88,10 @@ def populate_env_from_vault() -> None:
         )
         data = response["data"]["data"]
     except Exception as e:
-        logger.warning(
+        _early_log(
+            "warning",
             f"Failed to load secrets from Vault ({vault_mount}/{vault_path}): {e} "
-            "— using .env fallback"
+            "— using .env fallback",
         )
         return
 
@@ -78,10 +106,15 @@ def populate_env_from_vault() -> None:
         if value is None or value == "":
             skipped_empty += 1
             continue
-        os.environ[upper_key] = str(value)
+        # Strip surrounding quotes the way python-dotenv does — the .env files
+        # this data came from often have `FOO="bar"` which rsplit'd into a
+        # literal `"bar"`. Passing that through to os.environ makes pydantic
+        # and downstream code see the quotes as part of the value.
+        os.environ[upper_key] = _strip_quotes(str(value))
         loaded += 1
 
-    logger.info(
+    _early_log(
+        "warning",  # warning so it surfaces through uvicorn's pre-configured logger
         f"Vault loaded: {loaded} secrets from {vault_mount}/{vault_path} "
-        f"(skipped {skipped_existing} pre-existing, {skipped_empty} empty)"
+        f"(skipped {skipped_existing} pre-existing, {skipped_empty} empty)",
     )
