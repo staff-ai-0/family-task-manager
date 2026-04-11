@@ -210,6 +210,9 @@ if (flashError) {
     <script>
         import { showToast } from '../lib/toast';
 
+        const GOOGLE_CLIENT_ID =
+            '436801934159-r2klrd5n7b4da2q806c58utd24h9f71v.apps.googleusercontent.com';
+
         window.handleGoogleLogin = async function(response: any) {
             try {
                 const credential = response.credential;
@@ -233,6 +236,35 @@ if (flashError) {
             }
         };
 
+        /**
+         * Trigger the GIS sign-in prompt with a login_hint so Google
+         * pre-selects the account matching the email the user typed.
+         * Returns true if the prompt was displayed, false otherwise.
+         */
+        async function triggerGoogleSignIn(loginHint: string): Promise<boolean> {
+            // Wait up to 2s for the GIS client library to finish loading.
+            for (let i = 0; i < 20; i++) {
+                if ((window as any).google?.accounts?.id) break;
+                await new Promise(r => setTimeout(r, 100));
+            }
+            const gid = (window as any).google?.accounts?.id;
+            if (!gid) {
+                showToast('Google Sign-In is not available', 'error');
+                return false;
+            }
+            // Re-initialize with login_hint so the Google UI pre-selects
+            // the matching account. This is a no-op if already initialized
+            // with the same config, but cheap enough to always call.
+            gid.initialize({
+                client_id: GOOGLE_CLIENT_ID,
+                callback: window.handleGoogleLogin,
+                login_hint: loginHint,
+                auto_select: false,
+            });
+            gid.prompt();
+            return true;
+        }
+
         document.addEventListener('astro:page-load', () => {
             const loginForm = document.getElementById('login-form');
             if (loginForm) {
@@ -249,6 +281,40 @@ if (flashError) {
                     submitBtn.innerHTML = '<svg class="animate-spin h-4 w-4 mx-auto" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>';
 
                     try {
+                        // Step 1: ask the backend which auth methods exist
+                        // for this email. If it's a Google-only account we
+                        // redirect to Google sign-in instead of trying the
+                        // password (which they don't have).
+                        if (email) {
+                            try {
+                                const methodsRes = await fetch('/api/auth/check-methods', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ email }),
+                                });
+                                if (methodsRes.ok) {
+                                    const methods = await methodsRes.json();
+                                    if (methods.has_google && !methods.has_password) {
+                                        showToast(
+                                            'This account uses Google sign-in. Continuing with Google…',
+                                            'info'
+                                        );
+                                        const prompted = await triggerGoogleSignIn(email);
+                                        if (prompted) {
+                                            // Leave the button spinning —
+                                            // handleGoogleLogin will redirect
+                                            // on success.
+                                            return;
+                                        }
+                                    }
+                                }
+                            } catch {
+                                // Non-fatal: if the methods check fails,
+                                // fall through to the normal password flow.
+                            }
+                        }
+
+                        // Step 2: normal email+password login
                         const response = await fetch('/api/auth/login', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
