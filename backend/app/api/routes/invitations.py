@@ -152,20 +152,20 @@ async def accept_invitation(
         
         await db.commit()
         
-        # Get family name for welcome email
-        family_result = await db.execute(
-            select(Family).where(Family.id == user.family_id)
-        )
-        family = family_result.scalar_one_or_none()
-        family_name = family.name if family else "tu familia"
-        
-        # Send welcome email
-        await EmailService.send_welcome_email(
-            db=db,
-            user=user,
-            family_name=family_name,
-            base_url=settings.BASE_URL,
-        )
+        # Send welcome email via the idempotent helper — it resolves
+        # family_name internally, handles the fire-and-forget exception
+        # contract, and flips user.welcome_email_sent so future
+        # trigger points (re-invitation, etc.) don't duplicate.
+        try:
+            await EmailService.send_welcome_if_not_sent(
+                db=db, user=user, base_url=settings.BASE_URL
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"welcome dispatch after invitation accept failed for {user.email}",
+                exc_info=True,
+            )
         
         return AcceptInvitationResponse(
             success=True,
