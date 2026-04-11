@@ -70,6 +70,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/verify-email",
         "/reset-password",
         "/accept-invitation",
+        "/help",   // English user guide — linked from welcome email
+        "/ayuda",  // Spanish user guide — linked from welcome email
         "/api/auth/login",
         "/api/auth/register",  // Frontend API route for registration (calls backend /api/auth/register-family)
         "/api/auth/register-family",  // Backend API route (for direct calls)

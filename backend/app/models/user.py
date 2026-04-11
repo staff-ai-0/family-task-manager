@@ -31,7 +31,17 @@ class User(Base):
     
     email_verified = Column(Boolean, default=False, nullable=False)
     email_verified_at = Column(DateTime, nullable=True)
-    
+
+    # True once the user has received the welcome email. Set by
+    # EmailService.send_welcome_if_not_sent after a successful Resend
+    # send. Idempotent guard: the helper short-circuits if already True,
+    # so the welcome is dispatched at most once per user regardless of
+    # which code path created the account or how many times a related
+    # event (re-verification, OAuth race, etc.) fires.
+    welcome_email_sent = Column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
+
     oauth_provider = Column(String(50), nullable=True)
     oauth_id = Column(String(255), nullable=True)
     

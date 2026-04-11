@@ -76,25 +76,92 @@ _COPY = {
         "es": "Si no solicitaste este cambio, ignora este correo. Tu contraseña no cambiará.",
         "en": "If you did not request this, ignore this email. Your password will remain unchanged.",
     },
-    "welcome_subject": {
-        "es": "¡Bienvenido a Family Task Manager!",
-        "en": "Welcome to Family Task Manager!",
+    # ----- Welcome email, PARENT variant (5-step quick-start) -----
+    "welcome_parent_subject": {
+        "es": "¡Bienvenido a Family Task Manager, {name}!",
+        "en": "Welcome to Family Task Manager, {name}!",
     },
-    "welcome_heading": {
-        "es": "¡Te damos la bienvenida a tu familia!",
-        "en": "Welcome to your family!",
+    "welcome_parent_heading": {
+        "es": "¡Bienvenido, {name}!",
+        "en": "Welcome, {name}!",
     },
-    "welcome_body": {
-        "es": "Hola {name}, ¡te has unido exitosamente a {family_name}! Ahora puedes colaborar con tu familia en tareas, recompensas y finanzas.",
-        "en": "Hi {name}, you've successfully joined {family_name}! You can now collaborate with your family on tasks, rewards, and finances.",
+    "welcome_parent_opening": {
+        "es": "Hola {name}, bienvenido a <strong>{family_name}</strong> en Family Task Manager. Como padre/madre en esta familia, tienes acceso completo para crear tareas, configurar recompensas, llevar el presupuesto y administrar a todos los miembros.",
+        "en": "Hi {name}, welcome to <strong>{family_name}</strong> on Family Task Manager. As a parent in this family, you have full access to create tasks, configure rewards, track budgets, and manage all members.",
     },
-    "welcome_btn": {
-        "es": "Ir al Dashboard",
-        "en": "Go to Dashboard",
+    "welcome_parent_steps_heading": {
+        "es": "🚀 Tus primeros 5 pasos",
+        "en": "🚀 Your first 5 steps",
     },
-    "welcome_features": {
-        "es": "Aquí hay algunas cosas que puedes hacer:",
-        "en": "Here are some things you can do:",
+    "welcome_parent_step1": {
+        "es": "📋 <strong>Crea tu primera tarea</strong> — ve a <em>Dashboard → Nueva tarea</em>, asígnala a ti o a otro miembro, ponle puntos como premio.",
+        "en": "📋 <strong>Create your first task</strong> — go to <em>Dashboard → New task</em>, assign it to yourself or another member, set points as the reward.",
+    },
+    "welcome_parent_step2": {
+        "es": "👨‍👩‍👧 <strong>Invita a tu familia</strong> — desde <em>Settings → Miembros</em> genera un código de invitación y compártelo con tu pareja, hijos o adolescentes.",
+        "en": "👨‍👩‍👧 <strong>Invite your family</strong> — from <em>Settings → Members</em> generate an invitation code and share it with your partner, kids, or teens.",
+    },
+    "welcome_parent_step3": {
+        "es": "🎁 <strong>Configura recompensas</strong> — en <em>Rewards</em> define los premios que los miembros pueden canjear con los puntos que ganen.",
+        "en": "🎁 <strong>Set up rewards</strong> — in <em>Rewards</em>, define the prizes members can redeem with the points they earn.",
+    },
+    "welcome_parent_step4": {
+        "es": "💰 <strong>Conecta tu presupuesto</strong> — en <em>Budget</em> crea cuentas, categorías y empieza a registrar ingresos/gastos (o escanea un recibo con la cámara).",
+        "en": "💰 <strong>Connect your budget</strong> — in <em>Budget</em> create accounts, categories, and start logging income/expenses (or scan a receipt with your camera).",
+    },
+    "welcome_parent_step5": {
+        "es": "⚙️ <strong>Ajusta el idioma y las notificaciones</strong> — en <em>Profile</em> elige español/inglés y revisa tus preferencias.",
+        "en": "⚙️ <strong>Adjust language and notifications</strong> — in <em>Profile</em> pick English/Spanish and review your preferences.",
+    },
+    "welcome_parent_cta": {
+        "es": "Abrir mi dashboard →",
+        "en": "Open my dashboard →",
+    },
+    "welcome_parent_guide_link": {
+        "es": "📘 Ver manual completo →",
+        "en": "📘 View full user guide →",
+    },
+
+    # ----- Welcome email, MINOR variant (CHILD/TEEN, 4-step quick-start) -----
+    "welcome_minor_subject": {
+        "es": "¡Bienvenido a {family_name}, {name}!",
+        "en": "Welcome to {family_name}, {name}!",
+    },
+    "welcome_minor_heading": {
+        "es": "¡Bienvenido, {name}!",
+        "en": "Welcome, {name}!",
+    },
+    "welcome_minor_opening": {
+        "es": "Hola {name}, ya eres parte de <strong>{family_name}</strong> en Family Task Manager. Aquí puedes ver tus tareas, completarlas para ganar puntos, y canjear esos puntos por recompensas.",
+        "en": "Hi {name}, you're now part of <strong>{family_name}</strong> on Family Task Manager. Here you can see your tasks, complete them to earn points, and redeem those points for rewards.",
+    },
+    "welcome_minor_steps_heading": {
+        "es": "🚀 Cómo empezar",
+        "en": "🚀 Getting started",
+    },
+    "welcome_minor_step1": {
+        "es": "📋 <strong>Revisa tus tareas del día</strong> — abre <em>Dashboard</em> y verás todo lo que te toca hacer hoy, con cuántos puntos vale cada una.",
+        "en": "📋 <strong>Check today's tasks</strong> — open <em>Dashboard</em> and you'll see everything assigned to you today, with the points each one is worth.",
+    },
+    "welcome_minor_step2": {
+        "es": "✅ <strong>Marca las tareas como completadas</strong> — cuando termines algo, ponle check. Tus papás revisarán y recibirás los puntos.",
+        "en": "✅ <strong>Mark tasks as done</strong> — when you finish something, check it off. Your parents will review and you'll get the points.",
+    },
+    "welcome_minor_step3": {
+        "es": "🎁 <strong>Canjea tus puntos por recompensas</strong> — en <em>Rewards</em> ves la lista de premios disponibles. Elige y canjea.",
+        "en": "🎁 <strong>Redeem points for rewards</strong> — in <em>Rewards</em> you'll see the list of available prizes. Pick one and redeem.",
+    },
+    "welcome_minor_step4": {
+        "es": "🌐 <strong>Elige tu idioma</strong> — en <em>Profile</em> puedes cambiar entre español e inglés cuando quieras.",
+        "en": "🌐 <strong>Pick your language</strong> — in <em>Profile</em> you can switch between English and Spanish anytime.",
+    },
+    "welcome_minor_cta": {
+        "es": "Ver mis tareas →",
+        "en": "See my tasks →",
+    },
+    "welcome_minor_guide_link": {
+        "es": "📘 Ver guía para miembros →",
+        "en": "📘 View members' guide →",
     },
 }
 
@@ -141,6 +208,103 @@ def _build_html(*, heading: str, body: str, btn_text: str, btn_url: str,
     <div class="link-box">{btn_url}</div>
     <p class="note">{expiry_note}</p>
     <p class="note">{ignore_note}</p>
+  </div>
+  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="https://family.agent-ia.mx" style="color:#00D9FF;text-decoration:none">family.agent-ia.mx</a></div>
+</div>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# Welcome email helpers
+# ---------------------------------------------------------------------------
+
+def _welcome_variant(user: User) -> str:
+    """Return 'parent' for PARENT users, 'minor' for CHILD and TEEN."""
+    from app.models.user import UserRole
+
+    return "parent" if user.role == UserRole.PARENT else "minor"
+
+
+def _guide_url(base_url: str, lang: str) -> str:
+    """Return the URL for the hosted user guide in the user's language."""
+    base = base_url.rstrip("/")
+    return f"{base}/ayuda" if lang == "es" else f"{base}/help"
+
+
+def _welcome_lang(user: User) -> str:
+    """Normalize user.preferred_lang to one of our supported locales."""
+    lang = getattr(user, "preferred_lang", "en") or "en"
+    return "es" if lang == "es" else "en"
+
+
+def _build_welcome_html(
+    *,
+    variant: str,
+    lang: str,
+    user_name: str,
+    family_name: str,
+    dashboard_url: str,
+    guide_url: str,
+) -> str:
+    """
+    Construct the full welcome email HTML.
+
+    Unlike _build_html (the generic heading+body+button template used by
+    verify/reset/invitation emails), this helper owns the entire body
+    because the welcome structure is richer: greeting, role-aware
+    opening paragraph, numbered quick-start list (5 steps for parent,
+    4 for minor), primary CTA to the dashboard, and a secondary link
+    to the hosted user guide. No html.replace tricks — every piece is
+    substituted explicitly.
+    """
+    opening = _t(f"welcome_{variant}_opening", lang).format(
+        name=user_name, family_name=family_name
+    )
+    heading = _t(f"welcome_{variant}_heading", lang).format(name=user_name)
+    steps_heading = _t(f"welcome_{variant}_steps_heading", lang)
+    cta = _t(f"welcome_{variant}_cta", lang)
+    guide_link_label = _t(f"welcome_{variant}_guide_link", lang)
+
+    step_count = 5 if variant == "parent" else 4
+    step_items = "\n".join(
+        f"      <li style=\"margin-bottom:12px\">{_t(f'welcome_{variant}_step{i}', lang)}</li>"
+        for i in range(1, step_count + 1)
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="{lang}">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  body{{margin:0;padding:0;background:#030B1F;font-family:Arial,Helvetica,sans-serif;color:#e2e8f0}}
+  .wrap{{max-width:600px;margin:40px auto;background:#0B1E4A;border-radius:12px;overflow:hidden;border:1px solid rgba(0,217,255,.15)}}
+  .hdr{{background:linear-gradient(135deg,#05102A 0%,#0B1E4A 100%);padding:32px 40px;border-bottom:1px solid rgba(0,217,255,.2)}}
+  .hdr-logo{{font-size:20px;font-weight:700;color:#00D9FF;letter-spacing:.5px}}
+  .body{{padding:36px 40px}}
+  h2{{margin:0 0 20px;font-size:26px;color:#fff}}
+  p.opening{{margin:0 0 24px;font-size:15px;line-height:1.6;color:#cbd5e1}}
+  h3.steps-heading{{margin:28px 0 16px;font-size:18px;color:#fff}}
+  ol.steps{{margin:0 0 28px;padding-left:22px;color:#cbd5e1;font-size:14px;line-height:1.55}}
+  ol.steps li strong{{color:#fff}}
+  .btn{{display:inline-block;margin:0 0 20px;padding:14px 32px;background:linear-gradient(135deg,#00D9FF,#B000FF);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:15px}}
+  .guide-link{{display:block;margin-top:14px;font-size:14px;color:#00D9FF;text-decoration:none;font-weight:500}}
+  .ftr{{background:#05102A;padding:20px 40px;font-size:12px;color:#475569;border-top:1px solid rgba(0,217,255,.1)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr"><span class="hdr-logo">Family Task Manager</span></div>
+  <div class="body">
+    <h2>{heading}</h2>
+    <p class="opening">{opening}</p>
+    <h3 class="steps-heading">{steps_heading}</h3>
+    <ol class="steps">
+{step_items}
+    </ol>
+    <a href="{dashboard_url}" class="btn">{cta}</a>
+    <a href="{guide_url}" class="guide-link">{guide_link_label}</a>
   </div>
   <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="https://family.agent-ia.mx" style="color:#00D9FF;text-decoration:none">family.agent-ia.mx</a></div>
 </div>
@@ -256,6 +420,24 @@ class EmailService:
             user.email_verified_at = datetime.utcnow()
 
         await db.commit()
+
+        # After successful verification, fire the welcome email
+        # (idempotent — if the user was somehow verified previously we
+        # would have already set welcome_email_sent=True and this is a
+        # no-op). Any failure here is swallowed; verification must not
+        # depend on welcome email delivery.
+        if user and user.email_verified:
+            try:
+                await EmailService.send_welcome_if_not_sent(
+                    db=db, user=user, base_url=settings.BASE_URL
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"welcome dispatch after verify failed for {user.email}",
+                    exc_info=True,
+                )
+
         return user
 
     # ------------------------------------------------------------------
@@ -350,47 +532,115 @@ class EmailService:
         family_name: str,
         base_url: str = "https://family.agent-ia.mx",
     ) -> bool:
-        """Send a welcome email to a newly onboarded family member."""
-        lang = getattr(user, "preferred_lang", "en") or "en"
-        dashboard_link = f"{base_url}/dashboard"
-        
-        html = _build_html(
-            heading=_t("welcome_heading", lang),
-            body=_t("welcome_body", lang).format(name=user.name, family_name=family_name),
-            btn_text=_t("welcome_btn", lang),
-            btn_url=dashboard_link,
-            link_label=_t("welcome_features", lang),
-            expiry_note="",
-            ignore_note="",
+        """
+        Send a role-aware, bilingual welcome email with quick-start + manual link.
+
+        Variant (parent vs minor) is determined by user.role. Language
+        comes from user.preferred_lang. The caller is responsible for
+        deciding WHEN to send this — for the idempotent dispatch used
+        by actual registration/OAuth/invitation flows, call
+        send_welcome_if_not_sent instead.
+        """
+        lang = _welcome_lang(user)
+        variant = _welcome_variant(user)
+        dashboard_url = f"{base_url.rstrip('/')}/dashboard"
+        guide_url = _guide_url(base_url, lang)
+
+        html = _build_welcome_html(
+            variant=variant,
+            lang=lang,
+            user_name=user.name,
+            family_name=family_name,
+            dashboard_url=dashboard_url,
+            guide_url=guide_url,
         )
-        
-        # Customize HTML to show features instead of expiry
-        if lang == "es":
-            features = """
-            <ul style="margin: 15px 0; padding-left: 20px; color: #cbd5e1;">
-                <li style="margin-bottom: 8px;">📋 Gestiona tareas familiares y asignaciones</li>
-                <li style="margin-bottom: 8px;">🎁 Gana y canjea recompensas</li>
-                <li style="margin-bottom: 8px;">💰 Colabora en presupuesto familiar</li>
-                <li style="margin-bottom: 8px;">👥 Conecta con tu familia</li>
-            </ul>
-            """
-        else:
-            features = """
-            <ul style="margin: 15px 0; padding-left: 20px; color: #cbd5e1;">
-                <li style="margin-bottom: 8px;">📋 Manage family tasks and assignments</li>
-                <li style="margin-bottom: 8px;">🎁 Earn and redeem rewards</li>
-                <li style="margin-bottom: 8px;">💰 Collaborate on family budget</li>
-                <li style="margin-bottom: 8px;">👥 Connect with your family</li>
-            </ul>
-            """
-        
-        html = html.replace('<p class="note">' + _t("welcome_features", lang) + '</p>', features)
-        
+
+        subject = _t(f"welcome_{variant}_subject", lang).format(
+            name=user.name, family_name=family_name
+        )
+
         return await EmailService._send(
             to=user.email,
-            subject=_t("welcome_subject", lang),
+            subject=subject,
             html=html,
         )
+
+    @staticmethod
+    async def send_welcome_if_not_sent(
+        db: AsyncSession,
+        user: User,
+        base_url: Optional[str] = None,
+    ) -> bool:
+        """
+        Idempotent welcome dispatcher.
+
+        Short-circuits if user.welcome_email_sent is already True.
+        Resolves family_name lazily (fallback to a generic label if the
+        family row can't be loaded, so a missing family never blocks the
+        welcome from being recorded as sent). Marks welcome_email_sent
+        True on successful Resend call and commits. Catches all
+        exceptions: Resend failures, missing Family, template errors,
+        DB commit errors. Returns True on success or already-sent,
+        False on any failure. Never raises — this is fire-and-forget
+        by contract and must not block the caller flow.
+        """
+        import logging
+        from sqlalchemy import select
+
+        logger = logging.getLogger(__name__)
+
+        if getattr(user, "welcome_email_sent", False):
+            logger.debug(f"welcome already sent to {user.email}, skipping")
+            return True
+
+        base_url = base_url or settings.BASE_URL
+        lang = _welcome_lang(user)
+
+        try:
+            # Resolve family_name — fall back gracefully if the relation
+            # is not loadable for any reason (orphan row, missing FK, ...).
+            from app.models.family import Family
+            family_name: str
+            try:
+                result = await db.execute(
+                    select(Family).where(Family.id == user.family_id)
+                )
+                family = result.scalar_one_or_none()
+                family_name = (
+                    family.name
+                    if family and family.name
+                    else ("tu familia" if lang == "es" else "your family")
+                )
+            except Exception as fe:
+                logger.warning(
+                    f"welcome email: could not resolve family for user "
+                    f"{user.email}: {fe}"
+                )
+                family_name = "tu familia" if lang == "es" else "your family"
+
+            sent = await EmailService.send_welcome_email(
+                db=db,
+                user=user,
+                family_name=family_name,
+                base_url=base_url,
+            )
+
+            if sent:
+                user.welcome_email_sent = True
+                await db.commit()
+                await db.refresh(user)
+                logger.info(f"welcome email sent to {user.email} ({lang}, {_welcome_variant(user)})")
+                return True
+
+            logger.warning(f"welcome email dispatch returned False for {user.email}")
+            return False
+
+        except Exception as e:
+            logger.warning(
+                f"welcome email dispatch failed for {user.email}: {e}",
+                exc_info=True,
+            )
+            return False
 
     @staticmethod
     async def send_invitation_email(
