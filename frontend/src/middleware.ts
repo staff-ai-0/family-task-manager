@@ -95,13 +95,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
     const token = cookies.get("access_token")?.value;
     
     if (!token) {
-        if (import.meta.env.DEV) {
-            console.log(`No token found for protected route: ${path}`);
-        } else {
-            // In production, log the available cookies for debugging
-            const availableCookies = [...cookies].map(c => c[0]).join(", ");
-            console.log(`No access_token for ${path}. Available cookies: [${availableCookies}]`);
-        }
+        // Plain log works for both dev and prod. The previous prod branch
+        // tried to enumerate cookies via `[...cookies]`, but AstroCookies
+        // isn't iterable in the Astro 5 prod SSR build and the spread
+        // threw `TypeError: cookies is not iterable` — which turned every
+        // unauthenticated request to a protected route into a 500 instead
+        // of the intended 302 redirect to /login.
+        console.log(`No access_token for protected route: ${path}`);
         // Redirect to login for HTML pages
         if (!path.startsWith("/api/")) {
             return redirect("/login", 302);
