@@ -28,28 +28,53 @@ class GoogleOAuthService:
     @staticmethod
     async def verify_google_token(token: str) -> Dict[str, Any]:
         """
-        Verify Google ID token and return user info
-        
+        Verify Google ID token and return user info.
+
+        Accepts tokens from any of the client IDs in settings.google_accepted_audiences
+        (Web client + any configured mobile/desktop clients registered under
+        the same Google Cloud project). Google's library will only validate
+        one audience per call, so we verify without an audience constraint
+        and then check aud against our allow-list manually.
+
         Args:
-            token: Google ID token from frontend
-            
+            token: Google ID token from frontend (Web or mobile)
+
         Returns:
             Dict with user info (sub, email, name, picture)
-            
+
         Raises:
-            UnauthorizedException: If token is invalid
+            UnauthorizedException: If token is invalid, signature check fails,
+                issuer is wrong, or aud is not in the allow-list.
         """
-        try:
-            idinfo = id_token.verify_oauth2_token(
-                token, 
-                requests.Request(), 
-                settings.GOOGLE_CLIENT_ID
+        accepted = settings.google_accepted_audiences
+        if not accepted:
+            # Misconfiguration: refuse to accept any token rather than a
+            # silent security downgrade that would trust every Google-issued
+            # token in the world.
+            raise UnauthorizedException(
+                "No Google client IDs configured on the server"
             )
-            
-            # Verify the issuer
-            if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
-                raise ValueError('Wrong issuer.')
-            
+
+        try:
+            # audience=None → library skips the aud check; we do it below
+            # against our multi-client allow-list. Signature, expiration,
+            # and issuer checks still run as normal.
+            idinfo = id_token.verify_oauth2_token(
+                token,
+                requests.Request(),
+                audience=None,
+            )
+
+            # Issuer check (library also does this but we re-assert)
+            if idinfo.get('iss') not in ('accounts.google.com', 'https://accounts.google.com'):
+                raise ValueError(f"Wrong issuer: {idinfo.get('iss')!r}")
+
+            aud = idinfo.get('aud')
+            if aud not in accepted:
+                raise ValueError(
+                    f"Token has wrong audience {aud}, expected one of {accepted}"
+                )
+
             return {
                 'google_id': idinfo['sub'],
                 'email': idinfo['email'],

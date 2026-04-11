@@ -29,9 +29,33 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # Google OAuth
+    # GOOGLE_CLIENT_ID is the primary Web client (legacy single-value field,
+    # kept so existing code that reads settings.GOOGLE_CLIENT_ID directly
+    # still works). GOOGLE_CLIENT_IDS is a comma-separated list of additional
+    # accepted audiences (e.g. mobile app client IDs issued under the same
+    # Google project). Token verification accepts any aud in the union of
+    # both — see app.services.google_oauth_service.verify_google_token.
     GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_IDS: Union[List[str], str] = []
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/google/callback"
+
+    @property
+    def google_accepted_audiences(self) -> List[str]:
+        """Union of GOOGLE_CLIENT_ID and GOOGLE_CLIENT_IDS, empty strings removed."""
+        ids: List[str] = []
+        if self.GOOGLE_CLIENT_ID:
+            ids.append(self.GOOGLE_CLIENT_ID)
+        if isinstance(self.GOOGLE_CLIENT_IDS, list):
+            ids.extend([x for x in self.GOOGLE_CLIENT_IDS if x])
+        # de-dupe while preserving order
+        seen: set[str] = set()
+        out: List[str] = []
+        for i in ids:
+            if i and i not in seen:
+                seen.add(i)
+                out.append(i)
+        return out
     
     # PayPal Configuration
     PAYPAL_CLIENT_ID: str = ""
@@ -84,6 +108,15 @@ class Settings(BaseSettings):
     def parse_allowed_origins(cls, v):
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(',')]
+        return v
+
+    @field_validator('GOOGLE_CLIENT_IDS', mode='before')
+    @classmethod
+    def parse_google_client_ids(cls, v):
+        if v is None or v == "":
+            return []
+        if isinstance(v, str):
+            return [i.strip() for i in v.split(',') if i.strip()]
         return v
     
     model_config = SettingsConfigDict(
