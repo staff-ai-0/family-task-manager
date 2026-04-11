@@ -3,6 +3,13 @@ from pydantic import field_validator
 from typing import List, Union
 import os
 
+# Fold Vault KV secrets into os.environ before Settings() is instantiated.
+# This is a no-op if VAULT_ADDR/VAULT_TOKEN aren't set or if Vault is
+# unreachable, in which case pydantic falls back to .env / shell env as before.
+from app.core.vault_bootstrap import populate_env_from_vault
+
+populate_env_from_vault()
+
 
 class Settings(BaseSettings):
     """Application settings"""
