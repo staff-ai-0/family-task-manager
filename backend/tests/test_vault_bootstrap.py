@@ -126,6 +126,37 @@ class TestVaultBootstrap:
             vault_bootstrap.populate_env_from_vault()
         assert "FTM_TEST_SECRET" not in os.environ
 
+    def test_surrounding_quotes_are_stripped(self, clean_env):
+        # Values in Vault sometimes come from `FOO="bar"` .env lines that
+        # got rsplit as literal '"bar"'. Bootstrap must strip those quotes.
+        os.environ["VAULT_ADDR"] = "http://vault.example:8200"
+        os.environ["VAULT_TOKEN"] = "good-token"
+        data = {
+            "FTM_TEST_SECRET": '"double-quoted"',
+            "FTM_TEST_DB_URL": "'single-quoted'",
+            "FTM_TEST_OVERRIDE": "no-quotes",  # control
+        }
+        with patch.object(vault_bootstrap, "hvac") as mock_hvac:
+            mock_hvac.Client.return_value = _mock_hvac_client(
+                authenticated=True, data=data
+            )
+            vault_bootstrap.populate_env_from_vault()
+        assert os.environ["FTM_TEST_SECRET"] == "double-quoted"
+        assert os.environ["FTM_TEST_DB_URL"] == "single-quoted"
+        assert os.environ["FTM_TEST_OVERRIDE"] == "no-quotes"
+
+    def test_mismatched_quotes_are_preserved(self, clean_env):
+        # Only strip when the quotes actually match (paranoid edge case).
+        os.environ["VAULT_ADDR"] = "http://vault.example:8200"
+        os.environ["VAULT_TOKEN"] = "good-token"
+        data = {"FTM_TEST_SECRET": '"mismatched\''}
+        with patch.object(vault_bootstrap, "hvac") as mock_hvac:
+            mock_hvac.Client.return_value = _mock_hvac_client(
+                authenticated=True, data=data
+            )
+            vault_bootstrap.populate_env_from_vault()
+        assert os.environ["FTM_TEST_SECRET"] == '"mismatched\''
+
     def test_custom_vault_path_is_used(self, clean_env):
         os.environ["VAULT_ADDR"] = "http://vault.example:8200"
         os.environ["VAULT_TOKEN"] = "good-token"
