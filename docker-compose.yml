@@ -62,29 +62,27 @@ services:
       dockerfile: Dockerfile
     container_name: family_app_backend
     environment:
+      # --- Vault bootstrap (required for prod, optional for local dev) ---
+      # vault_bootstrap.py reads the KV v2 path at container start and folds
+      # the secrets into os.environ before pydantic Settings() runs. Any key
+      # already present here is NOT overwritten by Vault, so the values below
+      # (DB URL, ALLOWED_ORIGINS, etc.) remain the source of truth for ops
+      # config that needs to match compose networking.
+      VAULT_ADDR: ${VAULT_ADDR:-}
+      VAULT_TOKEN: ${VAULT_TOKEN:-}
+      VAULT_PATH: ${VAULT_PATH:-family-task-manager/prod}
+      VAULT_MOUNT: ${VAULT_MOUNT:-secret}
+      # --- Infra config (compose owns these, Vault values are ignored) ---
       DATABASE_URL: postgresql+asyncpg://familyapp:familyapp123@db:5432/familyapp
       TEST_DATABASE_URL: postgresql+asyncpg://familyapp_test:familyapp_test123@test_db:5432/familyapp_test
       REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret-key}
-      DEBUG: ${DEBUG:-true}
       ALLOWED_ORIGINS: http://localhost:3003,http://localhost:8000,https://family.agent-ia.mx
-      # Google OAuth
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8002/auth/google/callback}
-      # PayPal
-      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
-      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
-      PAYPAL_MODE: ${PAYPAL_MODE:-sandbox}
-      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID:-}
-      # Email (Resend)
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
-      EMAIL_FROM: ${EMAIL_FROM:-noreply@agent-ia.mx}
-      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Family Task Manager}
-      BASE_URL: ${BASE_URL:-https://family.agent-ia.mx}
-      # AI (Receipt Scanner)
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DEBUG: ${DEBUG:-false}
+      # --- Non-secret operational defaults ---
+      # These can be overridden by Vault (they're not pre-set in compose).
+      # Anything NOT listed here (SECRET_KEY, JWT_SECRET_KEY, GOOGLE_CLIENT_*,
+      # PAYPAL_*, RESEND_API_KEY, ANTHROPIC_API_KEY, BASE_URL, ...) is fetched
+      # from Vault exclusively — no compose-side leak of secrets.
     ports:
        - "8003:8000"
     depends_on:
