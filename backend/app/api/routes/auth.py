@@ -6,6 +6,7 @@ email verification and password reset.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -162,6 +163,44 @@ async def login(
         access_token=access_token,
         token_type="bearer",
         user=UserResponse.model_validate(user),
+    )
+
+
+class CheckMethodsRequest(BaseModel):
+    email: EmailStr
+
+
+class CheckMethodsResponse(BaseModel):
+    has_password: bool
+    has_google: bool
+
+
+@router.post("/check-methods", response_model=CheckMethodsResponse)
+async def check_auth_methods(
+    body: CheckMethodsRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Return which auth methods are configured for a given email.
+
+    Used by the login form to decide whether to redirect a user to Google
+    sign-in when they type an email belonging to an OAuth-only account.
+
+    For unknown emails returns {has_password: False, has_google: False} —
+    the caller should let the normal password path fail with invalid
+    credentials so this endpoint is no more of an enumeration oracle than
+    /forgot-password or /register already are.
+    """
+    result = await db.execute(
+        select(User.password_hash, User.oauth_provider).where(User.email == body.email)
+    )
+    row = result.first()
+    if row is None:
+        return CheckMethodsResponse(has_password=False, has_google=False)
+    password_hash, oauth_provider = row
+    return CheckMethodsResponse(
+        has_password=password_hash is not None,
+        has_google=oauth_provider == "google",
     )
 
 
