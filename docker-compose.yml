@@ -118,6 +118,12 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      # Mount the repo-root docs/ directory read-only so
+      # src/pages/help.astro and src/pages/ayuda.astro can import
+      # USER_GUIDE_{EN,ES}.md at runtime. Without this, the relative
+      # import `../../docs/USER_GUIDE_EN.md` resolves outside /app
+      # (the frontend container's root) and the file isn't visible.
+      - ./docs:/app/docs:ro
     networks:
       - app_network
     command: npm run dev -- --host
