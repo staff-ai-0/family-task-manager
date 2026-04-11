@@ -167,3 +167,6 @@ send_frontend_credentials.py
 .claude/
 .worktrees/
 actual/
+# Legacy Actual Budget sync service (Phase 10 decommissioned, see docker-compose.yml).
+# Still bind-mounted into backend at runtime on prod, but nothing to track.
+services/actual-budget/
