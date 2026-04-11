@@ -103,6 +103,95 @@ class TestUserLogin:
         assert response.status_code == 401
 
 
+class TestCheckAuthMethods:
+    """Tests for POST /api/auth/check-methods (used by email-match Google redirect)"""
+
+    @pytest.mark.asyncio
+    async def test_password_only_user(self, client: AsyncClient, test_parent_user):
+        """Password-only user → has_password True, has_google False"""
+        response = await client.post(
+            "/api/auth/check-methods",
+            json={"email": test_parent_user.email},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data == {"has_password": True, "has_google": False}
+
+    @pytest.mark.asyncio
+    async def test_google_only_user(
+        self, client: AsyncClient, db_session: AsyncSession, test_family
+    ):
+        """Google-only user (no password_hash) → has_password False, has_google True"""
+        from app.models.user import User, UserRole
+
+        user = User(
+            email="googleonly@test.com",
+            password_hash=None,
+            name="Google Only",
+            role=UserRole.PARENT,
+            family_id=test_family.id,
+            oauth_provider="google",
+            oauth_id="google-sub-1234",
+            email_verified=True,
+        )
+        db_session.add(user)
+        await db_session.commit()
+
+        response = await client.post(
+            "/api/auth/check-methods",
+            json={"email": "googleonly@test.com"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"has_password": False, "has_google": True}
+
+    @pytest.mark.asyncio
+    async def test_linked_user_has_both(
+        self, client: AsyncClient, db_session: AsyncSession, test_family
+    ):
+        """User with both password and linked Google → both True"""
+        from app.models.user import User, UserRole
+        from app.core.security import get_password_hash
+
+        user = User(
+            email="linked@test.com",
+            password_hash=get_password_hash("password123"),
+            name="Linked User",
+            role=UserRole.PARENT,
+            family_id=test_family.id,
+            oauth_provider="google",
+            oauth_id="google-sub-5678",
+            email_verified=True,
+        )
+        db_session.add(user)
+        await db_session.commit()
+
+        response = await client.post(
+            "/api/auth/check-methods",
+            json={"email": "linked@test.com"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"has_password": True, "has_google": True}
+
+    @pytest.mark.asyncio
+    async def test_unknown_email(self, client: AsyncClient):
+        """Unknown email → both False (does NOT 404, to avoid enumeration-via-status)"""
+        response = await client.post(
+            "/api/auth/check-methods",
+            json={"email": "nobody@test.com"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"has_password": False, "has_google": False}
+
+    @pytest.mark.asyncio
+    async def test_invalid_email_format(self, client: AsyncClient):
+        """Invalid email format → 422 from Pydantic validator"""
+        response = await client.post(
+            "/api/auth/check-methods",
+            json={"email": "not-an-email"},
+        )
+        assert response.status_code == 422
+
+
 class TestProtectedEndpoints:
     """Test protected endpoints require authentication"""
 
