@@ -1,0 +1,58 @@
+---
+/**
+ * Recycle Bin - View and restore/permanently delete soft-deleted budget items.
+ */
+
+import Layout from "@layouts/Layout.astro";
+import BottomNav from "@components/BottomNav.astro";
+import BudgetNavNew from "@components/BudgetNavNew.astro";
+import DrawerMenu from "@components/DrawerMenu.astro";
+import RecycleBinTable from "@components/RecycleBinTable.astro";
+import { apiFetch } from "@lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+const es = lang === "es";
+
+const { data: user, ok } = await apiFetch<any>("/api/auth/me", { token });
+if (!ok) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+const { data: draftsCount } = await apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token });
+const pendingDraftsCount = draftsCount?.count ?? 0;
+---
+
+<Layout title={`${es ? "Papelera" : "Recycle Bin"} - Budget`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen flex flex-col">
+
+        <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+            <div class="flex items-center gap-4">
+                <a href="/budget/settings" class="text-white hover:text-primary-100 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <div>
+                    <h1 class="text-2xl font-bold">{es ? "Papelera de reciclaje" : "Recycle Bin"}</h1>
+                    <p class="text-primary-100 text-sm mt-0.5">
+                        {es ? "Los elementos se eliminan permanentemente después de 30 días" : "Items are permanently deleted after 30 days"}
+                    </p>
+                </div>
+            </div>
+        </header>
+
+        <BudgetNavNew active="none" lang={lang} pendingDrafts={pendingDraftsCount} />
+        <DrawerMenu lang={lang} />
+
+        <main class="px-4 py-6 flex-grow">
+            <RecycleBinTable session={{ token }} />
+        </main>
+
+        <BottomNav active="budget" role={user.role} lang={lang} />
+    </div>
+</Layout>

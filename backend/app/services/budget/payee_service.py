@@ -74,6 +74,28 @@ class PayeeService(BaseFamilyService[BudgetPayee]):
         return await cls.update_by_id(db, payee_id, family_id, update_data)
 
     @classmethod
+    async def get_or_create_by_name(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        name: str,
+    ) -> BudgetPayee:
+        """Return an existing payee with the given name, or create a new one."""
+        result = await db.execute(
+            select(BudgetPayee).where(
+                and_(BudgetPayee.family_id == family_id, BudgetPayee.name == name)
+            )
+        )
+        existing = result.scalars().first()
+        if existing:
+            return existing
+        payee = BudgetPayee(family_id=family_id, name=name)
+        db.add(payee)
+        await db.commit()
+        await db.refresh(payee)
+        return payee
+
+    @classmethod
     async def list_by_family_filtered(
         cls,
         db: AsyncSession,

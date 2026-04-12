@@ -1,8 +1,6 @@
 ---
 /**
- * Budget Settings - Unified accordion page
- * Consolidates accounts, payees, rules, recurring transactions, and backups
- * into a single page with collapsible sections.
+ * Budget Settings - Full CRUD for accounts, payees, rules, recurring, goals, tags.
  */
 
 import Layout from "@layouts/Layout.astro";
@@ -28,191 +26,952 @@ if (!ok) {
 const { data: draftsCount } = await apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token });
 const pendingDraftsCount = draftsCount?.count ?? 0;
 
-if (user.role !== "parent") {
-    return Astro.redirect("/dashboard");
-}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 // Parallel fetch all settings data
-const [accountsRes, payeesRes, rulesRes, recurringRes] = await Promise.all([
+const [accountsRes, payeesRes, rulesRes, recurringRes, goalsRes, tagsRes, groupsRes] = await Promise.all([
     apiFetch<any[]>("/api/budget/accounts/", { token }),
     apiFetch<any[]>("/api/budget/payees/", { token }),
     apiFetch<any[]>("/api/budget/categorization-rules/", { token }),
     apiFetch<any[]>("/api/budget/recurring-transactions/", { token }),
+    apiFetch<any[]>("/api/budget/goals/", { token }),
+    apiFetch<any[]>("/api/budget/tags/", { token }),
+    apiFetch<any[]>("/api/budget/categories/groups", { token }),
 ]);
 
 const accounts = accountsRes.data || [];
 const payees = payeesRes.data || [];
 const rules = rulesRes.data || [];
 const recurring = recurringRes.data || [];
+const goals = goalsRes.data || [];
+const tags = tagsRes.data || [];
+const groups = groupsRes.data || [];
 
-// Account type labels
+const allCategories = groups.flatMap((g: any) =>
+    (g.categories || []).map((c: any) => ({ id: c.id, name: c.name, group_name: g.name }))
+);
+
 const accountTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
-        checking: es ? "Cheques" : "Checking",
-        savings: es ? "Ahorros" : "Savings",
-        credit_card: es ? "Tarjeta de crédito" : "Credit Card",
-        cash: es ? "Efectivo" : "Cash",
-        investment: es ? "Inversión" : "Investment",
-        loan: es ? "Préstamo" : "Loan",
-        other: es ? "Otro" : "Other",
+        checking: es ? "Cheques" : "Checking", savings: es ? "Ahorros" : "Savings",
+        credit_card: es ? "Tarjeta de crédito" : "Credit Card", cash: es ? "Efectivo" : "Cash",
+        investment: es ? "Inversión" : "Investment", loan: es ? "Préstamo" : "Loan", other: es ? "Otro" : "Other",
+        credit: es ? "Crédito" : "Credit",
     };
     return labels[type] || type;
 };
 
-// Frequency labels
 const frequencyLabel = (freq: string) => {
     const labels: Record<string, string> = {
         daily: es ? "Diaria" : "Daily",
         weekly: es ? "Semanal" : "Weekly",
         biweekly: es ? "Quincenal" : "Biweekly",
         monthly: es ? "Mensual" : "Monthly",
+        monthly_dayofmonth: es ? "Mensual" : "Monthly",
+        monthly_dayofweek: es ? "Mensual (día de semana)" : "Monthly (weekday)",
         quarterly: es ? "Trimestral" : "Quarterly",
         annual: es ? "Anual" : "Annual",
+        yearly: es ? "Anual" : "Annual",
     };
     return labels[freq] || freq;
 };
 ---
 
 <Layout title={`${es ? "Configuración" : "Settings"} - Budget`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen flex flex-col">
-        <BudgetNavNew active="none" lang={lang} pendingDrafts={pendingDraftsCount} />
-        <DrawerMenu lang={lang} />
+<div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen flex flex-col">
+    <BudgetNavNew active="none" lang={lang} pendingDrafts={pendingDraftsCount} />
+    <DrawerMenu lang={lang} />
 
-        <div class="px-4 pt-6 pb-2">
-            <h1 class="text-xl font-bold text-slate-800">
-                {es ? "Configuracion" : "Settings"}
-            </h1>
-            <p class="text-sm text-slate-500 mt-1">
-                {es ? "Gestiona cuentas, beneficiarios, reglas y mas" : "Manage accounts, payees, rules & more"}
-            </p>
-        </div>
+    <div class="px-4 pt-6 pb-2">
+        <h1 class="text-xl font-bold text-slate-800">{es ? "Configuración" : "Settings"}</h1>
+        <p class="text-sm text-slate-500 mt-1">{es ? "Gestiona cuentas, beneficiarios, reglas y más" : "Manage accounts, payees, rules & more"}</p>
+    </div>
 
-        <div class="px-4 py-4 flex-1">
-            <!-- Accounts -->
-            <SettingsAccordion id="accounts" title={es ? "Cuentas" : "Accounts"} icon="🏦">
-                {accounts.length === 0 ? (
-                    <p class="text-sm text-slate-500 text-center py-4">
-                        {es ? "No hay cuentas creadas" : "No accounts yet"}
-                    </p>
-                ) : (
-                    <div class="divide-y divide-slate-100">
-                        {accounts.map((acc: any) => (
-                            <div class="flex items-center justify-between py-3 -mx-4 px-4">
-                                <div>
-                                    <p class="text-sm font-medium text-slate-800">{acc.name}</p>
-                                    <p class="text-xs text-slate-500">{accountTypeLabel(acc.account_type)}</p>
-                                </div>
+    <div class="px-4 py-4 flex-1">
+
+        <!-- ACCOUNTS -->
+        <SettingsAccordion id="accounts" title={es ? "Cuentas" : "Accounts"} icon="🏦">
+            <div class="flex justify-end mb-3">
+                <button onclick="openAccountModal()" class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition">
+                    + {es ? "Nueva cuenta" : "New account"}
+                </button>
+            </div>
+            {accounts.length === 0 ? (
+                <p class="text-sm text-slate-500 text-center py-4">{es ? "No hay cuentas" : "No accounts yet"}</p>
+            ) : (
+                <div class="divide-y divide-slate-100">
+                    {accounts.map((acc: any) => (
+                        <div class="flex items-center justify-between py-3 -mx-4 px-4">
+                            <div>
+                                <p class="text-sm font-medium text-slate-800">{acc.name}</p>
+                                <p class="text-xs text-slate-500">{accountTypeLabel(acc.account_type || acc.type)}</p>
+                                {acc.notes && <p class="text-xs text-slate-400">{acc.notes}</p>}
+                            </div>
+                            <div class="flex items-center gap-3">
                                 <span class="text-sm font-semibold text-slate-700">
                                     {formatCurrency(acc.balance_cents ?? acc.balance ?? 0)}
                                 </span>
+                                <button onclick={`openAccountModal(${JSON.stringify(acc)})`}
+                                    class="text-slate-400 hover:text-primary-600 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                </button>
+                                <button onclick={`confirmDeleteAccount('${acc.id}','${acc.name.replace(/'/g,"\\'")}' )`}
+                                    class="text-slate-400 hover:text-red-600 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
                             </div>
-                        ))}
-                    </div>
-                )}
-                <div class="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400 italic">
-                    {es ? "Usa el boton + para agregar cuentas" : "Use the + button to add accounts"}
+                        </div>
+                    ))}
                 </div>
-            </SettingsAccordion>
+            )}
+        </SettingsAccordion>
 
-            <!-- Payees -->
-            <SettingsAccordion id="payees" title={es ? "Beneficiarios" : "Payees"} icon="👤">
-                {payees.length === 0 ? (
-                    <p class="text-sm text-slate-500 text-center py-4">
-                        {es ? "No hay beneficiarios" : "No payees yet"}
-                    </p>
-                ) : (
-                    <div class="divide-y divide-slate-100">
-                        {payees.map((p: any) => (
-                            <div class="flex items-center justify-between py-2.5">
-                                <span class="text-sm text-slate-700">{p.name}</span>
-                                {p.is_favorite && (
-                                    <span class="text-amber-400 text-base" title={es ? "Favorito" : "Favorite"}>&#9733;</span>
-                                )}
+        <!-- PAYEES -->
+        <SettingsAccordion id="payees" title={es ? "Beneficiarios" : "Payees"} icon="👤">
+            <div class="flex justify-end mb-3">
+                <button onclick="openPayeeModal()" class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition">
+                    + {es ? "Nuevo" : "New"}
+                </button>
+            </div>
+            {payees.length === 0 ? (
+                <p class="text-sm text-slate-500 text-center py-4">{es ? "No hay beneficiarios" : "No payees yet"}</p>
+            ) : (
+                <div class="divide-y divide-slate-100">
+                    {payees.map((p: any) => (
+                        <div class="flex items-center justify-between py-2.5">
+                            <span class="text-sm text-slate-700">{p.name}</span>
+                            <div class="flex items-center gap-2">
+                                <button
+                                    class={`favorite-btn text-base transition ${p.is_favorite ? 'text-amber-400 hover:text-amber-300' : 'text-slate-300 hover:text-amber-400'}`}
+                                    data-payee-id={p.id}
+                                    data-favorite={p.is_favorite ? "1" : "0"}
+                                    title={es ? "Favorito" : "Favorite"}
+                                >&#9733;</button>
+                                <button onclick={`openPayeeModal(${JSON.stringify(p)})`}
+                                    class="text-slate-400 hover:text-primary-600 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                </button>
+                                <button onclick={`confirmDeletePayee('${p.id}','${p.name.replace(/'/g,"\\'")}' )`}
+                                    class="text-slate-400 hover:text-red-600 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
                             </div>
-                        ))}
-                    </div>
-                )}
-            </SettingsAccordion>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </SettingsAccordion>
 
-            <!-- Categorization Rules -->
-            <SettingsAccordion id="rules" title={es ? "Reglas de categorizacion" : "Categorization Rules"} icon="🤖">
-                {rules.length === 0 ? (
-                    <p class="text-sm text-slate-500 text-center py-4">
-                        {es ? "No hay reglas creadas" : "No rules yet"}
-                    </p>
-                ) : (
-                    <div class="divide-y divide-slate-100">
-                        {rules.map((rule: any) => (
-                            <div class="py-2.5">
-                                <div class="flex items-center gap-2 flex-wrap">
+        <!-- CATEGORIZATION RULES -->
+        <SettingsAccordion id="rules" title={es ? "Reglas de categorización" : "Categorization Rules"} icon="🤖">
+            <div class="flex justify-end mb-3">
+                <button onclick="openRuleModal()" class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition">
+                    + {es ? "Nueva regla" : "New rule"}
+                </button>
+            </div>
+            {rules.length === 0 ? (
+                <p class="text-sm text-slate-500 text-center py-4">{es ? "No hay reglas" : "No rules yet"}</p>
+            ) : (
+                <div class="divide-y divide-slate-100">
+                    {rules.map((rule: any) => (
+                        <div class="py-2.5 flex items-start justify-between gap-2">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-1.5 flex-wrap">
                                     <span class="text-sm font-medium text-slate-800">"{rule.pattern}"</span>
                                     <span class="text-xs text-slate-400">&rarr;</span>
-                                    <span class="text-sm text-slate-600">{rule.category?.name || (es ? "Sin categoria" : "No category")}</span>
-                                    <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 uppercase">
-                                        {rule.rule_type}
-                                    </span>
+                                    <span class="text-sm text-slate-600">{rule.category?.name || (es ? "Sin cat." : "No cat.")}</span>
+                                    <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 uppercase">{rule.rule_type}</span>
                                     {!rule.enabled && (
-                                        <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-yellow-100 text-yellow-700">
-                                            {es ? "Inactiva" : "Disabled"}
-                                        </span>
+                                        <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-yellow-100 text-yellow-700">{es ? "Inactiva" : "Off"}</span>
                                     )}
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                )}
-            </SettingsAccordion>
-
-            <!-- Recurring Transactions -->
-            <SettingsAccordion id="recurring" title={es ? "Transacciones recurrentes" : "Recurring Transactions"} icon="🔄">
-                {recurring.length === 0 ? (
-                    <p class="text-sm text-slate-500 text-center py-4">
-                        {es ? "No hay transacciones recurrentes" : "No recurring transactions yet"}
-                    </p>
-                ) : (
-                    <div class="divide-y divide-slate-100">
-                        {recurring.map((txn: any) => (
-                            <div class="flex items-center justify-between py-2.5">
-                                <div>
-                                    <p class="text-sm font-medium text-slate-800">{txn.description}</p>
-                                    <p class="text-xs text-slate-500">
-                                        {frequencyLabel(txn.frequency)}
-                                        {txn.next_due_date && (
-                                            <span> &middot; {es ? "Prox:" : "Next:"} {txn.next_due_date}</span>
-                                        )}
-                                    </p>
-                                </div>
-                                <span class:list={[
-                                    "text-sm font-semibold",
-                                    txn.transaction_type === "income" ? "text-green-600" : "text-red-600",
-                                ]}>
-                                    {txn.transaction_type === "income" ? "+" : "-"}{formatCurrency(Math.abs(txn.amount))}
-                                </span>
+                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                                <button onclick={`openRuleModal(${JSON.stringify(rule)})`} class="text-slate-400 hover:text-primary-600 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                </button>
+                                <button onclick={`confirmDeleteRule('${rule.id}')`} class="text-slate-400 hover:text-red-600 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
                             </div>
-                        ))}
-                    </div>
-                )}
-            </SettingsAccordion>
-
-            <!-- Backups -->
-            <SettingsAccordion id="backups" title={es ? "Respaldos" : "Backups"} icon="💾">
-                <p class="text-sm text-slate-600 mb-4">
-                    {es ? "Descarga una copia de seguridad de tu presupuesto." : "Download a backup of your budget data."}
-                </p>
-                <div class="flex flex-col gap-2">
-                    <a
-                        href="/api/budget/export"
-                        class="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg transition"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-                        </svg>
-                        {es ? "Exportar datos (ZIP)" : "Export data (ZIP)"}
-                    </a>
+                        </div>
+                    ))}
                 </div>
-            </SettingsAccordion>
-        </div>
+            )}
+        </SettingsAccordion>
 
-        <BottomNav active="budget" role={user.role} lang={lang} />
+        <!-- RECURRING TRANSACTIONS -->
+        <SettingsAccordion id="recurring" title={es ? "Transacciones recurrentes" : "Recurring Transactions"} icon="🔄">
+            <div class="flex justify-end mb-3">
+                <button onclick="openRecurringModal()" class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition">
+                    + {es ? "Nueva" : "New"}
+                </button>
+            </div>
+            {recurring.length === 0 ? (
+                <p class="text-sm text-slate-500 text-center py-4">{es ? "No hay recurrentes" : "No recurring transactions yet"}</p>
+            ) : (
+                <div class="divide-y divide-slate-100">
+                    {recurring.map((txn: any) => (
+                        <div class="py-2.5 flex items-center justify-between gap-2">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-slate-800 truncate">{txn.name || txn.description}</p>
+                                <p class="text-xs text-slate-500">
+                                    {frequencyLabel(txn.recurrence_type || txn.frequency)}
+                                    {txn.next_due_date && <span> · {es ? "Prox:" : "Next:"} {txn.next_due_date}</span>}
+                                    {!txn.is_active && <span class="ml-1 text-yellow-600">({es ? "inactiva" : "inactive"})</span>}
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                                <span class={`text-sm font-semibold ${txn.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {txn.amount > 0 ? '+' : '-'}{formatCurrency(Math.abs(txn.amount))}
+                                </span>
+                                <button onclick={`postRecurring('${txn.id}')`}
+                                    class="text-slate-400 hover:text-green-600 transition" title={es ? "Registrar ahora" : "Post now"}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </button>
+                                <button onclick={`openRecurringModal(${JSON.stringify(txn)})`} class="text-slate-400 hover:text-primary-600 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                </button>
+                                <button onclick={`confirmDeleteRecurring('${txn.id}')`} class="text-slate-400 hover:text-red-600 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </SettingsAccordion>
+
+        <!-- GOALS -->
+        <SettingsAccordion id="goals" title={es ? "Metas" : "Goals"} icon="🎯">
+            <div class="flex justify-end mb-3">
+                <button onclick="openGoalModal()" class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition">
+                    + {es ? "Nueva meta" : "New goal"}
+                </button>
+            </div>
+            {goals.length === 0 ? (
+                <p class="text-sm text-slate-500 text-center py-4">{es ? "No hay metas" : "No goals yet"}</p>
+            ) : (
+                <div class="divide-y divide-slate-100">
+                    {goals.map((g: any) => (
+                        <div class="py-2.5 flex items-center justify-between gap-2">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-slate-800 truncate">{g.name}</p>
+                                <p class="text-xs text-slate-500">
+                                    {g.goal_type === 'spending_limit' ? (es ? 'Límite de gasto' : 'Spending limit') : (es ? 'Meta de ahorro' : 'Savings target')}
+                                    {' · '}{formatCurrency(g.target_amount)}
+                                    {' · '}{g.period}
+                                    {!g.is_active && <span class="ml-1 text-yellow-600">({es ? 'inactiva' : 'inactive'})</span>}
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                                <button onclick={`openGoalModal(${JSON.stringify(g)})`} class="text-slate-400 hover:text-primary-600 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                </button>
+                                <button onclick={`confirmDeleteGoal('${g.id}')`} class="text-slate-400 hover:text-red-600 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </SettingsAccordion>
+
+        <!-- TAGS -->
+        <SettingsAccordion id="tags" title={es ? "Etiquetas" : "Tags"} icon="🏷️">
+            <div class="flex justify-end mb-3">
+                <button onclick="openTagModal()" class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition">
+                    + {es ? "Nueva etiqueta" : "New tag"}
+                </button>
+            </div>
+            {tags.length === 0 ? (
+                <p class="text-sm text-slate-500 text-center py-4">{es ? "No hay etiquetas" : "No tags yet"}</p>
+            ) : (
+                <div class="flex flex-wrap gap-2">
+                    {tags.map((tag: any) => (
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-full text-sm text-slate-700">
+                            {tag.name}
+                            <button onclick={`openTagModal(${JSON.stringify(tag)})`} class="text-slate-400 hover:text-primary-600 transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                            </button>
+                            <button onclick={`confirmDeleteTag('${tag.id}')`} class="text-slate-400 hover:text-red-600 transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+        </SettingsAccordion>
+
+        <!-- BACKUPS & TOOLS -->
+        <SettingsAccordion id="backups" title={es ? "Respaldos y herramientas" : "Backups & Tools"} icon="💾">
+            <p class="text-sm text-slate-600 mb-4">
+                {es ? "Descarga una copia de seguridad de tu presupuesto." : "Download a backup of your budget data."}
+            </p>
+            <div class="flex flex-col gap-2">
+                <button id="export-btn"
+                    class="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                    </svg>
+                    {es ? "Exportar datos (ZIP)" : "Export data (ZIP)"}
+                </button>
+                <a href="/budget/recycle-bin"
+                    class="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    {es ? "Papelera de reciclaje" : "Recycle Bin"}
+                </a>
+            </div>
+        </SettingsAccordion>
     </div>
+
+    <BottomNav active="budget" role={user.role} lang={lang} />
+</div>
+
+<!-- ================================================================
+     SHARED MODAL OVERLAY
+     ================================================================ -->
+<div id="settings-modal-overlay" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100">
+            <h3 id="modal-title" class="text-lg font-bold text-slate-800"></h3>
+            <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-slate-600 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <div id="modal-body" class="px-5 py-4"></div>
+        <div id="modal-error" class="hidden mx-5 mb-2 text-sm text-red-600 px-1"></div>
+        <div class="flex gap-3 px-5 pb-5">
+            <button onclick="closeSettingsModal()" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition">
+                {es ? "Cancelar" : "Cancel"}
+            </button>
+            <button id="modal-save-btn" class="flex-1 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow transition">
+                {es ? "Guardar" : "Save"}
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- CONFIRM DELETE DIALOG -->
+<div id="confirm-overlay" class="hidden fixed inset-0 bg-black/60 z-[60] flex items-center justify-center px-4">
+    <div class="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
+        <h3 class="text-lg font-bold text-slate-800 mb-2">{es ? "¿Eliminar?" : "Delete?"}</h3>
+        <p id="confirm-msg" class="text-sm text-slate-500 mb-6"></p>
+        <div class="flex gap-3">
+            <button onclick="closeConfirm()" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition">
+                {es ? "Cancelar" : "Cancel"}
+            </button>
+            <button id="confirm-ok-btn" class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow transition">
+                {es ? "Eliminar" : "Delete"}
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- TOAST -->
+<div id="settings-toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-lg transition-all"></div>
 </Layout>
+
+<script define:vars={{ token, accountsData: accounts, allCategoriesData: allCategories, es }}>
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function showToast(msg, type = "success") {
+    const t = document.getElementById("settings-toast");
+    if (!t) return;
+    t.textContent = msg;
+    t.className = `fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-lg ${type === "success" ? "bg-green-600" : "bg-red-600"}`;
+    t.classList.remove("hidden");
+    setTimeout(() => t.classList.add("hidden"), 3000);
+}
+
+function showModalError(msg) {
+    const e = document.getElementById("modal-error");
+    if (!e) return;
+    e.textContent = msg;
+    e.classList.remove("hidden");
+}
+
+function clearModalError() {
+    const e = document.getElementById("modal-error");
+    if (e) { e.textContent = ""; e.classList.add("hidden"); }
+}
+
+function closeSettingsModal() {
+    document.getElementById("settings-modal-overlay")?.classList.add("hidden");
+    clearModalError();
+}
+
+function closeConfirm() {
+    document.getElementById("confirm-overlay")?.classList.add("hidden");
+}
+
+function openConfirm(msg, onConfirm) {
+    document.getElementById("confirm-msg").textContent = msg;
+    document.getElementById("confirm-overlay")?.classList.remove("hidden");
+    const btn = document.getElementById("confirm-ok-btn");
+    btn.onclick = async () => {
+        closeConfirm();
+        await onConfirm();
+    };
+}
+
+function setModalSaveHandler(fn) {
+    const btn = document.getElementById("modal-save-btn");
+    if (btn) btn.onclick = fn;
+}
+
+async function apiCall(url, method, body) {
+    const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Error ${res.status}`);
+    }
+    return res.status === 204 ? null : res.json();
+}
+
+function escapeHtml(str) {
+    return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+
+document.getElementById("export-btn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("export-btn");
+    const originalText = btn.textContent.trim();
+    btn.disabled = true;
+    btn.textContent = es ? "Exportando…" : "Exporting…";
+    try {
+        const res = await fetch("/api/budget/export", {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `budget-export-${new Date().toISOString().split("T")[0]}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch(e) {
+        showToast(e.message, "error");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+});
+
+// ─── ACCOUNTS ─────────────────────────────────────────────────────────────────
+
+window.openAccountModal = function(acc) {
+    const isEdit = !!acc;
+    document.getElementById("modal-title").textContent = isEdit ? (es ? "Editar cuenta" : "Edit Account") : (es ? "Nueva cuenta" : "New Account");
+    document.getElementById("modal-body").innerHTML = `
+        <div class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Nombre" : "Name"} *</label>
+                <input id="acc-name" type="text" value="${escapeHtml(acc?.name)}"
+                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Tipo" : "Type"} *</label>
+                <select id="acc-type" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                    ${['checking','savings','credit_card','cash','investment','loan','other'].map(t =>
+                        `<option value="${t}" ${(acc?.account_type||acc?.type)===t?'selected':''}>${t}</option>`
+                    ).join('')}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Notas" : "Notes"}</label>
+                <input id="acc-notes" type="text" value="${escapeHtml(acc?.notes)}"
+                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+            </div>
+            ${!isEdit ? `<div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Balance inicial ($)" : "Starting balance ($)"}</label>
+                <input id="acc-balance" type="number" step="0.01" placeholder="0.00"
+                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+            </div>` : ''}
+        </div>
+    `;
+    document.getElementById("settings-modal-overlay")?.classList.remove("hidden");
+    document.getElementById("acc-name").focus();
+
+    setModalSaveHandler(async () => {
+        const name = document.getElementById("acc-name").value.trim();
+        const type = document.getElementById("acc-type").value;
+        if (!name) { showModalError(es ? "El nombre es requerido" : "Name is required"); return; }
+        try {
+            const body = { name, account_type: type, notes: document.getElementById("acc-notes").value.trim() || undefined };
+            if (!isEdit) {
+                const bal = parseFloat(document.getElementById("acc-balance").value || "0");
+                if (bal) body.starting_balance = Math.round(bal * 100);
+            }
+            if (isEdit) {
+                await apiCall(`/api/budget/accounts/${acc.id}`, "PUT", body);
+            } else {
+                await apiCall("/api/budget/accounts/", "POST", body);
+            }
+            closeSettingsModal();
+            showToast(isEdit ? (es ? "Cuenta actualizada" : "Account updated") : (es ? "Cuenta creada" : "Account created"));
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showModalError(e.message); }
+    });
+};
+
+window.confirmDeleteAccount = function(id, name) {
+    openConfirm(`${es ? "¿Eliminar cuenta" : "Delete account"} "${name}"?`, async () => {
+        try {
+            await apiCall(`/api/budget/accounts/${id}`, "DELETE");
+            showToast(es ? "Cuenta eliminada" : "Account deleted");
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showToast(e.message, "error"); }
+    });
+};
+
+// ─── PAYEES ───────────────────────────────────────────────────────────────────
+
+window.openPayeeModal = function(p) {
+    const isEdit = !!p;
+    document.getElementById("modal-title").textContent = isEdit ? (es ? "Editar beneficiario" : "Edit Payee") : (es ? "Nuevo beneficiario" : "New Payee");
+    document.getElementById("modal-body").innerHTML = `
+        <div class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Nombre" : "Name"} *</label>
+                <input id="payee-name" type="text" value="${escapeHtml(p?.name)}"
+                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+            </div>
+        </div>
+    `;
+    document.getElementById("settings-modal-overlay")?.classList.remove("hidden");
+    document.getElementById("payee-name").focus();
+
+    setModalSaveHandler(async () => {
+        const name = document.getElementById("payee-name").value.trim();
+        if (!name) { showModalError(es ? "El nombre es requerido" : "Name is required"); return; }
+        try {
+            if (isEdit) {
+                await apiCall(`/api/budget/payees/${p.id}`, "PUT", { name });
+            } else {
+                await apiCall("/api/budget/payees/", "POST", { name });
+            }
+            closeSettingsModal();
+            showToast(isEdit ? (es ? "Actualizado" : "Updated") : (es ? "Creado" : "Created"));
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showModalError(e.message); }
+    });
+};
+
+window.confirmDeletePayee = function(id, name) {
+    openConfirm(`${es ? "¿Eliminar beneficiario" : "Delete payee"} "${name}"?`, async () => {
+        try {
+            await apiCall(`/api/budget/payees/${id}`, "DELETE");
+            showToast(es ? "Eliminado" : "Deleted");
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showToast(e.message, "error"); }
+    });
+};
+
+// Favorite toggle
+document.querySelectorAll(".favorite-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+        const id = btn.dataset.payeeId;
+        const isFav = btn.dataset.favorite === "1";
+        try {
+            await apiCall(`/api/budget/payees/${id}`, "PUT", { is_favorite: !isFav });
+            btn.dataset.favorite = isFav ? "0" : "1";
+            btn.className = `favorite-btn text-base transition ${!isFav ? 'text-amber-400 hover:text-amber-300' : 'text-slate-300 hover:text-amber-400'}`;
+        } catch(e) { showToast(e.message, "error"); }
+    });
+});
+
+// ─── CATEGORIZATION RULES ─────────────────────────────────────────────────────
+
+window.openRuleModal = function(rule) {
+    const isEdit = !!rule;
+    const catOptions = allCategoriesData.map(c =>
+        `<option value="${c.id}" ${rule?.category_id === c.id ? 'selected' : ''}>${c.group_name} → ${c.name}</option>`
+    ).join('');
+
+    document.getElementById("modal-title").textContent = isEdit ? (es ? "Editar regla" : "Edit Rule") : (es ? "Nueva regla" : "New Rule");
+    document.getElementById("modal-body").innerHTML = `
+        <div class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Patrón" : "Pattern"} *</label>
+                <input id="rule-pattern" type="text" value="${escapeHtml(rule?.pattern)}" placeholder="Netflix"
+                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Tipo de coincidencia" : "Match type"}</label>
+                <select id="rule-type" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                    <option value="contains" ${rule?.rule_type==='contains'?'selected':''}>contains</option>
+                    <option value="exact" ${rule?.rule_type==='exact'?'selected':''}>exact</option>
+                    <option value="startswith" ${rule?.rule_type==='startswith'?'selected':''}>startswith</option>
+                    <option value="regex" ${rule?.rule_type==='regex'?'selected':''}>regex</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Aplicar a" : "Match field"}</label>
+                <select id="rule-field" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                    <option value="payee" ${rule?.match_field==='payee'?'selected':''}>payee</option>
+                    <option value="description" ${rule?.match_field==='description'?'selected':''}>description</option>
+                    <option value="both" ${rule?.match_field==='both'?'selected':''}>both</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Categoría" : "Category"} *</label>
+                <select id="rule-category" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                    <option value="">--</option>${catOptions}
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <input id="rule-enabled" type="checkbox" class="h-4 w-4 rounded" ${!rule || rule.enabled ? 'checked' : ''}>
+                <label for="rule-enabled" class="text-sm text-slate-600">${es ? "Activa" : "Enabled"}</label>
+            </div>
+        </div>
+    `;
+    document.getElementById("settings-modal-overlay")?.classList.remove("hidden");
+    document.getElementById("rule-pattern").focus();
+
+    setModalSaveHandler(async () => {
+        const pattern = document.getElementById("rule-pattern").value.trim();
+        const category_id = document.getElementById("rule-category").value;
+        if (!pattern) { showModalError(es ? "El patrón es requerido" : "Pattern is required"); return; }
+        if (!category_id) { showModalError(es ? "Selecciona una categoría" : "Select a category"); return; }
+        try {
+            const body = {
+                pattern,
+                rule_type: document.getElementById("rule-type").value,
+                match_field: document.getElementById("rule-field").value,
+                category_id,
+                enabled: document.getElementById("rule-enabled").checked,
+            };
+            if (isEdit) {
+                await apiCall(`/api/budget/categorization-rules/${rule.id}`, "PUT", body);
+            } else {
+                await apiCall("/api/budget/categorization-rules/", "POST", body);
+            }
+            closeSettingsModal();
+            showToast(isEdit ? (es ? "Regla actualizada" : "Rule updated") : (es ? "Regla creada" : "Rule created"));
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showModalError(e.message); }
+    });
+};
+
+window.confirmDeleteRule = function(id) {
+    openConfirm(es ? "¿Eliminar esta regla?" : "Delete this rule?", async () => {
+        try {
+            await apiCall(`/api/budget/categorization-rules/${id}`, "DELETE");
+            showToast(es ? "Regla eliminada" : "Rule deleted");
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showToast(e.message, "error"); }
+    });
+};
+
+// ─── RECURRING TRANSACTIONS ───────────────────────────────────────────────────
+
+window.openRecurringModal = function(txn) {
+    const isEdit = !!txn;
+    const accOptions = accountsData.map(a =>
+        `<option value="${a.id}" ${txn?.account_id === a.id ? 'selected' : ''}>${a.name}</option>`
+    ).join('');
+    const catOptions = allCategoriesData.map(c =>
+        `<option value="${c.id}" ${txn?.category_id === c.id ? 'selected' : ''}>${c.group_name} → ${c.name}</option>`
+    ).join('');
+
+    document.getElementById("modal-title").textContent = isEdit ? (es ? "Editar recurrente" : "Edit Recurring") : (es ? "Nueva recurrente" : "New Recurring");
+    // Determine current recurrence_type for edit, mapping legacy frequency values
+    const currentRecType = txn?.recurrence_type || txn?.frequency || 'monthly_dayofmonth';
+    document.getElementById("modal-body").innerHTML = `
+        <div class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Nombre" : "Name"} *</label>
+                <input id="rec-desc" type="text" value="${escapeHtml(txn?.name || txn?.description)}"
+                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+            </div>
+            <div class="flex gap-2">
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Monto ($)" : "Amount ($)"} *</label>
+                    <input id="rec-amount" type="number" step="0.01" min="0.01"
+                        value="${txn ? (Math.abs(txn.amount)/100).toFixed(2) : ''}"
+                        class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Tipo" : "Type"}</label>
+                    <select id="rec-txtype" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                        <option value="expense" ${(txn ? txn.amount < 0 : true) ?'selected':''}>expense</option>
+                        <option value="income" ${(txn && txn.amount > 0) ?'selected':''}>income</option>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Cuenta" : "Account"} *</label>
+                <select id="rec-account" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                    <option value="">--</option>${accOptions}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Categoría" : "Category"}</label>
+                <select id="rec-category" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                    <option value="">--</option>${catOptions}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Frecuencia" : "Frequency"}</label>
+                <select id="rec-freq" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                    ${['daily','weekly','monthly_dayofmonth','monthly_dayofweek','yearly'].map(f =>
+                        `<option value="${f}" ${currentRecType===f?'selected':''}>${f}</option>`
+                    ).join('')}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Fecha de inicio" : "Start date"} *</label>
+                <input id="rec-date" type="date" value="${txn?.start_date || txn?.next_due_date || new Date().toISOString().split('T')[0]}"
+                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+            </div>
+            <div class="flex items-center gap-2">
+                <input id="rec-active" type="checkbox" class="h-4 w-4 rounded" ${!txn || txn.is_active ? 'checked' : ''}>
+                <label for="rec-active" class="text-sm text-slate-600">${es ? "Activa" : "Active"}</label>
+            </div>
+        </div>
+    `;
+    document.getElementById("settings-modal-overlay")?.classList.remove("hidden");
+    document.getElementById("rec-desc").focus();
+
+    setModalSaveHandler(async () => {
+        const name = document.getElementById("rec-desc").value.trim();
+        const rawAmt = parseFloat(document.getElementById("rec-amount").value || "0");
+        const account_id = document.getElementById("rec-account").value;
+        const start_date = document.getElementById("rec-date").value;
+        if (!name) { showModalError(es ? "El nombre es requerido" : "Name required"); return; }
+        if (rawAmt <= 0) { showModalError(es ? "Ingresa un monto mayor a 0" : "Enter an amount greater than 0"); return; }
+        if (!account_id) { showModalError(es ? "Selecciona una cuenta" : "Select an account"); return; }
+        if (!start_date) { showModalError(es ? "Selecciona una fecha" : "Select a date"); return; }
+        const isExpense = document.getElementById("rec-txtype").value === "expense";
+        try {
+            const body = {
+                name,
+                amount: Math.round(rawAmt * 100) * (isExpense ? -1 : 1),
+                account_id,
+                category_id: document.getElementById("rec-category").value || null,
+                recurrence_type: document.getElementById("rec-freq").value,
+                start_date,
+                is_active: document.getElementById("rec-active").checked,
+            };
+            if (isEdit) {
+                await apiCall(`/api/budget/recurring-transactions/${txn.id}`, "PUT", body);
+            } else {
+                await apiCall("/api/budget/recurring-transactions/", "POST", body);
+            }
+            closeSettingsModal();
+            showToast(isEdit ? (es ? "Actualizada" : "Updated") : (es ? "Creada" : "Created"));
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showModalError(e.message); }
+    });
+};
+
+window.confirmDeleteRecurring = function(id) {
+    openConfirm(es ? "¿Eliminar esta recurrente?" : "Delete this recurring transaction?", async () => {
+        try {
+            await apiCall(`/api/budget/recurring-transactions/${id}`, "DELETE");
+            showToast(es ? "Eliminada" : "Deleted");
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showToast(e.message, "error"); }
+    });
+};
+
+window.postRecurring = function(id) {
+    openConfirm(es ? "¿Registrar esta transacción hoy?" : "Post this transaction for today?", async () => {
+        try {
+            await apiCall(`/api/budget/recurring-transactions/${id}/post`, "POST");
+            showToast(es ? "Transacción registrada" : "Transaction posted");
+        } catch(e) { showToast(e.message, "error"); }
+    });
+};
+
+// ─── GOALS ────────────────────────────────────────────────────────────────────
+
+window.openGoalModal = function(g) {
+    const isEdit = !!g;
+    const catOptions = allCategoriesData.map(c =>
+        `<option value="${c.id}" ${g?.category_id === c.id ? 'selected' : ''}>${c.group_name} → ${c.name}</option>`
+    ).join('');
+
+    document.getElementById("modal-title").textContent = isEdit ? (es ? "Editar meta" : "Edit Goal") : (es ? "Nueva meta" : "New Goal");
+    document.getElementById("modal-body").innerHTML = `
+        <div class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Nombre" : "Name"} *</label>
+                <input id="goal-name" type="text" value="${escapeHtml(g?.name)}"
+                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Categoría" : "Category"} *</label>
+                <select id="goal-category" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                    <option value="">--</option>${catOptions}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Tipo" : "Type"}</label>
+                <select id="goal-type" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                    <option value="spending_limit" ${g?.goal_type==='spending_limit'||!g?'selected':''}>${es ? 'Límite de gasto' : 'Spending limit'}</option>
+                    <option value="savings_target" ${g?.goal_type==='savings_target'?'selected':''}>${es ? 'Meta de ahorro' : 'Savings target'}</option>
+                </select>
+            </div>
+            <div class="flex gap-2">
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Monto ($)" : "Amount ($)"} *</label>
+                    <input id="goal-amount" type="number" step="0.01" min="0"
+                        value="${g ? (Math.abs(g.target_amount)/100).toFixed(2) : ''}"
+                        class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Periodo" : "Period"}</label>
+                    <select id="goal-period" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                        <option value="monthly" ${g?.period==='monthly'||!g?'selected':''}>${es ? 'Mensual' : 'Monthly'}</option>
+                        <option value="quarterly" ${g?.period==='quarterly'?'selected':''}>${es ? 'Trimestral' : 'Quarterly'}</option>
+                        <option value="annual" ${g?.period==='annual'?'selected':''}>${es ? 'Anual' : 'Annual'}</option>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Fecha inicio" : "Start date"} *</label>
+                <input id="goal-start" type="date" value="${g?.start_date || new Date().toISOString().split('T')[0]}"
+                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+            </div>
+            <div class="flex items-center gap-2">
+                <input id="goal-active" type="checkbox" class="h-4 w-4 rounded" ${!g || g.is_active ? 'checked' : ''}>
+                <label for="goal-active" class="text-sm text-slate-600">${es ? "Activa" : "Active"}</label>
+            </div>
+        </div>
+    `;
+    document.getElementById("settings-modal-overlay")?.classList.remove("hidden");
+    document.getElementById("goal-name").focus();
+
+    setModalSaveHandler(async () => {
+        const name = document.getElementById("goal-name").value.trim();
+        const category_id = document.getElementById("goal-category").value;
+        const rawAmt = parseFloat(document.getElementById("goal-amount").value || "0");
+        const start_date = document.getElementById("goal-start").value;
+        if (!name) { showModalError(es ? "El nombre es requerido" : "Name is required"); return; }
+        if (!category_id) { showModalError(es ? "Selecciona una categoría" : "Select a category"); return; }
+        if (!rawAmt) { showModalError(es ? "Ingresa un monto" : "Enter an amount"); return; }
+        try {
+            const body = {
+                name,
+                category_id,
+                goal_type: document.getElementById("goal-type").value,
+                target_amount: Math.round(rawAmt * 100),
+                period: document.getElementById("goal-period").value,
+                start_date,
+                is_active: document.getElementById("goal-active").checked,
+            };
+            if (isEdit) {
+                await apiCall(`/api/budget/goals/${g.id}`, "PUT", body);
+            } else {
+                await apiCall("/api/budget/goals/", "POST", body);
+            }
+            closeSettingsModal();
+            showToast(isEdit ? (es ? "Meta actualizada" : "Goal updated") : (es ? "Meta creada" : "Goal created"));
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showModalError(e.message); }
+    });
+};
+
+window.confirmDeleteGoal = function(id) {
+    openConfirm(es ? "¿Eliminar esta meta?" : "Delete this goal?", async () => {
+        try {
+            await apiCall(`/api/budget/goals/${id}`, "DELETE");
+            showToast(es ? "Meta eliminada" : "Goal deleted");
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showToast(e.message, "error"); }
+    });
+};
+
+// ─── TAGS ─────────────────────────────────────────────────────────────────────
+
+window.openTagModal = function(tag) {
+    const isEdit = !!tag;
+    document.getElementById("modal-title").textContent = isEdit ? (es ? "Editar etiqueta" : "Edit Tag") : (es ? "Nueva etiqueta" : "New Tag");
+    document.getElementById("modal-body").innerHTML = `
+        <div>
+            <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Nombre" : "Name"} *</label>
+            <input id="tag-name" type="text" value="${escapeHtml(tag?.name)}"
+                class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+        </div>
+    `;
+    document.getElementById("settings-modal-overlay")?.classList.remove("hidden");
+    document.getElementById("tag-name").focus();
+
+    setModalSaveHandler(async () => {
+        const name = document.getElementById("tag-name").value.trim();
+        if (!name) { showModalError(es ? "El nombre es requerido" : "Name is required"); return; }
+        try {
+            if (isEdit) {
+                await apiCall(`/api/budget/tags/${tag.id}`, "PUT", { name });
+            } else {
+                await apiCall("/api/budget/tags/", "POST", { name });
+            }
+            closeSettingsModal();
+            showToast(isEdit ? (es ? "Etiqueta actualizada" : "Tag updated") : (es ? "Etiqueta creada" : "Tag created"));
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showModalError(e.message); }
+    });
+};
+
+window.confirmDeleteTag = function(id) {
+    openConfirm(es ? "¿Eliminar esta etiqueta?" : "Delete this tag?", async () => {
+        try {
+            await apiCall(`/api/budget/tags/${id}`, "DELETE");
+            showToast(es ? "Etiqueta eliminada" : "Tag deleted");
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showToast(e.message, "error"); }
+    });
+};
+
+// Close modals on overlay click
+document.getElementById("settings-modal-overlay")?.addEventListener("click", (e) => {
+    if (e.target === document.getElementById("settings-modal-overlay")) closeSettingsModal();
+});
+document.getElementById("confirm-overlay")?.addEventListener("click", (e) => {
+    if (e.target === document.getElementById("confirm-overlay")) closeConfirm();
+});
+</script>

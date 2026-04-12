@@ -266,7 +266,7 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
             catTimer = setTimeout(async () => {
                 try {
                     const res = await fetch(
-                        `/api/budget/categorization-rules/match?payee=${encodeURIComponent(val)}`,
+                        `/api/budget/categorization-rules/suggest?payee=${encodeURIComponent(val)}`,
                         { headers: { Authorization: `Bearer ${token}` } }
                     );
                     if (res.ok) {

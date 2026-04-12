@@ -1,7 +1,7 @@
 ---
 /**
  * All Transactions Page
- * Shows all budget transactions with filtering options
+ * Shows all budget transactions with filtering, edit, and delete.
  */
 
 import Layout from "@layouts/Layout.astro";
@@ -19,6 +19,7 @@ const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 
 const lang = Astro.cookies.get("lang")?.value ?? "en";
+const es = lang === "es";
 
 // Get user info
 const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
@@ -49,7 +50,7 @@ const endOfMonth = new Date(year, month, 0);
 const endDate = `${year}-${String(month).padStart(2, '0')}-${String(endOfMonth.getDate()).padStart(2, '0')}`;
 
 // Build transaction fetch params with filters
-let txParams: any = { startDate: startOfMonth, endDate: endDate, limit: 100 };
+let txParams: any = { startDate: startOfMonth, endDate: endDate, limit: 200 };
 if (accountFilter) txParams.accountId = accountFilter;
 if (categoryFilter) txParams.categoryId = categoryFilter;
 
@@ -68,6 +69,12 @@ const allCategories = (groups || [])
         id: c.id, name: c.name, group_name: g.name,
     })));
 
+// All categories including income for edit modal
+const allCategoriesForEdit = (groups || [])
+    .flatMap((g: any) => (g.categories || []).map((c: any) => ({
+        id: c.id, name: c.name, group_name: g.name, is_income: g.is_income,
+    })));
+
 // Create lookup maps
 const accountMap = new Map(accounts?.map(a => [a.id, a]) || []);
 const categoryMap = new Map(categories?.map(c => [c.id, c]) || []);
@@ -77,7 +84,7 @@ const sortedTransactions = transactions?.sort((a, b) =>
     new Date(b.date).getTime() - new Date(a.date).getTime()
 ) || [];
 
-// Client-side search filtering (API doesn't support text search)
+// Client-side search filtering
 let filteredTransactions = sortedTransactions;
 if (searchFilter) {
     const q = searchFilter.toLowerCase();
@@ -103,10 +110,14 @@ const dates = Object.keys(transactionsByDate).sort((a, b) =>
 const totalIncome = filteredTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
 const totalExpenses = Math.abs(filteredTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
 const netAmount = totalIncome - totalExpenses;
+
+// Serialize data for client-side use
+const accountsJson = JSON.stringify(accounts || []);
+const categoriesJson = JSON.stringify(allCategoriesForEdit);
 ---
 
-<Layout title="Transacciones - Presupuesto">
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
+<Layout title={`${es ? "Transacciones" : "Transactions"} - Presupuesto`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 flex flex-col">
         <!-- Header -->
         <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
             <div class="flex items-center justify-between mb-6">
@@ -115,15 +126,13 @@ const netAmount = totalIncome - totalExpenses;
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </a>
-                <h1 class="text-2xl font-bold">Transacciones</h1>
-                <div class="flex items-center gap-3">
-                    <a href="/budget/scan-receipt" class="text-white hover:text-primary-100 transition" title={lang === "es" ? "Escanear recibo" : "Scan receipt"}>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                    </a>
-                </div>
+                <h1 class="text-2xl font-bold">{es ? "Transacciones" : "Transactions"}</h1>
+                <a href="/budget/scan-receipt" class="text-white hover:text-primary-100 transition" title={es ? "Escanear recibo" : "Scan receipt"}>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </a>
             </div>
 
             <!-- Summary -->
@@ -131,24 +140,18 @@ const netAmount = totalIncome - totalExpenses;
                 <div class="grid grid-cols-3 gap-3 text-center">
                     <div>
                         <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
-                            Ingresos
+                            {es ? "Ingresos" : "Income"}
                         </p>
-                        <p class="text-lg font-bold text-green-300">
-                            {formatCurrency(totalIncome)}
-                        </p>
+                        <p class="text-lg font-bold text-green-300">{formatCurrency(totalIncome)}</p>
                     </div>
                     <div>
                         <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
-                            Gastos
+                            {es ? "Gastos" : "Expenses"}
                         </p>
-                        <p class="text-lg font-bold text-red-300">
-                            {formatCurrency(totalExpenses)}
-                        </p>
+                        <p class="text-lg font-bold text-red-300">{formatCurrency(totalExpenses)}</p>
                     </div>
                     <div>
-                        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
-                            Neto
-                        </p>
+                        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">Neto</p>
                         <p class={`text-lg font-bold ${netAmount >= 0 ? 'text-white' : 'text-red-300'}`}>
                             {formatCurrency(netAmount)}
                         </p>
@@ -157,20 +160,19 @@ const netAmount = totalIncome - totalExpenses;
             </div>
         </header>
 
-        <!-- Budget Section Nav -->
         <BudgetNavNew active="transactions" lang={lang} pendingDrafts={pendingDraftsCount} />
         <DrawerMenu lang={lang} />
 
         <!-- Filter Bar -->
         <div class="px-4 py-3 bg-white border-b border-slate-200 flex flex-wrap gap-2">
             <select id="filter-account" class="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 flex-1 min-w-[100px]">
-                <option value="">{lang === "es" ? "Todas las cuentas" : "All accounts"}</option>
+                <option value="">{es ? "Todas las cuentas" : "All accounts"}</option>
                 {(accounts || []).map((acc) => (
                     <option value={acc.id} selected={acc.id === accountFilter}>{acc.name}</option>
                 ))}
             </select>
             <select id="filter-category" class="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 flex-1 min-w-[100px]">
-                <option value="">{lang === "es" ? "Todas las categorías" : "All categories"}</option>
+                <option value="">{es ? "Todas las categorías" : "All categories"}</option>
                 {(categories || []).map((cat) => (
                     <option value={cat.id} selected={cat.id === categoryFilter}>{cat.name}</option>
                 ))}
@@ -178,27 +180,27 @@ const netAmount = totalIncome - totalExpenses;
             <input
                 id="filter-search"
                 type="text"
-                placeholder={lang === "es" ? "Buscar..." : "Search..."}
+                placeholder={es ? "Buscar..." : "Search..."}
                 value={searchFilter}
                 class="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 flex-1 min-w-[120px]"
             />
         </div>
 
         <!-- Transactions List -->
-        <main class="px-6 py-4 flex-grow">
+        <main class="px-4 py-4 flex-grow">
             {!transOk ? (
                 <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
-                    <p class="font-semibold">Error al cargar transacciones</p>
-                    <p class="text-sm">{transError || "Error desconocido"}</p>
+                    <p class="font-semibold">{es ? "Error al cargar transacciones" : "Error loading transactions"}</p>
+                    <p class="text-sm">{transError || "Unknown error"}</p>
                 </div>
             ) : filteredTransactions.length === 0 ? (
                 <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <p class="text-slate-600 font-medium">No hay transacciones</p>
+                    <p class="text-slate-600 font-medium">{es ? "No hay transacciones" : "No transactions"}</p>
                     <p class="text-sm text-slate-500 mt-1">
-                        {lang === "es" ? "Usa el botón + para agregar tu primera transacción" : "Use the + button to add your first transaction"}
+                        {es ? "Usa el botón + para agregar" : "Use the + button to add one"}
                     </p>
                 </div>
             ) : (
@@ -206,13 +208,10 @@ const netAmount = totalIncome - totalExpenses;
                     {dates.map(date => {
                         const dayTransactions = transactionsByDate[date];
                         const dayTotal = dayTransactions.reduce((sum, t) => sum + t.amount, 0);
-
                         return (
                             <div class="bg-white rounded-xl shadow-sm overflow-hidden">
                                 <div class="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-                                    <h2 class="font-semibold text-slate-700 text-sm">
-                                        {formatDate(date, lang)}
-                                    </h2>
+                                    <h2 class="font-semibold text-slate-700 text-sm">{formatDate(date, lang)}</h2>
                                     <span class={`text-sm font-bold ${dayTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                         {formatCurrency(dayTotal)}
                                     </span>
@@ -222,35 +221,45 @@ const netAmount = totalIncome - totalExpenses;
                                         const account = accountMap.get(transaction.account_id);
                                         const category = transaction.category_id ? categoryMap.get(transaction.category_id) : null;
                                         const isIncome = transaction.amount > 0;
-
                                         return (
-                                            <div
-                                                class="block px-4 py-3 hover:bg-slate-50 transition"
+                                            <button
+                                                class="tx-row w-full text-left px-4 py-3 hover:bg-slate-50 active:bg-slate-100 transition flex items-center justify-between gap-3"
+                                                data-tx-id={transaction.id}
+                                                data-tx-amount={transaction.amount}
+                                                data-tx-date={transaction.date}
+                                                data-tx-payee={transaction.payee_name || ""}
+                                                data-tx-category={transaction.category_id || ""}
+                                                data-tx-account={transaction.account_id}
+                                                data-tx-notes={transaction.notes || ""}
+                                                data-tx-cleared={transaction.cleared ? "1" : "0"}
+                                                aria-label={es ? "Editar transacción" : "Edit transaction"}
                                             >
-                                                <div class="flex items-center justify-between mb-1">
-                                                    <div class="flex-1">
-                                                        <p class="text-sm font-medium text-slate-700">
-                                                            {category?.name || "Sin categoría"}
-                                                        </p>
-                                                        <p class="text-xs text-slate-500">
-                                                            {account?.name || "Cuenta desconocida"}
-                                                        </p>
-                                                    </div>
-                                                    <div class="text-right">
+                                                <div class="flex-1 min-w-0">
+                                                    <p class="text-sm font-medium text-slate-700 truncate">
+                                                        {transaction.payee_name || category?.name || (es ? "Sin categoría" : "No category")}
+                                                    </p>
+                                                    <p class="text-xs text-slate-500">
+                                                        {category?.name || (es ? "Sin categoría" : "No category")}
+                                                        {account && <span> · {account.name}</span>}
+                                                    </p>
+                                                    {transaction.notes && (
+                                                        <p class="text-xs text-slate-400 mt-0.5 truncate">{transaction.notes}</p>
+                                                    )}
+                                                </div>
+                                                <div class="text-right flex-shrink-0 flex items-center gap-2">
+                                                    <div>
                                                         <p class={`text-sm font-bold ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
                                                             {isIncome ? '+' : ''}{formatCurrency(transaction.amount)}
                                                         </p>
                                                         {transaction.cleared && (
-                                                            <span class="inline-block w-2 h-2 bg-green-500 rounded-full" title="Conciliado"></span>
+                                                            <span class="inline-block w-2 h-2 bg-green-500 rounded-full ml-auto" title={es ? "Conciliado" : "Cleared"}></span>
                                                         )}
                                                     </div>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                                    </svg>
                                                 </div>
-                                                {transaction.notes && (
-                                                    <p class="text-xs text-slate-400 mt-1">
-                                                        {transaction.notes}
-                                                    </p>
-                                                )}
-                                            </div>
+                                            </button>
                                         );
                                     })}
                                 </div>
@@ -260,17 +269,137 @@ const netAmount = totalIncome - totalExpenses;
                 </div>
             )}
 
-            <!-- Filter/Month selector (future enhancement) -->
             <div class="mt-6 text-center">
                 <p class="text-xs text-slate-500">
-                    Mostrando transacciones de {formatDate(startOfMonth, lang)} a {formatDate(endDate, lang)}
+                    {es ? "Mostrando" : "Showing"} {formatDate(startOfMonth, lang)} — {formatDate(endDate, lang)}
                 </p>
             </div>
         </main>
 
+        <!-- Edit Transaction Bottom Sheet -->
+        <div id="edit-backdrop" class="fixed inset-0 bg-black/50 z-40 hidden opacity-0 transition-opacity duration-300"></div>
+        <div id="edit-modal" class="fixed bottom-0 left-0 right-0 z-50 translate-y-full transition-transform duration-300 ease-out">
+            <div class="max-w-md mx-auto bg-white rounded-t-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-center pt-3 pb-1">
+                    <div class="w-10 h-1 bg-slate-300 rounded-full"></div>
+                </div>
+                <div class="px-5 pb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold text-slate-800">
+                            {es ? "Editar transacción" : "Edit Transaction"}
+                        </h2>
+                        <button id="edit-delete-btn" class="text-red-500 hover:text-red-700 transition p-1" title={es ? "Eliminar" : "Delete"}>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Type toggle -->
+                    <div class="flex gap-2 mb-4">
+                        <button id="edit-type-expense" class="flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-red-400 bg-red-50 text-red-700">
+                            {es ? "Gasto" : "Expense"}
+                        </button>
+                        <button id="edit-type-income" class="flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-slate-200 bg-white text-slate-500">
+                            {es ? "Ingreso" : "Income"}
+                        </button>
+                    </div>
+
+                    <!-- Amount -->
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-slate-500 mb-1">{es ? "Monto" : "Amount"}</label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-400">$</span>
+                            <input id="edit-amount" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00"
+                                class="w-full text-2xl font-bold text-center py-3 pl-8 pr-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none" />
+                        </div>
+                    </div>
+
+                    <!-- Date -->
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-slate-500 mb-1">{es ? "Fecha" : "Date"}</label>
+                        <input id="edit-date" type="date"
+                            class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm" />
+                    </div>
+
+                    <!-- Payee -->
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-slate-500 mb-1">{es ? "Beneficiario" : "Payee"}</label>
+                        <input id="edit-payee" type="text" autocomplete="off"
+                            class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm" />
+                    </div>
+
+                    <!-- Category -->
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-slate-500 mb-1">{es ? "Categoría" : "Category"}</label>
+                        <select id="edit-category"
+                            class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm bg-white">
+                            <option value="">-- {es ? "Sin categoría" : "No category"} --</option>
+                            {allCategoriesForEdit.map((cat) => (
+                                <option value={cat.id}>{cat.group_name} → {cat.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <!-- Account -->
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-slate-500 mb-1">{es ? "Cuenta" : "Account"}</label>
+                        <select id="edit-account"
+                            class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm bg-white">
+                            <option value="">--</option>
+                            {(accounts || []).map((acc) => (
+                                <option value={acc.id}>{acc.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-slate-500 mb-1">{es ? "Nota" : "Note"}</label>
+                        <input id="edit-notes" type="text"
+                            class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm" />
+                    </div>
+
+                    <!-- Cleared -->
+                    <div class="mb-4 flex items-center gap-3">
+                        <input id="edit-cleared" type="checkbox" class="h-4 w-4 rounded text-primary-600 border-slate-300" />
+                        <label for="edit-cleared" class="text-sm text-slate-600">
+                            {es ? "Conciliado" : "Cleared"}
+                        </label>
+                    </div>
+
+                    <div id="edit-error" class="hidden text-sm text-red-600 mb-3 px-1"></div>
+
+                    <div class="flex gap-3">
+                        <button id="edit-cancel-btn" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition">
+                            {es ? "Cancelar" : "Cancel"}
+                        </button>
+                        <button id="edit-save-btn" class="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow transition">
+                            {es ? "Guardar" : "Save"}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete confirm dialog -->
+        <div id="delete-confirm-overlay" class="fixed inset-0 bg-black/60 z-[60] hidden flex items-center justify-center px-4">
+            <div class="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
+                <h3 class="text-lg font-bold text-slate-800 mb-2">{es ? "¿Eliminar transacción?" : "Delete transaction?"}</h3>
+                <p class="text-sm text-slate-500 mb-6">{es ? "Esta acción no se puede deshacer." : "This action cannot be undone."}</p>
+                <div class="flex gap-3">
+                    <button id="delete-cancel" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition">
+                        {es ? "Cancelar" : "Cancel"}
+                    </button>
+                    <button id="delete-confirm" class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow transition">
+                        {es ? "Eliminar" : "Delete"}
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <FABButton />
         <FABModal lang={lang} token={token} accounts={accounts || []} categories={allCategories} />
-
         <BottomNav active="budget" role={user.role} lang={lang} />
     </div>
 </Layout>
@@ -301,4 +430,190 @@ function initFilters() {
 }
 initFilters();
 document.addEventListener("astro:after-swap", initFilters);
+</script>
+
+<script define:vars={{ token }}>
+(function initEditModal() {
+    const backdrop = document.getElementById("edit-backdrop");
+    const modal = document.getElementById("edit-modal");
+    const deleteConfirmOverlay = document.getElementById("delete-confirm-overlay");
+
+    if (!backdrop || !modal) return;
+
+    let currentTxId = null;
+    let isExpense = true;
+
+    const amountInput = document.getElementById("edit-amount");
+    const dateInput = document.getElementById("edit-date");
+    const payeeInput = document.getElementById("edit-payee");
+    const categorySelect = document.getElementById("edit-category");
+    const accountSelect = document.getElementById("edit-account");
+    const notesInput = document.getElementById("edit-notes");
+    const clearedCheck = document.getElementById("edit-cleared");
+    const errorDiv = document.getElementById("edit-error");
+    const saveBtn = document.getElementById("edit-save-btn");
+    const cancelBtn = document.getElementById("edit-cancel-btn");
+    const deleteBtn = document.getElementById("edit-delete-btn");
+    const typeExpenseBtn = document.getElementById("edit-type-expense");
+    const typeIncomeBtn = document.getElementById("edit-type-income");
+
+    function openModal(txData) {
+        currentTxId = txData.id;
+        const amountCents = parseInt(txData.amount);
+        isExpense = amountCents < 0;
+
+        // Fill fields
+        amountInput.value = (Math.abs(amountCents) / 100).toFixed(2);
+        dateInput.value = txData.date;
+        payeeInput.value = txData.payee || "";
+        categorySelect.value = txData.category || "";
+        accountSelect.value = txData.account || "";
+        notesInput.value = txData.notes || "";
+        clearedCheck.checked = txData.cleared === "1";
+
+        setTypeUI(isExpense);
+
+        if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+
+        backdrop.classList.remove("hidden");
+        requestAnimationFrame(() => {
+            backdrop.classList.remove("opacity-0");
+            backdrop.classList.add("opacity-100");
+            modal.classList.remove("translate-y-full");
+        });
+    }
+
+    function closeModal() {
+        backdrop.classList.remove("opacity-100");
+        backdrop.classList.add("opacity-0");
+        modal.classList.add("translate-y-full");
+        setTimeout(() => backdrop.classList.add("hidden"), 300);
+        currentTxId = null;
+    }
+
+    function setTypeUI(expense) {
+        isExpense = expense;
+        if (expense) {
+            typeExpenseBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-red-400 bg-red-50 text-red-700";
+            typeIncomeBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-slate-200 bg-white text-slate-500";
+        } else {
+            typeExpenseBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-slate-200 bg-white text-slate-500";
+            typeIncomeBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-green-400 bg-green-50 text-green-700";
+        }
+    }
+
+    typeExpenseBtn?.addEventListener("click", () => setTypeUI(true));
+    typeIncomeBtn?.addEventListener("click", () => setTypeUI(false));
+    cancelBtn?.addEventListener("click", closeModal);
+    backdrop?.addEventListener("click", closeModal);
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !backdrop.classList.contains("hidden")) closeModal();
+    });
+
+    // Row click handlers
+    function attachRowHandlers() {
+        document.querySelectorAll(".tx-row").forEach((row) => {
+            row.addEventListener("click", () => {
+                openModal({
+                    id: row.dataset.txId,
+                    amount: row.dataset.txAmount,
+                    date: row.dataset.txDate,
+                    payee: row.dataset.txPayee,
+                    category: row.dataset.txCategory,
+                    account: row.dataset.txAccount,
+                    notes: row.dataset.txNotes,
+                    cleared: row.dataset.txCleared,
+                });
+            });
+        });
+    }
+    attachRowHandlers();
+
+    // Save
+    saveBtn?.addEventListener("click", async () => {
+        if (!currentTxId) return;
+        if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+
+        const rawAmount = parseFloat(amountInput?.value || "0");
+        if (!rawAmount || rawAmount <= 0) {
+            if (errorDiv) { errorDiv.textContent = "Enter a valid amount"; errorDiv.classList.remove("hidden"); }
+            return;
+        }
+        const amountCents = Math.round(rawAmount * 100) * (isExpense ? -1 : 1);
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = "...";
+
+        try {
+            if (!accountSelect?.value) {
+                if (errorDiv) { errorDiv.textContent = es ? "Selecciona una cuenta" : "Select an account"; errorDiv.classList.remove("hidden"); }
+                saveBtn.disabled = false;
+                saveBtn.textContent = saveBtn.dataset.originalText || "Save";
+                return;
+            }
+
+            const body = {
+                amount: amountCents,
+                date: dateInput?.value,
+                payee_name: payeeInput?.value?.trim() || undefined,
+                category_id: categorySelect?.value || null,
+                account_id: accountSelect.value,
+                notes: notesInput?.value?.trim() || "",
+                cleared: clearedCheck?.checked || false,
+            };
+
+            const res = await fetch(`/api/budget/transactions/${currentTxId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify(body),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || `Error ${res.status}`);
+            }
+
+            closeModal();
+            window.location.reload();
+        } catch (err) {
+            if (errorDiv) { errorDiv.textContent = err.message; errorDiv.classList.remove("hidden"); }
+            saveBtn.disabled = false;
+            saveBtn.textContent = saveBtn.dataset.originalText || "Save";
+        }
+    });
+    if (saveBtn) saveBtn.dataset.originalText = saveBtn.textContent;
+
+    // Delete
+    deleteBtn?.addEventListener("click", () => {
+        deleteConfirmOverlay?.classList.remove("hidden");
+        deleteConfirmOverlay?.classList.add("flex");
+    });
+
+    document.getElementById("delete-cancel")?.addEventListener("click", () => {
+        deleteConfirmOverlay?.classList.add("hidden");
+        deleteConfirmOverlay?.classList.remove("flex");
+    });
+
+    document.getElementById("delete-confirm")?.addEventListener("click", async () => {
+        if (!currentTxId) return;
+        deleteConfirmOverlay?.classList.add("hidden");
+        deleteConfirmOverlay?.classList.remove("flex");
+
+        try {
+            const res = await fetch(`/api/budget/transactions/${currentTxId}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`Error ${res.status}`);
+            closeModal();
+            window.location.reload();
+        } catch (err) {
+            if (errorDiv) { errorDiv.textContent = err.message; errorDiv.classList.remove("hidden"); }
+        }
+    });
+
+    document.addEventListener("astro:after-swap", () => {
+        initEditModal();
+    });
+})();
 </script>

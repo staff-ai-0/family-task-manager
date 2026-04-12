@@ -51,6 +51,36 @@ async def create_rule(
     return rule
 
 
+@router.get("/suggest", response_model=Optional[CategorizationSuggestion])
+async def suggest_category(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    payee: Optional[str] = Query(None, description="Payee name"),
+    description: Optional[str] = Query(None, description="Transaction description"),
+):
+    """
+    Get a suggested category for a transaction based on payee and/or description.
+    
+    Returns None if no rule matches.
+    """
+    family_id = to_uuid_required(current_user.family_id)
+    category_id = await CategorizationRuleService.suggest_category(
+        db,
+        family_id,
+        payee=payee,
+        description=description,
+    )
+    
+    if category_id is None:
+        return None
+    
+    return CategorizationSuggestion(
+        category_id=category_id,
+        rule_id=None,  # We could look up the matching rule if needed
+        confidence="medium",
+    )
+
+
 @router.get("/{rule_id}", response_model=CategorizationRuleResponse)
 async def get_rule(
     rule_id: UUID,
@@ -96,33 +126,3 @@ async def delete_rule(
         to_uuid_required(current_user.family_id),
     )
     return None
-
-
-@router.post("/suggest", response_model=Optional[CategorizationSuggestion])
-async def suggest_category(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-    payee: Optional[str] = Query(None, description="Payee name"),
-    description: Optional[str] = Query(None, description="Transaction description"),
-):
-    """
-    Get a suggested category for a transaction based on payee and/or description.
-    
-    Returns None if no rule matches.
-    """
-    family_id = to_uuid_required(current_user.family_id)
-    category_id = await CategorizationRuleService.suggest_category(
-        db,
-        family_id,
-        payee=payee,
-        description=description,
-    )
-    
-    if category_id is None:
-        return None
-    
-    return CategorizationSuggestion(
-        category_id=category_id,
-        rule_id=None,  # We could look up the matching rule if needed
-        confidence="medium",
-    )
