@@ -45,6 +45,56 @@ from app.services.budget.categorization_rule_service import CategorizationRuleSe
 RECEIPT_MODEL = "claude-haiku"
 
 
+# DPI for rasterizing PDF pages to PNG before the vision call. 150 is a
+# sweet spot for printed receipts: high enough that small text and totals
+# are readable, low enough that the resulting PNG fits well under the
+# ~5MB vision input budget for Claude Haiku. Tickets térmicos narrow
+# receipts end up around 600x1500px at this setting.
+PDF_RASTER_DPI = 150
+
+
+def _pdf_first_page_to_png(pdf_bytes: bytes) -> bytes:
+    """Rasterize the first page of a PDF to PNG bytes, in memory.
+
+    Uses PyMuPDF (fitz), which ships as a prebuilt wheel on Linux x86_64
+    — no poppler or other system dependency needed. Only the first page
+    is rendered; for multi-page receipts the caller is responsible for
+    pre-splitting or the user is asked to re-scan. We default to this
+    single-page behavior because (a) virtually all supermarket/
+    restaurant tickets are one page, (b) iOS Files "Scan Document" often
+    creates a single-page PDF per tap even for longer receipts, (c)
+    sending a multi-image vision request to every receipt would quadruple
+    our token cost for the common case.
+
+    Raises:
+        ValidationError: If the bytes are not a valid PDF or the PDF
+            has zero pages.
+    """
+    try:
+        import fitz  # PyMuPDF
+    except ImportError as exc:
+        raise ValidationError(
+            "PDF support is not available: pymupdf is not installed"
+        ) from exc
+
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    except Exception as exc:
+        raise ValidationError(f"Could not open PDF: {exc}")
+
+    try:
+        if doc.page_count == 0:
+            raise ValidationError("PDF has no pages")
+        page = doc.load_page(0)
+        # fitz renders at 72 DPI by default; scale matrix bumps it up.
+        zoom = PDF_RASTER_DPI / 72.0
+        matrix = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=matrix, alpha=False)
+        return pix.tobytes("png")
+    finally:
+        doc.close()
+
+
 @dataclass
 class ScannedReceipt:
     """Extracted receipt data from vision analysis."""
@@ -103,6 +153,15 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
             "Receipt scanning is not configured. Please set LITELLM_API_KEY "
             "to a virtual key issued by the LiteLLM proxy."
         )
+
+    # If the upload is a PDF (typical from iOS Files "Scan Document"),
+    # rasterize the first page to PNG in memory before handing off to
+    # the vision model. Vision models via LiteLLM/OpenAI-format accept
+    # image_url data-URIs only — no direct PDF support over that wire.
+    # Normalize the media_type so the downstream data URI is correct.
+    if media_type == "application/pdf":
+        image_bytes = _pdf_first_page_to_png(image_bytes)
+        media_type = "image/png"
 
     # OpenAI SDK pointed at LiteLLM's /v1 endpoint. The proxy handles
     # authentication, request translation to the provider's native

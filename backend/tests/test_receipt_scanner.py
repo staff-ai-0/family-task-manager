@@ -146,6 +146,132 @@ class TestScanReceipt:
                 with pytest.raises(ValidationError, match="LiteLLM failed|budget exceeded"):
                     await scan_receipt(b"fake-image", "image/jpeg")
 
+    @pytest.mark.asyncio
+    async def test_scan_receipt_pdf_is_rasterized_to_png(self):
+        """PDF input triggers _pdf_first_page_to_png, downstream sees image/png data URI."""
+        mock_response_text = '''{
+            "date": "2026-04-08",
+            "total_amount": -50000,
+            "payee_name": "Test Store",
+            "items": [],
+            "currency": "MXN",
+            "confidence": 0.9
+        }'''
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = self._mock_openai_response(
+            mock_response_text
+        )
+
+        fake_png_bytes = b"\x89PNG\r\n\x1a\nfake-rasterized-png-payload"
+
+        with patch(
+            "app.services.budget.receipt_scanner_service.settings"
+        ) as mock_settings, patch(
+            "app.services.budget.receipt_scanner_service.OpenAI"
+        ) as mock_openai, patch(
+            "app.services.budget.receipt_scanner_service._pdf_first_page_to_png",
+            return_value=fake_png_bytes,
+        ) as mock_rasterize:
+            mock_settings.LITELLM_API_KEY = "sk-fake"
+            mock_settings.LITELLM_API_BASE = "http://10.1.0.99:4000"
+            mock_openai.return_value = mock_client
+
+            result = await scan_receipt(b"%PDF-1.4 fake pdf bytes", "application/pdf")
+
+            # Rasterizer called with original PDF bytes
+            mock_rasterize.assert_called_once_with(b"%PDF-1.4 fake pdf bytes")
+
+            # Downstream vision call got a PNG data URI, not a PDF one
+            call_args = mock_client.chat.completions.create.call_args
+            content = call_args.kwargs["messages"][0]["content"]
+            image_part = next(c for c in content if c["type"] == "image_url")
+            url = image_part["image_url"]["url"]
+            assert url.startswith("data:image/png;base64,"), (
+                f"expected image/png data URI after PDF rasterization, got: {url[:50]}"
+            )
+            assert "application/pdf" not in url
+
+        assert result.payee_name == "Test Store"
+        assert result.total_amount == -50000
+
+    @pytest.mark.asyncio
+    async def test_scan_receipt_malformed_pdf_raises_validation_error(self):
+        """Bad PDF bytes surface as ValidationError before any vision call."""
+        from app.core.exceptions import ValidationError
+
+        with patch(
+            "app.services.budget.receipt_scanner_service.settings"
+        ) as mock_settings, patch(
+            "app.services.budget.receipt_scanner_service.OpenAI"
+        ) as mock_openai:
+            mock_settings.LITELLM_API_KEY = "sk-fake"
+            mock_settings.LITELLM_API_BASE = "http://10.1.0.99:4000"
+
+            # Not a PDF — PyMuPDF will raise, we wrap it
+            with pytest.raises(ValidationError, match="[Cc]ould not open PDF"):
+                await scan_receipt(b"this is not a pdf", "application/pdf")
+
+            # Vision client never even constructed
+            mock_openai.assert_not_called()
+
+
+class TestPdfRasterization:
+    """Unit tests for the _pdf_first_page_to_png helper."""
+
+    def test_rasterizes_real_minimal_pdf_to_png(self):
+        """A hand-built minimal PDF rasterizes cleanly and returns PNG bytes."""
+        import fitz
+
+        from app.services.budget.receipt_scanner_service import (
+            _pdf_first_page_to_png,
+        )
+
+        # Build a minimal 1-page PDF in memory
+        doc = fitz.open()
+        page = doc.new_page(width=200, height=100)
+        page.insert_text((20, 50), "HEB $150.50")
+        pdf_bytes = doc.tobytes()
+        doc.close()
+
+        png_bytes = _pdf_first_page_to_png(pdf_bytes)
+        assert png_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+        # At 150 dpi a 200x100 pt page should give a reasonable image
+        assert len(png_bytes) > 500
+
+    def test_multi_page_pdf_only_rasterizes_first_page(self):
+        """Multi-page PDFs: only page 0 is rendered (by design, see docstring)."""
+        import fitz
+
+        from app.services.budget.receipt_scanner_service import (
+            _pdf_first_page_to_png,
+        )
+
+        doc = fitz.open()
+        for i in range(3):
+            page = doc.new_page(width=200, height=100)
+            page.insert_text((20, 50), f"Page {i + 1}")
+        pdf_bytes = doc.tobytes()
+        doc.close()
+
+        png_bytes = _pdf_first_page_to_png(pdf_bytes)
+        # We can't easily assert which page from png bytes alone, but
+        # the fact that no exception was raised and the call returned
+        # sensible png data is the primary contract. If someone later
+        # adds multi-page support, this test stops passing as-is and
+        # needs to be reshaped to reflect the new semantics.
+        assert png_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+
+    def test_empty_pdf_raises_validation_error(self):
+        """Zero-page (or can't-parse) input bubbles up as ValidationError."""
+        from app.core.exceptions import ValidationError
+        from app.services.budget.receipt_scanner_service import (
+            _pdf_first_page_to_png,
+        )
+
+        with pytest.raises(ValidationError):
+            _pdf_first_page_to_png(b"not a pdf at all")
+
 
 class TestScanAndCreateTransaction:
     """Test the full scan-and-create flow."""

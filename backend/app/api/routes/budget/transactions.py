@@ -262,17 +262,22 @@ async def import_file_transactions_endpoint(
 
 @router.post("/scan-receipt", status_code=status.HTTP_200_OK)
 async def scan_receipt_endpoint(
-    file: UploadFile = File(..., description="Receipt photo (JPEG, PNG, WebP)"),
+    file: UploadFile = File(..., description="Receipt photo or scanned PDF (JPEG, PNG, WebP, GIF, PDF)"),
     account_id: UUID = Form(..., description="Target account for the transaction"),
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Scan a receipt photo and create a transaction (parent only, premium feature).
+    """Scan a receipt (image or PDF) and create a transaction (parent only, premium feature).
 
-    Uses Claude Vision to extract date, amount, payee, and line items from the receipt.
-    Auto-creates payee if new, applies categorization rules, and creates the transaction.
+    Uses a vision model via the LiteLLM proxy to extract date, amount,
+    payee, and line items from the receipt. PDF uploads are rasterized
+    first-page-to-PNG in memory via PyMuPDF before the vision call — a
+    single call to this endpoint therefore handles both phone photos
+    and iOS "Scan Document" PDFs without the caller having to convert.
 
-    Returns scanned data, confidence score, and created transaction ID.
+    Auto-creates the payee if new, applies categorization rules, and
+    creates the transaction. Returns scanned data, confidence score,
+    and the created transaction ID.
     """
     family_id = to_uuid_required(current_user.family_id)
 
@@ -286,24 +291,34 @@ async def scan_receipt_endpoint(
     from app.services.budget.account_service import AccountService
     await AccountService.get_by_id(db, account_id, family_id)
 
-    # Validate file type
-    allowed_types = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    # Validate file type. PDF is accepted — receipt_scanner_service
+    # rasterizes the first page to PNG in memory before the vision call.
+    allowed_types = {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+        "application/pdf",
+    }
     content_type = file.content_type or "image/jpeg"
     if content_type not in allowed_types:
         return {
             "success": False,
-            "message": f"Unsupported image type: {content_type}. Use JPEG, PNG, or WebP.",
+            "message": (
+                f"Unsupported file type: {content_type}. "
+                "Use JPEG, PNG, WebP, GIF, or PDF."
+            ),
             "scanned_data": None,
             "transaction_id": None,
         }
 
-    image_bytes = await file.read()
+    file_bytes = await file.read()
 
-    # Max 10MB
-    if len(image_bytes) > 10 * 1024 * 1024:
+    # Max 10MB (applies to the raw upload; rasterized PNG will be smaller)
+    if len(file_bytes) > 10 * 1024 * 1024:
         return {
             "success": False,
-            "message": "Image too large. Maximum size is 10MB.",
+            "message": "File too large. Maximum size is 10MB.",
             "scanned_data": None,
             "transaction_id": None,
         }
@@ -312,7 +327,7 @@ async def scan_receipt_endpoint(
         db=db,
         family_id=family_id,
         account_id=account_id,
-        image_bytes=image_bytes,
+        image_bytes=file_bytes,
         media_type=content_type,
     )
     return result
