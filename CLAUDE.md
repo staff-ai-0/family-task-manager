@@ -111,27 +111,29 @@ All routes prefixed `/api/`. Key route groups:
 
 Fully native to PostgreSQL (the external "Actual Budget" service was decommissioned in Phase 10). Never re-introduce external budget dependencies.
 
-**14 budget models** in `backend/app/models/budget.py`:
+**15 budget models** in `backend/app/models/budget.py`:
 - Core: `BudgetCategoryGroup`, `BudgetCategory`, `BudgetAccount`, `BudgetPayee`, `BudgetTransaction`, `BudgetAllocation`
 - Rules & Goals: `BudgetCategorizationRule`, `BudgetGoal`
 - Scheduling: `BudgetRecurringTransaction`
 - Organization: `BudgetSavedFilter`, `BudgetTag`, `BudgetTransactionTag`
 - Analytics: `BudgetCustomReport`
+- HITL: `BudgetReceiptDraft` — low-confidence scans pending human review
 - Sync (legacy): `BudgetSyncState`
 
-**17 budget sub-routes** (`/api/budget/`):
+**18 budget sub-routes** (`/api/budget/`):
 - Core CRUD: `categories`, `accounts`, `transactions`, `allocations`, `payees`, `transfers`
 - Time: `month` (single month view), `months` (month locking)
 - Rules: `categorization-rules`
 - Goals: `goals`
 - Scheduling: `recurring-transactions`
 - Data: `recycle-bin`, `saved-filters`, `tags`
+- HITL: `receipt-drafts` (list pending / approve / reject low-confidence scans)
 - Import/Export: `transactions/import/csv`, `transactions/import/file` (OFX/QIF/CAMT), `transactions/scan-receipt` (AI), `export`, `import-backup`
 - Analytics: `reports`, `custom-reports`
 - Templates: `allocations/auto-fill` (5 strategies)
 
-**19 budget services** in `backend/app/services/budget/`:
-`account`, `allocation`, `categorization_rule`, `category`, `csv_import`, `custom_report`, `export`, `file_import`, `goal`, `month_locking`, `payee`, `receipt_scanner`, `recurring_transaction`, `recycle_bin`, `report`, `saved_filter`, `tag`, `transaction`, `transfer`
+**20 budget services** in `backend/app/services/budget/`:
+`account`, `allocation`, `categorization_rule`, `category`, `csv_import`, `custom_report`, `export`, `file_import`, `goal`, `month_locking`, `payee`, `receipt_draft`, `receipt_scanner`, `recurring_transaction`, `recycle_bin`, `report`, `saved_filter`, `tag`, `transaction`, `transfer`
 
 ### Subscription & premium gating
 
@@ -144,12 +146,23 @@ Fully native to PostgreSQL (the external "Actual Budget" service was decommissio
 
 ### AI Receipt Scanner
 
-Uses Anthropic Claude Vision API to extract transaction data from receipt photos.
+Uses Claude Vision via LiteLLM proxy to extract transaction data from receipt photos/PDFs.
 
 - Service: `backend/app/services/budget/receipt_scanner_service.py`
 - Endpoint: `POST /api/budget/transactions/scan-receipt` (parent only, premium gated)
-- Frontend: `/budget/scan-receipt` (camera capture + file upload + drag-drop)
-- Requires `ANTHROPIC_API_KEY` env var
+- Frontend: `/budget/scan-receipt` (camera capture + file upload + drag-drop; accepts JPEG/PNG/WebP/PDF)
+- Routes through LiteLLM proxy (`LITELLM_API_BASE` / `LITELLM_API_KEY`) using model alias `claude-haiku`
+- PDFs are rasterized to JPEG (first page only, capped at 3000px, quality 85) via PyMuPDF before sending to vision API
+
+### HITL Receipt Review Queue
+
+Low-confidence scans (<30% or no detectable total) create a `BudgetReceiptDraft` record instead of being discarded.
+
+- Model: `BudgetReceiptDraft` in `backend/app/models/budget.py`
+- Service: `backend/app/services/budget/receipt_draft_service.py`
+- Endpoints: `GET/POST/DELETE /api/budget/receipt-drafts/` (parent only)
+- Frontend: `/budget/receipt-drafts` — review queue with pre-filled editable form per draft
+- Nav badge: red dot on clipboard icon in `BudgetNavNew` shows pending count on all budget pages
 
 ### Frontend (Astro 5)
 
@@ -158,7 +171,8 @@ Pages live in `frontend/src/pages/`. Routing is file-based. All server-side API 
 Key frontend pages:
 - `/budget/` — main budget dashboard
 - `/budget/transactions` — transaction list with filters
-- `/budget/scan-receipt` — AI receipt scanner
+- `/budget/scan-receipt` — AI receipt scanner (JPEG/PNG/WebP/PDF)
+- `/budget/receipt-drafts` — HITL review queue for low-confidence scans
 - `/budget/import` — CSV import
 - `/budget/reports/` — spending reports
 - `/parent/settings/subscription` — plan management

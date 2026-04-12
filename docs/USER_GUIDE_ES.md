@@ -63,7 +63,10 @@ Bienvenido a la guia oficial de **Family Task Manager**, la aplicacion para orga
    - [9.1 Que son los Beneficiarios](#91-que-son-los-beneficiarios)
    - [9.2 Gestion de Beneficiarios](#92-gestion-de-beneficiarios)
    - [9.3 Auto-creacion desde CSV](#93-auto-creacion-desde-csv)
-10. [Capitulo 10: Reglas de Categorizacion](#capitulo-10-reglas-de-categorizacion)
+10. [Capitulo 9.5: Escaner de Recibos con IA y Cola de Revision](#capitulo-95-escaner-de-recibos-con-ia-y-cola-de-revision)
+    - [9.5.1 Escanear un Recibo](#951-escanear-un-recibo)
+    - [9.5.2 Cola de Revision (Revision Humana)](#952-cola-de-revision-revision-humana)
+11. [Capitulo 10: Reglas de Categorizacion](#capitulo-10-reglas-de-categorizacion)
     - [10.1 Como Funcionan](#101-como-funcionan)
     - [10.2 Crear una Regla](#102-crear-una-regla)
     - [10.3 Prioridad](#103-prioridad)
@@ -1386,6 +1389,76 @@ Cuando importa transacciones desde un CSV bancario, el sistema crea automaticame
 **Ejemplo:** Si su CSV incluye "AMAZON MX", "OXXO JURIQUILLA", "TELMEX RECIBO", se crearan tres beneficiarios nuevos automaticamente.
 
 Despues de la importacion, puede renombrar los beneficiarios para que sean mas legibles (ej: "AMAZON MX" → "Amazon Mexico").
+
+---
+
+# Capitulo 9.5: Escaner de Recibos con IA y Cola de Revision
+
+**Rutas:** `/budget/scan-receipt` · `/budget/receipt-drafts`
+
+> **Plan requerido:** Plus o Pro — el plan Gratuito no incluye escaneo de recibos.
+
+## 9.5.1 Escanear un Recibo
+
+En lugar de escribir una transaccion manualmente, puede fotografiar o subir un recibo y dejar que la IA extraiga los datos automaticamente.
+
+1. Vaya a **Presupuesto → Escanear Recibo** (icono de camara en la barra inferior, o desde el menu del presupuesto).
+2. **Seleccione la cuenta destino** — la transaccion se agregara aqui.
+3. Proporcione una imagen:
+   - **Tomar Foto** — use la camara de su telefono directamente (solo movil).
+   - **Subir Archivo** — arrastre y suelte, o haga clic para buscar. Acepta JPEG, PNG, WebP y **PDF** (en PDFs de varias paginas solo se escanea la primera).
+4. Haga clic en **Escanear Recibo**. La IA analiza la imagen en segundos.
+
+### Que extrae la IA
+
+| Campo | Ejemplo |
+|-------|---------|
+| Fecha | 2026-03-13 |
+| Monto total | −$1,500.78 MXN |
+| Nombre del comercio | HEB |
+| Articulos | Lacteos · Verduras · Pan |
+
+Si el comercio ya existe en la lista de beneficiarios de su familia, la transaccion se vincula automaticamente. De lo contrario, se crea un nuevo beneficiario.
+
+### Puntuacion de confianza
+
+Cada escaneo devuelve una **puntuacion de confianza** (0–100%). Los escaneos superiores al 30% con un total detectable se crean inmediatamente como transacciones. Los que quedan por debajo de ese umbral se guardan en la **Cola de Revision** para que usted los corrija antes de registrar la transaccion — ningun dato se pierde.
+
+### Consejos para mejores escaneos
+
+- Fotografíe con buena iluminacion; evite sombras sobre el total.
+- Mantenga todo el recibo en el encuadre — la IA necesita ver el monto total.
+- Para recibos largos y angostos (supermercados), el escaner funciona con PDFs generados por "Escanear Documento" en iOS o apps equivalentes en Android.
+- Tamano maximo de archivo: 10 MB.
+
+---
+
+## 9.5.2 Cola de Revision (Revision Humana)
+
+**Ruta:** `/budget/receipt-drafts`
+
+Cuando un escaneo regresa con baja confianza, los datos se guardan como un **borrador pendiente** en lugar de descartarse. Un punto rojo en el icono del portapapeles en la barra del presupuesto le indica cuantos borradores estan esperando.
+
+### Revisar un borrador
+
+1. Haga clic en el **icono del portapapeles** (arriba a la derecha en la barra del presupuesto) o navegue a `/budget/receipt-drafts`.
+2. Cada tarjeta muestra:
+   - Lo que extrajo la IA (comercio, monto, fecha, articulos)
+   - El porcentaje de confianza
+   - La cuenta destino
+3. Edite cualquier campo que parezca incorrecto — el formulario se pre-llena con los datos de la IA.
+4. Haga clic en **Confirmar y Crear** → se registra una transaccion real y el borrador desaparece.
+5. O haga clic en **Descartar** → el borrador se rechaza permanentemente; no se crea ninguna transaccion.
+
+### Estados del borrador
+
+| Estado | Significado |
+|--------|-------------|
+| **pendiente** | Esperando su revision |
+| **aprobado** | Lo confirmo — existe la transaccion |
+| **rechazado** | Lo descarto — sin transaccion |
+
+> Los borradores aprobados y rechazados no se muestran en la cola. Solo los padres pueden acceder a la cola de revision.
 
 ---
 

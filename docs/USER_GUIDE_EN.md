@@ -63,7 +63,10 @@ Welcome to the official **Family Task Manager** guide, the app for organizing yo
    - [9.1 What Are Payees](#91-what-are-payees)
    - [9.2 Managing Payees](#92-managing-payees)
    - [9.3 Auto-creation from CSV](#93-auto-creation-from-csv)
-10. [Chapter 10: Categorization Rules](#chapter-10-categorization-rules)
+10. [Chapter 9.5: AI Receipt Scanner & Review Queue](#chapter-95-ai-receipt-scanner--review-queue)
+    - [9.5.1 Scanning a Receipt](#951-scanning-a-receipt)
+    - [9.5.2 Receipt Review Queue (Human-in-the-Loop)](#952-receipt-review-queue-human-in-the-loop)
+11. [Chapter 10: Categorization Rules](#chapter-10-categorization-rules)
     - [10.1 How They Work](#101-how-they-work)
     - [10.2 Creating a Rule](#102-creating-a-rule)
     - [10.3 Priority](#103-priority)
@@ -1386,6 +1389,76 @@ When you import transactions from a bank CSV, the system automatically creates p
 **Example:** If your CSV includes "AMAZON MARKETPLACE", "WALMART STORE #1234", "NETFLIX.COM", three new payees will be created automatically.
 
 After import, you can rename payees to make them more readable (e.g., "AMAZON MARKETPLACE" → "Amazon").
+
+---
+
+# Chapter 9.5: AI Receipt Scanner & Review Queue
+
+**Routes:** `/budget/scan-receipt` · `/budget/receipt-drafts`
+
+> **Plan required:** Plus or Pro — Free plan does not include receipt scanning.
+
+## 9.5.1 Scanning a Receipt
+
+Instead of typing a transaction manually, you can photograph or upload a receipt and let the AI extract the data automatically.
+
+1. Go to **Budget → Scan Receipt** (camera icon in bottom nav, or the icon in the budget menu).
+2. **Select your target account** — the transaction will be added here.
+3. Provide an image:
+   - **Take Photo** — use your phone's camera directly (mobile only).
+   - **Upload File** — drag and drop, or click to browse. Accepts JPEG, PNG, WebP, and **PDF** (multi-page PDFs: only the first page is scanned).
+4. Click **Scan Receipt**. The AI analyzes the image in a few seconds.
+
+### What the AI extracts
+
+| Field | Example |
+|-------|---------|
+| Date | 2026-03-13 |
+| Total amount | −$1,500.78 MXN |
+| Payee name | HEB |
+| Line items | Lácteos · Verduras · Pan |
+
+If the payee already exists in your family's payee list, the transaction links to it automatically. Otherwise a new payee is created.
+
+### Confidence score
+
+Every scan returns a **confidence score** (0–100%). Scans above 30% with a detectable total are created immediately as transactions. Scans below that threshold are saved to the **Review Queue** for you to correct before the transaction is recorded — no data is lost.
+
+### Tips for better scans
+
+- Photograph in good light; avoid shadows across the total.
+- Keep the entire receipt in frame — the AI needs the total amount.
+- For long, narrow receipts (supermarkets), the scanner works on PDFs produced by iOS "Scan Document" or Android scanning apps.
+- Max file size: 10 MB.
+
+---
+
+## 9.5.2 Receipt Review Queue (Human-in-the-Loop)
+
+**Route:** `/budget/receipt-drafts`
+
+When a scan comes back with low confidence the data goes into a **pending draft** rather than being discarded. A red badge on the clipboard icon in the budget nav bar tells you how many drafts are waiting.
+
+### Reviewing a draft
+
+1. Click the **clipboard icon** (top-right of the budget nav) or navigate directly to `/budget/receipt-drafts`.
+2. Each card shows:
+   - What the AI extracted (payee, amount, date, line items)
+   - The confidence percentage
+   - Which account it targets
+3. Edit any field that looks wrong — the form pre-fills from the AI data.
+4. Click **Confirm & Create** → a real transaction is recorded and the draft disappears.
+5. Or click **Discard** → the draft is permanently rejected; no transaction is created.
+
+### Statuses
+
+| Status | Meaning |
+|--------|---------|
+| **pending** | Waiting for your review |
+| **approved** | You confirmed it — transaction exists |
+| **rejected** | You discarded it — no transaction |
+
+> Approved and rejected drafts are not shown in the queue. Only parents can access the review queue.
 
 ---
 
