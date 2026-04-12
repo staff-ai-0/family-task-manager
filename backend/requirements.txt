@@ -57,6 +57,11 @@ anthropic>=0.39.0
 # to the FTM virtual key in LiteLLM admin instead of hitting Anthropic
 # directly.
 openai>=1.50.0
+# PyMuPDF (imported as fitz) — lets receipt_scanner_service accept
+# application/pdf uploads and rasterize the first page to PNG in memory
+# before sending to the vision model. Ships as a prebuilt wheel for
+# Linux x86_64 so there's no poppler or other system dependency.
+pymupdf>=1.24.0
 
 # Utilities
 python-dotenv==1.0.1
