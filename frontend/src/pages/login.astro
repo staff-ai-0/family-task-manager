@@ -17,8 +17,63 @@ if (flashError) {
 ---
 
 <Layout title={`${t(lang, "login_submit")} - Family Task Manager`}>
+    {/*
+      CRITICAL ORDERING — Google Identity Services (GIS) scans the DOM for
+      g_id_onload elements and validates their data-callback attribute at
+      init time. If the named function isn't already a global when GIS
+      runs, it logs "callback is not a function. Configuration ignored"
+      and silently disables the button.
+
+      In Astro dev mode the bundled <script> below was inlined early, so
+      window.handleGoogleLogin was defined before the GIS async script
+      finished parsing the DOM. In Astro prod SSR the bundled module is
+      a separate deferred file that loads AFTER GIS — race lost, button
+      broken.
+
+      Fix: define window.handleGoogleLogin in a `is:inline` script that
+      runs synchronously, BEFORE the GIS script tag. Astro `is:inline`
+      emits the script verbatim into the HTML without bundling, so it
+      executes in document order. The full submit handler (with all the
+      check-methods / login_hint logic) still lives in the bundled
+      module below; this inline stub only has to exist on window so GIS
+      accepts the config.
+    */}
+    <script is:inline define:vars={{ API_URL: "/api/oauth/google" }}>
+        window.handleGoogleLogin = async function (response) {
+            try {
+                const result = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        token: response.credential,
+                        join_code: null,
+                    }),
+                });
+                const data = await result.json();
+                if (result.ok) {
+                    window.location.href = "/dashboard";
+                } else {
+                    const msg = data.message || data.detail || "Login failed";
+                    // Toast library is loaded by the module script below;
+                    // if it hasn't arrived yet, fall back to alert.
+                    if (window.__showToast) {
+                        window.__showToast(msg, "error");
+                    } else {
+                        alert(msg);
+                    }
+                }
+            } catch (err) {
+                console.error("Google login error:", err);
+                if (window.__showToast) {
+                    window.__showToast("An error occurred during login", "error");
+                } else {
+                    alert("An error occurred during login");
+                }
+            }
+        };
+    </script>
     <script src="https://accounts.google.com/gsi/client" async></script>
-    
+
     <main class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
         <div class="w-full max-w-5xl">
             <div class="bg-white rounded-3xl shadow-2xl overflow-hidden">
@@ -96,21 +151,29 @@ if (flashError) {
 
                         <!-- Google Sign-In Button -->
                         <div class="mb-6">
-                            <div 
+                            <div
                                 id="g_id_onload"
                                 data-client_id="436801934159-r2klrd5n7b4da2q806c58utd24h9f71v.apps.googleusercontent.com"
                                 data-callback="handleGoogleLogin"
-                                data-auto_prompt="false">
+                                data-auto_prompt="false"
+                                data-use_fedcm_for_prompt="true">
                             </div>
-                            <div 
-                                class="g_id_signin" 
+                            <!--
+                              data-width must be a pixel number, not "100%".
+                              GIS logs "Expected a number for 'width'. Configuration
+                              ignored" otherwise. 360px fits the right-column
+                              width comfortably; the button is centered by its
+                              flex parent when the column is wider.
+                            -->
+                            <div
+                                class="g_id_signin"
                                 data-type="standard"
                                 data-size="large"
                                 data-theme="outline"
                                 data-text="signin_with"
                                 data-shape="rectangular"
                                 data-logo_alignment="left"
-                                data-width="100%">
+                                data-width="360">
                             </div>
                         </div>
 
@@ -213,28 +276,13 @@ if (flashError) {
         const GOOGLE_CLIENT_ID =
             '436801934159-r2klrd5n7b4da2q806c58utd24h9f71v.apps.googleusercontent.com';
 
-        window.handleGoogleLogin = async function(response: any) {
-            try {
-                const credential = response.credential;
-                const result = await fetch('/api/oauth/google', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: credential, join_code: null }),
-                });
-
-                const data = await result.json();
-
-                if (result.ok) {
-                    window.location.href = '/dashboard';
-                } else {
-                    const errorMsg = data.message || data.detail || 'Login failed';
-                    showToast(errorMsg, 'error');
-                }
-            } catch (error) {
-                console.error('Google login error:', error);
-                showToast('An error occurred during login', 'error');
-            }
-        };
+        // Expose showToast to the inline Google callback defined above.
+        // The inline callback runs outside this module scope, so it can't
+        // import directly — we stash a reference on window as a bridge.
+        // Checked with `if (window.__showToast)` before calling, so if the
+        // module hasn't finished loading yet (race with a click on the
+        // Google button) the inline fallback is `alert`.
+        (window as any).__showToast = showToast;
 
         /**
          * Trigger the GIS sign-in prompt with a login_hint so Google

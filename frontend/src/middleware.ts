@@ -88,7 +88,25 @@ export const onRequest = defineMiddleware(async (context, next) => {
     const isPublicRoute = publicRoutes.some(route => path === route || path.startsWith("/api/translate"));
 
     if (isPublicRoute) {
-        return next();
+        const response = await next();
+        // /login uses Google Identity Services popup sign-in. Chrome's
+        // default COOP (`unsafe-none` or no header) can still block the
+        // window.postMessage bridge from the Google popup back to our
+        // opener — GIS logs "Cross-Origin-Opener-Policy policy would
+        // block the window.postMessage call" and the callback never
+        // fires. `same-origin-allow-popups` is the Google-recommended
+        // setting for sites that embed GIS.
+        if (path === "/login") {
+            response.headers.set(
+                "Cross-Origin-Opener-Policy",
+                "same-origin-allow-popups"
+            );
+            response.headers.set(
+                "Cross-Origin-Embedder-Policy",
+                "unsafe-none"
+            );
+        }
+        return response;
     }
 
     // Check authentication for protected routes
