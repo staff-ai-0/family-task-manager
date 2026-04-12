@@ -187,7 +187,7 @@ class TestScanReceipt:
             content = call_args.kwargs["messages"][0]["content"]
             image_part = next(c for c in content if c["type"] == "image_url")
             url = image_part["image_url"]["url"]
-            assert url.startswith("data:image/png;base64,"), (
+            assert url.startswith("data:image/jpeg;base64,"), (
                 f"expected image/png data URI after PDF rasterization, got: {url[:50]}"
             )
             assert "application/pdf" not in url
@@ -235,7 +235,7 @@ class TestPdfRasterization:
         doc.close()
 
         png_bytes = _pdf_first_page_to_png(pdf_bytes)
-        assert png_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+        assert png_bytes.startswith(b"\xff\xd8\xff")  # JPEG magic bytes
         # At 150 dpi a 200x100 pt page should give a reasonable image
         assert len(png_bytes) > 500
 
@@ -260,7 +260,7 @@ class TestPdfRasterization:
         # sensible png data is the primary contract. If someone later
         # adds multi-page support, this test stops passing as-is and
         # needs to be reshaped to reflect the new semantics.
-        assert png_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+        assert png_bytes.startswith(b"\xff\xd8\xff")  # JPEG magic bytes
 
     def test_empty_pdf_raises_validation_error(self):
         """Zero-page (or can't-parse) input bubbles up as ValidationError."""
