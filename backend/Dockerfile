@@ -27,6 +27,7 @@ COPY . .
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \
+    mkdir -p /app/uploads/receipt-drafts && \
     chown -R appuser:appuser /app
 
 # Switch to non-root user
