@@ -1,7 +1,19 @@
 """
 Receipt Scanner Service
 
-Uses Claude Vision API to extract transaction data from receipt photos.
+Extracts structured transaction data from receipt photos using a vision
+model, routed through the LiteLLM proxy for centralized spend tracking.
+
+The provider under the hood today is Anthropic Claude Haiku (cheapest
+current vision-capable model), but because we speak to LiteLLM via the
+OpenAI-compatible SDK, switching to GPT-4o-vision, Gemini Flash vision,
+or any other vision model is a single-string change in RECEIPT_MODEL.
+
+All requests are authenticated with a scoped LiteLLM virtual key
+(settings.LITELLM_API_KEY) that has per-month budget caps configured in
+the proxy — if the monthly budget is exceeded, LiteLLM rejects the
+request with 429 and the caller gets a ValidationError before any cost
+leaks to the upstream provider.
 """
 
 import base64
@@ -15,7 +27,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-import anthropic
+from openai import OpenAI
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
@@ -23,6 +35,14 @@ from app.models.budget import BudgetPayee, BudgetTransaction
 from app.schemas.budget import TransactionCreate
 from app.services.budget.transaction_service import TransactionService
 from app.services.budget.categorization_rule_service import CategorizationRuleService
+
+
+# LiteLLM model alias. Registered in /mnt/nvme/docker-prod/litellm-proxy/
+# litellm_config.yaml. "claude-haiku" is anthropic/claude-haiku-4-5-*,
+# the cheapest current model that supports vision input. If a receipt
+# is particularly hard to parse, the caller can bump this to
+# "claude-sonnet" (anthropic/claude-sonnet-4-6) via a future override.
+RECEIPT_MODEL = "claude-haiku"
 
 
 @dataclass
@@ -59,7 +79,12 @@ Rules:
 
 
 async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
-    """Extract transaction data from a receipt image using Claude Vision.
+    """Extract transaction data from a receipt image via LiteLLM proxy.
+
+    Uses the OpenAI-compatible Chat Completions endpoint exposed by
+    LiteLLM, which translates to the underlying provider's native API
+    (Anthropic Messages by default). Centralized spend tracking, model
+    switching, and monthly budget enforcement all live in the proxy.
 
     Args:
         image_bytes: Raw image bytes (JPEG, PNG, WebP, GIF)
@@ -69,42 +94,51 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
         ScannedReceipt with extracted data
 
     Raises:
-        ValidationError: If API key not configured or image unprocessable
+        ValidationError: If LITELLM_API_KEY is not configured, the proxy
+            rejects the request (budget exceeded, model unavailable), or
+            the vision model's response can't be parsed into valid JSON.
     """
-    if not settings.ANTHROPIC_API_KEY:
+    if not settings.LITELLM_API_KEY:
         raise ValidationError(
-            "Receipt scanning is not configured. Please set ANTHROPIC_API_KEY."
+            "Receipt scanning is not configured. Please set LITELLM_API_KEY "
+            "to a virtual key issued by the LiteLLM proxy."
         )
 
-    client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-
-    image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
-
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": image_b64,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": RECEIPT_PROMPT,
-                    },
-                ],
-            }
-        ],
+    # OpenAI SDK pointed at LiteLLM's /v1 endpoint. The proxy handles
+    # authentication, request translation to the provider's native
+    # format, budget enforcement, and spend logging.
+    client = OpenAI(
+        base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
+        api_key=settings.LITELLM_API_KEY,
     )
 
-    response_text = message.content[0].text.strip()
+    image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+    # OpenAI vision content format: data-URI in image_url field.
+    # LiteLLM translates this to Anthropic's image content block when
+    # forwarding to claude-haiku / claude-sonnet / claude-opus.
+    data_uri = f"data:{media_type};base64,{image_b64}"
+
+    try:
+        completion = client.chat.completions.create(
+            model=RECEIPT_MODEL,
+            max_tokens=1024,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": data_uri}},
+                        {"type": "text", "text": RECEIPT_PROMPT},
+                    ],
+                }
+            ],
+        )
+    except Exception as exc:
+        # Surface all proxy-side failures (budget exceeded, rate limits,
+        # upstream 5xx, credit balance too low) as ValidationError so the
+        # caller always sees a clean error response.
+        raise ValidationError(f"Receipt scan via LiteLLM failed: {exc}")
+
+    response_text = (completion.choices[0].message.content or "").strip()
 
     # Parse JSON from response (handle potential markdown wrapping)
     json_match = re.search(r'\{[\s\S]*\}', response_text)

@@ -2,7 +2,10 @@
 Tests for Receipt Scanner Service
 
 Tests the receipt scanning endpoint and service logic.
-Note: Tests that require the Anthropic API use mocking.
+Note: the scanner routes through the LiteLLM proxy via the OpenAI
+SDK, so the mock target is openai.OpenAI (which lives as the
+`OpenAI` symbol inside receipt_scanner_service). No real network
+calls ever leave the test container.
 """
 
 import pytest
@@ -36,11 +39,21 @@ async def budget_account(db_session: AsyncSession, test_family):
 
 
 class TestScanReceipt:
-    """Test the scan_receipt function with mocked Anthropic API."""
+    """Test the scan_receipt function with the LiteLLM/OpenAI client mocked."""
+
+    def _mock_openai_response(self, content: str):
+        """Build a mock OpenAI ChatCompletion response wrapping `content`."""
+        message = MagicMock()
+        message.content = content
+        choice = MagicMock()
+        choice.message = message
+        completion = MagicMock()
+        completion.choices = [choice]
+        return completion
 
     @pytest.mark.asyncio
     async def test_scan_receipt_returns_scanned_data(self):
-        """Test that scan_receipt correctly parses Claude Vision response."""
+        """scan_receipt parses the vision model's JSON response correctly."""
         mock_response_text = '''{
             "date": "2026-03-15",
             "total_amount": -15050,
@@ -54,18 +67,37 @@ class TestScanReceipt:
             "confidence": 0.92
         }'''
 
-        mock_message = MagicMock()
-        mock_message.content = [MagicMock(text=mock_response_text)]
-
         mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_message
+        mock_client.chat.completions.create.return_value = self._mock_openai_response(
+            mock_response_text
+        )
 
-        with patch("app.services.budget.receipt_scanner_service.settings") as mock_settings:
-            mock_settings.ANTHROPIC_API_KEY = "test-key"
-            with patch("app.services.budget.receipt_scanner_service.anthropic") as mock_anthropic:
-                mock_anthropic.Anthropic.return_value = mock_client
-
+        with patch(
+            "app.services.budget.receipt_scanner_service.settings"
+        ) as mock_settings:
+            mock_settings.LITELLM_API_KEY = "sk-fake-virtual-key"
+            mock_settings.LITELLM_API_BASE = "http://10.1.0.99:4000"
+            with patch(
+                "app.services.budget.receipt_scanner_service.OpenAI"
+            ) as mock_openai:
+                mock_openai.return_value = mock_client
                 result = await scan_receipt(b"fake-image-bytes", "image/jpeg")
+
+                # OpenAI SDK was instantiated pointing at LiteLLM proxy /v1
+                mock_openai.assert_called_once()
+                call_kwargs = mock_openai.call_args.kwargs
+                assert call_kwargs["base_url"] == "http://10.1.0.99:4000/v1"
+                assert call_kwargs["api_key"] == "sk-fake-virtual-key"
+
+                # Correct model alias passed through
+                call_args = mock_client.chat.completions.create.call_args
+                assert call_args.kwargs["model"] == "claude-haiku"
+                # Vision payload contains the image as a data URI
+                content = call_args.kwargs["messages"][0]["content"]
+                image_part = next(c for c in content if c["type"] == "image_url")
+                assert image_part["image_url"]["url"].startswith(
+                    "data:image/jpeg;base64,"
+                )
 
         assert result.date == date(2026, 3, 15)
         assert result.total_amount == -15050
@@ -76,13 +108,43 @@ class TestScanReceipt:
 
     @pytest.mark.asyncio
     async def test_scan_receipt_no_api_key_raises_error(self):
-        """Test that missing API key raises ValidationError."""
+        """Missing LITELLM_API_KEY → ValidationError, OpenAI client never built."""
         from app.core.exceptions import ValidationError
 
-        with patch("app.services.budget.receipt_scanner_service.settings") as mock_settings:
-            mock_settings.ANTHROPIC_API_KEY = ""
-            with pytest.raises(ValidationError, match="not configured"):
-                await scan_receipt(b"fake-image", "image/jpeg")
+        with patch(
+            "app.services.budget.receipt_scanner_service.settings"
+        ) as mock_settings:
+            mock_settings.LITELLM_API_KEY = ""
+            mock_settings.LITELLM_API_BASE = "http://10.1.0.99:4000"
+            with patch(
+                "app.services.budget.receipt_scanner_service.OpenAI"
+            ) as mock_openai:
+                with pytest.raises(ValidationError, match="not configured"):
+                    await scan_receipt(b"fake-image", "image/jpeg")
+                # Fail-fast before any client construction or network IO
+                mock_openai.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_scan_receipt_proxy_failure_wraps_as_validation_error(self):
+        """LiteLLM proxy errors (budget exceeded, upstream 5xx) surface as ValidationError."""
+        from app.core.exceptions import ValidationError
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = RuntimeError(
+            "LiteLLM budget exceeded for key family-task-manager-receipt-scanner"
+        )
+
+        with patch(
+            "app.services.budget.receipt_scanner_service.settings"
+        ) as mock_settings:
+            mock_settings.LITELLM_API_KEY = "sk-fake"
+            mock_settings.LITELLM_API_BASE = "http://10.1.0.99:4000"
+            with patch(
+                "app.services.budget.receipt_scanner_service.OpenAI"
+            ) as mock_openai:
+                mock_openai.return_value = mock_client
+                with pytest.raises(ValidationError, match="LiteLLM failed|budget exceeded"):
+                    await scan_receipt(b"fake-image", "image/jpeg")
 
 
 class TestScanAndCreateTransaction:
