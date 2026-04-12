@@ -52,13 +52,15 @@ const startDate = startD.toISOString().split("T")[0].slice(0, 7) + "-01";
 const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
 // --- Fetch ALL reports in parallel ---
-const [spendingRes, cashflowRes, networthRes, accountsRes, groupsRes] = await Promise.all([
+const [spendingRes, cashflowRes, networthRes, accountsRes, groupsRes, draftsCountRes] = await Promise.all([
     getSpendingReport(token, startDate, endDate, "category"),
     getIncomeVsExpenseReport(token, startDate, endDate, "month"),
     getNetWorthReport(token),
     apiFetch<any[]>("/api/budget/accounts/", { token }),
     getCategoryGroups(token),
+    apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token }),
 ]);
+const pendingDraftsCount = draftsCountRes.data?.count ?? 0;
 
 // --- Extract data ---
 const spendingItems: any[] = spendingRes.data?.items || [];
@@ -80,7 +82,7 @@ const allCategories = allGroups
 
 <Layout title={es ? "Reportes - Presupuesto" : "Reports - Budget"}>
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 flex flex-col min-h-screen">
-        <BudgetNavNew active="reports" lang={lang} />
+        <BudgetNavNew active="reports" lang={lang} pendingDrafts={pendingDraftsCount} />
         <DrawerMenu lang={lang} />
         <ReportSubTabs active={tab} lang={lang} />
         <PeriodSelector activePeriod={period} lang={lang} />

@@ -675,6 +675,35 @@ class CustomReportResponse(BaseModel):
         from_attributes = True
 
 
+# ============================================================================
+# RECEIPT DRAFT SCHEMAS (HITL review queue)
+# ============================================================================
+
+class ReceiptDraftApprove(BaseModel):
+    """Fields the human can override before approving a receipt draft."""
+    date: Optional[DateType] = Field(None, description="Transaction date (override extracted value)")
+    amount: Optional[int] = Field(None, description="Amount in cents, negative for expenses")
+    payee_name: Optional[str] = Field(None, max_length=200, description="Payee name")
+    category_id: Optional[UUID] = Field(None, description="Budget category")
+    notes: Optional[str] = Field(None, max_length=500)
+
+
+class ReceiptDraftResponse(BaseModel):
+    """Receipt draft as returned by the API."""
+    id: UUID
+    family_id: UUID
+    account_id: UUID
+    scanned_data: dict
+    confidence: float
+    status: str
+    transaction_id: Optional[UUID]
+    created_at: datetime
+    reviewed_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
 # Rebuild models to resolve forward references
 CategoryWithGroup.model_rebuild()
 CategoryGroupWithCategories.model_rebuild()

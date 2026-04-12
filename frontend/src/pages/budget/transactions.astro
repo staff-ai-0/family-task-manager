@@ -32,6 +32,9 @@ if (user.role !== "parent") {
     return Astro.redirect("/dashboard");
 }
 
+const { data: draftsCount } = await apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token });
+const pendingDraftsCount = draftsCount?.count ?? 0;
+
 // Read filter params from URL
 const accountFilter = Astro.url.searchParams.get("account") || "";
 const categoryFilter = Astro.url.searchParams.get("category") || "";
@@ -155,7 +158,7 @@ const netAmount = totalIncome - totalExpenses;
         </header>
 
         <!-- Budget Section Nav -->
-        <BudgetNavNew active="transactions" lang={lang} />
+        <BudgetNavNew active="transactions" lang={lang} pendingDrafts={pendingDraftsCount} />
         <DrawerMenu lang={lang} />
 
         <!-- Filter Bar -->
