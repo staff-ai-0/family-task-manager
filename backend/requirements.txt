@@ -47,7 +47,16 @@ mypy==1.8.0
 isort==5.13.2
 
 # AI / Vision
+# Anthropic SDK kept as a transitive fallback and for any code path that
+# still imports it; receipt_scanner_service now routes through LiteLLM
+# via the OpenAI-compatible SDK (see below).
 anthropic>=0.39.0
+# OpenAI SDK — used by receipt_scanner_service to call LiteLLM proxy's
+# /v1/chat/completions endpoint. LiteLLM translates the request to the
+# Anthropic Messages API underneath. All Anthropic spend is attributed
+# to the FTM virtual key in LiteLLM admin instead of hitting Anthropic
+# directly.
+openai>=1.50.0
 
 # Utilities
 python-dotenv==1.0.1
