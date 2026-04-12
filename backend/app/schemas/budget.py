@@ -207,7 +207,7 @@ class TransactionBase(BaseModel):
 
 class TransactionCreate(TransactionBase):
     """Schema for creating a transaction"""
-    pass
+    payee_name: Optional[str] = Field(None, max_length=255, description="Payee name; creates payee if payee_id is absent")
 
 
 class TransactionUpdate(BaseModel):
@@ -216,6 +216,7 @@ class TransactionUpdate(BaseModel):
     date: Optional[DateType] = None
     amount: Optional[int] = None
     payee_id: Optional[UUID] = None
+    payee_name: Optional[str] = Field(None, max_length=255, description="Payee name; creates payee if payee_id is absent")
     category_id: Optional[UUID] = None
     notes: Optional[str] = None
     cleared: Optional[bool] = None

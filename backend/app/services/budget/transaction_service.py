@@ -57,10 +57,16 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             from app.services.budget.category_service import CategoryService
             await CategoryService.get_by_id(db, data.category_id, family_id)
 
-        # Verify payee if provided
-        if data.payee_id:
+        # Resolve payee: verify existing or auto-create from payee_name
+        resolved_payee_id = data.payee_id
+        payee_name = getattr(data, "payee_name", None)
+        if resolved_payee_id:
             from app.services.budget.payee_service import PayeeService
-            await PayeeService.get_by_id(db, data.payee_id, family_id)
+            await PayeeService.get_by_id(db, resolved_payee_id, family_id)
+        elif payee_name:
+            from app.services.budget.payee_service import PayeeService
+            payee = await PayeeService.get_or_create_by_name(db, family_id, payee_name)
+            resolved_payee_id = payee.id
 
         # Verify transfer account if provided
         if data.transfer_account_id:
@@ -71,7 +77,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             account_id=data.account_id,
             date=data.date,
             amount=data.amount,
-            payee_id=data.payee_id,
+            payee_id=resolved_payee_id,
             category_id=data.category_id,
             notes=data.notes,
             cleared=data.cleared,
@@ -119,6 +125,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         await MonthLockingService.validate_month_not_closed(db, family_id, transaction_month)
         
         update_data = data.model_dump(exclude_unset=True)
+        payee_name = update_data.pop("payee_name", None)
 
         # Verify new account if provided
         if "account_id" in update_data:
@@ -130,10 +137,14 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             from app.services.budget.category_service import CategoryService
             await CategoryService.get_by_id(db, update_data["category_id"], family_id)
 
-        # Verify new payee if provided
+        # Resolve payee: verify existing or auto-create from payee_name
         if "payee_id" in update_data and update_data["payee_id"]:
             from app.services.budget.payee_service import PayeeService
             await PayeeService.get_by_id(db, update_data["payee_id"], family_id)
+        elif payee_name and "payee_id" not in update_data:
+            from app.services.budget.payee_service import PayeeService
+            payee = await PayeeService.get_or_create_by_name(db, family_id, payee_name)
+            update_data["payee_id"] = payee.id
 
         # Verify new transfer account if provided
         if "transfer_account_id" in update_data and update_data["transfer_account_id"]:
