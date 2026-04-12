@@ -74,11 +74,8 @@ def upgrade() -> None:
             nullable=True,
         ),
     )
-    op.create_index(
-        "ix_budget_receipt_drafts_family_id",
-        "budget_receipt_drafts",
-        ["family_id"],
-    )
+    # family_id index is created inline by op.create_table (index=True on column).
+    # Add a separate index on status for fast pending-count queries.
     op.create_index(
         "ix_budget_receipt_drafts_status",
         "budget_receipt_drafts",
@@ -88,5 +85,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_budget_receipt_drafts_status", table_name="budget_receipt_drafts")
-    op.drop_index("ix_budget_receipt_drafts_family_id", table_name="budget_receipt_drafts")
     op.drop_table("budget_receipt_drafts")
