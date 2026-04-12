@@ -412,6 +412,7 @@ class BudgetReceiptDraft(Base):
     transaction_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_transactions.id", ondelete="SET NULL"), nullable=True, comment="Populated on approval")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, comment="Stored receipt image path")
 
     # Relationships
     family: Mapped["Family"] = relationship("Family")

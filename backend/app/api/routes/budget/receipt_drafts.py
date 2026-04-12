@@ -4,7 +4,10 @@ Receipt Draft routes — HITL review queue.
 Parents list, approve, or reject low-confidence receipt scans.
 """
 
-from fastapi import APIRouter, Depends, status
+import os
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from uuid import UUID
@@ -13,6 +16,7 @@ from app.core.database import get_db
 from app.core.dependencies import require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.services.budget.receipt_draft_service import ReceiptDraftService
+from app.services.budget.receipt_scanner_service import RECEIPT_UPLOADS_DIR
 from app.schemas.budget import ReceiptDraftApprove, ReceiptDraftResponse
 from app.models import User
 
@@ -40,6 +44,24 @@ async def pending_drafts_count(
         db, to_uuid_required(current_user.family_id)
     )
     return {"count": count}
+
+
+@router.get("/{draft_id}/image")
+async def get_receipt_draft_image(
+    draft_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Serve the stored receipt image for a draft (parent only)."""
+    draft = await ReceiptDraftService.get_by_id(
+        db, draft_id, to_uuid_required(current_user.family_id)
+    )
+    if not draft.image_url:
+        raise HTTPException(status_code=404, detail="No image stored for this draft")
+    img_path = os.path.join(RECEIPT_UPLOADS_DIR, f"{draft_id}.jpg")
+    if not os.path.exists(img_path):
+        raise HTTPException(status_code=404, detail="Image file not found")
+    return FileResponse(img_path, media_type="image/jpeg")
 
 
 @router.get("/{draft_id}", response_model=ReceiptDraftResponse)
