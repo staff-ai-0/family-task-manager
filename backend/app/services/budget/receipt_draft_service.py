@@ -131,12 +131,8 @@ class ReceiptDraftService:
 
         notes = overrides.notes
         if notes is None:
-            items = sd.get("items", [])
-            notes = (
-                f"Receipt scan: {', '.join(i['name'] for i in items[:3])}"
-                if items
-                else "Receipt scan (reviewed)"
-            )
+            from app.services.budget.receipt_scanner_service import _build_notes
+            notes = _build_notes(sd.get("payee_name"), sd.get("items", []), sd.get("currency", "MXN"))
 
         txn_data = TransactionCreate(
             account_id=draft.account_id,

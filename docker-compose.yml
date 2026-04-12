@@ -95,6 +95,8 @@ services:
       # from Vault exclusively — no compose-side leak of secrets.
     ports:
        - "8003:8000"
+    volumes:
+      - receipt_uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -170,6 +172,7 @@ services:
 volumes:
   postgres_data:
   test_postgres_data:
+  receipt_uploads:
 
 
 networks:

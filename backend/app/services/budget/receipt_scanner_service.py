@@ -18,6 +18,7 @@ leaks to the upstream provider.
 
 import base64
 import json
+import os
 import re
 from dataclasses import dataclass
 from datetime import date
@@ -44,6 +45,31 @@ from app.services.budget.receipt_draft_service import ReceiptDraftService
 # is particularly hard to parse, the caller can bump this to
 # "claude-sonnet" (anthropic/claude-sonnet-4-6) via a future override.
 RECEIPT_MODEL = "claude-haiku"
+
+RECEIPT_UPLOADS_DIR = "/app/uploads/receipt-drafts"
+
+
+def _build_notes(payee_name: Optional[str], items: list, currency: str = "MXN") -> str:
+    """Build a full itemized notes string from scanner output.
+
+    Format:
+        Store Name
+        • Item A: $12.50 MXN
+        • Item B: $5.00 MXN
+    """
+    lines = []
+    if payee_name:
+        lines.append(payee_name)
+    for item in items:
+        name = item.get("name", "").strip()
+        if not name:
+            continue
+        amount_cents = item.get("amount_cents")
+        if amount_cents is not None:
+            lines.append(f"• {name}: ${abs(amount_cents) / 100:.2f} {currency}")
+        else:
+            lines.append(f"• {name}")
+    return "\n".join(lines) if lines else "Receipt scan"
 
 
 # DPI for rasterizing PDF pages to PNG before the vision call. 150 is a
@@ -282,6 +308,16 @@ async def scan_and_create_transaction(
             scanned_data=scanned_data_dict,
             confidence=receipt.confidence,
         )
+        # Persist the image so the review queue can display it
+        try:
+            os.makedirs(RECEIPT_UPLOADS_DIR, exist_ok=True)
+            img_path = os.path.join(RECEIPT_UPLOADS_DIR, f"{draft.id}.jpg")
+            with open(img_path, "wb") as f:
+                f.write(image_bytes)  # already JPEG (rasterized if PDF)
+            draft.image_url = f"/api/budget/receipt-drafts/{draft.id}/image"
+            await db.commit()
+        except Exception:
+            pass  # image storage failure is non-fatal — draft still exists
         return {
             "success": False,
             "draft_id": str(draft.id),
@@ -326,7 +362,7 @@ async def scan_and_create_transaction(
         amount=receipt.total_amount,
         payee_id=payee_id,
         category_id=category_id,
-        notes=f"Receipt scan: {', '.join(i['name'] for i in receipt.items[:3])}" if receipt.items else "Receipt scan",
+        notes=_build_notes(receipt.payee_name, receipt.items, receipt.currency),
         cleared=False,
         reconciled=False,
     )

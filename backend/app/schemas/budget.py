@@ -697,6 +697,7 @@ class ReceiptDraftResponse(BaseModel):
     confidence: float
     status: str
     transaction_id: Optional[UUID]
+    image_url: Optional[str] = None
     created_at: datetime
     reviewed_at: Optional[datetime]
 

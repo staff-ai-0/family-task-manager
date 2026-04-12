@@ -120,6 +120,19 @@ const l = {
                     const confPct = Math.round((draft.confidence ?? 0) * 100);
                     const confColor = confPct >= 60 ? "text-amber-600 bg-amber-50" : "text-red-600 bg-red-50";
                     const amt = sd.total_amount != null ? (sd.total_amount / 100).toFixed(2) : "";
+                    const prefillNotes = (() => {
+                        const lines: string[] = [];
+                        if (sd.payee_name) lines.push(sd.payee_name);
+                        (sd.items ?? []).forEach((i: any) => {
+                            if (!i.name) return;
+                            if (i.amount_cents != null) {
+                                lines.push(`• ${i.name}: $${(Math.abs(i.amount_cents) / 100).toFixed(2)} ${sd.currency ?? "MXN"}`);
+                            } else {
+                                lines.push(`• ${i.name}`);
+                            }
+                        });
+                        return lines.join("\n");
+                    })();
                     return (
                         <div
                             class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
@@ -135,6 +148,18 @@ const l = {
                                     {l.confidence}: {confPct}%
                                 </span>
                             </div>
+
+                            <!-- Receipt image -->
+                            {draft.image_url && (
+                                <div class="px-5 pt-4">
+                                    <img
+                                        src={`/api/budget/receipt-drafts/${draft.id}/image`}
+                                        alt="Receipt"
+                                        class="w-full max-h-72 object-contain rounded-lg bg-slate-100"
+                                        loading="lazy"
+                                    />
+                                </div>
+                            )}
 
                             <!-- AI-extracted preview -->
                             <div class="px-5 pt-4 pb-2">
@@ -156,10 +181,16 @@ const l = {
                                 {sd.items?.length > 0 && (
                                     <div class="mt-2">
                                         <span class="block text-xs text-slate-400">{l.items}</span>
-                                        <p class="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                                            {sd.items.slice(0, 4).map((i: any) => i.name).join(" · ")}
-                                            {sd.items.length > 4 ? ` +${sd.items.length - 4} more` : ""}
-                                        </p>
+                                        <div class="text-xs text-slate-500 mt-0.5 leading-relaxed space-y-0.5">
+                                            {sd.items.map((i: any) => (
+                                                <div class="flex justify-between">
+                                                    <span>{i.name}</span>
+                                                    {i.amount_cents != null && (
+                                                        <span class="text-slate-400">${(Math.abs(i.amount_cents) / 100).toFixed(2)} {sd.currency ?? "MXN"}</span>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -201,15 +232,15 @@ const l = {
                                             class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
                                         />
                                     </div>
-                                    <div>
-                                        <label class="block text-xs text-slate-500 mb-1">{l.notes}</label>
-                                        <input
-                                            type="text"
-                                            name="notes"
-                                            placeholder="Optional notes"
-                                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
-                                        />
-                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-500 mb-1">{l.notes}</label>
+                                    <textarea
+                                        name="notes"
+                                        rows={Math.min((sd.items?.length ?? 0) + 2, 8)}
+                                        placeholder="Optional notes"
+                                        class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-y font-mono"
+                                    >{prefillNotes}</textarea>
                                 </div>
 
                                 <!-- Actions -->
