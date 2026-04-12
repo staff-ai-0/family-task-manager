@@ -25,6 +25,9 @@ if (!userOk) {
     return Astro.redirect("/login");
 }
 
+const { data: draftsCount } = await apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token });
+const pendingDraftsCount = draftsCount?.count ?? 0;
+
 // Only parents can import
 if (user.role !== "parent") {
     return Astro.redirect("/dashboard");
@@ -59,7 +62,7 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
         </header>
 
         <!-- Budget Section Nav -->
-        <BudgetNavNew active="none" lang={lang} />
+        <BudgetNavNew active="none" lang={lang} pendingDrafts={pendingDraftsCount} />
         <DrawerMenu lang={lang} />
 
         <!-- Main Content -->

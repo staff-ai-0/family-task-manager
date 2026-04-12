@@ -35,6 +35,7 @@ from app.models.budget import BudgetPayee, BudgetTransaction
 from app.schemas.budget import TransactionCreate
 from app.services.budget.transaction_service import TransactionService
 from app.services.budget.categorization_rule_service import CategorizationRuleService
+from app.services.budget.receipt_draft_service import ReceiptDraftService
 
 
 # LiteLLM model alias. Registered in /mnt/nvme/docker-prod/litellm-proxy/
@@ -264,18 +265,29 @@ async def scan_and_create_transaction(
     # Scan the receipt
     receipt = await scan_receipt(image_bytes, media_type)
 
+    scanned_data_dict = {
+        "date": receipt.date.isoformat() if receipt.date else None,
+        "total_amount": receipt.total_amount,
+        "payee_name": receipt.payee_name,
+        "items": receipt.items,
+        "currency": receipt.currency,
+    }
+
     if receipt.confidence < 0.3 or receipt.total_amount is None:
+        # Save for human review instead of silently discarding
+        draft = await ReceiptDraftService.create(
+            db=db,
+            family_id=family_id,
+            account_id=account_id,
+            scanned_data=scanned_data_dict,
+            confidence=receipt.confidence,
+        )
         return {
             "success": False,
+            "draft_id": str(draft.id),
             "confidence": receipt.confidence,
-            "scanned_data": {
-                "date": receipt.date.isoformat() if receipt.date else None,
-                "total_amount": receipt.total_amount,
-                "payee_name": receipt.payee_name,
-                "items": receipt.items,
-                "currency": receipt.currency,
-            },
-            "message": "Low confidence scan. Please review and enter manually.",
+            "scanned_data": scanned_data_dict,
+            "message": "Low confidence — saved for review in the receipt queue.",
             "transaction_id": None,
         }
 
@@ -323,6 +335,7 @@ async def scan_and_create_transaction(
 
     return {
         "success": True,
+        "draft_id": None,
         "confidence": receipt.confidence,
         "scanned_data": {
             "date": txn_date.isoformat(),

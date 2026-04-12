@@ -12,7 +12,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -389,3 +389,30 @@ class BudgetCustomReport(Base):
 
     # Relationships
     family: Mapped["Family"] = relationship("Family", back_populates="budget_custom_reports")
+
+
+class BudgetReceiptDraft(Base):
+    """Pending receipt scan queued for human review (HITL).
+
+    Created when scan_and_create_transaction extracts data below the
+    confidence threshold or cannot read a total amount. A parent opens
+    the review queue, corrects the pre-filled fields, and either
+    approves (which creates the real BudgetTransaction) or rejects
+    (which discards the draft).
+    """
+
+    __tablename__ = "budget_receipt_drafts"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_accounts.id", ondelete="CASCADE"), nullable=False)
+    scanned_data: Mapped[dict] = mapped_column(JSONB, nullable=False, comment="Extracted receipt fields: date, total_amount, payee_name, items, currency")
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, comment="Vision model confidence 0.0–1.0")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", comment="pending | approved | rejected")
+    transaction_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_transactions.id", ondelete="SET NULL"), nullable=True, comment="Populated on approval")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    family: Mapped["Family"] = relationship("Family")
+    account: Mapped["BudgetAccount"] = relationship("BudgetAccount")

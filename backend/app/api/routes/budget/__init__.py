@@ -5,7 +5,7 @@ API endpoints for budget management.
 """
 
 from fastapi import APIRouter
-from app.api.routes.budget import categories, accounts, transactions, allocations, payees, month, transfers, reports, categorization_rules, goals, recurring_transactions, months, recycle_bin, saved_filters, tags, export, custom_reports
+from app.api.routes.budget import categories, accounts, transactions, allocations, payees, month, transfers, reports, categorization_rules, goals, recurring_transactions, months, recycle_bin, saved_filters, tags, export, custom_reports, receipt_drafts
 
 router = APIRouter()
 
@@ -27,5 +27,6 @@ router.include_router(saved_filters.router, prefix="/saved-filters", tags=["Budg
 router.include_router(tags.router, prefix="/tags", tags=["Budget - Tags"])
 router.include_router(export.router, tags=["budget-export"])
 router.include_router(custom_reports.router, prefix="/custom-reports", tags=["budget-custom-reports"])
+router.include_router(receipt_drafts.router, prefix="/receipt-drafts", tags=["budget-receipt-drafts"])
 
 __all__ = ["router"]

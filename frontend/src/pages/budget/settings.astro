@@ -25,6 +25,9 @@ if (!ok) {
     return Astro.redirect("/login");
 }
 
+const { data: draftsCount } = await apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token });
+const pendingDraftsCount = draftsCount?.count ?? 0;
+
 if (user.role !== "parent") {
     return Astro.redirect("/dashboard");
 }
@@ -72,7 +75,7 @@ const frequencyLabel = (freq: string) => {
 
 <Layout title={`${es ? "Configuración" : "Settings"} - Budget`}>
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen flex flex-col">
-        <BudgetNavNew active="none" lang={lang} />
+        <BudgetNavNew active="none" lang={lang} pendingDrafts={pendingDraftsCount} />
         <DrawerMenu lang={lang} />
 
         <div class="px-4 pt-6 pb-2">

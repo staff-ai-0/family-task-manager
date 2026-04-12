@@ -29,6 +29,8 @@ if (user.role !== "parent") {
 }
 
 const { data: accounts, ok: accountsOk } = await getAccounts(token);
+const { data: draftsCount } = await apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token });
+const pendingDraftsCount = draftsCount?.count ?? 0;
 
 const l = {
     en: {
@@ -118,7 +120,7 @@ const t = l[lang as keyof typeof l] || l.en;
             </div>
         </header>
 
-        <BudgetNavNew active="none" lang={lang} />
+        <BudgetNavNew active="none" lang={lang} pendingDrafts={pendingDraftsCount} />
         <DrawerMenu lang={lang} />
 
         <!-- Main Content -->

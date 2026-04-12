@@ -1,0 +1,344 @@
+---
+/**
+ * Receipt Draft Review Queue (HITL)
+ * Parents review, correct, and approve/reject low-confidence receipt scans.
+ */
+
+import Layout from "@layouts/Layout.astro";
+import BottomNav from "@components/BottomNav.astro";
+import BudgetNavNew from "@components/BudgetNavNew.astro";
+import DrawerMenu from "@components/DrawerMenu.astro";
+import { apiFetch } from "@lib/api";
+
+export const prerender = false;
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+const { data: drafts, ok: draftsOk } = await apiFetch<any[]>(
+    "/api/budget/receipt-drafts/",
+    { token }
+);
+const pendingDrafts = draftsOk ? (drafts ?? []) : [];
+
+const { data: accounts } = await apiFetch<any[]>("/api/budget/accounts/", { token });
+const accountMap: Record<string, string> = {};
+(accounts ?? []).forEach((a: any) => { accountMap[a.id] = a.name; });
+
+const l = {
+    en: {
+        title: "Receipt Review Queue",
+        subtitle: "Low-confidence scans waiting for your review",
+        empty: "No pending receipts",
+        emptyDesc: "All receipt scans have been reviewed.",
+        confidence: "Confidence",
+        payee: "Payee",
+        amount: "Amount",
+        date: "Date",
+        account: "Account",
+        items: "Items",
+        approve: "Confirm & Create",
+        reject: "Discard",
+        approving: "Creating...",
+        rejecting: "Discarding...",
+        approved: "Transaction created!",
+        rejected: "Draft discarded",
+        error: "Something went wrong",
+        scannedData: "Extracted by AI",
+        overrideHint: "Edit any field before confirming",
+        notes: "Notes",
+        category: "Category",
+        scanMore: "Scan More Receipts",
+    },
+    es: {
+        title: "Cola de Revisión de Recibos",
+        subtitle: "Escaneos de baja confianza en espera de tu revisión",
+        empty: "Sin recibos pendientes",
+        emptyDesc: "Todos los escaneos han sido revisados.",
+        confidence: "Confianza",
+        payee: "Comercio",
+        amount: "Monto",
+        date: "Fecha",
+        account: "Cuenta",
+        items: "Artículos",
+        approve: "Confirmar y crear",
+        reject: "Descartar",
+        approving: "Creando...",
+        rejecting: "Descartando...",
+        approved: "¡Transacción creada!",
+        rejected: "Borrador descartado",
+        error: "Algo salió mal",
+        scannedData: "Extraído por IA",
+        overrideHint: "Edita cualquier campo antes de confirmar",
+        notes: "Notas",
+        category: "Categoría",
+        scanMore: "Escanear más recibos",
+    },
+}[lang] ?? l.en;
+---
+
+<Layout title={l.title}>
+    <div class="min-h-screen bg-slate-50 pb-24">
+        <DrawerMenu user={user} />
+        <BudgetNavNew active="receipt-drafts" lang={lang as any} pendingDrafts={pendingDrafts.length} />
+
+        <main class="max-w-2xl mx-auto px-4 py-6">
+            <!-- Header -->
+            <div class="mb-6">
+                <h1 class="text-2xl font-bold text-slate-900">{l.title}</h1>
+                <p class="text-slate-500 mt-1 text-sm">{l.subtitle}</p>
+            </div>
+
+            <!-- Empty state -->
+            {pendingDrafts.length === 0 && (
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-12 text-center">
+                    <div class="text-5xl mb-4">✅</div>
+                    <h2 class="text-lg font-semibold text-slate-700">{l.empty}</h2>
+                    <p class="text-slate-400 mt-1 text-sm">{l.emptyDesc}</p>
+                    <a
+                        href="/budget/scan-receipt"
+                        class="mt-6 inline-block bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition"
+                    >
+                        {l.scanMore}
+                    </a>
+                </div>
+            )}
+
+            <!-- Draft cards -->
+            <div id="draft-list" class="space-y-4">
+                {pendingDrafts.map((draft: any) => {
+                    const sd = draft.scanned_data ?? {};
+                    const confPct = Math.round((draft.confidence ?? 0) * 100);
+                    const confColor = confPct >= 60 ? "text-amber-600 bg-amber-50" : "text-red-600 bg-red-50";
+                    const amt = sd.total_amount != null ? (sd.total_amount / 100).toFixed(2) : "";
+                    return (
+                        <div
+                            class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+                            data-draft-id={draft.id}
+                        >
+                            <!-- Card header -->
+                            <div class="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50">
+                                <span class="text-xs text-slate-500">
+                                    {new Date(draft.created_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", { dateStyle: "medium" })}
+                                    &nbsp;·&nbsp; {accountMap[draft.account_id] ?? "—"}
+                                </span>
+                                <span class={`text-xs font-semibold px-2 py-0.5 rounded-full ${confColor}`}>
+                                    {l.confidence}: {confPct}%
+                                </span>
+                            </div>
+
+                            <!-- AI-extracted preview -->
+                            <div class="px-5 pt-4 pb-2">
+                                <p class="text-[11px] uppercase tracking-wide text-slate-400 font-medium mb-2">{l.scannedData}</p>
+                                <div class="grid grid-cols-3 gap-3 text-sm">
+                                    <div>
+                                        <span class="block text-xs text-slate-400">{l.payee}</span>
+                                        <span class="font-medium text-slate-700">{sd.payee_name ?? "—"}</span>
+                                    </div>
+                                    <div>
+                                        <span class="block text-xs text-slate-400">{l.amount}</span>
+                                        <span class="font-medium text-slate-700">{amt ? `${sd.currency ?? "MXN"} $${amt}` : "—"}</span>
+                                    </div>
+                                    <div>
+                                        <span class="block text-xs text-slate-400">{l.date}</span>
+                                        <span class="font-medium text-slate-700">{sd.date ?? "—"}</span>
+                                    </div>
+                                </div>
+                                {sd.items?.length > 0 && (
+                                    <div class="mt-2">
+                                        <span class="block text-xs text-slate-400">{l.items}</span>
+                                        <p class="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                                            {sd.items.slice(0, 4).map((i: any) => i.name).join(" · ")}
+                                            {sd.items.length > 4 ? ` +${sd.items.length - 4} more` : ""}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <!-- Override form -->
+                            <form
+                                class="draft-form px-5 py-4 border-t border-slate-100 space-y-3"
+                                data-draft-id={draft.id}
+                                data-account-id={draft.account_id}
+                            >
+                                <p class="text-[11px] text-slate-400">{l.overrideHint}</p>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs text-slate-500 mb-1">{l.payee}</label>
+                                        <input
+                                            type="text"
+                                            name="payee_name"
+                                            value={sd.payee_name ?? ""}
+                                            placeholder="—"
+                                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-slate-500 mb-1">{l.amount} (cents)</label>
+                                        <input
+                                            type="number"
+                                            name="amount"
+                                            value={sd.total_amount ?? ""}
+                                            placeholder="e.g. -15050"
+                                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-slate-500 mb-1">{l.date}</label>
+                                        <input
+                                            type="date"
+                                            name="date"
+                                            value={sd.date ?? ""}
+                                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-slate-500 mb-1">{l.notes}</label>
+                                        <input
+                                            type="text"
+                                            name="notes"
+                                            placeholder="Optional notes"
+                                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                                        />
+                                    </div>
+                                </div>
+
+                                <!-- Actions -->
+                                <div class="flex gap-2 pt-1">
+                                    <button
+                                        type="submit"
+                                        class="approve-btn flex-1 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium py-2.5 rounded-xl transition disabled:opacity-50"
+                                    >
+                                        {l.approve}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="reject-btn w-24 border border-slate-200 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-600 text-sm font-medium py-2.5 rounded-xl transition"
+                                    >
+                                        {l.reject}
+                                    </button>
+                                </div>
+
+                                <!-- Status message -->
+                                <p class="status-msg hidden text-sm text-center pt-1"></p>
+                            </form>
+                        </div>
+                    );
+                })}
+            </div>
+        </main>
+
+        <BottomNav activePage="budget" />
+    </div>
+</Layout>
+
+<script is:inline>
+    const TOKEN_COOKIE = document.cookie
+        .split("; ")
+        .find((r) => r.startsWith("access_token="))
+        ?.split("=")[1];
+
+    const approveLabels = { approve: "Confirm & Create", approving: "Creating..." };
+    const rejectLabels  = { reject: "Discard", rejecting: "Discarding..." };
+
+    function showStatus(form, msg, isError) {
+        const el = form.querySelector(".status-msg");
+        el.textContent = msg;
+        el.className = `status-msg text-sm text-center pt-1 ${isError ? "text-red-600" : "text-green-600"}`;
+    }
+
+    function removeDraftCard(draftId) {
+        const card = document.querySelector(`[data-draft-id="${draftId}"]:not(form)`);
+        if (card) card.remove();
+
+        const remaining = document.querySelectorAll("#draft-list [data-draft-id]:not(form)").length;
+        if (remaining === 0) location.reload();
+    }
+
+    document.querySelectorAll(".draft-form").forEach((form) => {
+        const draftId = form.dataset.draftId;
+
+        // Approve
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const btn = form.querySelector(".approve-btn");
+            btn.disabled = true;
+            btn.textContent = "Creating...";
+
+            const fd = new FormData(form);
+            const body = {};
+            const payee = fd.get("payee_name")?.trim();
+            if (payee) body.payee_name = payee;
+            const amount = fd.get("amount");
+            if (amount !== "") body.amount = parseInt(amount, 10);
+            const date = fd.get("date");
+            if (date) body.date = date;
+            const notes = fd.get("notes")?.trim();
+            if (notes) body.notes = notes;
+
+            try {
+                const res = await fetch(
+                    `/api/budget/receipt-drafts/${draftId}/approve`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${TOKEN_COOKIE}`,
+                        },
+                        body: JSON.stringify(body),
+                    }
+                );
+                if (res.ok) {
+                    showStatus(form, "Transaction created!", false);
+                    setTimeout(() => removeDraftCard(draftId), 1200);
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    showStatus(form, err.detail ?? "Error", true);
+                    btn.disabled = false;
+                    btn.textContent = "Confirm & Create";
+                }
+            } catch {
+                showStatus(form, "Network error", true);
+                btn.disabled = false;
+                btn.textContent = "Confirm & Create";
+            }
+        });
+
+        // Reject
+        form.querySelector(".reject-btn").addEventListener("click", async () => {
+            const btn = form.querySelector(".reject-btn");
+            btn.disabled = true;
+            btn.textContent = "Discarding...";
+            try {
+                const res = await fetch(
+                    `/api/budget/receipt-drafts/${draftId}`,
+                    {
+                        method: "DELETE",
+                        headers: { Authorization: `Bearer ${TOKEN_COOKIE}` },
+                    }
+                );
+                if (res.ok || res.status === 204) {
+                    showStatus(form, "Draft discarded", false);
+                    setTimeout(() => removeDraftCard(draftId), 1000);
+                } else {
+                    showStatus(form, "Error discarding", true);
+                    btn.disabled = false;
+                    btn.textContent = "Discard";
+                }
+            } catch {
+                showStatus(form, "Network error", true);
+                btn.disabled = false;
+                btn.textContent = "Discard";
+            }
+        });
+    });
+</script>

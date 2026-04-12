@@ -43,13 +43,15 @@ const year = yearParam ? parseInt(yearParam, 10) : now.getFullYear();
 const month = monthParam ? parseInt(monthParam, 10) : now.getMonth() + 1;
 
 // --- Parallel data fetching ---
-const [budgetRes, allGroupsRes, accountsRes, goalsRes, monthStatusRes] = await Promise.all([
+const [budgetRes, allGroupsRes, accountsRes, goalsRes, monthStatusRes, draftsCountRes] = await Promise.all([
     getMonthBudget(token, year, month),
     getCategoryGroups(token),
     apiFetch<any[]>("/api/budget/accounts/", { token }),
     apiFetch<any[]>("/api/budget/goals/", { token }),
     getMonthStatus(token, year, month),
+    apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token }),
 ]);
+const pendingDraftsCount = draftsCountRes.data?.count ?? 0;
 
 const budget = budgetRes.data;
 const allGroups = allGroupsRes.data;
@@ -86,7 +88,7 @@ const allCategories = (allGroups || [])
 <Layout title={t(lang, 'fin_budget_home')}>
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen pb-20">
         <!-- Top nav: 3 tabs -->
-        <BudgetNavNew active="month" lang={lang} />
+        <BudgetNavNew active="month" lang={lang} pendingDrafts={pendingDraftsCount} />
 
         <!-- Drawer menu (hidden, toggled by hamburger) -->
         <DrawerMenu lang={lang} />

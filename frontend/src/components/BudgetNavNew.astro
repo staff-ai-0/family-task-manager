@@ -6,11 +6,12 @@
  */
 
 interface Props {
-    active: "month" | "transactions" | "reports" | "none";
+    active: "month" | "transactions" | "reports" | "receipt-drafts" | "none";
     lang: "en" | "es";
+    pendingDrafts?: number;
 }
 
-const { active, lang } = Astro.props;
+const { active, lang, pendingDrafts = 0 } = Astro.props;
 const es = lang === "es";
 
 const tabs = [
@@ -71,7 +72,25 @@ const tabs = [
             ))}
         </nav>
 
-        <!-- Spacer to balance hamburger -->
-        <div class="w-12"></div>
+        <!-- Receipt review queue button with pending badge -->
+        <a
+            href="/budget/receipt-drafts"
+            aria-label={es ? "Revisar recibos pendientes" : "Review pending receipts"}
+            class={`relative p-3 transition-colors ${
+                active === "receipt-drafts"
+                    ? "text-violet-600"
+                    : "text-slate-400 hover:text-slate-600"
+            }`}
+        >
+            <!-- Receipt / inbox icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            {pendingDrafts > 0 && (
+                <span class="absolute top-1.5 right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                    {pendingDrafts > 9 ? "9+" : pendingDrafts}
+                </span>
+            )}
+        </a>
     </div>
 </div>
