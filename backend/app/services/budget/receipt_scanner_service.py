@@ -90,7 +90,12 @@ def _pdf_first_page_to_png(pdf_bytes: bytes) -> bytes:
         zoom = PDF_RASTER_DPI / 72.0
         matrix = fitz.Matrix(zoom, zoom)
         pix = page.get_pixmap(matrix=matrix, alpha=False)
-        return pix.tobytes("png")
+        # JPEG instead of PNG: scanned receipts are photographic (camera
+        # noise, gradients, lighting) and compress terribly as PNG
+        # (13 MB+ for a typical HEB scan) but well as JPEG (~500KB at
+        # quality 85). Anthropic's vision input limit is 5 MB, so JPEG
+        # is the only practical choice for scanned documents.
+        return pix.tobytes("jpeg", jpg_quality=85)
     finally:
         doc.close()
 
@@ -161,7 +166,7 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
     # Normalize the media_type so the downstream data URI is correct.
     if media_type == "application/pdf":
         image_bytes = _pdf_first_page_to_png(image_bytes)
-        media_type = "image/png"
+        media_type = "image/jpeg"  # rasterizer outputs JPEG for size
 
     # OpenAI SDK pointed at LiteLLM's /v1 endpoint. The proxy handles
     # authentication, request translation to the provider's native
