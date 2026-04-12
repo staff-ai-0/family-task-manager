@@ -90,6 +90,15 @@ def _pdf_first_page_to_png(pdf_bytes: bytes) -> bytes:
         zoom = PDF_RASTER_DPI / 72.0
         matrix = fitz.Matrix(zoom, zoom)
         pix = page.get_pixmap(matrix=matrix, alpha=False)
+        # Cap to 3000px on the longest side. iOS "Scan Document" PDFs embed
+        # full-res camera frames (up to 4032×3024) which rasterize well over
+        # Anthropic's 8000px-per-dimension hard limit at 150 DPI. 3000px keeps
+        # all text readable while staying safely under the cap.
+        max_dim = 3000
+        if max(pix.width, pix.height) > max_dim:
+            scale = max_dim / max(pix.width, pix.height)
+            matrix = fitz.Matrix(zoom * scale, zoom * scale)
+            pix = page.get_pixmap(matrix=matrix, alpha=False)
         # JPEG instead of PNG: scanned receipts are photographic (camera
         # noise, gradients, lighting) and compress terribly as PNG
         # (13 MB+ for a typical HEB scan) but well as JPEG (~500KB at
