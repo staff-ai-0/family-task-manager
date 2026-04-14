@@ -8,7 +8,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Stack**: Python 3.12 + FastAPI (backend) · Astro 5 + Tailwind CSS v4 (frontend) · PostgreSQL 15 + Redis 7 · Docker Compose · Anthropic Claude API (receipt scanner)
 
-> Note: `.github/copilot-instructions.md` is outdated (references Jinja2/HTMX/Flowbite/Render). The current frontend is Astro 5, not Jinja2 templates.
+**Environments**:
+- Local (dev): frontend `http://localhost:3003`, backend `http://localhost:8003/docs` — secrets in `.env` or Vault
+- Production (GCP `agentia-platform-hub` VM, `us-central1-a`): `https://family.agent-ia.mx` (Cloudflare tunnel) — secrets from `platform-vault` (`secret/family-task-manager/prod`)
+
+**GCP deployment**: `docker-compose.gcp.yml` runs backend + frontend on the shared GCP VM. Shared infrastructure: `platform-postgres` (PostgreSQL 16), `platform-redis` (Redis 7), `platform-vault` (Vault 1.15), `litellm-proxy`. Deploy with `./deploy-gcp.sh`.
+
+> Note: `.github/copilot-instructions.md` and `DEPLOYMENT_GUIDE.md` are outdated (reference Jinja2/HTMX/Render.com). The current frontend is Astro 5, deployed on GCP.
 
 ---
 
@@ -195,13 +201,16 @@ Key frontend pages:
 | `backend/app/services/budget/export_service.py` | Budget export/import as ZIP |
 | `backend/tests/conftest.py` | Test fixtures, test DB setup |
 | `frontend/src/middleware.ts` | Auth/session middleware for Astro SSR |
-| `docker-compose.yml` | All 5 services orchestrated here |
+| `docker-compose.yml` | Local dev / on-prem compose (all 5 services) |
+| `docker-compose.gcp.yml` | GCP production compose (backend + frontend, shared infra) |
+| `deploy-gcp.sh` | GCP deployment script (build, migrate, health check) |
+| `.env.gcp.example` | GCP environment template |
 
 ---
 
 ## Environment variables
 
-Key env vars (set in `.env` or `docker-compose.yml`):
+Key env vars (set in `.env` or compose file). On GCP, most secrets come from Vault (`secret/family-task-manager/prod`):
 
 | Variable | Purpose | Required |
 |----------|---------|----------|

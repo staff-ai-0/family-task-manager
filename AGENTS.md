@@ -6,42 +6,46 @@
 **Phase**: 10 - Production Complete ✅  
 **Status**: Live on https://family.agent-ia.mx
 
-## Production Deployment (2026-03-01)
+## Production Deployment
 
-### Current Infrastructure
+### Current Infrastructure (GCP)
 ```
-Frontend (Port 3003)         Backend API (Port 8002)
-Astro 5 + Tailwind v4 ←→     FastAPI + SQLAlchemy
-    ↓                              ↓
-  Sessions                    PostgreSQL (Port 5437)
-    ↓                              ↓
-  Redis (Port 6380)          Test DB (Port 5435)
+Frontend (gcp_ftm_frontend)    Backend API (gcp_ftm_backend)
+Astro 5 + Tailwind v4    ←→    FastAPI + SQLAlchemy
+         ↓                              ↓
+   Cloudflare Tunnel            platform-postgres (shared)
+  (platform-cloudflared)                ↓
+         ↓                      platform-redis (shared)
+  family.agent-ia.mx                    ↓
+  fam-backend.agent-ia.mx        platform-vault (shared)
 ```
 
-**Production Server**: 10.1.0.99 (TrueNAS)  
-**Public URL**: https://family.agent-ia.mx (reverse proxy)  
-**All services running and verified ✅**
+**Production**: GCP VM `agentia-platform-hub` (us-central1-a, project `icegg-platform`)
+**Public URL**: https://family.agent-ia.mx (Cloudflare tunnel)
+**Compose file**: `docker-compose.gcp.yml`
 
 ### Deployment Commands
 
 ```bash
-# SSH to production
-ssh jc@10.1.0.99
+# SSH to GCP VM
+gcloud compute ssh agentia-platform-hub --zone=us-central1-a
 
 # Navigate to project
-cd /mnt/zfs-storage/home/jc/projects/family-task-manager
+cd /home/jc/family-task-manager
 
-# View running containers
-docker compose ps
+# Deploy (build + migrate + health check)
+./deploy-gcp.sh
 
-# View logs
-docker compose logs -f backend
-docker compose logs -f frontend
-
-# Restart services
-docker compose down
-docker compose up -d backend frontend
+# Or manually:
+DC="sudo docker compose --env-file .env -f docker-compose.gcp.yml"
+$DC up -d
+$DC logs -f backend
+$DC exec -T backend alembic upgrade head
+$DC ps
 ```
+
+### Legacy On-Prem (deprecated)
+Previously ran on 10.1.0.99 (TrueNAS/NVMe). On-prem deployment uses `docker-compose.yml` + `deploy-prod.sh`.
 
 ## Setup Commands (Development)
 
@@ -155,10 +159,10 @@ Models (Database Entities)
 
 ## Access Points
 
-### Production
+### Production (GCP)
 - **Frontend**: https://family.agent-ia.mx
-- **Backend API**: http://10.1.0.99:8002/docs
-- **Health Check**: http://10.1.0.99:8002/health
+- **Backend API**: https://fam-backend.agent-ia.mx
+- **Health Check**: `sudo docker exec gcp_ftm_backend python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/sync/health')"` (expects 410)
 
 ### Development
 - **Frontend**: http://localhost:3003

@@ -1,0 +1,98 @@
+# ================================
+# GCP Deployment — Google Cloud Platform
+# ================================
+# Colocated on the same GCP VM as school-admin. Connects to shared
+# infrastructure (PostgreSQL, Redis, Vault, LiteLLM) via external network.
+# Access through Cloudflare Tunnel (no open ports, no static IP cost).
+#
+# Prerequisites on GCP VM:
+#   - platform-postgres (PostgreSQL 16) with `familyapp` database created
+#   - platform-redis (Redis 7) available
+#   - platform-vault (Vault 1.15) with secret/family-task-manager/prod populated
+#   - litellm-proxy running
+#   - All above on `platform-network` (created by platform docker-compose)
+#
+# Usage:
+#   sudo docker compose --env-file .env -f docker-compose.gcp.yml up -d
+#
+# First deploy:
+#   1. Create DB:  sudo docker exec platform-postgres createdb -U postgres familyapp
+#   2. Create user: sudo docker exec platform-postgres psql -U postgres -c "CREATE USER familyapp WITH PASSWORD '<pw>'; GRANT ALL ON DATABASE familyapp TO familyapp;"
+#   3. cp .env.gcp.example .env && fill in secrets
+#   4. sudo docker compose --env-file .env -f docker-compose.gcp.yml up -d
+#   5. sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T backend alembic upgrade head
+#   6. sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T backend python /app/seed_data.py  # optional
+# ================================
+
+services:
+
+  # -- Application -------------------------------------------------------
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gcp_ftm_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@platform-postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://platform-redis:6379/${REDIS_DB:-1}
+      VAULT_ADDR: http://platform-vault:8200
+      VAULT_TOKEN: ${VAULT_TOKEN}
+      VAULT_PATH: ${VAULT_PATH:-family-task-manager/prod}
+      VAULT_MOUNT: ${VAULT_MOUNT:-secret}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://family.agent-ia.mx}
+      BASE_URL: ${BASE_URL:-https://fam-backend.agent-ia.mx}
+      LITELLM_API_BASE: http://litellm-proxy:4000
+      DEBUG: "false"
+    volumes:
+      - receipt_uploads:/app/uploads
+    networks:
+      - internal
+      - platform-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;\ntry: urllib.request.urlopen('http://localhost:8000/api/sync/health')\nexcept urllib.error.HTTPError as e:\n  sys.exit(0) if e.code==410 else sys.exit(1)\nexcept: sys.exit(1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: gcp_ftm_frontend
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://backend:8000
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-https://fam-backend.agent-ia.mx}
+      PORT: 3000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - internal
+      - platform-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Access: uses existing platform-cloudflared tunnel (already running).
+  # Configure routes in Cloudflare Zero Trust dashboard:
+  #   family.agent-ia.mx     -> http://gcp_ftm_frontend:3000
+  #   fam-backend.agent-ia.mx -> http://gcp_ftm_backend:8000
+
+networks:
+  internal:
+    driver: bridge    # backend <-> frontend internal comms
+  platform-network:
+    external: true    # created by platform docker-compose: postgres, redis, vault, litellm, cloudflared
+
+volumes:
+  receipt_uploads:
+    driver: local
