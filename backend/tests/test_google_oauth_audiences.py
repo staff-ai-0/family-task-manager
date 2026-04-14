@@ -21,8 +21,8 @@ from app.core.exceptions import UnauthorizedException
 from app.services.google_oauth_service import GoogleOAuthService
 
 
-WEB_CLIENT = "436801934159-r2klrd5n7b4da2q806c58utd24h9f71v.apps.googleusercontent.com"
-IOS_CLIENT = "436801934159-da0pomq1oejrsh80p4lcbu9hhu0rlms1.apps.googleusercontent.com"
+WEB_CLIENT = "355849593-42c0kgc5hbq2l0mr23g95b74jv3nprod.apps.googleusercontent.com"
+IOS_CLIENT = "355849593-da0pomq1oejrsh80p4lcbu9hhu0rlms1.apps.googleusercontent.com"
 UNKNOWN_CLIENT = "999999999999-evil-client.apps.googleusercontent.com"
 
 
