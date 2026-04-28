@@ -10,11 +10,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Environments**:
 - Local (dev): frontend `http://localhost:3003`, backend `http://localhost:8003/docs` — secrets in `.env` or Vault
-- Production (GCP `agentia-platform-hub` VM, `us-central1-a`): `https://family.agent-ia.mx` (Cloudflare tunnel) — secrets from `platform-vault` (`secret/family-task-manager/prod`)
+- Production (10.1.0.99 on-prem, Podman rootless): `https://family.agent-ia.mx` (Cloudflare tunnel) — app at `/mnt/nvme/docker-prod/family-task-manager/`, secrets from `platform-vault`
 
-**GCP deployment**: `docker-compose.gcp.yml` runs backend + frontend on the shared GCP VM. Shared infrastructure: `platform-postgres` (PostgreSQL 16), `platform-redis` (Redis 7), `platform-vault` (Vault 1.15), `litellm-proxy`. Deploy with `./deploy-gcp.sh`.
+**Production deployment**: `docker-compose.onprem.yml` (or `docker-compose.production.yml`) uses shared infra: `platform-postgres`, `platform-redis`, `platform-vault`, `litellm-proxy` — all on platform-network.
 
-> Note: `.github/copilot-instructions.md` and `DEPLOYMENT_GUIDE.md` are outdated (reference Jinja2/HTMX/Render.com). The current frontend is Astro 5, deployed on GCP.
+> Note: `.github/copilot-instructions.md` and `DEPLOYMENT_GUIDE.md` are outdated (reference Jinja2/HTMX/Render.com). Current frontend is Astro 5.
 
 ---
 
@@ -202,15 +202,13 @@ Key frontend pages:
 | `backend/tests/conftest.py` | Test fixtures, test DB setup |
 | `frontend/src/middleware.ts` | Auth/session middleware for Astro SSR |
 | `docker-compose.yml` | Local dev / on-prem compose (all 5 services) |
-| `docker-compose.gcp.yml` | GCP production compose (backend + frontend, shared infra) |
-| `deploy-gcp.sh` | GCP deployment script (build, migrate, health check) |
-| `.env.gcp.example` | GCP environment template |
+| `docker-compose.onprem.yml` | Production compose (backend + frontend, shared infra) |
 
 ---
 
 ## Environment variables
 
-Key env vars (set in `.env` or compose file). On GCP, most secrets come from Vault (`secret/family-task-manager/prod`):
+Key env vars (set in `.env` or compose file). In production, secrets come from Vault (`secret/family-task-manager/prod`):
 
 | Variable | Purpose | Required |
 |----------|---------|----------|

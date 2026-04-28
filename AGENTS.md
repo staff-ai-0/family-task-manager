@@ -8,9 +8,9 @@
 
 ## Production Deployment
 
-### Current Infrastructure (GCP)
+### Current Infrastructure (On-Prem)
 ```
-Frontend (gcp_ftm_frontend)    Backend API (gcp_ftm_backend)
+Frontend (ftm_frontend)    Backend API (ftm_backend)
 Astro 5 + Tailwind v4    ←→    FastAPI + SQLAlchemy
          ↓                              ↓
    Cloudflare Tunnel            platform-postgres (shared)
@@ -20,32 +20,27 @@ Astro 5 + Tailwind v4    ←→    FastAPI + SQLAlchemy
   fam-backend.agent-ia.mx        platform-vault (shared)
 ```
 
-**Production**: GCP VM `agentia-platform-hub` (us-central1-a, project `icegg-platform`)
+**Production**: 10.1.0.99 on-prem (Podman rootless, RHEL 10)
+**App dir**: `/mnt/nvme/docker-prod/family-task-manager/`
 **Public URL**: https://family.agent-ia.mx (Cloudflare tunnel)
-**Compose file**: `docker-compose.gcp.yml`
+**Compose file**: `docker-compose.onprem.yml`
 
 ### Deployment Commands
 
 ```bash
-# SSH to GCP VM
-gcloud compute ssh agentia-platform-hub --zone=us-central1-a
+# SSH to on-prem server
+ssh jc@10.1.0.99
 
 # Navigate to project
-cd /home/jc/family-task-manager
+cd /mnt/nvme/docker-prod/family-task-manager
 
-# Deploy (build + migrate + health check)
-./deploy-gcp.sh
-
-# Or manually:
-DC="sudo docker compose --env-file .env -f docker-compose.gcp.yml"
+# Deploy manually:
+DC="podman compose --env-file .env -f docker-compose.onprem.yml"
 $DC up -d
 $DC logs -f backend
 $DC exec -T backend alembic upgrade head
 $DC ps
 ```
-
-### Legacy On-Prem (deprecated)
-Previously ran on 10.1.0.99 (TrueNAS/NVMe). On-prem deployment uses `docker-compose.yml` + `deploy-prod.sh`.
 
 ## Setup Commands (Development)
 
@@ -159,10 +154,10 @@ Models (Database Entities)
 
 ## Access Points
 
-### Production (GCP)
+### Production (On-Prem 10.1.0.99)
 - **Frontend**: https://family.agent-ia.mx
 - **Backend API**: https://fam-backend.agent-ia.mx
-- **Health Check**: `sudo docker exec gcp_ftm_backend python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/sync/health')"` (expects 410)
+- **Health Check**: `podman exec ftm_backend python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/sync/health')"` (expects 410)
 
 ### Development
 - **Frontend**: http://localhost:3003
