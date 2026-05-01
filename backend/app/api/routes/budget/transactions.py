@@ -4,7 +4,8 @@ Transaction routes
 CRUD endpoints for budget transactions.
 """
 
-from fastapi import APIRouter, Depends, status, Query, File, UploadFile, Form
+from fastapi import APIRouter, Body, Depends, status, Query, File, UploadFile, Form
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
 from datetime import date
@@ -126,6 +127,94 @@ async def delete_transaction(
         db,
         transaction_id,
         to_uuid_required(current_user.family_id),
+    )
+
+
+class BulkUpdateRequest(BaseModel):
+    transaction_ids: List[UUID]
+    updates: Dict[str, object] = Field(..., description="Whitelist: cleared, reconciled, category_id, payee_id")
+
+
+class BulkDeleteRequest(BaseModel):
+    transaction_ids: List[UUID]
+
+
+class FinishReconciliationRequest(BaseModel):
+    account_id: UUID
+    statement_balance: int
+    transaction_ids: List[UUID]
+
+
+@router.get("/search", response_model=List[TransactionResponse])
+async def search_transactions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    account_id: Optional[UUID] = Query(None),
+    category_id: Optional[UUID] = Query(None),
+    payee_id: Optional[UUID] = Query(None),
+    cleared: Optional[bool] = Query(None),
+    reconciled: Optional[bool] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    amount_min: Optional[int] = Query(None, description="Min amount in cents (inclusive)"),
+    amount_max: Optional[int] = Query(None, description="Max amount in cents (inclusive)"),
+    search: Optional[str] = Query(None, description="Substring match against notes (case-insensitive)"),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """Filter transactions by any combination of criteria."""
+    family_id = to_uuid_required(current_user.family_id)
+    return await TransactionService.search_transactions(
+        db, family_id,
+        account_id=account_id, category_id=category_id, payee_id=payee_id,
+        cleared=cleared, reconciled=reconciled,
+        start_date=start_date, end_date=end_date,
+        amount_min=amount_min, amount_max=amount_max,
+        search=search, limit=limit, offset=offset,
+    )
+
+
+@router.post("/bulk-update")
+async def bulk_update_transactions(
+    data: BulkUpdateRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bulk modify N transactions (parent only). Whitelist: cleared, reconciled, category_id, payee_id."""
+    family_id = to_uuid_required(current_user.family_id)
+    count = await TransactionService.bulk_update_transactions(
+        db, family_id, data.transaction_ids, data.updates,
+    )
+    return {"updated_count": count}
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_transactions(
+    data: BulkDeleteRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bulk delete N transactions (parent only)."""
+    family_id = to_uuid_required(current_user.family_id)
+    count = await TransactionService.bulk_delete_transactions(
+        db, family_id, data.transaction_ids,
+    )
+    return {"deleted_count": count}
+
+
+@router.post("/finish-reconciliation")
+async def finish_reconciliation(
+    data: FinishReconciliationRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark transactions as cleared+reconciled and create adjustment if balance differs (parent only)."""
+    family_id = to_uuid_required(current_user.family_id)
+    return await TransactionService.finish_reconciliation(
+        db, family_id,
+        account_id=data.account_id,
+        statement_balance=data.statement_balance,
+        transaction_ids=data.transaction_ids,
     )
 
 

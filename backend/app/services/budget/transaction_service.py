@@ -596,3 +596,195 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         await db.commit()
         await db.refresh(parent)
         return parent
+
+    # ------------------------------------------------------------------
+    # Search & bulk operations
+    # ------------------------------------------------------------------
+
+    @classmethod
+    async def search_transactions(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        *,
+        account_id: Optional[UUID] = None,
+        category_id: Optional[UUID] = None,
+        payee_id: Optional[UUID] = None,
+        cleared: Optional[bool] = None,
+        reconciled: Optional[bool] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        amount_min: Optional[int] = None,
+        amount_max: Optional[int] = None,
+        search: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> List[BudgetTransaction]:
+        """Filter transactions by any combination of criteria."""
+        query = select(BudgetTransaction).where(
+            BudgetTransaction.family_id == family_id,
+            BudgetTransaction.deleted_at.is_(None),
+        )
+        if account_id is not None:
+            query = query.where(BudgetTransaction.account_id == account_id)
+        if category_id is not None:
+            query = query.where(BudgetTransaction.category_id == category_id)
+        if payee_id is not None:
+            query = query.where(BudgetTransaction.payee_id == payee_id)
+        if cleared is not None:
+            query = query.where(BudgetTransaction.cleared == cleared)
+        if reconciled is not None:
+            query = query.where(BudgetTransaction.reconciled == reconciled)
+        if start_date is not None:
+            query = query.where(BudgetTransaction.date >= start_date)
+        if end_date is not None:
+            query = query.where(BudgetTransaction.date <= end_date)
+        if amount_min is not None:
+            query = query.where(BudgetTransaction.amount >= amount_min)
+        if amount_max is not None:
+            query = query.where(BudgetTransaction.amount <= amount_max)
+        if search:
+            query = query.where(BudgetTransaction.notes.ilike(f"%{search}%"))
+
+        query = query.order_by(BudgetTransaction.date.desc(), BudgetTransaction.created_at.desc())
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
+
+        result = await db.execute(query)
+        return list(result.scalars().all())
+
+    BULK_UPDATE_ALLOWED = frozenset({"cleared", "reconciled", "category_id", "payee_id"})
+
+    @classmethod
+    async def bulk_update_transactions(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        transaction_ids: List[UUID],
+        updates: dict,
+    ) -> int:
+        """Apply same field updates to N transactions. Returns count modified.
+
+        Whitelist: cleared, reconciled, category_id, payee_id. Other fields dropped.
+        """
+        if not transaction_ids:
+            return 0
+        filtered = {k: v for k, v in updates.items() if k in cls.BULK_UPDATE_ALLOWED}
+        if not filtered:
+            return 0
+
+        query = select(BudgetTransaction).where(
+            and_(
+                BudgetTransaction.id.in_(transaction_ids),
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.deleted_at.is_(None),
+            )
+        )
+        result = await db.execute(query)
+        rows = list(result.scalars().all())
+
+        for txn in rows:
+            for field, value in filtered.items():
+                if field.endswith("_id") and isinstance(value, str):
+                    value = UUID(value)
+                setattr(txn, field, value)
+
+        await db.commit()
+        return len(rows)
+
+    @classmethod
+    async def bulk_delete_transactions(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        transaction_ids: List[UUID],
+    ) -> int:
+        """Delete N transactions (family-scoped). Returns count deleted."""
+        if not transaction_ids:
+            return 0
+
+        query = select(BudgetTransaction).where(
+            and_(
+                BudgetTransaction.id.in_(transaction_ids),
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.deleted_at.is_(None),
+            )
+        )
+        result = await db.execute(query)
+        rows = list(result.scalars().all())
+
+        for txn in rows:
+            await db.delete(txn)
+        await db.commit()
+        return len(rows)
+
+    @classmethod
+    async def finish_reconciliation(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        *,
+        account_id: UUID,
+        statement_balance: int,
+        transaction_ids: List[UUID],
+    ) -> dict:
+        """Mark transactions cleared+reconciled, create adjustment if balance mismatches.
+
+        Returns {reconciled_count, adjustment_amount, adjustment_transaction_id}.
+        """
+        from app.services.budget.account_service import AccountService
+        await AccountService.get_by_id(db, account_id, family_id)
+
+        query = select(BudgetTransaction).where(
+            and_(
+                BudgetTransaction.id.in_(transaction_ids),
+                BudgetTransaction.account_id == account_id,
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.deleted_at.is_(None),
+            )
+        )
+        result = await db.execute(query)
+        rows = list(result.scalars().all())
+
+        for txn in rows:
+            txn.cleared = True
+            txn.reconciled = True
+        await db.flush()
+
+        cleared_query = (
+            select(func.coalesce(func.sum(BudgetTransaction.amount), 0))
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.account_id == account_id,
+                    BudgetTransaction.cleared == True,
+                    BudgetTransaction.deleted_at.is_(None),
+                )
+            )
+        )
+        cleared_total = (await db.execute(cleared_query)).scalar() or 0
+
+        adjustment_amount = statement_balance - cleared_total
+        adjustment_id = None
+        if adjustment_amount != 0:
+            adj = BudgetTransaction(
+                family_id=family_id,
+                account_id=account_id,
+                date=date.today(),
+                amount=adjustment_amount,
+                notes="Ajuste de Conciliación",
+                cleared=True,
+                reconciled=True,
+            )
+            db.add(adj)
+            await db.flush()
+            adjustment_id = adj.id
+
+        await db.commit()
+        return {
+            "reconciled_count": len(rows),
+            "adjustment_amount": adjustment_amount,
+            "adjustment_transaction_id": adjustment_id,
+        }
