@@ -317,6 +317,7 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                         BudgetTransaction.family_id == family_id,
                         BudgetTransaction.category_id == category_id,
                         BudgetTransaction.date < month,
+                        BudgetTransaction.deleted_at.is_(None),
                     )
                 )
             )
@@ -424,6 +425,8 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                 and_(
                     BudgetCategory.family_id == family_id,
                     BudgetCategoryGroup.is_income == False,
+                    BudgetCategory.deleted_at.is_(None),
+                    BudgetCategoryGroup.deleted_at.is_(None),
                 )
             )
         )
@@ -470,6 +473,8 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                 and_(
                     BudgetCategory.family_id == family_id,
                     BudgetCategoryGroup.is_income == False,
+                    BudgetCategory.deleted_at.is_(None),
+                    BudgetCategoryGroup.deleted_at.is_(None),
                 )
             )
         )
@@ -522,6 +527,8 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                 and_(
                     BudgetCategory.family_id == family_id,
                     BudgetCategoryGroup.is_income == False,
+                    BudgetCategory.deleted_at.is_(None),
+                    BudgetCategoryGroup.deleted_at.is_(None),
                 )
             )
         )
@@ -533,6 +540,7 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.category_id.in_(expense_category_ids_query),
                     BudgetTransaction.date <= end_of_prior,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
         )
@@ -648,6 +656,7 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                         BudgetTransaction.category_id == cat.id,
                         BudgetTransaction.date >= start_month,
                         BudgetTransaction.date < target_month,
+                        BudgetTransaction.deleted_at.is_(None),
                     )
                 )
             )

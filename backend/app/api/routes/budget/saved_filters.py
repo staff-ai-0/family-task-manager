@@ -4,7 +4,7 @@ Saved Filter routes
 CRUD endpoints for saved transaction filter presets.
 """
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from uuid import UUID
@@ -27,10 +27,12 @@ router = APIRouter()
 async def list_saved_filters(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    limit: int = Query(200, ge=1, le=500, description="Max results"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
 ):
     """List all saved filters for the family"""
     family_id = to_uuid_required(current_user.family_id)
-    return await SavedFilterService.list_by_family(db, family_id)
+    return await SavedFilterService.list_by_family(db, family_id, limit=limit, offset=offset)
 
 
 @router.post("/", response_model=SavedFilterResponse, status_code=status.HTTP_201_CREATED)

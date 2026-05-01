@@ -117,6 +117,8 @@ async def list_categories(
     db: AsyncSession = Depends(get_db),
     group_id: UUID = Query(None, description="Filter by group ID"),
     include_hidden: bool = Query(False, description="Include hidden categories"),
+    limit: int = Query(500, ge=1, le=1000, description="Max results"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
 ):
     """List all categories, optionally filtered by group"""
     if group_id:
@@ -125,15 +127,19 @@ async def list_categories(
             group_id,
             to_uuid_required(current_user.family_id),
             include_hidden=include_hidden,
+            limit=limit,
+            offset=offset,
         )
     else:
         categories = await CategoryService.list_by_family(
             db,
             to_uuid_required(current_user.family_id),
+            limit=limit,
+            offset=offset,
         )
         if not include_hidden:
             categories = [c for c in categories if not c.hidden]
-    
+
     return categories
 
 

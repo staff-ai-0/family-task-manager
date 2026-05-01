@@ -101,6 +101,8 @@ class PayeeService(BaseFamilyService[BudgetPayee]):
         db: AsyncSession,
         family_id: UUID,
         favorites_only: bool = False,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[BudgetPayee]:
         """
         List payees for a family with optional favorite filter.
@@ -109,6 +111,8 @@ class PayeeService(BaseFamilyService[BudgetPayee]):
             db: Database session
             family_id: Family ID
             favorites_only: If True, only return favorite payees
+            limit: Max results
+            offset: Pagination offset
 
         Returns:
             List of payees
@@ -117,6 +121,10 @@ class PayeeService(BaseFamilyService[BudgetPayee]):
         if favorites_only:
             query = query.where(BudgetPayee.is_favorite == True)
         query = query.order_by(BudgetPayee.created_at.desc())
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
         result = await db.execute(query)
         return list(result.scalars().all())
 

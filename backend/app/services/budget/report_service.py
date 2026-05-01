@@ -83,6 +83,7 @@ class ReportService:
                     BudgetTransaction.date >= start_date,
                     BudgetTransaction.date <= end_date,
                     BudgetTransaction.category_id.isnot(None),
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
             .group_by(BudgetCategory.id, BudgetCategory.name, BudgetCategoryGroup.name)
@@ -141,6 +142,7 @@ class ReportService:
                     BudgetTransaction.date >= start_date,
                     BudgetTransaction.date <= end_date,
                     BudgetTransaction.category_id.isnot(None),
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
             .group_by(BudgetCategoryGroup.id, BudgetCategoryGroup.name)
@@ -194,6 +196,7 @@ class ReportService:
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.date >= start_date,
                     BudgetTransaction.date <= end_date,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
             .group_by('month')
@@ -251,6 +254,7 @@ class ReportService:
                     BudgetTransaction.date >= start_date,
                     BudgetTransaction.date <= end_date,
                     BudgetTransaction.payee_id.isnot(None),
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
             .group_by(BudgetPayee.id, BudgetPayee.name)
@@ -328,6 +332,7 @@ class ReportService:
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.date >= start_date,
                     BudgetTransaction.date <= end_date,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
             .group_by('period')

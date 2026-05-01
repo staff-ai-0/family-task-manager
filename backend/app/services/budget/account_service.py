@@ -104,6 +104,8 @@ class AccountService(BaseFamilyService[BudgetAccount]):
         family_id: UUID,
         account_type: str,
         include_closed: bool = False,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[BudgetAccount]:
         """
         List accounts by type.
@@ -123,6 +125,7 @@ class AccountService(BaseFamilyService[BudgetAccount]):
                 and_(
                     BudgetAccount.family_id == family_id,
                     BudgetAccount.type == account_type,
+                    BudgetAccount.deleted_at.is_(None),
                 )
             )
             .order_by(BudgetAccount.sort_order, BudgetAccount.name)
@@ -130,6 +133,10 @@ class AccountService(BaseFamilyService[BudgetAccount]):
 
         if not include_closed:
             query = query.where(BudgetAccount.closed == False)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
 
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -140,6 +147,8 @@ class AccountService(BaseFamilyService[BudgetAccount]):
         db: AsyncSession,
         family_id: UUID,
         include_closed: bool = False,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[BudgetAccount]:
         """
         List on-budget accounts (excludes tracking/offbudget accounts).
@@ -158,6 +167,7 @@ class AccountService(BaseFamilyService[BudgetAccount]):
                 and_(
                     BudgetAccount.family_id == family_id,
                     BudgetAccount.offbudget == False,
+                    BudgetAccount.deleted_at.is_(None),
                 )
             )
             .order_by(BudgetAccount.sort_order, BudgetAccount.name)
@@ -165,6 +175,10 @@ class AccountService(BaseFamilyService[BudgetAccount]):
 
         if not include_closed:
             query = query.where(BudgetAccount.closed == False)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
 
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -204,10 +218,11 @@ class AccountService(BaseFamilyService[BudgetAccount]):
                 and_(
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.account_id == account_id,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
         )
-        
+
         # Build query for cleared balance (cleared transactions only)
         cleared_query = (
             select(func.coalesce(func.sum(BudgetTransaction.amount), 0))
@@ -216,6 +231,7 @@ class AccountService(BaseFamilyService[BudgetAccount]):
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.account_id == account_id,
                     BudgetTransaction.cleared == True,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
         )
@@ -272,6 +288,7 @@ class AccountService(BaseFamilyService[BudgetAccount]):
                     BudgetAccount.family_id == family_id,
                     BudgetAccount.offbudget == False,
                     BudgetAccount.closed == False,
+                    BudgetAccount.deleted_at.is_(None),
                 )
             )
         )
@@ -283,6 +300,7 @@ class AccountService(BaseFamilyService[BudgetAccount]):
                 and_(
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.account_id.in_(on_budget_accounts_query),
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
         )

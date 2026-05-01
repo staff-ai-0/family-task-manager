@@ -59,17 +59,26 @@ class ExportService:
         Returns:
             ZIP file bytes containing budget_data.json and metadata.json.
         """
-        # Query all budget entities
+        # Query all budget entities (excludes soft-deleted rows)
         accounts = (await db.execute(
-            select(BudgetAccount).where(BudgetAccount.family_id == family_id)
+            select(BudgetAccount).where(
+                BudgetAccount.family_id == family_id,
+                BudgetAccount.deleted_at.is_(None),
+            )
         )).scalars().all()
 
         category_groups = (await db.execute(
-            select(BudgetCategoryGroup).where(BudgetCategoryGroup.family_id == family_id)
+            select(BudgetCategoryGroup).where(
+                BudgetCategoryGroup.family_id == family_id,
+                BudgetCategoryGroup.deleted_at.is_(None),
+            )
         )).scalars().all()
 
         categories = (await db.execute(
-            select(BudgetCategory).where(BudgetCategory.family_id == family_id)
+            select(BudgetCategory).where(
+                BudgetCategory.family_id == family_id,
+                BudgetCategory.deleted_at.is_(None),
+            )
         )).scalars().all()
 
         payees = (await db.execute(
@@ -77,7 +86,10 @@ class ExportService:
         )).scalars().all()
 
         transactions = (await db.execute(
-            select(BudgetTransaction).where(BudgetTransaction.family_id == family_id)
+            select(BudgetTransaction).where(
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.deleted_at.is_(None),
+            )
         )).scalars().all()
 
         allocations = (await db.execute(

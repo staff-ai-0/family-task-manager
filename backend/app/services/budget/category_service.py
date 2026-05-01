@@ -105,7 +105,10 @@ class CategoryGroupService(BaseFamilyService[BudgetCategoryGroup]):
 
         query = (
             select(BudgetCategoryGroup)
-            .where(BudgetCategoryGroup.family_id == family_id)
+            .where(
+                BudgetCategoryGroup.family_id == family_id,
+                BudgetCategoryGroup.deleted_at.is_(None),
+            )
             .options(selectinload(BudgetCategoryGroup.categories))
             .order_by(BudgetCategoryGroup.sort_order, BudgetCategoryGroup.name)
         )
@@ -116,10 +119,9 @@ class CategoryGroupService(BaseFamilyService[BudgetCategoryGroup]):
         result = await db.execute(query)
         groups = list(result.scalars().all())
 
-        # Filter hidden categories if needed
-        if not include_hidden:
-            for group in groups:
-                group.categories = [c for c in group.categories if not c.hidden]
+        # Filter hidden + soft-deleted categories
+        for group in groups:
+            group.categories = [c for c in group.categories if c.deleted_at is None and (include_hidden or not c.hidden)]
 
         return groups
 
@@ -205,6 +207,8 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
         group_id: UUID,
         family_id: UUID,
         include_hidden: bool = False,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[BudgetCategory]:
         """
         List all categories in a group.
@@ -230,6 +234,7 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
                 and_(
                     BudgetCategory.family_id == family_id,
                     BudgetCategory.group_id == group_id,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
             .order_by(BudgetCategory.sort_order, BudgetCategory.name)
@@ -237,6 +242,10 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
 
         if not include_hidden:
             query = query.where(BudgetCategory.hidden == False)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
 
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -270,6 +279,7 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
                 and_(
                     BudgetCategory.id == category_id,
                     BudgetCategory.family_id == family_id,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
             .options(selectinload(BudgetCategory.group))
@@ -372,6 +382,7 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
                     BudgetCategory.family_id == family_id,
                     BudgetCategory.group_id == group_id,
                     BudgetCategory.hidden == True,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
             .order_by(BudgetCategory.sort_order, BudgetCategory.name)
@@ -416,6 +427,7 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
                 and_(
                     BudgetCategory.family_id == family_id,
                     BudgetCategory.group_id == group_id,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
         )
@@ -465,6 +477,7 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
                 and_(
                     BudgetCategory.family_id == family_id,
                     BudgetCategory.group_id == group_id,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
         )

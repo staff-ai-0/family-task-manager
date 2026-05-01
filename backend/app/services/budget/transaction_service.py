@@ -189,6 +189,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
                 and_(
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.account_id == account_id,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
             .order_by(BudgetTransaction.date.desc(), BudgetTransaction.created_at.desc())
@@ -238,6 +239,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
                 and_(
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.category_id == category_id,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
             .order_by(BudgetTransaction.date.desc())
@@ -281,6 +283,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
                 and_(
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.account_id == account_id,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
         )
@@ -331,6 +334,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
                     BudgetTransaction.category_id == category_id,
                     BudgetTransaction.date >= month,
                     BudgetTransaction.date <= end_of_month,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
         )
@@ -404,6 +408,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
                     BudgetTransaction.id.in_(transaction_ids),
                     BudgetTransaction.account_id == account_id,
                     BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
         )

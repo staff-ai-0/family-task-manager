@@ -76,6 +76,7 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
                 and_(
                     BudgetCategory.id == data.category_id,
                     BudgetCategory.family_id == family_id,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
         )

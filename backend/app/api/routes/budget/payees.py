@@ -22,6 +22,8 @@ router = APIRouter()
 @router.get("/", response_model=List[PayeeResponse])
 async def list_payees(
     favorites_only: bool = Query(False, description="Only return favorite payees"),
+    limit: int = Query(500, ge=1, le=2000, description="Max results"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -30,6 +32,8 @@ async def list_payees(
         db,
         to_uuid_required(current_user.family_id),
         favorites_only=favorites_only,
+        limit=limit,
+        offset=offset,
     )
     return payees
 
