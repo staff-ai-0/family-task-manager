@@ -364,3 +364,102 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
                 return False
         else:
             return False
+
+    @classmethod
+    async def apply_all_rules(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+    ) -> dict:
+        """Walk uncategorized transactions, apply matching rules. Returns {applied, skipped}.
+
+        Skipped = uncategorized transactions with no matching rule.
+        """
+        from app.models.budget import BudgetPayee
+
+        rules = await cls.list_rules(db, family_id, enabled_only=True)
+
+        # Get all uncategorized non-deleted transactions
+        txn_q = (
+            select(BudgetTransaction, BudgetPayee.name)
+            .outerjoin(BudgetPayee, BudgetTransaction.payee_id == BudgetPayee.id)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.category_id.is_(None),
+                    BudgetTransaction.deleted_at.is_(None),
+                )
+            )
+        )
+        result = await db.execute(txn_q)
+
+        applied = 0
+        skipped = 0
+        for txn, payee_name in result.all():
+            matched_rule = None
+            for rule in rules:
+                if cls._match_rule(rule, payee_name, txn.notes):
+                    matched_rule = rule
+                    break
+            if matched_rule:
+                await cls.apply_rule(db, txn, matched_rule)
+                applied += 1
+            else:
+                skipped += 1
+
+        await db.commit()
+        return {"applied": applied, "skipped": skipped}
+
+    @classmethod
+    async def suggest_new_rules(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        min_count: int = 3,
+    ) -> List[dict]:
+        """Suggest payees with N+ uncategorized transactions and no existing exact rule.
+
+        Returns list of {payee_id, payee_name, transaction_count}.
+        """
+        from sqlalchemy import func as sql_func
+        from app.models.budget import BudgetPayee
+
+        # Group uncategorized txns by payee
+        agg_q = (
+            select(
+                BudgetPayee.id,
+                BudgetPayee.name,
+                sql_func.count(BudgetTransaction.id).label("cnt"),
+            )
+            .join(BudgetPayee, BudgetTransaction.payee_id == BudgetPayee.id)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.category_id.is_(None),
+                    BudgetTransaction.deleted_at.is_(None),
+                )
+            )
+            .group_by(BudgetPayee.id, BudgetPayee.name)
+            .having(sql_func.count(BudgetTransaction.id) >= min_count)
+        )
+        rows = (await db.execute(agg_q)).all()
+
+        # Existing exact rules on payee field — exclude those payee names
+        rule_q = select(BudgetCategorizationRule.pattern).where(
+            and_(
+                BudgetCategorizationRule.family_id == family_id,
+                BudgetCategorizationRule.rule_type == "exact",
+                BudgetCategorizationRule.match_field == "payee",
+            )
+        )
+        excluded = {p.lower() for p in (await db.execute(rule_q)).scalars().all()}
+
+        return [
+            {
+                "payee_id": pid,
+                "payee_name": pname,
+                "transaction_count": cnt,
+            }
+            for pid, pname, cnt in rows
+            if pname.lower() not in excluded
+        ]

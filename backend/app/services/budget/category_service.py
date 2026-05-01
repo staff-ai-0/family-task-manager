@@ -5,11 +5,11 @@ Business logic for budget category groups and categories.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, update as sql_update
 from typing import List, Optional
 from uuid import UUID
 
-from app.models.budget import BudgetCategoryGroup, BudgetCategory
+from app.models.budget import BudgetCategoryGroup, BudgetCategory, BudgetTransaction
 from app.schemas.budget import (
     CategoryGroupCreate,
     CategoryGroupUpdate,
@@ -490,3 +490,48 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
 
         await db.commit()
         return updated_group
+
+    @classmethod
+    async def delete_with_reassign(
+        cls,
+        db: AsyncSession,
+        category_id: UUID,
+        family_id: UUID,
+        reassign_to_id: Optional[UUID] = None,
+    ) -> dict:
+        """Hard-delete a category. Reassign txns to reassign_to_id, or NULL.
+
+        Returns {deleted_name, reassigned_count}.
+        """
+        category = await cls.get_by_id(db, category_id, family_id)
+        if reassign_to_id:
+            await cls.get_by_id(db, reassign_to_id, family_id)
+
+        # Count transactions before reassignment
+        count_q = select(BudgetTransaction).where(
+            and_(
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.category_id == category_id,
+            )
+        )
+        reassigned_count = len(list((await db.execute(count_q)).scalars().all()))
+
+        await db.execute(
+            sql_update(BudgetTransaction)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.category_id == category_id,
+                )
+            )
+            .values(category_id=reassign_to_id)
+        )
+
+        deleted_name = category.name
+        await db.delete(category)
+        await db.commit()
+
+        return {
+            "deleted_name": deleted_name,
+            "reassigned_count": reassigned_count,
+        }

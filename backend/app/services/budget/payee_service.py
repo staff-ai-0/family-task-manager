@@ -195,3 +195,83 @@ class PayeeService(BaseFamilyService[BudgetPayee]):
         await db.commit()
         await db.refresh(target)
         return target
+
+    @classmethod
+    async def merge_payees(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        source_id: UUID,
+        target_id: UUID,
+    ) -> dict:
+        """Merge a single source payee into target. Returns merge stats."""
+        if source_id == target_id:
+            raise ValidationException("source and target must differ")
+
+        source = await cls.get_by_id(db, source_id, family_id)
+        target = await cls.get_by_id(db, target_id, family_id)
+
+        # Count source transactions before reassignment
+        count_q = select(BudgetTransaction).where(
+            and_(
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.payee_id == source_id,
+            )
+        )
+        merged_count = len(list((await db.execute(count_q)).scalars().all()))
+
+        await db.execute(
+            sql_update(BudgetTransaction)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.payee_id == source_id,
+                )
+            )
+            .values(payee_id=target_id)
+        )
+
+        await db.execute(
+            sql_update(BudgetRecurringTransaction)
+            .where(
+                and_(
+                    BudgetRecurringTransaction.family_id == family_id,
+                    BudgetRecurringTransaction.payee_id == source_id,
+                )
+            )
+            .values(payee_id=target_id)
+        )
+
+        source_name = source.name
+        target_name = target.name
+        await db.delete(source)
+        await db.commit()
+
+        return {
+            "merged_count": merged_count,
+            "source_name": source_name,
+            "target_name": target_name,
+        }
+
+    @classmethod
+    async def get_last_category(
+        cls,
+        db: AsyncSession,
+        payee_id: UUID,
+        family_id: UUID,
+    ) -> Optional[UUID]:
+        """Return category_id of the most recent transaction for payee, or None."""
+        query = (
+            select(BudgetTransaction.category_id)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.payee_id == payee_id,
+                    BudgetTransaction.deleted_at.is_(None),
+                )
+            )
+            .order_by(BudgetTransaction.date.desc(), BudgetTransaction.created_at.desc())
+            .limit(1)
+        )
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
