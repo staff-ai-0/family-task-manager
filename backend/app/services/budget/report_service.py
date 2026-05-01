@@ -448,3 +448,165 @@ class ReportService:
             "net_worth": net_worth,
             "net_worth_currency": net_worth / 100,
         }
+
+    @classmethod
+    async def get_net_worth_history(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        months: int = 12,
+    ) -> Dict:
+        """Net worth at end of each of the last N months.
+
+        Excludes closed accounts. Returns {series, months, current_net_worth,
+        current_net_worth_currency}.
+        """
+        from dateutil.relativedelta import relativedelta
+        from app.services.budget.account_service import AccountService
+
+        accounts = await AccountService.list_by_family(db, family_id)
+        open_accounts = [a for a in accounts if not a.closed]
+
+        if not open_accounts:
+            return {
+                "series": [],
+                "months": months,
+                "current_net_worth": 0,
+                "current_net_worth_currency": 0.0,
+            }
+
+        today = date.today()
+        # First day of current month, then walk back
+        current_month = date(today.year, today.month, 1)
+        month_starts = [current_month - relativedelta(months=i) for i in range(months - 1, -1, -1)]
+
+        series = []
+        for ms in month_starts:
+            # End of month for cumulative balance
+            end_of_month = (ms + relativedelta(months=1)) - timedelta(days=1)
+            net_worth = 0
+            for acct in open_accounts:
+                bal = await AccountService.get_balance(db, acct.id, family_id, end_of_month)
+                net_worth += bal["balance"]
+            series.append({
+                "month": ms.strftime("%Y-%m"),
+                "net_worth": net_worth,
+                "net_worth_currency": net_worth / 100,
+            })
+
+        current = series[-1]["net_worth"] if series else 0
+        return {
+            "series": series,
+            "months": months,
+            "current_net_worth": current,
+            "current_net_worth_currency": current / 100,
+        }
+
+    @classmethod
+    async def get_budget_vs_actual(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        month: date,
+    ) -> Dict:
+        """Budgeted vs actual spending per category for a month (expense groups only).
+
+        Returns {month, groups: [{group_name, categories: [{category_name, budgeted,
+        actual, variance, pct_used}]}], totals: {budgeted, actual, variance}}.
+        actual is reported as the absolute value of expense activity.
+        pct_used is None when budgeted == 0.
+        """
+        from app.models.budget import BudgetAllocation
+
+        # First day of month for allocation lookup; end-of-month for activity range
+        from dateutil.relativedelta import relativedelta
+        end_of_month = (month + relativedelta(months=1)) - timedelta(days=1)
+
+        # Expense groups + categories (non-deleted)
+        group_q = (
+            select(BudgetCategoryGroup)
+            .where(
+                and_(
+                    BudgetCategoryGroup.family_id == family_id,
+                    BudgetCategoryGroup.is_income == False,
+                    BudgetCategoryGroup.deleted_at.is_(None),
+                )
+            )
+            .order_by(BudgetCategoryGroup.sort_order, BudgetCategoryGroup.name)
+        )
+        groups = list((await db.execute(group_q)).scalars().all())
+
+        result_groups = []
+        total_budgeted = 0
+        total_actual = 0
+
+        for grp in groups:
+            cat_q = (
+                select(BudgetCategory)
+                .where(
+                    and_(
+                        BudgetCategory.family_id == family_id,
+                        BudgetCategory.group_id == grp.id,
+                        BudgetCategory.deleted_at.is_(None),
+                        BudgetCategory.hidden == False,
+                    )
+                )
+                .order_by(BudgetCategory.sort_order, BudgetCategory.name)
+            )
+            cats = list((await db.execute(cat_q)).scalars().all())
+
+            cat_entries = []
+            for cat in cats:
+                # Budgeted
+                alloc_q = select(BudgetAllocation.budgeted_amount).where(
+                    and_(
+                        BudgetAllocation.family_id == family_id,
+                        BudgetAllocation.category_id == cat.id,
+                        BudgetAllocation.month == month,
+                    )
+                )
+                budgeted = (await db.execute(alloc_q)).scalar_one_or_none() or 0
+
+                # Actual = abs(sum(activity)) over month
+                act_q = select(func.coalesce(func.sum(BudgetTransaction.amount), 0)).where(
+                    and_(
+                        BudgetTransaction.family_id == family_id,
+                        BudgetTransaction.category_id == cat.id,
+                        BudgetTransaction.date >= month,
+                        BudgetTransaction.date <= end_of_month,
+                        BudgetTransaction.deleted_at.is_(None),
+                    )
+                )
+                activity = (await db.execute(act_q)).scalar() or 0
+                actual = abs(activity)
+
+                variance = budgeted - actual
+                pct_used = None if budgeted == 0 else round(actual / budgeted * 100, 2)
+
+                cat_entries.append({
+                    "category_id": str(cat.id),
+                    "category_name": cat.name,
+                    "budgeted": budgeted,
+                    "actual": actual,
+                    "variance": variance,
+                    "pct_used": pct_used,
+                })
+                total_budgeted += budgeted
+                total_actual += actual
+
+            if cat_entries:
+                result_groups.append({
+                    "group_id": str(grp.id),
+                    "group_name": grp.name,
+                    "categories": cat_entries,
+                })
+
+        return {
+            "month": month.isoformat(),
+            "groups": result_groups,
+            "totals": {
+                "budgeted": total_budgeted,
+                "actual": total_actual,
+                "variance": total_budgeted - total_actual,
+            },
+        }
