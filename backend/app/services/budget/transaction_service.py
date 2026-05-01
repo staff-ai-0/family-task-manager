@@ -11,7 +11,7 @@ from datetime import date
 from uuid import UUID
 
 from app.models.budget import BudgetTransaction
-from app.schemas.budget import TransactionCreate, TransactionUpdate
+from app.schemas.budget import TransactionCreate, TransactionUpdate, SplitChild
 from app.services.base_service import BaseFamilyService
 from app.core.exceptions import NotFoundException, ValidationError
 
@@ -421,6 +421,178 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             transaction.reconciled = True
             transaction.cleared = True
             count += 1
-        
+
         await db.commit()
         return count
+
+    # ------------------------------------------------------------------
+    # Split transactions
+    # ------------------------------------------------------------------
+
+    @classmethod
+    async def create_split(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        *,
+        account_id: UUID,
+        txn_date: date,
+        splits: List[SplitChild],
+        payee_id: Optional[UUID] = None,
+        payee_name: Optional[str] = None,
+        notes: Optional[str] = None,
+        cleared: bool = False,
+        reconciled: bool = False,
+    ) -> BudgetTransaction:
+        """Create a parent split transaction with N child legs.
+
+        Parent has aggregate amount, no category. Children share account/date/payee
+        but each has its own category and amount. Sum of children == parent.amount.
+        """
+        if len(splits) < 2:
+            raise ValidationError("Split requires at least 2 child legs")
+
+        from app.services.budget.month_locking_service import MonthLockingService
+        await MonthLockingService.validate_month_not_closed(
+            db, family_id, date(txn_date.year, txn_date.month, 1)
+        )
+
+        from app.services.budget.account_service import AccountService
+        await AccountService.get_by_id(db, account_id, family_id)
+
+        resolved_payee_id = payee_id
+        if payee_id:
+            from app.services.budget.payee_service import PayeeService
+            await PayeeService.get_by_id(db, payee_id, family_id)
+        elif payee_name:
+            from app.services.budget.payee_service import PayeeService
+            payee = await PayeeService.get_or_create_by_name(db, family_id, payee_name)
+            resolved_payee_id = payee.id
+
+        from app.services.budget.category_service import CategoryService
+        for s in splits:
+            if s.category_id:
+                await CategoryService.get_by_id(db, s.category_id, family_id)
+            if s.payee_id:
+                from app.services.budget.payee_service import PayeeService
+                await PayeeService.get_by_id(db, s.payee_id, family_id)
+
+        total = sum(s.amount for s in splits)
+
+        parent = BudgetTransaction(
+            family_id=family_id,
+            account_id=account_id,
+            date=txn_date,
+            amount=total,
+            payee_id=resolved_payee_id,
+            category_id=None,
+            notes=notes,
+            cleared=cleared,
+            reconciled=reconciled,
+            is_parent=True,
+        )
+        db.add(parent)
+        await db.flush()
+
+        for s in splits:
+            child = BudgetTransaction(
+                family_id=family_id,
+                account_id=account_id,
+                date=txn_date,
+                amount=s.amount,
+                payee_id=s.payee_id or resolved_payee_id,
+                category_id=s.category_id,
+                notes=s.notes,
+                cleared=cleared,
+                reconciled=reconciled,
+                parent_id=parent.id,
+                is_parent=False,
+            )
+            db.add(child)
+
+        await db.commit()
+        await db.refresh(parent)
+        return parent
+
+    @classmethod
+    async def get_split_children(
+        cls,
+        db: AsyncSession,
+        parent_id: UUID,
+        family_id: UUID,
+    ) -> List[BudgetTransaction]:
+        """Return child legs of a split parent."""
+        parent = await cls.get_by_id(db, parent_id, family_id)
+        if not parent.is_parent:
+            raise ValidationError("Transaction is not a split parent")
+        query = (
+            select(BudgetTransaction)
+            .where(
+                and_(
+                    BudgetTransaction.parent_id == parent_id,
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.deleted_at.is_(None),
+                )
+            )
+            .order_by(BudgetTransaction.created_at.asc())
+        )
+        result = await db.execute(query)
+        return list(result.scalars().all())
+
+    @classmethod
+    async def replace_split_children(
+        cls,
+        db: AsyncSession,
+        parent_id: UUID,
+        family_id: UUID,
+        splits: List[SplitChild],
+    ) -> BudgetTransaction:
+        """Replace child legs of a split parent. Updates parent total."""
+        if len(splits) < 2:
+            raise ValidationError("Split requires at least 2 child legs")
+
+        parent = await cls.get_by_id(db, parent_id, family_id)
+        if not parent.is_parent:
+            raise ValidationError("Transaction is not a split parent")
+
+        from app.services.budget.month_locking_service import MonthLockingService
+        await MonthLockingService.validate_month_not_closed(
+            db, family_id, date(parent.date.year, parent.date.month, 1)
+        )
+
+        from app.services.budget.category_service import CategoryService
+        from app.services.budget.payee_service import PayeeService
+        for s in splits:
+            if s.category_id:
+                await CategoryService.get_by_id(db, s.category_id, family_id)
+            if s.payee_id:
+                await PayeeService.get_by_id(db, s.payee_id, family_id)
+
+        # Hard-delete existing children (cascade was set in model relationship)
+        existing = await cls.get_split_children(db, parent_id, family_id)
+        for child in existing:
+            await db.delete(child)
+        await db.flush()
+
+        total = sum(s.amount for s in splits)
+        parent.amount = total
+
+        for s in splits:
+            child = BudgetTransaction(
+                family_id=family_id,
+                account_id=parent.account_id,
+                date=parent.date,
+                amount=s.amount,
+                payee_id=s.payee_id or parent.payee_id,
+                category_id=s.category_id,
+                notes=s.notes,
+                cleared=parent.cleared,
+                reconciled=parent.reconciled,
+                parent_id=parent.id,
+                is_parent=False,
+            )
+            db.add(child)
+
+        await db.commit()
+        await db.refresh(parent)
+        return parent

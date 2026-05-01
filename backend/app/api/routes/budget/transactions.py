@@ -19,7 +19,14 @@ from app.services.usage_service import UsageService
 from app.services.budget.csv_import_service import CSVImportService
 from app.services.budget.file_import_service import import_file_transactions
 from app.services.budget.receipt_scanner_service import scan_and_create_transaction
-from app.schemas.budget import TransactionCreate, TransactionUpdate, TransactionResponse
+from app.schemas.budget import (
+    TransactionCreate,
+    TransactionUpdate,
+    TransactionResponse,
+    SplitTransactionCreate,
+    SplitTransactionUpdate,
+    SplitTransactionResponse,
+)
 from app.models import User
 
 router = APIRouter()
@@ -35,10 +42,11 @@ async def list_transactions(
     end_date: Optional[date] = Query(None, description="End date filter"),
     limit: int = Query(100, le=500, description="Limit results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
+    include_split_children: bool = Query(False, description="Include child legs of split parents"),
 ):
     """List transactions with optional filters"""
     family_id = to_uuid_required(current_user.family_id)
-    
+
     if account_id:
         transactions = await TransactionService.list_by_account(
             db, account_id, family_id, start_date, end_date, limit, offset
@@ -51,7 +59,10 @@ async def list_transactions(
         transactions = await TransactionService.list_by_family(
             db, family_id, limit=limit, offset=offset
         )
-    
+
+    if not include_split_children:
+        transactions = [t for t in transactions if t.parent_id is None]
+
     return transactions
 
 
@@ -116,6 +127,61 @@ async def delete_transaction(
         transaction_id,
         to_uuid_required(current_user.family_id),
     )
+
+
+@router.post("/split", response_model=SplitTransactionResponse, status_code=status.HTTP_201_CREATED)
+async def create_split_transaction(
+    data: SplitTransactionCreate,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a parent + N child split transaction (parent only)."""
+    await require_feature("budget_transaction", db, current_user)
+    family_id = to_uuid_required(current_user.family_id)
+    parent = await TransactionService.create_split(
+        db,
+        family_id,
+        account_id=data.account_id,
+        txn_date=data.date,
+        splits=data.splits,
+        payee_id=data.payee_id,
+        payee_name=data.payee_name,
+        notes=data.notes,
+        cleared=data.cleared,
+        reconciled=data.reconciled,
+    )
+    await UsageService.increment(db, current_user.family_id, "budget_transaction")
+    children = await TransactionService.get_split_children(db, parent.id, family_id)
+    return SplitTransactionResponse(parent=parent, children=children, total=parent.amount)
+
+
+@router.get("/{transaction_id}/splits", response_model=SplitTransactionResponse)
+async def get_split_transaction(
+    transaction_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return parent split transaction with its child legs."""
+    family_id = to_uuid_required(current_user.family_id)
+    parent = await TransactionService.get_by_id(db, transaction_id, family_id)
+    children = await TransactionService.get_split_children(db, transaction_id, family_id)
+    return SplitTransactionResponse(parent=parent, children=children, total=parent.amount)
+
+
+@router.put("/{transaction_id}/splits", response_model=SplitTransactionResponse)
+async def update_split_transaction(
+    transaction_id: UUID,
+    data: SplitTransactionUpdate,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Replace child legs of a split parent (parent only)."""
+    family_id = to_uuid_required(current_user.family_id)
+    parent = await TransactionService.replace_split_children(
+        db, transaction_id, family_id, data.splits
+    )
+    children = await TransactionService.get_split_children(db, parent.id, family_id)
+    return SplitTransactionResponse(parent=parent, children=children, total=parent.amount)
 
 
 @router.put("/{transaction_id}/reconcile", response_model=TransactionResponse)

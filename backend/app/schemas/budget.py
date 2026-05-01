@@ -238,6 +238,38 @@ class TransactionResponse(TransactionBase):
         from_attributes = True
 
 
+class SplitChild(BaseModel):
+    """One leg of a split transaction."""
+    amount: int = Field(..., description="Amount in cents (sign matches parent)")
+    category_id: Optional[UUID] = Field(None, description="Category for this leg")
+    payee_id: Optional[UUID] = Field(None, description="Override payee for this leg")
+    notes: Optional[str] = Field(None, description="Per-leg notes")
+
+
+class SplitTransactionCreate(BaseModel):
+    """Create a parent transaction with N child legs."""
+    account_id: UUID
+    date: DateType
+    payee_id: Optional[UUID] = None
+    payee_name: Optional[str] = Field(None, max_length=255)
+    notes: Optional[str] = None
+    cleared: bool = False
+    reconciled: bool = False
+    splits: List[SplitChild] = Field(..., min_length=2, description="At least 2 child legs required")
+
+
+class SplitTransactionUpdate(BaseModel):
+    """Replace the child legs of an existing split parent."""
+    splits: List[SplitChild] = Field(..., min_length=2)
+
+
+class SplitTransactionResponse(BaseModel):
+    """Parent transaction plus its children."""
+    parent: TransactionResponse
+    children: List[TransactionResponse]
+    total: int = Field(..., description="Sum of children amounts (must equal parent.amount)")
+
+
 # ============================================================================
 # ALLOCATION SCHEMAS
 # ============================================================================
