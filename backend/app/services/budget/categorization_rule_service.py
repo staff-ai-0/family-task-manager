@@ -10,7 +10,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 
 from app.models.budget import BudgetCategorizationRule, BudgetCategory, BudgetTransaction
 from app.schemas.budget import (
@@ -365,50 +365,92 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
         else:
             return False
 
+    APPLY_ALL_BATCH_SIZE = 1000
+
     @classmethod
     async def apply_all_rules(
         cls,
         db: AsyncSession,
         family_id: UUID,
+        max_transactions: int = 10000,
     ) -> dict:
-        """Walk uncategorized transactions, apply matching rules. Returns {applied, skipped}.
+        """Walk uncategorized transactions, apply matching rules. Returns {applied, skipped, scanned, truncated}.
 
-        Skipped = uncategorized transactions with no matching rule.
+        Processes up to `max_transactions` rows in batches of APPLY_ALL_BATCH_SIZE
+        ordered by created_at desc. Skipped = uncategorized rows that did not match
+        any rule. truncated=True when scan limit was hit.
         """
         from app.models.budget import BudgetPayee
 
         rules = await cls.list_rules(db, family_id, enabled_only=True)
 
-        # Get all uncategorized non-deleted transactions
-        txn_q = (
-            select(BudgetTransaction, BudgetPayee.name)
-            .outerjoin(BudgetPayee, BudgetTransaction.payee_id == BudgetPayee.id)
-            .where(
-                and_(
-                    BudgetTransaction.family_id == family_id,
-                    BudgetTransaction.category_id.is_(None),
-                    BudgetTransaction.deleted_at.is_(None),
-                )
-            )
-        )
-        result = await db.execute(txn_q)
-
         applied = 0
         skipped = 0
-        for txn, payee_name in result.all():
-            matched_rule = None
-            for rule in rules:
-                if cls._match_rule(rule, payee_name, txn.notes):
-                    matched_rule = rule
-                    break
-            if matched_rule:
-                await cls.apply_rule(db, txn, matched_rule)
-                applied += 1
-            else:
-                skipped += 1
+        scanned = 0
+        offset = 0
+        truncated = False
+
+        while scanned < max_transactions:
+            remaining = max_transactions - scanned
+            batch_limit = min(cls.APPLY_ALL_BATCH_SIZE, remaining)
+            txn_q = (
+                select(BudgetTransaction, BudgetPayee.name)
+                .outerjoin(BudgetPayee, BudgetTransaction.payee_id == BudgetPayee.id)
+                .where(
+                    and_(
+                        BudgetTransaction.family_id == family_id,
+                        BudgetTransaction.category_id.is_(None),
+                        BudgetTransaction.deleted_at.is_(None),
+                    )
+                )
+                .order_by(BudgetTransaction.created_at.desc())
+                .limit(batch_limit)
+                .offset(offset)
+            )
+            rows = (await db.execute(txn_q)).all()
+            if not rows:
+                break
+
+            for txn, payee_name in rows:
+                matched_rule = None
+                for rule in rules:
+                    if cls._match_rule(rule, payee_name, txn.notes):
+                        matched_rule = rule
+                        break
+                if matched_rule:
+                    await cls.apply_rule(db, txn, matched_rule)
+                    applied += 1
+                else:
+                    skipped += 1
+
+            scanned += len(rows)
+            offset += len(rows)
+            if len(rows) < batch_limit:
+                break
+
+        if scanned >= max_transactions:
+            # Check whether more uncategorized rows exist beyond the scan window.
+            tail_q = (
+                select(func.count())
+                .select_from(BudgetTransaction)
+                .where(
+                    and_(
+                        BudgetTransaction.family_id == family_id,
+                        BudgetTransaction.category_id.is_(None),
+                        BudgetTransaction.deleted_at.is_(None),
+                    )
+                )
+            )
+            total = (await db.execute(tail_q)).scalar_one()
+            truncated = total > scanned
 
         await db.commit()
-        return {"applied": applied, "skipped": skipped}
+        return {
+            "applied": applied,
+            "skipped": skipped,
+            "scanned": scanned,
+            "truncated": truncated,
+        }
 
     @classmethod
     async def suggest_new_rules(

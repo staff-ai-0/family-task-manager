@@ -40,13 +40,11 @@ async def list_goals(
 
     if category_id:
         goals = await GoalService.list_by_category(
-            db, category_id, family_id, active_only=active_only
+            db, category_id, family_id,
+            active_only=active_only, limit=limit, offset=offset,
         )
-        # In-memory slice for sub-list; small set per category
-        goals = goals[offset:offset + limit]
     elif active_only:
-        goals = await GoalService.list_active(db, family_id)
-        goals = goals[offset:offset + limit]
+        goals = await GoalService.list_active(db, family_id, limit=limit, offset=offset)
     else:
         goals = await GoalService.list_by_family(db, family_id, limit=limit, offset=offset)
 

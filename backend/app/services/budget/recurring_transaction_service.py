@@ -170,6 +170,8 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         account_id: UUID,
         family_id: UUID,
         active_only: bool = True,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[BudgetRecurringTransaction]:
         """
         List all recurring transactions for a specific account.
@@ -196,6 +198,35 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
 
         if active_only:
             query = query.where(BudgetRecurringTransaction.is_active == True)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
+
+        result = await db.execute(query)
+        return list(result.scalars().all())
+
+    @classmethod
+    async def list_by_family_filtered(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        active_only: bool = False,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> List[BudgetRecurringTransaction]:
+        """List family recurring transactions with optional active filter at SQL level."""
+        query = (
+            select(BudgetRecurringTransaction)
+            .where(BudgetRecurringTransaction.family_id == family_id)
+            .order_by(BudgetRecurringTransaction.created_at.desc())
+        )
+        if active_only:
+            query = query.where(BudgetRecurringTransaction.is_active == True)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
 
         result = await db.execute(query)
         return list(result.scalars().all())

@@ -41,13 +41,14 @@ async def list_recurring_transactions(
 
     if account_id:
         templates = await RecurringTransactionService.list_by_account(
-            db, account_id, family_id, active_only=active_only
+            db, account_id, family_id,
+            active_only=active_only, limit=limit, offset=offset,
         )
-        templates = templates[offset:offset + limit]
     else:
-        templates = await RecurringTransactionService.list_by_family(db, family_id, limit=limit, offset=offset)
-        if active_only:
-            templates = [t for t in templates if t.is_active]
+        templates = await RecurringTransactionService.list_by_family_filtered(
+            db, family_id,
+            active_only=active_only, limit=limit, offset=offset,
+        )
 
     return templates
 

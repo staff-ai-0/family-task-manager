@@ -459,10 +459,12 @@ class ReportService:
         """Net worth at end of each of the last N months.
 
         Excludes closed accounts. Returns {series, months, current_net_worth,
-        current_net_worth_currency}.
+        current_net_worth_currency}. Uses a single grouped query plus an
+        all-time-prior baseline per account to avoid N*M round-trips.
         """
         from dateutil.relativedelta import relativedelta
         from app.services.budget.account_service import AccountService
+        from app.models.budget import BudgetAccount
 
         accounts = await AccountService.list_by_family(db, family_id)
         open_accounts = [a for a in accounts if not a.closed]
@@ -476,18 +478,69 @@ class ReportService:
             }
 
         today = date.today()
-        # First day of current month, then walk back
         current_month = date(today.year, today.month, 1)
-        month_starts = [current_month - relativedelta(months=i) for i in range(months - 1, -1, -1)]
+        month_starts = [
+            current_month - relativedelta(months=i)
+            for i in range(months - 1, -1, -1)
+        ]
+        oldest_month = month_starts[0]
+
+        starting_balance_by_acct = {a.id: a.starting_balance for a in open_accounts}
+        open_account_ids = list(starting_balance_by_acct.keys())
+
+        # Prior-period sum (everything strictly before the oldest displayed month)
+        prior_q = (
+            select(
+                BudgetTransaction.account_id,
+                func.coalesce(func.sum(BudgetTransaction.amount), 0).label("amt"),
+            )
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.account_id.in_(open_account_ids),
+                    BudgetTransaction.date < oldest_month,
+                    BudgetTransaction.deleted_at.is_(None),
+                )
+            )
+            .group_by(BudgetTransaction.account_id)
+        )
+        prior_by_acct: dict = {row.account_id: row.amt for row in (await db.execute(prior_q)).all()}
+
+        # Per-month activity per account, single query
+        month_col = func.date_trunc("month", BudgetTransaction.date).label("month")
+        period_q = (
+            select(
+                BudgetTransaction.account_id,
+                month_col,
+                func.coalesce(func.sum(BudgetTransaction.amount), 0).label("amt"),
+            )
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.account_id.in_(open_account_ids),
+                    BudgetTransaction.date >= oldest_month,
+                    BudgetTransaction.date <= (current_month + relativedelta(months=1)) - timedelta(days=1),
+                    BudgetTransaction.deleted_at.is_(None),
+                )
+            )
+            .group_by(BudgetTransaction.account_id, month_col)
+        )
+        activity: dict = {}
+        for row in (await db.execute(period_q)).all():
+            month_key = row.month.date() if hasattr(row.month, "date") else row.month
+            activity[(row.account_id, date(month_key.year, month_key.month, 1))] = row.amt
+
+        running = {
+            acct_id: starting_balance_by_acct[acct_id] + prior_by_acct.get(acct_id, 0)
+            for acct_id in open_account_ids
+        }
 
         series = []
         for ms in month_starts:
-            # End of month for cumulative balance
-            end_of_month = (ms + relativedelta(months=1)) - timedelta(days=1)
             net_worth = 0
-            for acct in open_accounts:
-                bal = await AccountService.get_balance(db, acct.id, family_id, end_of_month)
-                net_worth += bal["balance"]
+            for acct_id in open_account_ids:
+                running[acct_id] += activity.get((acct_id, ms), 0)
+                net_worth += running[acct_id]
             series.append({
                 "month": ms.strftime("%Y-%m"),
                 "net_worth": net_worth,
@@ -517,89 +570,100 @@ class ReportService:
         pct_used is None when budgeted == 0.
         """
         from app.models.budget import BudgetAllocation
-
-        # First day of month for allocation lookup; end-of-month for activity range
         from dateutil.relativedelta import relativedelta
         end_of_month = (month + relativedelta(months=1)) - timedelta(days=1)
 
-        # Expense groups + categories (non-deleted)
-        group_q = (
-            select(BudgetCategoryGroup)
+        # Single query: pull all expense groups + visible non-deleted categories
+        cat_q = (
+            select(BudgetCategoryGroup, BudgetCategory)
+            .join(BudgetCategory, BudgetCategory.group_id == BudgetCategoryGroup.id)
             .where(
                 and_(
                     BudgetCategoryGroup.family_id == family_id,
                     BudgetCategoryGroup.is_income == False,
                     BudgetCategoryGroup.deleted_at.is_(None),
+                    BudgetCategory.deleted_at.is_(None),
+                    BudgetCategory.hidden == False,
                 )
             )
-            .order_by(BudgetCategoryGroup.sort_order, BudgetCategoryGroup.name)
+            .order_by(
+                BudgetCategoryGroup.sort_order, BudgetCategoryGroup.name,
+                BudgetCategory.sort_order, BudgetCategory.name,
+            )
         )
-        groups = list((await db.execute(group_q)).scalars().all())
+        rows = (await db.execute(cat_q)).all()
+        if not rows:
+            return {
+                "month": month.isoformat(),
+                "groups": [],
+                "totals": {"budgeted": 0, "actual": 0, "variance": 0},
+            }
 
-        result_groups = []
+        category_ids = [cat.id for _, cat in rows]
+
+        # Allocations for the target month, all categories at once
+        alloc_q = (
+            select(BudgetAllocation.category_id, BudgetAllocation.budgeted_amount)
+            .where(
+                and_(
+                    BudgetAllocation.family_id == family_id,
+                    BudgetAllocation.month == month,
+                    BudgetAllocation.category_id.in_(category_ids),
+                )
+            )
+        )
+        budgeted_by_cat = {cid: amt for cid, amt in (await db.execute(alloc_q)).all()}
+
+        # Activity sum per category over month, single query
+        act_q = (
+            select(
+                BudgetTransaction.category_id,
+                func.coalesce(func.sum(BudgetTransaction.amount), 0).label("amt"),
+            )
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.category_id.in_(category_ids),
+                    BudgetTransaction.date >= month,
+                    BudgetTransaction.date <= end_of_month,
+                    BudgetTransaction.deleted_at.is_(None),
+                )
+            )
+            .group_by(BudgetTransaction.category_id)
+        )
+        activity_by_cat = {row.category_id: row.amt for row in (await db.execute(act_q)).all()}
+
+        result_groups: list = []
+        current_group_id = None
+        current_entry: dict = {}
         total_budgeted = 0
         total_actual = 0
 
-        for grp in groups:
-            cat_q = (
-                select(BudgetCategory)
-                .where(
-                    and_(
-                        BudgetCategory.family_id == family_id,
-                        BudgetCategory.group_id == grp.id,
-                        BudgetCategory.deleted_at.is_(None),
-                        BudgetCategory.hidden == False,
-                    )
-                )
-                .order_by(BudgetCategory.sort_order, BudgetCategory.name)
-            )
-            cats = list((await db.execute(cat_q)).scalars().all())
+        for grp, cat in rows:
+            budgeted = budgeted_by_cat.get(cat.id, 0)
+            actual = abs(activity_by_cat.get(cat.id, 0))
+            variance = budgeted - actual
+            pct_used = None if budgeted == 0 else round(actual / budgeted * 100, 2)
 
-            cat_entries = []
-            for cat in cats:
-                # Budgeted
-                alloc_q = select(BudgetAllocation.budgeted_amount).where(
-                    and_(
-                        BudgetAllocation.family_id == family_id,
-                        BudgetAllocation.category_id == cat.id,
-                        BudgetAllocation.month == month,
-                    )
-                )
-                budgeted = (await db.execute(alloc_q)).scalar_one_or_none() or 0
-
-                # Actual = abs(sum(activity)) over month
-                act_q = select(func.coalesce(func.sum(BudgetTransaction.amount), 0)).where(
-                    and_(
-                        BudgetTransaction.family_id == family_id,
-                        BudgetTransaction.category_id == cat.id,
-                        BudgetTransaction.date >= month,
-                        BudgetTransaction.date <= end_of_month,
-                        BudgetTransaction.deleted_at.is_(None),
-                    )
-                )
-                activity = (await db.execute(act_q)).scalar() or 0
-                actual = abs(activity)
-
-                variance = budgeted - actual
-                pct_used = None if budgeted == 0 else round(actual / budgeted * 100, 2)
-
-                cat_entries.append({
-                    "category_id": str(cat.id),
-                    "category_name": cat.name,
-                    "budgeted": budgeted,
-                    "actual": actual,
-                    "variance": variance,
-                    "pct_used": pct_used,
-                })
-                total_budgeted += budgeted
-                total_actual += actual
-
-            if cat_entries:
-                result_groups.append({
+            if grp.id != current_group_id:
+                current_entry = {
                     "group_id": str(grp.id),
                     "group_name": grp.name,
-                    "categories": cat_entries,
-                })
+                    "categories": [],
+                }
+                result_groups.append(current_entry)
+                current_group_id = grp.id
+
+            current_entry["categories"].append({
+                "category_id": str(cat.id),
+                "category_name": cat.name,
+                "budgeted": budgeted,
+                "actual": actual,
+                "variance": variance,
+                "pct_used": pct_used,
+            })
+            total_budgeted += budgeted
+            total_actual += actual
 
         return {
             "month": month.isoformat(),

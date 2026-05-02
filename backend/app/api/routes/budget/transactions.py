@@ -33,6 +33,12 @@ from app.models import User
 router = APIRouter()
 
 
+def _build_split_response(parent, children) -> SplitTransactionResponse:
+    """Construct response with sum-of-children total; surfaces drift if data corrupt."""
+    total = sum(c.amount for c in children)
+    return SplitTransactionResponse(parent=parent, children=children, total=total)
+
+
 @router.get("/", response_model=List[TransactionResponse])
 async def list_transactions(
     current_user: User = Depends(get_current_user),
@@ -241,7 +247,7 @@ async def create_split_transaction(
     )
     await UsageService.increment(db, current_user.family_id, "budget_transaction")
     children = await TransactionService.get_split_children(db, parent.id, family_id)
-    return SplitTransactionResponse(parent=parent, children=children, total=parent.amount)
+    return _build_split_response(parent, children)
 
 
 @router.get("/{transaction_id}/splits", response_model=SplitTransactionResponse)
@@ -254,7 +260,7 @@ async def get_split_transaction(
     family_id = to_uuid_required(current_user.family_id)
     parent = await TransactionService.get_by_id(db, transaction_id, family_id)
     children = await TransactionService.get_split_children(db, transaction_id, family_id)
-    return SplitTransactionResponse(parent=parent, children=children, total=parent.amount)
+    return _build_split_response(parent, children)
 
 
 @router.put("/{transaction_id}/splits", response_model=SplitTransactionResponse)
@@ -270,7 +276,7 @@ async def update_split_transaction(
         db, transaction_id, family_id, data.splits
     )
     children = await TransactionService.get_split_children(db, parent.id, family_id)
-    return SplitTransactionResponse(parent=parent, children=children, total=parent.amount)
+    return _build_split_response(parent, children)
 
 
 @router.put("/{transaction_id}/reconcile", response_model=TransactionResponse)
