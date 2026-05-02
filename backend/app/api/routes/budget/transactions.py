@@ -90,6 +90,39 @@ async def create_transaction(
     return transaction
 
 
+@router.get("/search", response_model=List[TransactionResponse])
+async def search_transactions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    account_id: Optional[UUID] = Query(None),
+    category_id: Optional[UUID] = Query(None),
+    payee_id: Optional[UUID] = Query(None),
+    cleared: Optional[bool] = Query(None),
+    reconciled: Optional[bool] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    amount_min: Optional[int] = Query(None, description="Min amount in cents (inclusive)"),
+    amount_max: Optional[int] = Query(None, description="Max amount in cents (inclusive)"),
+    search: Optional[str] = Query(None, description="Substring match against notes (case-insensitive)"),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """Filter transactions by any combination of criteria.
+
+    Declared before /{transaction_id} routes so the literal path is matched
+    before the UUID-typed path parameter.
+    """
+    family_id = to_uuid_required(current_user.family_id)
+    return await TransactionService.search_transactions(
+        db, family_id,
+        account_id=account_id, category_id=category_id, payee_id=payee_id,
+        cleared=cleared, reconciled=reconciled,
+        start_date=start_date, end_date=end_date,
+        amount_min=amount_min, amount_max=amount_max,
+        search=search, limit=limit, offset=offset,
+    )
+
+
 @router.get("/{transaction_id}", response_model=TransactionResponse)
 async def get_transaction(
     transaction_id: UUID,
@@ -149,35 +182,6 @@ class FinishReconciliationRequest(BaseModel):
     account_id: UUID
     statement_balance: int
     transaction_ids: List[UUID]
-
-
-@router.get("/search", response_model=List[TransactionResponse])
-async def search_transactions(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-    account_id: Optional[UUID] = Query(None),
-    category_id: Optional[UUID] = Query(None),
-    payee_id: Optional[UUID] = Query(None),
-    cleared: Optional[bool] = Query(None),
-    reconciled: Optional[bool] = Query(None),
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
-    amount_min: Optional[int] = Query(None, description="Min amount in cents (inclusive)"),
-    amount_max: Optional[int] = Query(None, description="Max amount in cents (inclusive)"),
-    search: Optional[str] = Query(None, description="Substring match against notes (case-insensitive)"),
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-):
-    """Filter transactions by any combination of criteria."""
-    family_id = to_uuid_required(current_user.family_id)
-    return await TransactionService.search_transactions(
-        db, family_id,
-        account_id=account_id, category_id=category_id, payee_id=payee_id,
-        cleared=cleared, reconciled=reconciled,
-        start_date=start_date, end_date=end_date,
-        amount_min=amount_min, amount_max=amount_max,
-        search=search, limit=limit, offset=offset,
-    )
 
 
 @router.post("/bulk-update")

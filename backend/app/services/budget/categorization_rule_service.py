@@ -378,7 +378,8 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
 
         Processes up to `max_transactions` rows in batches of APPLY_ALL_BATCH_SIZE
         ordered by created_at desc. Skipped = uncategorized rows that did not match
-        any rule. truncated=True when scan limit was hit.
+        any rule. truncated=True when more uncategorized rows remain beyond the
+        scan window after hitting max_transactions.
         """
         from app.models.budget import BudgetPayee
 
@@ -387,9 +388,12 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
         applied = 0
         skipped = 0
         scanned = 0
-        offset = 0
         truncated = False
 
+        # Each loop, applied rows leave the `category_id IS NULL` result set
+        # after autoflush, so paginate by `skipped` (rows we passed over but
+        # could not match) rather than total rows seen — otherwise we'd skip
+        # past real candidates.
         while scanned < max_transactions:
             remaining = max_transactions - scanned
             batch_limit = min(cls.APPLY_ALL_BATCH_SIZE, remaining)
@@ -405,7 +409,7 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
                 )
                 .order_by(BudgetTransaction.created_at.desc())
                 .limit(batch_limit)
-                .offset(offset)
+                .offset(skipped)
             )
             rows = (await db.execute(txn_q)).all()
             if not rows:
@@ -424,12 +428,12 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
                     skipped += 1
 
             scanned += len(rows)
-            offset += len(rows)
             if len(rows) < batch_limit:
                 break
 
         if scanned >= max_transactions:
-            # Check whether more uncategorized rows exist beyond the scan window.
+            # Total uncategorized = skipped (still in result set) + any rows
+            # that remain beyond the scan window.
             tail_q = (
                 select(func.count())
                 .select_from(BudgetTransaction)
@@ -442,7 +446,7 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
                 )
             )
             total = (await db.execute(tail_q)).scalar_one()
-            truncated = total > scanned
+            truncated = total > skipped
 
         await db.commit()
         return {

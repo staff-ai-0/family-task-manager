@@ -15,10 +15,12 @@ from app.services.budget.payee_service import PayeeService
 from app.services.budget.transaction_service import TransactionService
 from app.services.budget.allocation_service import AllocationService
 from app.services.budget.report_service import ReportService
+from app.services.budget.categorization_rule_service import CategorizationRuleService
 from app.schemas.budget import (
     AccountCreate,
     CategoryGroupCreate,
     CategoryCreate,
+    CategorizationRuleCreate,
     PayeeCreate,
     TransactionCreate,
     AllocationCreate,
@@ -289,3 +291,101 @@ async def test_get_net_worth_history_series_length_matches_months(
     assert len(result["series"]) == 3
     assert result["months"] == 3
     assert result["current_net_worth"] == result["series"][-1]["net_worth"]
+
+
+# ---------- Route ordering: /search must not be shadowed by /{transaction_id} ----------
+
+@pytest.mark.asyncio
+async def test_search_endpoint_is_not_shadowed_by_transaction_id_route(
+    client, auth_headers
+):
+    """GET /api/budget/transactions/search must resolve to the search handler,
+    not be parsed as transaction_id="search" by the /{transaction_id} route.
+
+    Regression: prior to the fix, /search was declared after /{transaction_id},
+    so FastAPI matched the literal "search" against the UUID-typed path param
+    and returned 422.
+    """
+    response = await client.get(
+        "/api/budget/transactions/search",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
+# ---------- apply_all_rules pagination correctness ----------
+
+@pytest.mark.asyncio
+async def test_apply_all_rules_processes_all_rows_across_batches(
+    db: AsyncSession, family_id, monkeypatch
+):
+    """apply_all_rules must not skip rows when matched rows leave the result set
+    between batches.
+
+    Regression: with offset += len(rows), each applied row caused an offset
+    drift that left uncategorized rows behind the scan window unprocessed.
+    Force a tiny batch size so multiple iterations are required.
+    """
+    monkeypatch.setattr(CategorizationRuleService, "APPLY_ALL_BATCH_SIZE", 2)
+
+    account = await _make_account(db, family_id)
+    _, cat = await _make_category(db, family_id)
+
+    match_payee = await PayeeService.create(
+        db, family_id, PayeeCreate(name="MatchPayee")
+    )
+    nomatch_payee = await PayeeService.create(
+        db, family_id, PayeeCreate(name="NoMatchPayee")
+    )
+
+    # 3 matching, 2 non-matching, all uncategorized
+    matching_ids = []
+    for i in range(3):
+        t = await TransactionService.create(
+            db, family_id,
+            TransactionCreate(
+                account_id=account.id, date=date(2026, 5, 1), amount=-(100 + i),
+                payee_id=match_payee.id,
+            ),
+        )
+        matching_ids.append(t.id)
+
+    nomatch_ids = []
+    for i in range(2):
+        t = await TransactionService.create(
+            db, family_id,
+            TransactionCreate(
+                account_id=account.id, date=date(2026, 5, 1), amount=-(500 + i),
+                payee_id=nomatch_payee.id,
+            ),
+        )
+        nomatch_ids.append(t.id)
+
+    await CategorizationRuleService.create(
+        db, family_id,
+        CategorizationRuleCreate(
+            category_id=cat.id,
+            rule_type="exact",
+            match_field="payee",
+            pattern="MatchPayee",
+            enabled=True,
+            priority=0,
+        ),
+    )
+
+    result = await CategorizationRuleService.apply_all_rules(db, family_id)
+
+    assert result["applied"] == 3, (
+        f"Expected all 3 matching txns categorized, got {result}"
+    )
+    assert result["skipped"] == 2
+    assert result["truncated"] is False
+
+    for tid in matching_ids:
+        txn = await TransactionService.get_by_id(db, tid, family_id)
+        assert txn.category_id == cat.id
+
+    for tid in nomatch_ids:
+        txn = await TransactionService.get_by_id(db, tid, family_id)
+        assert txn.category_id is None
