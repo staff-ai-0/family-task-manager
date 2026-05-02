@@ -12,9 +12,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Local (dev): frontend `http://localhost:3003`, backend `http://localhost:8003/docs` — secrets in `.env` or Vault
 - Production (10.1.0.99 on-prem, Podman rootless): `https://family.agent-ia.mx` (Cloudflare tunnel) — app at `/mnt/nvme/docker-prod/family-task-manager/`, secrets from `platform-vault`
 
-**Production deployment**: `docker-compose.onprem.yml` (or `docker-compose.production.yml`) uses shared infra: `platform-postgres`, `platform-redis`, `platform-vault`, `litellm-proxy` — all on platform-network.
+**Production deployment**: `docker-compose.yml` (single compose file is prod-ready; `docker-compose.stage.yml` exists for staging only). Uses shared platform infra: `platform-postgres`, `platform-redis`, `platform-vault`, `litellm-proxy` on platform-network. Canonical deploy script: `./deploy-prod.sh`.
 
-> Note: `.github/copilot-instructions.md` and `DEPLOYMENT_GUIDE.md` are outdated (reference Jinja2/HTMX/Render.com). Current frontend is Astro 5.
+> Note: There is NO `docker-compose.onprem.yml` or `docker-compose.production.yml`. There is NO `start-onprem.sh`. There is NO `.github/workflows/`. Older docs that referenced these are removed.
 
 ---
 
@@ -201,8 +201,9 @@ Key frontend pages:
 | `backend/app/services/budget/export_service.py` | Budget export/import as ZIP |
 | `backend/tests/conftest.py` | Test fixtures, test DB setup |
 | `frontend/src/middleware.ts` | Auth/session middleware for Astro SSR |
-| `docker-compose.yml` | Local dev / on-prem compose (all 5 services) |
-| `docker-compose.onprem.yml` | Production compose (backend + frontend, shared infra) |
+| `docker-compose.yml` | Local dev + on-prem compose (all services, prod-ready) |
+| `docker-compose.stage.yml` | Staging compose (override) |
+| `deploy-prod.sh` | Canonical on-prem deploy script (target: 10.1.0.99) |
 
 ---
 
