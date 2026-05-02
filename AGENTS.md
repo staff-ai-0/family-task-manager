@@ -23,19 +23,18 @@ Astro 5 + Tailwind v4    ←→    FastAPI + SQLAlchemy
 **Production**: 10.1.0.99 on-prem (Podman rootless, RHEL 10)
 **App dir**: `/mnt/nvme/docker-prod/family-task-manager/`
 **Public URL**: https://family.agent-ia.mx (Cloudflare tunnel)
-**Compose file**: `docker-compose.onprem.yml`
+**Compose file**: `docker-compose.yml` (prod-ready single file; no `docker-compose.onprem.yml` or `.production.yml` exist)
 
 ### Deployment Commands
 
+Canonical: `./deploy-prod.sh` from a clean working tree (drives SSH + `sudo docker compose -f docker-compose.yml` against 10.1.0.99 via the docker-compatible shim over podman).
+
+Manual on-prem operations (after SSH):
+
 ```bash
-# SSH to on-prem server
 ssh jc@10.1.0.99
-
-# Navigate to project
 cd /mnt/nvme/docker-prod/family-task-manager
-
-# Deploy manually:
-DC="podman compose --env-file .env -f docker-compose.onprem.yml"
+DC="podman compose --env-file .env -f docker-compose.yml"
 $DC up -d
 $DC logs -f backend
 $DC exec -T backend alembic upgrade head
@@ -81,16 +80,16 @@ docker exec family_app_backend python /app/seed_data.py
 ### Budget API Operations
 ```bash
 # View budget categories
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8002/api/budget/categories
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8003/api/budget/categories
 
 # View accounts
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8002/api/budget/accounts
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8003/api/budget/accounts
 
 # View transactions
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8002/api/budget/transactions
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8003/api/budget/transactions
 
 # View allocations
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8002/api/budget/allocations
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8003/api/budget/allocations
 ```
 
 ## Architecture Overview
@@ -128,7 +127,7 @@ Models (Database Entities)
 - **Auth Cookies**: MUST use `secure: true` and `httpOnly: true`
 - **CSRF**: Middleware configured for `family.agent-ia.mx` origin
 - **Backend Communication**: Frontend uses internal Docker URL `http://backend:8000` for SSR requests
-- **Port Mapping**: External 3003→Internal 3000 (frontend), 8002→8000 (backend)
+- **Port Mapping**: External 3003→Internal 3000 (frontend), 8003→8000 (backend)
 
 ### Budget System (Phase 10)
 
@@ -161,7 +160,7 @@ Models (Database Entities)
 
 ### Development
 - **Frontend**: http://localhost:3003
-- **Backend API**: http://localhost:8002/docs
+- **Backend API**: http://localhost:8003/docs
 - **Database**: localhost:5437 (familyapp / familyapp123)
 - **Redis**: localhost:6380
 - **Test DB**: localhost:5435
@@ -189,16 +188,16 @@ lucas@demo.com / password123 (TEEN, 280 points)
 - `.github/instructions/05-multi-tenant-patterns.md` - Multi-tenant pattern implementations
 - `.github/instructions/02-frontend-ui.instructions.md` - Frontend architecture
 - `.github/instructions/04-python-type-safety.instructions.md` - Type safety standards
-- `PRODUCTION_DEPLOYMENT_FINAL.md` - Complete deployment record (2026-03-01)
-- `DOCKER_COMPOSE_CLEANUP.md` - Infrastructure cleanup record
+- `docs/DEPLOYMENT.md` — current deployment procedures
+- `docs/deployments/2026-04-11.md` — last cold-start deployment record
 
 ## Removed / Obsolete
 
 - ❌ Actual Budget sync service (Phase 10 decommissioned)
 - ❌ `/services/actual-budget/` directory
 - ❌ External Actual Budget dependencies
-- ❌ `docker-compose.prod.yml` (PM2 setup)
-- ❌ `docker-compose.prod.full.yml` (old port config)
+- ❌ `docker-compose.prod.yml` / `docker-compose.prod.full.yml` / `docker-compose.onprem.yml` / `docker-compose.production.yml` — none exist
+- ❌ `start-onprem.sh` — does not exist (use `deploy-prod.sh`)
 - ❌ Sync-related memory-bank files
 
 ## Next Agent Should Know
@@ -206,7 +205,7 @@ lucas@demo.com / password123 (TEEN, 280 points)
 1. **Production is live** - All changes should be tested locally before pushing to main
 2. **Phase 10 complete** - No Actual Budget integration, use internal budget system only
 3. **Multi-tenant strict** - ALL new entities must have `family_id` foreign key
-4. **Port configuration** - Docker maps 3003→3000, 8002→8000 (important for debugging)
+4. **Port configuration** - Docker maps 3003→3000, 8003→8000 (important for debugging)
 5. **Tests required** - All new code must have tests with 70%+ coverage
 6. **Database migrations** - Always use alembic for schema changes, never direct SQL
 7. **Clean architecture** - Follow routes→services→repositories→models pattern
