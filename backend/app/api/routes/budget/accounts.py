@@ -41,9 +41,10 @@ async def list_accounts(
             db, family_id, account_type, include_closed=include_closed, limit=limit, offset=offset
         )
     else:
-        accounts = await AccountService.list_by_family(db, family_id, limit=limit, offset=offset)
-        if not include_closed:
-            accounts = [a for a in accounts if not a.closed]
+        accounts = await AccountService.list_for_family(
+            db, family_id,
+            include_closed=include_closed, limit=limit, offset=offset,
+        )
 
     return accounts
 

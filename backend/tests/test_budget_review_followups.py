@@ -218,6 +218,123 @@ async def test_delete_with_reassign_soft_deletes_and_reassigns(
         await CategoryService.get_by_id(db, src_cat.id, family_id)
 
 
+@pytest.mark.asyncio
+async def test_delete_with_reassign_rejects_self_reassignment(
+    db: AsyncSession, family_id
+):
+    """Reassigning a category onto itself would orphan its txns when the row
+    gets soft-deleted. Service must refuse with ValidationError before
+    mutating any state.
+    """
+    from app.core.exceptions import ValidationError
+
+    account = await _make_account(db, family_id)
+    _, cat = await _make_category(db, family_id, cat_name="LoneCat")
+    txn = await TransactionService.create(
+        db, family_id,
+        TransactionCreate(
+            account_id=account.id, date=date(2026, 5, 1), amount=-100,
+            category_id=cat.id,
+        ),
+    )
+
+    with pytest.raises(ValidationError):
+        await CategoryService.delete_with_reassign(
+            db, cat.id, family_id, reassign_to_id=cat.id
+        )
+
+    # Category and txn must be untouched
+    await db.refresh(txn)
+    assert txn.category_id == cat.id
+    fetched = await CategoryService.get_by_id(db, cat.id, family_id)
+    assert fetched.deleted_at is None
+
+
+# ---------- Currency safety ----------
+
+@pytest.mark.asyncio
+async def test_account_create_rejects_mismatched_currency(
+    db: AsyncSession, family_id
+):
+    """Family currency is implicit and singular. A second account with a
+    different currency must be refused — reports sum amounts blindly across
+    accounts and have no FX conversion.
+    """
+    from app.core.exceptions import ValidationError
+
+    await AccountService.create(
+        db, family_id, AccountCreate(name="MXN Checking", type="checking")
+    )
+
+    with pytest.raises(ValidationError):
+        await AccountService.create(
+            db, family_id,
+            AccountCreate(name="USD Savings", type="savings", currency="USD"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_account_update_rejects_currency_change(
+    db: AsyncSession, family_id
+):
+    """Once set, currency cannot be changed if other accounts exist on the
+    family with the original currency."""
+    from app.core.exceptions import ValidationError
+    from app.schemas.budget import AccountUpdate
+
+    a = await AccountService.create(
+        db, family_id, AccountCreate(name="A", type="checking")
+    )
+    await AccountService.create(
+        db, family_id, AccountCreate(name="B", type="checking")
+    )
+
+    with pytest.raises(ValidationError):
+        await AccountService.update(
+            db, a.id, family_id, AccountUpdate(currency="USD")
+        )
+
+
+# ---------- SQL-side filtering for paginated list endpoints ----------
+
+@pytest.mark.asyncio
+async def test_list_for_family_drops_closed_in_sql_not_python(
+    db: AsyncSession, family_id
+):
+    """list_for_family must filter closed accounts in SQL so the requested
+    limit reflects the count of returned (open) rows, not pre-filter rows.
+
+    Layout: 3 closed + 2 open. limit=2, include_closed=False must return
+    exactly 2 open accounts. Pre-fix python-filter would return 0 (the first
+    2 in sort order are closed and stripped after pagination).
+    """
+    closed_a = await AccountService.create(
+        db, family_id, AccountCreate(name="A_closed", type="checking", sort_order=1)
+    )
+    closed_b = await AccountService.create(
+        db, family_id, AccountCreate(name="B_closed", type="checking", sort_order=2)
+    )
+    closed_c = await AccountService.create(
+        db, family_id, AccountCreate(name="C_closed", type="checking", sort_order=3)
+    )
+    open_d = await AccountService.create(
+        db, family_id, AccountCreate(name="D_open", type="checking", sort_order=4)
+    )
+    open_e = await AccountService.create(
+        db, family_id, AccountCreate(name="E_open", type="checking", sort_order=5)
+    )
+
+    from app.schemas.budget import AccountUpdate
+    for a in (closed_a, closed_b, closed_c):
+        await AccountService.update(db, a.id, family_id, AccountUpdate(closed=True))
+
+    rows = await AccountService.list_for_family(
+        db, family_id, include_closed=False, limit=2, offset=0
+    )
+    assert len(rows) == 2
+    assert {r.id for r in rows} == {open_d.id, open_e.id}
+
+
 # ---------- AllocationService.copy_from_month ----------
 
 @pytest.mark.asyncio
@@ -291,6 +408,35 @@ async def test_get_net_worth_history_series_length_matches_months(
     assert len(result["series"]) == 3
     assert result["months"] == 3
     assert result["current_net_worth"] == result["series"][-1]["net_worth"]
+
+
+@pytest.mark.asyncio
+async def test_get_net_worth_history_includes_closed_accounts(
+    db: AsyncSession, family_id
+):
+    """Closing an account must not retroactively erase its historical
+    contribution — net worth at month T should be the same regardless of
+    whether the account is closed today.
+    """
+    from app.schemas.budget import AccountUpdate
+
+    account = await _make_account(db, family_id, name="ClosedSavings")
+    await TransactionService.create(
+        db, family_id,
+        TransactionCreate(account_id=account.id, date=date(2026, 4, 15), amount=50_000),
+    )
+
+    before = await ReportService.get_net_worth_history(db, family_id, months=3)
+    before_total = before["current_net_worth"]
+    assert before_total != 0, "precondition: account should contribute"
+
+    await AccountService.update(
+        db, account.id, family_id, AccountUpdate(closed=True)
+    )
+
+    after = await ReportService.get_net_worth_history(db, family_id, months=3)
+    assert after["current_net_worth"] == before_total
+    assert after["series"] == before["series"]
 
 
 # ---------- Route ordering: /search must not be shadowed by /{transaction_id} ----------

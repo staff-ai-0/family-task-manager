@@ -131,14 +131,13 @@ async def list_categories(
             offset=offset,
         )
     else:
-        categories = await CategoryService.list_by_family(
+        categories = await CategoryService.list_for_family(
             db,
             to_uuid_required(current_user.family_id),
+            include_hidden=include_hidden,
             limit=limit,
             offset=offset,
         )
-        if not include_hidden:
-            categories = [c for c in categories if not c.hidden]
 
     return categories
 

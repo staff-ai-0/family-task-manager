@@ -99,6 +99,11 @@ class AccountBase(BaseModel):
     notes: Optional[str] = Field(None, description="Optional notes")
     sort_order: int = Field(0, ge=0, description="Display order")
     starting_balance: int = Field(0, description="Initial account balance in cents at creation time")
+    currency: str = Field(
+        "MXN",
+        min_length=3, max_length=3,
+        description="ISO 4217 currency code. All accounts in a family must share the same currency — reports/balances do not convert.",
+    )
 
     @field_validator('type')
     @classmethod
@@ -106,6 +111,13 @@ class AccountBase(BaseModel):
         allowed_types = ['checking', 'savings', 'credit', 'investment', 'loan', 'other']
         if v not in allowed_types:
             raise ValueError(f'type must be one of: {", ".join(allowed_types)}')
+        return v
+
+    @field_validator('currency')
+    @classmethod
+    def validate_currency(cls, v):
+        if not v.isalpha() or v != v.upper():
+            raise ValueError("currency must be a 3-letter uppercase ISO 4217 code")
         return v
 
 
@@ -123,6 +135,7 @@ class AccountUpdate(BaseModel):
     notes: Optional[str] = None
     sort_order: Optional[int] = Field(None, ge=0)
     starting_balance: Optional[int] = Field(None, description="Initial account balance in cents")
+    currency: Optional[str] = Field(None, min_length=3, max_length=3)
 
     @field_validator('type')
     @classmethod
@@ -131,6 +144,13 @@ class AccountUpdate(BaseModel):
             allowed_types = ['checking', 'savings', 'credit', 'investment', 'loan', 'other']
             if v not in allowed_types:
                 raise ValueError(f'type must be one of: {", ".join(allowed_types)}')
+        return v
+
+    @field_validator('currency')
+    @classmethod
+    def validate_currency(cls, v):
+        if v is not None and (not v.isalpha() or v != v.upper()):
+            raise ValueError("currency must be a 3-letter uppercase ISO 4217 code")
         return v
 
 

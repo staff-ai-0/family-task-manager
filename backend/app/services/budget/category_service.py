@@ -18,7 +18,7 @@ from app.schemas.budget import (
     CategoryUpdate,
 )
 from app.services.base_service import BaseFamilyService
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, ValidationError
 
 
 class CategoryGroupService(BaseFamilyService[BudgetCategoryGroup]):
@@ -200,6 +200,36 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
             await CategoryGroupService.get_by_id(db, update_data["group_id"], family_id)
 
         return await cls.update_by_id(db, category_id, family_id, update_data)
+
+    @classmethod
+    async def list_for_family(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        include_hidden: bool = False,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> List[BudgetCategory]:
+        """List categories with the hidden filter applied at the SQL level so
+        pagination is stable. The base class list_by_family ignores hidden.
+        """
+        query = (
+            select(BudgetCategory)
+            .where(
+                and_(
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategory.deleted_at.is_(None),
+                )
+            )
+            .order_by(BudgetCategory.sort_order, BudgetCategory.name)
+        )
+        if not include_hidden:
+            query = query.where(BudgetCategory.hidden == False)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
+        return list((await db.execute(query)).scalars().all())
 
     @classmethod
     async def list_by_group(
@@ -505,6 +535,11 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
 
         Returns {deleted_name, reassigned_count}.
         """
+        if reassign_to_id is not None and reassign_to_id == category_id:
+            raise ValidationError(
+                "reassign_to_id must differ from the category being deleted"
+            )
+
         category = await cls.get_by_id(db, category_id, family_id)
         if reassign_to_id:
             await cls.get_by_id(db, reassign_to_id, family_id)

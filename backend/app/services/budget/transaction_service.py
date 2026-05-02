@@ -675,19 +675,22 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         if not filtered:
             return 0
 
-        # Coerce string UUIDs and verify FK targets belong to this family.
+        # Phase 1: coerce all string UUIDs up front so the dict is fully
+        # normalised before any DB call. Otherwise a validation failure on
+        # field N could leave field N-1 already mutated in-place.
         for field in ("category_id", "payee_id"):
-            if field in filtered and filtered[field] is not None:
-                value = filtered[field]
-                if isinstance(value, str):
-                    value = UUID(value)
-                    filtered[field] = value
-                if field == "category_id":
-                    from app.services.budget.category_service import CategoryService
-                    await CategoryService.get_by_id(db, value, family_id)
-                else:
-                    from app.services.budget.payee_service import PayeeService
-                    await PayeeService.get_by_id(db, value, family_id)
+            value = filtered.get(field)
+            if value is not None and isinstance(value, str):
+                filtered[field] = UUID(value)
+
+        # Phase 2: verify FK targets belong to this family. Either both pass
+        # or we raise before any transaction is mutated.
+        if filtered.get("category_id") is not None:
+            from app.services.budget.category_service import CategoryService
+            await CategoryService.get_by_id(db, filtered["category_id"], family_id)
+        if filtered.get("payee_id") is not None:
+            from app.services.budget.payee_service import PayeeService
+            await PayeeService.get_by_id(db, filtered["payee_id"], family_id)
 
         query = select(BudgetTransaction).where(
             and_(

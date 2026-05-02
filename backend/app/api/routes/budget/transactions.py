@@ -235,7 +235,9 @@ async def create_split_transaction(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a parent + N child split transaction (parent only)."""
-    await require_feature("budget_transaction", db, current_user)
+    await require_feature(
+        "budget_transaction", db, current_user, units=len(data.splits)
+    )
     family_id = to_uuid_required(current_user.family_id)
     parent = await TransactionService.create_split(
         db,
@@ -249,7 +251,11 @@ async def create_split_transaction(
         cleared=data.cleared,
         reconciled=data.reconciled,
     )
-    await UsageService.increment(db, current_user.family_id, "budget_transaction")
+    # Charge usage per child leg; the parent row is a virtual aggregator and
+    # is not user-visible as an independent transaction.
+    await UsageService.increment(
+        db, current_user.family_id, "budget_transaction", amount=len(data.splits)
+    )
     children = await TransactionService.get_split_children(db, parent.id, family_id)
     return _build_split_response(parent, children)
 

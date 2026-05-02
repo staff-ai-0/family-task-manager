@@ -13,12 +13,35 @@ from uuid import UUID
 from app.models.budget import BudgetAccount, BudgetTransaction
 from app.schemas.budget import AccountCreate, AccountUpdate
 from app.services.base_service import BaseFamilyService
+from app.core.exceptions import ValidationError
 
 
 class AccountService(BaseFamilyService[BudgetAccount]):
     """Service for budget account operations"""
 
     model = BudgetAccount
+
+    @classmethod
+    async def _existing_family_currency(
+        cls, db: AsyncSession, family_id: UUID
+    ) -> Optional[str]:
+        """Return the currency in use by any non-deleted account in the family,
+        or None when the family has no accounts yet.
+
+        Reports and balance aggregations sum amounts across accounts without
+        currency conversion, so families must use a single currency.
+        """
+        q = (
+            select(BudgetAccount.currency)
+            .where(
+                and_(
+                    BudgetAccount.family_id == family_id,
+                    BudgetAccount.deleted_at.is_(None),
+                )
+            )
+            .limit(1)
+        )
+        return (await db.execute(q)).scalar_one_or_none()
 
     @classmethod
     async def create(
@@ -42,6 +65,14 @@ class AccountService(BaseFamilyService[BudgetAccount]):
         Returns:
             Created account
         """
+        existing_currency = await cls._existing_family_currency(db, family_id)
+        if existing_currency is not None and existing_currency != data.currency:
+            raise ValidationError(
+                f"Account currency {data.currency!r} does not match the family's "
+                f"existing currency {existing_currency!r}. Reports do not convert "
+                f"across currencies."
+            )
+
         account = BudgetAccount(
             family_id=family_id,
             name=data.name,
@@ -51,6 +82,7 @@ class AccountService(BaseFamilyService[BudgetAccount]):
             notes=data.notes,
             sort_order=data.sort_order,
             starting_balance=data.starting_balance,
+            currency=data.currency,
         )
 
         db.add(account)
@@ -95,7 +127,45 @@ class AccountService(BaseFamilyService[BudgetAccount]):
             Updated account
         """
         update_data = data.model_dump(exclude_unset=True)
+        if "currency" in update_data and update_data["currency"] is not None:
+            existing = await cls._existing_family_currency(db, family_id)
+            if existing is not None and existing != update_data["currency"]:
+                raise ValidationError(
+                    f"Cannot change account currency to {update_data['currency']!r}; "
+                    f"family already uses {existing!r}. Reports do not convert "
+                    f"across currencies."
+                )
         return await cls.update_by_id(db, account_id, family_id, update_data)
+
+    @classmethod
+    async def list_for_family(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        include_closed: bool = False,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> List[BudgetAccount]:
+        """List accounts with the closed filter applied at the SQL level so
+        pagination is stable. The base class list_by_family ignores closed.
+        """
+        query = (
+            select(BudgetAccount)
+            .where(
+                and_(
+                    BudgetAccount.family_id == family_id,
+                    BudgetAccount.deleted_at.is_(None),
+                )
+            )
+            .order_by(BudgetAccount.sort_order, BudgetAccount.name)
+        )
+        if not include_closed:
+            query = query.where(BudgetAccount.closed == False)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
+        return list((await db.execute(query)).scalars().all())
 
     @classmethod
     async def list_by_type(

@@ -458,18 +458,21 @@ class ReportService:
     ) -> Dict:
         """Net worth at end of each of the last N months.
 
-        Excludes closed accounts. Returns {series, months, current_net_worth,
-        current_net_worth_currency}. Uses a single grouped query plus an
-        all-time-prior baseline per account to avoid N*M round-trips.
+        Includes closed accounts: a closed account that held a balance during
+        the window must still contribute to historical net worth, otherwise
+        the chart spikes/drops on close events. Soft-deleted accounts are
+        excluded via list_by_family. Returns {series, months,
+        current_net_worth, current_net_worth_currency}. Uses a single grouped
+        query plus an all-time-prior baseline per account to avoid N*M
+        round-trips.
         """
         from dateutil.relativedelta import relativedelta
         from app.services.budget.account_service import AccountService
         from app.models.budget import BudgetAccount
 
         accounts = await AccountService.list_by_family(db, family_id)
-        open_accounts = [a for a in accounts if not a.closed]
 
-        if not open_accounts:
+        if not accounts:
             return {
                 "series": [],
                 "months": months,
@@ -485,8 +488,8 @@ class ReportService:
         ]
         oldest_month = month_starts[0]
 
-        starting_balance_by_acct = {a.id: a.starting_balance for a in open_accounts}
-        open_account_ids = list(starting_balance_by_acct.keys())
+        starting_balance_by_acct = {a.id: a.starting_balance for a in accounts}
+        account_ids = list(starting_balance_by_acct.keys())
 
         # Prior-period sum (everything strictly before the oldest displayed month)
         prior_q = (
@@ -497,7 +500,7 @@ class ReportService:
             .where(
                 and_(
                     BudgetTransaction.family_id == family_id,
-                    BudgetTransaction.account_id.in_(open_account_ids),
+                    BudgetTransaction.account_id.in_(account_ids),
                     BudgetTransaction.date < oldest_month,
                     BudgetTransaction.deleted_at.is_(None),
                 )
@@ -517,7 +520,7 @@ class ReportService:
             .where(
                 and_(
                     BudgetTransaction.family_id == family_id,
-                    BudgetTransaction.account_id.in_(open_account_ids),
+                    BudgetTransaction.account_id.in_(account_ids),
                     BudgetTransaction.date >= oldest_month,
                     BudgetTransaction.date <= (current_month + relativedelta(months=1)) - timedelta(days=1),
                     BudgetTransaction.deleted_at.is_(None),
@@ -532,13 +535,13 @@ class ReportService:
 
         running = {
             acct_id: starting_balance_by_acct[acct_id] + prior_by_acct.get(acct_id, 0)
-            for acct_id in open_account_ids
+            for acct_id in account_ids
         }
 
         series = []
         for ms in month_starts:
             net_worth = 0
-            for acct_id in open_account_ids:
+            for acct_id in account_ids:
                 running[acct_id] += activity.get((acct_id, ms), 0)
                 net_worth += running[acct_id]
             series.append({
