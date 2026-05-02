@@ -162,3 +162,41 @@ async def test_get_split_children_rejects_non_parent(db: AsyncSession, family_id
     )
     with pytest.raises(ValidationError):
         await TransactionService.get_split_children(db, standalone.id, family_id)
+
+
+@pytest.mark.asyncio
+async def test_bulk_update_rejects_cross_family_category(db: AsyncSession, family_id):
+    """bulk_update_transactions must refuse to set a category from another family."""
+    from app.schemas.budget import TransactionCreate
+    from app.models.family import Family
+
+    # Owner family + transaction
+    account = await AccountService.create(
+        db, family_id, AccountCreate(name="Checking", type="checking")
+    )
+    txn = await TransactionService.create(
+        db, family_id,
+        TransactionCreate(account_id=account.id, date=date(2026, 5, 1), amount=-100),
+    )
+
+    # Foreign family + category that the owner must not be allowed to attach
+    other_family = Family(name="Other Family")
+    db.add(other_family)
+    await db.commit()
+    await db.refresh(other_family)
+
+    other_group = await CategoryGroupService.create(
+        db, other_family.id, CategoryGroupCreate(name="Other Food", is_income=False)
+    )
+    other_cat = await CategoryService.create(
+        db, other_family.id, CategoryCreate(name="Their Groceries", group_id=other_group.id)
+    )
+
+    with pytest.raises(NotFoundException):
+        await TransactionService.bulk_update_transactions(
+            db, family_id, [txn.id], {"category_id": other_cat.id}
+        )
+
+    # Verify txn untouched
+    await db.refresh(txn)
+    assert txn.category_id is None

@@ -5,9 +5,10 @@ Business logic for budget category groups and categories.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, update as sql_update
+from sqlalchemy import select, and_, func, update as sql_update
 from typing import List, Optional
 from uuid import UUID
+from datetime import datetime, timezone
 
 from app.models.budget import BudgetCategoryGroup, BudgetCategory, BudgetTransaction
 from app.schemas.budget import (
@@ -498,8 +499,9 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
         category_id: UUID,
         family_id: UUID,
         reassign_to_id: Optional[UUID] = None,
+        deleted_by_id: Optional[UUID] = None,
     ) -> dict:
-        """Hard-delete a category. Reassign txns to reassign_to_id, or NULL.
+        """Soft-delete a category. Reassign txns to reassign_to_id, or NULL.
 
         Returns {deleted_name, reassigned_count}.
         """
@@ -507,14 +509,17 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
         if reassign_to_id:
             await cls.get_by_id(db, reassign_to_id, family_id)
 
-        # Count transactions before reassignment
-        count_q = select(BudgetTransaction).where(
-            and_(
-                BudgetTransaction.family_id == family_id,
-                BudgetTransaction.category_id == category_id,
+        count_q = (
+            select(func.count())
+            .select_from(BudgetTransaction)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.category_id == category_id,
+                )
             )
         )
-        reassigned_count = len(list((await db.execute(count_q)).scalars().all()))
+        reassigned_count = (await db.execute(count_q)).scalar_one()
 
         await db.execute(
             sql_update(BudgetTransaction)
@@ -528,7 +533,9 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
         )
 
         deleted_name = category.name
-        await db.delete(category)
+        category.deleted_at = datetime.now(timezone.utc)
+        if deleted_by_id:
+            category.deleted_by_id = deleted_by_id
         await db.commit()
 
         return {

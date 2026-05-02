@@ -675,6 +675,20 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         if not filtered:
             return 0
 
+        # Coerce string UUIDs and verify FK targets belong to this family.
+        for field in ("category_id", "payee_id"):
+            if field in filtered and filtered[field] is not None:
+                value = filtered[field]
+                if isinstance(value, str):
+                    value = UUID(value)
+                    filtered[field] = value
+                if field == "category_id":
+                    from app.services.budget.category_service import CategoryService
+                    await CategoryService.get_by_id(db, value, family_id)
+                else:
+                    from app.services.budget.payee_service import PayeeService
+                    await PayeeService.get_by_id(db, value, family_id)
+
         query = select(BudgetTransaction).where(
             and_(
                 BudgetTransaction.id.in_(transaction_ids),
@@ -687,8 +701,6 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
 
         for txn in rows:
             for field, value in filtered.items():
-                if field.endswith("_id") and isinstance(value, str):
-                    value = UUID(value)
                 setattr(txn, field, value)
 
         await db.commit()
@@ -769,10 +781,15 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         adjustment_amount = statement_balance - cleared_total
         adjustment_id = None
         if adjustment_amount != 0:
+            today = date.today()
+            from app.services.budget.month_locking_service import MonthLockingService
+            await MonthLockingService.validate_month_not_closed(
+                db, family_id, date(today.year, today.month, 1)
+            )
             adj = BudgetTransaction(
                 family_id=family_id,
                 account_id=account_id,
-                date=date.today(),
+                date=today,
                 amount=adjustment_amount,
                 notes="Ajuste de Conciliación",
                 cleared=True,

@@ -5,7 +5,7 @@ Business logic for budget payee operations.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, update as sql_update
+from sqlalchemy import select, and_, func, update as sql_update
 from typing import List, Optional
 from uuid import UUID
 
@@ -212,13 +212,17 @@ class PayeeService(BaseFamilyService[BudgetPayee]):
         target = await cls.get_by_id(db, target_id, family_id)
 
         # Count source transactions before reassignment
-        count_q = select(BudgetTransaction).where(
-            and_(
-                BudgetTransaction.family_id == family_id,
-                BudgetTransaction.payee_id == source_id,
+        count_q = (
+            select(func.count())
+            .select_from(BudgetTransaction)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.payee_id == source_id,
+                )
             )
         )
-        merged_count = len(list((await db.execute(count_q)).scalars().all()))
+        merged_count = (await db.execute(count_q)).scalar_one()
 
         await db.execute(
             sql_update(BudgetTransaction)
