@@ -23,22 +23,34 @@ class AccountService(BaseFamilyService[BudgetAccount]):
 
     @classmethod
     async def _existing_family_currency(
-        cls, db: AsyncSession, family_id: UUID
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        exclude_account_id: Optional[UUID] = None,
     ) -> Optional[str]:
         """Return the currency in use by any non-deleted account in the family,
         or None when the family has no accounts yet.
 
         Reports and balance aggregations sum amounts across accounts without
         currency conversion, so families must use a single currency.
+
+        exclude_account_id lets the update path skip the row being changed,
+        so a sole-account currency change is permitted (no other account is
+        anchored to the old currency).
+
+        ORDER BY created_at, id makes the result deterministic if legacy data
+        ever ends up with mixed currencies — same anchor row every call.
         """
+        conditions = [
+            BudgetAccount.family_id == family_id,
+            BudgetAccount.deleted_at.is_(None),
+        ]
+        if exclude_account_id is not None:
+            conditions.append(BudgetAccount.id != exclude_account_id)
         q = (
             select(BudgetAccount.currency)
-            .where(
-                and_(
-                    BudgetAccount.family_id == family_id,
-                    BudgetAccount.deleted_at.is_(None),
-                )
-            )
+            .where(and_(*conditions))
+            .order_by(BudgetAccount.created_at, BudgetAccount.id)
             .limit(1)
         )
         return (await db.execute(q)).scalar_one_or_none()
@@ -128,7 +140,9 @@ class AccountService(BaseFamilyService[BudgetAccount]):
         """
         update_data = data.model_dump(exclude_unset=True)
         if "currency" in update_data and update_data["currency"] is not None:
-            existing = await cls._existing_family_currency(db, family_id)
+            existing = await cls._existing_family_currency(
+                db, family_id, exclude_account_id=account_id
+            )
             if existing is not None and existing != update_data["currency"]:
                 raise ValidationError(
                     f"Cannot change account currency to {update_data['currency']!r}; "

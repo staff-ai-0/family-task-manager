@@ -266,6 +266,9 @@ class SplitChild(BaseModel):
     notes: Optional[str] = Field(None, description="Per-leg notes")
 
 
+SPLIT_MAX_LEGS = 50
+
+
 class SplitTransactionCreate(BaseModel):
     """Create a parent transaction with N child legs."""
     account_id: UUID
@@ -275,12 +278,19 @@ class SplitTransactionCreate(BaseModel):
     notes: Optional[str] = None
     cleared: bool = False
     reconciled: bool = False
-    splits: List[SplitChild] = Field(..., min_length=2, description="At least 2 child legs required")
+    splits: List[SplitChild] = Field(
+        ...,
+        min_length=2,
+        max_length=SPLIT_MAX_LEGS,
+        description=f"Between 2 and {SPLIT_MAX_LEGS} child legs.",
+    )
 
 
 class SplitTransactionUpdate(BaseModel):
     """Replace the child legs of an existing split parent."""
-    splits: List[SplitChild] = Field(..., min_length=2)
+    splits: List[SplitChild] = Field(
+        ..., min_length=2, max_length=SPLIT_MAX_LEGS
+    )
 
 
 class SplitTransactionResponse(BaseModel):

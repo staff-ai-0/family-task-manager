@@ -535,3 +535,198 @@ async def test_apply_all_rules_processes_all_rows_across_batches(
     for tid in nomatch_ids:
         txn = await TransactionService.get_by_id(db, tid, family_id)
         assert txn.category_id is None
+
+
+# ---------- require_feature(units=N) gating ----------
+
+@pytest.mark.asyncio
+async def test_create_split_blocked_when_units_would_exceed_limit(
+    client, auth_headers, db_session, test_family
+):
+    """A split request whose len(splits) would push usage past the plan limit
+    must be rejected with 403, not silently accepted then over-counted.
+
+    Free plan: max_budget_transactions_per_month = 30. Pre-seed usage=28,
+    attempt 5-leg split → 28+5 > 30 → 403.
+    """
+    from app.models.subscription import SubscriptionPlan, UsageTracking
+    from app.models.budget import BudgetAccount, BudgetCategoryGroup, BudgetCategory
+    from app.core.premium import DEFAULT_FREE_LIMITS
+
+    # Seed free plan + max-out usage near the cap
+    plan = SubscriptionPlan(
+        name="free", display_name="Free", display_name_es="Gratis",
+        price_monthly_cents=0, price_annual_cents=0,
+        limits=dict(DEFAULT_FREE_LIMITS), sort_order=0,
+    )
+    db_session.add(plan)
+    await db_session.commit()
+
+    account = BudgetAccount(
+        family_id=test_family.id, name="Checking", type="checking",
+        starting_balance=0,
+    )
+    group = BudgetCategoryGroup(family_id=test_family.id, name="Food")
+    db_session.add_all([account, group])
+    await db_session.commit()
+    await db_session.refresh(account)
+    await db_session.refresh(group)
+    cat = BudgetCategory(
+        family_id=test_family.id, group_id=group.id, name="Groceries",
+    )
+    db_session.add(cat)
+
+    usage = UsageTracking(
+        family_id=test_family.id, feature="budget_transaction",
+        period_start=date.today().replace(day=1), count=28,
+    )
+    db_session.add(usage)
+    await db_session.commit()
+    await db_session.refresh(cat)
+
+    body = {
+        "account_id": str(account.id),
+        "date": date.today().isoformat(),
+        "splits": [
+            {"amount": -100, "category_id": str(cat.id)} for _ in range(5)
+        ],
+    }
+    response = await client.post(
+        "/api/budget/transactions/split", headers=auth_headers, json=body,
+    )
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"]["error"] == "upgrade_required"
+
+    # 2-leg split fits (28 + 2 == 30) and must succeed
+    body["splits"] = body["splits"][:2]
+    response = await client.post(
+        "/api/budget/transactions/split", headers=auth_headers, json=body,
+    )
+    assert response.status_code == 201, response.text
+
+
+# ---------- UsageService.increment(amount=N) accumulation ----------
+
+@pytest.mark.asyncio
+async def test_usage_service_increment_amount_accumulates(
+    db: AsyncSession, family_id
+):
+    """increment(amount=N) must add N to the counter, not reset to 1."""
+    from app.services.usage_service import UsageService
+
+    count = await UsageService.increment(db, family_id, "budget_transaction", amount=3)
+    assert count == 3
+
+    count = await UsageService.increment(db, family_id, "budget_transaction", amount=3)
+    assert count == 6
+
+    count = await UsageService.increment(db, family_id, "budget_transaction")
+    assert count == 7
+
+
+# ---------- CategoryService.list_for_family hidden filter ----------
+
+@pytest.mark.asyncio
+async def test_category_list_for_family_drops_hidden_in_sql(
+    db: AsyncSession, family_id
+):
+    """Mirror of the closed-accounts test: hidden categories must be filtered
+    in SQL so pagination is stable (not python post-filter after limit/offset).
+    """
+    group = await CategoryGroupService.create(
+        db, family_id, CategoryGroupCreate(name="Mixed", is_income=False)
+    )
+
+    hidden_ids = []
+    for i, name in enumerate(["A_hidden", "B_hidden", "C_hidden"]):
+        c = await CategoryService.create(
+            db, family_id,
+            CategoryCreate(name=name, group_id=group.id, sort_order=i),
+        )
+        hidden_ids.append(c.id)
+
+    visible_d = await CategoryService.create(
+        db, family_id,
+        CategoryCreate(name="D_visible", group_id=group.id, sort_order=4),
+    )
+    visible_e = await CategoryService.create(
+        db, family_id,
+        CategoryCreate(name="E_visible", group_id=group.id, sort_order=5),
+    )
+
+    from app.schemas.budget import CategoryUpdate
+    for cid in hidden_ids:
+        await CategoryService.update(
+            db, cid, family_id, CategoryUpdate(hidden=True)
+        )
+
+    rows = await CategoryService.list_for_family(
+        db, family_id, include_hidden=False, limit=2, offset=0
+    )
+    assert len(rows) == 2
+    assert {r.id for r in rows} == {visible_d.id, visible_e.id}
+
+
+# ---------- bulk_update_transactions partial-mutation safety ----------
+
+@pytest.mark.asyncio
+async def test_bulk_update_does_not_partially_mutate_on_validation_failure(
+    db: AsyncSession, family_id
+):
+    """If FK validation raises (cross-family category), bulk_update must not
+    have applied any of the OTHER whitelisted fields (cleared/reconciled) to
+    matching rows. Locks the two-phase ordering invariant: validate first,
+    mutate second.
+    """
+    from app.models.family import Family
+
+    account = await _make_account(db, family_id)
+    txn = await TransactionService.create(
+        db, family_id,
+        TransactionCreate(account_id=account.id, date=date(2026, 5, 1), amount=-100),
+    )
+    assert txn.cleared is False
+
+    other_family = Family(name="Other Family")
+    db.add(other_family)
+    await db.commit()
+    await db.refresh(other_family)
+    other_group = await CategoryGroupService.create(
+        db, other_family.id, CategoryGroupCreate(name="Other", is_income=False)
+    )
+    other_cat = await CategoryService.create(
+        db, other_family.id,
+        CategoryCreate(name="Foreign", group_id=other_group.id),
+    )
+
+    with pytest.raises(NotFoundException):
+        await TransactionService.bulk_update_transactions(
+            db, family_id, [txn.id],
+            {"cleared": True, "category_id": other_cat.id},
+        )
+
+    await db.refresh(txn)
+    assert txn.cleared is False, "cleared was applied despite FK validation failure"
+    assert txn.category_id is None
+
+
+# ---------- Currency change permitted on the only account in the family ----------
+
+@pytest.mark.asyncio
+async def test_account_update_allows_currency_change_when_sole_account(
+    db: AsyncSession, family_id
+):
+    """A family with a single account must be able to switch its currency.
+    Pre-fix the lookup hit the same row being updated and refused the change.
+    """
+    from app.schemas.budget import AccountUpdate
+
+    a = await AccountService.create(
+        db, family_id, AccountCreate(name="OnlyAccount", type="checking")
+    )
+    assert a.currency == "MXN"
+
+    updated = await AccountService.update(
+        db, a.id, family_id, AccountUpdate(currency="USD")
+    )
+    assert updated.currency == "USD"
