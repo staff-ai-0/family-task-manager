@@ -4,9 +4,11 @@ Usage tracking service for premium feature metering.
 Tracks per-family, per-feature usage counts by billing period (month).
 """
 from datetime import date
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select, and_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.subscription import UsageTracking
@@ -84,6 +86,71 @@ class UsageService:
         await db.commit()
         await db.refresh(record)
         return record.count
+
+    @classmethod
+    async def try_increment_within_limit(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        feature: str,
+        limit: int,
+        amount: int = 1,
+    ) -> Optional[int]:
+        """Atomically increment usage by *amount* only if it would not breach
+        *limit*. Returns the new count on success, or None when the increment
+        would exceed the limit.
+
+        Single statement: INSERT ... ON CONFLICT DO UPDATE WHERE ... RETURNING.
+        The (family_id, feature, period_start) unique constraint serializes
+        concurrent callers at the row level, eliminating the read-then-write
+        race in the require_feature → increment pattern (where two requests
+        could each observe usage below the limit and both increment past it).
+
+        Limit semantics:
+          limit == -1  → unlimited (always increments)
+          limit ==  0  → disabled  (always returns None)
+          limit >  0   → numeric cap, increment iff current + amount <= limit
+        """
+        if amount < 1:
+            raise ValueError("amount must be >= 1")
+        if limit == 0:
+            return None
+        if limit != -1 and amount > limit:
+            return None
+
+        period = cls._current_period()
+        stmt = pg_insert(UsageTracking).values(
+            family_id=family_id,
+            feature=feature,
+            period_start=period,
+            count=amount,
+        )
+
+        if limit == -1:
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_usage_family_feature_period",
+                set_={"count": UsageTracking.count + amount},
+            )
+        else:
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_usage_family_feature_period",
+                set_={"count": UsageTracking.count + amount},
+                where=(UsageTracking.count + amount <= limit),
+            )
+
+        stmt = stmt.returning(UsageTracking.count)
+        result = await db.execute(stmt)
+        new_count = result.scalar()
+
+        if new_count is None:
+            # ON CONFLICT WHERE failed → over limit. The INSERT side cannot
+            # produce a NULL because amount > 0, so reaching here means an
+            # existing row was found and the predicate rejected the update.
+            await db.rollback()
+            return None
+
+        await db.commit()
+        return new_count
 
     @classmethod
     async def check_limit(

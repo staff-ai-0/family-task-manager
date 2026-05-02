@@ -5,9 +5,9 @@ Business logic for budget transaction operations.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, update as sql_update
 from typing import List, Optional
-from datetime import date
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from app.models.budget import BudgetTransaction
@@ -568,10 +568,20 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             if s.payee_id:
                 await PayeeService.get_by_id(db, s.payee_id, family_id)
 
-        # Hard-delete existing children (cascade was set in model relationship)
-        existing = await cls.get_split_children(db, parent_id, family_id)
-        for child in existing:
-            await db.delete(child)
+        # Soft-delete existing children in a single UPDATE; matches the
+        # deleted_at convention used everywhere else and keeps the audit
+        # trail of replaced legs.
+        await db.execute(
+            sql_update(BudgetTransaction)
+            .where(
+                and_(
+                    BudgetTransaction.parent_id == parent_id,
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.deleted_at.is_(None),
+                )
+            )
+            .values(deleted_at=datetime.now(timezone.utc))
+        )
         await db.flush()
 
         total = sum(s.amount for s in splits)
