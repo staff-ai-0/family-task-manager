@@ -730,3 +730,52 @@ async def test_account_update_allows_currency_change_when_sole_account(
         db, a.id, family_id, AccountUpdate(currency="USD")
     )
     assert updated.currency == "USD"
+
+
+# ---------- SPLIT_MAX_LEGS cap enforcement ----------
+
+@pytest.mark.asyncio
+async def test_create_split_rejects_beyond_max_legs(
+    client, auth_headers, db_session, test_family
+):
+    """Schema must reject a split request whose splits list exceeds
+    SPLIT_MAX_LEGS, otherwise a Pro-plan caller could create thousands of
+    child rows in one request.
+    """
+    from app.models.budget import BudgetAccount, BudgetCategoryGroup, BudgetCategory
+    from app.schemas.budget import SPLIT_MAX_LEGS
+
+    account = BudgetAccount(
+        family_id=test_family.id, name="Checking", type="checking",
+        starting_balance=0,
+    )
+    group = BudgetCategoryGroup(family_id=test_family.id, name="Food")
+    db_session.add_all([account, group])
+    await db_session.commit()
+    await db_session.refresh(account)
+    await db_session.refresh(group)
+    cat = BudgetCategory(
+        family_id=test_family.id, group_id=group.id, name="Groceries",
+    )
+    db_session.add(cat)
+    await db_session.commit()
+    await db_session.refresh(cat)
+
+    over_cap = SPLIT_MAX_LEGS + 1
+    body = {
+        "account_id": str(account.id),
+        "date": date.today().isoformat(),
+        "splits": [
+            {"amount": -1, "category_id": str(cat.id)} for _ in range(over_cap)
+        ],
+    }
+    response = await client.post(
+        "/api/budget/transactions/split", headers=auth_headers, json=body,
+    )
+    assert response.status_code == 422, response.text
+    # Pydantic location confirms the rejection comes from the schema cap, not
+    # the quota gate (which would be 403 with detail.error="upgrade_required").
+    assert any(
+        err.get("loc", [None, None])[1] == "splits"
+        for err in response.json().get("detail", [])
+    ), response.text
