@@ -2,11 +2,22 @@
 Usage tracking service for premium feature metering.
 
 Tracks per-family, per-feature usage counts by billing period (month).
+
+Transaction-management convention used by this module:
+- get_usage / check_limit are read-only, never commit.
+- increment commits its own work — the legacy single-shot path used by
+  routes that have nothing else pending on the session.
+- try_increment_within_limit does NOT commit or rollback. It is meant to
+  compose with other in-flight ORM mutations (e.g. creating the budget
+  transaction the increment is gating), so the caller owns the outer
+  transaction boundary. The UPSERT itself is statement-level atomic.
 """
 from datetime import date
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select, and_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.subscription import UsageTracking
@@ -84,6 +95,77 @@ class UsageService:
         await db.commit()
         await db.refresh(record)
         return record.count
+
+    @classmethod
+    async def try_increment_within_limit(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        feature: str,
+        limit: int,
+        amount: int = 1,
+    ) -> Optional[int]:
+        """Atomically increment usage by *amount* only if it would not breach
+        *limit*. Returns the new count on success, or None when the increment
+        would exceed the limit.
+
+        Single statement: INSERT ... ON CONFLICT DO UPDATE WHERE ... RETURNING.
+        The (family_id, feature, period_start) unique constraint serializes
+        concurrent callers at the row level, eliminating the read-then-write
+        race in the require_feature → increment pattern (where two requests
+        could each observe usage below the limit and both increment past it).
+
+        Caller commits — unlike UsageService.increment, this method does NOT
+        commit or rollback the session, so it is safe to compose with other
+        in-flight ORM mutations on the same session (e.g. creating the
+        budget transaction the increment is gating). The UPSERT itself is
+        statement-level atomic regardless of when the outer transaction
+        commits.
+
+        Limit semantics:
+          limit == -1  → unlimited (always increments)
+          limit ==  0  → disabled  (always returns None)
+          limit >  0   → numeric cap, increment iff current + amount <= limit
+        """
+        if amount < 1:
+            raise ValueError("amount must be >= 1")
+        if limit == 0:
+            return None
+        if limit != -1 and amount > limit:
+            return None
+
+        period = cls._current_period()
+        stmt = pg_insert(UsageTracking).values(
+            family_id=family_id,
+            feature=feature,
+            period_start=period,
+            count=amount,
+        )
+
+        # Reference the unique constraint by its column tuple rather than its
+        # name so a future rename of the constraint doesn't break this UPSERT
+        # silently at runtime.
+        conflict_columns = ["family_id", "feature", "period_start"]
+        if limit == -1:
+            stmt = stmt.on_conflict_do_update(
+                index_elements=conflict_columns,
+                set_={"count": UsageTracking.count + amount},
+            )
+        else:
+            stmt = stmt.on_conflict_do_update(
+                index_elements=conflict_columns,
+                set_={"count": UsageTracking.count + amount},
+                where=(UsageTracking.count + amount <= limit),
+            )
+
+        stmt = stmt.returning(UsageTracking.count)
+        result = await db.execute(stmt)
+        new_count = result.scalar()
+
+        # ON CONFLICT WHERE failed → over limit. The INSERT side cannot
+        # produce a NULL because amount > 0, so reaching here means an
+        # existing row was found and the predicate rejected the update.
+        return new_count
 
     @classmethod
     async def check_limit(
