@@ -21,6 +21,12 @@ RUN npm ci
 COPY frontend/ ./
 COPY docs/ ./docs/
 
+# Build-time public env. Astro/Vite inlines anything matching PUBLIC_* into
+# the client bundle at build, so per-environment values (dev, stage, prod)
+# must be supplied as docker build args — they cannot be patched at runtime.
+ARG PUBLIC_GOOGLE_CLIENT_ID=""
+ENV PUBLIC_GOOGLE_CLIENT_ID=${PUBLIC_GOOGLE_CLIENT_ID}
+
 RUN npm run build
 
 
