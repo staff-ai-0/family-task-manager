@@ -32,6 +32,7 @@ from app.schemas.budget import (
     CategoryGroupCreate,
     CategoryCreate,
     SplitChild,
+    TransactionCreate,
 )
 
 
@@ -322,3 +323,77 @@ async def test_try_increment_within_limit_does_not_clobber_caller_session(
 
     fetched = await TransactionService.get_by_id(db, pending_txn.id, family_id)
     assert fetched.amount == -100
+
+    # The successful increment must also be durable on the caller's commit.
+    # If the no-commit primitive ever silently re-introduced its own commit,
+    # the rejection-path call above would have reset/erased this counter.
+    assert await UsageService.get_usage(db, family_id, "budget_transaction") == 2
+
+
+# ---------------------------------------------------------------------------
+# Recycle bin: replaced split-child legs must not appear
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_recycle_bin_excludes_replaced_split_children(
+    db: AsyncSession, family_id
+):
+    """Replacing the legs of a split soft-deletes the old children. Those
+    rows are an internal audit trail, not user-deleted transactions, so the
+    recycle bin listing must filter them out (parent_id IS NOT NULL).
+
+    A user soft-deleted standalone transaction (parent_id IS NULL) must
+    still appear.
+    """
+    from datetime import datetime, timezone
+    from app.services.budget.recycle_bin_service import RecycleBinService
+
+    account = await AccountService.create(
+        db, family_id, AccountCreate(name="Checking", type="checking")
+    )
+    group = await CategoryGroupService.create(
+        db, family_id, CategoryGroupCreate(name="Food", is_income=False)
+    )
+    cat = await CategoryService.create(
+        db, family_id, CategoryCreate(name="Groceries", group_id=group.id)
+    )
+
+    # Replace legs of a split → 2 soft-deleted child rows with parent_id set.
+    parent = await TransactionService.create_split(
+        db, family_id,
+        account_id=account.id,
+        txn_date=date(2026, 5, 1),
+        splits=[
+            SplitChild(amount=-100, category_id=cat.id),
+            SplitChild(amount=-200, category_id=cat.id),
+        ],
+    )
+    await TransactionService.replace_split_children(
+        db, parent.id, family_id,
+        splits=[
+            SplitChild(amount=-150, category_id=cat.id),
+            SplitChild(amount=-150, category_id=cat.id),
+        ],
+    )
+
+    # Soft-deleted standalone transaction (parent_id IS NULL): the user
+    # threw this in the recycle bin and expects to see it there.
+    standalone = await TransactionService.create(
+        db, family_id,
+        TransactionCreate(account_id=account.id, date=date(2026, 5, 2), amount=-500),
+    )
+    standalone.deleted_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    deleted = await RecycleBinService.list_deleted_items(
+        db, family_id, item_type="transaction",
+    )
+    visible_ids = {t.id for t in deleted["transactions"]}
+
+    assert standalone.id in visible_ids, (
+        "User-deleted standalone transaction must appear in recycle bin"
+    )
+    for t in deleted["transactions"]:
+        assert t.parent_id is None, (
+            f"Recycle bin leaked a split child leg: {t.id} parent={t.parent_id}"
+        )

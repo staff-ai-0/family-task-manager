@@ -2,6 +2,15 @@
 Usage tracking service for premium feature metering.
 
 Tracks per-family, per-feature usage counts by billing period (month).
+
+Transaction-management convention used by this module:
+- get_usage / check_limit are read-only, never commit.
+- increment commits its own work — the legacy single-shot path used by
+  routes that have nothing else pending on the session.
+- try_increment_within_limit does NOT commit or rollback. It is meant to
+  compose with other in-flight ORM mutations (e.g. creating the budget
+  transaction the increment is gating), so the caller owns the outer
+  transaction boundary. The UPSERT itself is statement-level atomic.
 """
 from datetime import date
 from typing import Optional
