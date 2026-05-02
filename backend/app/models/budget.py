@@ -22,15 +22,17 @@ from app.core.database import Base
 
 class BudgetCategoryGroup(Base):
     """Category groups organize budget categories (e.g., 'Mandado', 'Servicios', 'Entretenimiento')."""
-    
+
     __tablename__ = "budget_category_groups"
-    
+
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_income: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True, comment="Soft delete timestamp")
+    deleted_by_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, comment="User who deleted this group")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
@@ -51,9 +53,11 @@ class BudgetCategory(Base):
     hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     rollover_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     goal_amount: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False, comment="Monthly goal in cents")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True, comment="Soft delete timestamp")
+    deleted_by_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, comment="User who deleted this category")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    
+
     # Relationships
     group: Mapped["BudgetCategoryGroup"] = relationship("BudgetCategoryGroup", back_populates="categories")
     family: Mapped["Family"] = relationship("Family", back_populates="budget_categories")
@@ -98,9 +102,12 @@ class BudgetAccount(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     starting_balance: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False, comment="Initial account balance in cents at creation time")
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="MXN", comment="ISO 4217 currency code (e.g. MXN, USD, EUR)")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True, comment="Soft delete timestamp")
+    deleted_by_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, comment="User who deleted this account")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    
+
     # Relationships
     family: Mapped["Family"] = relationship("Family", back_populates="budget_accounts")
     transactions: Mapped[list["BudgetTransaction"]] = relationship(
@@ -159,6 +166,8 @@ class BudgetTransaction(Base):
     parent_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_transactions.id", ondelete="CASCADE"), nullable=True, comment="For split transactions")
     is_parent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="Is this a split parent transaction?")
     transfer_account_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_accounts.id", ondelete="SET NULL"), nullable=True, comment="Target account for transfers")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True, comment="Soft delete timestamp")
+    deleted_by_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, comment="User who deleted this transaction")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     

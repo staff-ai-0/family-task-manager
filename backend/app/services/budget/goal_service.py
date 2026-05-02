@@ -107,6 +107,8 @@ class GoalService(BaseFamilyService[BudgetGoal]):
         category_id: UUID,
         family_id: UUID,
         active_only: bool = True,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[BudgetGoal]:
         """
         List all goals for a specific category.
@@ -141,6 +143,10 @@ class GoalService(BaseFamilyService[BudgetGoal]):
 
         if active_only:
             query = query.where(BudgetGoal.is_active == True)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
 
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -151,6 +157,8 @@ class GoalService(BaseFamilyService[BudgetGoal]):
         db: AsyncSession,
         family_id: UUID,
         target_date: Optional[date] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[BudgetGoal]:
         """
         List all active goals for a family.
@@ -188,6 +196,10 @@ class GoalService(BaseFamilyService[BudgetGoal]):
                 BudgetGoal.end_date >= target_date,
             )
         )
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
 
         result = await db.execute(query)
         return list(result.scalars().all())

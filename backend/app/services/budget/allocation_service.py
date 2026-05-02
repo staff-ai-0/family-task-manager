@@ -317,6 +317,7 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                         BudgetTransaction.family_id == family_id,
                         BudgetTransaction.category_id == category_id,
                         BudgetTransaction.date < month,
+                        BudgetTransaction.deleted_at.is_(None),
                     )
                 )
             )
@@ -424,6 +425,8 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                 and_(
                     BudgetCategory.family_id == family_id,
                     BudgetCategoryGroup.is_income == False,
+                    BudgetCategory.deleted_at.is_(None),
+                    BudgetCategoryGroup.deleted_at.is_(None),
                 )
             )
         )
@@ -470,6 +473,8 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                 and_(
                     BudgetCategory.family_id == family_id,
                     BudgetCategoryGroup.is_income == False,
+                    BudgetCategory.deleted_at.is_(None),
+                    BudgetCategoryGroup.deleted_at.is_(None),
                 )
             )
         )
@@ -522,6 +527,8 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                 and_(
                     BudgetCategory.family_id == family_id,
                     BudgetCategoryGroup.is_income == False,
+                    BudgetCategory.deleted_at.is_(None),
+                    BudgetCategoryGroup.deleted_at.is_(None),
                 )
             )
         )
@@ -533,6 +540,7 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.category_id.in_(expense_category_ids_query),
                     BudgetTransaction.date <= end_of_prior,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
         )
@@ -648,6 +656,7 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
                         BudgetTransaction.category_id == cat.id,
                         BudgetTransaction.date >= start_month,
                         BudgetTransaction.date < target_month,
+                        BudgetTransaction.deleted_at.is_(None),
                     )
                 )
             )
@@ -741,3 +750,223 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
         )
         result = await db.execute(query)
         return result.scalar_one_or_none()
+
+    # ------------------------------------------------------------------
+    # Bulk month operations: copy / fill_from_average / carry_over
+    # ------------------------------------------------------------------
+
+    @classmethod
+    async def copy_from_month(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        source: date,
+        target: date,
+        overwrite: bool = False,
+    ) -> dict:
+        """Copy non-zero allocations from source month to target month.
+
+        Returns {copied, skipped}. With overwrite=False, target allocations
+        with non-zero amount are kept unchanged and counted as skipped.
+        """
+        source_allocs = await cls.list_by_month(db, family_id, source)
+        copied = 0
+        skipped = 0
+
+        for alloc in source_allocs:
+            if alloc.budgeted_amount == 0:
+                skipped += 1
+                continue
+
+            existing = await cls._get_allocation_for_category_month(
+                db, family_id, alloc.category_id, target
+            )
+            if existing and existing.budgeted_amount != 0 and not overwrite:
+                skipped += 1
+                continue
+
+            if existing:
+                existing.budgeted_amount = alloc.budgeted_amount
+            else:
+                db.add(BudgetAllocation(
+                    family_id=family_id,
+                    category_id=alloc.category_id,
+                    month=target,
+                    budgeted_amount=alloc.budgeted_amount,
+                ))
+            copied += 1
+
+        await db.commit()
+        return {"copied": copied, "skipped": skipped}
+
+    @classmethod
+    async def fill_from_average(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        target: date,
+        months_back: int,
+        overwrite: bool = True,
+    ) -> dict:
+        """Set target month allocations to abs(avg spending) over last N months.
+
+        Excludes income groups and hidden categories. Categories with no
+        spending history are skipped. Returns {filled, skipped}.
+        """
+        if months_back < 1:
+            raise ValidationError("months_back must be >= 1")
+
+        start_month = target - relativedelta(months=months_back)
+
+        # Expense categories only (non-income, non-hidden, non-deleted)
+        expense_q = (
+            select(BudgetCategory)
+            .join(BudgetCategoryGroup, BudgetCategory.group_id == BudgetCategoryGroup.id)
+            .where(
+                and_(
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategoryGroup.is_income == False,
+                    BudgetCategory.hidden == False,
+                    BudgetCategory.deleted_at.is_(None),
+                    BudgetCategoryGroup.deleted_at.is_(None),
+                )
+            )
+        )
+        cats = list((await db.execute(expense_q)).scalars().all())
+
+        filled = 0
+        skipped = 0
+
+        for cat in cats:
+            activity_q = (
+                select(func.coalesce(func.sum(BudgetTransaction.amount), 0))
+                .where(
+                    and_(
+                        BudgetTransaction.family_id == family_id,
+                        BudgetTransaction.category_id == cat.id,
+                        BudgetTransaction.date >= start_month,
+                        BudgetTransaction.date < target,
+                        BudgetTransaction.deleted_at.is_(None),
+                    )
+                )
+            )
+            total = (await db.execute(activity_q)).scalar() or 0
+            if total == 0:
+                skipped += 1
+                continue
+
+            avg = abs(int(total // months_back))
+            if avg == 0:
+                skipped += 1
+                continue
+
+            existing = await cls._get_allocation_for_category_month(
+                db, family_id, cat.id, target
+            )
+            if existing and existing.budgeted_amount != 0 and not overwrite:
+                skipped += 1
+                continue
+
+            if existing:
+                existing.budgeted_amount = avg
+            else:
+                db.add(BudgetAllocation(
+                    family_id=family_id,
+                    category_id=cat.id,
+                    month=target,
+                    budgeted_amount=avg,
+                ))
+            filled += 1
+
+        await db.commit()
+        return {"filled": filled, "skipped": skipped}
+
+    @classmethod
+    async def carry_over_month(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        source: date,
+        target: date,
+        mode: str = "all",
+    ) -> dict:
+        """Carry over remaining balance from source month into target month.
+
+        Modes:
+          - "all": carry both positive (unspent) and negative (overspent) balances
+          - "unspent_only": skip overspent categories (available < 0)
+
+        New target amount = max(0, target.budgeted + source.available).
+        Hidden categories are always skipped. Returns {carried, skipped}.
+        """
+        if mode not in ("all", "unspent_only"):
+            raise ValidationError(f"Invalid mode: {mode}")
+
+        # Expense categories only (non-income, non-hidden, non-deleted)
+        expense_q = (
+            select(BudgetCategory)
+            .join(BudgetCategoryGroup, BudgetCategory.group_id == BudgetCategoryGroup.id)
+            .where(
+                and_(
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategoryGroup.is_income == False,
+                    BudgetCategory.hidden == False,
+                    BudgetCategory.deleted_at.is_(None),
+                    BudgetCategoryGroup.deleted_at.is_(None),
+                )
+            )
+        )
+        cats = list((await db.execute(expense_q)).scalars().all())
+
+        # Count hidden categories with source allocations as skipped
+        hidden_q = (
+            select(BudgetCategory)
+            .join(BudgetCategoryGroup, BudgetCategory.group_id == BudgetCategoryGroup.id)
+            .where(
+                and_(
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategoryGroup.is_income == False,
+                    BudgetCategory.hidden == True,
+                    BudgetCategory.deleted_at.is_(None),
+                )
+            )
+        )
+        hidden_cats = list((await db.execute(hidden_q)).scalars().all())
+
+        carried = 0
+        skipped = 0
+
+        for hcat in hidden_cats:
+            src = await cls._get_allocation_for_category_month(db, family_id, hcat.id, source)
+            if src and src.budgeted_amount != 0:
+                skipped += 1
+
+        for cat in cats:
+            avail_info = await cls.get_category_available_amount(
+                db, family_id, cat.id, source
+            )
+            available = avail_info["available"]
+
+            if mode == "unspent_only" and available < 0:
+                skipped += 1
+                continue
+
+            existing = await cls._get_allocation_for_category_month(
+                db, family_id, cat.id, target
+            )
+            current_target = existing.budgeted_amount if existing else 0
+            new_amount = max(0, current_target + available)
+
+            if existing:
+                existing.budgeted_amount = new_amount
+            else:
+                db.add(BudgetAllocation(
+                    family_id=family_id,
+                    category_id=cat.id,
+                    month=target,
+                    budgeted_amount=new_amount,
+                ))
+            carried += 1
+
+        await db.commit()
+        return {"carried": carried, "skipped": skipped}

@@ -32,19 +32,22 @@ async def list_goals(
     db: AsyncSession = Depends(get_db),
     category_id: Optional[UUID] = Query(None, description="Filter by category ID"),
     active_only: bool = Query(True, description="Only return active goals"),
+    limit: int = Query(200, ge=1, le=500, description="Max results"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
 ):
     """List budget goals for the family"""
     family_id = to_uuid_required(current_user.family_id)
-    
+
     if category_id:
         goals = await GoalService.list_by_category(
-            db, category_id, family_id, active_only=active_only
+            db, category_id, family_id,
+            active_only=active_only, limit=limit, offset=offset,
         )
+    elif active_only:
+        goals = await GoalService.list_active(db, family_id, limit=limit, offset=offset)
     else:
-        goals = await GoalService.list_active(
-            db, family_id
-        ) if active_only else await GoalService.list_by_family(db, family_id)
-    
+        goals = await GoalService.list_by_family(db, family_id, limit=limit, offset=offset)
+
     return goals
 
 

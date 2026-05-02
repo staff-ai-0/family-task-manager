@@ -99,6 +99,11 @@ class AccountBase(BaseModel):
     notes: Optional[str] = Field(None, description="Optional notes")
     sort_order: int = Field(0, ge=0, description="Display order")
     starting_balance: int = Field(0, description="Initial account balance in cents at creation time")
+    currency: str = Field(
+        "MXN",
+        min_length=3, max_length=3,
+        description="ISO 4217 currency code. All accounts in a family must share the same currency — reports/balances do not convert.",
+    )
 
     @field_validator('type')
     @classmethod
@@ -106,6 +111,13 @@ class AccountBase(BaseModel):
         allowed_types = ['checking', 'savings', 'credit', 'investment', 'loan', 'other']
         if v not in allowed_types:
             raise ValueError(f'type must be one of: {", ".join(allowed_types)}')
+        return v
+
+    @field_validator('currency')
+    @classmethod
+    def validate_currency(cls, v):
+        if not v.isalpha() or v != v.upper():
+            raise ValueError("currency must be a 3-letter uppercase ISO 4217 code")
         return v
 
 
@@ -123,6 +135,7 @@ class AccountUpdate(BaseModel):
     notes: Optional[str] = None
     sort_order: Optional[int] = Field(None, ge=0)
     starting_balance: Optional[int] = Field(None, description="Initial account balance in cents")
+    currency: Optional[str] = Field(None, min_length=3, max_length=3)
 
     @field_validator('type')
     @classmethod
@@ -131,6 +144,13 @@ class AccountUpdate(BaseModel):
             allowed_types = ['checking', 'savings', 'credit', 'investment', 'loan', 'other']
             if v not in allowed_types:
                 raise ValueError(f'type must be one of: {", ".join(allowed_types)}')
+        return v
+
+    @field_validator('currency')
+    @classmethod
+    def validate_currency(cls, v):
+        if v is not None and (not v.isalpha() or v != v.upper()):
+            raise ValueError("currency must be a 3-letter uppercase ISO 4217 code")
         return v
 
 
@@ -236,6 +256,48 @@ class TransactionResponse(TransactionBase):
 
     class Config:
         from_attributes = True
+
+
+class SplitChild(BaseModel):
+    """One leg of a split transaction."""
+    amount: int = Field(..., description="Amount in cents (sign matches parent)")
+    category_id: Optional[UUID] = Field(None, description="Category for this leg")
+    payee_id: Optional[UUID] = Field(None, description="Override payee for this leg")
+    notes: Optional[str] = Field(None, description="Per-leg notes")
+
+
+SPLIT_MAX_LEGS = 50
+
+
+class SplitTransactionCreate(BaseModel):
+    """Create a parent transaction with N child legs."""
+    account_id: UUID
+    date: DateType
+    payee_id: Optional[UUID] = None
+    payee_name: Optional[str] = Field(None, max_length=255)
+    notes: Optional[str] = None
+    cleared: bool = False
+    reconciled: bool = False
+    splits: List[SplitChild] = Field(
+        ...,
+        min_length=2,
+        max_length=SPLIT_MAX_LEGS,
+        description=f"Between 2 and {SPLIT_MAX_LEGS} child legs.",
+    )
+
+
+class SplitTransactionUpdate(BaseModel):
+    """Replace the child legs of an existing split parent."""
+    splits: List[SplitChild] = Field(
+        ..., min_length=2, max_length=SPLIT_MAX_LEGS
+    )
+
+
+class SplitTransactionResponse(BaseModel):
+    """Parent transaction plus its children."""
+    parent: TransactionResponse
+    children: List[TransactionResponse]
+    total: int = Field(..., description="Sum of children amounts (must equal parent.amount)")
 
 
 # ============================================================================

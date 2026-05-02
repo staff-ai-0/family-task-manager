@@ -33,19 +33,23 @@ async def list_recurring_transactions(
     db: AsyncSession = Depends(get_db),
     account_id: Optional[UUID] = Query(None, description="Filter by account ID"),
     active_only: bool = Query(True, description="Only return active templates"),
+    limit: int = Query(200, ge=1, le=500, description="Max results"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
 ):
     """List recurring transaction templates for the family"""
     family_id = to_uuid_required(current_user.family_id)
-    
+
     if account_id:
         templates = await RecurringTransactionService.list_by_account(
-            db, account_id, family_id, active_only=active_only
+            db, account_id, family_id,
+            active_only=active_only, limit=limit, offset=offset,
         )
     else:
-        templates = await RecurringTransactionService.list_by_family(
-            db, family_id
-        ) if not active_only else [t for t in await RecurringTransactionService.list_by_family(db, family_id) if t.is_active]
-    
+        templates = await RecurringTransactionService.list_by_family_filtered(
+            db, family_id,
+            active_only=active_only, limit=limit, offset=offset,
+        )
+
     return templates
 
 

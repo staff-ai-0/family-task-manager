@@ -4,7 +4,8 @@ Transaction routes
 CRUD endpoints for budget transactions.
 """
 
-from fastapi import APIRouter, Depends, status, Query, File, UploadFile, Form
+from fastapi import APIRouter, Body, Depends, status, Query, File, UploadFile, Form
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
 from datetime import date
@@ -19,10 +20,23 @@ from app.services.usage_service import UsageService
 from app.services.budget.csv_import_service import CSVImportService
 from app.services.budget.file_import_service import import_file_transactions
 from app.services.budget.receipt_scanner_service import scan_and_create_transaction
-from app.schemas.budget import TransactionCreate, TransactionUpdate, TransactionResponse
+from app.schemas.budget import (
+    TransactionCreate,
+    TransactionUpdate,
+    TransactionResponse,
+    SplitTransactionCreate,
+    SplitTransactionUpdate,
+    SplitTransactionResponse,
+)
 from app.models import User
 
 router = APIRouter()
+
+
+def _build_split_response(parent, children) -> SplitTransactionResponse:
+    """Construct response with sum-of-children total; surfaces drift if data corrupt."""
+    total = sum(c.amount for c in children)
+    return SplitTransactionResponse(parent=parent, children=children, total=total)
 
 
 @router.get("/", response_model=List[TransactionResponse])
@@ -35,10 +49,11 @@ async def list_transactions(
     end_date: Optional[date] = Query(None, description="End date filter"),
     limit: int = Query(100, le=500, description="Limit results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
+    include_split_children: bool = Query(False, description="Include child legs of split parents"),
 ):
     """List transactions with optional filters"""
     family_id = to_uuid_required(current_user.family_id)
-    
+
     if account_id:
         transactions = await TransactionService.list_by_account(
             db, account_id, family_id, start_date, end_date, limit, offset
@@ -51,7 +66,10 @@ async def list_transactions(
         transactions = await TransactionService.list_by_family(
             db, family_id, limit=limit, offset=offset
         )
-    
+
+    if not include_split_children:
+        transactions = [t for t in transactions if t.parent_id is None]
+
     return transactions
 
 
@@ -70,6 +88,39 @@ async def create_transaction(
     )
     await UsageService.increment(db, current_user.family_id, "budget_transaction")
     return transaction
+
+
+@router.get("/search", response_model=List[TransactionResponse])
+async def search_transactions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    account_id: Optional[UUID] = Query(None),
+    category_id: Optional[UUID] = Query(None),
+    payee_id: Optional[UUID] = Query(None),
+    cleared: Optional[bool] = Query(None),
+    reconciled: Optional[bool] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    amount_min: Optional[int] = Query(None, description="Min amount in cents (inclusive)"),
+    amount_max: Optional[int] = Query(None, description="Max amount in cents (inclusive)"),
+    search: Optional[str] = Query(None, description="Substring match against notes (case-insensitive)"),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """Filter transactions by any combination of criteria.
+
+    Declared before /{transaction_id} routes so the literal path is matched
+    before the UUID-typed path parameter.
+    """
+    family_id = to_uuid_required(current_user.family_id)
+    return await TransactionService.search_transactions(
+        db, family_id,
+        account_id=account_id, category_id=category_id, payee_id=payee_id,
+        cleared=cleared, reconciled=reconciled,
+        start_date=start_date, end_date=end_date,
+        amount_min=amount_min, amount_max=amount_max,
+        search=search, limit=limit, offset=offset,
+    )
 
 
 @router.get("/{transaction_id}", response_model=TransactionResponse)
@@ -116,6 +167,126 @@ async def delete_transaction(
         transaction_id,
         to_uuid_required(current_user.family_id),
     )
+
+
+class BulkUpdateRequest(BaseModel):
+    transaction_ids: List[UUID]
+    updates: Dict[str, object] = Field(..., description="Whitelist: cleared, reconciled, category_id, payee_id")
+
+
+class BulkDeleteRequest(BaseModel):
+    transaction_ids: List[UUID]
+
+
+class FinishReconciliationRequest(BaseModel):
+    account_id: UUID
+    statement_balance: int
+    transaction_ids: List[UUID]
+
+
+@router.post("/bulk-update")
+async def bulk_update_transactions(
+    data: BulkUpdateRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bulk modify N transactions (parent only). Whitelist: cleared, reconciled, category_id, payee_id."""
+    family_id = to_uuid_required(current_user.family_id)
+    count = await TransactionService.bulk_update_transactions(
+        db, family_id, data.transaction_ids, data.updates,
+    )
+    return {"updated_count": count}
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_transactions(
+    data: BulkDeleteRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bulk delete N transactions (parent only)."""
+    family_id = to_uuid_required(current_user.family_id)
+    count = await TransactionService.bulk_delete_transactions(
+        db, family_id, data.transaction_ids,
+    )
+    return {"deleted_count": count}
+
+
+@router.post("/finish-reconciliation")
+async def finish_reconciliation(
+    data: FinishReconciliationRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark transactions as cleared+reconciled and create adjustment if balance differs (parent only)."""
+    family_id = to_uuid_required(current_user.family_id)
+    return await TransactionService.finish_reconciliation(
+        db, family_id,
+        account_id=data.account_id,
+        statement_balance=data.statement_balance,
+        transaction_ids=data.transaction_ids,
+    )
+
+
+@router.post("/split", response_model=SplitTransactionResponse, status_code=status.HTTP_201_CREATED)
+async def create_split_transaction(
+    data: SplitTransactionCreate,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a parent + N child split transaction (parent only)."""
+    await require_feature(
+        "budget_transaction", db, current_user, units=len(data.splits)
+    )
+    family_id = to_uuid_required(current_user.family_id)
+    parent = await TransactionService.create_split(
+        db,
+        family_id,
+        account_id=data.account_id,
+        txn_date=data.date,
+        splits=data.splits,
+        payee_id=data.payee_id,
+        payee_name=data.payee_name,
+        notes=data.notes,
+        cleared=data.cleared,
+        reconciled=data.reconciled,
+    )
+    # Charge usage per child leg; the parent row is a virtual aggregator and
+    # is not user-visible as an independent transaction.
+    await UsageService.increment(
+        db, current_user.family_id, "budget_transaction", amount=len(data.splits)
+    )
+    children = await TransactionService.get_split_children(db, parent.id, family_id)
+    return _build_split_response(parent, children)
+
+
+@router.get("/{transaction_id}/splits", response_model=SplitTransactionResponse)
+async def get_split_transaction(
+    transaction_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return parent split transaction with its child legs."""
+    family_id = to_uuid_required(current_user.family_id)
+    parent = await TransactionService.get_by_id(db, transaction_id, family_id)
+    children = await TransactionService.get_split_children(db, transaction_id, family_id)
+    return _build_split_response(parent, children)
+
+
+@router.put("/{transaction_id}/splits", response_model=SplitTransactionResponse)
+async def update_split_transaction(
+    transaction_id: UUID,
+    data: SplitTransactionUpdate,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Replace child legs of a split parent (parent only)."""
+    family_id = to_uuid_required(current_user.family_id)
+    parent = await TransactionService.replace_split_children(
+        db, transaction_id, family_id, data.splits
+    )
+    children = await TransactionService.get_split_children(db, parent.id, family_id)
+    return _build_split_response(parent, children)
 
 
 @router.put("/{transaction_id}/reconcile", response_model=TransactionResponse)

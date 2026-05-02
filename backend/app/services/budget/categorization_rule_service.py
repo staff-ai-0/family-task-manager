@@ -10,7 +10,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 
 from app.models.budget import BudgetCategorizationRule, BudgetCategory, BudgetTransaction
 from app.schemas.budget import (
@@ -76,6 +76,7 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
                 and_(
                     BudgetCategory.id == data.category_id,
                     BudgetCategory.family_id == family_id,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
         )
@@ -363,3 +364,148 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
                 return False
         else:
             return False
+
+    APPLY_ALL_BATCH_SIZE = 1000
+
+    @classmethod
+    async def apply_all_rules(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        max_transactions: int = 10000,
+    ) -> dict:
+        """Walk uncategorized transactions, apply matching rules. Returns {applied, skipped, scanned, truncated}.
+
+        Processes up to `max_transactions` rows in batches of APPLY_ALL_BATCH_SIZE
+        ordered by created_at desc. Skipped = uncategorized rows that did not match
+        any rule. truncated=True when more uncategorized rows remain beyond the
+        scan window after hitting max_transactions.
+        """
+        from app.models.budget import BudgetPayee
+
+        rules = await cls.list_rules(db, family_id, enabled_only=True)
+
+        applied = 0
+        skipped = 0
+        scanned = 0
+        truncated = False
+
+        # Each loop, applied rows leave the `category_id IS NULL` result set
+        # after autoflush, so paginate by `skipped` (rows we passed over but
+        # could not match) rather than total rows seen — otherwise we'd skip
+        # past real candidates.
+        while scanned < max_transactions:
+            remaining = max_transactions - scanned
+            batch_limit = min(cls.APPLY_ALL_BATCH_SIZE, remaining)
+            txn_q = (
+                select(BudgetTransaction, BudgetPayee.name)
+                .outerjoin(BudgetPayee, BudgetTransaction.payee_id == BudgetPayee.id)
+                .where(
+                    and_(
+                        BudgetTransaction.family_id == family_id,
+                        BudgetTransaction.category_id.is_(None),
+                        BudgetTransaction.deleted_at.is_(None),
+                    )
+                )
+                .order_by(BudgetTransaction.created_at.desc())
+                .limit(batch_limit)
+                .offset(skipped)
+            )
+            rows = (await db.execute(txn_q)).all()
+            if not rows:
+                break
+
+            for txn, payee_name in rows:
+                matched_rule = None
+                for rule in rules:
+                    if cls._match_rule(rule, payee_name, txn.notes):
+                        matched_rule = rule
+                        break
+                if matched_rule:
+                    await cls.apply_rule(db, txn, matched_rule)
+                    applied += 1
+                else:
+                    skipped += 1
+
+            scanned += len(rows)
+            if len(rows) < batch_limit:
+                break
+
+        if scanned >= max_transactions:
+            # Total uncategorized = skipped (still in result set) + any rows
+            # that remain beyond the scan window.
+            tail_q = (
+                select(func.count())
+                .select_from(BudgetTransaction)
+                .where(
+                    and_(
+                        BudgetTransaction.family_id == family_id,
+                        BudgetTransaction.category_id.is_(None),
+                        BudgetTransaction.deleted_at.is_(None),
+                    )
+                )
+            )
+            total = (await db.execute(tail_q)).scalar_one()
+            truncated = total > skipped
+
+        await db.commit()
+        return {
+            "applied": applied,
+            "skipped": skipped,
+            "scanned": scanned,
+            "truncated": truncated,
+        }
+
+    @classmethod
+    async def suggest_new_rules(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        min_count: int = 3,
+    ) -> List[dict]:
+        """Suggest payees with N+ uncategorized transactions and no existing exact rule.
+
+        Returns list of {payee_id, payee_name, transaction_count}.
+        """
+        from sqlalchemy import func as sql_func
+        from app.models.budget import BudgetPayee
+
+        # Group uncategorized txns by payee
+        agg_q = (
+            select(
+                BudgetPayee.id,
+                BudgetPayee.name,
+                sql_func.count(BudgetTransaction.id).label("cnt"),
+            )
+            .join(BudgetPayee, BudgetTransaction.payee_id == BudgetPayee.id)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.category_id.is_(None),
+                    BudgetTransaction.deleted_at.is_(None),
+                )
+            )
+            .group_by(BudgetPayee.id, BudgetPayee.name)
+            .having(sql_func.count(BudgetTransaction.id) >= min_count)
+        )
+        rows = (await db.execute(agg_q)).all()
+
+        # Existing exact rules on payee field — exclude those payee names
+        rule_q = select(BudgetCategorizationRule.pattern).where(
+            and_(
+                BudgetCategorizationRule.family_id == family_id,
+                BudgetCategorizationRule.rule_type == "exact",
+                BudgetCategorizationRule.match_field == "payee",
+            )
+        )
+        excluded = {p.lower() for p in (await db.execute(rule_q)).scalars().all()}
+
+        return [
+            {
+                "payee_id": pid,
+                "payee_name": pname,
+                "transaction_count": cnt,
+            }
+            for pid, pname, cnt in rows
+            if pname.lower() not in excluded
+        ]
