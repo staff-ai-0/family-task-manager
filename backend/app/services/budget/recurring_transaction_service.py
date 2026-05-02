@@ -461,35 +461,22 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         return next_date
 
     @classmethod
-    async def post_transaction(
+    def _post_recurring_no_commit(
         cls,
         db: AsyncSession,
-        recurring_id: UUID,
+        recurring: BudgetRecurringTransaction,
         family_id: UUID,
-        transaction_date: Optional[date] = None,
+        transaction_date: date,
     ) -> BudgetTransaction:
+        """Internal helper: build a transaction from an already-loaded
+        recurring template and update its scheduling state without
+        committing or flushing.
+
+        Bulk callers like post_all_due reuse the rows returned by
+        list_due_for_posting and pass them in directly, so this helper does
+        not re-fetch via get_by_id (avoids an N+1 round-trip per template).
+        Caller owns the commit, the flush, and any subsequent refresh.
         """
-        Post a transaction from a recurring template.
-
-        Args:
-            db: Database session
-            recurring_id: Recurring transaction template ID
-            family_id: Family ID for verification
-            transaction_date: Date to post transaction (defaults to today)
-
-        Returns:
-            Created transaction
-
-        Raises:
-            NotFoundException: If recurring transaction not found
-        """
-        if transaction_date is None:
-            transaction_date = date.today()
-
-        recurring = await cls.get_by_id(db, recurring_id, family_id)
-
-        # Create transaction from template
-        # BudgetTransaction uses 'date' and 'notes', not 'transaction_date' and 'description'
         transaction = BudgetTransaction(
             family_id=family_id,
             account_id=recurring.account_id,
@@ -501,23 +488,20 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
             cleared=False,
             reconciled=False,
         )
-
         db.add(transaction)
 
-        # Increment occurrence count
         recurring.occurrence_count += 1
 
-        # Auto-deactivate if after_n limit reached
-        if recurring.end_mode == "after_n" and recurring.occurrence_limit is not None:
-            if recurring.occurrence_count >= recurring.occurrence_limit:
-                recurring.is_active = False
-                recurring.next_due_date = None
-                recurring.last_generated_date = transaction_date
-                await db.commit()
-                await db.refresh(transaction)
-                return transaction
+        if (
+            recurring.end_mode == "after_n"
+            and recurring.occurrence_limit is not None
+            and recurring.occurrence_count >= recurring.occurrence_limit
+        ):
+            recurring.is_active = False
+            recurring.next_due_date = None
+            recurring.last_generated_date = transaction_date
+            return transaction
 
-        # Update recurring transaction's last_generated_date and next_due_date
         recurring.last_generated_date = transaction_date
         recurring.next_due_date = cls._calculate_next_occurrence(
             recurring.start_date,
@@ -531,7 +515,29 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
             occurrence_count=recurring.occurrence_count,
             weekend_behavior=recurring.weekend_behavior,
         )
+        return transaction
 
+    @classmethod
+    async def post_transaction(
+        cls,
+        db: AsyncSession,
+        recurring_id: UUID,
+        family_id: UUID,
+        transaction_date: Optional[date] = None,
+    ) -> BudgetTransaction:
+        """Post a transaction from a recurring template.
+
+        Single-row entry point: loads the template via get_by_id and commits
+        its own work. Bulk callers should pre-load templates and call
+        _post_recurring_no_commit directly to avoid the per-row fetch.
+        """
+        if transaction_date is None:
+            transaction_date = date.today()
+
+        recurring = await cls.get_by_id(db, recurring_id, family_id)
+        transaction = cls._post_recurring_no_commit(
+            db, recurring, family_id, transaction_date
+        )
         await db.commit()
         await db.refresh(transaction)
         return transaction
@@ -545,6 +551,13 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
     ) -> dict:
         """Post all active recurring transactions due on or before as_of_date.
 
+        All rows post inside a single transaction: if any one fails, the whole
+        batch rolls back rather than leaving a partial state where some
+        templates advanced their next_due_date and others didn't.
+
+        Templates are reused from the list_due_for_posting result, so the
+        bulk path does not re-fetch each row by id.
+
         Returns {posted, transactions: [{recurring_id, recurring_name, amount, date,
         transaction_id}]}.
         """
@@ -553,16 +566,30 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
 
         due = await cls.list_due_for_posting(db, family_id, as_of_date)
 
-        posted_info = []
-        for recurring in due:
-            txn = await cls.post_transaction(db, recurring.id, family_id, as_of_date)
-            posted_info.append({
+        pending = [
+            (
+                recurring,
+                cls._post_recurring_no_commit(
+                    db, recurring, family_id, as_of_date
+                ),
+            )
+            for recurring in due
+        ]
+
+        await db.flush()  # populate transaction.id without ending the txn
+
+        posted_info = [
+            {
                 "recurring_id": str(recurring.id),
                 "recurring_name": recurring.name,
                 "amount": txn.amount,
                 "date": str(txn.date),
                 "transaction_id": str(txn.id),
-            })
+            }
+            for recurring, txn in pending
+        ]
+
+        await db.commit()
 
         return {
             "posted": len(posted_info),

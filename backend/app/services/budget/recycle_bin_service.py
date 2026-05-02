@@ -63,12 +63,17 @@ class RecycleBinService:
         }
         
         # Get deleted transactions
+        # parent_id IS NULL filters out replaced split-child legs that were
+        # soft-deleted by replace_split_children. Those rows are an internal
+        # audit trail of the split's edit history — they are not user-visible
+        # transactions and should not clutter the recycle bin.
         if not item_type or item_type == 'transaction':
             stmt = (
                 select(BudgetTransaction)
                 .where(
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.deleted_at.is_not(None),
+                    BudgetTransaction.parent_id.is_(None),
                 )
                 .order_by(desc(BudgetTransaction.deleted_at))
                 .limit(limit)
