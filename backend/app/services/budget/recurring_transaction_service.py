@@ -461,22 +461,22 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         return next_date
 
     @classmethod
-    async def _post_transaction_no_commit(
+    def _post_recurring_no_commit(
         cls,
         db: AsyncSession,
-        recurring_id: UUID,
+        recurring: BudgetRecurringTransaction,
         family_id: UUID,
         transaction_date: date,
     ) -> BudgetTransaction:
-        """Internal helper: build the transaction and update template state
-        without committing. Caller is responsible for db.commit() and any
-        subsequent db.refresh() calls.
+        """Internal helper: build a transaction from an already-loaded
+        recurring template and update its scheduling state without
+        committing or flushing.
 
-        Lets bulk callers like post_all_due batch many postings into a single
-        transaction so a failure on row N rolls back rows 1..N-1.
+        Bulk callers like post_all_due reuse the rows returned by
+        list_due_for_posting and pass them in directly, so this helper does
+        not re-fetch via get_by_id (avoids an N+1 round-trip per template).
+        Caller owns the commit, the flush, and any subsequent refresh.
         """
-        recurring = await cls.get_by_id(db, recurring_id, family_id)
-
         transaction = BudgetTransaction(
             family_id=family_id,
             account_id=recurring.account_id,
@@ -527,14 +527,16 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
     ) -> BudgetTransaction:
         """Post a transaction from a recurring template.
 
-        Single-row entry point: commits its own work. Use the internal
-        no-commit helper from inside a bulk loop.
+        Single-row entry point: loads the template via get_by_id and commits
+        its own work. Bulk callers should pre-load templates and call
+        _post_recurring_no_commit directly to avoid the per-row fetch.
         """
         if transaction_date is None:
             transaction_date = date.today()
 
-        transaction = await cls._post_transaction_no_commit(
-            db, recurring_id, family_id, transaction_date
+        recurring = await cls.get_by_id(db, recurring_id, family_id)
+        transaction = cls._post_recurring_no_commit(
+            db, recurring, family_id, transaction_date
         )
         await db.commit()
         await db.refresh(transaction)
@@ -553,6 +555,9 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         batch rolls back rather than leaving a partial state where some
         templates advanced their next_due_date and others didn't.
 
+        Templates are reused from the list_due_for_posting result, so the
+        bulk path does not re-fetch each row by id.
+
         Returns {posted, transactions: [{recurring_id, recurring_name, amount, date,
         transaction_id}]}.
         """
@@ -561,12 +566,15 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
 
         due = await cls.list_due_for_posting(db, family_id, as_of_date)
 
-        pending = []
-        for recurring in due:
-            txn = await cls._post_transaction_no_commit(
-                db, recurring.id, family_id, as_of_date
+        pending = [
+            (
+                recurring,
+                cls._post_recurring_no_commit(
+                    db, recurring, family_id, as_of_date
+                ),
             )
-            pending.append((recurring, txn))
+            for recurring in due
+        ]
 
         await db.flush()  # populate transaction.id without ending the txn
 

@@ -106,6 +106,13 @@ class UsageService:
         race in the require_feature → increment pattern (where two requests
         could each observe usage below the limit and both increment past it).
 
+        Caller commits — unlike UsageService.increment, this method does NOT
+        commit or rollback the session, so it is safe to compose with other
+        in-flight ORM mutations on the same session (e.g. creating the
+        budget transaction the increment is gating). The UPSERT itself is
+        statement-level atomic regardless of when the outer transaction
+        commits.
+
         Limit semantics:
           limit == -1  → unlimited (always increments)
           limit ==  0  → disabled  (always returns None)
@@ -126,14 +133,18 @@ class UsageService:
             count=amount,
         )
 
+        # Reference the unique constraint by its column tuple rather than its
+        # name so a future rename of the constraint doesn't break this UPSERT
+        # silently at runtime.
+        conflict_columns = ["family_id", "feature", "period_start"]
         if limit == -1:
             stmt = stmt.on_conflict_do_update(
-                constraint="uq_usage_family_feature_period",
+                index_elements=conflict_columns,
                 set_={"count": UsageTracking.count + amount},
             )
         else:
             stmt = stmt.on_conflict_do_update(
-                constraint="uq_usage_family_feature_period",
+                index_elements=conflict_columns,
                 set_={"count": UsageTracking.count + amount},
                 where=(UsageTracking.count + amount <= limit),
             )
@@ -142,14 +153,9 @@ class UsageService:
         result = await db.execute(stmt)
         new_count = result.scalar()
 
-        if new_count is None:
-            # ON CONFLICT WHERE failed → over limit. The INSERT side cannot
-            # produce a NULL because amount > 0, so reaching here means an
-            # existing row was found and the predicate rejected the update.
-            await db.rollback()
-            return None
-
-        await db.commit()
+        # ON CONFLICT WHERE failed → over limit. The INSERT side cannot
+        # produce a NULL because amount > 0, so reaching here means an
+        # existing row was found and the predicate rejected the update.
         return new_count
 
     @classmethod

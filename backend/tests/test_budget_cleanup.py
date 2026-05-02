@@ -154,6 +154,50 @@ async def test_post_all_due_advances_state_for_every_template(
         assert rt.next_due_date > today
 
 
+@pytest.mark.asyncio
+async def test_post_all_due_deactivates_after_n_template(
+    db: AsyncSession, family_id
+):
+    """A template with end_mode=after_n that hits its occurrence_limit
+    inside the bulk batch must deactivate (is_active=False, next_due_date
+    cleared) and the deactivation must persist after post_all_due commits.
+    """
+    account = await AccountService.create(
+        db, family_id, AccountCreate(name="Checking", type="checking")
+    )
+
+    today = date(2026, 5, 1)
+    rt = BudgetRecurringTransaction(
+        family_id=family_id,
+        account_id=account.id,
+        name="One-shot",
+        amount=-500,
+        recurrence_type="monthly_dayofmonth",
+        recurrence_interval=1,
+        recurrence_pattern={"day": 1},
+        start_date=today - timedelta(days=30),
+        next_due_date=today,
+        is_active=True,
+        occurrence_count=0,
+        end_mode="after_n",
+        occurrence_limit=1,
+    )
+    db.add(rt)
+    await db.commit()
+    await db.refresh(rt)
+
+    result = await RecurringTransactionService.post_all_due(
+        db, family_id, as_of_date=today,
+    )
+    assert result["posted"] == 1
+
+    await db.refresh(rt)
+    assert rt.is_active is False
+    assert rt.next_due_date is None
+    assert rt.occurrence_count == 1
+    assert rt.last_generated_date == today
+
+
 # ---------------------------------------------------------------------------
 # UsageService.try_increment_within_limit: atomic check + increment
 # ---------------------------------------------------------------------------
@@ -234,3 +278,47 @@ async def test_try_increment_within_limit_rejects_first_call_over_limit(
     )
     assert rejected is None
     assert await UsageService.get_usage(db, family_id, "budget_transaction") == 0
+
+
+@pytest.mark.asyncio
+async def test_try_increment_within_limit_does_not_clobber_caller_session(
+    db: AsyncSession, family_id
+):
+    """try_increment_within_limit must not commit or roll back the caller's
+    session. Pending ORM mutations (a transaction added but not committed)
+    must survive across both the success and rejection paths so the caller
+    keeps full control of the outer transaction boundary.
+    """
+    account = await AccountService.create(
+        db, family_id, AccountCreate(name="Checking", type="checking")
+    )
+
+    # Pending mutation that must not be committed by the increment call.
+    pending_txn = BudgetTransaction(
+        family_id=family_id,
+        account_id=account.id,
+        date=date(2026, 5, 1),
+        amount=-100,
+    )
+    db.add(pending_txn)
+    # Do NOT commit; pending_txn lives in the session only.
+
+    # Success path: should not commit the pending row either.
+    new_count = await UsageService.try_increment_within_limit(
+        db, family_id, "budget_transaction", limit=10, amount=2,
+    )
+    assert new_count == 2
+
+    # Rejection path: must not roll back pending_txn.
+    rejected = await UsageService.try_increment_within_limit(
+        db, family_id, "budget_transaction", limit=10, amount=999,
+    )
+    assert rejected is None
+
+    # Caller commits when ready; the pending txn must end up persisted.
+    await db.commit()
+    await db.refresh(pending_txn)
+    assert pending_txn.id is not None
+
+    fetched = await TransactionService.get_by_id(db, pending_txn.id, family_id)
+    assert fetched.amount == -100
