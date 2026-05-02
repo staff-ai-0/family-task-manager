@@ -57,7 +57,8 @@ class TransferService:
             select(BudgetAccount).where(
                 and_(
                     BudgetAccount.id == from_account_id,
-                    BudgetAccount.family_id == family_id
+                    BudgetAccount.family_id == family_id,
+                    BudgetAccount.deleted_at.is_(None),
                 )
             )
         )
@@ -72,7 +73,8 @@ class TransferService:
             select(BudgetAccount).where(
                 and_(
                     BudgetAccount.id == to_account_id,
-                    BudgetAccount.family_id == family_id
+                    BudgetAccount.family_id == family_id,
+                    BudgetAccount.deleted_at.is_(None),
                 )
             )
         )
@@ -161,7 +163,8 @@ class TransferService:
             select(BudgetCategory).where(
                 and_(
                     BudgetCategory.id == from_category_id,
-                    BudgetCategory.family_id == family_id
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
         )
@@ -176,7 +179,8 @@ class TransferService:
             select(BudgetCategory).where(
                 and_(
                     BudgetCategory.id == to_category_id,
-                    BudgetCategory.family_id == family_id
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
         )

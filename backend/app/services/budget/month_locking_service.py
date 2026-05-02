@@ -5,7 +5,7 @@ Business logic for month closing/locking operations.
 Prevents edits to past closed months for data integrity.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from typing import List, Optional
@@ -58,8 +58,8 @@ class MonthLockingService(BaseFamilyService[BudgetAllocation]):
                 f"No allocations found for family {family_id} in month {month}"
             )
 
-        # Close all allocations for this month
-        closed_at = datetime.utcnow()
+        # Close all allocations for this month (timezone-aware UTC)
+        closed_at = datetime.now(timezone.utc)
         for allocation in allocations:
             allocation.closed_at = closed_at
 

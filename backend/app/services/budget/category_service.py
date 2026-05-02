@@ -5,11 +5,12 @@ Business logic for budget category groups and categories.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func, update as sql_update
 from typing import List, Optional
 from uuid import UUID
+from datetime import datetime, timezone
 
-from app.models.budget import BudgetCategoryGroup, BudgetCategory
+from app.models.budget import BudgetCategoryGroup, BudgetCategory, BudgetTransaction
 from app.schemas.budget import (
     CategoryGroupCreate,
     CategoryGroupUpdate,
@@ -17,7 +18,7 @@ from app.schemas.budget import (
     CategoryUpdate,
 )
 from app.services.base_service import BaseFamilyService
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, ValidationError
 
 
 class CategoryGroupService(BaseFamilyService[BudgetCategoryGroup]):
@@ -105,7 +106,10 @@ class CategoryGroupService(BaseFamilyService[BudgetCategoryGroup]):
 
         query = (
             select(BudgetCategoryGroup)
-            .where(BudgetCategoryGroup.family_id == family_id)
+            .where(
+                BudgetCategoryGroup.family_id == family_id,
+                BudgetCategoryGroup.deleted_at.is_(None),
+            )
             .options(selectinload(BudgetCategoryGroup.categories))
             .order_by(BudgetCategoryGroup.sort_order, BudgetCategoryGroup.name)
         )
@@ -116,10 +120,9 @@ class CategoryGroupService(BaseFamilyService[BudgetCategoryGroup]):
         result = await db.execute(query)
         groups = list(result.scalars().all())
 
-        # Filter hidden categories if needed
-        if not include_hidden:
-            for group in groups:
-                group.categories = [c for c in group.categories if not c.hidden]
+        # Filter hidden + soft-deleted categories
+        for group in groups:
+            group.categories = [c for c in group.categories if c.deleted_at is None and (include_hidden or not c.hidden)]
 
         return groups
 
@@ -199,12 +202,44 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
         return await cls.update_by_id(db, category_id, family_id, update_data)
 
     @classmethod
+    async def list_for_family(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        include_hidden: bool = False,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> List[BudgetCategory]:
+        """List categories with the hidden filter applied at the SQL level so
+        pagination is stable. The base class list_by_family ignores hidden.
+        """
+        query = (
+            select(BudgetCategory)
+            .where(
+                and_(
+                    BudgetCategory.family_id == family_id,
+                    BudgetCategory.deleted_at.is_(None),
+                )
+            )
+            .order_by(BudgetCategory.sort_order, BudgetCategory.name)
+        )
+        if not include_hidden:
+            query = query.where(BudgetCategory.hidden == False)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
+        return list((await db.execute(query)).scalars().all())
+
+    @classmethod
     async def list_by_group(
         cls,
         db: AsyncSession,
         group_id: UUID,
         family_id: UUID,
         include_hidden: bool = False,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[BudgetCategory]:
         """
         List all categories in a group.
@@ -230,6 +265,7 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
                 and_(
                     BudgetCategory.family_id == family_id,
                     BudgetCategory.group_id == group_id,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
             .order_by(BudgetCategory.sort_order, BudgetCategory.name)
@@ -237,6 +273,10 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
 
         if not include_hidden:
             query = query.where(BudgetCategory.hidden == False)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
 
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -270,6 +310,7 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
                 and_(
                     BudgetCategory.id == category_id,
                     BudgetCategory.family_id == family_id,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
             .options(selectinload(BudgetCategory.group))
@@ -372,6 +413,7 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
                     BudgetCategory.family_id == family_id,
                     BudgetCategory.group_id == group_id,
                     BudgetCategory.hidden == True,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
             .order_by(BudgetCategory.sort_order, BudgetCategory.name)
@@ -416,6 +458,7 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
                 and_(
                     BudgetCategory.family_id == family_id,
                     BudgetCategory.group_id == group_id,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
         )
@@ -465,6 +508,7 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
                 and_(
                     BudgetCategory.family_id == family_id,
                     BudgetCategory.group_id == group_id,
+                    BudgetCategory.deleted_at.is_(None),
                 )
             )
         )
@@ -477,3 +521,59 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
 
         await db.commit()
         return updated_group
+
+    @classmethod
+    async def delete_with_reassign(
+        cls,
+        db: AsyncSession,
+        category_id: UUID,
+        family_id: UUID,
+        reassign_to_id: Optional[UUID] = None,
+        deleted_by_id: Optional[UUID] = None,
+    ) -> dict:
+        """Soft-delete a category. Reassign txns to reassign_to_id, or NULL.
+
+        Returns {deleted_name, reassigned_count}.
+        """
+        if reassign_to_id is not None and reassign_to_id == category_id:
+            raise ValidationError(
+                "reassign_to_id must differ from the category being deleted"
+            )
+
+        category = await cls.get_by_id(db, category_id, family_id)
+        if reassign_to_id:
+            await cls.get_by_id(db, reassign_to_id, family_id)
+
+        count_q = (
+            select(func.count())
+            .select_from(BudgetTransaction)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.category_id == category_id,
+                )
+            )
+        )
+        reassigned_count = (await db.execute(count_q)).scalar_one()
+
+        await db.execute(
+            sql_update(BudgetTransaction)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.category_id == category_id,
+                )
+            )
+            .values(category_id=reassign_to_id)
+        )
+
+        deleted_name = category.name
+        category.deleted_at = datetime.now(timezone.utc)
+        if deleted_by_id:
+            category.deleted_by_id = deleted_by_id
+        await db.commit()
+
+        return {
+            "deleted_name": deleted_name,
+            "reassigned_count": reassigned_count,
+        }

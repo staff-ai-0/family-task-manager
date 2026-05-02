@@ -46,13 +46,18 @@ class UsageService:
 
     @classmethod
     async def increment(
-        cls, db: AsyncSession, family_id: UUID, feature: str
+        cls, db: AsyncSession, family_id: UUID, feature: str, amount: int = 1
     ) -> int:
         """
         Increment the usage counter for a feature in the current month.
 
         Creates the record if it doesn't exist yet. Returns the new count.
+        Use amount > 1 when a single API call produces multiple chargeable
+        units (e.g. split transactions create N child legs at once).
         """
+        if amount < 1:
+            raise ValueError("amount must be >= 1")
+
         period = cls._current_period()
 
         query = select(UsageTracking).where(
@@ -70,11 +75,11 @@ class UsageService:
                 family_id=family_id,
                 feature=feature,
                 period_start=period,
-                count=1,
+                count=amount,
             )
             db.add(record)
         else:
-            record.count += 1
+            record.count += amount
 
         await db.commit()
         await db.refresh(record)

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, delete as sql_delete
 from typing import TypeVar, Generic, Type, List, Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.exceptions import NotFoundException
 
@@ -64,6 +64,8 @@ class BaseFamilyService(Generic[ModelType]):
         query = select(cls.model).where(
             and_(cls.model.id == entity_id, cls.model.family_id == family_id)
         )
+        if hasattr(cls.model, "deleted_at"):
+            query = query.where(cls.model.deleted_at.is_(None))
         result = await db.execute(query)
         entity = result.scalar_one_or_none()
 
@@ -97,6 +99,8 @@ class BaseFamilyService(Generic[ModelType]):
             raise NotImplementedError("Subclass must set 'model' class attribute")
 
         query = select(cls.model).where(cls.model.family_id == family_id)
+        if hasattr(cls.model, "deleted_at"):
+            query = query.where(cls.model.deleted_at.is_(None))
 
         # Apply ordering if created_at exists
         if hasattr(cls.model, "created_at"):
@@ -168,7 +172,7 @@ class BaseFamilyService(Generic[ModelType]):
 
         # Update timestamp if exists
         if hasattr(entity, "updated_at"):
-            entity.updated_at = datetime.utcnow()
+            entity.updated_at = datetime.now(timezone.utc)
 
         await db.commit()
         await db.refresh(entity)
@@ -200,6 +204,8 @@ class BaseFamilyService(Generic[ModelType]):
             .select_from(cls.model)
             .where(cls.model.family_id == family_id)
         )
+        if hasattr(cls.model, "deleted_at"):
+            query = query.where(cls.model.deleted_at.is_(None))
         result = await db.execute(query)
         return result.scalar_one()
 

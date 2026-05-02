@@ -360,6 +360,7 @@ async def import_file_transactions(
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.account_id == account_id,
                     BudgetTransaction.imported_id == txn.imported_id,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
                 result = await db.execute(stmt)
                 if result.scalars().first():

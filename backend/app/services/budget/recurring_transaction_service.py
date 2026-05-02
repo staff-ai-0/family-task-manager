@@ -170,6 +170,8 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         account_id: UUID,
         family_id: UUID,
         active_only: bool = True,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[BudgetRecurringTransaction]:
         """
         List all recurring transactions for a specific account.
@@ -196,6 +198,35 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
 
         if active_only:
             query = query.where(BudgetRecurringTransaction.is_active == True)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
+
+        result = await db.execute(query)
+        return list(result.scalars().all())
+
+    @classmethod
+    async def list_by_family_filtered(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        active_only: bool = False,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> List[BudgetRecurringTransaction]:
+        """List family recurring transactions with optional active filter at SQL level."""
+        query = (
+            select(BudgetRecurringTransaction)
+            .where(BudgetRecurringTransaction.family_id == family_id)
+            .order_by(BudgetRecurringTransaction.created_at.desc())
+        )
+        if active_only:
+            query = query.where(BudgetRecurringTransaction.is_active == True)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
 
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -504,3 +535,36 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         await db.commit()
         await db.refresh(transaction)
         return transaction
+
+    @classmethod
+    async def post_all_due(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        as_of_date: Optional[date] = None,
+    ) -> dict:
+        """Post all active recurring transactions due on or before as_of_date.
+
+        Returns {posted, transactions: [{recurring_id, recurring_name, amount, date,
+        transaction_id}]}.
+        """
+        if as_of_date is None:
+            as_of_date = date.today()
+
+        due = await cls.list_due_for_posting(db, family_id, as_of_date)
+
+        posted_info = []
+        for recurring in due:
+            txn = await cls.post_transaction(db, recurring.id, family_id, as_of_date)
+            posted_info.append({
+                "recurring_id": str(recurring.id),
+                "recurring_name": recurring.name,
+                "amount": txn.amount,
+                "date": str(txn.date),
+                "transaction_id": str(txn.id),
+            })
+
+        return {
+            "posted": len(posted_info),
+            "transactions": posted_info,
+        }

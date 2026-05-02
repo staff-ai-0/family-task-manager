@@ -136,13 +136,18 @@ async def get_family_plan(db: AsyncSession, user: User) -> FamilyPlan:
 # ---------------------------------------------------------------------------
 
 async def require_feature(
-    feature: str, db: AsyncSession, user: User
+    feature: str, db: AsyncSession, user: User, units: int = 1
 ) -> FamilyPlan:
     """
-    Ensure the family's plan allows *feature*.
+    Ensure the family's plan allows *feature* for *units* additional usages.
 
-    Returns the FamilyPlan on success, raises HTTP 403 on failure.
+    Returns the FamilyPlan on success, raises HTTP 403 on failure. Pass
+    units > 1 when a single API call would consume multiple chargeable
+    increments (e.g. a split transaction with N child legs).
     """
+    if units < 1:
+        raise ValueError("units must be >= 1")
+
     plan = await get_family_plan(db, user)
     limit_key = FEATURE_LIMIT_MAP.get(feature)
 
@@ -194,7 +199,7 @@ async def require_feature(
     # Check metered usage
     family_id = user.family_id
     current_usage = await UsageService.get_usage(db, family_id, feature)
-    allowed = current_usage < numeric_limit
+    allowed = current_usage + units <= numeric_limit
 
     if allowed:
         return plan

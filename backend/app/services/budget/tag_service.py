@@ -66,6 +66,7 @@ class TagService(BaseFamilyService[BudgetTag]):
                 and_(
                     BudgetTransaction.id == transaction_id,
                     BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
         )
@@ -121,6 +122,7 @@ class TagService(BaseFamilyService[BudgetTag]):
                 and_(
                     BudgetTransaction.id == transaction_id,
                     BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
             )
         )

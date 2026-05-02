@@ -101,12 +101,14 @@ async def get_month_budget(
                 BudgetTransaction.amount > 0,
                 BudgetTransaction.date >= month_date,
                 BudgetTransaction.date <= end_of_month,
+                BudgetTransaction.deleted_at.is_(None),
                 BudgetTransaction.account_id.in_(
                     select(BudgetAccount.id).where(
                         and_(
                             BudgetAccount.family_id == family_id,
                             BudgetAccount.offbudget == False,
                             BudgetAccount.closed == False,
+                            BudgetAccount.deleted_at.is_(None),
                         )
                     )
                 ),

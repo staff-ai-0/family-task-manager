@@ -352,6 +352,7 @@ class CSVImportService:
                     BudgetTransaction.date == date_val,
                     BudgetTransaction.amount == amount_val,
                     BudgetTransaction.imported_id == description,
+                    BudgetTransaction.deleted_at.is_(None),
                 )
                 result_set = await db.execute(stmt)
                 existing = result_set.scalars().first()
@@ -390,6 +391,7 @@ class CSVImportService:
                     stmt = select(BudgetCategory).where(
                         BudgetCategory.family_id == family_id,
                         BudgetCategory.name == category_name,
+                        BudgetCategory.deleted_at.is_(None),
                     )
                     cat_result = await db.execute(stmt)
                     category = cat_result.scalars().first()

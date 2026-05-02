@@ -26,23 +26,26 @@ async def list_accounts(
     account_type: str = Query(None, description="Filter by account type"),
     include_closed: bool = Query(False, description="Include closed accounts"),
     budget_only: bool = Query(False, description="Only on-budget accounts"),
+    limit: int = Query(200, ge=1, le=500, description="Max results"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
 ):
     """List all accounts"""
     family_id = to_uuid_required(current_user.family_id)
-    
+
     if budget_only:
         accounts = await AccountService.list_budget_accounts(
-            db, family_id, include_closed=include_closed
+            db, family_id, include_closed=include_closed, limit=limit, offset=offset
         )
     elif account_type:
         accounts = await AccountService.list_by_type(
-            db, family_id, account_type, include_closed=include_closed
+            db, family_id, account_type, include_closed=include_closed, limit=limit, offset=offset
         )
     else:
-        accounts = await AccountService.list_by_family(db, family_id)
-        if not include_closed:
-            accounts = [a for a in accounts if not a.closed]
-    
+        accounts = await AccountService.list_for_family(
+            db, family_id,
+            include_closed=include_closed, limit=limit, offset=offset,
+        )
+
     return accounts
 
 
