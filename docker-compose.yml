@@ -71,6 +71,20 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: family_app_backend
+    # Load secrets that aren't in the explicit `environment:` block from
+    # the host .env file. Order of precedence inside the container:
+    # explicit `environment:` (below) > `env_file:` > Vault bootstrap >
+    # pydantic defaults. So infra config stays compose-owned while
+    # SECRET_KEY, JWT_SECRET_KEY, GOOGLE_CLIENT_*, PAYPAL_*, RESEND_API_KEY,
+    # ANTHROPIC_API_KEY, LITELLM_API_*, BASE_URL, GOOGLE_REDIRECT_URI, etc.
+    # all come from .env. Vault is still consulted for keys NOT in either.
+    env_file:
+      # required: false lets the stack come up on a fresh clone with no
+      # .env yet (defaults from app.core.config kick in). Compose v2 / new
+      # podman-compose support this; older runtimes ignore the flag and
+      # require the file. `touch .env` works as the universal fallback.
+      - path: .env
+        required: false
     environment:
       # --- Vault bootstrap (required for prod, optional for local dev) ---
       # vault_bootstrap.py reads the KV v2 path at container start and folds
@@ -82,17 +96,12 @@ services:
       VAULT_TOKEN: ${VAULT_TOKEN:-}
       VAULT_PATH: ${VAULT_PATH:-family-task-manager/prod}
       VAULT_MOUNT: ${VAULT_MOUNT:-secret}
-      # --- Infra config (compose owns these, Vault values are ignored) ---
+      # --- Infra config (compose owns these, .env / Vault values are ignored) ---
       DATABASE_URL: postgresql+asyncpg://familyapp:familyapp123@db:5432/familyapp
       TEST_DATABASE_URL: postgresql+asyncpg://familyapp_test:familyapp_test123@test_db:5432/familyapp_test
       REDIS_URL: redis://redis:6379/0
       ALLOWED_ORIGINS: http://localhost:3003,http://localhost:8000,https://family.agent-ia.mx
       DEBUG: ${DEBUG:-false}
-      # --- Non-secret operational defaults ---
-      # These can be overridden by Vault (they're not pre-set in compose).
-      # Anything NOT listed here (SECRET_KEY, JWT_SECRET_KEY, GOOGLE_CLIENT_*,
-      # PAYPAL_*, RESEND_API_KEY, ANTHROPIC_API_KEY, BASE_URL, ...) is fetched
-      # from Vault exclusively — no compose-side leak of secrets.
     ports:
        # Host port is configurable so a deployment can avoid collisions with
        # other services on the same host. Defaults to 8003 to match local-dev
