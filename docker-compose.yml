@@ -94,7 +94,10 @@ services:
       # PAYPAL_*, RESEND_API_KEY, ANTHROPIC_API_KEY, BASE_URL, ...) is fetched
       # from Vault exclusively — no compose-side leak of secrets.
     ports:
-       - "8003:8000"
+       # Host port is configurable so a deployment can avoid collisions with
+       # other services on the same host. Defaults to 8003 to match local-dev
+       # docs. Internal Docker network is unchanged (frontend → backend:8000).
+       - "${BACKEND_HOST_PORT:-8003}:8000"
     volumes:
       - receipt_uploads:/app/uploads
     depends_on:
@@ -120,6 +123,12 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      args:
+        # Astro/Vite inlines PUBLIC_* into the client bundle at build time,
+        # so this must be a build arg, not a runtime env var. Empty string
+        # is fine — the Sign-In button degrades to no-op and password login
+        # still works.
+        PUBLIC_GOOGLE_CLIENT_ID: ${PUBLIC_GOOGLE_CLIENT_ID:-}
     container_name: family_app_frontend
     environment:
       API_BASE_URL: http://backend:8000
