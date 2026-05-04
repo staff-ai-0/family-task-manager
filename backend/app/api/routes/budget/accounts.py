@@ -53,8 +53,11 @@ async def list_accounts(
     for acc in accounts:
         bal = await AccountService.get_balance(db, acc.id, family_id)
         resp = AccountResponse.model_validate(acc)
-        resp.balance_cents = bal["balance"]
-        resp.cleared_balance_cents = bal["cleared_balance"]
+        # SQLAlchemy func.sum() over BigInteger may return Decimal/float on
+        # some drivers (asyncpg). Force int so JSON serializes a number, not
+        # a quoted string — strict mobile clients (Swift Codable) reject str.
+        resp.balance_cents = int(bal["balance"])
+        resp.cleared_balance_cents = int(bal["cleared_balance"])
         responses.append(resp)
     return responses
 
