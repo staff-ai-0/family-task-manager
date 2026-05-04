@@ -160,6 +160,14 @@ class AccountResponse(AccountBase):
     family_id: UUID
     created_at: datetime
     updated_at: datetime
+    balance_cents: Optional[int] = Field(
+        None,
+        description="Computed balance in cents (starting_balance + sum of transactions). Only populated by list endpoints; null on create/update responses.",
+    )
+    cleared_balance_cents: Optional[int] = Field(
+        None,
+        description="Computed cleared balance in cents. Only populated by list endpoints.",
+    )
 
     class Config:
         from_attributes = True
