@@ -46,7 +46,17 @@ async def list_accounts(
             include_closed=include_closed, limit=limit, offset=offset,
         )
 
-    return accounts
+    # Enrich each account with computed balance so the UI doesn't have to
+    # round-trip per account. AccountResponse declares balance_cents +
+    # cleared_balance_cents as optional fields populated only here.
+    responses: List[AccountResponse] = []
+    for acc in accounts:
+        bal = await AccountService.get_balance(db, acc.id, family_id)
+        resp = AccountResponse.model_validate(acc)
+        resp.balance_cents = bal["balance"]
+        resp.cleared_balance_cents = bal["cleared_balance"]
+        responses.append(resp)
+    return responses
 
 
 @router.post("/", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
