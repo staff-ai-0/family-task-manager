@@ -9,18 +9,80 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Stack**: Python 3.12 + FastAPI (backend) · Astro 5 + Tailwind CSS v4 (frontend) · PostgreSQL 15 + Redis 7 · Docker Compose · Anthropic Claude API (receipt scanner)
 
 **Environments**:
-- Local (dev): frontend `http://localhost:3003`, backend `http://localhost:8003/docs` — secrets in `.env` or Vault
-- Production (10.1.0.99 on-prem, Podman rootless): `https://family.agent-ia.mx` (Cloudflare tunnel) — app at `/mnt/nvme/docker-prod/family-task-manager/`, secrets from `platform-vault`
+- Local (dev): frontend `http://localhost:3003`, backend `http://localhost:8003/docs` — secrets in `.env`
+- Production (10.1.0.99 on-prem, **rootless Podman under user `jc`**): `https://family.agent-ia.mx` (Cloudflare tunnel) — app at `/mnt/nvme/docker-prod/family-task-manager/`, secrets in `.env` on host (Vault env vars currently empty; bootstrap falls back to `.env`)
 
-**Production deployment**: `docker-compose.yml` (single compose file is prod-ready; `docker-compose.stage.yml` exists for staging only). Uses shared platform infra: `platform-postgres`, `platform-redis`, `platform-vault`, `litellm-proxy` on platform-network. Canonical deploy script: `./deploy-prod.sh`.
+**Production deployment**: `docker-compose.yml` is prod-ready (`docker-compose.stage.yml` for staging). Preferred restart path is the user-level systemd unit (`systemctl --user restart family-task-manager`), NOT `deploy-prod.sh` — that script invokes `sudo docker compose` which corrupts rootless storage on this host (see "Production runtime" section below).
 
 > Note: There is NO `docker-compose.onprem.yml` or `docker-compose.production.yml`. There is NO `start-onprem.sh`. There is NO `.github/workflows/`. Older docs that referenced these are removed.
 
 ---
 
+## Production runtime (10.1.0.99)
+
+**Rootless Podman under user `jc`** — every stack runs as `jc`, not root.
+- Storage: `/mnt/nvme/podman-storage` (overridden in `~jc/.config/containers/storage.conf`; same path also set in `/etc/containers/storage.conf` and `/root/.config/containers/storage.conf`)
+- Runtime dir: `/run/user/1000/containers`
+- Autostart: user-level systemd units in `~jc/.config/systemd/user/`, linger enabled (`loginctl enable-linger jc`)
+
+Active user units: `family-task-manager.service`, `homeassistant.service`, `cloudflared.service`.
+
+### Critical: never `sudo podman` against this host
+
+Both system and root storage configs point at jc's storage + runtime dir. Running `sudo podman` writes those files as root → jc can no longer read its own state → `podman ps` fails with `permission denied`. Recovery:
+
+```bash
+sudo chown -hR jc:jc /mnt/nvme/podman-storage
+sudo find /run/user/1000 -not -user jc -delete
+```
+
+`deploy-prod.sh` invokes `sudo docker compose` (via the podman-docker shim). On this host that is **wrong** — bypass it. Run `podman-compose` directly as `jc`:
+
+```bash
+ssh jc@10.1.0.99 'cd /mnt/nvme/docker-prod/family-task-manager && podman-compose up -d'
+# preferred — managed by systemd:
+ssh jc@10.1.0.99 'systemctl --user restart family-task-manager'
+```
+
+### Cloudflared is host-wide, not bundled with HA
+
+Tunnel runs standalone at `/mnt/nvme/docker-prod/cloudflared/` with `network_mode: host` and its own `cloudflared.service` user unit. Tunnel ingress is managed remotely via the Cloudflare zero-trust dashboard (`TUNNEL_TOKEN` env activates remote config); the local `config.yaml` is not authoritative.
+
+### Stale netavark rules can break rootless port reachability
+
+Symptom: a rootless service port (e.g. `:3003`) responds on IPv6 (`localhost`, `::1`) but returns "Connection refused" on IPv4 (`127.0.0.1`, `10.1.0.99`). Cause: stale `nv_*_dnat` chain left in the `inet netavark` nftables table from a prior `sudo podman` invocation. Fix:
+
+```bash
+sudo nft delete table inet netavark
+sudo podman network reload --all
+```
+
+---
+
 ## Common Commands
 
-### Docker (recommended workflow)
+### Production / on-prem (rootless podman, as `jc`)
+
+```bash
+# Status / logs
+ssh jc@10.1.0.99 'podman ps'
+ssh jc@10.1.0.99 'podman logs -f family_app_backend'
+ssh jc@10.1.0.99 'sudo journalctl CONTAINER_NAME=family_app_backend --since "10 min ago"'
+
+# Restart whole family stack (preferred — systemd-managed)
+ssh jc@10.1.0.99 'systemctl --user restart family-task-manager'
+
+# Rebuild image after pulling new code
+ssh jc@10.1.0.99 'cd /mnt/nvme/docker-prod/family-task-manager && sudo git pull && podman-compose build backend && systemctl --user restart family-task-manager'
+
+# Tests
+ssh jc@10.1.0.99 'podman exec -e PYTHONPATH=/app family_app_backend pytest tests/ -v'
+
+# Migrations
+ssh jc@10.1.0.99 'podman exec family_app_backend alembic upgrade head'
+```
+
+### Local docker-compose dev
 
 ```bash
 docker compose up -d                                          # Start all services
@@ -101,6 +163,11 @@ Routes must not contain business logic. Services own domain rules. Use `base_ser
 - Sessions stored in Redis
 - Roles: `PARENT` (full access), `TEEN` (extended), `CHILD` (limited)
 - Auth cookies: `secure=True`, `httpOnly=True` in production
+- Google OAuth accepts multiple client IDs: `GOOGLE_CLIENT_ID` (web) plus `GOOGLE_CLIENT_IDS` (comma list, for native iOS/Android client IDs registered under the same Cloud project). `GoogleOAuthService.verify_google_token` skips library-level `aud` validation and checks against the union manually (`backend/app/services/google_oauth_service.py:49-77`).
+
+### JSON serialization for strict clients (iOS Swift, Android Kotlin)
+
+SQLAlchemy `func.sum` over a `BigInteger` column returns a `Decimal` under asyncpg. Pydantic v2 serializes `Decimal` as a JSON **string** even when the schema field is typed `int` — strict-decoding mobile clients then fail with `Expected Int but found String`. **Always cast aggregated numeric values to `int()` before assigning to a Pydantic field.** Canonical pattern: `backend/app/api/routes/budget/accounts.py` (the `list_accounts` enrichment loop).
 
 ### API structure
 
@@ -116,6 +183,8 @@ All routes prefixed `/api/`. Key route groups:
 ### Budget system
 
 Fully native to PostgreSQL (the external "Actual Budget" service was decommissioned in Phase 10). Never re-introduce external budget dependencies.
+
+**Account list endpoint includes computed balance**: `GET /api/budget/accounts/` enriches every row with `balance_cents` + `cleared_balance_cents` (both `Optional[int]`, populated only by list endpoints — null on POST/PUT responses). Avoids N+1 calls from clients. `starting_balance` is the seed value at account creation; when non-zero `AccountService.create` auto-inserts a synthetic "Starting Balance" transaction so the computed balance is correct from day one.
 
 **15 budget models** in `backend/app/models/budget.py`:
 - Core: `BudgetCategoryGroup`, `BudgetCategory`, `BudgetAccount`, `BudgetPayee`, `BudgetTransaction`, `BudgetAllocation`
@@ -194,7 +263,7 @@ Key frontend pages:
 | `backend/app/core/dependencies.py` | `get_current_user` and other FastAPI deps |
 | `backend/app/core/premium.py` | Feature gating, plan resolution, usage limits |
 | `backend/app/services/base_service.py` | CRUD base class — extend for new services |
-| `backend/app/models/budget.py` | All 14 budget tables |
+| `backend/app/models/budget.py` | All 15 budget tables |
 | `backend/app/models/subscription.py` | Subscription plans, family subscriptions, usage tracking |
 | `backend/app/services/budget/receipt_scanner_service.py` | Claude Vision receipt scanning |
 | `backend/app/services/budget/file_import_service.py` | OFX/QIF/CAMT parsers |
@@ -255,3 +324,8 @@ dad@demo.com / password123    (PARENT)
 emma@demo.com / password123   (CHILD)
 lucas@demo.com / password123  (TEEN)
 ```
+
+## Reference data (prod)
+
+- Real user: `juan.mtz79@gmail.com` (PARENT, family_id `1998e48d-2ef0-48b6-a437-cbb730ae935c`)
+- ~60 budget transactions imported from bank statements + receipts (May 2026 batch); 17 accounts including duplicates of card variants (e.g. `Mastercard **9222` and `Mastercard **9222 (USD)` for mixed-currency holdings)
