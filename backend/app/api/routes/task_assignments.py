@@ -18,9 +18,11 @@ from app.services.task_assignment_service import TaskAssignmentService
 from app.schemas.task_assignment import (
     ShuffleRequest,
     ShuffleResponse,
+    ShufflePreviewResponse,
     TaskAssignmentResponse,
     TaskAssignmentWithDetails,
     DailyProgressResponse,
+    AssignmentPatch,
 )
 from app.models import User
 from app.models.task_assignment import AssignmentStatus
@@ -53,6 +55,24 @@ async def shuffle_tasks(
         assignments_created=len(assignments),
         assignments=assignments,
     )
+
+
+@router.get("/shuffle/preview", response_model=ShufflePreviewResponse)
+async def preview_shuffle(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+    week_of: Optional[date] = Query(None, description="Any date in the target week"),
+):
+    """
+    Dry-run shuffle: returns the proposed plan + per-member point totals without
+    persisting anything. Use to preview before POST /shuffle.
+    """
+    preview = await TaskAssignmentService.preview_shuffle(
+        db,
+        family_id=to_uuid_required(current_user.family_id),
+        week_of=week_of,
+    )
+    return preview
 
 
 # ─── Query Assignments ──────────────────────────────────────────────
@@ -129,6 +149,28 @@ async def get_assignment(
     """Get an assignment by ID"""
     assignment = await TaskAssignmentService.get_assignment(
         db, assignment_id, to_uuid_required(current_user.family_id)
+    )
+    return _assignment_to_detail(assignment)
+
+
+@router.patch("/{assignment_id}", response_model=TaskAssignmentWithDetails)
+async def patch_assignment(
+    assignment_id: UUID,
+    patch: AssignmentPatch,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Parent edit on a single assignment: reassign, reschedule, or cancel/revive.
+    Completion goes through /complete (which awards points).
+    """
+    assignment = await TaskAssignmentService.patch_assignment(
+        db,
+        assignment_id,
+        family_id=to_uuid_required(current_user.family_id),
+        assigned_to=patch.assigned_to,
+        assigned_date=patch.assigned_date,
+        status=patch.status,
     )
     return _assignment_to_detail(assignment)
 

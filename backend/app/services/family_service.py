@@ -9,8 +9,8 @@ from typing import List, Optional
 from datetime import datetime
 from uuid import UUID
 
-from app.models import Family, User, Task, Reward, Consequence
-from app.models.task import TaskStatus
+from app.models import Family, User, Reward, Consequence
+from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.family import generate_join_code
 from app.schemas.family import FamilyCreate, FamilyUpdate
 from app.core.exceptions import NotFoundException, ValidationException
@@ -112,20 +112,32 @@ class FamilyService:
             select(func.count()).select_from(User).where(User.family_id == family_id)
         )).scalar()
         
-        # Count tasks
+        # Count task assignments (current task system)
         total_tasks = (await db.execute(
-            select(func.count()).select_from(Task).where(Task.family_id == family_id)
+            select(func.count())
+            .select_from(TaskAssignment)
+            .where(TaskAssignment.family_id == family_id)
         )).scalar()
-        
+
         completed_tasks = (await db.execute(
-            select(func.count()).select_from(Task).where(
-                and_(Task.family_id == family_id, Task.status == TaskStatus.COMPLETED)
+            select(func.count())
+            .select_from(TaskAssignment)
+            .where(
+                and_(
+                    TaskAssignment.family_id == family_id,
+                    TaskAssignment.status == AssignmentStatus.COMPLETED,
+                )
             )
         )).scalar()
-        
+
         pending_tasks = (await db.execute(
-            select(func.count()).select_from(Task).where(
-                and_(Task.family_id == family_id, Task.status == TaskStatus.PENDING)
+            select(func.count())
+            .select_from(TaskAssignment)
+            .where(
+                and_(
+                    TaskAssignment.family_id == family_id,
+                    TaskAssignment.status == AssignmentStatus.PENDING,
+                )
             )
         )).scalar()
         

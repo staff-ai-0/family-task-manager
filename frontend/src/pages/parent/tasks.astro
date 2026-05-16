@@ -25,7 +25,8 @@ if (Astro.request.method === "POST") {
     if (action === "create") {
         const assignmentType = data.get("assignment_type") || "auto";
         const assignedUserIds = data.getAll("assigned_user_ids[]").filter(id => id);
-        
+        const allowedRoles = data.getAll("allowed_roles[]").filter(r => r);
+
         const payload: any = {
             title: data.get("title"),
             description: data.get("description") || null,
@@ -36,6 +37,7 @@ if (Astro.request.method === "POST") {
             is_bonus: data.get("is_bonus") === "on",
             assignment_type: assignmentType,
             assigned_user_ids: assignedUserIds.length > 0 ? assignedUserIds : null,
+            allowed_roles: allowedRoles.length > 0 ? allowedRoles : null,
         };
         const { ok, error } = await apiFetch("/api/task-templates/", {
             method: "POST",
@@ -151,19 +153,37 @@ function freqLabel(interval: number): string {
                     <h2 class="font-bold text-slate-800">{t(lang, "shuffle_title")}</h2>
                 </div>
                 <p class="text-xs text-slate-500 mb-3">{t(lang, "shuffle_desc")}</p>
-                <form method="POST">
-                    <input type="hidden" name="action" value="shuffle" />
+                <div class="flex gap-2">
                     <button
-                        type="submit"
-                        onclick={`return confirm('${t(lang, "shuffle_confirm")}')`}
-                        class="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2"
+                        type="button"
+                        id="btn-shuffle-preview"
+                        data-t-loading={t(lang, "shuffle_preview_loading")}
+                        data-t-error={t(lang, "shuffle_preview_error")}
+                        data-t-empty={t(lang, "shuffle_preview_empty")}
+                        data-t-carry={t(lang, "shuffle_preview_carry")}
+                        data-t-total={t(lang, "shuffle_preview_total")}
+                        class="flex-1 py-2.5 bg-white border border-amber-300 hover:bg-amber-50 text-amber-700 font-semibold text-sm rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2"
                     >
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
-                        {t(lang, "shuffle_btn")}
+                        {t(lang, "shuffle_preview_btn")}
                     </button>
-                </form>
+                    <form method="POST" class="flex-1">
+                        <input type="hidden" name="action" value="shuffle" />
+                        <button
+                            type="submit"
+                            onclick={`return confirm('${t(lang, "shuffle_confirm")}')`}
+                            class="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2"
+                        >
+                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            {t(lang, "shuffle_btn")}
+                        </button>
+                    </form>
+                </div>
                 {assignmentList.length > 0 && (
                     <p class="text-xs text-amber-700 mt-2 text-center">
                         {t(lang, "shuffle_week_of")}: {assignmentList[0]?.week_of} | {(t(lang, "shuffle_assignment_count") as Function)(assignmentList.length)}
@@ -237,7 +257,7 @@ function freqLabel(interval: number): string {
                     </div>
                     <div>
                         <label class="text-xs font-medium text-slate-600 mb-1 block">
-                            Assignment Type
+                            {t(lang, "pt_assignment_type")}
                         </label>
                         <select
                             id="assignment_type"
@@ -245,14 +265,14 @@ function freqLabel(interval: number): string {
                             class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white"
                             onchange="toggleUserSelection(this.value)"
                         >
-                            <option value="auto">Auto - Load Balancing (Default)</option>
-                            <option value="fixed">Fixed - Always same person(s)</option>
-                            <option value="rotate">Rotate - Cycle through specific people</option>
+                            <option value="auto">{t(lang, "pt_assignment_auto")}</option>
+                            <option value="fixed">{t(lang, "pt_assignment_fixed")}</option>
+                            <option value="rotate">{t(lang, "pt_assignment_rotate")}</option>
                         </select>
                     </div>
                     <div id="user_selection_container" class="hidden">
                         <label class="text-xs font-medium text-slate-600 mb-1 block">
-                            Assign To (select one or more)
+                            {t(lang, "pt_assign_to")}
                         </label>
                         <div class="space-y-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
                             {memberList.map((member: any) => (
@@ -269,9 +289,28 @@ function freqLabel(interval: number): string {
                             ))}
                         </div>
                         <p class="text-xs text-slate-500 mt-1">
-                            <strong>Fixed:</strong> Task always assigned to selected person(s). 
-                            <strong>Rotate:</strong> Task cycles through selected people in order.
+                            {t(lang, "pt_assign_hint_fixed")} {t(lang, "pt_assign_hint_rotate")}
                         </p>
+                    </div>
+                    <div>
+                        <label class="text-xs font-medium text-slate-600 mb-1 block">
+                            {t(lang, "pt_allowed_roles")}
+                        </label>
+                        <div class="flex gap-3 flex-wrap p-3 bg-slate-50 rounded-lg border border-slate-200">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" name="allowed_roles[]" value="parent" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-2 focus:ring-primary-500" />
+                                <span class="text-sm text-slate-700">{t(lang, "pt_role_parent")}</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" name="allowed_roles[]" value="teen" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-2 focus:ring-primary-500" />
+                                <span class="text-sm text-slate-700">{t(lang, "pt_role_teen")}</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" name="allowed_roles[]" value="child" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-2 focus:ring-primary-500" />
+                                <span class="text-sm text-slate-700">{t(lang, "pt_role_child")}</span>
+                            </label>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">{t(lang, "pt_allowed_roles_hint")}</p>
                     </div>
                     <div class="flex items-center gap-3 py-1">
                         <label class="relative inline-flex items-center cursor-pointer">
@@ -396,6 +435,38 @@ function freqLabel(interval: number): string {
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
     
+    <!-- Shuffle preview modal -->
+    <div id="preview-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
+        <div class="bg-white w-full md:max-w-2xl max-h-[90vh] rounded-t-2xl md:rounded-2xl shadow-xl border border-slate-200 flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex items-start justify-between gap-3">
+                <div>
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">{t(lang, "shuffle_preview_title")}</p>
+                    <p id="preview-week" class="text-lg font-bold text-slate-800"></p>
+                    <p class="text-xs text-slate-500 mt-0.5">{t(lang, "shuffle_preview_hint")}</p>
+                </div>
+                <button type="button" id="preview-close" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-5 space-y-4">
+                <div id="preview-status" class="text-sm text-slate-500 text-center py-4 hidden"></div>
+                <div id="preview-totals" class="grid grid-cols-2 md:grid-cols-3 gap-2"></div>
+                <div id="preview-plan" class="space-y-2"></div>
+            </div>
+            <div class="p-4 border-t border-slate-100 flex items-center gap-2">
+                <button type="button" id="preview-cancel" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-lg transition-colors">
+                    {t(lang, "shuffle_preview_close")}
+                </button>
+                <form method="POST" class="flex-1">
+                    <input type="hidden" name="action" value="shuffle" />
+                    <button type="submit" class="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm">
+                        {t(lang, "shuffle_preview_apply")}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         document.addEventListener('astro:page-load', () => {
         (window as any).toggleUserSelection = function(assignmentType: string) {
@@ -408,6 +479,93 @@ function freqLabel(interval: number): string {
                 }
             }
         };
+
+        const previewBtn = document.getElementById("btn-shuffle-preview");
+        const modal = document.getElementById("preview-modal");
+        const closeBtn = document.getElementById("preview-close");
+        const cancelBtn = document.getElementById("preview-cancel");
+        const weekEl = document.getElementById("preview-week");
+        const statusEl = document.getElementById("preview-status");
+        const totalsEl = document.getElementById("preview-totals");
+        const planEl = document.getElementById("preview-plan");
+
+        if (!previewBtn || !modal) return;
+
+        const t = {
+            loading: previewBtn.dataset.tLoading ?? "Computing...",
+            error: previewBtn.dataset.tError ?? "Error loading preview.",
+            empty: previewBtn.dataset.tEmpty ?? "No assignments.",
+            carry: previewBtn.dataset.tCarry ?? "carry",
+            total: previewBtn.dataset.tTotal ?? "this week",
+        };
+
+        const close = () => modal.classList.add("hidden");
+        closeBtn?.addEventListener("click", close);
+        cancelBtn?.addEventListener("click", close);
+        modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+
+        previewBtn.addEventListener("click", async () => {
+            modal.classList.remove("hidden");
+            if (totalsEl) totalsEl.innerHTML = "";
+            if (planEl) planEl.innerHTML = "";
+            if (weekEl) weekEl.textContent = "";
+            if (statusEl) {
+                statusEl.textContent = t.loading;
+                statusEl.classList.remove("hidden", "text-red-600");
+                statusEl.classList.add("text-slate-500");
+            }
+
+            try {
+                const res = await fetch("/api/assignments/preview");
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (statusEl) statusEl.classList.add("hidden");
+                if (weekEl) weekEl.textContent = data.week_of ?? "";
+
+                if (totalsEl) {
+                    totalsEl.innerHTML = (data.totals_by_member || [])
+                        .map((m: any) => `
+                            <div class="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                <p class="text-sm font-semibold text-slate-800">${m.user_name}</p>
+                                <p class="text-xs text-slate-500">${m.points_this_week} pts ${t.total} · ${m.points_carry} ${t.carry}</p>
+                            </div>`)
+                        .join("");
+                }
+
+                const items = data.assignments || [];
+                if (planEl) {
+                    if (items.length === 0) {
+                        planEl.innerHTML = `<p class="text-sm text-slate-500 text-center py-4">${t.empty}</p>`;
+                    } else {
+                        // Group by user
+                        const byUser: Record<string, any[]> = {};
+                        for (const a of items) {
+                            const k = a.assigned_user_name || a.assigned_to;
+                            if (!byUser[k]) byUser[k] = [];
+                            byUser[k].push(a);
+                        }
+                        planEl.innerHTML = Object.entries(byUser).map(([name, list]) => `
+                            <div class="bg-white border border-slate-200 rounded-lg p-3">
+                                <p class="text-sm font-bold text-slate-800 mb-2">${name}</p>
+                                <ul class="space-y-1">
+                                    ${list.map((a: any) => `
+                                        <li class="flex justify-between text-xs">
+                                            <span class="text-slate-700 truncate">${a.assigned_date} · ${a.template_title}${a.template_is_bonus ? " ⭐" : ""}</span>
+                                            <span class="text-amber-600 font-semibold ml-2 flex-shrink-0">+${a.template_points}</span>
+                                        </li>`).join("")}
+                                </ul>
+                            </div>`).join("");
+                    }
+                }
+            } catch (err) {
+                console.error("preview error", err);
+                if (statusEl) {
+                    statusEl.textContent = t.error;
+                    statusEl.classList.remove("text-slate-500");
+                    statusEl.classList.add("text-red-600");
+                }
+            }
+        });
         });
     </script>
 </Layout>

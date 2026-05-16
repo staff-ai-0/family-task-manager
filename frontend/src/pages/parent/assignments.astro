@@ -243,8 +243,8 @@ function isToday(d: Date): boolean {
                             </span>
                         </div>
 
-                        <!-- Day columns -->
-                        <div class="grid grid-cols-7 gap-1">
+                        <!-- Day columns (md+) -->
+                        <div class="hidden md:grid grid-cols-7 gap-1">
                             {/* Day headers */}
                             {dayKeys.map((dayKey, i) => (
                                 <div class:list={[
@@ -297,11 +297,24 @@ function isToday(d: Date): boolean {
                                                     : "";
 
                                             const displayTitle = (lang === "es" && task.template_title_es) ? task.template_title_es : task.template_title;
+                                            const editable = task.status === "pending" || task.status === "overdue" || task.status === "cancelled";
 
                                             return (
-                                                <div class={`text-xs px-1 py-0.5 mb-0.5 rounded border ${statusColor} truncate`}
-                                                     title={`${displayTitle} (${task.status})${task.template_is_bonus ? " [BONUS]" : ""}`}>
-                                                    <div class="flex items-center gap-0.5">
+                                                <button
+                                                    type="button"
+                                                    class={`w-full text-left text-xs px-1 py-0.5 mb-0.5 rounded border ${statusColor} truncate ${editable ? "hover:ring-2 hover:ring-sky-300 cursor-pointer" : "cursor-default"}`}
+                                                    title={`${displayTitle} (${task.status})${task.template_is_bonus ? " [BONUS]" : ""}`}
+                                                    disabled={!editable}
+                                                    data-edit-assignment={editable ? "1" : undefined}
+                                                    data-assignment-id={task.id}
+                                                    data-assigned-to={task.assigned_to}
+                                                    data-assigned-date={task.assigned_date}
+                                                    data-current-status={task.status}
+                                                    data-title={displayTitle}
+                                                    data-points={task.template_points}
+                                                    data-is-bonus={task.template_is_bonus ? "1" : "0"}
+                                                >
+                                                    <span class="flex items-center gap-0.5">
                                                         {statusIcon && (
                                                             <svg class="w-2.5 h-2.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                                                                 <path stroke-linecap="round" stroke-linejoin="round" d={statusIcon} />
@@ -312,10 +325,79 @@ function isToday(d: Date): boolean {
                                                                 ? displayTitle.slice(0, 6) + ".."
                                                                 : displayTitle}
                                                         </span>
-                                                    </div>
-                                                </div>
+                                                    </span>
+                                                </button>
                                             );
                                         })}
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <!-- Stacked day rows (mobile) -->
+                        <div class="md:hidden space-y-1.5">
+                            {weekDays.map((day, idx) => {
+                                const dateStr = formatDateISO(day);
+                                const dayTasks = memberAssignments[dateStr] ?? [];
+                                const todayHighlight = isToday(day);
+
+                                return (
+                                    <div class:list={[
+                                        "rounded-lg border overflow-hidden",
+                                        todayHighlight ? "border-sky-300" : "border-slate-200",
+                                    ]}>
+                                        <div class:list={[
+                                            "px-3 py-1.5 flex items-center justify-between text-xs font-semibold",
+                                            todayHighlight ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600",
+                                        ]}>
+                                            <span>{t(lang, dayKeys[idx])} · {day.getDate()}</span>
+                                            <span class:list={[
+                                                "text-[10px] font-normal",
+                                                todayHighlight ? "text-sky-100" : "text-slate-400",
+                                            ]}>
+                                                {dayTasks.length === 0
+                                                    ? "—"
+                                                    : (t(lang, "pac_total_tasks") as Function)(dayTasks.length)}
+                                            </span>
+                                        </div>
+                                        {dayTasks.length > 0 && (
+                                            <div class="bg-white p-2 space-y-1.5">
+                                                {dayTasks.map((task: any) => {
+                                                    const statusColor = task.status === "completed"
+                                                        ? "bg-green-50 text-green-700 border-green-200"
+                                                        : task.status === "overdue"
+                                                            ? "bg-red-50 text-red-700 border-red-200"
+                                                            : task.status === "cancelled"
+                                                                ? "bg-slate-50 text-slate-400 border-slate-200 line-through"
+                                                                : "bg-amber-50 text-amber-700 border-amber-200";
+                                                    const displayTitle = (lang === "es" && task.template_title_es) ? task.template_title_es : task.template_title;
+                                                    const editable = task.status === "pending" || task.status === "overdue" || task.status === "cancelled";
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            class={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border ${statusColor} text-left ${editable ? "active:scale-[0.98]" : "cursor-default"}`}
+                                                            disabled={!editable}
+                                                            data-edit-assignment={editable ? "1" : undefined}
+                                                            data-assignment-id={task.id}
+                                                            data-assigned-to={task.assigned_to}
+                                                            data-assigned-date={task.assigned_date}
+                                                            data-current-status={task.status}
+                                                            data-title={displayTitle}
+                                                            data-points={task.template_points}
+                                                            data-is-bonus={task.template_is_bonus ? "1" : "0"}
+                                                        >
+                                                            <span class="text-sm font-medium truncate">
+                                                                {displayTitle}
+                                                                {task.template_is_bonus && (
+                                                                    <span class="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">{t(lang, "dashboard_bonus_badge")}</span>
+                                                                )}
+                                                            </span>
+                                                            <span class="text-xs font-semibold whitespace-nowrap">+{task.template_points}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -351,4 +433,94 @@ function isToday(d: Date): boolean {
 
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
+
+    <!-- Edit-assignment modal -->
+    <div id="assignment-edit-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
+        <div class="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl shadow-xl border border-slate-200">
+            <form id="assignment-edit-form" method="POST" action="/api/assignments/patch" class="p-5 space-y-4">
+                <input type="hidden" name="assignment_id" id="edit-assignment-id" />
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">{t(lang, "pac_edit_title")}</p>
+                        <h2 id="edit-task-title" class="text-lg font-bold text-slate-800"></h2>
+                        <p id="edit-task-meta" class="text-xs text-slate-500 mt-0.5"></p>
+                    </div>
+                    <button type="button" id="edit-close" class="text-slate-400 hover:text-slate-600">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+
+                <div>
+                    <label class="text-xs font-medium text-slate-600 mb-1 block">{t(lang, "pac_reassign")}</label>
+                    <select name="assigned_to" id="edit-assigned-to" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-sky-500 outline-none bg-white">
+                        {members.map((m: any) => (
+                            <option value={m.id}>{m.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="text-xs font-medium text-slate-600 mb-1 block">{t(lang, "pac_reschedule")}</label>
+                    <input type="date" name="assigned_date" id="edit-assigned-date" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-sky-500 outline-none" />
+                </div>
+
+                <div>
+                    <label class="text-xs font-medium text-slate-600 mb-1 block">{t(lang, "pac_set_status")}</label>
+                    <select name="status" id="edit-status" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-sky-500 outline-none bg-white">
+                        <option value="pending">{t(lang, "pac_keep_pending")}</option>
+                        <option value="cancelled">{t(lang, "pac_set_cancelled")}</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-2 pt-2">
+                    <button type="button" id="edit-cancel" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-lg transition-colors">
+                        {t(lang, "pac_cancel_btn")}
+                    </button>
+                    <button type="submit" class="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm">
+                        {t(lang, "pac_save")}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("astro:page-load", () => {
+            const modal = document.getElementById("assignment-edit-modal");
+            const form = document.getElementById("assignment-edit-form") as HTMLFormElement | null;
+            const idInput = document.getElementById("edit-assignment-id") as HTMLInputElement | null;
+            const titleEl = document.getElementById("edit-task-title");
+            const metaEl = document.getElementById("edit-task-meta");
+            const assignedTo = document.getElementById("edit-assigned-to") as HTMLSelectElement | null;
+            const assignedDate = document.getElementById("edit-assigned-date") as HTMLInputElement | null;
+            const statusSel = document.getElementById("edit-status") as HTMLSelectElement | null;
+            const closeBtn = document.getElementById("edit-close");
+            const cancelBtn = document.getElementById("edit-cancel");
+
+            if (!modal || !form || !idInput || !assignedTo || !assignedDate || !statusSel) return;
+
+            const open = (btn: HTMLElement) => {
+                idInput.value = btn.dataset.assignmentId ?? "";
+                if (titleEl) titleEl.textContent = btn.dataset.title ?? "";
+                if (metaEl) {
+                    const pts = btn.dataset.points ?? "0";
+                    const bonus = btn.dataset.isBonus === "1" ? " · bonus" : "";
+                    metaEl.textContent = `${pts} pts${bonus}`;
+                }
+                assignedTo.value = btn.dataset.assignedTo ?? "";
+                assignedDate.value = btn.dataset.assignedDate ?? "";
+                const current = btn.dataset.currentStatus ?? "pending";
+                statusSel.value = current === "cancelled" ? "cancelled" : "pending";
+                modal.classList.remove("hidden");
+            };
+            const close = () => modal.classList.add("hidden");
+
+            document.querySelectorAll<HTMLButtonElement>("[data-edit-assignment]").forEach((btn) => {
+                btn.addEventListener("click", () => open(btn));
+            });
+            closeBtn?.addEventListener("click", close);
+            cancelBtn?.addEventListener("click", close);
+            modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+        });
+    </script>
 </Layout>

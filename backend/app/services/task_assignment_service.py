@@ -60,39 +60,20 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         return dates
 
     @staticmethod
-    async def shuffle_tasks(
-        db: AsyncSession,
-        family_id: UUID,
-        week_of: Optional[date] = None,
-    ) -> List[TaskAssignment]:
-        """
-        Generate weekly task assignments by shuffling templates across family members.
-
-        Algorithm:
-        1. Get all active non-bonus templates for the family
-        2. Get all family members
-        3. Delete existing PENDING assignments for this week (idempotent re-shuffle)
-        4. Distribute tasks aiming for equitable load (points):
-           - Sort templates by points (Heaviest first)
-           - Daily tasks (interval=1): Rotate among members daily
-           - Weekly tasks (interval=7): Assign to Member/Day with lowest current load
-           - Other intervals: Use standard expansion, assign to best fit member
-        5. Create TaskAssignment records
-
-        Also generates bonus task assignments (assigned to all members).
-        """
-        # Determine the Monday of the target week
+    def _resolve_week_monday(week_of: Optional[date]) -> date:
+        """Pick the target week's Monday. Sundays bump to next week."""
         if week_of is None:
             today = date.today()
-            # If called on Sunday, target next week; otherwise target current week
-            if today.weekday() == 6:  # Sunday
-                week_monday = today + timedelta(days=1)
-            else:
-                week_monday = TaskAssignmentService._get_monday(today)
-        else:
-            week_monday = TaskAssignmentService._get_monday(week_of)
+            if today.weekday() == 6:  # Sunday → next week
+                return today + timedelta(days=1)
+            return TaskAssignmentService._get_monday(today)
+        return TaskAssignmentService._get_monday(week_of)
 
-        # 1. Get active templates
+    @staticmethod
+    async def _load_shuffle_inputs(
+        db: AsyncSession, family_id: UUID
+    ) -> tuple[list[TaskTemplate], list[TaskTemplate], list[User]]:
+        """Fetch regular templates, bonus templates, and active members."""
         regular_query = select(TaskTemplate).where(
             and_(
                 TaskTemplate.family_id == family_id,
@@ -100,9 +81,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 TaskTemplate.is_bonus == False,
             )
         )
-        regular_templates = list(
-            (await db.execute(regular_query)).scalars().all()
-        )
+        regular_templates = list((await db.execute(regular_query)).scalars().all())
 
         bonus_query = select(TaskTemplate).where(
             and_(
@@ -111,11 +90,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 TaskTemplate.is_bonus == True,
             )
         )
-        bonus_templates = list(
-            (await db.execute(bonus_query)).scalars().all()
-        )
+        bonus_templates = list((await db.execute(bonus_query)).scalars().all())
 
-        # 2. Get all active family members
         members_query = select(User).where(
             and_(
                 User.family_id == family_id,
@@ -124,12 +100,236 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         )
         members = list((await db.execute(members_query)).scalars().all())
 
+        return regular_templates, bonus_templates, members
+
+    @staticmethod
+    async def _compute_member_carry(
+        db: AsyncSession,
+        family_id: UUID,
+        week_monday: date,
+        member_ids: list[UUID],
+        lookback_weeks: int = 2,
+    ) -> dict[UUID, int]:
+        """
+        Cross-week fairness: sum of template points assigned to each member in the
+        prior `lookback_weeks`. Members with high carry are picked LAST.
+        Excludes CANCELLED rows.
+        """
+        if lookback_weeks <= 0 or not member_ids:
+            return {mid: 0 for mid in member_ids}
+
+        start = week_monday - timedelta(weeks=lookback_weeks)
+        query = (
+            select(
+                TaskAssignment.assigned_to,
+                func.coalesce(func.sum(TaskTemplate.points), 0).label("pts"),
+            )
+            .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
+            .where(
+                and_(
+                    TaskAssignment.family_id == family_id,
+                    TaskAssignment.week_of >= start,
+                    TaskAssignment.week_of < week_monday,
+                    TaskAssignment.status != AssignmentStatus.CANCELLED,
+                )
+            )
+            .group_by(TaskAssignment.assigned_to)
+        )
+        rows = (await db.execute(query)).all()
+        carry = {mid: 0 for mid in member_ids}
+        for user_id, pts in rows:
+            if user_id in carry:
+                carry[user_id] = int(pts or 0)
+        return carry
+
+    @staticmethod
+    def _compute_assignments(
+        rng: random.Random,
+        family_id: UUID,
+        week_monday: date,
+        regular_templates: list[TaskTemplate],
+        bonus_templates: list[TaskTemplate],
+        members: list[User],
+        member_carry: Optional[dict[UUID, int]] = None,
+    ) -> tuple[list[TaskAssignment], dict[UUID, int]]:
+        """
+        Pure builder — produces TaskAssignment instances WITHOUT db.add/commit.
+        Caller decides whether to persist.
+
+        Returns (assignments, totals_per_member) where totals exclude carry.
+        """
         if not members:
             raise ValidationException("No active family members found")
-            
-        random.shuffle(members)  # Randomize order to avoid bias in ties
 
-        # 3. Delete existing PENDING assignments for this week
+        members = list(members)
+        rng.shuffle(members)  # Tie-break ordering for ties — deterministic via seeded rng
+
+        week_dates = [week_monday + timedelta(days=i) for i in range(7)]
+        date_strs = [d.isoformat() for d in week_dates]
+
+        member_load = {m.id: {d_str: 0 for d_str in date_strs} for m in members}
+        carry = member_carry or {m.id: 0 for m in members}
+        # Member total (current week) — used for cross-day fairness comparisons
+        member_total = {m.id: 0 for m in members}
+        totals: dict[UUID, int] = {m.id: 0 for m in members}
+
+        regular_templates = sorted(regular_templates, key=lambda t: t.points, reverse=True)
+        rotation_state: dict[UUID, int] = {}
+        assignments: list[TaskAssignment] = []
+
+        def _new_assignment(template_id: UUID, user_id: UUID, d: date) -> TaskAssignment:
+            return TaskAssignment(
+                template_id=template_id,
+                assigned_to=user_id,
+                family_id=family_id,
+                status=AssignmentStatus.PENDING,
+                assigned_date=d,
+                week_of=week_monday,
+            )
+
+        def _credit(user_id: UUID, d: date, points: int) -> None:
+            member_load[user_id][d.isoformat()] += points
+            member_total[user_id] += points
+            totals[user_id] += points
+
+        def _bias(user_id: UUID) -> int:
+            return member_total[user_id] + carry.get(user_id, 0)
+
+        for template in regular_templates:
+            eligible_members = members
+
+            allowed = template.allowed_roles or None
+            if allowed:
+                allowed_lower = {r.lower() for r in allowed}
+                eligible_members = [
+                    m for m in eligible_members
+                    if (m.role.value if hasattr(m.role, "value") else str(m.role)).lower()
+                    in allowed_lower
+                ]
+                if not eligible_members:
+                    continue
+
+            if template.assignment_type == AssignmentType.FIXED:
+                if not template.assigned_user_ids:
+                    continue
+                eligible_members = [m for m in members if str(m.id) in template.assigned_user_ids]
+                if not eligible_members:
+                    continue
+            elif template.assignment_type == AssignmentType.ROTATE:
+                if not template.assigned_user_ids:
+                    continue
+                eligible_members = [m for m in members if str(m.id) in template.assigned_user_ids]
+                if not eligible_members:
+                    continue
+                rotation_state.setdefault(template.id, 0)
+
+            if template.interval_days == 7:
+                task_dates = week_dates
+            else:
+                task_dates = TaskAssignmentService._expand_dates(
+                    week_monday, template.interval_days
+                )
+
+            if template.assignment_type == AssignmentType.FIXED:
+                fixed_user = eligible_members[0]
+                for d in task_dates:
+                    assignments.append(_new_assignment(template.id, fixed_user.id, d))
+                    _credit(fixed_user.id, d, template.points)
+
+            elif template.assignment_type == AssignmentType.ROTATE:
+                for d in task_dates:
+                    idx = rotation_state[template.id]
+                    chosen = eligible_members[idx % len(eligible_members)]
+                    assignments.append(_new_assignment(template.id, chosen.id, d))
+                    _credit(chosen.id, d, template.points)
+                    rotation_state[template.id] += 1
+
+            else:  # AUTO
+                if template.interval_days == 7:
+                    # Pick (member, day) slot with min (day-load + cross-week bias)
+                    candidates = [
+                        (member_load[m.id][d.isoformat()] + _bias(m.id), m, d)
+                        for m in eligible_members
+                        for d in week_dates
+                    ]
+                    rng.shuffle(candidates)
+                    _, best_member, best_date = min(candidates, key=lambda x: x[0])
+                    assignments.append(
+                        _new_assignment(template.id, best_member.id, best_date)
+                    )
+                    _credit(best_member.id, best_date, template.points)
+
+                elif template.interval_days == 1:
+                    for d in week_dates:
+                        d_str = d.isoformat()
+                        day_candidates = [
+                            (member_load[m.id][d_str] + _bias(m.id), m)
+                            for m in eligible_members
+                        ]
+                        rng.shuffle(day_candidates)
+                        _, best_member = min(day_candidates, key=lambda x: x[0])
+                        assignments.append(
+                            _new_assignment(template.id, best_member.id, d)
+                        )
+                        _credit(best_member.id, d, template.points)
+
+                else:
+                    dates = task_dates
+                    candidates = []
+                    for m in eligible_members:
+                        max_impact = 0
+                        cum = 0
+                        for d in dates:
+                            load = member_load[m.id][d.isoformat()]
+                            if load > max_impact:
+                                max_impact = load
+                            cum += load
+                        candidates.append(
+                            (cum + _bias(m.id), max_impact, m)
+                        )
+                    rng.shuffle(candidates)
+                    _, _, best_member = min(candidates, key=lambda x: (x[0], x[1]))
+                    for d in dates:
+                        assignments.append(
+                            _new_assignment(template.id, best_member.id, d)
+                        )
+                        _credit(best_member.id, d, template.points)
+
+        for template in bonus_templates:
+            dates = TaskAssignmentService._expand_dates(
+                week_monday, template.interval_days
+            )
+            for d in dates:
+                for member in members:
+                    assignments.append(_new_assignment(template.id, member.id, d))
+
+        return assignments, totals
+
+    @staticmethod
+    async def shuffle_tasks(
+        db: AsyncSession,
+        family_id: UUID,
+        week_of: Optional[date] = None,
+    ) -> List[TaskAssignment]:
+        """
+        Generate weekly task assignments by shuffling templates across family members.
+
+        Deterministic per (family_id, week_monday): same input → same output.
+        Idempotent for PENDING (re-shuffle replaces only PENDING rows).
+        """
+        week_monday = TaskAssignmentService._resolve_week_monday(week_of)
+
+        regular_templates, bonus_templates, members = (
+            await TaskAssignmentService._load_shuffle_inputs(db, family_id)
+        )
+
+        carry = await TaskAssignmentService._compute_member_carry(
+            db, family_id, week_monday, [m.id for m in members]
+        )
+
+        rng = random.Random(f"{family_id}:{week_monday.isoformat()}")
+
+        # Delete existing PENDING rows for this week (preserves completed/overdue/cancelled)
         delete_stmt = sql_delete(TaskAssignment).where(
             and_(
                 TaskAssignment.family_id == family_id,
@@ -139,199 +339,87 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         )
         await db.execute(delete_stmt)
 
-        assignments: List[TaskAssignment] = []
-        
-        # LOAD BALANCING SETUP
-        # Track load[member_id][date_iso] = total_points
-        # Dates are Mon-Sun of the target week
-        week_dates = [week_monday + timedelta(days=i) for i in range(7)]
-        date_strs = [d.isoformat() for d in week_dates]
-        
-        member_load = {m.id: {d_str: 0 for d_str in date_strs} for m in members}
-        
-        # Sort templates by points descending (allocate heavy tasks first)
-        regular_templates.sort(key=lambda t: t.points, reverse=True)
-        
-        # Track rotation state for ROTATE templates (template_id -> current_index)
-        rotation_state = {}
-        
-        for template in regular_templates:
-            # Determine which users can be assigned to this template
-            eligible_members = members
-            
-            if template.assignment_type == AssignmentType.FIXED:
-                # FIXED: Only assign to specific user(s)
-                if not template.assigned_user_ids:
-                    continue  # Skip if no users assigned
-                eligible_members = [m for m in members if str(m.id) in template.assigned_user_ids]
-                if not eligible_members:
-                    continue  # Skip if assigned users not found
-                    
-            elif template.assignment_type == AssignmentType.ROTATE:
-                # ROTATE: Rotate among specific users in order
-                if not template.assigned_user_ids or len(template.assigned_user_ids) == 0:
-                    continue  # Skip if no users assigned
-                eligible_members = [m for m in members if str(m.id) in template.assigned_user_ids]
-                if not eligible_members:
-                    continue  # Skip if assigned users not found
-                # Initialize rotation index for this template
-                if template.id not in rotation_state:
-                    rotation_state[template.id] = 0
-            
-            # Calculate dates for this template
-            if template.interval_days == 7:
-                # Weekly task - pick best day
-                task_dates = week_dates  # Consider all days
-            else:
-                task_dates = TaskAssignmentService._expand_dates(week_monday, template.interval_days)
-            
-            # Assignment logic based on type and interval
-            if template.assignment_type == AssignmentType.FIXED:
-                # FIXED: Always assign to the same user (first in list for simplicity)
-                fixed_user = eligible_members[0]
-                
-                for d in task_dates:
-                    assignment = TaskAssignment(
-                        template_id=template.id,
-                        assigned_to=fixed_user.id,
-                        family_id=family_id,
-                        status=AssignmentStatus.PENDING,
-                        assigned_date=d,
-                        week_of=week_monday,
-                    )
-                    db.add(assignment)
-                    assignments.append(assignment)
-                    member_load[fixed_user.id][d.isoformat()] += template.points
-                    
-            elif template.assignment_type == AssignmentType.ROTATE:
-                # ROTATE: Cycle through eligible users in order
-                for d in task_dates:
-                    # Get next user in rotation
-                    current_idx = rotation_state[template.id]
-                    assigned_user = eligible_members[current_idx % len(eligible_members)]
-                    
-                    assignment = TaskAssignment(
-                        template_id=template.id,
-                        assigned_to=assigned_user.id,
-                        family_id=family_id,
-                        status=AssignmentStatus.PENDING,
-                        assigned_date=d,
-                        week_of=week_monday,
-                    )
-                    db.add(assignment)
-                    assignments.append(assignment)
-                    member_load[assigned_user.id][d.isoformat()] += template.points
-                    
-                    # Advance rotation
-                    rotation_state[template.id] += 1
-                    
-            else:  # AUTO (default)
-                # Original load-balancing algorithm
-                # Case A: Weekly Tasks (interval=7) - Flexible Day
-                if template.interval_days == 7:
-                    # Find the (member, day) slot with the absolute lowest current load
-                    candidates = []
-                    for m in eligible_members:
-                        for d in week_dates:
-                            d_str = d.isoformat()
-                            load = member_load[m.id][d_str]
-                            candidates.append((load, m, d))
-                    
-                    random.shuffle(candidates)
-                    best_candidate = min(candidates, key=lambda x: x[0])
-                    _, best_member, best_date = best_candidate
-                    
-                    # Assign
-                    assignment = TaskAssignment(
-                        template_id=template.id,
-                        assigned_to=best_member.id,
-                        family_id=family_id,
-                        status=AssignmentStatus.PENDING,
-                        assigned_date=best_date,
-                        week_of=week_monday,
-                    )
-                    db.add(assignment)
-                    assignments.append(assignment)
-                    member_load[best_member.id][best_date.isoformat()] += template.points
-                    
-                # Case B: Daily Tasks (interval=1) - Fixed Day, Rotate Member
-                elif template.interval_days == 1:
-                    for d in week_dates:
-                        d_str = d.isoformat()
-                        # Find member with lowest load on this specific day
-                        day_candidates = [(member_load[m.id][d_str], m) for m in eligible_members]
-                        random.shuffle(day_candidates)
-                        _, best_member = min(day_candidates, key=lambda x: x[0])
-                        
-                        assignment = TaskAssignment(
-                            template_id=template.id,
-                            assigned_to=best_member.id,
-                            family_id=family_id,
-                            status=AssignmentStatus.PENDING,
-                            assigned_date=d,
-                            week_of=week_monday,
-                        )
-                        db.add(assignment)
-                        assignments.append(assignment)
-                        member_load[best_member.id][d_str] += template.points
+        assignments, _ = TaskAssignmentService._compute_assignments(
+            rng,
+            family_id,
+            week_monday,
+            regular_templates,
+            bonus_templates,
+            members,
+            member_carry=carry,
+        )
 
-                # Case C: Other Intervals (e.g. 3) - Fixed Pattern, Best Member
-                else:
-                    dates = TaskAssignmentService._expand_dates(week_monday, template.interval_days)
-                    
-                    # Find member who can take this SET of dates with least impact
-                    candidates = []
-                    for m in eligible_members:
-                        max_impact = 0
-                        current_sum = 0
-                        for d in dates:
-                            d_str = d.isoformat()
-                            load = member_load[m.id][d_str]
-                            if load > max_impact: max_impact = load
-                            current_sum += load
-                        candidates.append((current_sum, max_impact, m))
-                    
-                    random.shuffle(candidates)
-                    _, _, best_member = min(candidates, key=lambda x: (x[0], x[1]))
-                    
-                    for d in dates:
-                        assignment = TaskAssignment(
-                            template_id=template.id,
-                            assigned_to=best_member.id,
-                            family_id=family_id,
-                            status=AssignmentStatus.PENDING,
-                            assigned_date=d,
-                            week_of=week_monday,
-                        )
-                        db.add(assignment)
-                        assignments.append(assignment)
-                        member_load[best_member.id][d.isoformat()] += template.points
-
-        # 7. Bonus templates — assign to ALL members on their dates
-        for template in bonus_templates:
-            dates = TaskAssignmentService._expand_dates(
-                week_monday, template.interval_days
-            )
-            for d in dates:
-                for member in members:
-                    assignment = TaskAssignment(
-                        template_id=template.id,
-                        assigned_to=member.id,
-                        family_id=family_id,
-                        status=AssignmentStatus.PENDING,
-                        assigned_date=d,
-                        week_of=week_monday,
-                    )
-                    db.add(assignment)
-                    assignments.append(assignment)
+        for a in assignments:
+            db.add(a)
 
         await db.commit()
-
-        # Refresh all assignments to get IDs
-        for assignment in assignments:
-            await db.refresh(assignment)
+        for a in assignments:
+            await db.refresh(a)
 
         return assignments
+
+    @staticmethod
+    async def preview_shuffle(
+        db: AsyncSession,
+        family_id: UUID,
+        week_of: Optional[date] = None,
+    ) -> dict:
+        """
+        Dry-run shuffle — no DB writes. Returns the proposed assignment plan plus
+        per-member point totals (current week) and cross-week carry used for bias.
+        """
+        week_monday = TaskAssignmentService._resolve_week_monday(week_of)
+
+        regular_templates, bonus_templates, members = (
+            await TaskAssignmentService._load_shuffle_inputs(db, family_id)
+        )
+        carry = await TaskAssignmentService._compute_member_carry(
+            db, family_id, week_monday, [m.id for m in members]
+        )
+
+        rng = random.Random(f"{family_id}:{week_monday.isoformat()}")
+        assignments, totals = TaskAssignmentService._compute_assignments(
+            rng,
+            family_id,
+            week_monday,
+            regular_templates,
+            bonus_templates,
+            members,
+            member_carry=carry,
+        )
+
+        # Build lightweight detail dicts (no DB IDs since not persisted)
+        member_by_id = {m.id: m for m in members}
+        template_by_id = {t.id: t for t in (regular_templates + bonus_templates)}
+        items = []
+        for a in assignments:
+            tmpl = template_by_id.get(a.template_id)
+            mem = member_by_id.get(a.assigned_to)
+            items.append({
+                "template_id": a.template_id,
+                "template_title": tmpl.title if tmpl else "",
+                "template_title_es": tmpl.title_es if tmpl else None,
+                "template_points": tmpl.points if tmpl else 0,
+                "template_is_bonus": tmpl.is_bonus if tmpl else False,
+                "assigned_to": a.assigned_to,
+                "assigned_user_name": mem.name if mem else "",
+                "assigned_date": a.assigned_date,
+                "week_of": a.week_of,
+            })
+
+        return {
+            "week_of": week_monday,
+            "totals_by_member": [
+                {
+                    "user_id": m.id,
+                    "user_name": m.name,
+                    "points_this_week": totals.get(m.id, 0),
+                    "points_carry": carry.get(m.id, 0),
+                }
+                for m in members
+            ],
+            "assignments": items,
+        }
 
     # ─── Assignment Queries ──────────────────────────────────────────
 
@@ -537,6 +625,60 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         return assignment
 
+    # ─── Parent Edit (reassign / reschedule / cancel) ────────────────
+
+    @staticmethod
+    async def patch_assignment(
+        db: AsyncSession,
+        assignment_id: UUID,
+        family_id: UUID,
+        assigned_to: Optional[UUID] = None,
+        assigned_date: Optional[date] = None,
+        status: Optional[AssignmentStatus] = None,
+    ) -> TaskAssignment:
+        """
+        Parent-only edit on an individual assignment.
+
+        - assigned_to: must belong to same family.
+        - assigned_date: any date; week_of recomputed to its Monday.
+        - status: only PENDING (revive) or CANCELLED allowed. COMPLETED must go
+          through complete_assignment() so points are awarded correctly.
+        """
+        assignment = await TaskAssignmentService.get_assignment(
+            db, assignment_id, family_id
+        )
+
+        if status is not None and status not in (
+            AssignmentStatus.PENDING,
+            AssignmentStatus.CANCELLED,
+        ):
+            raise ValidationException(
+                "PATCH only allows status=pending or status=cancelled. Use /complete to mark completed."
+            )
+
+        if assigned_to is not None:
+            new_user = await get_user_by_id(db, assigned_to)
+            if new_user.family_id != family_id:
+                raise ForbiddenException(
+                    "Cannot assign to a user outside this family"
+                )
+            assignment.assigned_to = assigned_to
+
+        if assigned_date is not None:
+            assignment.assigned_date = assigned_date
+            assignment.week_of = TaskAssignmentService._get_monday(assigned_date)
+
+        if status is not None:
+            assignment.status = status
+            if status == AssignmentStatus.PENDING:
+                assignment.completed_at = None
+
+        await db.commit()
+        # Re-fetch with template + user eagerly loaded
+        return await TaskAssignmentService.get_assignment(
+            db, assignment_id, family_id
+        )
+
     # ─── Daily Progress ──────────────────────────────────────────────
 
     @staticmethod
@@ -604,3 +746,26 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             await db.commit()
 
         return assignments
+
+    @staticmethod
+    async def mark_overdue_all(db: AsyncSession) -> int:
+        """
+        Sweep across ALL families: flip PENDING rows with assigned_date < today
+        to OVERDUE. Returns row count. Intended for the background scheduler.
+        """
+        today = date.today()
+        from sqlalchemy import update as sql_update
+
+        stmt = (
+            sql_update(TaskAssignment)
+            .where(
+                and_(
+                    TaskAssignment.status == AssignmentStatus.PENDING,
+                    TaskAssignment.assigned_date < today,
+                )
+            )
+            .values(status=AssignmentStatus.OVERDUE, updated_at=datetime.utcnow())
+        )
+        result = await db.execute(stmt)
+        await db.commit()
+        return result.rowcount or 0
