@@ -29,6 +29,21 @@ class ShuffleRequest(BaseModel):
     )
 
 
+class AssignmentPatch(BaseModel):
+    """Schema for parent edits to a single assignment (reassign / reschedule / cancel)"""
+
+    assigned_to: Optional[UUID] = Field(
+        None, description="Move assignment to a different family member"
+    )
+    assigned_date: Optional[date] = Field(
+        None, description="Move assignment to a different date (week_of recomputed)"
+    )
+    status: Optional[AssignmentStatus] = Field(
+        None,
+        description="Set status. Only 'cancelled' and 'pending' allowed here — use /complete to award points.",
+    )
+
+
 # Response schemas
 class TaskAssignmentResponse(FamilyEntityResponse):
     """Schema for task assignment response"""
@@ -62,6 +77,31 @@ class ShuffleResponse(BaseModel):
     week_of: date
     assignments_created: int
     assignments: List[TaskAssignmentResponse]
+
+
+class ShufflePreviewMemberTotal(BaseModel):
+    user_id: UUID
+    user_name: str
+    points_this_week: int
+    points_carry: int
+
+
+class ShufflePreviewItem(BaseModel):
+    template_id: UUID
+    template_title: str
+    template_title_es: Optional[str] = None
+    template_points: int
+    template_is_bonus: bool
+    assigned_to: UUID
+    assigned_user_name: str
+    assigned_date: date
+    week_of: date
+
+
+class ShufflePreviewResponse(BaseModel):
+    week_of: date
+    totals_by_member: List[ShufflePreviewMemberTotal]
+    assignments: List[ShufflePreviewItem]
 
 
 class DailyProgressResponse(BaseModel):

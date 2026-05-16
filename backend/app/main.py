@@ -1,3 +1,6 @@
+import asyncio
+from datetime import datetime, timedelta, time
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -5,16 +8,34 @@ from contextlib import asynccontextmanager
 import logging
 
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
-from app.api.routes import auth, users, tasks, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion, invitations, subscriptions
+from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion, invitations, subscriptions
 from app.api.routes.budget import router as budget_router
+from app.services.task_assignment_service import TaskAssignmentService
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+async def _overdue_sweep_loop() -> None:
+    """Background loop: every 60 minutes, mark stale PENDING assignments OVERDUE."""
+    # Run once on startup so a fresh boot catches anything missed during downtime.
+    await asyncio.sleep(30)
+    while True:
+        try:
+            async with AsyncSessionLocal() as session:
+                flipped = await TaskAssignmentService.mark_overdue_all(session)
+                if flipped:
+                    logger.info("Overdue sweep flipped %d assignment(s)", flipped)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Overdue sweep failed")
+        await asyncio.sleep(60 * 60)  # 1 hour
 
 
 @asynccontextmanager
@@ -30,10 +51,17 @@ async def lifespan(app: FastAPI):
     # async with engine.begin() as conn:
     #     await conn.run_sync(Base.metadata.create_all)
 
+    overdue_task = asyncio.create_task(_overdue_sweep_loop())
+
     yield
 
     # Shutdown
     logger.info("Shutting down API...")
+    overdue_task.cancel()
+    try:
+        await overdue_task
+    except asyncio.CancelledError:
+        pass
     await engine.dispose()
 
 
@@ -74,7 +102,6 @@ app.include_router(oauth.router, prefix="/api/oauth", tags=["OAuth"])
 app.include_router(payment.router, prefix="/api/payment", tags=["Payment"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(families.router, prefix="/api/families", tags=["Families"])
-app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks (Legacy)"])
 app.include_router(task_templates.router, prefix="/api/task-templates", tags=["Task Templates"])
 app.include_router(task_assignments.router, prefix="/api/task-assignments", tags=["Task Assignments"])
 app.include_router(rewards.router, prefix="/api/rewards", tags=["Rewards"])

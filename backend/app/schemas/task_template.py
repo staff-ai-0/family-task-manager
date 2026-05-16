@@ -25,6 +25,10 @@ class TaskTemplateBase(BaseModel):
     is_bonus: bool = False
     assignment_type: AssignmentType = AssignmentType.AUTO
     assigned_user_ids: Optional[List[UUID]] = Field(None, description="User UUIDs for FIXED or ROTATE assignment")
+    allowed_roles: Optional[List[str]] = Field(
+        None,
+        description="Role strings (parent/teen/child) eligible under AUTO. Null/empty = all roles allowed.",
+    )
 
 
 # Request schemas
@@ -47,6 +51,7 @@ class TaskTemplateUpdate(BaseModel):
     is_active: Optional[bool] = None
     assignment_type: Optional[AssignmentType] = None
     assigned_user_ids: Optional[List[UUID]] = None
+    allowed_roles: Optional[List[str]] = None
 
 
 # Response schemas
@@ -64,6 +69,7 @@ class TaskTemplateResponse(FamilyEntityResponse):
     created_by: Optional[UUID] = None
     assignment_type: AssignmentType
     assigned_user_ids: Optional[List[UUID]] = None
+    allowed_roles: Optional[List[str]] = None
 
 
 class TaskTemplateWithStats(TaskTemplateResponse):

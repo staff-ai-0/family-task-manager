@@ -10,7 +10,7 @@ from typing import List, Optional
 from datetime import datetime
 from uuid import UUID
 
-from app.models import Consequence, User, Task
+from app.models import Consequence, User
 from app.models.consequence import ConsequenceSeverity, RestrictionType
 from app.schemas.consequence import ConsequenceCreate, ConsequenceUpdate
 from app.core.exceptions import (

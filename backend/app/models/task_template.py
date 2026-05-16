@@ -59,6 +59,11 @@ class TaskTemplate(Base):
         nullable=True,
         comment="List of user UUIDs for FIXED or ROTATE assignment types"
     )
+    allowed_roles = Column(
+        JSONB,
+        nullable=True,
+        comment="List of role strings (parent/teen/child) eligible under AUTO. Null = all roles allowed."
+    )
 
     # Classification
     is_bonus = Column(Boolean, default=False, nullable=False)
