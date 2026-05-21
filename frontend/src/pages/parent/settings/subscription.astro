@@ -282,18 +282,23 @@ function cellClass(value: any): string {
 
                 <!-- Upgrade / Cancel Buttons -->
                 <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                    {currentPlanName === "free" && (
+                        <button
+                            class="upgrade-btn px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                            data-plan="plus"
+                            data-cycle="monthly"
+                        >
+                            {l.upgrade} → {l.plus}
+                        </button>
+                    )}
                     {currentPlanName !== "pro" && (
-                        <div class="relative group">
-                            <button
-                                disabled
-                                class="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg opacity-60 cursor-not-allowed"
-                            >
-                                {l.upgrade}
-                            </button>
-                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                                {l.coming_soon}
-                            </div>
-                        </div>
+                        <button
+                            class="upgrade-btn px-6 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors"
+                            data-plan="pro"
+                            data-cycle="monthly"
+                        >
+                            {l.upgrade} → {l.pro}
+                        </button>
                     )}
                     {isPaid && isActive && (
                         <button
@@ -327,5 +332,36 @@ function cellClass(value: any): string {
                 }
             });
         }
+
+        document.querySelectorAll('.upgrade-btn').forEach((btn) => {
+            btn.addEventListener('click', async (evt) => {
+                const target = evt.currentTarget;
+                const plan = target.dataset.plan;
+                const cycle = target.dataset.cycle || 'monthly';
+                const originalText = target.textContent;
+                target.disabled = true;
+                target.textContent = '...';
+                try {
+                    const resp = await fetch('/api/subscriptions/checkout', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ plan_name: plan, billing_cycle: cycle }),
+                    });
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(() => ({ detail: 'Error' }));
+                        alert('Upgrade failed: ' + (err.detail || resp.statusText));
+                        target.disabled = false;
+                        target.textContent = originalText;
+                        return;
+                    }
+                    const data = await resp.json();
+                    window.location.href = data.approval_url;
+                } catch (e) {
+                    alert('Network error: ' + e);
+                    target.disabled = false;
+                    target.textContent = originalText;
+                }
+            });
+        });
     });
 </script>
