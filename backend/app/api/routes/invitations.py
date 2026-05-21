@@ -13,6 +13,7 @@ from app.core.dependencies import get_current_user, require_parent_role, verify_
 from app.core.config import settings
 from app.core.type_utils import to_uuid_required
 from app.core.security import create_access_token
+from app.core.premium import require_feature
 from app.services.invitation_service import InvitationService
 from app.services.email_service import EmailService
 from app.schemas.invitation import (
@@ -53,7 +54,12 @@ async def send_invitation(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to invite to this family"
         )
-    
+
+    # Gate behind premium — each pending+accepted invitation consumes
+    # one family_member quota slot. Block before InvitationService.send
+    # so we never queue an email the plan cannot honor.
+    await require_feature("family_member", db, current_user)
+
     try:
         invitation = await InvitationService.send_invitation(
             db=db,
