@@ -36,6 +36,7 @@ async def list_goals(
     offset: int = Query(0, ge=0, description="Pagination offset"),
 ):
     """List budget goals for the family"""
+    await require_feature("budget_goals", db, current_user)
     family_id = to_uuid_required(current_user.family_id)
 
     if category_id:
@@ -74,6 +75,7 @@ async def get_goal(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific budget goal"""
+    await require_feature("budget_goals", db, current_user)
     goal = await GoalService.get_by_id(
         db, goal_id, to_uuid_required(current_user.family_id)
     )
@@ -105,6 +107,7 @@ async def delete_goal(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a budget goal (parent only)"""
+    await require_feature("budget_goals", db, current_user)
     await GoalService.delete_by_id(
         db, goal_id, to_uuid_required(current_user.family_id)
     )
@@ -118,6 +121,7 @@ async def get_goal_progress(
     db: AsyncSession = Depends(get_db),
 ):
     """Get progress towards a specific goal"""
+    await require_feature("budget_goals", db, current_user)
     progress = await GoalService.calculate_progress(
         db, goal_id, to_uuid_required(current_user.family_id)
     )

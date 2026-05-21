@@ -452,7 +452,10 @@ async def scan_receipt_endpoint(
     """
     family_id = to_uuid_required(current_user.family_id)
 
-    # Gate behind premium
+    # Gate behind premium — ai_features first so the entire feature
+    # area can be toggled at the plan level independently of the
+    # per-month metered receipt_scan quota.
+    await require_feature("ai_features", db, current_user)
     await require_feature("receipt_scan", db, current_user)
 
     # Track usage
