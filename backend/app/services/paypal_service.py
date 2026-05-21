@@ -354,8 +354,20 @@ class PayPalService:
         Note: PayPal cancellations are immediate at PayPal's end, but our
         app keeps the subscription active until period_end via
         cancel_at_period_end flag.
+
+        Returns:
+            {"status": "cancelled", "subscription_id": str}
+
+        Raises:
+            NotFoundException: if PayPal returns 404 for the subscription_id
+            ValidationException: if cancellation fails for any other reason
         """
-        agreement = paypalrestsdk.BillingAgreement.find(subscription_id)
+        try:
+            agreement = paypalrestsdk.BillingAgreement.find(subscription_id)
+        except paypalrestsdk.ResourceNotFound:
+            raise NotFoundException(
+                f"PayPal subscription {subscription_id} not found"
+            )
 
         if agreement.cancel({"note": reason}):
             return {"status": "cancelled", "subscription_id": subscription_id}
