@@ -1,0 +1,56 @@
+---
+import Layout from '../../../../layouts/Layout.astro';
+
+const token = Astro.cookies.get('access_token')?.value;
+if (!token) return Astro.redirect('/login');
+
+const subscriptionId = Astro.url.searchParams.get('subscription_id');
+let status = 'pending';
+let message = '';
+let plan = '';
+
+if (subscriptionId) {
+    const backend = import.meta.env.API_BASE_URL || process.env.API_BASE_URL || 'http://backend:8000';
+    const resp = await fetch(`${backend}/api/subscriptions/activate`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ paypal_subscription_id: subscriptionId }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok) {
+        status = 'activated';
+        message = data.status === 'already_active'
+            ? 'Subscription was already active.'
+            : 'Your subscription is active.';
+        plan = data.plan_name ?? '';
+    } else {
+        status = 'error';
+        message = data.detail || 'Activation failed';
+    }
+} else {
+    status = 'error';
+    message = 'Missing subscription_id';
+}
+---
+<Layout title="Activating subscription...">
+  <main class="max-w-2xl mx-auto p-8">
+    {status === 'activated' && (
+      <div class="bg-green-100 border border-green-300 rounded p-6 text-center">
+        <h1 class="text-2xl font-bold mb-2">Subscription activated</h1>
+        <p>{message}</p>
+        <p class="mt-2 text-sm">Plan: <strong>{plan}</strong></p>
+        <a href="/parent/settings/subscription" class="inline-block mt-4 px-4 py-2 bg-blue-600 text-white rounded">Back to settings</a>
+      </div>
+    )}
+    {status === 'error' && (
+      <div class="bg-red-100 border border-red-300 rounded p-6 text-center">
+        <h1 class="text-2xl font-bold mb-2">Activation problem</h1>
+        <p>{message}</p>
+        <a href="/parent/settings/subscription" class="inline-block mt-4 px-4 py-2 bg-blue-600 text-white rounded">Back to settings</a>
+      </div>
+    )}
+  </main>
+</Layout>
