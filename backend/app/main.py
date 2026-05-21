@@ -112,6 +112,12 @@ app.include_router(invitations.router, prefix="/api/invitations", tags=["Invitat
 app.include_router(budget_router, prefix="/api/budget", tags=["Budget"])
 app.include_router(points_conversion.router, prefix="/api/points-conversion", tags=["Points Conversion"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions"])
+from app.api.routes import subscriptions_webhook  # noqa: E402
+app.include_router(
+    subscriptions_webhook.router,
+    prefix="/api/subscriptions",
+    tags=["Subscriptions"],
+)
 app.include_router(sync.router, tags=["Sync"])
 
 
