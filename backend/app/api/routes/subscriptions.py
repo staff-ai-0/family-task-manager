@@ -118,24 +118,22 @@ async def create_checkout(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_parent_role),
 ):
-    """Create a PayPal subscription checkout session."""
-    # Validate plan exists
+    """Create a PayPal subscription checkout session and persist a pending row."""
+    from app.core.config import settings
+
     query = select(SubscriptionPlan).where(
         and_(
             SubscriptionPlan.name == request.plan_name,
             SubscriptionPlan.is_active == True,  # noqa: E712
         )
     )
-    result = await db.execute(query)
-    plan = result.scalar_one_or_none()
-
+    plan = (await db.execute(query)).scalar_one_or_none()
     if not plan:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Plan '{request.plan_name}' not found",
         )
 
-    # Get PayPal plan ID for this plan and billing cycle
     if request.billing_cycle == "monthly":
         paypal_plan_id = plan.paypal_plan_id_monthly
     elif request.billing_cycle == "annual":
@@ -145,37 +143,64 @@ async def create_checkout(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid billing_cycle. Use 'monthly' or 'annual'",
         )
-
     if not paypal_plan_id:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=f"PayPal plan not configured for {plan.name} {request.billing_cycle} billing",
+            detail=f"PayPal plan not configured for {plan.name} {request.billing_cycle}",
         )
 
-    # Create PayPal subscription
+    public_url = (settings.PUBLIC_URL or settings.BASE_URL).rstrip("/")
+    return_url = f"{public_url}/parent/settings/subscription/activate"
+    cancel_url = f"{public_url}/parent/settings/subscription?cancelled=1"
+
     try:
         paypal_service = PayPalService()
         result = paypal_service.create_subscription(
             plan_id=paypal_plan_id,
-            return_url=f"{current_user.family_id}/subscription/success",  # Will be handled by frontend
-            cancel_url=f"{current_user.family_id}/subscription/cancel",  # Will be handled by frontend
-        )
-
-        if not result.get("approval_url"):
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create PayPal subscription",
-            )
-
-        return CheckoutResponse(
-            approval_url=result["approval_url"],
-            paypal_subscription_id=result["subscription_id"],
+            return_url=return_url,
+            cancel_url=cancel_url,
         )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"PayPal error: {str(e)}",
         )
+
+    if not result.get("approval_url"):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create PayPal subscription",
+        )
+
+    # Upsert pending FamilySubscription so /activate can resolve plan/cycle
+    # from paypal_subscription_id. The family_id column is unique — one
+    # FamilySubscription per family — so we either insert or refresh in place.
+    existing = await db.execute(
+        select(FamilySubscription).where(
+            FamilySubscription.family_id == current_user.family_id
+        )
+    )
+    pending = existing.scalar_one_or_none()
+    if pending:
+        pending.plan_id = plan.id
+        pending.billing_cycle = request.billing_cycle
+        pending.status = "pending"
+        pending.paypal_subscription_id = result["subscription_id"]
+    else:
+        pending = FamilySubscription(
+            family_id=current_user.family_id,
+            plan_id=plan.id,
+            billing_cycle=request.billing_cycle,
+            status="pending",
+            paypal_subscription_id=result["subscription_id"],
+        )
+        db.add(pending)
+    await db.commit()
+
+    return CheckoutResponse(
+        approval_url=result["approval_url"],
+        paypal_subscription_id=result["subscription_id"],
+    )
 
 
 @router.post("/activate")
@@ -185,87 +210,74 @@ async def activate_subscription(
     current_user: User = Depends(require_parent_role),
 ):
     """
-    Activate a subscription after PayPal approval.
+    Finalize a subscription after PayPal approval.
 
-    Called after user approves payment on PayPal and returns to our app.
-    Receives the PayPal subscription ID and executes the billing agreement.
+    PayPal redirects the buyer to /parent/settings/subscription/activate with
+    ?subscription_id=I-XXXX. The activate page POSTs here. We look up the
+    pending FamilySubscription that /checkout persisted (keyed on
+    paypal_subscription_id), execute the billing agreement with PayPal, and
+    apply the ACTIVATED transition via subscription_state.
     """
-    try:
-        # Execute the billing agreement with PayPal
-        paypal_service = PayPalService()
-        execution_result = paypal_service.execute_subscription(
-            billing_agreement_id=request.paypal_subscription_id,
-            token=request.paypal_subscription_id,  # Token is the BA ID for execution
-        )
+    from datetime import timedelta
 
-        # Get the plan that's being subscribed to
-        # First, check if there's already an active subscription (shouldn't be)
-        existing_query = select(FamilySubscription).where(
+    from app.services.subscription_state import apply_activated
+
+    query = (
+        select(FamilySubscription)
+        .options(joinedload(FamilySubscription.plan))
+        .where(
             and_(
+                FamilySubscription.paypal_subscription_id
+                == request.paypal_subscription_id,
                 FamilySubscription.family_id == current_user.family_id,
-                FamilySubscription.status == "active",
             )
         )
-        existing_result = await db.execute(existing_query)
-        existing_subscription = existing_result.scalar_one_or_none()
-
-        if existing_subscription:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Family already has an active subscription",
-            )
-
-        # Get plan information from request metadata
-        # Note: In a real implementation, you might store this in a temporary session
-        # For now, we'll query to find which plan was being checked out
-        # by looking for the billing plan in PayPal response
-
-        # Create FamilySubscription record
-        now = datetime.now(timezone.utc)
-
-        # For demo: assign to Plus monthly plan as default
-        # In production, this would be determined from PayPal or session data
-        plans_query = select(SubscriptionPlan).where(SubscriptionPlan.name == "plus")
-        plans_result = await db.execute(plans_query)
-        plan = plans_result.scalar_one_or_none()
-
-        if not plan:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Default plan not found",
-            )
-
-        family_subscription = FamilySubscription(
-            family_id=current_user.family_id,
-            plan_id=plan.id,
-            billing_cycle="monthly",  # Default to monthly
-            status="active",
-            paypal_subscription_id=request.paypal_subscription_id,
-            current_period_start=now,
-            current_period_end=datetime(
-                now.year if now.month < 12 else now.year + 1,
-                (now.month % 12) + 1 if now.month < 12 else 1,
-                now.day,
-                tzinfo=timezone.utc,
-            ),
+    )
+    pending = (await db.execute(query)).scalar_one_or_none()
+    if pending is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No pending subscription found for this PayPal subscription_id",
         )
 
-        db.add(family_subscription)
-        await db.commit()
-        await db.refresh(family_subscription)
-
+    if pending.status == "active":
+        # Idempotent re-entry — already activated (likely by webhook race)
         return {
-            "status": "activated",
-            "subscription_id": str(family_subscription.id),
-            "paypal_subscription_id": family_subscription.paypal_subscription_id,
-            "plan_name": plan.name,
+            "status": "already_active",
+            "subscription_id": str(pending.id),
+            "plan_name": pending.plan.name if pending.plan else None,
         }
+
+    try:
+        paypal_service = PayPalService()
+        paypal_service.execute_subscription(
+            billing_agreement_id=request.paypal_subscription_id,
+            token=request.paypal_subscription_id,
+        )
     except Exception as e:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to activate subscription: {str(e)}",
+            detail=f"Failed to execute PayPal agreement: {str(e)}",
         )
+
+    period_end = datetime.now(timezone.utc) + (
+        timedelta(days=365)
+        if pending.billing_cycle == "annual"
+        else timedelta(days=30)
+    )
+    sub = await apply_activated(
+        db,
+        paypal_subscription_id=request.paypal_subscription_id,
+        period_end=period_end,
+    )
+
+    return {
+        "status": "activated",
+        "subscription_id": str(sub.id) if sub else None,
+        "paypal_subscription_id": request.paypal_subscription_id,
+        "plan_name": pending.plan.name if pending.plan else None,
+    }
 
 
 @router.post("/cancel")
@@ -273,24 +285,53 @@ async def cancel_subscription(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_parent_role),
 ):
-    """Cancel the family's active subscription."""
+    """
+    Cancel the family's active subscription at end of current period.
+
+    PayPal billing is cancelled immediately at their end (no future charges),
+    but the family keeps the plan benefits until current_period_end via the
+    cancel_at_period_end flag. The daily sweep job downgrades to Free after
+    period_end passes.
+    """
+    import logging
+
+    from app.services.subscription_state import apply_cancelled
+
     query = select(FamilySubscription).where(
         and_(
             FamilySubscription.family_id == current_user.family_id,
-            FamilySubscription.status.in_(["active", "past_due"]),
+            FamilySubscription.status.in_(["active", "past_due", "payment_failed"]),
         )
     )
-    result = await db.execute(query)
-    subscription = result.scalar_one_or_none()
-
+    subscription = (await db.execute(query)).scalar_one_or_none()
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No active subscription found",
         )
 
-    subscription.status = "cancelled"
-    subscription.cancelled_at = datetime.now(timezone.utc)
-    await db.commit()
+    if subscription.paypal_subscription_id:
+        try:
+            PayPalService.cancel_subscription(
+                subscription.paypal_subscription_id,
+                reason="User requested via app",
+            )
+        except Exception as e:
+            # PayPal call failed but we still flag cancel locally;
+            # log + continue. Webhook will reconcile if PayPal eventually fires.
+            logging.warning(
+                "PayPal cancel failed for %s: %s",
+                subscription.paypal_subscription_id,
+                e,
+            )
 
-    return {"status": "cancelled", "cancelled_at": str(subscription.cancelled_at)}
+    await apply_cancelled(
+        db, paypal_subscription_id=subscription.paypal_subscription_id
+    )
+    await db.refresh(subscription)
+
+    return {
+        "status": "cancel_pending",
+        "cancel_at_period_end": True,
+        "period_end": str(subscription.current_period_end),
+    }
