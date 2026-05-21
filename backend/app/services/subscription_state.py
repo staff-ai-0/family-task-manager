@@ -45,7 +45,8 @@ async def apply_activated(
     sub.current_period_start = sub.current_period_start or datetime.now(
         timezone.utc
     )
-    sub.trial_end_at = trial_end_at
+    if trial_end_at is not None:
+        sub.trial_end_at = trial_end_at
     await db.commit()
     await db.refresh(sub)
     return sub
@@ -75,6 +76,8 @@ async def apply_payment_failed(
     sub = await _find(db, paypal_subscription_id)
     if sub is None:
         return None
+    if sub.status == "payment_failed":
+        return sub  # idempotent — keep original payment_failure_at
 
     sub.status = "payment_failed"
     sub.payment_failure_at = datetime.now(timezone.utc)
