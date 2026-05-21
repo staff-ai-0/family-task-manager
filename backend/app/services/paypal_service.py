@@ -357,29 +357,31 @@ class PayPalService:
         event_body: Dict[str, Any],
     ) -> bool:
         """
-        Verify PayPal webhook signature
+        Verify a PayPal webhook signature against the configured webhook_id.
 
-        Args:
-            transmission_id: Transmission ID from webhook headers
-            transmission_time: Transmission time from webhook headers
-            cert_url: Cert URL from webhook headers
-            auth_algo: Auth algorithm from webhook headers
-            transmission_sig: Transmission signature from webhook headers
-            webhook_id: Your webhook ID from PayPal dashboard
-            event_body: Webhook event body
+        Uses PayPal's notifications/verify-webhook-signature endpoint directly
+        (paypalrestsdk.WebhookEvent.verify has a different kwarg surface and
+        is unreliable across SDK versions).
 
-        Returns:
-            True if signature is valid, False otherwise
+        Returns True iff PayPal responds with verification_status == "SUCCESS".
+        Any HTTP error or non-SUCCESS verdict returns False.
         """
-        return paypalrestsdk.WebhookEvent.verify(
-            transmission_id=transmission_id,
-            transmission_time=transmission_time,
-            cert_url=cert_url,
-            auth_algo=auth_algo,
-            transmission_sig=transmission_sig,
-            webhook_id=webhook_id,
-            event_body=event_body,
-        )
+        try:
+            body = {
+                "transmission_id": transmission_id,
+                "transmission_time": transmission_time,
+                "cert_url": cert_url,
+                "auth_algo": auth_algo,
+                "transmission_sig": transmission_sig,
+                "webhook_id": webhook_id,
+                "webhook_event": event_body,
+            }
+            resp = _PayPalV2HTTP.post(
+                "/v1/notifications/verify-webhook-signature", body
+            )
+            return resp.get("verification_status") == "SUCCESS"
+        except Exception:
+            return False
 
     @staticmethod
     def get_subscription(subscription_id: str) -> Dict[str, Any]:
