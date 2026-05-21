@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     VERSION: str = "1.0.0"
     BASE_URL: str = "http://localhost:8000"  # Used for OAuth callbacks and email links
+    PUBLIC_URL: str = ""  # Public-facing frontend origin (e.g. https://gcp-family.agent-ia.mx); used for PayPal return/cancel URLs
     
     # Database
     DATABASE_URL: str = "postgresql://familyapp:familyapp123@db:5432/familyapp"
