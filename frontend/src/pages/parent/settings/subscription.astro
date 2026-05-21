@@ -25,10 +25,19 @@ const plans = plansRes.data ?? [];
 const current = currentRes.data;
 const usage = usageRes.data;
 
-const currentPlanName = current?.plan_name?.toLowerCase() ?? "free";
+const currentPlanName = (current?.plan?.name ?? current?.plan_name ?? "free").toLowerCase();
 const isActive = current?.status === "active";
 const isCancelled = current?.status === "cancelled";
 const isPaid = currentPlanName !== "free";
+const cancelAtPeriodEnd = Boolean(current?.cancel_at_period_end);
+const periodEndIso = current?.current_period_end ?? null;
+const periodEndLabel = periodEndIso
+    ? new Date(periodEndIso).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+    })
+    : "";
 
 const i18n = {
     en: {
@@ -37,6 +46,8 @@ const i18n = {
         current_plan: "Current Plan",
         active: "Active",
         cancelled: "Cancelled",
+        cancel_scheduled: "Cancellation scheduled",
+        access_until: "You keep your current plan benefits until",
         usage_title: "Current Usage",
         of: "of",
         unlimited: "Unlimited",
@@ -70,6 +81,8 @@ const i18n = {
         current_plan: "Plan Actual",
         active: "Activo",
         cancelled: "Cancelado",
+        cancel_scheduled: "Cancelación programada",
+        access_until: "Conservas los beneficios del plan actual hasta",
         usage_title: "Uso Actual",
         of: "de",
         unlimited: "Ilimitado",
@@ -182,9 +195,14 @@ function cellClass(value: any): string {
                         <p class="text-sm text-slate-500">{l.current_plan}</p>
                         <h2 class="text-xl font-bold text-slate-800 capitalize">{currentPlanName}</h2>
                     </div>
-                    {isActive && (
+                    {isActive && !cancelAtPeriodEnd && (
                         <span class="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700 border border-green-200">
                             {l.active}
+                        </span>
+                    )}
+                    {isActive && cancelAtPeriodEnd && (
+                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                            {l.cancel_scheduled}
                         </span>
                     )}
                     {isCancelled && (
@@ -193,6 +211,11 @@ function cellClass(value: any): string {
                         </span>
                     )}
                 </div>
+                {cancelAtPeriodEnd && periodEndLabel && (
+                    <p class="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        {l.access_until} <strong>{periodEndLabel}</strong>.
+                    </p>
+                )}
             </section>
 
             <!-- Usage Meters -->
@@ -282,20 +305,25 @@ function cellClass(value: any): string {
 
                 <!-- Upgrade / Cancel Buttons -->
                 <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
-                    {currentPlanName !== "pro" && (
-                        <div class="relative group">
-                            <button
-                                disabled
-                                class="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg opacity-60 cursor-not-allowed"
-                            >
-                                {l.upgrade}
-                            </button>
-                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                                {l.coming_soon}
-                            </div>
-                        </div>
+                    {currentPlanName === "free" && (
+                        <button
+                            class="upgrade-btn px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                            data-plan="plus"
+                            data-cycle="monthly"
+                        >
+                            {l.upgrade} → {l.plus}
+                        </button>
                     )}
-                    {isPaid && isActive && (
+                    {currentPlanName !== "pro" && (
+                        <button
+                            class="upgrade-btn px-6 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors"
+                            data-plan="pro"
+                            data-cycle="monthly"
+                        >
+                            {l.upgrade} → {l.pro}
+                        </button>
+                    )}
+                    {isPaid && isActive && !cancelAtPeriodEnd && (
                         <button
                             id="cancel-sub-btn"
                             class="px-6 py-2.5 bg-white border border-red-200 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 transition-colors"
@@ -327,5 +355,36 @@ function cellClass(value: any): string {
                 }
             });
         }
+
+        document.querySelectorAll('.upgrade-btn').forEach((btn) => {
+            btn.addEventListener('click', async (evt) => {
+                const target = evt.currentTarget;
+                const plan = target.dataset.plan;
+                const cycle = target.dataset.cycle || 'monthly';
+                const originalText = target.textContent;
+                target.disabled = true;
+                target.textContent = '...';
+                try {
+                    const resp = await fetch('/api/subscriptions/checkout', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ plan_name: plan, billing_cycle: cycle }),
+                    });
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(() => ({ detail: 'Error' }));
+                        alert('Upgrade failed: ' + (err.detail || resp.statusText));
+                        target.disabled = false;
+                        target.textContent = originalText;
+                        return;
+                    }
+                    const data = await resp.json();
+                    window.location.href = data.approval_url;
+                } catch (e) {
+                    alert('Network error: ' + e);
+                    target.disabled = false;
+                    target.textContent = originalText;
+                }
+            });
+        });
     });
 </script>

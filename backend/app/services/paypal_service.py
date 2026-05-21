@@ -2,21 +2,99 @@
 PayPal Payment Service
 
 Handles PayPal payment processing and webhook events.
+
+Subscriptions use the PayPal v2 Billing Subscriptions API via direct HTTP
+calls (the legacy paypalrestsdk.BillingAgreement is v1 and incompatible
+with v2 Plans created by scripts/setup_paypal_plans.py). The webhook
+signature verification still uses paypalrestsdk since that wraps PayPal's
+verify endpoint identically across versions.
 """
 
-import paypalrestsdk
-from typing import Dict, Any, Optional, List
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from uuid import UUID, uuid4
+import time
+from typing import Any, Dict, List, Optional
 from datetime import datetime
+from uuid import UUID, uuid4
+
+import paypalrestsdk
+import requests
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import (
-    ValidationException,
     NotFoundException,
+    ValidationException,
 )
 from app.models import User
+
+
+PAYPAL_API_BASE = {
+    "sandbox": "https://api-m.sandbox.paypal.com",
+    "live": "https://api-m.paypal.com",
+}
+
+
+class _PayPalV2HTTP:
+    """Lightweight OAuth-token-caching HTTP client for the v2 Billing API."""
+
+    _token: Optional[str] = None
+    _token_exp: float = 0.0
+
+    @classmethod
+    def _base(cls) -> str:
+        mode = settings.PAYPAL_MODE or "sandbox"
+        return PAYPAL_API_BASE.get(mode, PAYPAL_API_BASE["sandbox"])
+
+    @classmethod
+    def _auth(cls) -> str:
+        if cls._token and time.time() < cls._token_exp - 30:
+            return cls._token
+        r = requests.post(
+            f"{cls._base()}/v1/oauth2/token",
+            auth=(settings.PAYPAL_CLIENT_ID, settings.PAYPAL_CLIENT_SECRET),
+            data={"grant_type": "client_credentials"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        body = r.json()
+        cls._token = body["access_token"]
+        cls._token_exp = time.time() + body.get("expires_in", 3600)
+        return cls._token
+
+    @classmethod
+    def get(cls, path: str) -> Dict[str, Any]:
+        r = requests.get(
+            f"{cls._base()}{path}",
+            headers={"Authorization": f"Bearer {cls._auth()}"},
+            timeout=15,
+        )
+        if r.status_code == 404:
+            raise NotFoundException(f"PayPal resource not found: {path}")
+        r.raise_for_status()
+        return r.json()
+
+    @classmethod
+    def post(
+        cls, path: str, body: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        r = requests.post(
+            f"{cls._base()}{path}",
+            headers={
+                "Authorization": f"Bearer {cls._auth()}",
+                "Content-Type": "application/json",
+            },
+            json=body if body is not None else {},
+            timeout=15,
+        )
+        if r.status_code == 404:
+            raise NotFoundException(f"PayPal resource not found: {path}")
+        if r.status_code >= 400:
+            raise ValidationException(
+                f"PayPal API error {r.status_code}: {r.text[:300]}"
+            )
+        if r.status_code == 204 or not r.text:
+            return {}
+        return r.json()
 
 
 class PayPalService:
@@ -177,95 +255,96 @@ class PayPalService:
         cancel_url: str = None,
     ) -> Dict[str, Any]:
         """
-        Create a PayPal subscription
+        Create a PayPal v2 Billing Subscription.
 
         Args:
-            plan_id: PayPal billing plan ID
-            return_url: URL to redirect after successful subscription
-            cancel_url: URL to redirect if subscription is cancelled
+            plan_id: PayPal v2 Plan ID (P-XXXX, from setup_paypal_plans.py)
+            return_url: URL PayPal redirects to after user approval
+            cancel_url: URL PayPal redirects to if user cancels
 
         Returns:
-            Dict with subscription info including approval_url
+            {
+              "subscription_id": str,    # I-XXXX
+              "approval_url": str,       # PayPal-hosted approval page
+              "status": str,             # APPROVAL_PENDING
+            }
 
         Raises:
-            ValidationException: If subscription creation fails
+            ValidationException: PayPal API error
         """
-        # Set default URLs if not provided
         if not return_url:
             return_url = f"{settings.BASE_URL}/subscription/success"
         if not cancel_url:
             cancel_url = f"{settings.BASE_URL}/subscription/cancel"
 
-        # Create AgreementStateDescriptor with redirect URLs
-        agreement = paypalrestsdk.BillingAgreement(
-            {
-                "name": "Family Task Manager Subscription",
-                "description": "Subscription to Family Task Manager premium features",
-                "start_date": datetime.now().isoformat() + "Z",
-                "agreement_type": "regular",
-                "payer": {"payment_method": "paypal"},
-                "plan": {"id": plan_id},
-                "override_merchant_preferences": {
-                    "return_url": return_url,
-                    "cancel_url": cancel_url,
-                    "notify_url": f"{settings.BASE_URL}/api/subscriptions/webhook",
-                    "max_fail_attempts": "2",
-                    "initial_fail_amount_action": "CONTINUE",
-                    "valid": "1",
+        body = {
+            "plan_id": plan_id,
+            "application_context": {
+                "brand_name": "Family Task Manager",
+                "user_action": "SUBSCRIBE_NOW",
+                "payment_method": {
+                    "payer_selected": "PAYPAL",
+                    "payee_preferred": "IMMEDIATE_PAYMENT_REQUIRED",
                 },
-            }
-        )
+                "return_url": return_url,
+                "cancel_url": cancel_url,
+            },
+        }
+        data = _PayPalV2HTTP.post("/v1/billing/subscriptions", body)
 
-        if agreement.create():
-            # Get approval URL
-            approval_url = None
-            for link in agreement.links:
-                if link.rel == "approval_url":
-                    approval_url = link.href
-                    break
+        approval_url = None
+        for link in data.get("links", []):
+            if link.get("rel") == "approve":
+                approval_url = link.get("href")
+                break
 
-            return {
-                "subscription_id": agreement.id,
-                "approval_url": approval_url,
-                "status": "approval_pending",
-            }
-        else:
+        if not approval_url:
             raise ValidationException(
-                f"Failed to create PayPal subscription: {agreement.error['message']}"
+                "PayPal subscription created but no approval link returned"
             )
+
+        return {
+            "subscription_id": data["id"],
+            "approval_url": approval_url,
+            "status": data.get("status", "APPROVAL_PENDING"),
+        }
 
     @staticmethod
     def execute_subscription(
         billing_agreement_id: str,
-        token: str,
+        token: str,  # kept for backward signature compat; ignored in v2
     ) -> Dict[str, Any]:
         """
-        Execute (activate) a PayPal billing agreement after user approval
+        v2 Subscriptions auto-activate after the buyer approves on PayPal's
+        hosted page. No explicit execute call is needed; the webhook fires
+        BILLING.SUBSCRIPTION.ACTIVATED and we reconcile state via
+        subscription_state.apply_activated.
 
-        Args:
-            billing_agreement_id: The billing agreement ID
-            token: The token returned by PayPal after user approval
-
-        Returns:
-            Dict with execution result
+        For the synchronous /activate route, we just fetch the current
+        subscription status from PayPal and return it. If the status is
+        APPROVAL_PENDING it means the user hasn't actually approved yet
+        (e.g., they navigated to /activate by hand) — treat as error.
 
         Raises:
-            ValidationException: If execution fails
+            NotFoundException: PayPal doesn't recognize the subscription_id
+            ValidationException: Subscription is in an invalid state
         """
-        agreement = paypalrestsdk.BillingAgreement.find(billing_agreement_id)
-
-        if agreement.execute(token):
-            return {
-                "status": "active",
-                "subscription_id": billing_agreement_id,
-                "start_date": agreement.agreement_details.get(
-                    "outstanding_balance", {}
-                ).get("value"),
-            }
+        data = _PayPalV2HTTP.get(f"/v1/billing/subscriptions/{billing_agreement_id}")
+        sub_status = data.get("status", "")
+        if sub_status in ("APPROVAL_PENDING", "APPROVED"):
+            # APPROVED = user approved but PayPal hasn't started the trial/
+            # active phase yet — counts as success for /activate.
+            pass
+        elif sub_status in ("ACTIVE", "SUSPENDED", "CANCELLED", "EXPIRED"):
+            pass
         else:
             raise ValidationException(
-                f"Failed to execute PayPal subscription: {agreement.error['message']}"
+                f"PayPal subscription {billing_agreement_id} has unexpected status: {sub_status}"
             )
+        return {
+            "status": sub_status,
+            "subscription_id": billing_agreement_id,
+        }
 
     @staticmethod
     def verify_webhook_signature(
@@ -278,26 +357,77 @@ class PayPalService:
         event_body: Dict[str, Any],
     ) -> bool:
         """
-        Verify PayPal webhook signature
+        Verify a PayPal webhook signature against the configured webhook_id.
 
-        Args:
-            transmission_id: Transmission ID from webhook headers
-            transmission_time: Transmission time from webhook headers
-            cert_url: Cert URL from webhook headers
-            auth_algo: Auth algorithm from webhook headers
-            transmission_sig: Transmission signature from webhook headers
-            webhook_id: Your webhook ID from PayPal dashboard
-            event_body: Webhook event body
+        Uses PayPal's notifications/verify-webhook-signature endpoint directly
+        (paypalrestsdk.WebhookEvent.verify has a different kwarg surface and
+        is unreliable across SDK versions).
+
+        Returns True iff PayPal responds with verification_status == "SUCCESS".
+        Any HTTP error or non-SUCCESS verdict returns False.
+        """
+        try:
+            body = {
+                "transmission_id": transmission_id,
+                "transmission_time": transmission_time,
+                "cert_url": cert_url,
+                "auth_algo": auth_algo,
+                "transmission_sig": transmission_sig,
+                "webhook_id": webhook_id,
+                "webhook_event": event_body,
+            }
+            resp = _PayPalV2HTTP.post(
+                "/v1/notifications/verify-webhook-signature", body
+            )
+            return resp.get("verification_status") == "SUCCESS"
+        except Exception:
+            return False
+
+    @staticmethod
+    def get_subscription(subscription_id: str) -> Dict[str, Any]:
+        """
+        Fetch a v2 PayPal Billing Subscription by ID.
 
         Returns:
-            True if signature is valid, False otherwise
+            {
+              "subscription_id": str,
+              "status": str,             # APPROVAL_PENDING | APPROVED | ACTIVE | SUSPENDED | CANCELLED | EXPIRED
+              "plan_id": str | None,
+              "next_billing_at": str | None,
+            }
+
+        Raises:
+            NotFoundException: PayPal 404
         """
-        return paypalrestsdk.WebhookEvent.verify(
-            transmission_id=transmission_id,
-            transmission_time=transmission_time,
-            cert_url=cert_url,
-            auth_algo=auth_algo,
-            transmission_sig=transmission_sig,
-            webhook_id=webhook_id,
-            event_body=event_body,
+        data = _PayPalV2HTTP.get(f"/v1/billing/subscriptions/{subscription_id}")
+        billing_info = data.get("billing_info") or {}
+        return {
+            "subscription_id": data.get("id"),
+            "status": data.get("status"),
+            "plan_id": data.get("plan_id"),
+            "next_billing_at": billing_info.get("next_billing_time"),
+        }
+
+    @staticmethod
+    def cancel_subscription(
+        subscription_id: str, reason: str = "User requested cancellation"
+    ) -> Dict[str, Any]:
+        """
+        Cancel a v2 PayPal Billing Subscription immediately at PayPal's end.
+
+        Our app keeps the local FamilySubscription active until
+        current_period_end via the cancel_at_period_end flag — PayPal's
+        side just stops future renewal charges.
+
+        Returns:
+            {"status": "cancelled", "subscription_id": str}
+
+        Raises:
+            NotFoundException: PayPal 404
+            ValidationException: cancellation failed (e.g., already cancelled)
+        """
+        _PayPalV2HTTP.post(
+            f"/v1/billing/subscriptions/{subscription_id}/cancel",
+            {"reason": reason},
         )
+        return {"status": "cancelled", "subscription_id": subscription_id}

@@ -1,0 +1,11 @@
+{
+  "id": "WH-TEST-PAYFAIL-001",
+  "event_type": "BILLING.SUBSCRIPTION.PAYMENT.FAILED",
+  "create_time": "2026-05-21T18:00:00Z",
+  "resource_type": "subscription",
+  "summary": "Payment failed",
+  "resource": {
+    "id": "I-WEBHOOK-SUB-123",
+    "status": "ACTIVE"
+  }
+}

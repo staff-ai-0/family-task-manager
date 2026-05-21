@@ -1,0 +1,11 @@
+{
+  "id": "WH-TEST-CANCELLED-001",
+  "event_type": "BILLING.SUBSCRIPTION.CANCELLED",
+  "create_time": "2026-05-21T18:00:00Z",
+  "resource_type": "subscription",
+  "summary": "Subscription cancelled",
+  "resource": {
+    "id": "I-WEBHOOK-SUB-123",
+    "status": "CANCELLED"
+  }
+}

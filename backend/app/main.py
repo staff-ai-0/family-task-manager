@@ -7,11 +7,14 @@ from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
 import logging
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
 from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion, invitations, subscriptions
 from app.api.routes.budget import router as budget_router
+from app.jobs.subscription_sweep import run_sweep
 from app.services.task_assignment_service import TaskAssignmentService
 
 # Configure logging
@@ -53,10 +56,15 @@ async def lifespan(app: FastAPI):
 
     overdue_task = asyncio.create_task(_overdue_sweep_loop())
 
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(run_sweep, "cron", hour=3, minute=0, id="subscription_sweep")
+    scheduler.start()
+
     yield
 
     # Shutdown
     logger.info("Shutting down API...")
+    scheduler.shutdown(wait=True)
     overdue_task.cancel()
     try:
         await overdue_task
@@ -112,6 +120,12 @@ app.include_router(invitations.router, prefix="/api/invitations", tags=["Invitat
 app.include_router(budget_router, prefix="/api/budget", tags=["Budget"])
 app.include_router(points_conversion.router, prefix="/api/points-conversion", tags=["Points Conversion"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions"])
+from app.api.routes import subscriptions_webhook  # noqa: E402
+app.include_router(
+    subscriptions_webhook.router,
+    prefix="/api/subscriptions",
+    tags=["Subscriptions"],
+)
 app.include_router(sync.router, tags=["Sync"])
 
 
