@@ -278,3 +278,15 @@ async def db(db_session: AsyncSession) -> AsyncSession:
 async def family_id(test_family):
     """Return just the family UUID, used in budget tests."""
     return test_family.id
+
+
+@pytest_asyncio.fixture
+async def sample_family(db_session: AsyncSession):
+    """Create a sample family for subscription/state-transition tests."""
+    from app.models.family import Family
+
+    fam = Family(name="Sample Family", join_code="ABCDEF")
+    db_session.add(fam)
+    await db_session.commit()
+    await db_session.refresh(fam)
+    return fam
