@@ -42,7 +42,10 @@ async def run_sweep():
     """Top-level entrypoint for the scheduled job. Creates its own session."""
     from app.core.database import AsyncSessionLocal
 
-    async with AsyncSessionLocal() as db:
-        n = await downgrade_expired_subscriptions(db)
-        if n:
-            logger.info("Sweep downgraded %d expired subscriptions", n)
+    try:
+        async with AsyncSessionLocal() as db:
+            n = await downgrade_expired_subscriptions(db)
+            if n:
+                logger.info("Sweep downgraded %d expired subscriptions", n)
+    except Exception:
+        logger.exception("Subscription sweep failed")

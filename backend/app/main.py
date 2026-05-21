@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down API...")
-    scheduler.shutdown(wait=False)
+    scheduler.shutdown(wait=True)
     overdue_task.cancel()
     try:
         await overdue_task
