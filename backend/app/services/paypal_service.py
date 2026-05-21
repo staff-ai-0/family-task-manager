@@ -301,3 +301,64 @@ class PayPalService:
             webhook_id=webhook_id,
             event_body=event_body,
         )
+
+    @staticmethod
+    def get_subscription(subscription_id: str) -> Dict[str, Any]:
+        """
+        Fetch a PayPal billing agreement (subscription) by ID.
+
+        Returns:
+            {
+              "subscription_id": str,
+              "status": str,                # "Active" | "Pending" | "Cancelled" | ...
+              "plan_id": str | None,
+              "next_billing_at": str | None,
+            }
+
+        Raises:
+            NotFoundException: if PayPal returns 404
+        """
+        try:
+            agreement = paypalrestsdk.BillingAgreement.find(subscription_id)
+        except paypalrestsdk.ResourceNotFound:
+            raise NotFoundException(
+                f"PayPal subscription {subscription_id} not found"
+            )
+
+        next_billing = None
+        try:
+            next_billing = agreement.agreement_details.next_billing_date
+        except AttributeError:
+            pass
+
+        plan_id = None
+        try:
+            plan_id = agreement.plan.id
+        except AttributeError:
+            pass
+
+        return {
+            "subscription_id": agreement.id,
+            "status": agreement.state,
+            "plan_id": plan_id,
+            "next_billing_at": next_billing,
+        }
+
+    @staticmethod
+    def cancel_subscription(
+        subscription_id: str, reason: str = "User requested cancellation"
+    ) -> Dict[str, Any]:
+        """
+        Cancel a PayPal billing agreement.
+
+        Note: PayPal cancellations are immediate at PayPal's end, but our
+        app keeps the subscription active until period_end via
+        cancel_at_period_end flag.
+        """
+        agreement = paypalrestsdk.BillingAgreement.find(subscription_id)
+
+        if agreement.cancel({"note": reason}):
+            return {"status": "cancelled", "subscription_id": subscription_id}
+        raise ValidationException(
+            f"Failed to cancel PayPal subscription: {agreement.error}"
+        )
