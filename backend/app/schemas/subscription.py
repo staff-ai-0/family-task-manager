@@ -26,6 +26,8 @@ class SubscriptionResponse(BaseModel):
     current_period_start: Optional[datetime] = None
     current_period_end: Optional[datetime] = None
     cancelled_at: Optional[datetime] = None
+    cancel_at_period_end: bool = False
+    trial_end_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
