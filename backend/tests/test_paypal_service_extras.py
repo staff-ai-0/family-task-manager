@@ -37,3 +37,15 @@ def test_cancel_subscription_calls_paypal():
 
     fake_agreement.cancel.assert_called_once()
     assert out["status"] == "cancelled"
+
+
+def test_cancel_subscription_raises_not_found():
+    import paypalrestsdk
+    from app.core.exceptions import NotFoundException
+
+    with patch(
+        "paypalrestsdk.BillingAgreement.find",
+        side_effect=paypalrestsdk.ResourceNotFound("404"),
+    ):
+        with pytest.raises(NotFoundException):
+            PayPalService.cancel_subscription("I-MISSING")
