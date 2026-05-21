@@ -63,6 +63,9 @@ openai>=1.50.0
 # Linux x86_64 so there's no poppler or other system dependency.
 pymupdf>=1.24.0
 
+# Scheduler
+apscheduler==3.10.4
+
 # Utilities
 python-dotenv==1.0.1
 email-validator==2.1.0.post1
