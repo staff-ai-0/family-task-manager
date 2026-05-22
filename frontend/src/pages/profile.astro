@@ -59,7 +59,7 @@ const consequences: any[] = Array.isArray(consequencesRaw)
 <Layout title={`${t(lang, "profile_title")} - Family Task Manager`}>
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <header
-            class="bg-gradient-to-br from-brand-coral to-brand-coral-deep text-white pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
+            class="bg-brand-coral text-brand-ink border-b-4 border-brand-ink pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
         >
             <div class="flex items-center gap-4">
                 <div
@@ -182,7 +182,7 @@ const consequences: any[] = Array.isArray(consequencesRaw)
                     </select>
                     <button
                         type="submit"
-                        class="px-5 py-2.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white text-sm font-semibold rounded-lg transition-colors shadow-[var(--shadow-card)]"
+                        class="px-5 py-2.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition-colors shadow-[var(--shadow-card)]"
                     >
                         {t(lang, "pt_save")}
                     </button>
@@ -234,7 +234,7 @@ const consequences: any[] = Array.isArray(consequencesRaw)
                     </div>
                     <button
                         type="submit"
-                        class="w-full py-2.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white text-sm font-semibold rounded-lg transition-colors shadow-[var(--shadow-card)]"
+                        class="w-full py-2.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition-colors shadow-[var(--shadow-card)]"
                     >
                         {t(lang, "profile_update_password")}
                     </button>

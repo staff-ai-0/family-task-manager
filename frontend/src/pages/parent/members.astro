@@ -137,7 +137,7 @@ if (!joinCodeOk && joinCodeError) {
 <Layout title={`${t(lang, "pm_title")} - Family Task Manager`}>
   <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
     <header
-      class="bg-gradient-to-br from-brand-coral to-brand-coral-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
+      class="bg-brand-coral text-brand-ink border-b-4 border-brand-ink pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
     >
       <a
         href="/parent"
@@ -227,7 +227,7 @@ if (!joinCodeOk && joinCodeError) {
             <input type="hidden" name="action" value="generate_join_code" />
             <button 
               type="submit"
-              class="w-full py-2.5 bg-brand-coral-deep hover:bg-brand-coral-deep text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
+              class="w-full py-2.5 bg-brand-coral-deep hover:bg-brand-ink text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
             >
               {lang === "es" ? "Generar Codigo de Familia" : "Generate Family Code"}
             </button>
@@ -256,7 +256,7 @@ if (!joinCodeOk && joinCodeError) {
           <button 
             id="open-invitation-modal"
             type="button"
-            class="px-4 py-2 rounded-lg bg-brand-sky hover:from-brand-sky hover:to-brand-sky-deep text-white font-semibold text-sm transition-all transform hover:scale-105 active:scale-95 whitespace-nowrap"
+            class="px-4 py-2 rounded-lg bg-brand-sky text-brand-ink font-semibold text-sm transition-all transform hover:scale-105 active:scale-95 whitespace-nowrap"
           >
             {lang === "es" ? "Invitar" : "Invite"}
           </button>
@@ -446,7 +446,7 @@ if (!joinCodeOk && joinCodeError) {
           </select>
           <button
             type="submit"
-            class="w-full py-2.5 bg-brand-coral-deep hover:bg-brand-coral-deep text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
+            class="w-full py-2.5 bg-brand-coral-deep hover:bg-brand-ink text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
           >
             {t(lang, "pm_register_btn")}
           </button>

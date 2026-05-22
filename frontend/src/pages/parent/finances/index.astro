@@ -58,7 +58,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 <Layout title={`${t(lang, "parent_finances_label")} - Family Task Manager`}>
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <!-- Header -->
-        <header class="bg-gradient-to-br from-brand-mint to-brand-mint-deep text-white pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+        <header class="bg-brand-mint text-brand-ink border-b-4 border-brand-ink pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex items-center justify-between mb-6">
                 <a href="/parent" class="text-white hover:text-brand-mint-deep transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

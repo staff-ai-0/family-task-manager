@@ -118,19 +118,19 @@ function freqLabel(interval: number): string {
 <Layout title={`${t(lang, "pt_title")} - Family Task Manager`}>
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <header
-            class="bg-gradient-to-br from-brand-sky to-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
+            class="bg-brand-sky text-brand-ink border-b-4 border-brand-ink pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
         >
             <a
                 href="/parent"
-                class="text-brand-sky text-sm flex items-center gap-1 mb-3"
+                class="text-brand-ink-soft hover:text-brand-ink text-sm font-bold flex items-center gap-1 mb-3"
             >
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                 </svg>
                 {t(lang, "back_parent")}
             </a>
-            <h1 class="text-2xl font-bold">{t(lang, "pt_title")}</h1>
-            <p class="text-brand-sky text-sm mt-1">
+            <h1 class="font-display text-2xl font-extrabold text-brand-ink">{t(lang, "pt_title")}</h1>
+            <p class="text-brand-ink-soft text-sm mt-1 font-sans">
                 {t(lang, "pt_templates_in_family")(templateList.length)}
             </p>
         </header>
@@ -148,7 +148,7 @@ function freqLabel(interval: number): string {
             )}
 
             <!-- Shuffle Section -->
-            <section class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-sun">
+            <section class="bg-brand-sun/20 rounded-[var(--radius-card)] p-5 shadow-[var(--shadow-card)] border-2 border-brand-ink">
                 <div class="flex items-center justify-between mb-2">
                     <h2 class="font-bold text-brand-ink">{t(lang, "shuffle_title")}</h2>
                 </div>
@@ -162,7 +162,7 @@ function freqLabel(interval: number): string {
                         data-t-empty={t(lang, "shuffle_preview_empty")}
                         data-t-carry={t(lang, "shuffle_preview_carry")}
                         data-t-total={t(lang, "shuffle_preview_total")}
-                        class="flex-1 py-2.5 bg-brand-cream border border-brand-sun hover:bg-brand-sun/20 text-brand-sun-deep font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)] flex items-center justify-center gap-2"
+                        class="press flex-1 py-2.5 bg-brand-cream border-2 border-brand-ink hover:bg-brand-sun/30 text-brand-ink font-extrabold text-sm rounded-full transition-colors shadow-[var(--shadow-card)] flex items-center justify-center gap-2"
                     >
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -175,7 +175,7 @@ function freqLabel(interval: number): string {
                         <button
                             type="submit"
                             onclick={`return confirm('${t(lang, "shuffle_confirm")}')`}
-                            class="w-full py-2.5 bg-brand-sun-deep hover:bg-brand-sun-deep text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)] flex items-center justify-center gap-2"
+                            class="press w-full py-2.5 bg-brand-sun border-2 border-brand-ink hover:bg-brand-sun-deep text-brand-ink font-extrabold text-sm rounded-full transition-colors shadow-[var(--shadow-card)] flex items-center justify-center gap-2"
                         >
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -324,7 +324,7 @@ function freqLabel(interval: number): string {
                     </div>
                     <button
                         type="submit"
-                        class="w-full py-2.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
+                        class="w-full py-2.5 bg-brand-sky-deep hover:bg-brand-ink text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
                     >
                         {t(lang, "pt_create_btn")}
                     </button>
@@ -459,7 +459,7 @@ function freqLabel(interval: number): string {
                 </button>
                 <form method="POST" class="flex-1">
                     <input type="hidden" name="action" value="shuffle" />
-                    <button type="submit" class="w-full py-2.5 bg-brand-sun-deep hover:bg-brand-sun-deep text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]">
+                    <button type="submit" class="w-full py-2.5 bg-brand-sun-deep hover:bg-brand-ink text-brand-ink font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]">
                         {t(lang, "shuffle_preview_apply")}
                     </button>
                 </form>

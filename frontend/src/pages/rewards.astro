@@ -171,7 +171,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                         <button
                                             type="submit"
                                             disabled={!canAfford}
-                                            class={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${canAfford ? "bg-brand-sun-deep hover:bg-brand-sun-deep text-white shadow-[var(--shadow-card)] active:scale-95" : "bg-brand-cream-deep text-brand-ink-soft cursor-not-allowed"}`}
+                                            class={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${canAfford ? "bg-brand-sun-deep hover:bg-brand-ink text-brand-ink shadow-[var(--shadow-card)] active:scale-95" : "bg-brand-cream-deep text-brand-ink-soft cursor-not-allowed"}`}
                                         >
                                             {canAfford
                                                 ? t(lang, "rewards_redeem")
