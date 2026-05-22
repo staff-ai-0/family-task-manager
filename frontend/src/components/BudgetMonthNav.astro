@@ -1,18 +1,4 @@
 ---
-/**
- * BudgetMonthNav Component
- * Reusable month navigation with Ready to Assign balance display
- * 
- * Props:
- * - year: number - current year
- * - month: number - current month (1-12)
- * - readyToAssign: number - amount ready to be assigned to categories
- * - lang: 'en' | 'es' - language code
- * - t: translation function
- * - formatCurrency: currency formatter function
- * - baseRoute: string - base route for month links (e.g., '/budget/month')
- */
-
 interface Props {
     year: number;
     month: number;
@@ -23,23 +9,21 @@ interface Props {
     baseRoute?: string;
 }
 
-const { 
-    year, 
-    month, 
-    readyToAssign, 
-    lang, 
+const {
+    year,
+    month,
+    readyToAssign,
+    lang,
     t,
     formatCurrency,
     baseRoute = '/budget/month'
 } = Astro.props;
 
-// Calculate month navigation
 const prevMonth = month === 1 ? 12 : month - 1;
 const prevYear = month === 1 ? year - 1 : year;
 const nextMonth = month === 12 ? 1 : month + 1;
 const nextYear = month === 12 ? year + 1 : year;
 
-// Build prev/next URLs: query-param style for /budget, path-param for others
 const useQueryParams = baseRoute === '/budget';
 const prevUrl = useQueryParams
     ? `${baseRoute}/?year=${prevYear}&month=${prevMonth}`
@@ -48,11 +32,9 @@ const nextUrl = useQueryParams
     ? `${baseRoute}/?year=${nextYear}&month=${nextMonth}`
     : `${baseRoute}/${nextYear}/${nextMonth}`;
 
-// Check if current month
 const now = new Date();
 const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
 
-// Get month name
 const monthNames = {
     en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
     es: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -60,56 +42,55 @@ const monthNames = {
 const monthName = monthNames[lang][month - 1];
 ---
 
-<div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
+<div class="bg-brand-cream rounded-[var(--radius-card)] p-4 border-2 border-brand-ink shadow-[var(--shadow-card)]">
     <div class="flex items-center justify-between mb-4">
-        <a href={prevUrl} class="text-white hover:text-primary-100 transition p-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        <a href={prevUrl} class="text-brand-ink hover:text-brand-coral-deep transition p-2 border-2 border-brand-ink rounded-full shadow-[2px_2px_0_var(--color-brand-ink)] press">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
         </a>
         <div class="text-center">
-            <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
+            <p class="text-brand-ink-soft text-xs font-extrabold uppercase tracking-wider mb-1 font-sans">
                 {monthName} {year}
             </p>
             {isCurrentMonth && (
-                <span class="inline-block bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full">
-                    {lang === "es" ? "Mes Actual" : "Current Month"}
+                <span class="inline-block bg-brand-sun text-brand-ink border-2 border-brand-ink text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                    {lang === "es" ? "MES ACTUAL" : "CURRENT"}
                 </span>
             )}
         </div>
-        <a href={nextUrl} class="text-white hover:text-primary-100 transition p-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        <a href={nextUrl} class="text-brand-ink hover:text-brand-coral-deep transition p-2 border-2 border-brand-ink rounded-full shadow-[2px_2px_0_var(--color-brand-ink)] press">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
             </svg>
         </a>
     </div>
 
-    <!-- Ready to Assign — clickable to open assign funds modal -->
     <button
         id="open-assign-funds-modal"
-        class="w-full bg-white/30 hover:bg-white/40 active:bg-white/50 rounded-xl p-4 text-left transition cursor-pointer"
+        class={`press w-full rounded-[var(--radius-card)] p-4 text-left border-2 border-brand-ink transition cursor-pointer ${readyToAssign < 0 ? 'bg-red-100' : readyToAssign === 0 ? 'bg-brand-mint/30' : 'bg-brand-sun'}`}
         title={lang === "es" ? "Toca para asignar fondos a categorías" : "Tap to assign funds to categories"}
     >
-        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
+        <p class="text-brand-ink text-xs font-extrabold uppercase tracking-wider mb-1 font-sans">
             {t(lang, 'fin_ready_to_assign')}
         </p>
         <div class="flex items-center justify-between">
-            <p class={`text-3xl font-extrabold tracking-tight ${readyToAssign < 0 ? 'text-red-300' : 'text-white'}`}>
+            <p class={`font-display text-3xl font-extrabold tracking-tight num ${readyToAssign < 0 ? 'text-red-700' : 'text-brand-ink'}`}>
                 {formatCurrency(readyToAssign)}
             </p>
             {readyToAssign > 0 && (
-                <span class="bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full">
+                <span class="bg-brand-coral text-brand-ink border-2 border-brand-ink text-xs font-extrabold px-2 py-0.5 rounded-full">
                     {lang === "es" ? "Asignar" : "Assign"}
                 </span>
             )}
             {readyToAssign === 0 && (
-                <span class="bg-green-400 text-green-900 text-xs font-bold px-2 py-1 rounded-full">
-                    {lang === "es" ? "✓ Todo asignado" : "✓ All assigned"}
+                <span class="bg-brand-mint text-brand-ink border-2 border-brand-ink text-xs font-extrabold px-2 py-0.5 rounded-full">
+                    {lang === "es" ? "✓ Listo" : "✓ Done"}
                 </span>
             )}
             {readyToAssign < 0 && (
-                <span class="bg-red-400 text-red-900 text-xs font-bold px-2 py-1 rounded-full">
-                    {lang === "es" ? "Sobreasignado" : "Overbudgeted"}
+                <span class="bg-red-500 text-brand-cream border-2 border-brand-ink text-xs font-extrabold px-2 py-0.5 rounded-full">
+                    {lang === "es" ? "Excedido" : "Over"}
                 </span>
             )}
         </div>

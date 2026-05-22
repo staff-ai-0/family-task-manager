@@ -38,18 +38,18 @@ if (subscriptionId) {
 <Layout title="Activating subscription...">
   <main class="max-w-2xl mx-auto p-8">
     {status === 'activated' && (
-      <div class="bg-green-100 border border-green-300 rounded p-6 text-center">
+      <div class="bg-brand-mint/20 border border-brand-mint rounded p-6 text-center">
         <h1 class="text-2xl font-bold mb-2">Subscription activated</h1>
         <p>{message}</p>
         <p class="mt-2 text-sm">Plan: <strong>{plan}</strong></p>
-        <a href="/parent/settings/subscription" class="inline-block mt-4 px-4 py-2 bg-blue-600 text-white rounded">Back to settings</a>
+        <a href="/parent/settings/subscription" class="inline-block mt-4 px-4 py-2 bg-brand-sky-deep text-white rounded">Back to settings</a>
       </div>
     )}
     {status === 'error' && (
       <div class="bg-red-100 border border-red-300 rounded p-6 text-center">
         <h1 class="text-2xl font-bold mb-2">Activation problem</h1>
         <p>{message}</p>
-        <a href="/parent/settings/subscription" class="inline-block mt-4 px-4 py-2 bg-blue-600 text-white rounded">Back to settings</a>
+        <a href="/parent/settings/subscription" class="inline-block mt-4 px-4 py-2 bg-brand-sky-deep text-white rounded">Back to settings</a>
       </div>
     )}
   </main>

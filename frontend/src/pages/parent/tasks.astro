@@ -116,13 +116,13 @@ function freqLabel(interval: number): string {
 ---
 
 <Layout title={`${t(lang, "pt_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <header
-            class="bg-gradient-to-br from-primary-700 to-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md"
+            class="bg-gradient-to-br from-brand-sky to-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
         >
             <a
                 href="/parent"
-                class="text-primary-200 text-sm flex items-center gap-1 mb-3"
+                class="text-brand-sky text-sm flex items-center gap-1 mb-3"
             >
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -130,29 +130,29 @@ function freqLabel(interval: number): string {
                 {t(lang, "back_parent")}
             </a>
             <h1 class="text-2xl font-bold">{t(lang, "pt_title")}</h1>
-            <p class="text-primary-200 text-sm mt-1">
+            <p class="text-brand-sky text-sm mt-1">
                 {t(lang, "pt_templates_in_family")(templateList.length)}
             </p>
         </header>
 
         <main class="flex-1 px-4 py-6 space-y-6">
             {successMsg && (
-                <div class="p-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl">
+                <div class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
                     {successMsg}
                 </div>
             )}
             {errorMsg && (
-                <div class="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">
+                <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                     {errorMsg}
                 </div>
             )}
 
             <!-- Shuffle Section -->
-            <section class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-5 shadow-sm border border-amber-200">
+            <section class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-sun">
                 <div class="flex items-center justify-between mb-2">
-                    <h2 class="font-bold text-slate-800">{t(lang, "shuffle_title")}</h2>
+                    <h2 class="font-bold text-brand-ink">{t(lang, "shuffle_title")}</h2>
                 </div>
-                <p class="text-xs text-slate-500 mb-3">{t(lang, "shuffle_desc")}</p>
+                <p class="text-xs text-brand-ink-soft mb-3">{t(lang, "shuffle_desc")}</p>
                 <div class="flex gap-2">
                     <button
                         type="button"
@@ -162,7 +162,7 @@ function freqLabel(interval: number): string {
                         data-t-empty={t(lang, "shuffle_preview_empty")}
                         data-t-carry={t(lang, "shuffle_preview_carry")}
                         data-t-total={t(lang, "shuffle_preview_total")}
-                        class="flex-1 py-2.5 bg-white border border-amber-300 hover:bg-amber-50 text-amber-700 font-semibold text-sm rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2"
+                        class="flex-1 py-2.5 bg-brand-cream border border-brand-sun hover:bg-brand-sun/20 text-brand-sun-deep font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)] flex items-center justify-center gap-2"
                     >
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -175,7 +175,7 @@ function freqLabel(interval: number): string {
                         <button
                             type="submit"
                             onclick={`return confirm('${t(lang, "shuffle_confirm")}')`}
-                            class="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2"
+                            class="w-full py-2.5 bg-brand-sun-deep hover:bg-brand-sun-deep text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)] flex items-center justify-center gap-2"
                         >
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -185,51 +185,51 @@ function freqLabel(interval: number): string {
                     </form>
                 </div>
                 {assignmentList.length > 0 && (
-                    <p class="text-xs text-amber-700 mt-2 text-center">
+                    <p class="text-xs text-brand-sun-deep mt-2 text-center">
                         {t(lang, "shuffle_week_of")}: {assignmentList[0]?.week_of} | {(t(lang, "shuffle_assignment_count") as Function)(assignmentList.length)}
                     </p>
                 )}
             </section>
 
             <!-- Create Template Form -->
-            <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                <h2 class="font-bold text-slate-800 mb-4">{t(lang, "pt_create_title")}</h2>
+            <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                <h2 class="font-bold text-brand-ink mb-4">{t(lang, "pt_create_title")}</h2>
                 <form method="POST" class="space-y-3">
                     <input type="hidden" name="action" value="create" />
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="space-y-3">
-                            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">English</h3>
+                            <h3 class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider">English</h3>
                             <input
                                 name="title"
                                 required
                                 placeholder={t(lang, "pt_task_title")}
-                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                                class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
                             />
                             <textarea
                                 name="description"
                                 placeholder={t(lang, "pt_description")}
                                 rows={2}
-                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+                                class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none resize-none"
                             ></textarea>
                         </div>
                         <div class="space-y-3">
-                            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Español</h3>
+                            <h3 class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider">Español</h3>
                             <input
                                 name="title_es"
                                 placeholder={t(lang, "translation_title_es")}
-                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                                class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
                             />
                             <textarea
                                 name="description_es"
                                 placeholder={t(lang, "translation_desc_es")}
                                 rows={2}
-                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+                                class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none resize-none"
                             ></textarea>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="text-xs font-medium text-slate-600 mb-1 block">
+                            <label class="text-xs font-medium text-brand-ink-soft mb-1 block">
                                 {t(lang, "pt_points")}
                             </label>
                             <input
@@ -238,16 +238,16 @@ function freqLabel(interval: number): string {
                                 min={1}
                                 max={1000}
                                 value={10}
-                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                                class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
                             />
                         </div>
                         <div>
-                            <label class="text-xs font-medium text-slate-600 mb-1 block">
+                            <label class="text-xs font-medium text-brand-ink-soft mb-1 block">
                                 {t(lang, "pt_interval")}
                             </label>
                             <select
                                 name="interval_days"
-                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                                class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none bg-brand-cream"
                             >
                                 <option value="1">{t(lang, "pt_interval_daily")}</option>
                                 <option value="3">{t(lang, "pt_interval_every3")}</option>
@@ -256,13 +256,13 @@ function freqLabel(interval: number): string {
                         </div>
                     </div>
                     <div>
-                        <label class="text-xs font-medium text-slate-600 mb-1 block">
+                        <label class="text-xs font-medium text-brand-ink-soft mb-1 block">
                             {t(lang, "pt_assignment_type")}
                         </label>
                         <select
                             id="assignment_type"
                             name="assignment_type"
-                            class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                            class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none bg-brand-cream"
                             onchange="toggleUserSelection(this.value)"
                         >
                             <option value="auto">{t(lang, "pt_assignment_auto")}</option>
@@ -271,60 +271,60 @@ function freqLabel(interval: number): string {
                         </select>
                     </div>
                     <div id="user_selection_container" class="hidden">
-                        <label class="text-xs font-medium text-slate-600 mb-1 block">
+                        <label class="text-xs font-medium text-brand-ink-soft mb-1 block">
                             {t(lang, "pt_assign_to")}
                         </label>
-                        <div class="space-y-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <div class="space-y-2 p-3 bg-brand-cream-deep rounded-lg border border-brand-ink/10">
                             {memberList.map((member: any) => (
-                                <label class="flex items-center gap-2 cursor-pointer hover:bg-white px-2 py-1.5 rounded transition-colors">
+                                <label class="flex items-center gap-2 cursor-pointer hover:bg-brand-cream px-2 py-1.5 rounded transition-colors">
                                     <input
                                         type="checkbox"
                                         name="assigned_user_ids[]"
                                         value={member.id}
-                                        class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-2 focus:ring-primary-500"
+                                        class="w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep"
                                     />
-                                    <span class="text-sm text-slate-700">{member.name}</span>
-                                    <span class="text-xs text-slate-500 ml-auto">{member.role.toLowerCase()}</span>
+                                    <span class="text-sm text-brand-ink">{member.name}</span>
+                                    <span class="text-xs text-brand-ink-soft ml-auto">{member.role.toLowerCase()}</span>
                                 </label>
                             ))}
                         </div>
-                        <p class="text-xs text-slate-500 mt-1">
+                        <p class="text-xs text-brand-ink-soft mt-1">
                             {t(lang, "pt_assign_hint_fixed")} {t(lang, "pt_assign_hint_rotate")}
                         </p>
                     </div>
                     <div>
-                        <label class="text-xs font-medium text-slate-600 mb-1 block">
+                        <label class="text-xs font-medium text-brand-ink-soft mb-1 block">
                             {t(lang, "pt_allowed_roles")}
                         </label>
-                        <div class="flex gap-3 flex-wrap p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <div class="flex gap-3 flex-wrap p-3 bg-brand-cream-deep rounded-lg border border-brand-ink/10">
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" name="allowed_roles[]" value="parent" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-2 focus:ring-primary-500" />
-                                <span class="text-sm text-slate-700">{t(lang, "pt_role_parent")}</span>
+                                <input type="checkbox" name="allowed_roles[]" value="parent" class="w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" />
+                                <span class="text-sm text-brand-ink">{t(lang, "pt_role_parent")}</span>
                             </label>
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" name="allowed_roles[]" value="teen" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-2 focus:ring-primary-500" />
-                                <span class="text-sm text-slate-700">{t(lang, "pt_role_teen")}</span>
+                                <input type="checkbox" name="allowed_roles[]" value="teen" class="w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" />
+                                <span class="text-sm text-brand-ink">{t(lang, "pt_role_teen")}</span>
                             </label>
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" name="allowed_roles[]" value="child" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-2 focus:ring-primary-500" />
-                                <span class="text-sm text-slate-700">{t(lang, "pt_role_child")}</span>
+                                <input type="checkbox" name="allowed_roles[]" value="child" class="w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" />
+                                <span class="text-sm text-brand-ink">{t(lang, "pt_role_child")}</span>
                             </label>
                         </div>
-                        <p class="text-xs text-slate-500 mt-1">{t(lang, "pt_allowed_roles_hint")}</p>
+                        <p class="text-xs text-brand-ink-soft mt-1">{t(lang, "pt_allowed_roles_hint")}</p>
                     </div>
                     <div class="flex items-center gap-3 py-1">
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" name="is_bonus" class="sr-only peer" />
-                            <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-amber-500 peer-focus:ring-2 peer-focus:ring-amber-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                            <div class="w-9 h-5 bg-brand-cream-deep rounded-full peer peer-checked:bg-brand-sun-deep peer-focus:ring-2 peer-focus:ring-amber-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-brand-cream after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
                         </label>
                         <div>
-                            <span class="text-sm font-medium text-slate-700">{t(lang, "pt_is_bonus")}</span>
-                            <p class="text-xs text-slate-400">{t(lang, "pt_is_bonus_hint")}</p>
+                            <span class="text-sm font-medium text-brand-ink">{t(lang, "pt_is_bonus")}</span>
+                            <p class="text-xs text-brand-ink-soft">{t(lang, "pt_is_bonus_hint")}</p>
                         </div>
                     </div>
                     <button
                         type="submit"
-                        class="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm"
+                        class="w-full py-2.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
                     >
                         {t(lang, "pt_create_btn")}
                     </button>
@@ -333,17 +333,17 @@ function freqLabel(interval: number): string {
 
             <!-- Template List -->
             <section>
-                <h2 class="font-bold text-slate-800 mb-3 px-1">{t(lang, "pt_all_templates")}</h2>
+                <h2 class="font-bold text-brand-ink mb-3 px-1">{t(lang, "pt_all_templates")}</h2>
                 <div class="space-y-3">
                     {templateList.length === 0 ? (
-                        <p class="text-slate-500 text-sm text-center py-6">{t(lang, "pt_none")}</p>
+                        <p class="text-brand-ink-soft text-sm text-center py-6">{t(lang, "pt_none")}</p>
                     ) : (
                         templateList.map((tmpl: any) => (
-                            <div class={`bg-white rounded-2xl p-4 shadow-sm border ${tmpl.is_active ? "border-slate-100" : "border-slate-200 opacity-60"}`}>
+                            <div class={`bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border ${tmpl.is_active ? "border-brand-ink/10" : "border-brand-ink/10 opacity-60"}`}>
                                 <div class="flex items-start justify-between gap-3">
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2 flex-wrap mb-1">
-                                            <h3 class="font-bold text-slate-800 text-sm">
+                                            <h3 class="font-bold text-brand-ink text-sm">
                                                 {tmpl.title}
                                                 {!tmpl.title_es && (
                                                     <span class="inline-block ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title={t(lang, "translation_missing")}>
@@ -353,19 +353,19 @@ function freqLabel(interval: number): string {
                                             </h3>
                                             <span class={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                                                 tmpl.is_bonus
-                                                    ? "bg-amber-100 text-amber-700"
-                                                    : "bg-blue-100 text-blue-700"
+                                                    ? "bg-brand-sun/20 text-brand-sun-deep"
+                                                    : "bg-brand-sky/15 text-brand-sky-deep"
                                             }`}>
                                                 {tmpl.is_bonus ? t(lang, "pt_bonus") : t(lang, "pt_regular")}
                                             </span>
-                                            <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                                            <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-cream-deep text-brand-ink-soft">
                                                 {freqLabel(tmpl.interval_days)}
                                             </span>
                                             {tmpl.assignment_type && tmpl.assignment_type !== 'auto' && (
                                                 <span class={`text-xs font-medium px-2 py-0.5 rounded-full ${
                                                     tmpl.assignment_type === 'fixed' 
-                                                        ? 'bg-purple-100 text-purple-700' 
-                                                        : 'bg-green-100 text-green-700'
+                                                        ? 'bg-brand-coral/15 text-brand-coral-deep' 
+                                                        : 'bg-brand-mint/20 text-brand-mint-deep'
                                                 }`}>
                                                     {tmpl.assignment_type === 'fixed' ? '📌 Fixed' : '🔄 Rotate'}
                                                 </span>
@@ -377,9 +377,9 @@ function freqLabel(interval: number): string {
                                             )}
                                         </div>
                                         {tmpl.description && (
-                                            <p class="text-xs text-slate-500 line-clamp-1">{tmpl.description}</p>
+                                            <p class="text-xs text-brand-ink-soft line-clamp-1">{tmpl.description}</p>
                                         )}
-                                        <p class="text-xs text-amber-600 font-semibold mt-1">+{tmpl.points} pts</p>
+                                        <p class="text-xs text-brand-sun-deep font-semibold mt-1">+{tmpl.points} pts</p>
                                     </div>
                                     <div class="flex gap-1.5 flex-shrink-0">
                                         <!-- Toggle active -->
@@ -391,8 +391,8 @@ function freqLabel(interval: number): string {
                                                 title={tmpl.is_active ? (t(lang, "pm_deactivate") as string) : (t(lang, "pm_activate") as string)}
                                                 class={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${
                                                     tmpl.is_active
-                                                        ? "bg-green-100 text-green-600 hover:bg-green-200"
-                                                        : "bg-slate-100 text-slate-400 hover:bg-green-100 hover:text-green-600"
+                                                        ? "bg-brand-mint/20 text-brand-mint-deep hover:bg-brand-mint"
+                                                        : "bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-mint/20 hover:text-brand-mint-deep"
                                                 }`}
                                             >
                                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -403,7 +403,7 @@ function freqLabel(interval: number): string {
                                         <!-- Edit -->
                                         <a
                                             href={`/parent/tasks/${tmpl.id}/edit`}
-                                            class="h-8 w-8 rounded-lg bg-slate-100 hover:bg-primary-100 text-slate-500 hover:text-primary-600 flex items-center justify-center transition-colors"
+                                            class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink-soft hover:text-brand-sky-deep flex items-center justify-center transition-colors"
                                         >
                                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -416,7 +416,7 @@ function freqLabel(interval: number): string {
                                             <button
                                                 type="submit"
                                                 onclick={`return confirm('${t(lang, "pt_delete_confirm")}')`}
-                                                class="h-8 w-8 rounded-lg bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-500 flex items-center justify-center transition-colors"
+                                                class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-red-100 text-brand-ink-soft hover:text-red-500 flex items-center justify-center transition-colors"
                                             >
                                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -437,29 +437,29 @@ function freqLabel(interval: number): string {
     
     <!-- Shuffle preview modal -->
     <div id="preview-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
-        <div class="bg-white w-full md:max-w-2xl max-h-[90vh] rounded-t-2xl md:rounded-2xl shadow-xl border border-slate-200 flex flex-col">
-            <div class="p-5 border-b border-slate-100 flex items-start justify-between gap-3">
+        <div class="bg-brand-cream w-full md:max-w-2xl max-h-[90vh] rounded-t-[var(--radius-card)] md:rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] border border-brand-ink/10 flex flex-col">
+            <div class="p-5 border-b border-brand-ink/10 flex items-start justify-between gap-3">
                 <div>
-                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">{t(lang, "shuffle_preview_title")}</p>
-                    <p id="preview-week" class="text-lg font-bold text-slate-800"></p>
-                    <p class="text-xs text-slate-500 mt-0.5">{t(lang, "shuffle_preview_hint")}</p>
+                    <p class="text-xs font-medium text-brand-ink-soft uppercase tracking-wider">{t(lang, "shuffle_preview_title")}</p>
+                    <p id="preview-week" class="text-lg font-bold text-brand-ink"></p>
+                    <p class="text-xs text-brand-ink-soft mt-0.5">{t(lang, "shuffle_preview_hint")}</p>
                 </div>
-                <button type="button" id="preview-close" class="text-slate-400 hover:text-slate-600">
+                <button type="button" id="preview-close" class="text-brand-ink-soft hover:text-brand-ink-soft">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
             <div class="flex-1 overflow-y-auto p-5 space-y-4">
-                <div id="preview-status" class="text-sm text-slate-500 text-center py-4 hidden"></div>
+                <div id="preview-status" class="text-sm text-brand-ink-soft text-center py-4 hidden"></div>
                 <div id="preview-totals" class="grid grid-cols-2 md:grid-cols-3 gap-2"></div>
                 <div id="preview-plan" class="space-y-2"></div>
             </div>
-            <div class="p-4 border-t border-slate-100 flex items-center gap-2">
-                <button type="button" id="preview-cancel" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-lg transition-colors">
+            <div class="p-4 border-t border-brand-ink/10 flex items-center gap-2">
+                <button type="button" id="preview-cancel" class="flex-1 py-2.5 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold text-sm rounded-lg transition-colors">
                     {t(lang, "shuffle_preview_close")}
                 </button>
                 <form method="POST" class="flex-1">
                     <input type="hidden" name="action" value="shuffle" />
-                    <button type="submit" class="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm">
+                    <button type="submit" class="w-full py-2.5 bg-brand-sun-deep hover:bg-brand-sun-deep text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]">
                         {t(lang, "shuffle_preview_apply")}
                     </button>
                 </form>
@@ -512,7 +512,7 @@ function freqLabel(interval: number): string {
             if (statusEl) {
                 statusEl.textContent = t.loading;
                 statusEl.classList.remove("hidden", "text-red-600");
-                statusEl.classList.add("text-slate-500");
+                statusEl.classList.add("text-brand-ink-soft");
             }
 
             try {
@@ -525,9 +525,9 @@ function freqLabel(interval: number): string {
                 if (totalsEl) {
                     totalsEl.innerHTML = (data.totals_by_member || [])
                         .map((m: any) => `
-                            <div class="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                                <p class="text-sm font-semibold text-slate-800">${m.user_name}</p>
-                                <p class="text-xs text-slate-500">${m.points_this_week} pts ${t.total} · ${m.points_carry} ${t.carry}</p>
+                            <div class="bg-brand-cream-deep rounded-lg p-3 border border-brand-ink/10">
+                                <p class="text-sm font-semibold text-brand-ink">${m.user_name}</p>
+                                <p class="text-xs text-brand-ink-soft">${m.points_this_week} pts ${t.total} · ${m.points_carry} ${t.carry}</p>
                             </div>`)
                         .join("");
                 }
@@ -535,7 +535,7 @@ function freqLabel(interval: number): string {
                 const items = data.assignments || [];
                 if (planEl) {
                     if (items.length === 0) {
-                        planEl.innerHTML = `<p class="text-sm text-slate-500 text-center py-4">${t.empty}</p>`;
+                        planEl.innerHTML = `<p class="text-sm text-brand-ink-soft text-center py-4">${t.empty}</p>`;
                     } else {
                         // Group by user
                         const byUser: Record<string, any[]> = {};
@@ -545,13 +545,13 @@ function freqLabel(interval: number): string {
                             byUser[k].push(a);
                         }
                         planEl.innerHTML = Object.entries(byUser).map(([name, list]) => `
-                            <div class="bg-white border border-slate-200 rounded-lg p-3">
-                                <p class="text-sm font-bold text-slate-800 mb-2">${name}</p>
+                            <div class="bg-brand-cream border border-brand-ink/10 rounded-lg p-3">
+                                <p class="text-sm font-bold text-brand-ink mb-2">${name}</p>
                                 <ul class="space-y-1">
                                     ${list.map((a: any) => `
                                         <li class="flex justify-between text-xs">
-                                            <span class="text-slate-700 truncate">${a.assigned_date} · ${a.template_title}${a.template_is_bonus ? " ⭐" : ""}</span>
-                                            <span class="text-amber-600 font-semibold ml-2 flex-shrink-0">+${a.template_points}</span>
+                                            <span class="text-brand-ink truncate">${a.assigned_date} · ${a.template_title}${a.template_is_bonus ? " ⭐" : ""}</span>
+                                            <span class="text-brand-sun-deep font-semibold ml-2 flex-shrink-0">+${a.template_points}</span>
                                         </li>`).join("")}
                                 </ul>
                             </div>`).join("");
@@ -561,7 +561,7 @@ function freqLabel(interval: number): string {
                 console.error("preview error", err);
                 if (statusEl) {
                     statusEl.textContent = t.error;
-                    statusEl.classList.remove("text-slate-500");
+                    statusEl.classList.remove("text-brand-ink-soft");
                     statusEl.classList.add("text-red-600");
                 }
             }

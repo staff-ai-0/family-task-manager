@@ -44,9 +44,9 @@ if (!reward) return Astro.redirect("/parent/rewards");
 ---
 
 <Layout title={`${t(lang, "pr_edit_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <header
-            class="bg-gradient-to-br from-amber-600 to-orange-500 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md"
+            class="bg-gradient-to-br from-amber-600 to-orange-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
         >
             <a
                 href="/parent/rewards"
@@ -71,41 +71,41 @@ if (!reward) return Astro.redirect("/parent/rewards");
         <main class="flex-1 px-4 py-6">
             {
                 errorMsg && (
-                    <div class="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">
+                    <div class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                         {errorMsg}
                     </div>
                 )
             }
             <form
                 method="POST"
-                class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 space-y-4"
+                class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-4"
             >
                 <div>
-                    <label class="text-sm font-medium text-slate-700 mb-1 block"
+                    <label class="text-sm font-medium text-brand-ink mb-1 block"
                         >{t(lang, "pr_name")}</label
                     >
                     <input
                         name="name"
                         required
                         value={reward.name}
-                        class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                        class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                     />
                 </div>
                 <div>
-                    <label class="text-sm font-medium text-slate-700 mb-1 block"
+                    <label class="text-sm font-medium text-brand-ink mb-1 block"
                         >{t(lang, "pt_description")}</label
                     >
                     <textarea
                         name="description"
                         rows={3}
-                        class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none resize-none"
+                        class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-amber-500 outline-none resize-none"
                         >{reward.description}</textarea
                     >
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label
-                            class="text-sm font-medium text-slate-700 mb-1 block"
+                            class="text-sm font-medium text-brand-ink mb-1 block"
                             >{t(lang, "pr_point_cost")}</label
                         >
                         <input
@@ -113,17 +113,17 @@ if (!reward) return Astro.redirect("/parent/rewards");
                             name="points_cost"
                             min={1}
                             value={reward.points_cost}
-                            class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                            class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                         />
                     </div>
                     <div>
                         <label
-                            class="text-sm font-medium text-slate-700 mb-1 block"
+                            class="text-sm font-medium text-brand-ink mb-1 block"
                             >{t(lang, "pr_category")}</label
                         >
                         <select
                             name="category"
-                            class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white"
+                            class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-brand-cream"
                         >
                             <option value="">{t(lang, "pr_none_cat")}</option>
                             <option
@@ -161,7 +161,7 @@ if (!reward) return Astro.redirect("/parent/rewards");
                 </div>
                 <button
                     type="submit"
-                    class="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm"
+                    class="w-full py-2.5 bg-brand-sun-deep hover:bg-brand-sun-deep text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
                 >
                     {t(lang, "pt_save")}
                 </button>

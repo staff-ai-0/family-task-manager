@@ -56,11 +56,11 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 ---
 
 <Layout title={`${t(lang, "parent_finances_label")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <!-- Header -->
-        <header class="bg-gradient-to-br from-emerald-600 to-emerald-700 text-white pt-12 pb-8 px-6 rounded-b-3xl shadow-md">
+        <header class="bg-gradient-to-br from-brand-mint to-brand-mint-deep text-white pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex items-center justify-between mb-6">
-                <a href="/parent" class="text-white hover:text-emerald-100 transition">
+                <a href="/parent" class="text-white hover:text-brand-mint-deep transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
@@ -69,20 +69,20 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                 <div class="w-6"></div>
             </div>
             
-            <p class="text-emerald-100 text-sm mb-4">{monthName} {currentYear}</p>
+            <p class="text-brand-mint-deep text-sm mb-4">{monthName} {currentYear}</p>
 
             <!-- Quick Stats -->
             <div class="grid grid-cols-2 gap-3">
-                <div class="bg-white/20 backdrop-blur-md rounded-xl p-3 border border-white/30">
-                    <p class="text-emerald-50 text-xs font-semibold uppercase tracking-wider mb-0.5">
+                <div class="bg-brand-cream/20 backdrop-blur-md rounded-xl p-3 border border-white/30">
+                    <p class="text-brand-mint-deep text-xs font-semibold uppercase tracking-wider mb-0.5">
                         {t(lang, 'fin_ready_to_assign')}
                     </p>
                     <p class={`text-2xl font-extrabold ${readyToAssign < 0 ? 'text-red-300' : 'text-white'}`}>
                         {formatCurrency(readyToAssign)}
                     </p>
                 </div>
-                <div class="bg-white/20 backdrop-blur-md rounded-xl p-3 border border-white/30">
-                    <p class="text-emerald-50 text-xs font-semibold uppercase tracking-wider mb-0.5">
+                <div class="bg-brand-cream/20 backdrop-blur-md rounded-xl p-3 border border-white/30">
+                    <p class="text-brand-mint-deep text-xs font-semibold uppercase tracking-wider mb-0.5">
                         {t(lang, 'fin_spent')}
                     </p>
                     <p class="text-2xl font-extrabold text-white">
@@ -99,18 +99,18 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                 <!-- Monthly Budget -->
                 <a
                     href="/budget/"
-                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-primary-200 transition-all flex flex-col items-center text-center gap-2"
+                    class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-sky transition-all flex flex-col items-center text-center gap-2"
                 >
-                    <div class="w-10 h-10 rounded-lg bg-primary-50 flex items-center justify-center">
-                        <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="w-10 h-10 rounded-lg bg-brand-cream-deep flex items-center justify-center">
+                        <svg class="h-5 w-5 text-brand-sky-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800 text-sm">
+                        <p class="font-bold text-brand-ink text-sm">
                             {lang === "es" ? "Presupuesto" : "Budget"}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {lang === "es" ? "Mensual" : "Monthly"}
                         </p>
                     </div>
@@ -119,18 +119,18 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                 <!-- Accounts -->
                 <a
                     href="/budget/settings#accounts"
-                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-blue-200 transition-all flex flex-col items-center text-center gap-2"
+                    class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-sky transition-all flex flex-col items-center text-center gap-2"
                 >
-                    <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                        <svg class="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="w-10 h-10 rounded-lg bg-brand-sky/15 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-brand-sky-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800 text-sm">
+                        <p class="font-bold text-brand-ink text-sm">
                             {lang === "es" ? "Cuentas" : "Accounts"}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {lang === "es" ? "Bancarias" : "Banking"}
                         </p>
                     </div>
@@ -139,18 +139,18 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                 <!-- Categories -->
                 <a
                     href="/budget/settings#categories"
-                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-amber-200 transition-all flex flex-col items-center text-center gap-2"
+                    class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-sun transition-all flex flex-col items-center text-center gap-2"
                 >
-                    <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
-                        <svg class="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="w-10 h-10 rounded-lg bg-brand-sun/20 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-brand-sun-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800 text-sm">
+                        <p class="font-bold text-brand-ink text-sm">
                             {lang === "es" ? "Categorías" : "Categories"}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {lang === "es" ? "Estructura" : "Structure"}
                         </p>
                     </div>
@@ -159,18 +159,18 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                 <!-- Transactions -->
                 <a
                     href="/budget/transactions"
-                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-violet-200 transition-all flex flex-col items-center text-center gap-2"
+                    class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-coral transition-all flex flex-col items-center text-center gap-2"
                 >
-                    <div class="w-10 h-10 rounded-lg bg-violet-50 flex items-center justify-center">
-                        <svg class="h-5 w-5 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="w-10 h-10 rounded-lg bg-brand-coral/15 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-brand-coral-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800 text-sm">
+                        <p class="font-bold text-brand-ink text-sm">
                             {lang === "es" ? "Movimientos" : "Transactions"}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {lang === "es" ? "Historial" : "History"}
                         </p>
                     </div>
@@ -179,7 +179,7 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                 <!-- Reports -->
                 <a
                     href="/budget/reports"
-                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-rose-200 transition-all flex flex-col items-center text-center gap-2"
+                    class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-rose-200 transition-all flex flex-col items-center text-center gap-2"
                 >
                     <div class="w-10 h-10 rounded-lg bg-rose-50 flex items-center justify-center">
                         <svg class="h-5 w-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -187,10 +187,10 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800 text-sm">
+                        <p class="font-bold text-brand-ink text-sm">
                             {lang === "es" ? "Reportes" : "Reports"}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {lang === "es" ? "Análisis" : "Analytics"}
                         </p>
                     </div>
@@ -199,18 +199,18 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                 <!-- Import Transactions -->
                 <a
                     href="/budget/settings"
-                    class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:shadow-md hover:border-green-200 transition-all flex flex-col items-center text-center gap-2"
+                    class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-mint transition-all flex flex-col items-center text-center gap-2"
                 >
-                    <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
-                        <svg class="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="w-10 h-10 rounded-lg bg-brand-mint/20 flex items-center justify-center">
+                        <svg class="h-5 w-5 text-brand-mint-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800 text-sm">
+                        <p class="font-bold text-brand-ink text-sm">
                             {lang === "es" ? "Importar" : "Import"}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {lang === "es" ? "CSV/OFX" : "CSV/OFX"}
                         </p>
                     </div>
@@ -219,29 +219,29 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
             <!-- Quick Info -->
             {budgetOk && budget && (
-                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                    <h2 class="font-bold text-slate-800 mb-3 text-sm">
+                <div class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                    <h2 class="font-bold text-brand-ink mb-3 text-sm">
                         {lang === "es" ? "Este Mes" : "This Month"}
                     </h2>
                     <div class="grid grid-cols-3 gap-3">
                         <div>
-                            <p class="text-xs text-slate-500 font-semibold mb-1">
+                            <p class="text-xs text-brand-ink-soft font-semibold mb-1">
                                 {lang === "es" ? "Ingresos" : "Income"}
                             </p>
-                            <p class="text-lg font-bold text-green-600">
+                            <p class="text-lg font-bold text-brand-mint-deep">
                                 {formatCurrency(totalIncome)}
                             </p>
                         </div>
                         <div>
-                            <p class="text-xs text-slate-500 font-semibold mb-1">
+                            <p class="text-xs text-brand-ink-soft font-semibold mb-1">
                                 {t(lang, 'fin_budgeted')}
                             </p>
-                            <p class="text-lg font-bold text-blue-600">
+                            <p class="text-lg font-bold text-brand-sky-deep">
                                 {formatCurrency(totalBudgeted)}
                             </p>
                         </div>
                         <div>
-                            <p class="text-xs text-slate-500 font-semibold mb-1">
+                            <p class="text-xs text-brand-ink-soft font-semibold mb-1">
                                 {t(lang, 'fin_spent')}
                             </p>
                             <p class="text-lg font-bold text-red-600">

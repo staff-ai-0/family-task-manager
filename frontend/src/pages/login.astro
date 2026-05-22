@@ -81,17 +81,17 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
     </script>
     <script src="https://accounts.google.com/gsi/client" async></script>
 
-    <main class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+    <main class="min-h-screen bg-brand-cream-deep flex items-center justify-center p-4">
         <div class="w-full max-w-5xl">
-            <div class="bg-white rounded-3xl shadow-2xl overflow-hidden">
+            <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-stamp)] overflow-hidden">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-0">
                     <!-- Left column: Hero / Value Proposition -->
-                    <div class="hidden md:flex md:flex-col md:justify-center md:items-start p-12 lg:p-16 bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-white">
+                    <div class="hidden md:flex md:flex-col md:justify-center md:items-start p-12 lg:p-16 bg-brand-sky text-brand-ink border-r-2 border-brand-ink">
                         <div class="mb-8">
-                            <h2 class="text-5xl font-black leading-tight mb-4">
+                            <h2 class="font-display text-5xl font-extrabold leading-tight mb-4 tracking-tight">
                                 {lang === "es" ? "Gestiona tu familia" : "Manage your family"}
                             </h2>
-                            <p class="text-xl text-indigo-100 leading-relaxed">
+                            <p class="text-xl text-brand-ink leading-relaxed font-sans font-medium">
                                 {lang === "es" 
                                     ? "Tareas, recompensas y control parental en un solo lugar" 
                                     : "Tasks, rewards, and parental control in one place"}
@@ -100,38 +100,38 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
                         <div class="space-y-6 mt-12">
                             <div class="flex items-start gap-4">
-                                <div class="flex-shrink-0">
-                                    <svg class="h-6 w-6 text-indigo-200" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-brand-mint border-2 border-brand-ink flex items-center justify-center">
+                                    <svg class="h-4 w-4 text-brand-ink" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
                                     </svg>
                                 </div>
                                 <div>
-                                    <p class="font-semibold">{lang === "es" ? "Asignación de tareas" : "Task assignment"}</p>
-                                    <p class="text-sm text-indigo-100">{lang === "es" ? "Crea y asigna tareas con puntos" : "Create and assign tasks with points"}</p>
+                                    <p class="font-display font-extrabold text-brand-ink">{lang === "es" ? "Asignación de tareas" : "Task assignment"}</p>
+                                    <p class="text-sm text-brand-ink-soft font-sans">{lang === "es" ? "Crea y asigna tareas con puntos" : "Create and assign tasks with points"}</p>
                                 </div>
                             </div>
 
                             <div class="flex items-start gap-4">
-                                <div class="flex-shrink-0">
-                                    <svg class="h-6 w-6 text-indigo-200" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-brand-coral border-2 border-brand-ink flex items-center justify-center">
+                                    <svg class="h-4 w-4 text-brand-ink" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
                                     </svg>
                                 </div>
                                 <div>
-                                    <p class="font-semibold">{lang === "es" ? "Sistema de recompensas" : "Reward system"}</p>
-                                    <p class="text-sm text-indigo-100">{lang === "es" ? "Motiva con recompensas atractivas" : "Motivate with attractive rewards"}</p>
+                                    <p class="font-display font-extrabold text-brand-ink">{lang === "es" ? "Sistema de recompensas" : "Reward system"}</p>
+                                    <p class="text-sm text-brand-ink-soft font-sans">{lang === "es" ? "Motiva con recompensas atractivas" : "Motivate with attractive rewards"}</p>
                                 </div>
                             </div>
 
                             <div class="flex items-start gap-4">
-                                <div class="flex-shrink-0">
-                                    <svg class="h-6 w-6 text-indigo-200" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-brand-sun border-2 border-brand-ink flex items-center justify-center">
+                                    <svg class="h-4 w-4 text-brand-ink" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
                                     </svg>
                                 </div>
                                 <div>
-                                    <p class="font-semibold">{lang === "es" ? "Finanzas familiares" : "Family finances"}</p>
-                                    <p class="text-sm text-indigo-100">{lang === "es" ? "Presupuesto y control de gastos" : "Budget and expense tracking"}</p>
+                                    <p class="font-display font-extrabold text-brand-ink">{lang === "es" ? "Finanzas familiares" : "Family finances"}</p>
+                                    <p class="text-sm text-brand-ink-soft font-sans">{lang === "es" ? "Presupuesto y control de gastos" : "Budget and expense tracking"}</p>
                                 </div>
                             </div>
                         </div>
@@ -140,17 +140,17 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                     <!-- Right column: Login form -->
                     <div class="p-8 lg:p-12 flex flex-col justify-center">
                         <div class="mb-8">
-                            <h1 class="text-3xl lg:text-4xl font-bold text-slate-900 mb-2">
+                            <h1 class="text-3xl lg:text-4xl font-bold text-brand-ink mb-2">
                                 {t(lang, "login_welcome")}
                             </h1>
-                            <p class="text-slate-500 text-lg">
+                            <p class="text-brand-ink-soft text-lg">
                                 {t(lang, "login_subtitle")}
                             </p>
                         </div>
 
                         {
                             error && (
-                                <div class="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium">
+                                <div class="mb-6 p-4 rounded-xl bg-red-100 border border-red-200 text-red-700 text-sm font-medium">
                                     {error}
                                 </div>
                             )
@@ -187,10 +187,10 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                         <!-- Divider -->
                         <div class="relative my-6">
                             <div class="absolute inset-0 flex items-center">
-                                <div class="w-full border-t border-slate-300"></div>
+                                <div class="w-full border-t border-brand-ink/20"></div>
                             </div>
                             <div class="relative flex justify-center text-sm">
-                                <span class="px-3 bg-white text-slate-500 font-medium">
+                                <span class="px-3 bg-brand-cream text-brand-ink-soft font-medium">
                                     {lang === "es" ? "O continúa con correo" : "Or continue with email"}
                                 </span>
                             </div>
@@ -199,7 +199,7 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                         <!-- Email/Password Form -->
                         <form id="login-form" class="space-y-5">
                             <div>
-                                <label for="email" class="block text-sm font-semibold text-slate-700 mb-2">
+                                <label for="email" class="block text-sm font-semibold text-brand-ink mb-2">
                                     {t(lang, "login_email")}
                                 </label>
                                 <input
@@ -208,12 +208,12 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                                     name="email"
                                     required
                                     placeholder="parent@demo.com"
-                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                    class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all hover:border-brand-ink/20"
                                 />
                             </div>
 
                             <div>
-                                <label for="password" class="block text-sm font-semibold text-slate-700 mb-2">
+                                <label for="password" class="block text-sm font-semibold text-brand-ink mb-2">
                                     {t(lang, "login_password")}
                                 </label>
                                 <input
@@ -222,14 +222,14 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                                     name="password"
                                     required
                                     placeholder="••••••••"
-                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                    class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all hover:border-brand-ink/20"
                                 />
                             </div>
 
                             <div class="flex items-center justify-between">
                                 <a
                                     href="/forgot-password"
-                                    class="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+                                    class="text-sm font-medium text-brand-coral-deep hover:text-brand-coral-deep transition-colors"
                                 >
                                     {lang === "es" ? "¿Olvidaste tu contraseña?" : "Forgot password?"}
                                 </a>
@@ -238,17 +238,17 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                             <button
                                 type="submit"
                                 id="login-submit-btn"
-                                class="w-full py-3 px-4 rounded-lg text-white font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all shadow-lg hover:shadow-xl active:scale-95"
+                                class="press w-full py-3 px-4 rounded-full text-brand-ink font-extrabold font-display bg-brand-coral border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-coral-deep transition-all"
                             >
                                 {t(lang, "login_submit")}
                             </button>
                         </form>
 
                         <!-- Register Link -->
-                        <p class="mt-8 text-center text-sm text-slate-600">
+                        <p class="mt-8 text-center text-sm text-brand-ink-soft">
                             {lang === "es" ? "¿No tienes cuenta?" : "Don't have an account?"}
                             {" "}
-                            <a href="/register" class="font-bold text-indigo-600 hover:text-indigo-700 transition-colors">
+                            <a href="/register" class="font-bold text-brand-coral-deep hover:text-brand-coral-deep transition-colors">
                                 {lang === "es" ? "Crear cuenta" : "Create one"}
                             </a>
                         </p>
@@ -258,7 +258,7 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                             <input type="hidden" name="lang" value={lang === "es" ? "en" : "es"} />
                             <button
                                 type="submit"
-                                class="text-xs text-slate-400 hover:text-indigo-600 font-medium flex items-center gap-1.5 transition-colors"
+                                class="text-xs text-brand-ink-soft hover:text-brand-coral-deep font-medium flex items-center gap-1.5 transition-colors"
                             >
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
@@ -271,7 +271,7 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
             </div>
 
             <!-- Demo credentials hint (mobile) -->
-            <div class="mt-6 text-center text-xs text-slate-500 md:hidden">
+            <div class="mt-6 text-center text-xs text-brand-ink-soft md:hidden">
                 <p>{lang === "es" ? "Demo: parent@demo.com / password123" : "Demo: parent@demo.com / password123"}</p>
             </div>
         </div>

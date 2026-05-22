@@ -37,15 +37,15 @@ const labels = {
 ---
 
 <Layout title={`${labels.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 flex flex-col">
-        <header class="bg-gradient-to-br from-slate-800 to-slate-700 text-white pt-12 pb-8 px-6 rounded-b-3xl shadow-md">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col">
+        <header class="bg-gradient-to-br from-slate-800 to-slate-700 text-white pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex items-center gap-3 mb-2">
-                <a href="/parent" class="text-slate-400 hover:text-white transition-colors">
+                <a href="/parent" class="text-brand-ink-soft hover:text-white transition-colors">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </a>
-                <p class="text-slate-400 text-sm">{labels.back}</p>
+                <p class="text-brand-ink-soft text-sm">{labels.back}</p>
             </div>
             <h1 class="text-2xl font-bold">{labels.title}</h1>
         </header>
@@ -54,20 +54,20 @@ const labels = {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <a
                     href="/parent/settings/subscription"
-                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-amber-200 transition-all flex items-center gap-4"
+                    class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-sun transition-all flex items-center gap-4"
                 >
-                    <div class="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
-                        <svg class="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="w-12 h-12 rounded-xl bg-brand-sun/20 flex items-center justify-center flex-shrink-0">
+                        <svg class="h-6 w-6 text-brand-sun-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M5 3l3.057-3 3.943 4 3.943-4L19 3l-4 4 4 4-3.057 3-3.943-4-3.943 4L5 11l4-4-4-4z"
                             />
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800">{labels.subscription}</p>
-                        <p class="text-xs text-slate-500">{labels.subscription_desc}</p>
+                        <p class="font-bold text-brand-ink">{labels.subscription}</p>
+                        <p class="text-xs text-brand-ink-soft">{labels.subscription_desc}</p>
                     </div>
-                    <svg class="w-5 h-5 text-slate-400 ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="w-5 h-5 text-brand-ink-soft ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                     </svg>
                 </a>

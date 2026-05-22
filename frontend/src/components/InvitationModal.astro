@@ -23,13 +23,13 @@ const {
 ---
 
 <div id="invitation-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-        <div class="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-6 py-4 rounded-t-2xl">
+    <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] max-w-md w-full">
+        <div class="bg-brand-sky text-white px-6 py-4 rounded-t-[var(--radius-card)]">
             <div class="flex items-center justify-between">
                 <h2 class="text-xl font-bold">
                     {lang === "es" ? "Invitar a la familia" : "Invite to family"}
                 </h2>
-                <button id="invitation-close-btn" class="text-white hover:text-cyan-100 transition">
+                <button id="invitation-close-btn" class="text-white hover:text-brand-sky transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -39,26 +39,26 @@ const {
         
         <div class="p-6 space-y-4">
             <!-- Family name display -->
-            <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <p class="text-xs text-blue-600 font-semibold mb-1 uppercase tracking-wider">
+            <div class="bg-brand-sky/15 border border-brand-sky rounded-xl p-4">
+                <p class="text-xs text-brand-sky-deep font-semibold mb-1 uppercase tracking-wider">
                     {lang === "es" ? "Tu familia" : "Your family"}
                 </p>
-                <p class="text-lg font-bold text-blue-700">
+                <p class="text-lg font-bold text-brand-sky-deep">
                     {familyName}
                 </p>
             </div>
 
             <!-- Error message -->
-            <div id="invitation-error" class="hidden p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm"></div>
+            <div id="invitation-error" class="hidden p-3 rounded-lg bg-red-100 border border-red-200 text-red-700 text-sm"></div>
 
             <!-- Success message -->
-            <div id="invitation-success" class="hidden p-3 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm"></div>
+            <div id="invitation-success" class="hidden p-3 rounded-lg bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm"></div>
 
             <!-- Invite form -->
             <form id="invitation-form" class="space-y-4">
                 <!-- Email input -->
                 <div>
-                    <label for="invite-email" class="block text-xs font-semibold text-slate-700 mb-2">
+                    <label for="invite-email" class="block text-xs font-semibold text-brand-ink mb-2">
                         {lang === "es" ? "Email de la persona a invitar" : "Email to invite"}
                     </label>
                     <input
@@ -67,13 +67,13 @@ const {
                         name="email"
                         required
                         placeholder={lang === "es" ? "ejemplo@correo.com" : "example@email.com"}
-                        class="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all"
+                        class="w-full px-4 py-2 border border-brand-ink/20 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep focus:border-transparent outline-none transition-all"
                     />
                 </div>
 
                 <!-- Optional message -->
                 <div>
-                    <label for="invite-message" class="block text-xs font-semibold text-slate-700 mb-2">
+                    <label for="invite-message" class="block text-xs font-semibold text-brand-ink mb-2">
                         {lang === "es" ? "Mensaje (opcional)" : "Message (optional)"}
                     </label>
                     <textarea
@@ -83,19 +83,19 @@ const {
                         placeholder={lang === "es" 
                             ? "¡Únete a nuestra familia! Podemos organizar tareas juntos..." 
                             : "Join us! We can organize tasks together..."}
-                        class="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all resize-none"
+                        class="w-full px-4 py-2 border border-brand-ink/20 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep focus:border-transparent outline-none transition-all resize-none"
                     ></textarea>
                 </div>
 
                 <!-- Role selector -->
                 <div>
-                    <label for="invite-role" class="block text-xs font-semibold text-slate-700 mb-2">
+                    <label for="invite-role" class="block text-xs font-semibold text-brand-ink mb-2">
                         {lang === "es" ? "Rol en la familia" : "Role in family"}
                     </label>
                     <select
                         id="invite-role"
                         name="role"
-                        class="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all bg-white"
+                        class="w-full px-4 py-2 border border-brand-ink/20 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep focus:border-transparent outline-none transition-all bg-brand-cream"
                     >
                         <option value="child">
                             {lang === "es" ? "Niño (Child)" : "Child"}
@@ -107,7 +107,7 @@ const {
                             {lang === "es" ? "Padre/Madre (Parent)" : "Parent"}
                         </option>
                     </select>
-                    <p class="text-xs text-slate-500 mt-1">
+                    <p class="text-xs text-brand-ink-soft mt-1">
                         {lang === "es" 
                             ? "El rol puede ser cambiado después"
                             : "Role can be changed later"}
@@ -116,7 +116,7 @@ const {
                 <button
                     type="submit"
                     id="invitation-submit"
-                    class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold py-2 rounded-lg transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                    class="w-full bg-brand-sky hover:from-brand-sky hover:to-brand-sky-deep text-white font-bold py-2 rounded-lg transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
                 >
                     <span id="invitation-submit-text">
                         {lang === "es" ? "Enviar invitación" : "Send invitation"}
@@ -125,8 +125,8 @@ const {
             </form>
 
             <!-- Pending invitations section -->
-            <div class="pt-4 border-t border-slate-200">
-                <p class="text-xs text-slate-500 text-center py-3">
+            <div class="pt-4 border-t border-brand-ink/10">
+                <p class="text-xs text-brand-ink-soft text-center py-3">
                     {lang === "es" 
                         ? "Las invitaciones pendientes aparecerán en la sección principal después de ser enviadas."
                         : "Pending invitations will appear in the main section after being sent."}

@@ -36,13 +36,13 @@ const tabs = [
 ];
 ---
 
-<div class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-20">
+<div class="bg-brand-cream border-b border-brand-ink/10 shadow-[var(--shadow-card)] sticky top-0 z-20">
     <div class="max-w-md md:max-w-4xl lg:max-w-6xl mx-auto flex items-center">
         <!-- Hamburger button -->
         <button
             id="drawer-toggle"
             type="button"
-            class="p-3 text-slate-500 hover:text-slate-700 transition-colors"
+            class="p-3 text-brand-ink-soft hover:text-brand-ink transition-colors"
             aria-label={es ? "Abrir menú" : "Open menu"}
             aria-expanded="false"
             aria-controls="drawer-panel"
@@ -60,8 +60,8 @@ const tabs = [
                     aria-current={active === tab.id ? "page" : undefined}
                     class={`flex flex-col items-center gap-1 px-4 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
                         active === tab.id
-                            ? "border-primary-600 text-primary-600"
-                            : "border-transparent text-slate-400 hover:text-slate-600"
+                            ? "border-brand-ink text-brand-sky-deep"
+                            : "border-transparent text-brand-ink-soft hover:text-brand-ink-soft"
                     }`}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -78,8 +78,8 @@ const tabs = [
             aria-label={es ? "Revisar recibos pendientes" : "Review pending receipts"}
             class={`relative p-3 transition-colors ${
                 active === "receipt-drafts"
-                    ? "text-violet-600"
-                    : "text-slate-400 hover:text-slate-600"
+                    ? "text-brand-coral-deep"
+                    : "text-brand-ink-soft hover:text-brand-ink-soft"
             }`}
         >
             <!-- Receipt / inbox icon -->

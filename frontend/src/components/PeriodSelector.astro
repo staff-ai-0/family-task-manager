@@ -21,7 +21,7 @@ const periods = [
 
 <div class="px-4 py-2 flex items-center justify-center gap-2">
     <!-- Prev arrow -->
-    <button type="button" id="period-prev" class="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition-colors">
+    <button type="button" id="period-prev" class="p-1.5 rounded-full text-brand-ink-soft hover:bg-brand-cream-deep transition-colors">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
@@ -34,8 +34,8 @@ const periods = [
                 type="button"
                 class={`period-btn px-3 py-1 rounded-full text-xs font-bold transition-colors ${
                     activePeriod === p.id
-                        ? "bg-primary-600 text-white"
-                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                        ? "bg-brand-sky-deep text-white"
+                        : "bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-cream-deep"
                 }`}
                 data-period={p.id}
             >
@@ -45,7 +45,7 @@ const periods = [
     </div>
 
     <!-- Next arrow -->
-    <button type="button" id="period-next" class="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 transition-colors">
+    <button type="button" id="period-next" class="p-1.5 rounded-full text-brand-ink-soft hover:bg-brand-cream-deep transition-colors">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
         </svg>

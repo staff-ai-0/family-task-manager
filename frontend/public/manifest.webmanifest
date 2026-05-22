@@ -1,0 +1,26 @@
+{
+  "name": "Family Task Manager",
+  "short_name": "Family Task",
+  "description": "Chores, rewards, budget — together.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#4FB8E6",
+  "theme_color": "#4FB8E6",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["productivity", "lifestyle", "family"],
+  "icons": [
+    { "src": "/icon-192.png",         "type": "image/png", "sizes": "192x192" },
+    { "src": "/icon-512.png",         "type": "image/png", "sizes": "512x512" },
+    { "src": "/icon-maskable-192.png","type": "image/png", "sizes": "192x192", "purpose": "maskable" },
+    { "src": "/icon-maskable-512.png","type": "image/png", "sizes": "512x512", "purpose": "maskable" },
+    { "src": "/favicon.svg",          "type": "image/svg+xml", "sizes": "any", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Today's chores", "short_name": "Chores", "url": "/today", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Rewards",        "short_name": "Rewards", "url": "/rewards", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
