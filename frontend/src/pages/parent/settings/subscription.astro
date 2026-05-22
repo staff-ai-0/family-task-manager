@@ -167,15 +167,15 @@ function renderCell(value: any): string {
 }
 
 function cellClass(value: any): string {
-    if (value === true) return "text-green-600 font-bold";
-    if (value === null || value === false) return "text-slate-300";
-    return "text-slate-700 font-medium";
+    if (value === true) return "text-brand-mint-deep font-bold";
+    if (value === null || value === false) return "text-brand-ink-soft";
+    return "text-brand-ink font-medium";
 }
 ---
 
 <Layout title={`${l.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 flex flex-col min-h-screen">
-        <header class="bg-gradient-to-br from-amber-600 to-orange-600 text-white pt-12 pb-8 px-6 rounded-b-3xl shadow-md">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen">
+        <header class="bg-gradient-to-br from-amber-600 to-orange-600 text-white pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex items-center gap-3 mb-2">
                 <a href="/parent/settings" class="text-amber-200 hover:text-white transition-colors">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -189,19 +189,19 @@ function cellClass(value: any): string {
 
         <main class="flex-1 px-4 py-6 space-y-6">
             <!-- Current Plan -->
-            <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+            <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-slate-500">{l.current_plan}</p>
-                        <h2 class="text-xl font-bold text-slate-800 capitalize">{currentPlanName}</h2>
+                        <p class="text-sm text-brand-ink-soft">{l.current_plan}</p>
+                        <h2 class="text-xl font-bold text-brand-ink capitalize">{currentPlanName}</h2>
                     </div>
                     {isActive && !cancelAtPeriodEnd && (
-                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700 border border-green-200">
+                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-brand-mint/20 text-brand-mint-deep border border-brand-mint">
                             {l.active}
                         </span>
                     )}
                     {isActive && cancelAtPeriodEnd && (
-                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                        <span class="px-3 py-1 text-xs font-semibold rounded-full bg-brand-sun/20 text-brand-sun-deep border border-brand-sun">
                             {l.cancel_scheduled}
                         </span>
                     )}
@@ -212,7 +212,7 @@ function cellClass(value: any): string {
                     )}
                 </div>
                 {cancelAtPeriodEnd && periodEndLabel && (
-                    <p class="mt-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <p class="mt-3 text-sm text-brand-sun-deep bg-brand-sun/20 border border-brand-sun rounded-lg p-3">
                         {l.access_until} <strong>{periodEndLabel}</strong>.
                     </p>
                 )}
@@ -220,23 +220,23 @@ function cellClass(value: any): string {
 
             <!-- Usage Meters -->
             {usageMeters.length > 0 && (
-                <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                    <h2 class="text-lg font-bold text-slate-800 mb-4">{l.usage_title}</h2>
+                <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                    <h2 class="text-lg font-bold text-brand-ink mb-4">{l.usage_title}</h2>
                     <div class="space-y-4">
                         {usageMeters.map((meter) => {
                             const isUnlimited = meter.limit === null || meter.limit === -1;
                             const pct = isUnlimited ? 0 : Math.min(100, Math.round((meter.current / meter.limit!) * 100));
-                            const barColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-blue-500";
+                            const barColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-brand-sun-deep" : "bg-brand-sky-deep";
                             return (
                                 <div>
                                     <div class="flex justify-between text-sm mb-1">
-                                        <span class="text-slate-600">{meter.label}</span>
-                                        <span class="font-medium text-slate-800">
+                                        <span class="text-brand-ink-soft">{meter.label}</span>
+                                        <span class="font-medium text-brand-ink">
                                             {meter.current} {l.of} {isUnlimited ? l.unlimited : meter.limit}
-                                            {" "}<span class="text-slate-400 text-xs">{l.this_month}</span>
+                                            {" "}<span class="text-brand-ink-soft text-xs">{l.this_month}</span>
                                         </span>
                                     </div>
-                                    <div class="w-full bg-slate-100 rounded-full h-2.5">
+                                    <div class="w-full bg-brand-cream-deep rounded-full h-2.5">
                                         <div
                                             class={`h-2.5 rounded-full transition-all ${barColor}`}
                                             style={`width: ${isUnlimited ? 5 : pct}%`}
@@ -250,35 +250,35 @@ function cellClass(value: any): string {
             )}
 
             <!-- Plan Comparison Table -->
-            <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 overflow-x-auto">
-                <h2 class="text-lg font-bold text-slate-800 mb-4">{l.plan_comparison}</h2>
+            <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 overflow-x-auto">
+                <h2 class="text-lg font-bold text-brand-ink mb-4">{l.plan_comparison}</h2>
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="border-b border-slate-200">
-                            <th class="text-left py-3 px-2 text-slate-500 font-medium">{l.feature}</th>
-                            <th class={`text-center py-3 px-2 ${currentPlanName === "free" ? "bg-blue-50 rounded-t-xl" : ""}`}>
-                                <div class="font-bold text-slate-800">{l.free}</div>
-                                <div class="text-xs text-slate-400">{l.free}</div>
+                        <tr class="border-b border-brand-ink/10">
+                            <th class="text-left py-3 px-2 text-brand-ink-soft font-medium">{l.feature}</th>
+                            <th class={`text-center py-3 px-2 ${currentPlanName === "free" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
+                                <div class="font-bold text-brand-ink">{l.free}</div>
+                                <div class="text-xs text-brand-ink-soft">{l.free}</div>
                                 {currentPlanName === "free" && (
-                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-blue-100 text-blue-700">
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
                                         {l.current_plan}
                                     </span>
                                 )}
                             </th>
-                            <th class={`text-center py-3 px-2 ${currentPlanName === "plus" ? "bg-blue-50 rounded-t-xl" : ""}`}>
-                                <div class="font-bold text-slate-800">{l.plus}</div>
-                                <div class="text-xs text-slate-400">$5{l.month} ($50{l.year})</div>
+                            <th class={`text-center py-3 px-2 ${currentPlanName === "plus" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
+                                <div class="font-bold text-brand-ink">{l.plus}</div>
+                                <div class="text-xs text-brand-ink-soft">$5{l.month} ($50{l.year})</div>
                                 {currentPlanName === "plus" && (
-                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-blue-100 text-blue-700">
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
                                         {l.current_plan}
                                     </span>
                                 )}
                             </th>
-                            <th class={`text-center py-3 px-2 ${currentPlanName === "pro" ? "bg-blue-50 rounded-t-xl" : ""}`}>
-                                <div class="font-bold text-slate-800">{l.pro}</div>
-                                <div class="text-xs text-slate-400">$15{l.month} ($150{l.year})</div>
+                            <th class={`text-center py-3 px-2 ${currentPlanName === "pro" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
+                                <div class="font-bold text-brand-ink">{l.pro}</div>
+                                <div class="text-xs text-brand-ink-soft">$15{l.month} ($150{l.year})</div>
                                 {currentPlanName === "pro" && (
-                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-blue-100 text-blue-700">
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
                                         {l.current_plan}
                                     </span>
                                 )}
@@ -287,15 +287,15 @@ function cellClass(value: any): string {
                     </thead>
                     <tbody>
                         {featureRows.map((row, i) => (
-                            <tr class={`border-b border-slate-100 ${i % 2 === 0 ? "bg-slate-50/50" : ""}`}>
-                                <td class="py-3 px-2 text-slate-700">{row.label}</td>
-                                <td class={`py-3 px-2 text-center ${cellClass(row.free)} ${currentPlanName === "free" ? "bg-blue-50/50" : ""}`}>
+                            <tr class={`border-b border-brand-ink/10 ${i % 2 === 0 ? "bg-brand-cream-deep/50" : ""}`}>
+                                <td class="py-3 px-2 text-brand-ink">{row.label}</td>
+                                <td class={`py-3 px-2 text-center ${cellClass(row.free)} ${currentPlanName === "free" ? "bg-brand-sky/15/50" : ""}`}>
                                     {renderCell(row.free)}
                                 </td>
-                                <td class={`py-3 px-2 text-center ${cellClass(row.plus)} ${currentPlanName === "plus" ? "bg-blue-50/50" : ""}`}>
+                                <td class={`py-3 px-2 text-center ${cellClass(row.plus)} ${currentPlanName === "plus" ? "bg-brand-sky/15/50" : ""}`}>
                                     {renderCell(row.plus)}
                                 </td>
-                                <td class={`py-3 px-2 text-center ${cellClass(row.pro)} ${currentPlanName === "pro" ? "bg-blue-50/50" : ""}`}>
+                                <td class={`py-3 px-2 text-center ${cellClass(row.pro)} ${currentPlanName === "pro" ? "bg-brand-sky/15/50" : ""}`}>
                                     {renderCell(row.pro)}
                                 </td>
                             </tr>
@@ -307,7 +307,7 @@ function cellClass(value: any): string {
                 <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
                     {currentPlanName === "free" && (
                         <button
-                            class="upgrade-btn px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                            class="upgrade-btn px-6 py-2.5 bg-brand-sky-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-sky-deep transition-colors"
                             data-plan="plus"
                             data-cycle="monthly"
                         >
@@ -316,7 +316,7 @@ function cellClass(value: any): string {
                     )}
                     {currentPlanName !== "pro" && (
                         <button
-                            class="upgrade-btn px-6 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors"
+                            class="upgrade-btn px-6 py-2.5 bg-brand-coral-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-coral-deep transition-colors"
                             data-plan="pro"
                             data-cycle="monthly"
                         >
@@ -326,7 +326,7 @@ function cellClass(value: any): string {
                     {isPaid && isActive && !cancelAtPeriodEnd && (
                         <button
                             id="cancel-sub-btn"
-                            class="px-6 py-2.5 bg-white border border-red-200 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 transition-colors"
+                            class="px-6 py-2.5 bg-brand-cream border border-red-200 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-100 transition-colors"
                         >
                             {l.cancel}
                         </button>

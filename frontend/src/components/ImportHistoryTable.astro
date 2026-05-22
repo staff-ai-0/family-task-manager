@@ -10,18 +10,18 @@ interface Props {
 const { logs = [], lang } = Astro.props;
 
 const statusColor = (status: string) => {
-    if (status === "success") return "bg-green-100 text-green-700 border-green-200";
+    if (status === "success") return "bg-brand-mint/20 text-brand-mint-deep border-brand-mint";
     if (status === "failed") return "bg-red-100 text-red-700 border-red-200";
-    return "bg-amber-100 text-amber-700 border-amber-200";
+    return "bg-brand-sun/20 text-brand-sun-deep border-brand-sun";
 };
 ---
 
 {logs.length === 0 ? (
-    <p class="text-sm text-slate-500">{t(lang, "fin_settings_import_history_empty")}</p>
+    <p class="text-sm text-brand-ink-soft">{t(lang, "fin_settings_import_history_empty")}</p>
  ) : (
-    <div class="overflow-auto border border-slate-200 rounded-xl">
+    <div class="overflow-auto border border-brand-ink/10 rounded-xl">
         <table class="min-w-full text-sm">
-            <thead class="bg-slate-50 text-slate-600">
+            <thead class="bg-brand-cream-deep text-brand-ink-soft">
                 <tr>
                     <th class="text-left px-3 py-2">{t(lang, 'fin_settings_import_history_columns').filename}</th>
                     <th class="text-left px-3 py-2">{t(lang, 'fin_settings_import_history_columns').account}</th>
@@ -32,14 +32,14 @@ const statusColor = (status: string) => {
                     <th class="text-left px-3 py-2">{t(lang, 'fin_settings_import_history_columns').created_at}</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody class="divide-y divide-brand-ink/10">
                 {logs.map((log) => (
                     <tr>
-                        <td class="px-3 py-2 font-medium text-slate-800">{log.filename ?? "-"}</td>
-                        <td class="px-3 py-2 text-slate-700">{log.account_name ?? "-"}</td>
-                        <td class="px-3 py-2 text-slate-600">{log.total_rows ?? 0}</td>
-                        <td class="px-3 py-2 text-green-700">{log.successful_imports ?? 0}</td>
-                        <td class="px-3 py-2 text-amber-700">{log.skipped_rows ?? 0}</td>
+                        <td class="px-3 py-2 font-medium text-brand-ink">{log.filename ?? "-"}</td>
+                        <td class="px-3 py-2 text-brand-ink">{log.account_name ?? "-"}</td>
+                        <td class="px-3 py-2 text-brand-ink-soft">{log.total_rows ?? 0}</td>
+                        <td class="px-3 py-2 text-brand-mint-deep">{log.successful_imports ?? 0}</td>
+                        <td class="px-3 py-2 text-brand-sun-deep">{log.skipped_rows ?? 0}</td>
                         <td class="px-3 py-2">
                             <span class={`px-2 py-1 rounded-full text-xs font-semibold border ${statusColor(log.status ?? "partial")}`}>
                                 {log.status === "success"
@@ -49,7 +49,7 @@ const statusColor = (status: string) => {
                                         : t(lang, "fin_settings_status_partial")}
                             </span>
                         </td>
-                        <td class="px-3 py-2 text-slate-600">{log.created_at ? new Date(log.created_at).toLocaleString(lang) : "-"}</td>
+                        <td class="px-3 py-2 text-brand-ink-soft">{log.created_at ? new Date(log.created_at).toLocaleString(lang) : "-"}</td>
                     </tr>
                 ))}
             </tbody>

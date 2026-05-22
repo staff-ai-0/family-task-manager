@@ -16,8 +16,8 @@ const usageRounded = Math.round(usagePercent);
 const barColor = usagePercent > 95
     ? "bg-red-500"
     : usagePercent >= 75
-        ? "bg-amber-500"
-        : "bg-green-500";
+        ? "bg-brand-sun-deep"
+        : "bg-brand-mint-deep";
 
 const labels = {
     income: lang === "es" ? "Ingresos" : "Income",
@@ -29,28 +29,28 @@ const labels = {
 };
 ---
 
-<div class="bg-white rounded-xl shadow-sm p-4 mx-4 mt-3">
+<div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] p-4 mx-4 mt-3">
     <div class="flex text-center">
         <div class="flex-1">
-            <div class="text-[10px] text-slate-400 uppercase">{labels.income}</div>
-            <div class="text-sm font-bold text-green-600">{formatCurrency(income)}</div>
+            <div class="text-[10px] text-brand-ink-soft uppercase">{labels.income}</div>
+            <div class="text-sm font-bold text-brand-mint-deep">{formatCurrency(income)}</div>
         </div>
         <div class="flex-1">
-            <div class="text-[10px] text-slate-400 uppercase">{labels.spent}</div>
+            <div class="text-[10px] text-brand-ink-soft uppercase">{labels.spent}</div>
             <div class="text-sm font-bold text-red-500">{formatCurrency(Math.abs(spent))}</div>
         </div>
         <div class="flex-1">
-            <div class="text-[10px] text-slate-400 uppercase">{labels.available}</div>
-            <div class:list={["text-sm font-bold", available >= 0 ? "text-green-600" : "text-red-500"]}>
+            <div class="text-[10px] text-brand-ink-soft uppercase">{labels.available}</div>
+            <div class:list={["text-sm font-bold", available >= 0 ? "text-brand-mint-deep" : "text-red-500"]}>
                 {formatCurrency(available)}
             </div>
         </div>
     </div>
-    <div class="w-full bg-slate-200 rounded-full h-2 mt-3">
+    <div class="w-full bg-brand-cream-deep rounded-full h-2 mt-3">
         <div
             class:list={["h-2 rounded-full transition-all duration-300", barColor]}
             style={`width: ${usagePercent}%`}
         ></div>
     </div>
-    <div class="text-[10px] text-slate-400 text-right mt-1">{labels.usage}</div>
+    <div class="text-[10px] text-brand-ink-soft text-right mt-1">{labels.usage}</div>
 </div>

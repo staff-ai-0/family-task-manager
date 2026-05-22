@@ -115,9 +115,9 @@ function isToday(d: Date): boolean {
 ---
 
 <Layout title={`${t(lang, "pac_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <!-- Header -->
-        <header class="bg-gradient-to-br from-sky-700 to-sky-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+        <header class="bg-gradient-to-br from-sky-700 to-sky-600 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex items-center gap-3 mb-4">
                 <a href="/parent" class="text-sky-200 hover:text-white transition-colors">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -130,7 +130,7 @@ function isToday(d: Date): boolean {
             <p class="text-sky-200 text-sm mt-1">{t(lang, "pac_subtitle")}</p>
 
             <!-- Week navigator -->
-            <div class="flex items-center justify-between mt-4 bg-white/15 backdrop-blur-md rounded-xl px-4 py-3 border border-white/20">
+            <div class="flex items-center justify-between mt-4 bg-brand-cream/15 backdrop-blur-md rounded-xl px-4 py-3 border border-white/20">
                 <a
                     href={`/parent/assignments?week=${prevWeek}${memberFilter !== "all" ? `&member=${memberFilter}` : ""}`}
                     class="text-white hover:text-sky-200 transition-colors p-1"
@@ -165,8 +165,8 @@ function isToday(d: Date): boolean {
                         class:list={[
                             "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors",
                             memberFilter === "all"
-                                ? "bg-sky-600 text-white shadow-sm"
-                                : "bg-white text-slate-600 border border-slate-200 hover:border-sky-300",
+                                ? "bg-sky-600 text-white shadow-[var(--shadow-card)]"
+                                : "bg-brand-cream text-brand-ink-soft border border-brand-ink/10 hover:border-sky-300",
                         ]}
                     >
                         {t(lang, "pac_all_members")}
@@ -177,8 +177,8 @@ function isToday(d: Date): boolean {
                             class:list={[
                                 "px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors",
                                 memberFilter === m.id
-                                    ? "bg-sky-600 text-white shadow-sm"
-                                    : "bg-white text-slate-600 border border-slate-200 hover:border-sky-300",
+                                    ? "bg-sky-600 text-white shadow-[var(--shadow-card)]"
+                                    : "bg-brand-cream text-brand-ink-soft border border-brand-ink/10 hover:border-sky-300",
                             ]}
                         >
                             {m.name}
@@ -189,18 +189,18 @@ function isToday(d: Date): boolean {
 
             <!-- Summary stats -->
             {totalTasks > 0 && (
-                <div class="flex items-center justify-between bg-white rounded-2xl px-5 py-3 shadow-sm border border-slate-100 mb-4">
-                    <span class="text-sm text-slate-600">
+                <div class="flex items-center justify-between bg-brand-cream rounded-2xl px-5 py-3 shadow-[var(--shadow-card)] border border-brand-ink/10 mb-4">
+                    <span class="text-sm text-brand-ink-soft">
                         {t(lang, "pac_total_tasks")(totalTasks)}
                     </span>
                     <div class="flex items-center gap-2">
-                        <div class="w-20 bg-slate-200 rounded-full h-2">
+                        <div class="w-20 bg-brand-cream-deep rounded-full h-2">
                             <div
-                                class="bg-green-500 h-2 rounded-full transition-all"
+                                class="bg-brand-mint-deep h-2 rounded-full transition-all"
                                 style={`width: ${totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0}%`}
                             ></div>
                         </div>
-                        <span class="text-sm font-bold text-slate-700">
+                        <span class="text-sm font-bold text-brand-ink">
                             {t(lang, "pac_completed_count")(completedTasks, totalTasks)}
                         </span>
                     </div>
@@ -209,13 +209,13 @@ function isToday(d: Date): boolean {
 
             <!-- No assignments state -->
             {totalTasks === 0 && (
-                <div class="bg-white rounded-2xl p-8 text-center border border-slate-100 shadow-sm">
-                    <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                    <div class="w-16 h-16 bg-brand-cream-deep rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-brand-ink-soft" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                     </div>
-                    <p class="text-slate-500 text-sm">{t(lang, "pac_no_assignments")}</p>
+                    <p class="text-brand-ink-soft text-sm">{t(lang, "pac_no_assignments")}</p>
                 </div>
             )}
 
@@ -236,9 +236,9 @@ function isToday(d: Date): boolean {
                                 {memberName.charAt(0).toUpperCase()}
                             </div>
                             <div class="flex-1">
-                                <p class="font-bold text-slate-800">{memberName}</p>
+                                <p class="font-bold text-brand-ink">{memberName}</p>
                             </div>
-                            <span class="text-xs font-medium text-slate-500">
+                            <span class="text-xs font-medium text-brand-ink-soft">
                                 {t(lang, "pac_completed_count")(memberDone, memberTotal)}
                             </span>
                         </div>
@@ -251,12 +251,12 @@ function isToday(d: Date): boolean {
                                     "text-center text-xs font-semibold py-1.5 rounded-t-lg",
                                     isToday(weekDays[i])
                                         ? "bg-sky-600 text-white"
-                                        : "bg-slate-200 text-slate-600",
+                                        : "bg-brand-cream-deep text-brand-ink-soft",
                                 ]}>
                                     <div>{t(lang, dayKey)}</div>
                                     <div class:list={[
                                         "text-xs font-normal mt-0.5",
-                                        isToday(weekDays[i]) ? "text-sky-100" : "text-slate-400",
+                                        isToday(weekDays[i]) ? "text-sky-100" : "text-brand-ink-soft",
                                     ]}>
                                         {weekDays[i].getDate()}
                                     </div>
@@ -274,21 +274,21 @@ function isToday(d: Date): boolean {
                                         "min-h-16 p-0.5 rounded-b-lg border",
                                         todayHighlight
                                             ? "bg-sky-50 border-sky-200"
-                                            : "bg-white border-slate-100",
+                                            : "bg-brand-cream border-brand-ink/10",
                                     ]}>
                                         {dayTasks.length === 0 && (
                                             <div class="h-full flex items-center justify-center">
-                                                <span class="text-slate-300 text-xs">-</span>
+                                                <span class="text-brand-ink-soft text-xs">-</span>
                                             </div>
                                         )}
                                         {dayTasks.map((task: any) => {
                                             const statusColor = task.status === "completed"
-                                                ? "bg-green-100 text-green-700 border-green-200"
+                                                ? "bg-brand-mint/20 text-brand-mint-deep border-brand-mint"
                                                 : task.status === "overdue"
                                                     ? "bg-red-100 text-red-700 border-red-200"
                                                     : task.status === "cancelled"
-                                                        ? "bg-slate-100 text-slate-400 border-slate-200 line-through"
-                                                        : "bg-amber-50 text-amber-700 border-amber-200";
+                                                        ? "bg-brand-cream-deep text-brand-ink-soft border-brand-ink/10 line-through"
+                                                        : "bg-brand-sun/20 text-brand-sun-deep border-brand-sun";
 
                                             const statusIcon = task.status === "completed"
                                                 ? "M5 13l4 4L19 7"
@@ -344,16 +344,16 @@ function isToday(d: Date): boolean {
                                 return (
                                     <div class:list={[
                                         "rounded-lg border overflow-hidden",
-                                        todayHighlight ? "border-sky-300" : "border-slate-200",
+                                        todayHighlight ? "border-sky-300" : "border-brand-ink/10",
                                     ]}>
                                         <div class:list={[
                                             "px-3 py-1.5 flex items-center justify-between text-xs font-semibold",
-                                            todayHighlight ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600",
+                                            todayHighlight ? "bg-sky-600 text-white" : "bg-brand-cream-deep text-brand-ink-soft",
                                         ]}>
                                             <span>{t(lang, dayKeys[idx])} · {day.getDate()}</span>
                                             <span class:list={[
                                                 "text-[10px] font-normal",
-                                                todayHighlight ? "text-sky-100" : "text-slate-400",
+                                                todayHighlight ? "text-sky-100" : "text-brand-ink-soft",
                                             ]}>
                                                 {dayTasks.length === 0
                                                     ? "—"
@@ -361,15 +361,15 @@ function isToday(d: Date): boolean {
                                             </span>
                                         </div>
                                         {dayTasks.length > 0 && (
-                                            <div class="bg-white p-2 space-y-1.5">
+                                            <div class="bg-brand-cream p-2 space-y-1.5">
                                                 {dayTasks.map((task: any) => {
                                                     const statusColor = task.status === "completed"
-                                                        ? "bg-green-50 text-green-700 border-green-200"
+                                                        ? "bg-brand-mint/20 text-brand-mint-deep border-brand-mint"
                                                         : task.status === "overdue"
-                                                            ? "bg-red-50 text-red-700 border-red-200"
+                                                            ? "bg-red-100 text-red-700 border-red-200"
                                                             : task.status === "cancelled"
-                                                                ? "bg-slate-50 text-slate-400 border-slate-200 line-through"
-                                                                : "bg-amber-50 text-amber-700 border-amber-200";
+                                                                ? "bg-brand-cream-deep text-brand-ink-soft border-brand-ink/10 line-through"
+                                                                : "bg-brand-sun/20 text-brand-sun-deep border-brand-sun";
                                                     const displayTitle = (lang === "es" && task.template_title_es) ? task.template_title_es : task.template_title;
                                                     const editable = task.status === "pending" || task.status === "overdue" || task.status === "cancelled";
                                                     return (
@@ -389,7 +389,7 @@ function isToday(d: Date): boolean {
                                                             <span class="text-sm font-medium truncate">
                                                                 {displayTitle}
                                                                 {task.template_is_bonus && (
-                                                                    <span class="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">{t(lang, "dashboard_bonus_badge")}</span>
+                                                                    <span class="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand-sun-deep">{t(lang, "dashboard_bonus_badge")}</span>
                                                                 )}
                                                             </span>
                                                             <span class="text-xs font-semibold whitespace-nowrap">+{task.template_points}</span>
@@ -408,23 +408,23 @@ function isToday(d: Date): boolean {
 
             <!-- Legend -->
             {totalTasks > 0 && (
-                <div class="mt-4 bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                <div class="mt-4 bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10">
                     <div class="flex flex-wrap gap-3 justify-center">
                         <div class="flex items-center gap-1.5">
-                            <div class="w-3 h-3 rounded bg-amber-100 border border-amber-200"></div>
-                            <span class="text-xs text-slate-600">{t(lang, "pac_status_pending")}</span>
+                            <div class="w-3 h-3 rounded bg-brand-sun/20 border border-brand-sun"></div>
+                            <span class="text-xs text-brand-ink-soft">{t(lang, "pac_status_pending")}</span>
                         </div>
                         <div class="flex items-center gap-1.5">
-                            <div class="w-3 h-3 rounded bg-green-100 border border-green-200"></div>
-                            <span class="text-xs text-slate-600">{t(lang, "pac_status_completed")}</span>
+                            <div class="w-3 h-3 rounded bg-brand-mint/20 border border-brand-mint"></div>
+                            <span class="text-xs text-brand-ink-soft">{t(lang, "pac_status_completed")}</span>
                         </div>
                         <div class="flex items-center gap-1.5">
                             <div class="w-3 h-3 rounded bg-red-100 border border-red-200"></div>
-                            <span class="text-xs text-slate-600">{t(lang, "pac_status_overdue")}</span>
+                            <span class="text-xs text-brand-ink-soft">{t(lang, "pac_status_overdue")}</span>
                         </div>
                         <div class="flex items-center gap-1.5">
-                            <div class="w-3 h-3 rounded bg-slate-100 border border-slate-200"></div>
-                            <span class="text-xs text-slate-600">{t(lang, "pac_status_cancelled")}</span>
+                            <div class="w-3 h-3 rounded bg-brand-cream-deep border border-brand-ink/10"></div>
+                            <span class="text-xs text-brand-ink-soft">{t(lang, "pac_status_cancelled")}</span>
                         </div>
                     </div>
                 </div>
@@ -436,23 +436,23 @@ function isToday(d: Date): boolean {
 
     <!-- Edit-assignment modal -->
     <div id="assignment-edit-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
-        <div class="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl shadow-xl border border-slate-200">
+        <div class="bg-brand-cream w-full md:max-w-md rounded-t-[var(--radius-card)] md:rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] border border-brand-ink/10">
             <form id="assignment-edit-form" method="POST" action="/api/assignments/patch" class="p-5 space-y-4">
                 <input type="hidden" name="assignment_id" id="edit-assignment-id" />
                 <div class="flex items-start justify-between gap-3">
                     <div>
-                        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">{t(lang, "pac_edit_title")}</p>
-                        <h2 id="edit-task-title" class="text-lg font-bold text-slate-800"></h2>
-                        <p id="edit-task-meta" class="text-xs text-slate-500 mt-0.5"></p>
+                        <p class="text-xs font-medium text-brand-ink-soft uppercase tracking-wider">{t(lang, "pac_edit_title")}</p>
+                        <h2 id="edit-task-title" class="text-lg font-bold text-brand-ink"></h2>
+                        <p id="edit-task-meta" class="text-xs text-brand-ink-soft mt-0.5"></p>
                     </div>
-                    <button type="button" id="edit-close" class="text-slate-400 hover:text-slate-600">
+                    <button type="button" id="edit-close" class="text-brand-ink-soft hover:text-brand-ink-soft">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
 
                 <div>
-                    <label class="text-xs font-medium text-slate-600 mb-1 block">{t(lang, "pac_reassign")}</label>
-                    <select name="assigned_to" id="edit-assigned-to" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-sky-500 outline-none bg-white">
+                    <label class="text-xs font-medium text-brand-ink-soft mb-1 block">{t(lang, "pac_reassign")}</label>
+                    <select name="assigned_to" id="edit-assigned-to" class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-sky-500 outline-none bg-brand-cream">
                         {members.map((m: any) => (
                             <option value={m.id}>{m.name}</option>
                         ))}
@@ -460,23 +460,23 @@ function isToday(d: Date): boolean {
                 </div>
 
                 <div>
-                    <label class="text-xs font-medium text-slate-600 mb-1 block">{t(lang, "pac_reschedule")}</label>
-                    <input type="date" name="assigned_date" id="edit-assigned-date" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-sky-500 outline-none" />
+                    <label class="text-xs font-medium text-brand-ink-soft mb-1 block">{t(lang, "pac_reschedule")}</label>
+                    <input type="date" name="assigned_date" id="edit-assigned-date" class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-sky-500 outline-none" />
                 </div>
 
                 <div>
-                    <label class="text-xs font-medium text-slate-600 mb-1 block">{t(lang, "pac_set_status")}</label>
-                    <select name="status" id="edit-status" class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-sky-500 outline-none bg-white">
+                    <label class="text-xs font-medium text-brand-ink-soft mb-1 block">{t(lang, "pac_set_status")}</label>
+                    <select name="status" id="edit-status" class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-sky-500 outline-none bg-brand-cream">
                         <option value="pending">{t(lang, "pac_keep_pending")}</option>
                         <option value="cancelled">{t(lang, "pac_set_cancelled")}</option>
                     </select>
                 </div>
 
                 <div class="flex items-center gap-2 pt-2">
-                    <button type="button" id="edit-cancel" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-lg transition-colors">
+                    <button type="button" id="edit-cancel" class="flex-1 py-2.5 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold text-sm rounded-lg transition-colors">
                         {t(lang, "pac_cancel_btn")}
                     </button>
-                    <button type="submit" class="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm">
+                    <button type="submit" class="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]">
                         {t(lang, "pac_save")}
                     </button>
                 </div>

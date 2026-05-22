@@ -13,10 +13,10 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
 <Layout title={lang === "es" ? "Aceptar invitación - Family Task Manager" : "Accept invitation - Family Task Manager"}>
     <main class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
         <div class="w-full max-w-5xl">
-            <div class="bg-white rounded-3xl shadow-2xl overflow-hidden">
+            <div class="bg-brand-cream rounded-3xl shadow-[var(--shadow-stamp)] overflow-hidden">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-0">
                     <!-- Left column: Hero -->
-                    <div class="hidden md:flex md:flex-col md:justify-center md:items-start p-12 lg:p-16 bg-gradient-to-br from-cyan-500 via-blue-500 to-blue-600 text-white">
+                    <div class="hidden md:flex md:flex-col md:justify-center md:items-start p-12 lg:p-16 bg-gradient-to-br from-brand-sky via-brand-sky to-brand-sky-deep text-white">
                         <h2 class="text-5xl font-black leading-tight mb-6">
                             {lang === "es" ? "¡Te han invitado!" : "You're invited!"}
                         </h2>
@@ -28,7 +28,7 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
 
                         <div class="space-y-6">
                             <div class="flex items-start gap-4">
-                                <div class="flex-shrink-0 bg-white bg-opacity-20 rounded-full p-3">
+                                <div class="flex-shrink-0 bg-brand-cream bg-opacity-20 rounded-full p-3">
                                     <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                     </svg>
@@ -40,7 +40,7 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
                             </div>
 
                             <div class="flex items-start gap-4">
-                                <div class="flex-shrink-0 bg-white bg-opacity-20 rounded-full p-3">
+                                <div class="flex-shrink-0 bg-brand-cream bg-opacity-20 rounded-full p-3">
                                     <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                     </svg>
@@ -52,7 +52,7 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
                             </div>
 
                             <div class="flex items-start gap-4">
-                                <div class="flex-shrink-0 bg-white bg-opacity-20 rounded-full p-3">
+                                <div class="flex-shrink-0 bg-brand-cream bg-opacity-20 rounded-full p-3">
                                     <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                     </svg>
@@ -68,24 +68,24 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
                     <!-- Right column: Accept form -->
                     <div class="p-8 lg:p-12 flex flex-col justify-center">
                         <div class="mb-8">
-                            <h1 class="text-3xl lg:text-4xl font-bold text-slate-900 mb-2">
+                            <h1 class="text-3xl lg:text-4xl font-bold text-brand-ink mb-2">
                                 {lang === "es" ? "Aceptar invitación" : "Accept invitation"}
                             </h1>
-                            <p class="text-slate-500 text-lg">
+                            <p class="text-brand-ink-soft text-lg">
                                 {lang === "es"
                                     ? "Completa tu perfil para unirte"
                                     : "Complete your profile to join"}
                             </p>
                         </div>
 
-                        <div id="error-message" class="hidden mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium"></div>
-                        <div id="success-message" class="hidden mb-6 p-4 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm font-medium"></div>
+                        <div id="error-message" class="hidden mb-6 p-4 rounded-xl bg-red-100 border border-red-200 text-red-700 text-sm font-medium"></div>
+                        <div id="success-message" class="hidden mb-6 p-4 rounded-xl bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm font-medium"></div>
 
                         <form id="accept-form" class="space-y-5">
                             <!-- Invitation code (if not in URL) -->
                             {!invitationCode && (
                                 <div>
-                                    <label for="invitation_code" class="block text-sm font-semibold text-slate-700 mb-2">
+                                    <label for="invitation_code" class="block text-sm font-semibold text-brand-ink mb-2">
                                         {lang === "es" ? "Código de invitación" : "Invitation code"}
                                     </label>
                                     <input
@@ -94,14 +94,14 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
                                         name="invitation_code"
                                         maxlength="32"
                                         placeholder={lang === "es" ? "Ingresa el código de la invitación" : "Enter invitation code"}
-                                        class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all hover:border-slate-400 font-mono text-sm"
+                                        class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-sky-deep focus:border-transparent outline-none transition-all hover:border-brand-ink/20 font-mono text-sm"
                                     />
                                 </div>
                             )}
 
                             <!-- Your name -->
                             <div>
-                                <label for="name" class="block text-sm font-semibold text-slate-700 mb-2">
+                                <label for="name" class="block text-sm font-semibold text-brand-ink mb-2">
                                     {lang === "es" ? "Tu nombre" : "Your name"}
                                 </label>
                                 <input
@@ -111,13 +111,13 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
                                     required
                                     maxlength="100"
                                     placeholder={lang === "es" ? "Ej: María" : "e.g. John"}
-                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                    class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-sky-deep focus:border-transparent outline-none transition-all hover:border-brand-ink/20"
                                 />
                             </div>
 
                             <!-- Password -->
                             <div>
-                                <label for="password" class="block text-sm font-semibold text-slate-700 mb-2">
+                                <label for="password" class="block text-sm font-semibold text-brand-ink mb-2">
                                     {lang === "es" ? "Contraseña" : "Password"}
                                 </label>
                                 <input
@@ -127,16 +127,16 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
                                     required
                                     minlength="8"
                                     placeholder={lang === "es" ? "Mínimo 8 caracteres" : "At least 8 characters"}
-                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                    class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-sky-deep focus:border-transparent outline-none transition-all hover:border-brand-ink/20"
                                 />
-                                <p class="text-xs text-slate-500 mt-2">
+                                <p class="text-xs text-brand-ink-soft mt-2">
                                     {lang === "es" ? "Tu contraseña es personal y confidencial" : "Your password is personal and confidential"}
                                 </p>
                             </div>
 
                             <!-- Confirm password -->
                              <div>
-                                 <label for="confirm_password" class="block text-sm font-semibold text-slate-700 mb-2">
+                                 <label for="confirm_password" class="block text-sm font-semibold text-brand-ink mb-2">
                                      {lang === "es" ? "Confirmar contraseña" : "Confirm password"}
                                  </label>
                                  <input
@@ -146,20 +146,20 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
                                      required
                                      minlength="8"
                                      placeholder={lang === "es" ? "Repite tu contraseña" : "Repeat your password"}
-                                     class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                     class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-sky-deep focus:border-transparent outline-none transition-all hover:border-brand-ink/20"
                                  />
                              </div>
 
                              <!-- Age verification checkbox -->
-                             <div class="flex items-start gap-3 p-4 rounded-lg bg-slate-50 border border-slate-200">
+                             <div class="flex items-start gap-3 p-4 rounded-lg bg-brand-cream-deep border border-brand-ink/10">
                                  <input
                                      type="checkbox"
                                      id="age_confirmation"
                                      name="age_confirmation"
                                      required
-                                     class="w-5 h-5 mt-0.5 rounded border-slate-300 text-cyan-600 focus:ring-2 focus:ring-cyan-500 cursor-pointer"
+                                     class="w-5 h-5 mt-0.5 rounded border-brand-ink/20 text-brand-sky focus:ring-2 focus:ring-brand-sky-deep cursor-pointer"
                                  />
-                                 <label for="age_confirmation" class="text-sm text-slate-700 cursor-pointer flex-1">
+                                 <label for="age_confirmation" class="text-sm text-brand-ink cursor-pointer flex-1">
                                      {lang === "es" 
                                          ? "Confirmo que tengo 18 años o más y soy un padre o adulto responsable"
                                          : "I confirm that I am 18+ and a parent or responsible adult"}
@@ -170,17 +170,17 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
                             <button
                                 type="submit"
                                 id="submit-btn"
-                                class="w-full mt-8 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold py-3 rounded-lg transition-all transform hover:scale-105 active:scale-95 shadow-lg flex items-center justify-center gap-2"
+                                class="w-full mt-8 bg-brand-sky hover:from-brand-sky hover:to-brand-sky-deep text-white font-bold py-3 rounded-lg transition-all transform hover:scale-105 active:scale-95 shadow-[var(--shadow-pop)] flex items-center justify-center gap-2"
                             >
                                 <span>{lang === "es" ? "Aceptar invitación" : "Accept invitation"}</span>
                             </button>
 
                             <!-- Already have account -->
-                            <p class="text-center text-slate-600 text-sm mt-6">
+                            <p class="text-center text-brand-ink-soft text-sm mt-6">
                                 {lang === "es" 
                                     ? "¿Ya tienes cuenta? " 
                                     : "Already have an account? "}
-                                <a href="/login" class="font-semibold text-cyan-600 hover:text-cyan-700">
+                                <a href="/login" class="font-semibold text-brand-sky hover:text-brand-sky">
                                     {lang === "es" ? "Inicia sesión" : "Sign in"}
                                 </a>
                             </p>

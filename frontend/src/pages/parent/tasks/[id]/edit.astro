@@ -58,13 +58,13 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
 ---
 
 <Layout title={`${t(lang, "pt_edit_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <header
-            class="bg-gradient-to-br from-primary-700 to-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md"
+            class="bg-gradient-to-br from-brand-sky to-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
         >
             <a
                 href="/parent/tasks"
-                class="text-primary-200 text-sm flex items-center gap-1 mb-3"
+                class="text-brand-sky text-sm flex items-center gap-1 mb-3"
             >
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -75,56 +75,56 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
         </header>
         <main class="flex-1 px-4 py-6">
             {errorMsg && (
-                <div class="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">
+                <div class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                     {errorMsg}
                 </div>
             )}
             <form
                 method="POST"
-                class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 space-y-4"
+                class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-4"
             >
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="space-y-3">
-                        <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">English</h3>
+                        <h3 class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider">English</h3>
                         <div>
-                            <label class="text-xs font-medium text-slate-700 mb-1 block">
+                            <label class="text-xs font-medium text-brand-ink mb-1 block">
                                 {t(lang, "pt_task_title")}
                             </label>
                             <input
                                 name="title"
                                 required
                                 value={tmpl.title}
-                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                                class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
                             />
                         </div>
                         <div>
-                            <label class="text-xs font-medium text-slate-700 mb-1 block">
+                            <label class="text-xs font-medium text-brand-ink mb-1 block">
                                 {t(lang, "pt_description")}
                             </label>
                             <textarea
                                 name="description"
                                 rows={3}
-                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+                                class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none resize-none"
                             >{tmpl.description}</textarea>
                         </div>
                     </div>
                     
                     <div class="space-y-3 relative">
                         <div class="flex items-center justify-between">
-                            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Español</h3>
+                            <h3 class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider">Español</h3>
                             <button
                                 type="button"
                                 id="btn-translate"
                                 data-id={id}
                                 data-token={token}
-                                class="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                                class="text-xs bg-indigo-50 text-brand-coral-deep px-2 py-1 rounded hover:bg-brand-coral-deep transition-colors flex items-center gap-1"
                             >
                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path></svg>
                                 {t(lang, "translation_auto_translate")}
                             </button>
                         </div>
                         <div>
-                            <label class="text-xs font-medium text-slate-700 mb-1 block">
+                            <label class="text-xs font-medium text-brand-ink mb-1 block">
                                 {t(lang, "translation_title_es")}
                             </label>
                             <input
@@ -132,11 +132,11 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                                 id="input-title-es"
                                 value={tmpl.title_es || ""}
                                 placeholder={t(lang, "translation_title_es")}
-                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                                class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
                             />
                         </div>
                         <div>
-                            <label class="text-xs font-medium text-slate-700 mb-1 block">
+                            <label class="text-xs font-medium text-brand-ink mb-1 block">
                                 {t(lang, "translation_desc_es")}
                             </label>
                             <textarea
@@ -144,16 +144,16 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                                 id="input-desc-es"
                                 rows={3}
                                 placeholder={t(lang, "translation_desc_es")}
-                                class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+                                class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none resize-none"
                             >{tmpl.description_es || ""}</textarea>
                         </div>
                         <div id="translate-status" class="text-xs text-center hidden"></div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                <div class="grid grid-cols-2 gap-3 pt-2 border-t border-brand-ink/10">
                     <div>
-                        <label class="text-sm font-medium text-slate-700 mb-1 block">
+                        <label class="text-sm font-medium text-brand-ink mb-1 block">
                             {t(lang, "pt_points")}
                         </label>
                         <input
@@ -162,16 +162,16 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                             min={1}
                             max={1000}
                             value={tmpl.points}
-                            class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                            class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
                         />
                     </div>
                     <div>
-                        <label class="text-sm font-medium text-slate-700 mb-1 block">
+                        <label class="text-sm font-medium text-brand-ink mb-1 block">
                             {t(lang, "pt_interval")}
                         </label>
                         <select
                             name="interval_days"
-                            class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                            class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none bg-brand-cream"
                         >
                             <option value="1" selected={tmpl.interval_days === 1}>
                                 {t(lang, "pt_interval_daily")}
@@ -186,14 +186,14 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                     </div>
                 </div>
                 
-                <div class="pt-2 border-t border-slate-100">
-                    <label class="text-sm font-medium text-slate-700 mb-1 block">
+                <div class="pt-2 border-t border-brand-ink/10">
+                    <label class="text-sm font-medium text-brand-ink mb-1 block">
                         {t(lang, "pt_assignment_type")}
                     </label>
                     <select
                         id="assignment_type"
                         name="assignment_type"
-                        class="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                        class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none bg-brand-cream"
                         onchange="toggleUserSelection(this.value)"
                     >
                         <option value="auto" selected={!tmpl.assignment_type || tmpl.assignment_type === 'auto'}>
@@ -209,51 +209,51 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                 </div>
 
                 <div id="user_selection_container" class={(!tmpl.assignment_type || tmpl.assignment_type === 'auto') ? 'hidden' : ''}>
-                    <label class="text-sm font-medium text-slate-700 mb-1 block">
+                    <label class="text-sm font-medium text-brand-ink mb-1 block">
                         {t(lang, "pt_assign_to")}
                     </label>
-                    <div class="space-y-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <div class="space-y-2 p-3 bg-brand-cream-deep rounded-lg border border-brand-ink/10">
                         {memberList.map((member: any) => {
                             const isChecked = tmpl.assigned_user_ids && Array.isArray(tmpl.assigned_user_ids)
                                 ? tmpl.assigned_user_ids.includes(member.id)
                                 : false;
                             return (
-                                <label class="flex items-center gap-2 cursor-pointer hover:bg-white px-2 py-1.5 rounded transition-colors">
+                                <label class="flex items-center gap-2 cursor-pointer hover:bg-brand-cream px-2 py-1.5 rounded transition-colors">
                                     <input
                                         type="checkbox"
                                         name="assigned_user_ids[]"
                                         value={member.id}
                                         checked={isChecked}
-                                        class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-2 focus:ring-primary-500"
+                                        class="w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep"
                                     />
-                                    <span class="text-sm text-slate-700">{member.name}</span>
-                                    <span class="text-xs text-slate-500 ml-auto">{member.role.toLowerCase()}</span>
+                                    <span class="text-sm text-brand-ink">{member.name}</span>
+                                    <span class="text-xs text-brand-ink-soft ml-auto">{member.role.toLowerCase()}</span>
                                 </label>
                             );
                         })}
                     </div>
-                    <p class="text-xs text-slate-500 mt-1">
+                    <p class="text-xs text-brand-ink-soft mt-1">
                         {t(lang, "pt_assign_hint_fixed")} {t(lang, "pt_assign_hint_rotate")}
                     </p>
                 </div>
 
-                <div class="pt-2 border-t border-slate-100">
-                    <label class="text-sm font-medium text-slate-700 mb-1 block">
+                <div class="pt-2 border-t border-brand-ink/10">
+                    <label class="text-sm font-medium text-brand-ink mb-1 block">
                         {t(lang, "pt_allowed_roles")}
                     </label>
-                    <div class="flex gap-3 flex-wrap p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <div class="flex gap-3 flex-wrap p-3 bg-brand-cream-deep rounded-lg border border-brand-ink/10">
                         {["parent", "teen", "child"].map((role) => {
                             const checked = Array.isArray(tmpl.allowed_roles) && tmpl.allowed_roles.includes(role);
                             const labelKey = role === "parent" ? "pt_role_parent" : role === "teen" ? "pt_role_teen" : "pt_role_child";
                             return (
                                 <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" name="allowed_roles[]" value={role} checked={checked} class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-2 focus:ring-primary-500" />
-                                    <span class="text-sm text-slate-700">{t(lang, labelKey)}</span>
+                                    <input type="checkbox" name="allowed_roles[]" value={role} checked={checked} class="w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" />
+                                    <span class="text-sm text-brand-ink">{t(lang, labelKey)}</span>
                                 </label>
                             );
                         })}
                     </div>
-                    <p class="text-xs text-slate-500 mt-1">{t(lang, "pt_allowed_roles_hint")}</p>
+                    <p class="text-xs text-brand-ink-soft mt-1">{t(lang, "pt_allowed_roles_hint")}</p>
                 </div>
                 
                 <div class="flex items-center gap-3 py-1">
@@ -264,16 +264,16 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                             class="sr-only peer"
                             checked={tmpl.is_bonus}
                         />
-                        <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:bg-amber-500 peer-focus:ring-2 peer-focus:ring-amber-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                        <div class="w-9 h-5 bg-brand-cream-deep rounded-full peer peer-checked:bg-brand-sun-deep peer-focus:ring-2 peer-focus:ring-amber-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-brand-cream after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
                     </label>
                     <div>
-                        <span class="text-sm font-medium text-slate-700">{t(lang, "pt_is_bonus")}</span>
-                        <p class="text-xs text-slate-400">{t(lang, "pt_is_bonus_hint")}</p>
+                        <span class="text-sm font-medium text-brand-ink">{t(lang, "pt_is_bonus")}</span>
+                        <p class="text-xs text-brand-ink-soft">{t(lang, "pt_is_bonus_hint")}</p>
                     </div>
                 </div>
                 <button
                     type="submit"
-                    class="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm"
+                    class="w-full py-2.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
                 >
                     {t(lang, "pt_save")}
                 </button>
@@ -309,8 +309,8 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
             // Show loading
             if (statusDiv) {
                 statusDiv.textContent = "Translating...";
-                statusDiv.classList.remove("hidden", "text-green-600", "text-red-600");
-                statusDiv.classList.add("text-slate-500");
+                statusDiv.classList.remove("hidden", "text-brand-mint-deep", "text-red-600");
+                statusDiv.classList.add("text-brand-ink-soft");
             }
             btnTranslate.setAttribute("disabled", "true");
             btnTranslate.classList.add("opacity-50", "cursor-not-allowed");
@@ -329,14 +329,14 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
 
                 if (statusDiv) {
                     statusDiv.textContent = "Translation complete!";
-                    statusDiv.classList.remove("text-slate-500");
-                    statusDiv.classList.add("text-green-600");
+                    statusDiv.classList.remove("text-brand-ink-soft");
+                    statusDiv.classList.add("text-brand-mint-deep");
                 }
             } catch (err) {
                 console.error(err);
                 if (statusDiv) {
                     statusDiv.textContent = "Error translating. Please try again.";
-                    statusDiv.classList.remove("text-slate-500");
+                    statusDiv.classList.remove("text-brand-ink-soft");
                     statusDiv.classList.add("text-red-600");
                 }
             } finally {

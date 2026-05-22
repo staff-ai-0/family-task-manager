@@ -48,19 +48,19 @@ const copy = {
 ---
 
 <Layout title={`${copy.title} — Family Task Manager`}>
-  <main class="min-h-screen flex items-center justify-center p-4 bg-slate-50">
-    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center">
+  <main class="min-h-screen flex items-center justify-center p-4 bg-brand-cream-deep">
+    <div class="w-full max-w-md bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] p-8 text-center">
 
       {serverResult === "success" && (
         <>
-          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-50 mb-4">
-            <svg class="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-mint/20 mb-4">
+            <svg class="w-8 h-8 text-brand-mint-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 class="text-2xl font-bold text-slate-900 mb-2">{copy.success_heading}</h1>
-          <p class="text-slate-500 mb-6">{copy.success_body}</p>
-          <a href="/login" class="inline-block px-6 py-3 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors">
+          <h1 class="text-2xl font-bold text-brand-ink mb-2">{copy.success_heading}</h1>
+          <p class="text-brand-ink-soft mb-6">{copy.success_body}</p>
+          <a href="/login" class="inline-block px-6 py-3 rounded-lg bg-brand-coral-deep text-white font-medium hover:bg-brand-coral-deep transition-colors">
             {copy.login}
           </a>
         </>
@@ -68,14 +68,14 @@ const copy = {
 
       {serverResult === "invalid" && (
         <>
-          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-50 mb-4">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
             <svg class="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </div>
-          <h1 class="text-2xl font-bold text-slate-900 mb-2">{copy.invalid_heading}</h1>
-          <p class="text-slate-500 mb-6">{copy.invalid_body}</p>
-          <a href="/login" class="inline-block px-6 py-3 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors">
+          <h1 class="text-2xl font-bold text-brand-ink mb-2">{copy.invalid_heading}</h1>
+          <p class="text-brand-ink-soft mb-6">{copy.invalid_body}</p>
+          <a href="/login" class="inline-block px-6 py-3 rounded-lg bg-brand-coral-deep text-white font-medium hover:bg-brand-coral-deep transition-colors">
             {copy.login}
           </a>
         </>
@@ -84,14 +84,14 @@ const copy = {
       {serverResult === "pending" && (
         <>
           <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 mb-4">
-            <svg class="w-8 h-8 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg class="w-8 h-8 text-brand-coral-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
           </div>
-          <h1 class="text-2xl font-bold text-slate-900 mb-2">{copy.no_token_heading}</h1>
-          <p class="text-slate-500 mb-6">{copy.no_token_body}</p>
-          <a href="/login" class="inline-block px-6 py-3 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors">
+          <h1 class="text-2xl font-bold text-brand-ink mb-2">{copy.no_token_heading}</h1>
+          <p class="text-brand-ink-soft mb-6">{copy.no_token_body}</p>
+          <a href="/login" class="inline-block px-6 py-3 rounded-lg bg-brand-coral-deep text-white font-medium hover:bg-brand-coral-deep transition-colors">
             {copy.login}
           </a>
         </>

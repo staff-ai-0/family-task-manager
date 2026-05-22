@@ -87,26 +87,26 @@ const l = {
 ---
 
 <Layout title={l.title}>
-    <div class="min-h-screen bg-slate-50 pb-24">
+    <div class="min-h-screen bg-brand-cream-deep pb-24">
         <DrawerMenu user={user} />
         <BudgetNavNew active="receipt-drafts" lang={lang as any} pendingDrafts={pendingDrafts.length} />
 
         <main class="max-w-2xl mx-auto px-4 py-6">
             <!-- Header -->
             <div class="mb-6">
-                <h1 class="text-2xl font-bold text-slate-900">{l.title}</h1>
-                <p class="text-slate-500 mt-1 text-sm">{l.subtitle}</p>
+                <h1 class="text-2xl font-bold text-brand-ink">{l.title}</h1>
+                <p class="text-brand-ink-soft mt-1 text-sm">{l.subtitle}</p>
             </div>
 
             <!-- Empty state -->
             {pendingDrafts.length === 0 && (
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-12 text-center">
+                <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-12 text-center">
                     <div class="text-5xl mb-4">✅</div>
-                    <h2 class="text-lg font-semibold text-slate-700">{l.empty}</h2>
-                    <p class="text-slate-400 mt-1 text-sm">{l.emptyDesc}</p>
+                    <h2 class="text-lg font-semibold text-brand-ink">{l.empty}</h2>
+                    <p class="text-brand-ink-soft mt-1 text-sm">{l.emptyDesc}</p>
                     <a
                         href="/budget/scan-receipt"
-                        class="mt-6 inline-block bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition"
+                        class="mt-6 inline-block bg-brand-coral-deep hover:bg-brand-coral-deep text-white text-sm font-medium px-5 py-2.5 rounded-xl transition"
                     >
                         {l.scanMore}
                     </a>
@@ -118,7 +118,7 @@ const l = {
                 {pendingDrafts.map((draft: any) => {
                     const sd = draft.scanned_data ?? {};
                     const confPct = Math.round((draft.confidence ?? 0) * 100);
-                    const confColor = confPct >= 60 ? "text-amber-600 bg-amber-50" : "text-red-600 bg-red-50";
+                    const confColor = confPct >= 60 ? "text-brand-sun-deep bg-brand-sun/20" : "text-red-600 bg-red-100";
                     const amt = sd.total_amount != null ? (sd.total_amount / 100).toFixed(2) : "";
                     const prefillNotes = (() => {
                         const lines: string[] = [];
@@ -135,12 +135,12 @@ const l = {
                     })();
                     return (
                         <div
-                            class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+                            class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 overflow-hidden"
                             data-draft-id={draft.id}
                         >
                             <!-- Card header -->
-                            <div class="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50">
-                                <span class="text-xs text-slate-500">
+                            <div class="flex items-center justify-between px-5 py-3 border-b border-brand-ink/10 bg-brand-cream-deep">
+                                <span class="text-xs text-brand-ink-soft">
                                     {new Date(draft.created_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", { dateStyle: "medium" })}
                                     &nbsp;·&nbsp; {accountMap[draft.account_id] ?? "—"}
                                 </span>
@@ -155,7 +155,7 @@ const l = {
                                     <img
                                         src={`/api/budget/receipt-drafts/${draft.id}/image`}
                                         alt="Receipt"
-                                        class="w-full max-h-72 object-contain rounded-lg bg-slate-100"
+                                        class="w-full max-h-72 object-contain rounded-lg bg-brand-cream-deep"
                                         loading="lazy"
                                     />
                                 </div>
@@ -163,30 +163,30 @@ const l = {
 
                             <!-- AI-extracted preview -->
                             <div class="px-5 pt-4 pb-2">
-                                <p class="text-[11px] uppercase tracking-wide text-slate-400 font-medium mb-2">{l.scannedData}</p>
+                                <p class="text-[11px] uppercase tracking-wide text-brand-ink-soft font-medium mb-2">{l.scannedData}</p>
                                 <div class="grid grid-cols-3 gap-3 text-sm">
                                     <div>
-                                        <span class="block text-xs text-slate-400">{l.payee}</span>
-                                        <span class="font-medium text-slate-700">{sd.payee_name ?? "—"}</span>
+                                        <span class="block text-xs text-brand-ink-soft">{l.payee}</span>
+                                        <span class="font-medium text-brand-ink">{sd.payee_name ?? "—"}</span>
                                     </div>
                                     <div>
-                                        <span class="block text-xs text-slate-400">{l.amount}</span>
-                                        <span class="font-medium text-slate-700">{amt ? `${sd.currency ?? "MXN"} $${amt}` : "—"}</span>
+                                        <span class="block text-xs text-brand-ink-soft">{l.amount}</span>
+                                        <span class="font-medium text-brand-ink">{amt ? `${sd.currency ?? "MXN"} $${amt}` : "—"}</span>
                                     </div>
                                     <div>
-                                        <span class="block text-xs text-slate-400">{l.date}</span>
-                                        <span class="font-medium text-slate-700">{sd.date ?? "—"}</span>
+                                        <span class="block text-xs text-brand-ink-soft">{l.date}</span>
+                                        <span class="font-medium text-brand-ink">{sd.date ?? "—"}</span>
                                     </div>
                                 </div>
                                 {sd.items?.length > 0 && (
                                     <div class="mt-2">
-                                        <span class="block text-xs text-slate-400">{l.items}</span>
-                                        <div class="text-xs text-slate-500 mt-0.5 leading-relaxed space-y-0.5">
+                                        <span class="block text-xs text-brand-ink-soft">{l.items}</span>
+                                        <div class="text-xs text-brand-ink-soft mt-0.5 leading-relaxed space-y-0.5">
                                             {sd.items.map((i: any) => (
                                                 <div class="flex justify-between">
                                                     <span>{i.name}</span>
                                                     {i.amount_cents != null && (
-                                                        <span class="text-slate-400">${(Math.abs(i.amount_cents) / 100).toFixed(2)} {sd.currency ?? "MXN"}</span>
+                                                        <span class="text-brand-ink-soft">${(Math.abs(i.amount_cents) / 100).toFixed(2)} {sd.currency ?? "MXN"}</span>
                                                     )}
                                                 </div>
                                             ))}
@@ -197,49 +197,49 @@ const l = {
 
                             <!-- Override form -->
                             <form
-                                class="draft-form px-5 py-4 border-t border-slate-100 space-y-3"
+                                class="draft-form px-5 py-4 border-t border-brand-ink/10 space-y-3"
                                 data-draft-id={draft.id}
                                 data-account-id={draft.account_id}
                             >
-                                <p class="text-[11px] text-slate-400">{l.overrideHint}</p>
+                                <p class="text-[11px] text-brand-ink-soft">{l.overrideHint}</p>
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label class="block text-xs text-slate-500 mb-1">{l.payee}</label>
+                                        <label class="block text-xs text-brand-ink-soft mb-1">{l.payee}</label>
                                         <input
                                             type="text"
                                             name="payee_name"
                                             value={sd.payee_name ?? ""}
                                             placeholder="—"
-                                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                                            class="w-full border border-brand-ink/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-coral"
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-xs text-slate-500 mb-1">{l.amount} (cents)</label>
+                                        <label class="block text-xs text-brand-ink-soft mb-1">{l.amount} (cents)</label>
                                         <input
                                             type="number"
                                             name="amount"
                                             value={sd.total_amount ?? ""}
                                             placeholder="e.g. -15050"
-                                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                                            class="w-full border border-brand-ink/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-coral"
                                         />
                                     </div>
                                     <div>
-                                        <label class="block text-xs text-slate-500 mb-1">{l.date}</label>
+                                        <label class="block text-xs text-brand-ink-soft mb-1">{l.date}</label>
                                         <input
                                             type="date"
                                             name="date"
                                             value={sd.date ?? ""}
-                                            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                                            class="w-full border border-brand-ink/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-coral"
                                         />
                                     </div>
                                 </div>
                                 <div>
-                                    <label class="block text-xs text-slate-500 mb-1">{l.notes}</label>
+                                    <label class="block text-xs text-brand-ink-soft mb-1">{l.notes}</label>
                                     <textarea
                                         name="notes"
                                         rows={Math.min((sd.items?.length ?? 0) + 2, 8)}
                                         placeholder="Optional notes"
-                                        class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-y font-mono"
+                                        class="w-full border border-brand-ink/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-coral resize-y font-mono"
                                     >{prefillNotes}</textarea>
                                 </div>
 
@@ -247,13 +247,13 @@ const l = {
                                 <div class="flex gap-2 pt-1">
                                     <button
                                         type="submit"
-                                        class="approve-btn flex-1 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium py-2.5 rounded-xl transition disabled:opacity-50"
+                                        class="approve-btn flex-1 bg-brand-coral-deep hover:bg-brand-coral-deep text-white text-sm font-medium py-2.5 rounded-xl transition disabled:opacity-50"
                                     >
                                         {l.approve}
                                     </button>
                                     <button
                                         type="button"
-                                        class="reject-btn w-24 border border-slate-200 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-slate-600 text-sm font-medium py-2.5 rounded-xl transition"
+                                        class="reject-btn w-24 border border-brand-ink/10 hover:bg-red-100 hover:border-red-200 hover:text-red-600 text-brand-ink-soft text-sm font-medium py-2.5 rounded-xl transition"
                                     >
                                         {l.reject}
                                     </button>
@@ -284,7 +284,7 @@ const l = {
     function showStatus(form, msg, isError) {
         const el = form.querySelector(".status-msg");
         el.textContent = msg;
-        el.className = `status-msg text-sm text-center pt-1 ${isError ? "text-red-600" : "text-green-600"}`;
+        el.className = `status-msg text-sm text-center pt-1 ${isError ? "text-red-600" : "text-brand-mint-deep"}`;
     }
 
     function removeDraftCard(draftId) {

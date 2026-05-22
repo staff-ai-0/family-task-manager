@@ -86,7 +86,7 @@ const allCategories = (allGroups || [])
 ---
 
 <Layout title={t(lang, 'fin_budget_home')}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen pb-20">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep min-h-screen pb-20">
         <!-- Top nav: 3 tabs -->
         <BudgetNavNew active="month" lang={lang} pendingDrafts={pendingDraftsCount} />
 
@@ -94,7 +94,7 @@ const allCategories = (allGroups || [])
         <DrawerMenu lang={lang} />
 
         <!-- Header with month nav + ready to assign -->
-        <header class="bg-primary-600 text-white pt-3 pb-5 px-4 rounded-b-3xl shadow-md">
+        <header class="bg-brand-sky-deep text-white pt-3 pb-5 px-4 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <BudgetMonthNav
                 year={year}
                 month={month}
@@ -148,10 +148,10 @@ const allCategories = (allGroups || [])
             {/* Empty state */}
             {incomeGroups.length === 0 && expenseGroups.length === 0 && (
                 <div class="text-center py-12">
-                    <p class="text-slate-400 text-sm">
+                    <p class="text-brand-ink-soft text-sm">
                         {lang === "es" ? "No hay categorias configuradas para este mes." : "No categories set up for this month."}
                     </p>
-                    <a href="/budget/settings#categories" class="text-primary-600 font-semibold text-sm mt-2 inline-block">
+                    <a href="/budget/settings#categories" class="text-brand-sky-deep font-semibold text-sm mt-2 inline-block">
                         {lang === "es" ? "Crear categorias" : "Create categories"}
                     </a>
                 </div>

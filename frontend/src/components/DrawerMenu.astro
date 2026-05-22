@@ -59,17 +59,17 @@ const sections = [
     role="dialog"
     aria-modal="true"
     aria-label="Navigation menu"
-    class="fixed top-0 left-0 h-full w-72 bg-white z-40 shadow-xl transform -translate-x-full transition-transform duration-300 flex flex-col"
+    class="fixed top-0 left-0 h-full w-72 bg-brand-cream z-40 shadow-[var(--shadow-pop)] transform -translate-x-full transition-transform duration-300 flex flex-col"
 >
     <!-- Header -->
-    <div class="flex items-center justify-between p-4 border-b border-slate-200">
-        <span class="text-lg font-bold text-slate-800">
+    <div class="flex items-center justify-between p-4 border-b border-brand-ink/10">
+        <span class="text-lg font-bold text-brand-ink">
             {es ? "Menú" : "Menu"}
         </span>
         <button
             id="drawer-close"
             type="button"
-            class="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+            class="p-2 text-brand-ink-soft hover:text-brand-ink-soft transition-colors"
             aria-label={es ? "Cerrar menú" : "Close menu"}
         >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -82,13 +82,13 @@ const sections = [
     <nav class="overflow-y-auto flex-1 py-2">
         {sections.map(section => (
             <div class="mb-2">
-                <h3 class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <h3 class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-brand-ink-soft">
                     {section.title}
                 </h3>
                 {section.links.map(link => (
                     <a
                         href={link.href}
-                        class="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                        class="flex items-center gap-3 px-4 py-2.5 text-sm text-brand-ink hover:bg-brand-cream-deep transition-colors"
                     >
                         <span class="text-lg">{link.emoji}</span>
                         {link.label}

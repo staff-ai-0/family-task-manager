@@ -56,12 +56,12 @@ const {
 } = Astro.props;
 
 const groupColor = isIncome ? 'green' : 'slate';
-const groupBgColor = isIncome ? 'bg-green-50' : 'bg-slate-100';
-const groupTextColor = isIncome ? 'text-green-800' : 'text-slate-800';
-const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
+const groupBgColor = isIncome ? 'bg-brand-mint/20' : 'bg-brand-cream-deep';
+const groupTextColor = isIncome ? 'text-brand-mint-deep' : 'text-brand-ink';
+const groupBorderColor = isIncome ? 'border-brand-mint' : 'border-brand-ink/10';
 ---
 
-<div class="bg-white rounded-xl shadow-sm overflow-hidden">
+<div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
     <div class={`${groupBgColor} px-4 py-3 border-b ${groupBorderColor}`}>
         <div class="flex items-center justify-between">
             <h2 class={`font-bold ${groupTextColor} text-sm uppercase tracking-wide`}>
@@ -69,11 +69,11 @@ const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
             </h2>
             {!isIncome && (
                 <div class="flex items-center gap-2">
-                    <span class="text-xs font-semibold text-slate-600">
+                    <span class="text-xs font-semibold text-brand-ink-soft">
                         {formatCurrency(group.total_available)} {lang === "es" ? "disponible" : "available"}
                     </span>
                     <button
-                        class="quick-add-btn text-slate-600 hover:text-primary-600 transition p-1"
+                        class="quick-add-btn text-brand-ink-soft hover:text-brand-sky-deep transition p-1"
                         data-group-id={group.id}
                         data-group-name={group.name}
                         title={lang === "es" ? "Agregar categoría" : "Add category"}
@@ -86,7 +86,7 @@ const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
             )}
         </div>
     </div>
-    <div class="divide-y divide-slate-100">
+    <div class="divide-y divide-brand-ink/10">
         {group.categories.map(category => {
             const percentUsed = category.budgeted > 0 
                 ? Math.abs((category.activity / category.budgeted) * 100)
@@ -105,7 +105,7 @@ const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
             
             return (
                 <div 
-                    class="px-4 py-3 hover:bg-slate-50 transition category-row"
+                    class="px-4 py-3 hover:bg-brand-cream-deep transition category-row"
                     data-category-id={category.id}
                     data-category-name={category.name}
                     data-budgeted={category.budgeted}
@@ -115,7 +115,7 @@ const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
                 >
                     <!-- Row top: name | available -->
                     <div class="flex items-center justify-between mb-1">
-                        <span class="text-sm font-medium text-slate-700">{category.name}</span>
+                        <span class="text-sm font-medium text-brand-ink">{category.name}</span>
                         <!-- Available balance — clickable for transfers (income categories don't show available button) -->
                         {!isIncome && (
                             <button
@@ -124,8 +124,8 @@ const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
                                     isOverBudget
                                         ? 'text-red-600 hover:ring-red-400 focus:ring-red-400'
                                         : category.available > 0
-                                            ? 'text-green-600 hover:ring-green-400 focus:ring-green-400'
-                                            : 'text-slate-900 hover:ring-slate-300 focus:ring-slate-300'
+                                            ? 'text-brand-mint-deep hover:ring-brand-mint-deep focus:ring-brand-mint-deep'
+                                            : 'text-brand-ink hover:ring-brand-ink/20 focus:ring-brand-ink/30'
                                 ]}
                                 data-category-id={category.id}
                                 data-category-name={category.name}
@@ -136,7 +136,7 @@ const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
                             </button>
                         )}
                         {isIncome && (
-                            <span class="text-sm font-bold text-green-600">
+                            <span class="text-sm font-bold text-brand-mint-deep">
                                 {formatCurrency(category.activity)}
                             </span>
                         )}
@@ -144,17 +144,17 @@ const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
 
                     {/* Previous balance row */}
                     {category.previous_balance > 0 && (
-                        <div class="text-xs text-green-600 font-semibold mb-1">
+                        <div class="text-xs text-brand-mint-deep font-semibold mb-1">
                             {formatCurrency(category.previous_balance)} {t(lang, 'fin_prev_balance_label')}
                         </div>
                     )}
 
                     {/* Row bottom: assign pill | budgeted | spent (only for expense categories) */}
                     {!isIncome && (
-                        <div class="flex items-center justify-between text-xs text-slate-500 mt-1">
+                        <div class="flex items-center justify-between text-xs text-brand-ink-soft mt-1">
                             <div class="flex items-center gap-2">
                                 <button
-                                    class="assign-pill-btn inline-flex items-center gap-1 bg-primary-50 hover:bg-primary-100 text-primary-700 font-semibold rounded-full px-2.5 py-0.5 transition text-xs border border-primary-200"
+                                    class="assign-pill-btn inline-flex items-center gap-1 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-sky-deep font-semibold rounded-full px-2.5 py-0.5 transition text-xs border border-brand-sky"
                                     data-category-id={category.id}
                                     data-category-name={category.name}
                                     title={lang === "es" ? "Asignar dinero a esta categoría" : "Assign money to this category"}
@@ -164,7 +164,7 @@ const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
                                     </svg>
                                     {lang === "es" ? "Asignar" : "Assign"}
                                 </button>
-                                <span class="text-slate-400">
+                                <span class="text-brand-ink-soft">
                                     {formatCurrency(category.budgeted)} {t(lang, 'fin_budgeted_label')}
                                 </span>
                             </div>
@@ -174,9 +174,9 @@ const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
 
                     {/* Progress bar (only for expense categories with budget) */}
                     {!isIncome && category.budgeted > 0 && (
-                        <div class="mt-2 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                        <div class="mt-2 bg-brand-cream-deep rounded-full h-1.5 overflow-hidden">
                             <div 
-                                class={`h-full transition-all ${isOverBudget ? 'bg-red-500' : 'bg-blue-500'}`}
+                                class={`h-full transition-all ${isOverBudget ? 'bg-red-500' : 'bg-brand-sky-deep'}`}
                                 style={`width: ${Math.min(percentUsed, 100)}%`}
                             ></div>
                         </div>
@@ -186,19 +186,19 @@ const groupBorderColor = isIncome ? 'border-green-100' : 'border-slate-200';
                     {!isIncome && goal && goalTarget > 0 && (
                         <div class="mt-1.5">
                             <div class="flex items-center justify-between mb-0.5">
-                                <span class="text-xs text-purple-600 font-semibold">
+                                <span class="text-xs text-brand-coral-deep font-semibold">
                                     {goal.goal_type === 'spending_limit'
                                         ? (lang === 'es' ? 'Límite' : 'Limit')
                                         : (lang === 'es' ? 'Meta' : 'Goal')}:
                                     {formatCurrency(goalCurrent)} / {formatCurrency(goalTarget)}
                                 </span>
-                                <span class={`text-xs font-bold ${isGoalOver ? 'text-red-600' : 'text-purple-600'}`}>
+                                <span class={`text-xs font-bold ${isGoalOver ? 'text-red-600' : 'text-brand-coral-deep'}`}>
                                     {Math.round(goalPct)}%
                                 </span>
                             </div>
-                            <div class="bg-purple-100 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-brand-coral/15 rounded-full h-1.5 overflow-hidden">
                                 <div
-                                    class={`h-full transition-all ${isGoalOver ? 'bg-red-500' : 'bg-purple-500'}`}
+                                    class={`h-full transition-all ${isGoalOver ? 'bg-red-500' : 'bg-brand-coral-deep'}`}
                                     style={`width: ${goalPct}%`}
                                 ></div>
                             </div>

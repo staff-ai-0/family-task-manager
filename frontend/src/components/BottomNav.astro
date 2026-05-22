@@ -2,195 +2,92 @@
 import { t } from "../lib/i18n";
 
 interface Props {
-    active?: "tasks" | "rewards" | "profile" | "parent";
+    active?: "tasks" | "rewards" | "profile" | "parent" | "budget";
     role?: string;
     lang?: string;
 }
 const { active = "tasks", role = "child", lang = "en" } = Astro.props;
 const nextLang = lang === "es" ? "en" : "es";
 const langLabel = lang === "es" ? "EN" : "ES";
+
+const itemBase = "flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-full transition-all";
+const itemIdle = "text-brand-ink-soft hover:text-brand-ink";
+const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shadow-[2px_2px_0_var(--color-brand-ink)]";
 ---
 
-<!-- Spacer that reserves the exact height of the fixed nav so content is never hidden behind it -->
 <div class="bottom-nav-spacer" aria-hidden="true" transition:persist="bottom-nav-spacer"></div>
 
 <nav
-    class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 safe-area-bottom z-50"
+    class="fixed bottom-0 left-0 right-0 bg-brand-cream border-t-2 border-brand-ink safe-area-bottom z-50"
     transition:persist="bottom-nav"
 >
     <div class="max-w-md mx-auto flex justify-around items-center px-1 py-2">
-        <!-- Tasks -->
-        <a
-            href="/dashboard"
-            class={`flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-xl transition-colors ${active === "tasks" ? "text-primary-600" : "text-slate-400 hover:text-primary-500"}`}
-        >
-            <svg
-                class="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-            >
-                <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                ></path>
+        <a href="/dashboard" class={`${itemBase} ${active === "tasks" ? itemActive : itemIdle}`}>
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
             </svg>
-            <span class="text-[10px] font-medium">{t(lang, "nav_tasks")}</span>
+            <span class="text-[10px] font-extrabold font-sans tracking-wider uppercase">{t(lang, "nav_tasks")}</span>
         </a>
 
-        <!-- Rewards -->
-        <a
-            href="/rewards"
-            class={`flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-xl transition-colors ${active === "rewards" ? "text-primary-600" : "text-slate-400 hover:text-primary-500"}`}
-        >
-            <svg
-                class="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-            >
-                <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"
-                ></path>
+        <a href="/rewards" class={`${itemBase} ${active === "rewards" ? itemActive : itemIdle}`}>
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
             </svg>
-            <span class="text-[10px] font-medium">{t(lang, "nav_rewards")}</span
-            >
+            <span class="text-[10px] font-extrabold font-sans tracking-wider uppercase">{t(lang, "nav_rewards")}</span>
         </a>
 
-        <!-- Profile -->
-        <a
-            href="/profile"
-            class={`flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-xl transition-colors ${active === "profile" ? "text-primary-600" : "text-slate-400 hover:text-primary-500"}`}
-        >
-            <svg
-                class="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-            >
-                <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                ></path>
+        <a href="/profile" class={`${itemBase} ${active === "profile" ? itemActive : itemIdle}`}>
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
-            <span class="text-[10px] font-medium">{t(lang, "nav_profile")}</span
-            >
+            <span class="text-[10px] font-extrabold font-sans tracking-wider uppercase">{t(lang, "nav_profile")}</span>
         </a>
 
-        <!-- Budget (parent only) -->
-        {
-            role === "parent" && (
-                <a
-                    href="/budget/month"
-                    class={`flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-xl transition-colors ${active === "budget" ? "text-primary-600" : "text-slate-400 hover:text-primary-500"}`}
-                >
-                    <svg
-                        class="h-6 w-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        ></path>
-                    </svg>
-                    <span class="text-[10px] font-medium">
-                        {t(lang, "nav_budget")}
-                    </span>
-                </a>
-            )
-        }
+        {role === "parent" && (
+            <a href="/budget/month" class={`${itemBase} ${active === "budget" ? itemActive : itemIdle}`}>
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="text-[10px] font-extrabold font-sans tracking-wider uppercase">{t(lang, "nav_budget")}</span>
+            </a>
+        )}
 
-        {
-            role === "parent" && (
-                <a
-                    href="/parent"
-                    class={`flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-xl transition-colors ${active === "parent" ? "text-primary-600" : "text-slate-400 hover:text-primary-500"}`}
-                >
-                    <svg
-                        class="h-6 w-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                        />
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                    </svg>
-                    <span class="text-[10px] font-medium">
-                        {t(lang, "nav_manage")}
-                    </span>
-                </a>
-            )
-        }
+        {role === "parent" && (
+            <a href="/parent" class={`${itemBase} ${active === "parent" ? itemActive : itemIdle}`}>
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span class="text-[10px] font-extrabold font-sans tracking-wider uppercase">{t(lang, "nav_manage")}</span>
+            </a>
+        )}
 
-        <!-- Language toggle -->
         <form method="POST" action="/api/lang" class="inline">
             <input type="hidden" name="lang" value={nextLang} />
-            <button
-                type="submit"
-                title={t(lang, "lang_toggle") as string}
-                class="flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-xl text-slate-400 hover:text-indigo-500 transition-colors"
-            >
-                <svg
-                    class="h-6 w-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-                    ></path>
+            <button type="submit" title={t(lang, "lang_toggle") as string}
+                class={`${itemBase} ${itemIdle}`}>
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
                 </svg>
-                <span class="text-[10px] font-medium">{langLabel}</span>
+                <span class="text-[10px] font-extrabold font-sans tracking-wider uppercase">{langLabel}</span>
             </button>
         </form>
 
-        <!-- Logout -->
         <form method="POST" action="/api/auth/logout" class="inline">
             <input type="hidden" name="action" value="logout" />
-            <button
-                type="submit"
-                class="flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-xl text-slate-400 hover:text-red-500 transition-colors"
-            >
-                <svg
-                    class="h-6 w-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                    ></path>
+            <button type="submit" class={`${itemBase} text-brand-ink-soft hover:text-brand-coral-deep`}>
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-                <span class="text-[10px] font-medium"
-                    >{t(lang, "nav_logout")}</span
-                >
+                <span class="text-[10px] font-extrabold font-sans tracking-wider uppercase">{t(lang, "nav_logout")}</span>
             </button>
         </form>
     </div>
@@ -200,14 +97,9 @@ const langLabel = lang === "es" ? "EN" : "ES";
     .safe-area-bottom {
         padding-bottom: env(safe-area-inset-bottom, 0px);
     }
-
-    /* This div sits in the normal document flow right before the fixed nav.
-       It reserves exactly the nav's rendered height so the last element
-       on any page is never hidden behind the fixed bar. */
     .bottom-nav-spacer {
         display: block;
         width: 100%;
-        /* nav inner content ~64px + border 1px + safe-area + extra breathing room */
         height: calc(64px + 24px + env(safe-area-inset-bottom, 0px));
         flex-shrink: 0;
         pointer-events: none;

@@ -11,14 +11,14 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
 <Layout title={lang === "es" ? "Crear cuenta - Family Task Manager" : "Create account - Family Task Manager"}>
     <main class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
         <div class="w-full max-w-5xl">
-            <div class="bg-white rounded-3xl shadow-2xl overflow-hidden">
+            <div class="bg-brand-cream rounded-3xl shadow-[var(--shadow-stamp)] overflow-hidden">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-0">
                     <!-- Left column: Hero -->
-                    <div class="hidden md:flex md:flex-col md:justify-center md:items-start p-12 lg:p-16 bg-gradient-to-br from-purple-600 via-purple-500 to-pink-600 text-white">
+                    <div class="hidden md:flex md:flex-col md:justify-center md:items-start p-12 lg:p-16 bg-gradient-to-br from-brand-coral via-brand-coral to-pink-600 text-white">
                         <h2 class="text-5xl font-black leading-tight mb-6">
                             {lang === "es" ? "¡Bienvenido!" : "Welcome!"}
                         </h2>
-                        <p class="text-xl text-purple-100 leading-relaxed mb-12">
+                        <p class="text-xl text-brand-coral-deep leading-relaxed mb-12">
                             {lang === "es" 
                                 ? "Crea tu familia y empieza a organizar tareas, recompensas y finanzas hoy mismo" 
                                 : "Create your family and start organizing tasks, rewards, and finances today"}
@@ -26,38 +26,38 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
 
                         <div class="space-y-6">
                             <div class="flex items-start gap-4">
-                                <div class="flex-shrink-0 bg-white bg-opacity-20 rounded-full p-3">
+                                <div class="flex-shrink-0 bg-brand-cream bg-opacity-20 rounded-full p-3">
                                     <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                     </svg>
                                 </div>
                                 <div>
                                     <p class="font-semibold text-lg">{lang === "es" ? "Gratis y fácil" : "Free & easy"}</p>
-                                    <p class="text-sm text-purple-100">{lang === "es" ? "Sin tarjeta de crédito requerida" : "No credit card needed"}</p>
+                                    <p class="text-sm text-brand-coral-deep">{lang === "es" ? "Sin tarjeta de crédito requerida" : "No credit card needed"}</p>
                                 </div>
                             </div>
 
                             <div class="flex items-start gap-4">
-                                <div class="flex-shrink-0 bg-white bg-opacity-20 rounded-full p-3">
+                                <div class="flex-shrink-0 bg-brand-cream bg-opacity-20 rounded-full p-3">
                                     <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                     </svg>
                                 </div>
                                 <div>
                                     <p class="font-semibold text-lg">{lang === "es" ? "Seguro" : "Secure"}</p>
-                                    <p class="text-sm text-purple-100">{lang === "es" ? "Tus datos protegidos en todo momento" : "Your data protected at all times"}</p>
+                                    <p class="text-sm text-brand-coral-deep">{lang === "es" ? "Tus datos protegidos en todo momento" : "Your data protected at all times"}</p>
                                 </div>
                             </div>
 
                             <div class="flex items-start gap-4">
-                                <div class="flex-shrink-0 bg-white bg-opacity-20 rounded-full p-3">
+                                <div class="flex-shrink-0 bg-brand-cream bg-opacity-20 rounded-full p-3">
                                     <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                     </svg>
                                 </div>
                                 <div>
                                     <p class="font-semibold text-lg">{lang === "es" ? "Escalable" : "Scalable"}</p>
-                                    <p class="text-sm text-purple-100">{lang === "es" ? "Invita a toda tu familia a participar" : "Invite your whole family to join"}</p>
+                                    <p class="text-sm text-brand-coral-deep">{lang === "es" ? "Invita a toda tu familia a participar" : "Invite your whole family to join"}</p>
                                 </div>
                             </div>
                         </div>
@@ -66,27 +66,27 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                     <!-- Right column: Register form -->
                     <div class="p-8 lg:p-12 flex flex-col justify-center">
                         <div class="mb-8">
-                             <h1 class="text-3xl lg:text-4xl font-bold text-slate-900 mb-2">
+                             <h1 class="text-3xl lg:text-4xl font-bold text-brand-ink mb-2">
                                  {lang === "es" ? "Crear cuenta" : "Create account"}
                              </h1>
-                             <p class="text-slate-500 text-lg">
+                             <p class="text-brand-ink-soft text-lg">
                                  {lang === "es"
                                      ? "Registra tu familia en segundos"
                                      : "Register your family in seconds"}
                              </p>
-                             <p class="text-slate-400 text-sm mt-2">
+                             <p class="text-brand-ink-soft text-sm mt-2">
                                  {lang === "es"
                                      ? "¿Ya tienes un código de familia? Úsalo para unirte a una familia existente"
                                      : "Already have a family code? Use it to join an existing family"}
                              </p>
                          </div>
 
-                        <div id="register-error" class="hidden mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium"></div>
+                        <div id="register-error" class="hidden mb-6 p-4 rounded-xl bg-red-100 border border-red-200 text-red-700 text-sm font-medium"></div>
 
                         <form id="register-form" class="space-y-5">
                              <!-- Family code (optional) -->
                              <div>
-                                 <label for="family_code" class="block text-sm font-semibold text-slate-700 mb-2">
+                                 <label for="family_code" class="block text-sm font-semibold text-brand-ink mb-2">
                                      {lang === "es" ? "Código de familia (opcional)" : "Family code (optional)"}
                                  </label>
                                  <input
@@ -95,9 +95,9 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                                      name="family_code"
                                      maxlength="10"
                                      placeholder={lang === "es" ? "Ej: ABC12345" : "e.g. ABC12345"}
-                                     class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all hover:border-slate-400 uppercase"
+                                     class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all hover:border-brand-ink/20 uppercase"
                                  />
-                                 <p class="text-xs text-slate-400 mt-1">
+                                 <p class="text-xs text-brand-ink-soft mt-1">
                                      {lang === "es" 
                                          ? "Si tienes un código, tu cuenta se agregará a esa familia" 
                                          : "If you have a code, your account will be added to that family"}
@@ -106,7 +106,7 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
 
                              <!-- Family name -->
                              <div>
-                                 <label for="family_name" class="block text-sm font-semibold text-slate-700 mb-2">
+                                 <label for="family_name" class="block text-sm font-semibold text-brand-ink mb-2">
                                      {lang === "es" ? "Nombre de tu familia" : "Family name"}
                                  </label>
                                  <input
@@ -116,9 +116,9 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                                      required
                                      maxlength="100"
                                      placeholder={lang === "es" ? "Ej: Familia García" : "e.g. The Smiths"}
-                                     class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                     class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all hover:border-brand-ink/20"
                                  />
-                                 <p class="text-xs text-slate-400 mt-1">
+                                 <p class="text-xs text-brand-ink-soft mt-1">
                                      {lang === "es" 
                                          ? "Se ignorará si proporcionas un código de familia" 
                                          : "This will be ignored if you provide a family code"}
@@ -127,7 +127,7 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
 
                             <!-- Your name -->
                             <div>
-                                <label for="name" class="block text-sm font-semibold text-slate-700 mb-2">
+                                <label for="name" class="block text-sm font-semibold text-brand-ink mb-2">
                                     {lang === "es" ? "Tu nombre" : "Your name"}
                                 </label>
                                 <input
@@ -137,13 +137,13 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                                     required
                                     maxlength="100"
                                     placeholder={lang === "es" ? "Ej: María" : "e.g. Maria"}
-                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                    class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all hover:border-brand-ink/20"
                                 />
                             </div>
 
                             <!-- Email -->
                             <div>
-                                <label for="email" class="block text-sm font-semibold text-slate-700 mb-2">
+                                <label for="email" class="block text-sm font-semibold text-brand-ink mb-2">
                                     {lang === "es" ? "Correo electrónico" : "Email address"}
                                 </label>
                                 <input
@@ -152,13 +152,13 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                                     name="email"
                                     required
                                     placeholder="you@example.com"
-                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                    class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all hover:border-brand-ink/20"
                                 />
                             </div>
 
                             <!-- Password -->
                             <div>
-                                <label for="password" class="block text-sm font-semibold text-slate-700 mb-2">
+                                <label for="password" class="block text-sm font-semibold text-brand-ink mb-2">
                                     {lang === "es" ? "Contraseña" : "Password"}
                                 </label>
                                 <input
@@ -168,16 +168,16 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                                     required
                                     minlength="8"
                                     placeholder="••••••••"
-                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                    class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all hover:border-brand-ink/20"
                                 />
-                                <p class="text-xs text-slate-400 mt-1">
+                                <p class="text-xs text-brand-ink-soft mt-1">
                                     {lang === "es" ? "Mínimo 8 caracteres" : "Minimum 8 characters"}
                                 </p>
                             </div>
 
                             <!-- Confirm password -->
                             <div>
-                                <label for="password_confirm" class="block text-sm font-semibold text-slate-700 mb-2">
+                                <label for="password_confirm" class="block text-sm font-semibold text-brand-ink mb-2">
                                     {lang === "es" ? "Confirmar contraseña" : "Confirm password"}
                                 </label>
                                 <input
@@ -187,24 +187,24 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                                     required
                                     minlength="8"
                                     placeholder="••••••••"
-                                    class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all hover:border-slate-400"
+                                    class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all hover:border-brand-ink/20"
                                 />
                             </div>
 
                             <button
                                 type="submit"
                                 id="register-submit-btn"
-                                class="w-full py-3 px-4 rounded-lg text-white font-bold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all shadow-lg hover:shadow-xl active:scale-95"
+                                class="w-full py-3 px-4 rounded-lg text-white font-bold bg-gradient-to-r from-brand-coral to-pink-600 hover:from-brand-coral hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-coral transition-all shadow-[var(--shadow-pop)] hover:shadow-[var(--shadow-pop)] active:scale-95"
                             >
                                 {lang === "es" ? "Crear mi cuenta" : "Create my account"}
                             </button>
                         </form>
 
                         <!-- Login Link -->
-                        <p class="mt-8 text-center text-sm text-slate-600">
+                        <p class="mt-8 text-center text-sm text-brand-ink-soft">
                             {lang === "es" ? "¿Ya tienes cuenta?" : "Already have an account?"}
                             {" "}
-                            <a href="/login" class="font-bold text-purple-600 hover:text-purple-700 transition-colors">
+                            <a href="/login" class="font-bold text-brand-coral-deep hover:text-brand-coral-deep transition-colors">
                                 {lang === "es" ? "Inicia sesión aquí" : "Sign in"}
                             </a>
                         </p>
@@ -214,7 +214,7 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                             <input type="hidden" name="lang" value={lang === "es" ? "en" : "es"} />
                             <button
                                 type="submit"
-                                class="text-xs text-slate-400 hover:text-purple-600 font-medium flex items-center gap-1.5 transition-colors"
+                                class="text-xs text-brand-ink-soft hover:text-brand-coral-deep font-medium flex items-center gap-1.5 transition-colors"
                             >
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />

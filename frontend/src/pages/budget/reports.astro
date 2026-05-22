@@ -81,7 +81,7 @@ const allCategories = allGroups
 ---
 
 <Layout title={es ? "Reportes - Presupuesto" : "Reports - Budget"}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 flex flex-col min-h-screen">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen">
         <BudgetNavNew active="reports" lang={lang} pendingDrafts={pendingDraftsCount} />
         <DrawerMenu lang={lang} />
         <ReportSubTabs active={tab} lang={lang} />
@@ -91,31 +91,31 @@ const allCategories = allGroups
         <div id="report-spending" class={tab !== "spending" ? "hidden" : ""}>
             <main class="px-4 pb-6">
                 {spendingItems.length === 0 ? (
-                    <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center mt-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="bg-brand-cream-deep border border-brand-ink/10 rounded-xl p-8 text-center mt-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-brand-ink-soft mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
-                        <p class="text-slate-600 font-medium">{es ? "Sin datos para este periodo" : "No data for this period"}</p>
+                        <p class="text-brand-ink-soft font-medium">{es ? "Sin datos para este periodo" : "No data for this period"}</p>
                     </div>
                 ) : (
                     <div class="space-y-3 mt-2">
                         {/* Total card */}
-                        <div class="bg-white rounded-xl shadow-sm p-4 text-center">
-                            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                        <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] p-4 text-center">
+                            <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider mb-1">
                                 {es ? "Total Gastado" : "Total Spent"}
                             </p>
                             <p class="text-3xl font-extrabold text-red-600">{formatCurrency(totalSpent)}</p>
                         </div>
 
                         {/* Category list */}
-                        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-                            <div class="divide-y divide-slate-100">
+                        <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
+                            <div class="divide-y divide-brand-ink/10">
                                 {spendingItems.map((item: any) => {
                                     const pct = totalSpent > 0 ? (Math.abs(item.total) / totalSpent) * 100 : 0;
                                     return (
                                         <div class="px-4 py-3">
                                             <div class="flex items-center justify-between mb-1.5">
-                                                <span class="text-sm font-medium text-slate-700 truncate max-w-[55%]">
+                                                <span class="text-sm font-medium text-brand-ink truncate max-w-[55%]">
                                                     {item.name || (es ? "Sin especificar" : "Unspecified")}
                                                 </span>
                                                 <span class="text-sm font-bold text-red-600">
@@ -123,13 +123,13 @@ const allCategories = allGroups
                                                 </span>
                                             </div>
                                             <div class="flex items-center gap-2">
-                                                <div class="flex-1 bg-slate-200 rounded-full h-2 overflow-hidden">
+                                                <div class="flex-1 bg-brand-cream-deep rounded-full h-2 overflow-hidden">
                                                     <div
                                                         class="h-full bg-red-500 transition-all"
                                                         style={`width: ${pct}%`}
                                                     ></div>
                                                 </div>
-                                                <span class="text-xs font-semibold text-slate-500 w-10 text-right">
+                                                <span class="text-xs font-semibold text-brand-ink-soft w-10 text-right">
                                                     {pct.toFixed(0)}%
                                                 </span>
                                             </div>
@@ -147,11 +147,11 @@ const allCategories = allGroups
         <div id="report-cashflow" class={tab !== "cashflow" ? "hidden" : ""}>
             <main class="px-4 pb-6">
                 {cashflowItems.length === 0 ? (
-                    <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center mt-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="bg-brand-cream-deep border border-brand-ink/10 rounded-xl p-8 text-center mt-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-brand-ink-soft mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
-                        <p class="text-slate-600 font-medium">{es ? "Sin datos para este periodo" : "No data for this period"}</p>
+                        <p class="text-brand-ink-soft font-medium">{es ? "Sin datos para este periodo" : "No data for this period"}</p>
                     </div>
                 ) : (
                     <div class="space-y-2 mt-2">
@@ -164,22 +164,22 @@ const allCategories = allGroups
                                 : item.period;
 
                             return (
-                                <div class="bg-white rounded-xl shadow-sm p-4">
+                                <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] p-4">
                                     <div class="flex items-center justify-between mb-3">
-                                        <span class="text-sm font-semibold text-slate-800 capitalize">{periodLabel}</span>
-                                        <span class={`text-sm font-bold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                        <span class="text-sm font-semibold text-brand-ink capitalize">{periodLabel}</span>
+                                        <span class={`text-sm font-bold ${isPositive ? 'text-brand-mint-deep' : 'text-red-600'}`}>
                                             {isPositive ? '+' : ''}{formatCurrency(net)}
                                         </span>
                                     </div>
                                     {/* Income bar */}
                                     <div class="mb-2">
                                         <div class="flex items-center justify-between mb-0.5">
-                                            <span class="text-xs text-slate-500">{es ? "Ingresos" : "Income"}</span>
-                                            <span class="text-xs font-bold text-green-600">{formatCurrency(item.income)}</span>
+                                            <span class="text-xs text-brand-ink-soft">{es ? "Ingresos" : "Income"}</span>
+                                            <span class="text-xs font-bold text-brand-mint-deep">{formatCurrency(item.income)}</span>
                                         </div>
-                                        <div class="bg-slate-200 rounded-full h-2 overflow-hidden">
+                                        <div class="bg-brand-cream-deep rounded-full h-2 overflow-hidden">
                                             <div
-                                                class="h-full bg-green-500 transition-all"
+                                                class="h-full bg-brand-mint-deep transition-all"
                                                 style={`width: ${totalIncome > 0 ? (item.income / totalIncome) * 100 : 0}%`}
                                             ></div>
                                         </div>
@@ -187,10 +187,10 @@ const allCategories = allGroups
                                     {/* Expense bar */}
                                     <div>
                                         <div class="flex items-center justify-between mb-0.5">
-                                            <span class="text-xs text-slate-500">{es ? "Gastos" : "Expenses"}</span>
+                                            <span class="text-xs text-brand-ink-soft">{es ? "Gastos" : "Expenses"}</span>
                                             <span class="text-xs font-bold text-red-600">{formatCurrency(Math.abs(item.expense))}</span>
                                         </div>
-                                        <div class="bg-slate-200 rounded-full h-2 overflow-hidden">
+                                        <div class="bg-brand-cream-deep rounded-full h-2 overflow-hidden">
                                             <div
                                                 class="h-full bg-red-500 transition-all"
                                                 style={`width: ${totalExpense > 0 ? (Math.abs(item.expense) / totalExpense) * 100 : 0}%`}
@@ -209,49 +209,49 @@ const allCategories = allGroups
         <div id="report-networth" class={tab !== "networth" ? "hidden" : ""}>
             <main class="px-4 pb-6">
                 {nwAccounts.length === 0 ? (
-                    <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center mt-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="bg-brand-cream-deep border border-brand-ink/10 rounded-xl p-8 text-center mt-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-brand-ink-soft mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                         </svg>
-                        <p class="text-slate-600 font-medium">{es ? "Sin datos para este periodo" : "No data for this period"}</p>
+                        <p class="text-brand-ink-soft font-medium">{es ? "Sin datos para este periodo" : "No data for this period"}</p>
                     </div>
                 ) : (
                     <div class="space-y-3 mt-2">
                         {/* Big net worth number */}
-                        <div class="bg-white rounded-xl shadow-sm p-5 text-center">
-                            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                        <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] p-5 text-center">
+                            <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider mb-1">
                                 {es ? "Valor Neto" : "Net Worth"}
                             </p>
-                            <p class={`text-4xl font-extrabold tracking-tight ${networth.net_worth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            <p class={`text-4xl font-extrabold tracking-tight ${networth.net_worth >= 0 ? 'text-brand-mint-deep' : 'text-red-600'}`}>
                                 {formatCurrency(networth.net_worth)}
                             </p>
                             <div class="flex justify-center gap-6 mt-3 text-sm">
                                 <div>
-                                    <span class="text-slate-500">{es ? "Activos" : "Assets"}: </span>
-                                    <span class="font-bold text-green-600">{formatCurrency(networth.total_assets)}</span>
+                                    <span class="text-brand-ink-soft">{es ? "Activos" : "Assets"}: </span>
+                                    <span class="font-bold text-brand-mint-deep">{formatCurrency(networth.total_assets)}</span>
                                 </div>
                                 <div>
-                                    <span class="text-slate-500">{es ? "Pasivos" : "Liabilities"}: </span>
+                                    <span class="text-brand-ink-soft">{es ? "Pasivos" : "Liabilities"}: </span>
                                     <span class="font-bold text-red-600">{formatCurrency(Math.abs(networth.total_liabilities))}</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Account list */}
-                        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-                            <div class="divide-y divide-slate-100">
+                        <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
+                            <div class="divide-y divide-brand-ink/10">
                                 {nwAccounts.map((account: any) => {
                                     const isNeg = account.balance < 0;
                                     return (
                                         <div class="px-4 py-3 flex items-center justify-between">
                                             <div class="flex items-center gap-3">
-                                                <div class={`w-2.5 h-2.5 rounded-full ${isNeg ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                                                <div class={`w-2.5 h-2.5 rounded-full ${isNeg ? 'bg-red-500' : 'bg-brand-mint-deep'}`}></div>
                                                 <div>
-                                                    <p class="text-sm font-medium text-slate-700">{account.name}</p>
-                                                    <p class="text-xs text-slate-400 capitalize">{account.type}</p>
+                                                    <p class="text-sm font-medium text-brand-ink">{account.name}</p>
+                                                    <p class="text-xs text-brand-ink-soft capitalize">{account.type}</p>
                                                 </div>
                                             </div>
-                                            <span class={`text-sm font-bold ${isNeg ? 'text-red-600' : 'text-slate-900'}`}>
+                                            <span class={`text-sm font-bold ${isNeg ? 'text-red-600' : 'text-brand-ink'}`}>
                                                 {formatCurrency(isNeg ? Math.abs(account.balance) : account.balance)}
                                             </span>
                                         </div>
@@ -267,12 +267,12 @@ const allCategories = allGroups
         <!-- ==================== BUDGET vs ACTUAL ==================== -->
         <div id="report-analysis" class={tab !== "analysis" ? "hidden" : ""}>
             <main class="px-4 pb-6">
-                <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center mt-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div class="bg-brand-cream-deep border border-brand-ink/10 rounded-xl p-8 text-center mt-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-brand-ink-soft mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
-                    <p class="text-slate-600 font-medium">{es ? "Proximamente" : "Coming soon"}</p>
-                    <p class="text-sm text-slate-500 mt-1">{es ? "El analisis de presupuesto vs. real estara disponible pronto." : "Budget vs. actual analysis will be available soon."}</p>
+                    <p class="text-brand-ink-soft font-medium">{es ? "Proximamente" : "Coming soon"}</p>
+                    <p class="text-sm text-brand-ink-soft mt-1">{es ? "El analisis de presupuesto vs. real estara disponible pronto." : "Budget vs. actual analysis will be available soon."}</p>
                 </div>
             </main>
         </div>
@@ -306,10 +306,10 @@ function initReportTabs() {
             document.querySelectorAll(".report-tab").forEach(t => {
                 const btn = t as HTMLElement;
                 const isActive = btn.dataset.tab === id;
-                btn.classList.toggle("bg-primary-600", isActive);
+                btn.classList.toggle("bg-brand-sky-deep", isActive);
                 btn.classList.toggle("text-white", isActive);
-                btn.classList.toggle("bg-slate-100", !isActive);
-                btn.classList.toggle("text-slate-500", !isActive);
+                btn.classList.toggle("bg-brand-cream-deep", !isActive);
+                btn.classList.toggle("text-brand-ink-soft", !isActive);
             });
         });
     });

@@ -32,21 +32,21 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
     aria-modal="true"
     class="fixed bottom-0 left-0 right-0 z-50 translate-y-full transition-transform duration-300 ease-out"
 >
-    <div class="max-w-md mx-auto bg-white rounded-t-2xl shadow-2xl max-h-[85vh] overflow-y-auto">
+    <div class="max-w-md mx-auto bg-brand-cream rounded-t-[var(--radius-card)] shadow-[var(--shadow-stamp)] max-h-[85vh] overflow-y-auto">
         <!-- Drag handle -->
         <div class="flex justify-center pt-3 pb-2">
-            <div class="w-10 h-1 bg-slate-300 rounded-full"></div>
+            <div class="w-10 h-1 bg-brand-cream-deep rounded-full"></div>
         </div>
 
         <!-- Step 1: Entry -->
         <div id="fab-step-entry" class="px-5 pb-6">
-            <h2 class="text-lg font-semibold text-slate-800 mb-4">{t(lang, "fab_register_expense")}</h2>
+            <h2 class="text-lg font-semibold text-brand-ink mb-4">{t(lang, "fab_register_expense")}</h2>
 
             <!-- Amount -->
             <div class="mb-4">
-                <label for="fab-amount" class="block text-sm font-medium text-slate-500 mb-1">{t(lang, "fab_amount")}</label>
+                <label for="fab-amount" class="block text-sm font-medium text-brand-ink-soft mb-1">{t(lang, "fab_amount")}</label>
                 <div class="relative">
-                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-400">$</span>
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-bold text-brand-ink-soft">$</span>
                     <input
                         id="fab-amount"
                         type="number"
@@ -54,14 +54,14 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
                         min="0"
                         inputmode="decimal"
                         placeholder="0.00"
-                        class="w-full text-3xl font-bold text-center py-3 pl-8 pr-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                        class="w-full text-3xl font-bold text-center py-3 pl-8 pr-4 border border-brand-ink/10 rounded-xl focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none"
                     />
                 </div>
                 <!-- Quick amount chips -->
                 <div class="flex gap-2 mt-2 justify-center">
                     {[50, 100, 200, 500].map((amt) => (
                         <button
-                            class="fab-quick-amount px-3 py-1 text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors"
+                            class="fab-quick-amount px-3 py-1 text-sm font-medium bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink rounded-full transition-colors"
                             data-amount={amt}
                         >
                             ${amt}
@@ -74,19 +74,19 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
             <div class="flex gap-2 mb-4">
                 <button
                     id="fab-mode-manual"
-                    class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-primary-500 bg-primary-50 text-primary-700 transition-colors"
+                    class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-brand-sky-deep bg-brand-cream-deep text-brand-sky-deep transition-colors"
                 >
                     ⌨️ {t(lang, "fab_manual")}
                 </button>
                 <a
                     href={`/budget/scan-receipt`}
-                    class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-center transition-colors"
+                    class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-brand-ink/10 bg-brand-cream text-brand-ink-soft hover:bg-brand-cream-deep text-center transition-colors"
                 >
                     📸 {t(lang, "fab_photo")}
                 </a>
                 <a
                     href={`/budget/import`}
-                    class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-center transition-colors"
+                    class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-brand-ink/10 bg-brand-cream text-brand-ink-soft hover:bg-brand-cream-deep text-center transition-colors"
                 >
                     📄 {t(lang, "fab_scan")}
                 </a>
@@ -94,15 +94,15 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
 
             <!-- Payee -->
             <div class="mb-3">
-                <label for="fab-payee" class="block text-sm font-medium text-slate-500 mb-1">{t(lang, "fab_payee")}</label>
+                <label for="fab-payee" class="block text-sm font-medium text-brand-ink-soft mb-1">{t(lang, "fab_payee")}</label>
                 <div class="relative">
                     <input
                         id="fab-payee"
                         type="text"
                         autocomplete="off"
-                        class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-sm"
+                        class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none text-sm"
                     />
-                    <span id="fab-rule-indicator" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-xs text-emerald-600 font-medium">
+                    <span id="fab-rule-indicator" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-xs text-brand-mint-deep font-medium">
                         {t(lang, "fab_auto_rule")}
                     </span>
                 </div>
@@ -110,10 +110,10 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
 
             <!-- Category -->
             <div class="mb-3">
-                <label for="fab-category" class="block text-sm font-medium text-slate-500 mb-1">{t(lang, "fab_category")}</label>
+                <label for="fab-category" class="block text-sm font-medium text-brand-ink-soft mb-1">{t(lang, "fab_category")}</label>
                 <select
                     id="fab-category"
-                    class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-sm bg-white"
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none text-sm bg-brand-cream"
                 >
                     <option value="">--</option>
                     {categories.map((cat) => (
@@ -124,10 +124,10 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
 
             <!-- Account -->
             <div class="mb-3">
-                <label for="fab-account" class="block text-sm font-medium text-slate-500 mb-1">{t(lang, "fab_account")}</label>
+                <label for="fab-account" class="block text-sm font-medium text-brand-ink-soft mb-1">{t(lang, "fab_account")}</label>
                 <select
                     id="fab-account"
-                    class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-sm bg-white"
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none text-sm bg-brand-cream"
                 >
                     <option value="">--</option>
                     {accounts.map((acc) => (
@@ -138,12 +138,12 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
 
             <!-- Note -->
             <div class="mb-4">
-                <label for="fab-note" class="block text-sm font-medium text-slate-500 mb-1">{t(lang, "fab_note")}</label>
+                <label for="fab-note" class="block text-sm font-medium text-brand-ink-soft mb-1">{t(lang, "fab_note")}</label>
                 <input
                     id="fab-note"
                     type="text"
                     placeholder={t(lang, "fab_note_placeholder")}
-                    class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-sm"
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none text-sm"
                 />
             </div>
 
@@ -153,7 +153,7 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
             <!-- Save -->
             <button
                 id="fab-save"
-                class="w-full py-3 bg-primary-600 hover:bg-primary-700 active:scale-[0.98] text-white font-semibold rounded-xl shadow transition-all duration-150"
+                class="w-full py-3 bg-brand-sky-deep hover:bg-brand-sky-deep active:scale-[0.98] text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition-all duration-150"
             >
                 {t(lang, "fab_save")}
             </button>
@@ -162,19 +162,19 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
         <!-- Step 2: Confirmation -->
         <div id="fab-step-confirm" class="hidden px-5 pb-6 text-center">
             <div class="text-5xl mb-3 mt-2">✅</div>
-            <h2 class="text-xl font-bold text-slate-800 mb-2">{t(lang, "fab_saved")}</h2>
-            <div id="fab-confirm-summary" class="text-sm text-slate-600 mb-3"></div>
-            <div id="fab-confirm-impact" class="text-sm text-slate-500 mb-5"></div>
+            <h2 class="text-xl font-bold text-brand-ink mb-2">{t(lang, "fab_saved")}</h2>
+            <div id="fab-confirm-summary" class="text-sm text-brand-ink-soft mb-3"></div>
+            <div id="fab-confirm-impact" class="text-sm text-brand-ink-soft mb-5"></div>
             <div class="flex gap-3">
                 <button
                     id="fab-another"
-                    class="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow transition-colors"
+                    class="flex-1 py-3 bg-brand-sky-deep hover:bg-brand-sky-deep text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition-colors"
                 >
                     {t(lang, "fab_another")}
                 </button>
                 <button
                     id="fab-done"
-                    class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors"
+                    class="flex-1 py-3 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold rounded-xl transition-colors"
                 >
                     {t(lang, "fab_close")}
                 </button>

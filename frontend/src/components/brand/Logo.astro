@@ -1,0 +1,44 @@
+---
+/**
+ * Logo — official lockup. Composes Mark + Wordmark.
+ * @prop layout   "horizontal" | "stacked"  default "horizontal"
+ * @prop size     "sm" | "md" | "lg"        default "md"
+ * @prop tone     "color" | "mono-ink" | "mono-cream"
+ * @prop href     Optional link wrapper.
+ */
+import Mark from "./Mark.astro";
+import Wordmark from "./Wordmark.astro";
+
+interface Props {
+  layout?: "horizontal" | "stacked";
+  size?: "sm" | "md" | "lg";
+  tone?: "color" | "mono-ink" | "mono-cream";
+  href?: string;
+  class?: string;
+}
+const {
+  layout = "horizontal",
+  size = "md",
+  tone = "color",
+  href,
+  class: className = "",
+} = Astro.props;
+
+const markSize = { sm: 32, md: 56, lg: 96 }[size];
+const wmSize   = { sm: "sm", md: "md", lg: "lg" }[size] as "sm" | "md" | "lg";
+const monoClass =
+  tone === "mono-ink"   ? "[&_svg]:grayscale [&_svg]:contrast-200" :
+  tone === "mono-cream" ? "[&_svg]:grayscale [&_svg]:invert"       : "";
+const wmTone: "ink" | "cream" = tone === "mono-cream" ? "cream" : "ink";
+
+const Tag = href ? "a" : "div";
+---
+
+<Tag
+  href={href}
+  class={`inline-flex ${layout === "stacked" ? "flex-col items-center gap-3 text-center" : "items-center gap-3"} ${monoClass} ${className}`}
+  aria-label="Family Task Manager"
+>
+  <Mark size={markSize} />
+  <Wordmark size={wmSize} stacked={layout === "horizontal" && size !== "sm"} tone={wmTone} />
+</Tag>

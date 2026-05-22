@@ -15,6 +15,7 @@
 .env.local
 !.env.example
 !.env.template
+!.env.gcp.example
 
 # Credentials files
 CREDENTIALS.md
@@ -156,6 +157,7 @@ e2e-tests/playwright-report/
 *.png
 *.jpg
 *.jpeg
+!frontend/public/*.png
 playwright-report/
 test-results/
 

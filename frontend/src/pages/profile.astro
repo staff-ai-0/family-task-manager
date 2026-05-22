@@ -57,21 +57,21 @@ const consequences: any[] = Array.isArray(consequencesRaw)
 ---
 
 <Layout title={`${t(lang, "profile_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <header
-            class="bg-gradient-to-br from-violet-600 to-indigo-600 text-white pt-12 pb-8 px-6 rounded-b-3xl shadow-md"
+            class="bg-gradient-to-br from-brand-coral to-brand-coral-deep text-white pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
         >
             <div class="flex items-center gap-4">
                 <div
-                    class="h-16 w-16 rounded-full bg-white/20 border-2 border-white flex items-center justify-center text-3xl font-bold"
+                    class="h-16 w-16 rounded-full bg-brand-cream/20 border-2 border-white flex items-center justify-center text-3xl font-bold"
                 >
                     {user.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
                     <h1 class="text-2xl font-bold">{user.name}</h1>
-                    <p class="text-indigo-200 text-sm">{user.email}</p>
+                    <p class="text-brand-coral-deep text-sm">{user.email}</p>
                     <span
-                        class="inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-white/20 border border-white/30"
+                        class="inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-brand-cream/20 border border-white/30"
                         >{user.role}</span
                     >
                 </div>
@@ -81,14 +81,14 @@ const consequences: any[] = Array.isArray(consequencesRaw)
         <main class="flex-1 px-4 py-6 space-y-6">
             {
                 successMsg && (
-                    <div class="p-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl">
+                    <div class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
                         {successMsg}
                     </div>
                 )
             }
             {
                 errorMsg && (
-                    <div class="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">
+                    <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                         {errorMsg}
                     </div>
                 )
@@ -96,20 +96,20 @@ const consequences: any[] = Array.isArray(consequencesRaw)
 
             {
                 pointsSummary && (
-                    <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                        <h2 class="text-lg font-bold text-slate-800 mb-4">
+                    <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                        <h2 class="text-lg font-bold text-brand-ink mb-4">
                             {t(lang, "profile_points_summary")}
                         </h2>
                         <div class="grid grid-cols-3 gap-3 text-center">
-                            <div class="bg-green-50 rounded-xl p-3">
-                                <p class="text-2xl font-extrabold text-green-600">
+                            <div class="bg-brand-mint/20 rounded-xl p-3">
+                                <p class="text-2xl font-extrabold text-brand-mint-deep">
                                     {pointsSummary.total_earned ?? 0}
                                 </p>
-                                <p class="text-xs text-green-700 font-medium mt-0.5">
+                                <p class="text-xs text-brand-mint-deep font-medium mt-0.5">
                                     {t(lang, "profile_earned")}
                                 </p>
                             </div>
-                            <div class="bg-red-50 rounded-xl p-3">
+                            <div class="bg-red-100 rounded-xl p-3">
                                 <p class="text-2xl font-extrabold text-red-500">
                                     {pointsSummary.total_spent ?? 0}
                                 </p>
@@ -117,12 +117,12 @@ const consequences: any[] = Array.isArray(consequencesRaw)
                                     {t(lang, "profile_spent")}
                                 </p>
                             </div>
-                            <div class="bg-amber-50 rounded-xl p-3">
-                                <p class="text-2xl font-extrabold text-amber-600">
+                            <div class="bg-brand-sun/20 rounded-xl p-3">
+                                <p class="text-2xl font-extrabold text-brand-sun-deep">
                                     {pointsSummary.current_balance ??
                                         user.points}
                                 </p>
-                                <p class="text-xs text-amber-700 font-medium mt-0.5">
+                                <p class="text-xs text-brand-sun-deep font-medium mt-0.5">
                                     {t(lang, "profile_balance")}
                                 </p>
                             </div>
@@ -133,8 +133,8 @@ const consequences: any[] = Array.isArray(consequencesRaw)
 
             {
                 consequences.length > 0 && (
-                    <section class="bg-white rounded-2xl p-5 shadow-sm border border-rose-100">
-                        <h2 class="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
+                    <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-rose-100">
+                        <h2 class="text-lg font-bold text-brand-ink mb-3 flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full bg-rose-500 inline-block" />
                             {t(lang, "profile_active_consequences")}
                         </h2>
@@ -142,11 +142,11 @@ const consequences: any[] = Array.isArray(consequencesRaw)
                             {consequences.map((c: any) => (
                                 <div class="flex items-start gap-3 p-3 bg-rose-50 rounded-xl border border-rose-100">
                                     <div class="flex-1">
-                                        <p class="font-semibold text-slate-700 text-sm">
+                                        <p class="font-semibold text-brand-ink text-sm">
                                             {c.title || c.name || "—"}
                                         </p>
                                         {c.description && (
-                                            <p class="text-xs text-slate-500 mt-0.5">
+                                            <p class="text-xs text-brand-ink-soft mt-0.5">
                                                 {c.description}
                                             </p>
                                         )}
@@ -167,22 +167,22 @@ const consequences: any[] = Array.isArray(consequencesRaw)
             }
 
             <!-- Language Preference -->
-            <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                <h2 class="text-lg font-bold text-slate-800 mb-4">
+            <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                <h2 class="text-lg font-bold text-brand-ink mb-4">
                     {t(lang, "profile_preferred_lang")}
                 </h2>
                 <form method="POST" class="flex items-center gap-3">
                     <input type="hidden" name="action" value="change_lang" />
                     <select
                         name="preferred_lang"
-                        class="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 outline-none text-sm bg-white"
+                        class="flex-1 px-4 py-2.5 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-sky-deep outline-none text-sm bg-brand-cream"
                     >
                         <option value="en" selected={user.preferred_lang === "en"}>{t(lang, "profile_lang_en")}</option>
                         <option value="es" selected={user.preferred_lang === "es"}>{t(lang, "profile_lang_es")}</option>
                     </select>
                     <button
                         type="submit"
-                        class="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
+                        class="px-5 py-2.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white text-sm font-semibold rounded-lg transition-colors shadow-[var(--shadow-card)]"
                     >
                         {t(lang, "pt_save")}
                     </button>
@@ -190,9 +190,9 @@ const consequences: any[] = Array.isArray(consequencesRaw)
             </section>
 
             <section
-                class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100"
+                class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10"
             >
-                <h2 class="text-lg font-bold text-slate-800 mb-4">
+                <h2 class="text-lg font-bold text-brand-ink mb-4">
                     {t(lang, "profile_change_password")}
                 </h2>
                 <form method="POST" class="space-y-4">
@@ -204,7 +204,7 @@ const consequences: any[] = Array.isArray(consequencesRaw)
                     <div>
                         <label
                             for="current_password"
-                            class="block text-sm font-medium text-slate-700 mb-1"
+                            class="block text-sm font-medium text-brand-ink mb-1"
                             >{t(lang, "profile_current_password")}</label
                         >
                         <input
@@ -213,13 +213,13 @@ const consequences: any[] = Array.isArray(consequencesRaw)
                             name="current_password"
                             required
                             placeholder="••••••••"
-                            class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                            class="w-full px-4 py-2.5 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-sky-deep outline-none text-sm"
                         />
                     </div>
                     <div>
                         <label
                             for="new_password"
-                            class="block text-sm font-medium text-slate-700 mb-1"
+                            class="block text-sm font-medium text-brand-ink mb-1"
                             >{t(lang, "profile_new_password")}</label
                         >
                         <input
@@ -229,12 +229,12 @@ const consequences: any[] = Array.isArray(consequencesRaw)
                             required
                             placeholder="••••••••"
                             minlength={8}
-                            class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary-500 outline-none text-sm"
+                            class="w-full px-4 py-2.5 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-sky-deep outline-none text-sm"
                         />
                     </div>
                     <button
                         type="submit"
-                        class="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
+                        class="w-full py-2.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white text-sm font-semibold rounded-lg transition-colors shadow-[var(--shadow-card)]"
                     >
                         {t(lang, "profile_update_password")}
                     </button>
