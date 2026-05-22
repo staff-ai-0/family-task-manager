@@ -60,18 +60,18 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
 <Layout title={`${t(lang, "pt_edit_title")} - Family Task Manager`}>
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <header
-            class="bg-gradient-to-br from-brand-sky to-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
+            class="bg-brand-sky text-brand-ink border-b-4 border-brand-ink pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
         >
             <a
                 href="/parent/tasks"
-                class="text-brand-sky text-sm flex items-center gap-1 mb-3"
+                class="text-brand-ink-soft hover:text-brand-ink text-sm font-bold flex items-center gap-1 mb-3"
             >
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                 </svg>
                 {t(lang, "back_all_tasks")}
             </a>
-            <h1 class="text-2xl font-bold">{t(lang, "pt_edit_title")}</h1>
+            <h1 class="font-display text-2xl font-extrabold text-brand-ink">{t(lang, "pt_edit_title")}</h1>
         </header>
         <main class="flex-1 px-4 py-6">
             {errorMsg && (
@@ -273,7 +273,7 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                 </div>
                 <button
                     type="submit"
-                    class="w-full py-2.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
+                    class="w-full py-2.5 bg-brand-sky-deep hover:bg-brand-ink text-white font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
                 >
                     {t(lang, "pt_save")}
                 </button>

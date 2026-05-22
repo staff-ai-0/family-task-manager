@@ -81,7 +81,7 @@ const plans = [
                         >
                             {plan.recommended && (
                                 <div class="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                                    <span class="bg-brand-sky text-white px-4 py-1 rounded-full text-sm font-medium">
+                                    <span class="bg-brand-sky text-brand-ink px-4 py-1 rounded-full text-sm font-medium">
                                         Recommended
                                     </span>
                                 </div>
@@ -125,7 +125,7 @@ const plans = [
                                 data-amount={plan.price}
                                 data-currency={plan.currency}
                                 data-description={`${plan.name} Subscription`}
-                                class="paypal-button w-full py-3 px-6 rounded-lg font-medium transition-colors bg-brand-sky-deep hover:bg-brand-sky-deep text-white shadow-[var(--shadow-card)]"
+                                class="paypal-button w-full py-3 px-6 rounded-lg font-medium transition-colors bg-brand-sky-deep hover:bg-brand-ink text-white shadow-[var(--shadow-card)]"
                             >
                                 Subscribe with PayPal
                             </button>

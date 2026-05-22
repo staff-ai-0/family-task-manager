@@ -16,7 +16,7 @@ const { lang } = Astro.props;
 
 <div id="edit-member-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
     <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] max-w-md w-full">
-        <div class="bg-brand-coral text-white px-6 py-4 rounded-t-[var(--radius-card)]">
+        <div class="bg-brand-coral text-brand-ink px-6 py-4 rounded-t-[var(--radius-card)]">
             <div class="flex items-center justify-between">
                 <h2 class="text-xl font-bold">
                     {lang === "es" ? "Editar Miembro" : "Edit Member"}
@@ -75,7 +75,7 @@ const { lang } = Astro.props;
                 <button
                     type="submit"
                     id="edit-member-submit"
-                    class="w-full bg-brand-coral hover:from-brand-coral hover:to-brand-coral-deep text-white font-bold py-2 rounded-lg transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                    class="w-full bg-brand-coral text-brand-ink font-bold py-2 rounded-lg transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
                 >
                     <span id="edit-member-submit-text">
                         {lang === "es" ? "Guardar cambios" : "Save changes"}

@@ -24,7 +24,7 @@ const {
 
 <div id="invitation-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
     <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] max-w-md w-full">
-        <div class="bg-brand-sky text-white px-6 py-4 rounded-t-[var(--radius-card)]">
+        <div class="bg-brand-sky text-brand-ink px-6 py-4 rounded-t-[var(--radius-card)]">
             <div class="flex items-center justify-between">
                 <h2 class="text-xl font-bold">
                     {lang === "es" ? "Invitar a la familia" : "Invite to family"}
@@ -116,7 +116,7 @@ const {
                 <button
                     type="submit"
                     id="invitation-submit"
-                    class="w-full bg-brand-sky hover:from-brand-sky hover:to-brand-sky-deep text-white font-bold py-2 rounded-lg transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+                    class="w-full bg-brand-sky text-brand-ink font-bold py-2 rounded-lg transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
                 >
                     <span id="invitation-submit-text">
                         {lang === "es" ? "Enviar invitación" : "Send invitation"}
