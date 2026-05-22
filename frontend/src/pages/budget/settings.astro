@@ -92,7 +92,7 @@ const frequencyLabel = (freq: string) => {
         <!-- ACCOUNTS -->
         <SettingsAccordion id="accounts" title={es ? "Cuentas" : "Accounts"} icon="🏦">
             <div class="flex justify-end mb-3">
-                <button onclick="openAccountModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openAccountModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nueva cuenta" : "New account"}
                 </button>
             </div>
@@ -133,7 +133,7 @@ const frequencyLabel = (freq: string) => {
         <!-- PAYEES -->
         <SettingsAccordion id="payees" title={es ? "Beneficiarios" : "Payees"} icon="👤">
             <div class="flex justify-end mb-3">
-                <button onclick="openPayeeModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openPayeeModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nuevo" : "New"}
                 </button>
             </div>
@@ -173,7 +173,7 @@ const frequencyLabel = (freq: string) => {
         <!-- CATEGORIZATION RULES -->
         <SettingsAccordion id="rules" title={es ? "Reglas de categorización" : "Categorization Rules"} icon="🤖">
             <div class="flex justify-end mb-3">
-                <button onclick="openRuleModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openRuleModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nueva regla" : "New rule"}
                 </button>
             </div>
@@ -215,7 +215,7 @@ const frequencyLabel = (freq: string) => {
         <!-- RECURRING TRANSACTIONS -->
         <SettingsAccordion id="recurring" title={es ? "Transacciones recurrentes" : "Recurring Transactions"} icon="🔄">
             <div class="flex justify-end mb-3">
-                <button onclick="openRecurringModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openRecurringModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nueva" : "New"}
                 </button>
             </div>
@@ -264,7 +264,7 @@ const frequencyLabel = (freq: string) => {
         <!-- GOALS -->
         <SettingsAccordion id="goals" title={es ? "Metas" : "Goals"} icon="🎯">
             <div class="flex justify-end mb-3">
-                <button onclick="openGoalModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openGoalModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nueva meta" : "New goal"}
                 </button>
             </div>
@@ -304,7 +304,7 @@ const frequencyLabel = (freq: string) => {
         <!-- TAGS -->
         <SettingsAccordion id="tags" title={es ? "Etiquetas" : "Tags"} icon="🏷️">
             <div class="flex justify-end mb-3">
-                <button onclick="openTagModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openTagModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nueva etiqueta" : "New tag"}
                 </button>
             </div>
@@ -377,7 +377,7 @@ const frequencyLabel = (freq: string) => {
             <button onclick="closeSettingsModal()" class="flex-1 py-2.5 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold rounded-xl transition">
                 {es ? "Cancelar" : "Cancel"}
             </button>
-            <button id="modal-save-btn" class="flex-1 py-2.5 bg-brand-sky-deep hover:bg-brand-sky-deep text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition">
+            <button id="modal-save-btn" class="flex-1 py-2.5 bg-brand-sky-deep hover:bg-brand-ink text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition">
                 {es ? "Guardar" : "Save"}
             </button>
         </div>
