@@ -78,13 +78,13 @@ const frequencyLabel = (freq: string) => {
 ---
 
 <Layout title={`${es ? "Configuración" : "Settings"} - Budget`}>
-<div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen flex flex-col">
+<div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep min-h-screen flex flex-col">
     <BudgetNavNew active="none" lang={lang} pendingDrafts={pendingDraftsCount} />
     <DrawerMenu lang={lang} />
 
     <div class="px-4 pt-6 pb-2">
-        <h1 class="text-xl font-bold text-slate-800">{es ? "Configuración" : "Settings"}</h1>
-        <p class="text-sm text-slate-500 mt-1">{es ? "Gestiona cuentas, beneficiarios, reglas y más" : "Manage accounts, payees, rules & more"}</p>
+        <h1 class="text-xl font-bold text-brand-ink">{es ? "Configuración" : "Settings"}</h1>
+        <p class="text-sm text-brand-ink-soft mt-1">{es ? "Gestiona cuentas, beneficiarios, reglas y más" : "Manage accounts, payees, rules & more"}</p>
     </div>
 
     <div class="px-4 py-4 flex-1">
@@ -92,33 +92,33 @@ const frequencyLabel = (freq: string) => {
         <!-- ACCOUNTS -->
         <SettingsAccordion id="accounts" title={es ? "Cuentas" : "Accounts"} icon="🏦">
             <div class="flex justify-end mb-3">
-                <button onclick="openAccountModal()" class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openAccountModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nueva cuenta" : "New account"}
                 </button>
             </div>
             {accounts.length === 0 ? (
-                <p class="text-sm text-slate-500 text-center py-4">{es ? "No hay cuentas" : "No accounts yet"}</p>
+                <p class="text-sm text-brand-ink-soft text-center py-4">{es ? "No hay cuentas" : "No accounts yet"}</p>
             ) : (
-                <div class="divide-y divide-slate-100">
+                <div class="divide-y divide-brand-ink/10">
                     {accounts.map((acc: any) => (
                         <div class="flex items-center justify-between py-3 -mx-4 px-4">
                             <div>
-                                <p class="text-sm font-medium text-slate-800">{acc.name}</p>
-                                <p class="text-xs text-slate-500">{accountTypeLabel(acc.account_type || acc.type)}</p>
-                                {acc.notes && <p class="text-xs text-slate-400">{acc.notes}</p>}
+                                <p class="text-sm font-medium text-brand-ink">{acc.name}</p>
+                                <p class="text-xs text-brand-ink-soft">{accountTypeLabel(acc.account_type || acc.type)}</p>
+                                {acc.notes && <p class="text-xs text-brand-ink-soft">{acc.notes}</p>}
                             </div>
                             <div class="flex items-center gap-3">
-                                <span class="text-sm font-semibold text-slate-700">
+                                <span class="text-sm font-semibold text-brand-ink">
                                     {formatCurrency(acc.balance_cents ?? acc.balance ?? 0)}
                                 </span>
                                 <button onclick={`openAccountModal(${JSON.stringify(acc)})`}
-                                    class="text-slate-400 hover:text-primary-600 transition">
+                                    class="text-brand-ink-soft hover:text-brand-sky-deep transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                 </button>
                                 <button onclick={`confirmDeleteAccount('${acc.id}','${acc.name.replace(/'/g,"\\'")}' )`}
-                                    class="text-slate-400 hover:text-red-600 transition">
+                                    class="text-brand-ink-soft hover:text-red-600 transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
@@ -133,32 +133,32 @@ const frequencyLabel = (freq: string) => {
         <!-- PAYEES -->
         <SettingsAccordion id="payees" title={es ? "Beneficiarios" : "Payees"} icon="👤">
             <div class="flex justify-end mb-3">
-                <button onclick="openPayeeModal()" class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openPayeeModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nuevo" : "New"}
                 </button>
             </div>
             {payees.length === 0 ? (
-                <p class="text-sm text-slate-500 text-center py-4">{es ? "No hay beneficiarios" : "No payees yet"}</p>
+                <p class="text-sm text-brand-ink-soft text-center py-4">{es ? "No hay beneficiarios" : "No payees yet"}</p>
             ) : (
-                <div class="divide-y divide-slate-100">
+                <div class="divide-y divide-brand-ink/10">
                     {payees.map((p: any) => (
                         <div class="flex items-center justify-between py-2.5">
-                            <span class="text-sm text-slate-700">{p.name}</span>
+                            <span class="text-sm text-brand-ink">{p.name}</span>
                             <div class="flex items-center gap-2">
                                 <button
-                                    class={`favorite-btn text-base transition ${p.is_favorite ? 'text-amber-400 hover:text-amber-300' : 'text-slate-300 hover:text-amber-400'}`}
+                                    class={`favorite-btn text-base transition ${p.is_favorite ? 'text-amber-400 hover:text-amber-300' : 'text-brand-ink-soft hover:text-amber-400'}`}
                                     data-payee-id={p.id}
                                     data-favorite={p.is_favorite ? "1" : "0"}
                                     title={es ? "Favorito" : "Favorite"}
                                 >&#9733;</button>
                                 <button onclick={`openPayeeModal(${JSON.stringify(p)})`}
-                                    class="text-slate-400 hover:text-primary-600 transition">
+                                    class="text-brand-ink-soft hover:text-brand-sky-deep transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                 </button>
                                 <button onclick={`confirmDeletePayee('${p.id}','${p.name.replace(/'/g,"\\'")}' )`}
-                                    class="text-slate-400 hover:text-red-600 transition">
+                                    class="text-brand-ink-soft hover:text-red-600 transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
@@ -173,34 +173,34 @@ const frequencyLabel = (freq: string) => {
         <!-- CATEGORIZATION RULES -->
         <SettingsAccordion id="rules" title={es ? "Reglas de categorización" : "Categorization Rules"} icon="🤖">
             <div class="flex justify-end mb-3">
-                <button onclick="openRuleModal()" class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openRuleModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nueva regla" : "New rule"}
                 </button>
             </div>
             {rules.length === 0 ? (
-                <p class="text-sm text-slate-500 text-center py-4">{es ? "No hay reglas" : "No rules yet"}</p>
+                <p class="text-sm text-brand-ink-soft text-center py-4">{es ? "No hay reglas" : "No rules yet"}</p>
             ) : (
-                <div class="divide-y divide-slate-100">
+                <div class="divide-y divide-brand-ink/10">
                     {rules.map((rule: any) => (
                         <div class="py-2.5 flex items-start justify-between gap-2">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-1.5 flex-wrap">
-                                    <span class="text-sm font-medium text-slate-800">"{rule.pattern}"</span>
-                                    <span class="text-xs text-slate-400">&rarr;</span>
-                                    <span class="text-sm text-slate-600">{rule.category?.name || (es ? "Sin cat." : "No cat.")}</span>
-                                    <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 uppercase">{rule.rule_type}</span>
+                                    <span class="text-sm font-medium text-brand-ink">"{rule.pattern}"</span>
+                                    <span class="text-xs text-brand-ink-soft">&rarr;</span>
+                                    <span class="text-sm text-brand-ink-soft">{rule.category?.name || (es ? "Sin cat." : "No cat.")}</span>
+                                    <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-brand-cream-deep text-brand-ink-soft uppercase">{rule.rule_type}</span>
                                     {!rule.enabled && (
-                                        <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-yellow-100 text-yellow-700">{es ? "Inactiva" : "Off"}</span>
+                                        <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-brand-sun/20 text-brand-ink">{es ? "Inactiva" : "Off"}</span>
                                     )}
                                 </div>
                             </div>
                             <div class="flex items-center gap-1.5 flex-shrink-0">
-                                <button onclick={`openRuleModal(${JSON.stringify(rule)})`} class="text-slate-400 hover:text-primary-600 transition">
+                                <button onclick={`openRuleModal(${JSON.stringify(rule)})`} class="text-brand-ink-soft hover:text-brand-sky-deep transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                 </button>
-                                <button onclick={`confirmDeleteRule('${rule.id}')`} class="text-slate-400 hover:text-red-600 transition">
+                                <button onclick={`confirmDeleteRule('${rule.id}')`} class="text-brand-ink-soft hover:text-red-600 transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
@@ -215,41 +215,41 @@ const frequencyLabel = (freq: string) => {
         <!-- RECURRING TRANSACTIONS -->
         <SettingsAccordion id="recurring" title={es ? "Transacciones recurrentes" : "Recurring Transactions"} icon="🔄">
             <div class="flex justify-end mb-3">
-                <button onclick="openRecurringModal()" class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openRecurringModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nueva" : "New"}
                 </button>
             </div>
             {recurring.length === 0 ? (
-                <p class="text-sm text-slate-500 text-center py-4">{es ? "No hay recurrentes" : "No recurring transactions yet"}</p>
+                <p class="text-sm text-brand-ink-soft text-center py-4">{es ? "No hay recurrentes" : "No recurring transactions yet"}</p>
             ) : (
-                <div class="divide-y divide-slate-100">
+                <div class="divide-y divide-brand-ink/10">
                     {recurring.map((txn: any) => (
                         <div class="py-2.5 flex items-center justify-between gap-2">
                             <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-slate-800 truncate">{txn.name || txn.description}</p>
-                                <p class="text-xs text-slate-500">
+                                <p class="text-sm font-medium text-brand-ink truncate">{txn.name || txn.description}</p>
+                                <p class="text-xs text-brand-ink-soft">
                                     {frequencyLabel(txn.recurrence_type || txn.frequency)}
                                     {txn.next_due_date && <span> · {es ? "Prox:" : "Next:"} {txn.next_due_date}</span>}
                                     {!txn.is_active && <span class="ml-1 text-yellow-600">({es ? "inactiva" : "inactive"})</span>}
                                 </p>
                             </div>
                             <div class="flex items-center gap-1.5 flex-shrink-0">
-                                <span class={`text-sm font-semibold ${txn.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <span class={`text-sm font-semibold ${txn.amount > 0 ? 'text-brand-mint-deep' : 'text-red-600'}`}>
                                     {txn.amount > 0 ? '+' : '-'}{formatCurrency(Math.abs(txn.amount))}
                                 </span>
                                 <button onclick={`postRecurring('${txn.id}')`}
-                                    class="text-slate-400 hover:text-green-600 transition" title={es ? "Registrar ahora" : "Post now"}>
+                                    class="text-brand-ink-soft hover:text-brand-mint-deep transition" title={es ? "Registrar ahora" : "Post now"}>
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 </button>
-                                <button onclick={`openRecurringModal(${JSON.stringify(txn)})`} class="text-slate-400 hover:text-primary-600 transition">
+                                <button onclick={`openRecurringModal(${JSON.stringify(txn)})`} class="text-brand-ink-soft hover:text-brand-sky-deep transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                 </button>
-                                <button onclick={`confirmDeleteRecurring('${txn.id}')`} class="text-slate-400 hover:text-red-600 transition">
+                                <button onclick={`confirmDeleteRecurring('${txn.id}')`} class="text-brand-ink-soft hover:text-red-600 transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
@@ -264,19 +264,19 @@ const frequencyLabel = (freq: string) => {
         <!-- GOALS -->
         <SettingsAccordion id="goals" title={es ? "Metas" : "Goals"} icon="🎯">
             <div class="flex justify-end mb-3">
-                <button onclick="openGoalModal()" class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openGoalModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nueva meta" : "New goal"}
                 </button>
             </div>
             {goals.length === 0 ? (
-                <p class="text-sm text-slate-500 text-center py-4">{es ? "No hay metas" : "No goals yet"}</p>
+                <p class="text-sm text-brand-ink-soft text-center py-4">{es ? "No hay metas" : "No goals yet"}</p>
             ) : (
-                <div class="divide-y divide-slate-100">
+                <div class="divide-y divide-brand-ink/10">
                     {goals.map((g: any) => (
                         <div class="py-2.5 flex items-center justify-between gap-2">
                             <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-slate-800 truncate">{g.name}</p>
-                                <p class="text-xs text-slate-500">
+                                <p class="text-sm font-medium text-brand-ink truncate">{g.name}</p>
+                                <p class="text-xs text-brand-ink-soft">
                                     {g.goal_type === 'spending_limit' ? (es ? 'Límite de gasto' : 'Spending limit') : (es ? 'Meta de ahorro' : 'Savings target')}
                                     {' · '}{formatCurrency(g.target_amount)}
                                     {' · '}{g.period}
@@ -284,12 +284,12 @@ const frequencyLabel = (freq: string) => {
                                 </p>
                             </div>
                             <div class="flex items-center gap-1.5 flex-shrink-0">
-                                <button onclick={`openGoalModal(${JSON.stringify(g)})`} class="text-slate-400 hover:text-primary-600 transition">
+                                <button onclick={`openGoalModal(${JSON.stringify(g)})`} class="text-brand-ink-soft hover:text-brand-sky-deep transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                 </button>
-                                <button onclick={`confirmDeleteGoal('${g.id}')`} class="text-slate-400 hover:text-red-600 transition">
+                                <button onclick={`confirmDeleteGoal('${g.id}')`} class="text-brand-ink-soft hover:text-red-600 transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
@@ -304,23 +304,23 @@ const frequencyLabel = (freq: string) => {
         <!-- TAGS -->
         <SettingsAccordion id="tags" title={es ? "Etiquetas" : "Tags"} icon="🏷️">
             <div class="flex justify-end mb-3">
-                <button onclick="openTagModal()" class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openTagModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nueva etiqueta" : "New tag"}
                 </button>
             </div>
             {tags.length === 0 ? (
-                <p class="text-sm text-slate-500 text-center py-4">{es ? "No hay etiquetas" : "No tags yet"}</p>
+                <p class="text-sm text-brand-ink-soft text-center py-4">{es ? "No hay etiquetas" : "No tags yet"}</p>
             ) : (
                 <div class="flex flex-wrap gap-2">
                     {tags.map((tag: any) => (
-                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-full text-sm text-slate-700">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-cream-deep rounded-full text-sm text-brand-ink">
                             {tag.name}
-                            <button onclick={`openTagModal(${JSON.stringify(tag)})`} class="text-slate-400 hover:text-primary-600 transition">
+                            <button onclick={`openTagModal(${JSON.stringify(tag)})`} class="text-brand-ink-soft hover:text-brand-sky-deep transition">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
                             </button>
-                            <button onclick={`confirmDeleteTag('${tag.id}')`} class="text-slate-400 hover:text-red-600 transition">
+                            <button onclick={`confirmDeleteTag('${tag.id}')`} class="text-brand-ink-soft hover:text-red-600 transition">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
@@ -333,7 +333,7 @@ const frequencyLabel = (freq: string) => {
 
         <!-- BACKUPS & TOOLS -->
         <SettingsAccordion id="backups" title={es ? "Respaldos y herramientas" : "Backups & Tools"} icon="💾">
-            <p class="text-sm text-slate-600 mb-4">
+            <p class="text-sm text-brand-ink-soft mb-4">
                 {es ? "Descarga una copia de seguridad de tu presupuesto." : "Download a backup of your budget data."}
             </p>
             <div class="flex flex-col gap-2">
@@ -345,7 +345,7 @@ const frequencyLabel = (freq: string) => {
                     {es ? "Exportar datos (ZIP)" : "Export data (ZIP)"}
                 </button>
                 <a href="/budget/recycle-bin"
-                    class="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition">
+                    class="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink text-sm font-semibold rounded-lg transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
@@ -362,10 +362,10 @@ const frequencyLabel = (freq: string) => {
      SHARED MODAL OVERLAY
      ================================================================ -->
 <div id="settings-modal-overlay" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
-        <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100">
-            <h3 id="modal-title" class="text-lg font-bold text-slate-800"></h3>
-            <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-slate-600 transition">
+    <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] w-full max-w-sm max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b border-brand-ink/10">
+            <h3 id="modal-title" class="text-lg font-bold text-brand-ink"></h3>
+            <button onclick="closeSettingsModal()" class="text-brand-ink-soft hover:text-brand-ink-soft transition">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -374,10 +374,10 @@ const frequencyLabel = (freq: string) => {
         <div id="modal-body" class="px-5 py-4"></div>
         <div id="modal-error" class="hidden mx-5 mb-2 text-sm text-red-600 px-1"></div>
         <div class="flex gap-3 px-5 pb-5">
-            <button onclick="closeSettingsModal()" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition">
+            <button onclick="closeSettingsModal()" class="flex-1 py-2.5 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold rounded-xl transition">
                 {es ? "Cancelar" : "Cancel"}
             </button>
-            <button id="modal-save-btn" class="flex-1 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow transition">
+            <button id="modal-save-btn" class="flex-1 py-2.5 bg-brand-sky-deep hover:bg-brand-ink text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition">
                 {es ? "Guardar" : "Save"}
             </button>
         </div>
@@ -386,14 +386,14 @@ const frequencyLabel = (freq: string) => {
 
 <!-- CONFIRM DELETE DIALOG -->
 <div id="confirm-overlay" class="hidden fixed inset-0 bg-black/60 z-[60] flex items-center justify-center px-4">
-    <div class="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
-        <h3 class="text-lg font-bold text-slate-800 mb-2">{es ? "¿Eliminar?" : "Delete?"}</h3>
-        <p id="confirm-msg" class="text-sm text-slate-500 mb-6"></p>
+    <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] p-6 max-w-sm w-full">
+        <h3 class="text-lg font-bold text-brand-ink mb-2">{es ? "¿Eliminar?" : "Delete?"}</h3>
+        <p id="confirm-msg" class="text-sm text-brand-ink-soft mb-6"></p>
         <div class="flex gap-3">
-            <button onclick="closeConfirm()" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition">
+            <button onclick="closeConfirm()" class="flex-1 py-2.5 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold rounded-xl transition">
                 {es ? "Cancelar" : "Cancel"}
             </button>
-            <button id="confirm-ok-btn" class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow transition">
+            <button id="confirm-ok-btn" class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition">
                 {es ? "Eliminar" : "Delete"}
             </button>
         </div>
@@ -401,7 +401,7 @@ const frequencyLabel = (freq: string) => {
 </div>
 
 <!-- TOAST -->
-<div id="settings-toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-lg transition-all"></div>
+<div id="settings-toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-[var(--shadow-pop)] transition-all"></div>
 </Layout>
 
 <script define:vars={{ token, accountsData: accounts, allCategoriesData: allCategories, es }}>
@@ -411,7 +411,7 @@ function showToast(msg, type = "success") {
     const t = document.getElementById("settings-toast");
     if (!t) return;
     t.textContent = msg;
-    t.className = `fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-lg ${type === "success" ? "bg-green-600" : "bg-red-600"}`;
+    t.className = `fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-[var(--shadow-pop)] ${type === "success" ? "bg-brand-mint-deep" : "bg-red-600"}`;
     t.classList.remove("hidden");
     setTimeout(() => t.classList.add("hidden"), 3000);
 }
@@ -508,27 +508,27 @@ window.openAccountModal = function(acc) {
     document.getElementById("modal-body").innerHTML = `
         <div class="space-y-3">
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Nombre" : "Name"} *</label>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Nombre" : "Name"} *</label>
                 <input id="acc-name" type="text" value="${escapeHtml(acc?.name)}"
-                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Tipo" : "Type"} *</label>
-                <select id="acc-type" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Tipo" : "Type"} *</label>
+                <select id="acc-type" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
                     ${['checking','savings','credit_card','cash','investment','loan','other'].map(t =>
                         `<option value="${t}" ${(acc?.account_type||acc?.type)===t?'selected':''}>${t}</option>`
                     ).join('')}
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Notas" : "Notes"}</label>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Notas" : "Notes"}</label>
                 <input id="acc-notes" type="text" value="${escapeHtml(acc?.notes)}"
-                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
             </div>
             ${!isEdit ? `<div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Balance inicial ($)" : "Starting balance ($)"}</label>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Balance inicial ($)" : "Starting balance ($)"}</label>
                 <input id="acc-balance" type="number" step="0.01" placeholder="0.00"
-                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
             </div>` : ''}
         </div>
     `;
@@ -575,9 +575,9 @@ window.openPayeeModal = function(p) {
     document.getElementById("modal-body").innerHTML = `
         <div class="space-y-3">
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Nombre" : "Name"} *</label>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Nombre" : "Name"} *</label>
                 <input id="payee-name" type="text" value="${escapeHtml(p?.name)}"
-                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
             </div>
         </div>
     `;
@@ -618,7 +618,7 @@ document.querySelectorAll(".favorite-btn").forEach(btn => {
         try {
             await apiCall(`/api/budget/payees/${id}`, "PUT", { is_favorite: !isFav });
             btn.dataset.favorite = isFav ? "0" : "1";
-            btn.className = `favorite-btn text-base transition ${!isFav ? 'text-amber-400 hover:text-amber-300' : 'text-slate-300 hover:text-amber-400'}`;
+            btn.className = `favorite-btn text-base transition ${!isFav ? 'text-amber-400 hover:text-amber-300' : 'text-brand-ink-soft hover:text-amber-400'}`;
         } catch(e) { showToast(e.message, "error"); }
     });
 });
@@ -635,13 +635,13 @@ window.openRuleModal = function(rule) {
     document.getElementById("modal-body").innerHTML = `
         <div class="space-y-3">
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Patrón" : "Pattern"} *</label>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Patrón" : "Pattern"} *</label>
                 <input id="rule-pattern" type="text" value="${escapeHtml(rule?.pattern)}" placeholder="Netflix"
-                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Tipo de coincidencia" : "Match type"}</label>
-                <select id="rule-type" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Tipo de coincidencia" : "Match type"}</label>
+                <select id="rule-type" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
                     <option value="contains" ${rule?.rule_type==='contains'?'selected':''}>contains</option>
                     <option value="exact" ${rule?.rule_type==='exact'?'selected':''}>exact</option>
                     <option value="startswith" ${rule?.rule_type==='startswith'?'selected':''}>startswith</option>
@@ -649,22 +649,22 @@ window.openRuleModal = function(rule) {
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Aplicar a" : "Match field"}</label>
-                <select id="rule-field" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Aplicar a" : "Match field"}</label>
+                <select id="rule-field" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
                     <option value="payee" ${rule?.match_field==='payee'?'selected':''}>payee</option>
                     <option value="description" ${rule?.match_field==='description'?'selected':''}>description</option>
                     <option value="both" ${rule?.match_field==='both'?'selected':''}>both</option>
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Categoría" : "Category"} *</label>
-                <select id="rule-category" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Categoría" : "Category"} *</label>
+                <select id="rule-category" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
                     <option value="">--</option>${catOptions}
                 </select>
             </div>
             <div class="flex items-center gap-2">
                 <input id="rule-enabled" type="checkbox" class="h-4 w-4 rounded" ${!rule || rule.enabled ? 'checked' : ''}>
-                <label for="rule-enabled" class="text-sm text-slate-600">${es ? "Activa" : "Enabled"}</label>
+                <label for="rule-enabled" class="text-sm text-brand-ink-soft">${es ? "Activa" : "Enabled"}</label>
             </div>
         </div>
     `;
@@ -723,53 +723,53 @@ window.openRecurringModal = function(txn) {
     document.getElementById("modal-body").innerHTML = `
         <div class="space-y-3">
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Nombre" : "Name"} *</label>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Nombre" : "Name"} *</label>
                 <input id="rec-desc" type="text" value="${escapeHtml(txn?.name || txn?.description)}"
-                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
             </div>
             <div class="flex gap-2">
                 <div class="flex-1">
-                    <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Monto ($)" : "Amount ($)"} *</label>
+                    <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Monto ($)" : "Amount ($)"} *</label>
                     <input id="rec-amount" type="number" step="0.01" min="0.01"
                         value="${txn ? (Math.abs(txn.amount)/100).toFixed(2) : ''}"
-                        class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                        class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
                 </div>
                 <div class="flex-1">
-                    <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Tipo" : "Type"}</label>
-                    <select id="rec-txtype" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                    <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Tipo" : "Type"}</label>
+                    <select id="rec-txtype" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
                         <option value="expense" ${(txn ? txn.amount < 0 : true) ?'selected':''}>expense</option>
                         <option value="income" ${(txn && txn.amount > 0) ?'selected':''}>income</option>
                     </select>
                 </div>
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Cuenta" : "Account"} *</label>
-                <select id="rec-account" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Cuenta" : "Account"} *</label>
+                <select id="rec-account" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
                     <option value="">--</option>${accOptions}
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Categoría" : "Category"}</label>
-                <select id="rec-category" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Categoría" : "Category"}</label>
+                <select id="rec-category" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
                     <option value="">--</option>${catOptions}
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Frecuencia" : "Frequency"}</label>
-                <select id="rec-freq" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Frecuencia" : "Frequency"}</label>
+                <select id="rec-freq" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
                     ${['daily','weekly','monthly_dayofmonth','monthly_dayofweek','yearly'].map(f =>
                         `<option value="${f}" ${currentRecType===f?'selected':''}>${f}</option>`
                     ).join('')}
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Fecha de inicio" : "Start date"} *</label>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Fecha de inicio" : "Start date"} *</label>
                 <input id="rec-date" type="date" value="${txn?.start_date || txn?.next_due_date || new Date().toISOString().split('T')[0]}"
-                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
             </div>
             <div class="flex items-center gap-2">
                 <input id="rec-active" type="checkbox" class="h-4 w-4 rounded" ${!txn || txn.is_active ? 'checked' : ''}>
-                <label for="rec-active" class="text-sm text-slate-600">${es ? "Activa" : "Active"}</label>
+                <label for="rec-active" class="text-sm text-brand-ink-soft">${es ? "Activa" : "Active"}</label>
             </div>
         </div>
     `;
@@ -839,33 +839,33 @@ window.openGoalModal = function(g) {
     document.getElementById("modal-body").innerHTML = `
         <div class="space-y-3">
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Nombre" : "Name"} *</label>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Nombre" : "Name"} *</label>
                 <input id="goal-name" type="text" value="${escapeHtml(g?.name)}"
-                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Categoría" : "Category"} *</label>
-                <select id="goal-category" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Categoría" : "Category"} *</label>
+                <select id="goal-category" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
                     <option value="">--</option>${catOptions}
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Tipo" : "Type"}</label>
-                <select id="goal-type" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Tipo" : "Type"}</label>
+                <select id="goal-type" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
                     <option value="spending_limit" ${g?.goal_type==='spending_limit'||!g?'selected':''}>${es ? 'Límite de gasto' : 'Spending limit'}</option>
                     <option value="savings_target" ${g?.goal_type==='savings_target'?'selected':''}>${es ? 'Meta de ahorro' : 'Savings target'}</option>
                 </select>
             </div>
             <div class="flex gap-2">
                 <div class="flex-1">
-                    <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Monto ($)" : "Amount ($)"} *</label>
+                    <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Monto ($)" : "Amount ($)"} *</label>
                     <input id="goal-amount" type="number" step="0.01" min="0"
                         value="${g ? (Math.abs(g.target_amount)/100).toFixed(2) : ''}"
-                        class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                        class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
                 </div>
                 <div class="flex-1">
-                    <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Periodo" : "Period"}</label>
-                    <select id="goal-period" class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 outline-none">
+                    <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Periodo" : "Period"}</label>
+                    <select id="goal-period" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
                         <option value="monthly" ${g?.period==='monthly'||!g?'selected':''}>${es ? 'Mensual' : 'Monthly'}</option>
                         <option value="quarterly" ${g?.period==='quarterly'?'selected':''}>${es ? 'Trimestral' : 'Quarterly'}</option>
                         <option value="annual" ${g?.period==='annual'?'selected':''}>${es ? 'Anual' : 'Annual'}</option>
@@ -873,13 +873,13 @@ window.openGoalModal = function(g) {
                 </div>
             </div>
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Fecha inicio" : "Start date"} *</label>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Fecha inicio" : "Start date"} *</label>
                 <input id="goal-start" type="date" value="${g?.start_date || new Date().toISOString().split('T')[0]}"
-                    class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
             </div>
             <div class="flex items-center gap-2">
                 <input id="goal-active" type="checkbox" class="h-4 w-4 rounded" ${!g || g.is_active ? 'checked' : ''}>
-                <label for="goal-active" class="text-sm text-slate-600">${es ? "Activa" : "Active"}</label>
+                <label for="goal-active" class="text-sm text-brand-ink-soft">${es ? "Activa" : "Active"}</label>
             </div>
         </div>
     `;
@@ -933,9 +933,9 @@ window.openTagModal = function(tag) {
     document.getElementById("modal-title").textContent = isEdit ? (es ? "Editar etiqueta" : "Edit Tag") : (es ? "Nueva etiqueta" : "New Tag");
     document.getElementById("modal-body").innerHTML = `
         <div>
-            <label class="block text-sm font-medium text-slate-500 mb-1">${es ? "Nombre" : "Name"} *</label>
+            <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Nombre" : "Name"} *</label>
             <input id="tag-name" type="text" value="${escapeHtml(tag?.name)}"
-                class="w-full py-2 px-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
         </div>
     `;
     document.getElementById("settings-modal-overlay")?.classList.remove("hidden");

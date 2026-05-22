@@ -38,11 +38,11 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
 ---
 
 <Layout title="Importar Transacciones - Presupuesto">
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <!-- Header -->
-        <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+        <header class="bg-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex items-center justify-between mb-6">
-                <a href="/budget" class="text-white hover:text-primary-100 transition">
+                <a href="/budget" class="text-white hover:text-brand-cream transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
@@ -52,8 +52,8 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
             </div>
 
             <!-- Summary -->
-            <div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
-                <p class="text-primary-50 text-sm">
+            <div class="bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
+                <p class="text-brand-cream text-sm">
                     {lang === "es" 
                         ? "Importa transacciones desde archivos CSV con detección automática de formato"
                         : "Import transactions from CSV files with automatic format detection"}
@@ -68,24 +68,24 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
         <!-- Main Content -->
         <main class="px-6 py-6 flex-grow max-w-2xl mx-auto w-full">
             <!-- Import Form -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+            <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-6">
                 <form id="import-form" class="space-y-6">
                     <!-- Target Account Selection -->
                     <div>
-                        <label for="account-id" class="block text-sm font-semibold text-slate-700 mb-2">
+                        <label for="account-id" class="block text-sm font-semibold text-brand-ink mb-2">
                             {lang === "es" ? "Cuenta Destino *" : "Target Account *"}
                         </label>
                         <select 
                             id="account-id"
                             required
-                            class="w-full px-4 py-3 border-2 border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            class="w-full px-4 py-3 border-2 border-brand-ink/20 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep"
                         >
                             <option value="">{lang === "es" ? "Seleccionar cuenta..." : "Select account..."}</option>
                             {accountsOk && accounts && accounts.map((account: BudgetAccount) => (
                                 <option value={account.id}>{account.name} ({account.type})</option>
                             ))}
                         </select>
-                        <p class="text-xs text-slate-500 mt-1">
+                        <p class="text-xs text-brand-ink-soft mt-1">
                             {lang === "es" 
                                 ? "Las transacciones se importarán a esta cuenta"
                                 : "Transactions will be imported to this account"}
@@ -94,7 +94,7 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
 
                     <!-- CSV File Upload -->
                     <div>
-                        <label for="csv-file" class="block text-sm font-semibold text-slate-700 mb-2">
+                        <label for="csv-file" class="block text-sm font-semibold text-brand-ink mb-2">
                             {lang === "es" ? "Archivo CSV *" : "CSV File *"}
                         </label>
                         <div class="relative">
@@ -103,23 +103,23 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                                 id="csv-file"
                                 accept=".csv,.txt"
                                 required
-                                class="block w-full px-4 py-3 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer file:hidden hover:border-primary-300 transition"
+                                class="block w-full px-4 py-3 border-2 border-dashed border-brand-ink/20 rounded-lg cursor-pointer file:hidden hover:border-brand-sky-deep transition"
                             />
-                            <div id="file-info" class="mt-2 text-xs text-slate-500"></div>
+                            <div id="file-info" class="mt-2 text-xs text-brand-ink-soft"></div>
                         </div>
                     </div>
 
                     <!-- CSV Settings -->
-                    <div class="space-y-4 bg-slate-50 p-4 rounded-lg">
-                        <p class="text-sm font-semibold text-slate-700">{lang === "es" ? "Configuración CSV" : "CSV Settings"}</p>
+                    <div class="space-y-4 bg-brand-cream-deep p-4 rounded-lg">
+                        <p class="text-sm font-semibold text-brand-ink">{lang === "es" ? "Configuración CSV" : "CSV Settings"}</p>
                         
                         <div>
-                            <label for="delimiter" class="block text-sm font-medium text-slate-700 mb-1">
+                            <label for="delimiter" class="block text-sm font-medium text-brand-ink mb-1">
                                 {lang === "es" ? "Delimitador" : "Delimiter"}
                             </label>
                             <select 
                                 id="delimiter"
-                                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                                class="w-full px-3 py-2 border border-brand-ink/20 rounded-lg text-sm"
                             >
                                 <option value=",">{lang === "es" ? "Coma (,)" : "Comma (,)"}</option>
                                 <option value=";">Punto y coma (;)</option>
@@ -129,7 +129,7 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                         </div>
 
                         <div>
-                            <label for="skip-rows" class="block text-sm font-medium text-slate-700 mb-1">
+                            <label for="skip-rows" class="block text-sm font-medium text-brand-ink mb-1">
                                 {lang === "es" ? "Filas a omitir" : "Skip rows"}
                             </label>
                             <input 
@@ -138,9 +138,9 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                                 min="0"
                                 max="10"
                                 value="0"
-                                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                                class="w-full px-3 py-2 border border-brand-ink/20 rounded-lg text-sm"
                             />
-                            <p class="text-xs text-slate-500 mt-1">
+                            <p class="text-xs text-brand-ink-soft mt-1">
                                 {lang === "es" 
                                     ? "Número de filas de encabezado a omitir antes del CSV"
                                     : "Number of header rows to skip before CSV data"}
@@ -153,9 +153,9 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                                     type="checkbox"
                                     id="create-payees"
                                     checked
-                                    class="w-4 h-4 text-primary-600 border-slate-300 rounded"
+                                    class="w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded"
                                 />
-                                <span class="text-slate-700">
+                                <span class="text-brand-ink">
                                     {lang === "es" ? "Crear pagadores automáticamente" : "Create payees automatically"}
                                 </span>
                             </label>
@@ -167,9 +167,9 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                                     type="checkbox"
                                     id="prevent-duplicates"
                                     checked
-                                    class="w-4 h-4 text-primary-600 border-slate-300 rounded"
+                                    class="w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded"
                                 />
-                                <span class="text-slate-700">
+                                <span class="text-brand-ink">
                                     {lang === "es" ? "Evitar duplicados" : "Prevent duplicates"}
                                 </span>
                             </label>
@@ -180,15 +180,15 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                     <button 
                         type="submit"
                         id="import-btn"
-                        class="w-full bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
+                        class="w-full bg-brand-sky-deep text-white px-6 py-3 rounded-lg font-semibold hover:bg-brand-sky-deep transition"
                     >
                         {lang === "es" ? "Importar Transacciones" : "Import Transactions"}
                     </button>
                 </form>
 
                 <!-- Results Section (hidden initially) -->
-                <div id="results" class="hidden mt-6 p-4 rounded-lg bg-slate-50 border border-slate-200">
-                    <h3 class="font-bold text-slate-800 mb-3">
+                <div id="results" class="hidden mt-6 p-4 rounded-lg bg-brand-cream-deep border border-brand-ink/10">
+                    <h3 class="font-bold text-brand-ink mb-3">
                         {lang === "es" ? "Resultados de la Importación" : "Import Results"}
                     </h3>
                     
@@ -197,7 +197,7 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                     <button 
                         type="button"
                         onclick="location.href='/budget/transactions'"
-                        class="mt-4 w-full bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-700 transition"
+                        class="mt-4 w-full bg-brand-sky-deep text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-brand-sky-deep transition"
                     >
                         {lang === "es" ? "Ver Movimientos Importados" : "View Imported Transactions"}
                     </button>
@@ -205,16 +205,16 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
             </div>
 
             <!-- Help Section -->
-            <div class="mt-6 bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                <h3 class="font-bold text-blue-800 mb-2 text-sm">
+            <div class="mt-6 bg-brand-sky/15 border border-brand-sky rounded-2xl p-4">
+                <h3 class="font-bold text-brand-sky-deep mb-2 text-sm">
                     {lang === "es" ? "Formato CSV Soportado" : "Supported CSV Format"}
                 </h3>
-                <p class="text-xs text-blue-700 mb-2">
+                <p class="text-xs text-brand-sky-deep mb-2">
                     {lang === "es" 
                         ? "El archivo CSV debe contener las siguientes columnas:"
                         : "Your CSV file should contain these columns:"}
                 </p>
-                <ul class="text-xs text-blue-700 space-y-1 ml-4 list-disc">
+                <ul class="text-xs text-brand-sky-deep space-y-1 ml-4 list-disc">
                     <li>{lang === "es" ? "Fecha (date, fecha, transaction_date)" : "Date (date, fecha, transaction_date)"}</li>
                     <li>{lang === "es" ? "Monto (amount, monto, value, quantity)" : "Amount (amount, monto, value, quantity)"}</li>
                     <li>{lang === "es" ? "Descripción (description, payee, memo, descripción)" : "Description (description, payee, memo, descripción)"}</li>
@@ -313,32 +313,32 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
         const html = `
             <div class="space-y-3">
                 <div class="grid grid-cols-2 gap-2">
-                    <div class="bg-white p-3 rounded border border-slate-200">
-                        <p class="text-xs text-slate-600">${lang === 'es' ? 'Total' : 'Total'}</p>
-                        <p class="text-lg font-bold text-slate-800">${result.total_rows}</p>
+                    <div class="bg-brand-cream p-3 rounded border border-brand-ink/10">
+                        <p class="text-xs text-brand-ink-soft">${lang === 'es' ? 'Total' : 'Total'}</p>
+                        <p class="text-lg font-bold text-brand-ink">${result.total_rows}</p>
                     </div>
-                    <div class="bg-green-50 p-3 rounded border border-green-200">
-                        <p class="text-xs text-green-600">${lang === 'es' ? 'Importados' : 'Imported'}</p>
-                        <p class="text-lg font-bold text-green-600">${result.successful_imports}</p>
+                    <div class="bg-brand-mint/20 p-3 rounded border border-brand-mint">
+                        <p class="text-xs text-brand-mint-deep">${lang === 'es' ? 'Importados' : 'Imported'}</p>
+                        <p class="text-lg font-bold text-brand-mint-deep">${result.successful_imports}</p>
                     </div>
                 </div>
 
                 ${result.skipped_rows > 0 ? `
-                    <div class="bg-yellow-50 p-3 rounded border border-yellow-200">
+                    <div class="bg-brand-sun/20 p-3 rounded border border-brand-sun">
                         <p class="text-xs text-yellow-600">${lang === 'es' ? 'Omitidos (duplicados)' : 'Skipped (duplicates)'}</p>
                         <p class="text-lg font-bold text-yellow-600">${result.skipped_rows}</p>
                     </div>
                 ` : ''}
 
                 ${result.created_payees.length > 0 ? `
-                    <div class="bg-blue-50 p-3 rounded border border-blue-200">
-                        <p class="text-xs text-blue-600">${lang === 'es' ? 'Pagadores Creados' : 'Payees Created'}</p>
-                        <p class="text-xs text-blue-800 mt-1">${result.created_payees.slice(0, 3).join(', ')}${result.created_payees.length > 3 ? '...' : ''}</p>
+                    <div class="bg-brand-sky/15 p-3 rounded border border-brand-sky">
+                        <p class="text-xs text-brand-sky-deep">${lang === 'es' ? 'Pagadores Creados' : 'Payees Created'}</p>
+                        <p class="text-xs text-brand-sky-deep mt-1">${result.created_payees.slice(0, 3).join(', ')}${result.created_payees.length > 3 ? '...' : ''}</p>
                     </div>
                 ` : ''}
 
                 ${result.failed_rows.length > 0 ? `
-                    <div class="bg-red-50 p-3 rounded border border-red-200">
+                    <div class="bg-red-100 p-3 rounded border border-red-200">
                         <p class="text-xs text-red-600 font-semibold">${lang === 'es' ? 'Errores' : 'Errors'}</p>
                         <div class="mt-2 space-y-1 max-h-32 overflow-auto">
                             ${result.failed_rows.map((row: any) => `

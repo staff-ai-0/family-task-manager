@@ -14,19 +14,19 @@ interface Props {
 const { id, title, icon, defaultOpen = false } = Astro.props;
 ---
 
-<div class="bg-white rounded-xl shadow-sm overflow-hidden mb-3">
+<div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden mb-3">
     <button
-        class="accordion-toggle w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+        class="accordion-toggle w-full flex items-center justify-between p-4 hover:bg-brand-cream-deep transition-colors"
         data-target={`accordion-content-${id}`}
         aria-expanded={defaultOpen ? "true" : "false"}
     >
         <span class="flex items-center gap-3">
             <span class="text-xl">{icon}</span>
-            <span class="font-semibold text-slate-800">{title}</span>
+            <span class="font-semibold text-brand-ink">{title}</span>
         </span>
         <svg
             class:list={[
-                "accordion-chevron h-5 w-5 text-slate-400 transition-transform duration-200",
+                "accordion-chevron h-5 w-5 text-brand-ink-soft transition-transform duration-200",
                 { "rotate-180": defaultOpen },
             ]}
             xmlns="http://www.w3.org/2000/svg"
@@ -40,7 +40,7 @@ const { id, title, icon, defaultOpen = false } = Astro.props;
     <div
         id={`accordion-content-${id}`}
         class:list={[
-            "border-t border-slate-100 px-4 py-4",
+            "border-t border-brand-ink/10 px-4 py-4",
             { hidden: !defaultOpen },
         ]}
     >

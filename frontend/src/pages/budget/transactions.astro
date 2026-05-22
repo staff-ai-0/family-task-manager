@@ -117,17 +117,17 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
 ---
 
 <Layout title={`${es ? "Transacciones" : "Transactions"} - Presupuesto`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 flex flex-col">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col">
         <!-- Header -->
-        <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+        <header class="bg-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex items-center justify-between mb-6">
-                <a href="/budget" class="text-white hover:text-primary-100 transition">
+                <a href="/budget" class="text-white hover:text-brand-cream transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </a>
                 <h1 class="text-2xl font-bold">{es ? "Transacciones" : "Transactions"}</h1>
-                <a href="/budget/scan-receipt" class="text-white hover:text-primary-100 transition" title={es ? "Escanear recibo" : "Scan receipt"}>
+                <a href="/budget/scan-receipt" class="text-white hover:text-brand-cream transition" title={es ? "Escanear recibo" : "Scan receipt"}>
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -136,22 +136,22 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
             </div>
 
             <!-- Summary -->
-            <div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
+            <div class="bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
                 <div class="grid grid-cols-3 gap-3 text-center">
                     <div>
-                        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
+                        <p class="text-brand-cream text-xs font-semibold uppercase tracking-wider mb-1">
                             {es ? "Ingresos" : "Income"}
                         </p>
                         <p class="text-lg font-bold text-green-300">{formatCurrency(totalIncome)}</p>
                     </div>
                     <div>
-                        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">
+                        <p class="text-brand-cream text-xs font-semibold uppercase tracking-wider mb-1">
                             {es ? "Gastos" : "Expenses"}
                         </p>
                         <p class="text-lg font-bold text-red-300">{formatCurrency(totalExpenses)}</p>
                     </div>
                     <div>
-                        <p class="text-primary-50 text-xs font-semibold uppercase tracking-wider mb-1">Neto</p>
+                        <p class="text-brand-cream text-xs font-semibold uppercase tracking-wider mb-1">Neto</p>
                         <p class={`text-lg font-bold ${netAmount >= 0 ? 'text-white' : 'text-red-300'}`}>
                             {formatCurrency(netAmount)}
                         </p>
@@ -164,14 +164,14 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
         <DrawerMenu lang={lang} />
 
         <!-- Filter Bar -->
-        <div class="px-4 py-3 bg-white border-b border-slate-200 flex flex-wrap gap-2">
-            <select id="filter-account" class="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 flex-1 min-w-[100px]">
+        <div class="px-4 py-3 bg-brand-cream border-b border-brand-ink/10 flex flex-wrap gap-2">
+            <select id="filter-account" class="text-sm border border-brand-ink/10 rounded-lg px-2 py-1.5 bg-brand-cream-deep flex-1 min-w-[100px]">
                 <option value="">{es ? "Todas las cuentas" : "All accounts"}</option>
                 {(accounts || []).map((acc) => (
                     <option value={acc.id} selected={acc.id === accountFilter}>{acc.name}</option>
                 ))}
             </select>
-            <select id="filter-category" class="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 flex-1 min-w-[100px]">
+            <select id="filter-category" class="text-sm border border-brand-ink/10 rounded-lg px-2 py-1.5 bg-brand-cream-deep flex-1 min-w-[100px]">
                 <option value="">{es ? "Todas las categorías" : "All categories"}</option>
                 {(categories || []).map((cat) => (
                     <option value={cat.id} selected={cat.id === categoryFilter}>{cat.name}</option>
@@ -182,24 +182,24 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                 type="text"
                 placeholder={es ? "Buscar..." : "Search..."}
                 value={searchFilter}
-                class="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 flex-1 min-w-[120px]"
+                class="text-sm border border-brand-ink/10 rounded-lg px-2 py-1.5 bg-brand-cream-deep flex-1 min-w-[120px]"
             />
         </div>
 
         <!-- Transactions List -->
         <main class="px-4 py-4 flex-grow">
             {!transOk ? (
-                <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
+                <div class="bg-red-100 border border-red-200 rounded-xl p-4 text-red-700">
                     <p class="font-semibold">{es ? "Error al cargar transacciones" : "Error loading transactions"}</p>
                     <p class="text-sm">{transError || "Unknown error"}</p>
                 </div>
             ) : filteredTransactions.length === 0 ? (
-                <div class="bg-slate-100 border border-slate-200 rounded-xl p-8 text-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div class="bg-brand-cream-deep border border-brand-ink/10 rounded-xl p-8 text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-brand-ink-soft mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <p class="text-slate-600 font-medium">{es ? "No hay transacciones" : "No transactions"}</p>
-                    <p class="text-sm text-slate-500 mt-1">
+                    <p class="text-brand-ink-soft font-medium">{es ? "No hay transacciones" : "No transactions"}</p>
+                    <p class="text-sm text-brand-ink-soft mt-1">
                         {es ? "Usa el botón + para agregar" : "Use the + button to add one"}
                     </p>
                 </div>
@@ -209,21 +209,21 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                         const dayTransactions = transactionsByDate[date];
                         const dayTotal = dayTransactions.reduce((sum, t) => sum + t.amount, 0);
                         return (
-                            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-                                <div class="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-                                    <h2 class="font-semibold text-slate-700 text-sm">{formatDate(date, lang)}</h2>
-                                    <span class={`text-sm font-bold ${dayTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
+                                <div class="bg-brand-cream-deep px-4 py-2 border-b border-brand-ink/10 flex items-center justify-between">
+                                    <h2 class="font-semibold text-brand-ink text-sm">{formatDate(date, lang)}</h2>
+                                    <span class={`text-sm font-bold ${dayTotal >= 0 ? 'text-brand-mint-deep' : 'text-red-600'}`}>
                                         {formatCurrency(dayTotal)}
                                     </span>
                                 </div>
-                                <div class="divide-y divide-slate-100">
+                                <div class="divide-y divide-brand-ink/10">
                                     {dayTransactions.map(transaction => {
                                         const account = accountMap.get(transaction.account_id);
                                         const category = transaction.category_id ? categoryMap.get(transaction.category_id) : null;
                                         const isIncome = transaction.amount > 0;
                                         return (
                                             <button
-                                                class="tx-row w-full text-left px-4 py-3 hover:bg-slate-50 active:bg-slate-100 transition flex items-center justify-between gap-3"
+                                                class="tx-row w-full text-left px-4 py-3 hover:bg-brand-cream-deep active:bg-brand-cream-deep transition flex items-center justify-between gap-3"
                                                 data-tx-id={transaction.id}
                                                 data-tx-amount={transaction.amount}
                                                 data-tx-date={transaction.date}
@@ -235,27 +235,27 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                                                 aria-label={es ? "Editar transacción" : "Edit transaction"}
                                             >
                                                 <div class="flex-1 min-w-0">
-                                                    <p class="text-sm font-medium text-slate-700 truncate">
+                                                    <p class="text-sm font-medium text-brand-ink truncate">
                                                         {transaction.payee_name || category?.name || (es ? "Sin categoría" : "No category")}
                                                     </p>
-                                                    <p class="text-xs text-slate-500">
+                                                    <p class="text-xs text-brand-ink-soft">
                                                         {category?.name || (es ? "Sin categoría" : "No category")}
                                                         {account && <span> · {account.name}</span>}
                                                     </p>
                                                     {transaction.notes && (
-                                                        <p class="text-xs text-slate-400 mt-0.5 truncate">{transaction.notes}</p>
+                                                        <p class="text-xs text-brand-ink-soft mt-0.5 truncate">{transaction.notes}</p>
                                                     )}
                                                 </div>
                                                 <div class="text-right flex-shrink-0 flex items-center gap-2">
                                                     <div>
-                                                        <p class={`text-sm font-bold ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
+                                                        <p class={`text-sm font-bold ${isIncome ? 'text-brand-mint-deep' : 'text-red-600'}`}>
                                                             {isIncome ? '+' : ''}{formatCurrency(transaction.amount)}
                                                         </p>
                                                         {transaction.cleared && (
-                                                            <span class="inline-block w-2 h-2 bg-green-500 rounded-full ml-auto" title={es ? "Conciliado" : "Cleared"}></span>
+                                                            <span class="inline-block w-2 h-2 bg-brand-mint-deep rounded-full ml-auto" title={es ? "Conciliado" : "Cleared"}></span>
                                                         )}
                                                     </div>
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-ink-soft flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                                                     </svg>
                                                 </div>
@@ -270,7 +270,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
             )}
 
             <div class="mt-6 text-center">
-                <p class="text-xs text-slate-500">
+                <p class="text-xs text-brand-ink-soft">
                     {es ? "Mostrando" : "Showing"} {formatDate(startOfMonth, lang)} — {formatDate(endDate, lang)}
                 </p>
             </div>
@@ -279,13 +279,13 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
         <!-- Edit Transaction Bottom Sheet -->
         <div id="edit-backdrop" class="fixed inset-0 bg-black/50 z-40 hidden opacity-0 transition-opacity duration-300"></div>
         <div id="edit-modal" class="fixed bottom-0 left-0 right-0 z-50 translate-y-full transition-transform duration-300 ease-out">
-            <div class="max-w-md mx-auto bg-white rounded-t-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="max-w-md mx-auto bg-brand-cream rounded-t-[var(--radius-card)] shadow-[var(--shadow-stamp)] max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-center pt-3 pb-1">
-                    <div class="w-10 h-1 bg-slate-300 rounded-full"></div>
+                    <div class="w-10 h-1 bg-brand-cream-deep rounded-full"></div>
                 </div>
                 <div class="px-5 pb-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h2 class="text-lg font-semibold text-slate-800">
+                        <h2 class="text-lg font-semibold text-brand-ink">
                             {es ? "Editar transacción" : "Edit Transaction"}
                         </h2>
                         <button id="edit-delete-btn" class="text-red-500 hover:text-red-700 transition p-1" title={es ? "Eliminar" : "Delete"}>
@@ -297,43 +297,43 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
 
                     <!-- Type toggle -->
                     <div class="flex gap-2 mb-4">
-                        <button id="edit-type-expense" class="flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-red-400 bg-red-50 text-red-700">
+                        <button id="edit-type-expense" class="flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-red-400 bg-red-100 text-red-700">
                             {es ? "Gasto" : "Expense"}
                         </button>
-                        <button id="edit-type-income" class="flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-slate-200 bg-white text-slate-500">
+                        <button id="edit-type-income" class="flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-brand-ink/10 bg-brand-cream text-brand-ink-soft">
                             {es ? "Ingreso" : "Income"}
                         </button>
                     </div>
 
                     <!-- Amount -->
                     <div class="mb-3">
-                        <label class="block text-sm font-medium text-slate-500 mb-1">{es ? "Monto" : "Amount"}</label>
+                        <label class="block text-sm font-medium text-brand-ink-soft mb-1">{es ? "Monto" : "Amount"}</label>
                         <div class="relative">
-                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-400">$</span>
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-bold text-brand-ink-soft">$</span>
                             <input id="edit-amount" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00"
-                                class="w-full text-2xl font-bold text-center py-3 pl-8 pr-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none" />
+                                class="w-full text-2xl font-bold text-center py-3 pl-8 pr-4 border border-brand-ink/10 rounded-xl focus:ring-2 focus:ring-brand-sky-deep outline-none" />
                         </div>
                     </div>
 
                     <!-- Date -->
                     <div class="mb-3">
-                        <label class="block text-sm font-medium text-slate-500 mb-1">{es ? "Fecha" : "Date"}</label>
+                        <label class="block text-sm font-medium text-brand-ink-soft mb-1">{es ? "Fecha" : "Date"}</label>
                         <input id="edit-date" type="date"
-                            class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm" />
+                            class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep outline-none text-sm" />
                     </div>
 
                     <!-- Payee -->
                     <div class="mb-3">
-                        <label class="block text-sm font-medium text-slate-500 mb-1">{es ? "Beneficiario" : "Payee"}</label>
+                        <label class="block text-sm font-medium text-brand-ink-soft mb-1">{es ? "Beneficiario" : "Payee"}</label>
                         <input id="edit-payee" type="text" autocomplete="off"
-                            class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm" />
+                            class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep outline-none text-sm" />
                     </div>
 
                     <!-- Category -->
                     <div class="mb-3">
-                        <label class="block text-sm font-medium text-slate-500 mb-1">{es ? "Categoría" : "Category"}</label>
+                        <label class="block text-sm font-medium text-brand-ink-soft mb-1">{es ? "Categoría" : "Category"}</label>
                         <select id="edit-category"
-                            class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm bg-white">
+                            class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep outline-none text-sm bg-brand-cream">
                             <option value="">-- {es ? "Sin categoría" : "No category"} --</option>
                             {allCategoriesForEdit.map((cat) => (
                                 <option value={cat.id}>{cat.group_name} → {cat.name}</option>
@@ -343,9 +343,9 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
 
                     <!-- Account -->
                     <div class="mb-3">
-                        <label class="block text-sm font-medium text-slate-500 mb-1">{es ? "Cuenta" : "Account"}</label>
+                        <label class="block text-sm font-medium text-brand-ink-soft mb-1">{es ? "Cuenta" : "Account"}</label>
                         <select id="edit-account"
-                            class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm bg-white">
+                            class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep outline-none text-sm bg-brand-cream">
                             <option value="">--</option>
                             {(accounts || []).map((acc) => (
                                 <option value={acc.id}>{acc.name}</option>
@@ -355,15 +355,15 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
 
                     <!-- Notes -->
                     <div class="mb-3">
-                        <label class="block text-sm font-medium text-slate-500 mb-1">{es ? "Nota" : "Note"}</label>
+                        <label class="block text-sm font-medium text-brand-ink-soft mb-1">{es ? "Nota" : "Note"}</label>
                         <input id="edit-notes" type="text"
-                            class="w-full py-2 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-sm" />
+                            class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep outline-none text-sm" />
                     </div>
 
                     <!-- Cleared -->
                     <div class="mb-4 flex items-center gap-3">
-                        <input id="edit-cleared" type="checkbox" class="h-4 w-4 rounded text-primary-600 border-slate-300" />
-                        <label for="edit-cleared" class="text-sm text-slate-600">
+                        <input id="edit-cleared" type="checkbox" class="h-4 w-4 rounded text-brand-sky-deep border-brand-ink/20" />
+                        <label for="edit-cleared" class="text-sm text-brand-ink-soft">
                             {es ? "Conciliado" : "Cleared"}
                         </label>
                     </div>
@@ -371,10 +371,10 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                     <div id="edit-error" class="hidden text-sm text-red-600 mb-3 px-1"></div>
 
                     <div class="flex gap-3">
-                        <button id="edit-cancel-btn" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition">
+                        <button id="edit-cancel-btn" class="flex-1 py-3 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold rounded-xl transition">
                             {es ? "Cancelar" : "Cancel"}
                         </button>
-                        <button id="edit-save-btn" class="flex-1 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow transition">
+                        <button id="edit-save-btn" class="flex-1 py-3 bg-brand-sky-deep hover:bg-brand-sky-deep text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition">
                             {es ? "Guardar" : "Save"}
                         </button>
                     </div>
@@ -384,14 +384,14 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
 
         <!-- Delete confirm dialog -->
         <div id="delete-confirm-overlay" class="fixed inset-0 bg-black/60 z-[60] hidden flex items-center justify-center px-4">
-            <div class="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
-                <h3 class="text-lg font-bold text-slate-800 mb-2">{es ? "¿Eliminar transacción?" : "Delete transaction?"}</h3>
-                <p class="text-sm text-slate-500 mb-6">{es ? "Esta acción no se puede deshacer." : "This action cannot be undone."}</p>
+            <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] p-6 max-w-sm w-full">
+                <h3 class="text-lg font-bold text-brand-ink mb-2">{es ? "¿Eliminar transacción?" : "Delete transaction?"}</h3>
+                <p class="text-sm text-brand-ink-soft mb-6">{es ? "Esta acción no se puede deshacer." : "This action cannot be undone."}</p>
                 <div class="flex gap-3">
-                    <button id="delete-cancel" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition">
+                    <button id="delete-cancel" class="flex-1 py-2.5 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold rounded-xl transition">
                         {es ? "Cancelar" : "Cancel"}
                     </button>
-                    <button id="delete-confirm" class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow transition">
+                    <button id="delete-confirm" class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition">
                         {es ? "Eliminar" : "Delete"}
                     </button>
                 </div>
@@ -494,11 +494,11 @@ document.addEventListener("astro:after-swap", initFilters);
     function setTypeUI(expense) {
         isExpense = expense;
         if (expense) {
-            typeExpenseBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-red-400 bg-red-50 text-red-700";
-            typeIncomeBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-slate-200 bg-white text-slate-500";
+            typeExpenseBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-red-400 bg-red-100 text-red-700";
+            typeIncomeBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-brand-ink/10 bg-brand-cream text-brand-ink-soft";
         } else {
-            typeExpenseBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-slate-200 bg-white text-slate-500";
-            typeIncomeBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-green-400 bg-green-50 text-green-700";
+            typeExpenseBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-brand-ink/10 bg-brand-cream text-brand-ink-soft";
+            typeIncomeBtn.className = "flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition-colors border-brand-mint-deep bg-brand-mint/20 text-brand-mint-deep";
         }
     }
 

@@ -48,20 +48,20 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 ---
 
 <Layout title={`${t(lang, "rewards_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <header
-            class="bg-gradient-to-br from-amber-500 to-orange-500 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md"
+            class="bg-gradient-to-br from-amber-500 to-orange-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
         >
             <h1 class="text-2xl font-bold mb-1">{t(lang, "rewards_title")}</h1>
             <p class="text-amber-100 text-sm mb-5">
                 {t(lang, "rewards_subtitle")}
             </p>
             <div
-                class="bg-white/20 backdrop-blur-md rounded-2xl p-4 flex items-center gap-4 border border-white/30"
+                class="bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 flex items-center gap-4 border border-white/30"
             >
-                <div class="bg-yellow-400 p-3 rounded-xl">
+                <div class="bg-brand-sun p-3 rounded-xl">
                     <svg
-                        class="h-7 w-7 text-yellow-800"
+                        class="h-7 w-7 text-brand-ink"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -88,14 +88,14 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         <main class="flex-1 px-4 py-6">
             {
                 flash && (
-                    <div class="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl">
+                    <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
                         {flash}
                     </div>
                 )
             }
             {
                 flashError && (
-                    <div class="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">
+                    <div class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                         {flashError}
                     </div>
                 )
@@ -103,8 +103,8 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 
             {
                 rewards.length === 0 ? (
-                    <div class="bg-white rounded-2xl p-8 text-center border border-slate-100 shadow-sm mt-4">
-                        <div class="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)] mt-4">
+                        <div class="w-16 h-16 bg-brand-sun/20 rounded-full flex items-center justify-center mx-auto mb-4">
                             <svg
                                 class="w-8 h-8 text-amber-400"
                                 fill="none"
@@ -119,10 +119,10 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                 />
                             </svg>
                         </div>
-                        <h3 class="text-lg font-bold text-slate-700">
+                        <h3 class="text-lg font-bold text-brand-ink">
                             {t(lang, "rewards_empty_title")}
                         </h3>
-                        <p class="text-slate-500 mt-1 text-sm">
+                        <p class="text-brand-ink-soft mt-1 text-sm">
                             {t(lang, "rewards_empty_subtitle")}
                         </p>
                     </div>
@@ -132,32 +132,32 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                             const canAfford = user.points >= reward.points_cost;
                             return (
                                 <div
-                                    class={`bg-white rounded-2xl p-5 shadow-sm border transition-all ${canAfford ? "border-slate-100 hover:shadow-md" : "border-slate-100 opacity-60"}`}
+                                    class={`bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border transition-all ${canAfford ? "border-brand-ink/10 hover:shadow-[var(--shadow-card)]" : "border-brand-ink/10 opacity-60"}`}
                                 >
                                     <div class="flex justify-between items-start mb-3">
                                         <div class="flex-1 pr-3">
-                                            <h3 class="font-bold text-slate-800 text-lg mb-1">
+                                            <h3 class="font-bold text-brand-ink text-lg mb-1">
                                                 {reward.name}
                                             </h3>
                                             {reward.description && (
-                                                <p class="text-slate-500 text-sm line-clamp-2">
+                                                <p class="text-brand-ink-soft text-sm line-clamp-2">
                                                     {reward.description}
                                                 </p>
                                             )}
                                             {reward.category && (
-                                                <span class="inline-block mt-2 px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-600 font-medium">
+                                                <span class="inline-block mt-2 px-2 py-0.5 text-xs rounded-full bg-brand-cream-deep text-brand-ink-soft font-medium">
                                                     {reward.category}
                                                 </span>
                                             )}
                                         </div>
-                                        <div class="flex flex-col items-center bg-amber-50 rounded-xl px-3 py-2 flex-shrink-0">
-                                            <span class="text-amber-600 text-xs font-semibold">
+                                        <div class="flex flex-col items-center bg-brand-sun/20 rounded-xl px-3 py-2 flex-shrink-0">
+                                            <span class="text-brand-sun-deep text-xs font-semibold">
                                                 {t(lang, "rewards_cost")}
                                             </span>
-                                            <span class="text-amber-700 text-xl font-extrabold">
+                                            <span class="text-brand-sun-deep text-xl font-extrabold">
                                                 {reward.points_cost}
                                             </span>
-                                            <span class="text-amber-500 text-xs">
+                                            <span class="text-brand-sun-deep text-xs">
                                                 {t(lang, "rewards_pts")}
                                             </span>
                                         </div>
@@ -171,7 +171,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                         <button
                                             type="submit"
                                             disabled={!canAfford}
-                                            class={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${canAfford ? "bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
+                                            class={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${canAfford ? "bg-brand-sun-deep hover:bg-brand-sun-deep text-white shadow-[var(--shadow-card)] active:scale-95" : "bg-brand-cream-deep text-brand-ink-soft cursor-not-allowed"}`}
                                         >
                                             {canAfford
                                                 ? t(lang, "rewards_redeem")

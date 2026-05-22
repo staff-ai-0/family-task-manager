@@ -60,10 +60,10 @@ const plans = [
         <div class="max-w-7xl mx-auto">
             <!-- Header -->
             <div class="text-center mb-12">
-                <h1 class="text-4xl font-bold text-slate-900 mb-4">
+                <h1 class="text-4xl font-bold text-brand-ink mb-4">
                     Choose Your Plan
                 </h1>
-                <p class="text-lg text-slate-600">
+                <p class="text-lg text-brand-ink-soft">
                     Select the perfect plan for your family
                 </p>
             </div>
@@ -73,29 +73,29 @@ const plans = [
                 {
                     plans.map((plan) => (
                         <div
-                            class={`relative bg-white rounded-2xl shadow-lg p-8 transition-all hover:shadow-xl ${
+                            class={`relative bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] p-8 transition-all hover:shadow-[var(--shadow-pop)] ${
                                 plan.recommended
-                                    ? "ring-2 ring-primary-500 scale-105"
+                                    ? "ring-2 ring-brand-sky-deep scale-105"
                                     : ""
                             }`}
                         >
                             {plan.recommended && (
                                 <div class="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                                    <span class="bg-primary-500 text-white px-4 py-1 rounded-full text-sm font-medium">
+                                    <span class="bg-brand-sky text-white px-4 py-1 rounded-full text-sm font-medium">
                                         Recommended
                                     </span>
                                 </div>
                             )}
 
                             <div class="text-center mb-6">
-                                <h3 class="text-2xl font-bold text-slate-900 mb-2">
+                                <h3 class="text-2xl font-bold text-brand-ink mb-2">
                                     {plan.name}
                                 </h3>
                                 <div class="flex items-baseline justify-center">
-                                    <span class="text-5xl font-extrabold text-primary-600">
+                                    <span class="text-5xl font-extrabold text-brand-sky-deep">
                                         ${plan.price}
                                     </span>
-                                    <span class="text-slate-500 ml-2">/month</span>
+                                    <span class="text-brand-ink-soft ml-2">/month</span>
                                 </div>
                             </div>
 
@@ -103,7 +103,7 @@ const plans = [
                                 {plan.features.map((feature) => (
                                     <li class="flex items-start">
                                         <svg
-                                            class="h-6 w-6 text-green-500 mr-2 flex-shrink-0"
+                                            class="h-6 w-6 text-brand-mint-deep mr-2 flex-shrink-0"
                                             fill="none"
                                             stroke="currentColor"
                                             viewBox="0 0 24 24"
@@ -115,7 +115,7 @@ const plans = [
                                                 d="M5 13l4 4L19 7"
                                             />
                                         </svg>
-                                        <span class="text-slate-700">{feature}</span>
+                                        <span class="text-brand-ink">{feature}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -125,7 +125,7 @@ const plans = [
                                 data-amount={plan.price}
                                 data-currency={plan.currency}
                                 data-description={`${plan.name} Subscription`}
-                                class="paypal-button w-full py-3 px-6 rounded-lg font-medium transition-colors bg-primary-600 hover:bg-primary-700 text-white shadow-sm"
+                                class="paypal-button w-full py-3 px-6 rounded-lg font-medium transition-colors bg-brand-sky-deep hover:bg-brand-sky-deep text-white shadow-[var(--shadow-card)]"
                             >
                                 Subscribe with PayPal
                             </button>
@@ -135,9 +135,9 @@ const plans = [
             </div>
 
             <!-- Payment Security Info -->
-            <div class="bg-white rounded-xl shadow-md p-6">
+            <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] p-6">
                 <div class="flex items-center justify-center space-x-8">
-                    <div class="flex items-center text-slate-600">
+                    <div class="flex items-center text-brand-ink-soft">
                         <svg
                             class="h-6 w-6 mr-2"
                             fill="none"
@@ -153,7 +153,7 @@ const plans = [
                         </svg>
                         <span>Secure Payment</span>
                     </div>
-                    <div class="flex items-center text-slate-600">
+                    <div class="flex items-center text-brand-ink-soft">
                         <svg
                             class="h-6 w-6 mr-2"
                             fill="none"
@@ -169,7 +169,7 @@ const plans = [
                         </svg>
                         <span>Money-Back Guarantee</span>
                     </div>
-                    <div class="flex items-center text-slate-600">
+                    <div class="flex items-center text-brand-ink-soft">
                         <svg
                             class="h-6 w-6 mr-2"
                             fill="none"
