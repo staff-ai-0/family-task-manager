@@ -94,11 +94,11 @@ const t = l[lang as keyof typeof l] || l.en;
 ---
 
 <Layout title={`${t.title} - Budget`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 flex flex-col min-h-screen">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen">
         <!-- Header -->
-        <header class="bg-gradient-to-br from-violet-600 to-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+        <header class="bg-gradient-to-br from-brand-coral to-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex items-center justify-between mb-6">
-                <a href="/budget/transactions" class="text-white hover:text-primary-100 transition">
+                <a href="/budget/transactions" class="text-white hover:text-brand-cream transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
@@ -107,9 +107,9 @@ const t = l[lang as keyof typeof l] || l.en;
                 <div class="w-6"></div>
             </div>
 
-            <div class="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
+            <div class="bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
                 <div class="flex items-center gap-3">
-                    <div class="bg-white/30 rounded-full p-2">
+                    <div class="bg-brand-cream/30 rounded-full p-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -128,36 +128,36 @@ const t = l[lang as keyof typeof l] || l.en;
             <!-- Scan Form -->
             <div id="scan-form" class="space-y-5">
                 <!-- Account Selection -->
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-                    <label for="account-id" class="block text-sm font-semibold text-slate-700 mb-2">
+                <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5">
+                    <label for="account-id" class="block text-sm font-semibold text-brand-ink mb-2">
                         {t.account}
                     </label>
                     <select
                         id="account-id"
                         required
-                        class="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 bg-slate-50"
+                        class="w-full px-4 py-3 border-2 border-brand-ink/10 rounded-xl focus:ring-2 focus:ring-brand-coral focus:border-brand-coral bg-brand-cream-deep"
                     >
                         <option value="">{t.accountPlaceholder}</option>
                         {accountsOk && accounts && accounts.map((account: BudgetAccount) => (
                             <option value={account.id}>{account.name} ({account.type})</option>
                         ))}
                     </select>
-                    <p class="text-xs text-slate-500 mt-1.5">{t.accountHelp}</p>
+                    <p class="text-xs text-brand-ink-soft mt-1.5">{t.accountHelp}</p>
                 </div>
 
                 <!-- Image Capture/Upload -->
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5">
                     <!-- Preview Area -->
                     <div
                         id="drop-zone"
-                        class="relative border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-violet-400 transition cursor-pointer"
+                        class="relative border-2 border-dashed border-brand-ink/20 rounded-xl p-8 text-center hover:border-brand-coral transition cursor-pointer"
                     >
                         <div id="placeholder-content">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-slate-400 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-brand-ink-soft mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
-                            <p class="text-sm font-medium text-slate-600">{t.dragDrop}</p>
-                            <p class="text-xs text-slate-400 mt-1">{t.maxSize}</p>
+                            <p class="text-sm font-medium text-brand-ink-soft">{t.dragDrop}</p>
+                            <p class="text-xs text-brand-ink-soft mt-1">{t.maxSize}</p>
                         </div>
                         <img id="preview-image" class="hidden max-h-64 mx-auto rounded-lg" alt="Receipt preview" />
                         <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" class="hidden" />
@@ -168,7 +168,7 @@ const t = l[lang as keyof typeof l] || l.en;
                         <button
                             id="camera-btn"
                             type="button"
-                            class="flex-1 flex items-center justify-center gap-2 bg-violet-600 text-white px-4 py-3 rounded-xl font-semibold hover:bg-violet-700 transition"
+                            class="flex-1 flex items-center justify-center gap-2 bg-brand-coral-deep text-white px-4 py-3 rounded-xl font-semibold hover:bg-brand-coral-deep transition"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -179,7 +179,7 @@ const t = l[lang as keyof typeof l] || l.en;
                         <button
                             id="upload-btn"
                             type="button"
-                            class="flex-1 flex items-center justify-center gap-2 bg-slate-100 text-slate-700 px-4 py-3 rounded-xl font-semibold hover:bg-slate-200 transition border border-slate-200"
+                            class="flex-1 flex items-center justify-center gap-2 bg-brand-cream-deep text-brand-ink px-4 py-3 rounded-xl font-semibold hover:bg-brand-cream-deep transition border border-brand-ink/10"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -196,7 +196,7 @@ const t = l[lang as keyof typeof l] || l.en;
                     id="scan-btn"
                     type="button"
                     disabled
-                    class="w-full bg-gradient-to-r from-violet-600 to-primary-600 text-white px-6 py-4 rounded-xl font-bold text-lg hover:from-violet-700 hover:to-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                    class="w-full bg-gradient-to-r from-brand-coral to-brand-sky-deep text-white px-6 py-4 rounded-xl font-bold text-lg hover:from-brand-coral hover:to-brand-sky-deep transition disabled:opacity-50 disabled:cursor-not-allowed shadow-[var(--shadow-pop)]"
                 >
                     {t.scanBtn}
                 </button>
@@ -204,36 +204,36 @@ const t = l[lang as keyof typeof l] || l.en;
 
             <!-- Loading State -->
             <div id="loading-state" class="hidden">
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center">
+                <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-8 text-center">
                     <div class="animate-pulse">
-                        <div class="bg-violet-100 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-violet-600 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <div class="bg-brand-coral/15 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-brand-coral-deep animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
                         </div>
-                        <p class="text-lg font-semibold text-slate-700">{t.scanning}</p>
-                        <p class="text-sm text-slate-500 mt-2">AI is reading your receipt...</p>
+                        <p class="text-lg font-semibold text-brand-ink">{t.scanning}</p>
+                        <p class="text-sm text-brand-ink-soft mt-2">AI is reading your receipt...</p>
                     </div>
                 </div>
             </div>
 
             <!-- Results -->
             <div id="results-state" class="hidden space-y-4">
-                <div id="result-card" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+                <div id="result-card" class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5">
                     <!-- Filled by JS -->
                 </div>
 
                 <div class="flex gap-3">
                     <a
                         href="/budget/transactions"
-                        class="flex-1 text-center bg-violet-600 text-white px-4 py-3 rounded-xl font-semibold hover:bg-violet-700 transition"
+                        class="flex-1 text-center bg-brand-coral-deep text-white px-4 py-3 rounded-xl font-semibold hover:bg-brand-coral-deep transition"
                     >
                         {t.viewTransaction}
                     </a>
                     <button
                         id="try-again-btn"
                         type="button"
-                        class="flex-1 bg-slate-100 text-slate-700 px-4 py-3 rounded-xl font-semibold hover:bg-slate-200 transition border border-slate-200"
+                        class="flex-1 bg-brand-cream-deep text-brand-ink px-4 py-3 rounded-xl font-semibold hover:bg-brand-cream-deep transition border border-brand-ink/10"
                     >
                         {t.tryAgain}
                     </button>
@@ -283,16 +283,16 @@ const t = l[lang as keyof typeof l] || l.en;
         // Drag and drop
         dropZone?.addEventListener('dragover', (e) => {
             e.preventDefault();
-            dropZone.classList.add('border-violet-400', 'bg-violet-50');
+            dropZone.classList.add('border-brand-coral', 'bg-brand-coral/15');
         });
 
         dropZone?.addEventListener('dragleave', () => {
-            dropZone.classList.remove('border-violet-400', 'bg-violet-50');
+            dropZone.classList.remove('border-brand-coral', 'bg-brand-coral/15');
         });
 
         dropZone?.addEventListener('drop', (e) => {
             e.preventDefault();
-            dropZone.classList.remove('border-violet-400', 'bg-violet-50');
+            dropZone.classList.remove('border-brand-coral', 'bg-brand-coral/15');
             const files = e.dataTransfer?.files;
             if (files?.[0]) handleFileSelect(files[0]);
         });
@@ -392,9 +392,9 @@ const t = l[lang as keyof typeof l] || l.en;
             const isSuccess = data.success;
             const confidence = Math.round((data.confidence || 0) * 100);
 
-            const confidenceColor = confidence >= 80 ? 'text-green-600 bg-green-50' :
-                                   confidence >= 50 ? 'text-yellow-600 bg-yellow-50' :
-                                   'text-red-600 bg-red-50';
+            const confidenceColor = confidence >= 80 ? 'text-brand-mint-deep bg-brand-mint/20' :
+                                   confidence >= 50 ? 'text-yellow-600 bg-brand-sun/20' :
+                                   'text-red-600 bg-red-100';
 
             const amount = scanned.total_amount != null
                 ? (scanned.total_amount / 100).toFixed(2)
@@ -403,13 +403,13 @@ const t = l[lang as keyof typeof l] || l.en;
             let itemsHtml = '';
             if (scanned.items?.length > 0) {
                 itemsHtml = `
-                    <div class="mt-3 pt-3 border-t border-slate-100">
-                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">${t.items}</p>
+                    <div class="mt-3 pt-3 border-t border-brand-ink/10">
+                        <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider mb-2">${t.items}</p>
                         <div class="space-y-1">
                             ${scanned.items.map(item => `
                                 <div class="flex justify-between text-sm">
-                                    <span class="text-slate-600">${item.name}</span>
-                                    <span class="text-slate-800 font-medium">$${(item.amount_cents / 100).toFixed(2)}</span>
+                                    <span class="text-brand-ink-soft">${item.name}</span>
+                                    <span class="text-brand-ink font-medium">$${(item.amount_cents / 100).toFixed(2)}</span>
                                 </div>
                             `).join('')}
                         </div>
@@ -420,43 +420,43 @@ const t = l[lang as keyof typeof l] || l.en;
             resultCard.innerHTML = `
                 <div class="flex items-center gap-3 mb-4">
                     ${isSuccess
-                        ? `<div class="bg-green-100 rounded-full p-2">
-                               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        ? `<div class="bg-brand-mint/20 rounded-full p-2">
+                               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-brand-mint-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                                </svg>
                            </div>
                            <div>
-                               <p class="font-bold text-green-700">${t.success}</p>
-                               <p class="text-xs text-slate-500">${data.message || ''}</p>
+                               <p class="font-bold text-brand-mint-deep">${t.success}</p>
+                               <p class="text-xs text-brand-ink-soft">${data.message || ''}</p>
                            </div>`
-                        : `<div class="bg-yellow-100 rounded-full p-2">
+                        : `<div class="bg-brand-sun/20 rounded-full p-2">
                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
                                </svg>
                            </div>
                            <div>
-                               <p class="font-bold text-yellow-700">${t.lowConfidence}</p>
-                               <p class="text-xs text-slate-500">${data.message || ''}</p>
+                               <p class="font-bold text-brand-ink">${t.lowConfidence}</p>
+                               <p class="text-xs text-brand-ink-soft">${data.message || ''}</p>
                            </div>`
                     }
                 </div>
 
                 <div class="space-y-3">
                     <div class="flex justify-between items-center">
-                        <span class="text-sm text-slate-500">${t.confidence}</span>
+                        <span class="text-sm text-brand-ink-soft">${t.confidence}</span>
                         <span class="text-sm font-bold px-2.5 py-0.5 rounded-full ${confidenceColor}">${confidence}%</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-sm text-slate-500">${t.date}</span>
-                        <span class="text-sm font-medium text-slate-800">${scanned.date || '—'}</span>
+                        <span class="text-sm text-brand-ink-soft">${t.date}</span>
+                        <span class="text-sm font-medium text-brand-ink">${scanned.date || '—'}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-sm text-slate-500">${t.amount}</span>
+                        <span class="text-sm text-brand-ink-soft">${t.amount}</span>
                         <span class="text-lg font-bold text-red-600">$${amount} ${scanned.currency || ''}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-sm text-slate-500">${t.payee}</span>
-                        <span class="text-sm font-medium text-slate-800">${scanned.payee_name || '—'}</span>
+                        <span class="text-sm text-brand-ink-soft">${t.payee}</span>
+                        <span class="text-sm font-medium text-brand-ink">${scanned.payee_name || '—'}</span>
                     </div>
                 </div>
 

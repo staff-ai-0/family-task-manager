@@ -161,7 +161,6 @@ export const translations = {
 
         // Legacy compat keys
         pt_due_date: "Due Date",
-        pt_assign_to: "Assign to",
         pt_unassigned: "— Unassigned —",
         pt_all_tasks: "All Tasks",
 
@@ -588,7 +587,6 @@ export const translations = {
 
         // Legacy compat keys
         pt_due_date: "Fecha Limite",
-        pt_assign_to: "Asignar a",
         pt_unassigned: "-- Sin asignar --",
         pt_all_tasks: "Todas las Tareas",
 

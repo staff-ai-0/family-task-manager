@@ -19,15 +19,15 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 ---
 
 <Layout title={`${t(lang, "parent_dashboard")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-slate-50 flex flex-col ">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
         <header
-            class="bg-gradient-to-br from-slate-800 to-slate-700 text-white pt-12 pb-8 px-6 rounded-b-3xl shadow-md"
+            class="bg-gradient-to-br from-slate-800 to-slate-700 text-white pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
         >
-            <p class="text-slate-400 text-sm mb-1">
+            <p class="text-brand-ink-soft text-sm mb-1">
                 {t(lang, "parent_dashboard")}
             </p>
             <h1 class="text-2xl font-bold">{family?.name || "—"}</h1>
-            <p class="text-slate-400 text-sm mt-1">
+            <p class="text-brand-ink-soft text-sm mt-1">
                 {t(lang, "parent_members_count")(family?.members?.length ?? 0)}
             </p>
         </header>
@@ -36,13 +36,13 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 <a
                     href="/parent/tasks"
-                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-primary-200 transition-all flex flex-col items-center text-center gap-3"
+                    class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-sky transition-all flex flex-col items-center text-center gap-3"
                 >
                     <div
-                        class="w-12 h-12 rounded-xl bg-primary-50 flex items-center justify-center"
+                        class="w-12 h-12 rounded-xl bg-brand-cream-deep flex items-center justify-center"
                     >
                         <svg
-                            class="h-6 w-6 text-primary-600"
+                            class="h-6 w-6 text-brand-sky-deep"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -56,23 +56,23 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800">
+                        <p class="font-bold text-brand-ink">
                             {t(lang, "parent_tasks_label")}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {t(lang, "parent_tasks_desc")}
                         </p>
                     </div>
                 </a>
                 <a
                     href="/parent/rewards"
-                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-amber-200 transition-all flex flex-col items-center text-center gap-3"
+                    class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-sun transition-all flex flex-col items-center text-center gap-3"
                 >
                     <div
-                        class="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center"
+                        class="w-12 h-12 rounded-xl bg-brand-sun/20 flex items-center justify-center"
                     >
                         <svg
-                            class="h-6 w-6 text-amber-600"
+                            class="h-6 w-6 text-brand-sun-deep"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -86,23 +86,23 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800">
+                        <p class="font-bold text-brand-ink">
                             {t(lang, "parent_rewards_label")}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {t(lang, "parent_rewards_desc")}
                         </p>
                     </div>
                 </a>
                 <a
                     href="/parent/members"
-                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-violet-200 transition-all flex flex-col items-center text-center gap-3"
+                    class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-coral transition-all flex flex-col items-center text-center gap-3"
                 >
                     <div
-                        class="w-12 h-12 rounded-xl bg-violet-50 flex items-center justify-center"
+                        class="w-12 h-12 rounded-xl bg-brand-coral/15 flex items-center justify-center"
                     >
                         <svg
-                            class="h-6 w-6 text-violet-600"
+                            class="h-6 w-6 text-brand-coral-deep"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -116,17 +116,17 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800">
+                        <p class="font-bold text-brand-ink">
                             {t(lang, "parent_members_label")}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {t(lang, "parent_members_desc")}
                         </p>
                     </div>
                 </a>
                 <a
                     href="/parent/consequences"
-                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-rose-200 transition-all flex flex-col items-center text-center gap-3"
+                    class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-rose-200 transition-all flex flex-col items-center text-center gap-3"
                 >
                     <div
                         class="w-12 h-12 rounded-xl bg-rose-50 flex items-center justify-center"
@@ -146,17 +146,17 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800">
+                        <p class="font-bold text-brand-ink">
                             {t(lang, "parent_consequences_label")}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {t(lang, "parent_consequences_desc")}
                         </p>
                     </div>
                 </a>
                 <a
                     href="/parent/assignments"
-                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-sky-200 transition-all flex flex-col items-center text-center gap-3"
+                    class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-sky-200 transition-all flex flex-col items-center text-center gap-3"
                 >
                     <div
                         class="w-12 h-12 rounded-xl bg-sky-50 flex items-center justify-center"
@@ -176,23 +176,23 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800">
+                        <p class="font-bold text-brand-ink">
                             {t(lang, "parent_assignments_label")}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {t(lang, "parent_assignments_desc")}
                         </p>
                     </div>
                 </a>
                 <a
                     href="/parent/settings"
-                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-amber-200 transition-all flex flex-col items-center text-center gap-3"
+                    class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-sun transition-all flex flex-col items-center text-center gap-3"
                 >
                     <div
-                        class="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center"
+                        class="w-12 h-12 rounded-xl bg-brand-sun/20 flex items-center justify-center"
                     >
                         <svg
-                            class="h-6 w-6 text-amber-600"
+                            class="h-6 w-6 text-brand-sun-deep"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -212,23 +212,23 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800">
+                        <p class="font-bold text-brand-ink">
                             {lang === "es" ? "Configuraci\u00f3n" : "Settings"}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {lang === "es" ? "Plan y suscripci\u00f3n" : "Plan & subscription"}
                         </p>
                     </div>
                 </a>
                 <a
                     href="/budget"
-                    class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-emerald-200 transition-all flex flex-col items-center text-center gap-3"
+                    class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-emerald-200 transition-all flex flex-col items-center text-center gap-3"
                 >
                     <div
-                        class="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center"
+                        class="w-12 h-12 rounded-xl bg-brand-mint-deep flex items-center justify-center"
                     >
                         <svg
-                            class="h-6 w-6 text-emerald-600"
+                            class="h-6 w-6 text-brand-mint-deep"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -242,10 +242,10 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-slate-800">
+                        <p class="font-bold text-brand-ink">
                             {t(lang, "parent_finances_label")}
                         </p>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-brand-ink-soft">
                             {t(lang, "parent_finances_desc")}
                         </p>
                     </div>
@@ -254,25 +254,25 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
             {
                 family?.members && family.members.length > 0 && (
-                    <section class="mt-6 bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                        <h2 class="font-bold text-slate-800 mb-3">
+                    <section class="mt-6 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                        <h2 class="font-bold text-brand-ink mb-3">
                             {t(lang, "parent_family_members")}
                         </h2>
                         <div class="space-y-3">
                             {family.members.map((m: any) => (
                                 <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-sm">
+                                    <div class="w-9 h-9 rounded-full bg-brand-cream-deep flex items-center justify-center text-brand-sky-deep font-bold text-sm">
                                         {m.name.charAt(0).toUpperCase()}
                                     </div>
                                     <div class="flex-1">
-                                        <p class="font-medium text-slate-800 text-sm">
+                                        <p class="font-medium text-brand-ink text-sm">
                                             {m.name}
                                         </p>
-                                        <p class="text-xs text-slate-400">
+                                        <p class="text-xs text-brand-ink-soft">
                                             {m.role}
                                         </p>
                                     </div>
-                                    <span class="text-sm font-bold text-amber-600">
+                                    <span class="text-sm font-bold text-brand-sun-deep">
                                         {m.points ?? 0} pts
                                     </span>
                                 </div>

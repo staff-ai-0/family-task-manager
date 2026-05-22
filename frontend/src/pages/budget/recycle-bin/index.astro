@@ -28,18 +28,18 @@ const pendingDraftsCount = draftsCount?.count ?? 0;
 ---
 
 <Layout title={`${es ? "Papelera" : "Recycle Bin"} - Budget`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-slate-50 min-h-screen flex flex-col">
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep min-h-screen flex flex-col">
 
-        <header class="bg-primary-600 text-white pt-12 pb-6 px-6 rounded-b-3xl shadow-md">
+        <header class="bg-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex items-center gap-4">
-                <a href="/budget/settings" class="text-white hover:text-primary-100 transition">
+                <a href="/budget/settings" class="text-white hover:text-brand-cream transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </a>
                 <div>
                     <h1 class="text-2xl font-bold">{es ? "Papelera de reciclaje" : "Recycle Bin"}</h1>
-                    <p class="text-primary-100 text-sm mt-0.5">
+                    <p class="text-brand-cream text-sm mt-0.5">
                         {es ? "Los elementos se eliminan permanentemente después de 30 días" : "Items are permanently deleted after 30 days"}
                     </p>
                 </div>

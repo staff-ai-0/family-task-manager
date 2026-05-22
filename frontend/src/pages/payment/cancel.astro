@@ -6,9 +6,9 @@ const lang = Astro.cookies.get("lang")?.value ?? "en";
 
 <Layout title="Payment Cancelled - Family Task Manager">
     <main class=" bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center px-4">
-        <div class="max-w-2xl w-full bg-white rounded-2xl shadow-xl p-8">
+        <div class="max-w-2xl w-full bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] p-8">
             <div class="text-center">
-                <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-yellow-100 mb-6">
+                <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-brand-sun/20 mb-6">
                     <svg
                         class="h-10 w-10 text-yellow-600"
                         fill="none"
@@ -24,31 +24,31 @@ const lang = Astro.cookies.get("lang")?.value ?? "en";
                     </svg>
                 </div>
                 
-                <h1 class="text-3xl font-bold text-slate-900 mb-4">
+                <h1 class="text-3xl font-bold text-brand-ink mb-4">
                     Payment Cancelled
                 </h1>
                 
-                <p class="text-lg text-slate-600 mb-8">
+                <p class="text-lg text-brand-ink-soft mb-8">
                     You cancelled the payment process. No charges were made to your account.
                 </p>
 
-                <div class="bg-slate-50 rounded-lg p-6 mb-8">
-                    <p class="text-slate-700">
+                <div class="bg-brand-cream-deep rounded-lg p-6 mb-8">
+                    <p class="text-brand-ink">
                         If you encountered any issues or have questions about our pricing,
-                        please don't hesitate to <a href="/contact" class="text-primary-600 hover:text-primary-700 font-medium">contact us</a>.
+                        please don't hesitate to <a href="/contact" class="text-brand-sky-deep hover:text-brand-sky-deep font-medium">contact us</a>.
                     </p>
                 </div>
 
                 <div class="flex flex-col sm:flex-row gap-4 justify-center">
                     <a
                         href="/payment"
-                        class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium transition-colors shadow-sm"
+                        class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-brand-sky-deep hover:bg-brand-sky-deep text-white font-medium transition-colors shadow-[var(--shadow-card)]"
                     >
                         Try Again
                     </a>
                     <a
                         href="/dashboard"
-                        class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium transition-colors"
+                        class="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-medium transition-colors"
                     >
                         Back to Dashboard
                     </a>

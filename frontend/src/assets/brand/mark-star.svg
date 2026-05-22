@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Family Task Manager — Star+Roof variant">
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="#4FB8E6" stroke="#1F2937" stroke-width="8"></rect>
+  <path d="M40,140 L128,60 L216,140 L216,216 C216,222 211,228 204,228 L52,228 C45,228 40,222 40,216 Z" fill="#FF8A65" stroke="#1F2937" stroke-width="8" stroke-linejoin="round"></path>
+  <path d="M108,228 L108,184 Q108,170 122,170 L134,170 Q148,170 148,184 L148,228 Z" fill="#1F2937"></path>
+  <path d="M128,90 L142,124 L178,128 L150,152 L158,188 L128,170 L98,188 L106,152 L78,128 L114,124 Z" fill="#FFC857" stroke="#1F2937" stroke-width="8" stroke-linejoin="round"></path>
+</svg>
