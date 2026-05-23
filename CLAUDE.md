@@ -4,82 +4,135 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Family Task Manager** — gamified family chore/task app with points, rewards, and consequences. Multi-tenant by design (each family is fully isolated). Live at https://family.agent-ia.mx.
+**Family Task Manager** — gamified family chore/task app with points, rewards, and consequences. Multi-tenant by design (each family is fully isolated). Live at https://gcp-family.agent-ia.mx.
 
 **Stack**: Python 3.12 + FastAPI (backend) · Astro 5 + Tailwind CSS v4 (frontend) · PostgreSQL 15 + Redis 7 · Docker Compose · Anthropic Claude API (receipt scanner)
 
 **Environments**:
 - Local (dev): frontend `http://localhost:3003`, backend `http://localhost:8003/docs` — secrets in `.env`
-- Production (10.1.0.99 on-prem, **rootless Podman under user `jc`**): `https://family.agent-ia.mx` (Cloudflare tunnel) — app at `/mnt/nvme/docker-prod/family-task-manager/`, secrets in `.env` on host (Vault env vars currently empty; bootstrap falls back to `.env`)
+- **Production (GCP)**: `https://gcp-family.agent-ia.mx` + `https://api-gcp-family.agent-ia.mx` (Cloudflare Tunnel `gcp-family`). VM `agentia-family-hub` (preemptible e2-standard-2) in project `agentia-prod-497016`, zone `us-central1-a`. App at `/home/jc/family-task-manager/`, compose file `docker-compose.gcp.yml`, secrets in `.env` on host. Deploy via `./scripts/deploy-gcp.sh`.
+- **On-prem (10.1.0.99) — DECOMMISSIONED 2026-05-23**: was `https://family.agent-ia.mx` under rootless podman. systemd unit disabled, containers stopped. DB dump retained at `/mnt/nvme/docker-prod/family-task-manager/backups/pre-gig-photo-*.sql`. Repo + volumes preserved in case of rollback. Do NOT redeploy without a full reassessment — preemptible-VM crash recovery already pulled the canonical DB to GCP.
 
-**Production deployment**: `docker-compose.yml` is prod-ready (`docker-compose.stage.yml` for staging). Preferred restart path is the user-level systemd unit (`systemctl --user restart family-task-manager`), NOT `deploy-prod.sh` — that script invokes `sudo docker compose` which corrupts rootless storage on this host (see "Production runtime" section below).
+**Production deployment**: `./scripts/deploy-gcp.sh` is the canonical path — rsyncs source, builds images, brings the stack up, runs alembic migrations, smoke-checks the public endpoints. Local `docker-compose.yml` is for dev only.
 
-> Note: There is NO `docker-compose.onprem.yml` or `docker-compose.production.yml`. There is NO `start-onprem.sh`. There is NO `.github/workflows/`. Older docs that referenced these are removed.
+> Note: There is NO `docker-compose.onprem.yml` or `docker-compose.production.yml`. There is NO `start-onprem.sh`. There is NO `.github/workflows/`. The legacy `deploy-prod.sh` is kept for archival only — do not run it.
 
 ---
 
-## Production runtime (10.1.0.99)
+## Production runtime — GCP VM `agentia-family-hub`
 
-**Rootless Podman under user `jc`** — every stack runs as `jc`, not root.
-- Storage: `/mnt/nvme/podman-storage` (overridden in `~jc/.config/containers/storage.conf`; same path also set in `/etc/containers/storage.conf` and `/root/.config/containers/storage.conf`)
-- Runtime dir: `/run/user/1000/containers`
-- Autostart: user-level systemd units in `~jc/.config/systemd/user/`, linger enabled (`loginctl enable-linger jc`)
+Standard Docker CE under user `jc`. Preemptible e2-standard-2 in `agentia-prod-497016` / `us-central1-a`. All AI traffic routes through the on-prem LiteLLM proxy at `https://litellm.agent-ia.mx`. No Vault — secrets live in `.env` on the VM at `/home/jc/family-task-manager/.env` (template at `.env.gcp.example`).
 
-Active user units: `family-task-manager.service`, `homeassistant.service`, `cloudflared.service`.
-
-### Critical: never `sudo podman` against this host
-
-Both system and root storage configs point at jc's storage + runtime dir. Running `sudo podman` writes those files as root → jc can no longer read its own state → `podman ps` fails with `permission denied`. Recovery:
+**Preemptible-VM risk**: GCP can reclaim this instance at any time. If it disappears (deploy script reports `VM ... is not RUNNING` and `gcloud compute instances list` shows it missing), recreate via:
 
 ```bash
-sudo chown -hR jc:jc /mnt/nvme/podman-storage
-sudo find /run/user/1000 -not -user jc -delete
+gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
+    compute instances create agentia-family-hub \
+    --zone=us-central1-a --machine-type=e2-standard-2 \
+    --image-family=debian-12 --image-project=debian-cloud \
+    --preemptible --tags=http-server,https-server --boot-disk-size=30GB
 ```
 
-`deploy-prod.sh` invokes `sudo docker compose` (via the podman-docker shim). On this host that is **wrong** — bypass it. Run `podman-compose` directly as `jc`:
+Then `./scripts/gcp-bootstrap.sh` → scp .env → `./scripts/deploy-gcp.sh` → restore DB from the most recent dump.
+
+**Cloudflare Tunnel `gcp-family`** routes the public hostnames. Configured in the Zero Trust dashboard (NOT in `cloudflared` config.yaml):
+- `gcp-family.agent-ia.mx` → `http://frontend:3000`
+- `api-gcp-family.agent-ia.mx` → `http://backend:8000`
+
+The on-prem `family.agent-ia.mx` apex is **retired**. Canonical URL is `gcp-family.agent-ia.mx`.
+
+### Bootstrap (one-time per VM)
 
 ```bash
-ssh jc@10.1.0.99 'cd /mnt/nvme/docker-prod/family-task-manager && podman-compose up -d'
-# preferred — managed by systemd:
-ssh jc@10.1.0.99 'systemctl --user restart family-task-manager'
+./scripts/gcp-bootstrap.sh         # installs docker + compose-plugin, creates app dir
+gcloud compute scp .env.gcp.example jc@agentia-family-hub:/home/jc/family-task-manager/.env --zone=us-central1-a
+# Fill in secrets in the VM's .env (or scp a complete one from local), then:
+./scripts/deploy-gcp.sh
 ```
 
-### Cloudflared is host-wide, not bundled with HA
-
-Tunnel runs standalone at `/mnt/nvme/docker-prod/cloudflared/` with `network_mode: host` and its own `cloudflared.service` user unit. Tunnel ingress is managed remotely via the Cloudflare zero-trust dashboard (`TUNNEL_TOKEN` env activates remote config); the local `config.yaml` is not authoritative.
-
-### Stale netavark rules can break rootless port reachability
-
-Symptom: a rootless service port (e.g. `:3003`) responds on IPv6 (`localhost`, `::1`) but returns "Connection refused" on IPv4 (`127.0.0.1`, `10.1.0.99`). Cause: stale `nv_*_dnat` chain left in the `inet netavark` nftables table from a prior `sudo podman` invocation. Fix:
+### Common ops
 
 ```bash
-sudo nft delete table inet netavark
-sudo podman network reload --all
+# Status
+gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
+  compute ssh agentia-family-hub --zone=us-central1-a \
+  --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml ps'
+
+# Logs (backend)
+gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
+  compute ssh agentia-family-hub --zone=us-central1-a \
+  --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml logs -f backend'
+
+# Quick redeploy (skip backup + cached images)
+./scripts/deploy-gcp.sh --skip-backup --skip-build -y
+
+# Run migrations only
+gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
+  compute ssh agentia-family-hub --zone=us-central1-a \
+  --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T backend alembic upgrade head'
+
+# DB shell
+gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
+  compute ssh agentia-family-hub --zone=us-central1-a \
+  --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T postgres psql -U familyapp familyapp'
 ```
+
+### Gig proof uploads volume
+
+Backend persists gig proof images under `/app/uploads/gig-proofs/<uuid>.<ext>`. The volume is bind-mounted from the host (`receipt_uploads`). Backend mounts `/uploads/*` as FastAPI `StaticFiles`. The frontend serves them publicly through the Astro proxy at `/uploads/gig-proofs/[file].ts`, which forces cookie-bearer auth before piping bytes from backend.
+
+If a fresh deploy hits `PermissionError: [Errno 13] Permission denied: '/app/uploads/gig-proofs'`, the volume's UID/GID does not match the in-container `appuser` (UID 1000). Fix:
+
+```bash
+# Identify volume mountpoint then chown:
+sudo chown -R 1000:1000 $(docker volume inspect family-task-manager_receipt_uploads --format '{{.Mountpoint}}')
+sudo docker compose --env-file .env -f docker-compose.gcp.yml restart backend
+```
+
+### DB backup + restore
+
+Backups under `/home/jc/family-task-manager/backups/` (created by `./scripts/deploy-gcp.sh` unless `--skip-backup`). To dump on demand:
+
+```bash
+gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
+  compute ssh agentia-family-hub --zone=us-central1-a \
+  --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T postgres pg_dump -U familyapp familyapp' > /tmp/family-backup.sql
+```
+
+Restore (after stopping or with empty target DB):
+
+```bash
+gcloud compute scp /tmp/family-backup.sql jc@agentia-family-hub:/tmp/restore.sql --zone=us-central1-a
+gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
+  compute ssh agentia-family-hub --zone=us-central1-a \
+  --command='cd /home/jc/family-task-manager && sudo docker cp /tmp/restore.sql gcp_family_db:/tmp/restore.sql && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T postgres bash -c "psql -U \$POSTGRES_USER \$POSTGRES_DB < /tmp/restore.sql"'
+```
+
+### Decommissioned on-prem (10.1.0.99) — DO NOT RESURRECT WITHOUT REVIEW
+
+The on-prem stack is stopped (`systemctl --user disable --now family-task-manager.service`, ran 2026-05-23). Containers and volumes still live at `/mnt/nvme/docker-prod/family-task-manager/` in case a quick rollback is ever needed, but the canonical DB has moved to GCP. The host's other services (`homeassistant.service`, `cloudflared.service`, host-wide LiteLLM proxy at `litellm.agent-ia.mx`) continue to run as before — only the family stack is down.
 
 ---
 
 ## Common Commands
 
-### Production / on-prem (rootless podman, as `jc`)
+### Production / GCP (Docker CE, as `jc` via gcloud)
 
 ```bash
-# Status / logs
-ssh jc@10.1.0.99 'podman ps'
-ssh jc@10.1.0.99 'podman logs -f family_app_backend'
-ssh jc@10.1.0.99 'sudo journalctl CONTAINER_NAME=family_app_backend --since "10 min ago"'
+# Full deploy (rsync + build + up + migrate)
+./scripts/deploy-gcp.sh -y
 
-# Restart whole family stack (preferred — systemd-managed)
-ssh jc@10.1.0.99 'systemctl --user restart family-task-manager'
+# Quick redeploy
+./scripts/deploy-gcp.sh --skip-backup --skip-build -y
 
-# Rebuild image after pulling new code
-ssh jc@10.1.0.99 'cd /mnt/nvme/docker-prod/family-task-manager && sudo git pull && podman-compose build backend && systemctl --user restart family-task-manager'
+# Status / logs (helpers — see Common Ops above for full incantations)
+gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
+  compute ssh agentia-family-hub --zone=us-central1-a --command='sudo docker ps'
 
-# Tests
-ssh jc@10.1.0.99 'podman exec -e PYTHONPATH=/app family_app_backend pytest tests/ -v'
-
-# Migrations
-ssh jc@10.1.0.99 'podman exec family_app_backend alembic upgrade head'
+# Run backend tests inside the running container
+gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
+  compute ssh agentia-family-hub --zone=us-central1-a \
+  --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T backend pytest tests/ -v'
 ```
 
 ### Local docker-compose dev
@@ -270,9 +323,12 @@ Key frontend pages:
 | `backend/app/services/budget/export_service.py` | Budget export/import as ZIP |
 | `backend/tests/conftest.py` | Test fixtures, test DB setup |
 | `frontend/src/middleware.ts` | Auth/session middleware for Astro SSR |
-| `docker-compose.yml` | Local dev + on-prem compose (all services, prod-ready) |
+| `docker-compose.yml` | Local dev compose (all services) |
+| `docker-compose.gcp.yml` | Production compose (used by `./scripts/deploy-gcp.sh`) |
 | `docker-compose.stage.yml` | Staging compose (override) |
-| `deploy-prod.sh` | Canonical on-prem deploy script (target: 10.1.0.99) |
+| `scripts/deploy-gcp.sh` | Canonical production deploy script (target: GCP VM) |
+| `scripts/gcp-bootstrap.sh` | First-time VM setup (Docker CE install, app dir) |
+| `deploy-prod.sh` | **LEGACY** — old on-prem path, do not run |
 
 ---
 
