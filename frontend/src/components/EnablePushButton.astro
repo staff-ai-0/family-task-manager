@@ -1,0 +1,86 @@
+---
+interface Props {
+    lang: string;
+}
+const { lang } = Astro.props;
+
+const L = lang === "es"
+    ? { enable: "Activar notificaciones", enabled: "Notificaciones activas", unsupported: "Notificaciones no soportadas", denied: "Permiso denegado", err: "Error" }
+    : { enable: "Enable push notifications", enabled: "Notifications enabled", unsupported: "Push not supported", denied: "Permission denied", err: "Error" };
+---
+
+<button
+    id="enable-push-btn"
+    type="button"
+    class="px-3 py-2 rounded-lg border border-brand-sky text-brand-sky-deep text-sm font-medium hover:bg-brand-sky/10 transition-colors disabled:opacity-60"
+    data-state="idle"
+>
+    {L.enable}
+</button>
+<span id="push-status" class="text-xs text-brand-ink-soft ml-2" aria-live="polite"></span>
+
+<script define:vars={{ L }}>
+    const btn = document.getElementById("enable-push-btn");
+    const status = document.getElementById("push-status");
+
+    function setStatus(msg, color = "text-brand-ink-soft") {
+        status.textContent = msg;
+        status.className = `text-xs ${color} ml-2`;
+    }
+
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        btn.disabled = true;
+        setStatus(L.unsupported, "text-red-700");
+    }
+
+    function urlBase64ToUint8Array(b64) {
+        const padding = "=".repeat((4 - (b64.length % 4)) % 4);
+        const padded = (b64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+        const raw = atob(padded);
+        const arr = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+        return arr;
+    }
+
+    btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        setStatus("…");
+        try {
+            const keyResp = await fetch("/api/push/public-key");
+            if (!keyResp.ok) {
+                setStatus(L.err, "text-red-700");
+                btn.disabled = false;
+                return;
+            }
+            const { public_key } = await keyResp.json();
+            const reg = await navigator.serviceWorker.register("/sw.js");
+            await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(public_key),
+            });
+
+            const json = sub.toJSON();
+            const r = await fetch("/api/push/subscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    endpoint: json.endpoint,
+                    keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+                }),
+            });
+            if (r.ok) {
+                setStatus(L.enabled, "text-green-700");
+                btn.setAttribute("data-state", "enabled");
+            } else {
+                setStatus(L.err, "text-red-700");
+                btn.disabled = false;
+            }
+        } catch (e) {
+            console.error(e);
+            const msg = e?.name === "NotAllowedError" ? L.denied : L.err;
+            setStatus(msg, "text-red-700");
+            btn.disabled = false;
+        }
+    });
+</script>

@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     # approved gigs, subsequent gig completions auto-approve and credit
     # points immediately. A parent rejection resets the streak to 0.
     GIG_AUTO_APPROVE_STREAK: int = 3
+
+    # Web Push (VAPID). Generate keys with:
+    #   python -c "from py_vapid import Vapid; v=Vapid(); v.generate_keys(); print(v.private_pem(), v.public_key.to_string())"
+    # If unset, PushService.send no-ops with a warning log; the app
+    # otherwise runs normally (email still fires).
+    VAPID_PUBLIC_KEY: str = ""
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_CLAIM_EMAIL: str = "admin@agent-ia.mx"
     
     # Google OAuth
     # GOOGLE_CLIENT_ID is the primary Web client (legacy single-value field,

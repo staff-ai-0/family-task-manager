@@ -2,6 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import BottomNav from "../../components/BottomNav.astro";
 import GigsIntroBanner from "../../components/GigsIntroBanner.astro";
+import EnablePushButton from "../../components/EnablePushButton.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 
@@ -41,6 +42,10 @@ const pendingApprovals = Array.isArray(pending) ? pending.length : 0;
         </header>
 
         <GigsIntroBanner lang={lang} show={!user.acknowledged_gigs_intro} />
+
+        <div class="px-4 mt-4 flex items-center">
+            <EnablePushButton lang={lang} />
+        </div>
 
         <main class="flex-1 px-4 py-6">
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
