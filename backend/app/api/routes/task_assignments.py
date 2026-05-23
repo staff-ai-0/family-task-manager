@@ -103,7 +103,8 @@ async def list_week_assignments(
 
     # Per-user, per-date lock cache. Only today (or future) can be locked;
     # historical dates always render unlocked since the day has passed.
-    today = date.today()
+    # "today" is computed in the viewer's family timezone.
+    today = await TaskAssignmentService._user_local_today(db, current_user.id)
     lock_cache: dict[tuple, bool] = {}
     for a in assignments:
         is_bonus = a.template.is_bonus if a.template else False
@@ -130,10 +131,11 @@ async def list_today_assignments(
     """List assignments for today (defaults to current user)"""
     target_user = user_id or to_uuid_required(current_user.id)
     family_id = to_uuid_required(current_user.family_id)
+    today = await TaskAssignmentService._user_local_today(db, target_user)
     assignments = await TaskAssignmentService.list_assignments_for_date(
         db,
         family_id=family_id,
-        target_date=date.today(),
+        target_date=today,
         user_id=target_user,
     )
 

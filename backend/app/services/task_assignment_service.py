@@ -808,8 +808,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         """
         Get daily progress summary for a user.
         Returns required/bonus counts and whether bonus is unlocked.
+        "today" is computed in the user's family timezone when target_date is None.
         """
-        check_date = target_date or date.today()
+        check_date = target_date or await TaskAssignmentService._user_local_today(db, user_id)
 
         assignments = await TaskAssignmentService.list_assignments_for_date(
             db, family_id, check_date, user_id

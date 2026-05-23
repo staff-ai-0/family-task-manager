@@ -41,6 +41,21 @@ async def test_new_family_gets_default_gigs(db_session):
     assert count == len(FamilyService.DEFAULT_GIGS)
 
 
+def test_schema_rejects_mandatory_nonzero_points():
+    from pydantic import ValidationError
+    from app.schemas.task_template import TaskTemplateCreate, TaskTemplateUpdate
+
+    with pytest.raises(ValidationError, match="Mandatory tasks"):
+        TaskTemplateCreate(title="bad", points=5, interval_days=1, is_bonus=False)
+
+    # Update path: explicit is_bonus=false + points>0 should also reject
+    with pytest.raises(ValidationError, match="Mandatory tasks"):
+        TaskTemplateUpdate(points=5, is_bonus=False)
+
+    # Bonus path accepts non-zero
+    TaskTemplateCreate(title="ok", points=20, interval_days=7, is_bonus=True)
+
+
 @pytest.mark.asyncio
 async def test_check_constraint_rejects_nonzero_mandatory_insert(db_session, test_family):
     from sqlalchemy.exc import IntegrityError
