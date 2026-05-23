@@ -117,3 +117,35 @@ async def test_gig_unlocked_completes_pending(
     assert result.approval_status == ApprovalStatus.PENDING
     assert result.proof_text == "learned about rootless podman storage"
     assert test_child_user.points == before  # not yet credited
+
+
+@pytest.mark.asyncio
+async def test_list_marks_gigs_locked_when_mandatory_pending(
+    db_session, test_family, test_child_user,
+    mandatory_template_factory, gig_template_factory,
+):
+    mand = await mandatory_template_factory(family=test_family)
+    gig = await gig_template_factory(family=test_family, points=20)
+    today = date.today()
+    week_of = today - timedelta(days=today.weekday())
+    db_session.add_all([
+        TaskAssignment(
+            id=uuid4(), template_id=mand.id, assigned_to=test_child_user.id,
+            family_id=test_family.id, assigned_date=today, week_of=week_of,
+            status=AssignmentStatus.PENDING,
+        ),
+        TaskAssignment(
+            id=uuid4(), template_id=gig.id, assigned_to=test_child_user.id,
+            family_id=test_family.id, assigned_date=today, week_of=week_of,
+            status=AssignmentStatus.PENDING,
+        ),
+    ])
+    await db_session.commit()
+
+    rows = await TaskAssignmentService.list_for_user_today_with_locks(
+        db_session, test_child_user.id, test_family.id
+    )
+
+    locked = [r for r in rows if r["is_locked"]]
+    assert len(locked) == 1
+    assert locked[0]["is_bonus"] is True
