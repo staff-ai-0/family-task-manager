@@ -34,6 +34,8 @@ async def _create_template(db, family_id, parent_id, **kwargs):
         "is_bonus": False,
     }
     defaults.update(kwargs)
+    if not defaults["is_bonus"]:
+        defaults["points"] = 0  # mandatory templates enforced to zero
     data = TaskTemplateCreate(**defaults)
     return await TaskTemplateService.create_template(
         db, data, family_id, parent_id
@@ -280,9 +282,9 @@ class TestCompletion:
         assert completed.status == AssignmentStatus.COMPLETED
         assert completed.completed_at is not None
 
-        # Points should be awarded
+        # Mandatory tasks award no points (baseline duty)
         await db_session.refresh(user)
-        assert user.points == initial_points + 50
+        assert user.points == initial_points
 
     async def test_complete_already_completed_raises(
         self, db_session, test_family, test_parent_user, test_child_user
@@ -392,7 +394,8 @@ class TestBonusGating:
         if child_bonus:
             # Should succeed: no required tasks means bonus unlocked
             completed = await TaskAssignmentService.complete_assignment(
-                db_session, child_bonus[0].id, test_family.id, test_child_user.id
+                db_session, child_bonus[0].id, test_family.id, test_child_user.id,
+                proof_text="completed the bonus",
             )
             assert completed.status == AssignmentStatus.COMPLETED
 
