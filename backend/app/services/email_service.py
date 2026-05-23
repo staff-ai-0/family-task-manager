@@ -345,6 +345,80 @@ class EmailService:
             return False
 
     # ------------------------------------------------------------------
+    # Gig approval notifications
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def notify_parents_gig_pending(
+        db: AsyncSession,
+        *,
+        family_id,
+        child_name: str,
+        gig_title: str,
+        proof_text: str,
+        proof_image_url: Optional[str] = None,
+        base_url: Optional[str] = None,
+    ) -> int:
+        """Email all parents in *family_id* that a gig is awaiting approval.
+
+        Returns the number of parents successfully notified. Fire-and-forget by
+        contract — exceptions on individual sends are swallowed so the API
+        response is not blocked by a flaky upstream.
+        """
+        import logging
+        from sqlalchemy import select
+        from app.models.user import User as UserModel, UserRole
+
+        logger = logging.getLogger(__name__)
+        base_url = (base_url or settings.BASE_URL or "https://family.agent-ia.mx").rstrip("/")
+        approvals_url = f"{base_url}/parent/approvals"
+
+        parents = (await db.execute(
+            select(UserModel).where(
+                UserModel.family_id == family_id,
+                UserModel.role == UserRole.PARENT,
+                UserModel.is_active == True,
+            )
+        )).scalars().all()
+
+        proof_html = (
+            f"<blockquote style='border-left:3px solid #ddd;padding-left:12px;"
+            f"color:#444;margin:12px 0;'>"
+            f"{(proof_text or '').replace(chr(10), '<br>')}</blockquote>"
+        )
+        image_html = ""
+        if proof_image_url:
+            full_img = proof_image_url if proof_image_url.startswith("http") else f"{base_url}{proof_image_url}"
+            image_html = (
+                f"<p><a href='{full_img}'><img src='{full_img}' "
+                f"style='max-width:320px;border-radius:8px;border:1px solid #ddd;' "
+                f"alt='proof image'/></a></p>"
+            )
+
+        html = (
+            f"<div style='font-family:system-ui,sans-serif;color:#222;'>"
+            f"<h2 style='margin:0 0 8px;'>{child_name} submitted a gig</h2>"
+            f"<p><strong>{gig_title}</strong></p>"
+            f"{proof_html}"
+            f"{image_html}"
+            f"<p><a href='{approvals_url}' "
+            f"style='display:inline-block;background:#0a7;color:#fff;padding:10px 18px;"
+            f"border-radius:6px;text-decoration:none;'>Review &amp; approve</a></p>"
+            f"</div>"
+        )
+        subject = f"Gig waiting: {child_name} - {gig_title}"
+
+        sent = 0
+        for parent in parents:
+            try:
+                ok = await EmailService._send(to=parent.email, subject=subject, html=html)
+                if ok:
+                    sent += 1
+            except Exception as exc:
+                logger.warning(f"gig-pending email to {parent.email} failed: {exc}")
+        return sent
+
+    # ------------------------------------------------------------------
     # Email verification
     # ------------------------------------------------------------------
 

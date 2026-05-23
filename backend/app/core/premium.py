@@ -30,6 +30,7 @@ DEFAULT_FREE_LIMITS: dict[str, Any] = {
     "csv_import": False,
     "max_receipt_scans_per_month": 0,
     "ai_features": False,
+    "max_gigs_per_month": 3,
 }
 
 # Maps feature name → limit key in the plan's limits dict
@@ -45,6 +46,7 @@ FEATURE_LIMIT_MAP: dict[str, str] = {
     "receipt_scan": "max_receipt_scans_per_month",
     "family_member": "max_family_members",
     "budget_account": "max_budget_accounts",
+    "gig_completion": "max_gigs_per_month",
 }
 
 # Minimum plan tier required for each feature (omitted → available on free)
@@ -55,6 +57,8 @@ FEATURE_MIN_PLAN: dict[str, str] = {
     "ai_features": "plus",
     "receipt_scan": "plus",
     "recurring_transaction": "plus",
+    # gig_completion available on free with low cap; plus tier raises it
+    "gig_completion": "plus",
 }
 
 

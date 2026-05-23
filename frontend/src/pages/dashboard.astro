@@ -275,6 +275,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                             <form method="POST" action="/api/assignments/complete" data-complete-form data-is-bonus="1">
                                                 <input type="hidden" name="assignment_id" value={a.id} />
                                                 <input type="hidden" name="proof_text" value="" />
+                                                <input type="hidden" name="proof_image_url" value="" />
                                                 <button
                                                     type="submit"
                                                     class="h-12 w-12 rounded-full bg-brand-sun/20 text-brand-sun-deep flex items-center justify-center hover:bg-brand-sun-deep hover:text-white transition-colors active:scale-95 flex-shrink-0 shadow-[var(--shadow-card)]"
@@ -401,6 +402,18 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     ? "¿Qué aprendiste / hiciste / lograste?"
                     : "What did you learn / make / accomplish?"}
             ></textarea>
+            <div>
+                <label class="block text-xs text-brand-ink-soft mb-1">
+                    {lang === "es" ? "Foto (opcional)" : "Photo (optional)"}
+                </label>
+                <input
+                    id="gig-proof-image"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    class="block w-full text-sm text-brand-ink file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-brand-cream-deep file:text-brand-ink hover:file:bg-brand-mint/40"
+                />
+                <p id="gig-proof-image-status" class="text-xs text-brand-ink-soft mt-1"></p>
+            </div>
             <div class="flex justify-end gap-2 pt-1">
                 <button type="button" id="gig-proof-cancel" class="px-4 py-2 rounded-lg bg-brand-cream-deep text-brand-ink font-semibold text-sm">
                     {lang === "es" ? "Cancelar" : "Cancel"}
@@ -441,7 +454,10 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 modal.close();
             });
 
-            submitBtn.addEventListener("click", () => {
+            const fileInput = document.getElementById("gig-proof-image") as HTMLInputElement | null;
+            const fileStatus = document.getElementById("gig-proof-image-status");
+
+            submitBtn.addEventListener("click", async () => {
                 const text = textarea.value.trim();
                 if (!text) {
                     textarea.focus();
@@ -453,8 +469,29 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     modal.close();
                     return;
                 }
+
+                // Upload image first if present
+                let imageUrl: string | null = null;
+                if (fileInput?.files?.length) {
+                    if (fileStatus) fileStatus.textContent = "Uploading…";
+                    try {
+                        const fd = new FormData();
+                        fd.append("file", fileInput.files[0]);
+                        const r = await fetch("/api/assignments/proof-upload", { method: "POST", body: fd });
+                        if (!r.ok) throw new Error(`Upload failed: ${r.status}`);
+                        const data = await r.json();
+                        imageUrl = data.proof_image_url;
+                    } catch (err) {
+                        if (fileStatus) fileStatus.textContent = `Upload failed: ${err}`;
+                        return;
+                    }
+                }
+
                 const proofInput = pendingForm.querySelector<HTMLInputElement>('input[name="proof_text"]');
                 if (proofInput) proofInput.value = text;
+                const imageInput = pendingForm.querySelector<HTMLInputElement>('input[name="proof_image_url"]');
+                if (imageInput) imageInput.value = imageUrl || "";
+
                 const submittingForm = pendingForm;
                 pendingForm = null;
                 modal.close();
