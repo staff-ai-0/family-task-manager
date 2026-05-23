@@ -330,52 +330,10 @@ class TestCompletion:
 
 
 class TestBonusGating:
-    async def test_bonus_blocked_when_required_incomplete(
-        self, db_session, test_family, test_parent_user, test_child_user
-    ):
-        # Create a regular daily + bonus daily
-        await _create_template(
-            db_session, test_family.id, test_parent_user.id,
-            title="Required", interval_days=7, is_bonus=False
-        )
-        await _create_template(
-            db_session, test_family.id, test_parent_user.id,
-            title="Bonus", interval_days=7, is_bonus=True
-        )
-        assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
-        )
-
-        # Find the bonus assignment for the child
-        bonus_assignments = [
-            a for a in assignments
-            if a.assigned_to == test_child_user.id
-        ]
-        # Find bonus assignment
-        bonus_a = None
-        for a in bonus_assignments:
-            await db_session.refresh(a)
-            tmpl = await TaskTemplateService.get_template(
-                db_session, a.template_id, test_family.id
-            )
-            if tmpl.is_bonus:
-                bonus_a = a
-                break
-
-        if bonus_a:
-            # Check if there are required assignments for the child on the same date
-            required_for_child = [
-                a for a in assignments
-                if a.assigned_to == test_child_user.id
-                and a.id != bonus_a.id
-            ]
-
-            if required_for_child:
-                # Try to complete bonus without completing required first
-                with pytest.raises(ForbiddenException):
-                    await TaskAssignmentService.complete_assignment(
-                        db_session, bonus_a.id, test_family.id, test_child_user.id
-                    )
+    # NOTE: deterministic "gig locked while mandatory pending" assertion lives in
+    # tests/test_gig_gating.py::test_gig_locked_when_mandatory_pending. The
+    # shuffle-based legacy version of that test was non-deterministic (load
+    # balancing could put all required tasks on the parent) and was removed.
 
     async def test_bonus_allowed_when_all_required_done(
         self, db_session, test_family, test_parent_user, test_child_user
