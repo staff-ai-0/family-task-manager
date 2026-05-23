@@ -58,6 +58,7 @@ class UserResponse(EntityResponse):
     is_active: bool
     preferred_lang: str = "en"
     email_verified: bool = False
+    acknowledged_gigs_intro: bool = False
 
 
 class UserWithStats(UserResponse):

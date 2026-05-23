@@ -42,6 +42,10 @@ class User(Base):
         Boolean, default=False, nullable=False, server_default="false"
     )
 
+    acknowledged_gigs_intro = Column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
+
     oauth_provider = Column(String(50), nullable=True)
     oauth_id = Column(String(255), nullable=True)
     
