@@ -70,9 +70,11 @@ async def get_family(
 async def update_family(
     family_data: FamilyUpdate,
     family_id: UUID = Depends(verify_family_id),
+    current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update family information"""
+    """Update family information (parent only — non-parents can shift
+    family-wide settings like timezone otherwise, bypassing gig gating)."""
     family = await FamilyService.update_family(db, family_id, family_data)
     return family
 

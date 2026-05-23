@@ -556,7 +556,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     TaskAssignment.assigned_to == user_id,
                     TaskAssignment.family_id == family_id,
                     TaskAssignment.assigned_date <= through_date,
-                    TaskTemplate.is_bonus == False,  # noqa: E712 — SQL boolean
+                    TaskTemplate.is_bonus.is_(False),
                     TaskAssignment.status.in_(
                         [AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]
                     ),
@@ -564,58 +564,6 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             )
         )
         return (await db.execute(q)).scalar_one() > 0
-
-    @staticmethod
-    async def check_all_required_done_today(
-        db: AsyncSession,
-        user_id: UUID,
-        family_id: UUID,
-        target_date: Optional[date] = None,
-    ) -> bool:
-        """
-        Check if a user has completed all non-bonus assignments for today.
-        This is the gating check for bonus task access.
-        """
-        check_date = target_date or date.today()
-
-        # Count required (non-bonus) assignments for today
-        total_query = (
-            select(func.count())
-            .select_from(TaskAssignment)
-            .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
-            .where(
-                and_(
-                    TaskAssignment.assigned_to == user_id,
-                    TaskAssignment.family_id == family_id,
-                    TaskAssignment.assigned_date == check_date,
-                    TaskTemplate.is_bonus == False,
-                )
-            )
-        )
-        total = (await db.execute(total_query)).scalar_one()
-
-        if total == 0:
-            # No required tasks today — bonus unlocked
-            return True
-
-        # Count completed required assignments for today
-        completed_query = (
-            select(func.count())
-            .select_from(TaskAssignment)
-            .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
-            .where(
-                and_(
-                    TaskAssignment.assigned_to == user_id,
-                    TaskAssignment.family_id == family_id,
-                    TaskAssignment.assigned_date == check_date,
-                    TaskTemplate.is_bonus == False,
-                    TaskAssignment.status == AssignmentStatus.COMPLETED,
-                )
-            )
-        )
-        completed = (await db.execute(completed_query)).scalar_one()
-
-        return completed >= total
 
     @staticmethod
     async def complete_assignment(
