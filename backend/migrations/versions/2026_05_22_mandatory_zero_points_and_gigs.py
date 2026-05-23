@@ -75,7 +75,10 @@ def upgrade() -> None:
     )
 
     # 4. new transaction type value
-    op.execute("ALTER TYPE transactiontype ADD VALUE IF NOT EXISTS 'gig_approved'")
+    # NOTE: existing values use uppercase (TASK_COMPLETED, etc.) because the
+    # SQLAlchemy column was declared without values_callable, so it sends the
+    # Python enum NAME, not the value. Match that convention.
+    op.execute("ALTER TYPE transactiontype ADD VALUE IF NOT EXISTS 'GIG_APPROVED'")
 
     # 5. seed default gig pack per existing family
     seed_default_gig_pack(bind)

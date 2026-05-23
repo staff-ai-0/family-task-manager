@@ -643,6 +643,65 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         await db.refresh(assignment)
         return assignment
 
+    # ─── Gig approval (parent-only) ──────────────────────────────────
+
+    @staticmethod
+    async def approve_gig(
+        db: AsyncSession,
+        assignment_id: UUID,
+        family_id: UUID,
+        parent_id: UUID,
+        approve: bool,
+        notes: Optional[str] = None,
+    ) -> TaskAssignment:
+        from app.models.user import UserRole
+        from app.services.points_service import PointsService
+
+        parent = await get_user_by_id(db, parent_id)
+        if parent.family_id != family_id or parent.role != UserRole.PARENT:
+            raise ForbiddenException("Only parents in this family can approve gigs")
+
+        assignment = await TaskAssignmentService.get_assignment(db, assignment_id, family_id)
+
+        if assignment.approval_status != ApprovalStatus.PENDING:
+            raise ValidationException(
+                f"Gig already decided (status: {assignment.approval_status.value})"
+            )
+
+        assignment.approved_by = parent_id
+        assignment.approved_at = datetime.utcnow()
+        assignment.approval_notes = notes
+
+        if approve:
+            assignment.approval_status = ApprovalStatus.APPROVED
+            await PointsService.award_gig_points(
+                db, assignment.assigned_to, assignment.id, assignment.template.points
+            )
+        else:
+            assignment.approval_status = ApprovalStatus.REJECTED
+
+        await db.commit()
+        await db.refresh(assignment)
+        return assignment
+
+    @staticmethod
+    async def list_pending_approvals(
+        db: AsyncSession,
+        family_id: UUID,
+    ) -> list[TaskAssignment]:
+        from sqlalchemy.orm import selectinload
+        q = (
+            select(TaskAssignment)
+            .options(selectinload(TaskAssignment.template))
+            .where(
+                TaskAssignment.family_id == family_id,
+                TaskAssignment.approval_status == ApprovalStatus.PENDING,
+            )
+            .order_by(TaskAssignment.completed_at.asc())
+        )
+        result = await db.execute(q)
+        return list(result.scalars().all())
+
     # ─── Parent Edit (reassign / reschedule / cancel) ────────────────
 
     @staticmethod
