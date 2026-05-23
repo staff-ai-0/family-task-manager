@@ -613,10 +613,27 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
             assignment.status = AssignmentStatus.COMPLETED
             assignment.completed_at = datetime.now(timezone.utc)
-            assignment.approval_status = ApprovalStatus.PENDING
             assignment.proof_text = proof_text.strip()
             if proof_image_url:
                 assignment.proof_image_url = proof_image_url
+
+            # Trust-score auto-approval: a user who has earned enough
+            # consecutive parent approvals graduates to auto-approval.
+            # Credit points immediately and skip the parent queue.
+            from app.core.config import settings
+            from app.services.points_service import PointsService
+            child = await get_user_by_id(db, user_id)
+            threshold = max(1, settings.GIG_AUTO_APPROVE_STREAK)
+            if child.gig_trust_streak >= threshold:
+                assignment.approval_status = ApprovalStatus.APPROVED
+                assignment.approved_at = datetime.now(timezone.utc)
+                assignment.approval_notes = "Auto-approved via trust streak"
+                await PointsService.award_gig_points(
+                    db, user_id, assignment.id, template.points
+                )
+                child.gig_trust_streak += 1
+            else:
+                assignment.approval_status = ApprovalStatus.PENDING
         else:
             # Mandatory path — silent, no points, no approval
             assignment.status = AssignmentStatus.COMPLETED
@@ -628,8 +645,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         # Fire-and-forget notification on gig submission. Failures are
         # swallowed inside the email helper so the API response is never
-        # blocked by an upstream issue.
-        if template.is_bonus:
+        # blocked by an upstream issue. Skip for auto-approved gigs —
+        # parents don't need a heads-up on something already credited.
+        if template.is_bonus and assignment.approval_status == ApprovalStatus.PENDING:
             try:
                 from app.services.email_service import EmailService
                 child = await get_user_by_id(db, user_id)
@@ -645,6 +663,73 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 import logging
                 logging.getLogger(__name__).exception("notify_parents_gig_pending failed")
 
+        return assignment
+
+    # ─── Gig claim (reserve before doing) ────────────────────────────
+
+    @staticmethod
+    async def claim_gig(
+        db: AsyncSession,
+        assignment_id: UUID,
+        family_id: UUID,
+        user_id: UUID,
+    ) -> TaskAssignment:
+        """
+        Reserve a gig before working on it. Transitions PENDING → CLAIMED.
+
+        Only the assignee can claim. Mandatory rows reject (no claim
+        semantic). Gating still applies — must finish open mandatory
+        first.
+        """
+        assignment = await TaskAssignmentService.get_assignment(
+            db, assignment_id, family_id
+        )
+
+        if not assignment.template.is_bonus:
+            raise ValidationException("Only gigs can be claimed")
+
+        if assignment.assigned_to != user_id:
+            raise ForbiddenException("Only the assigned user can claim this gig")
+
+        if not assignment.can_claim:
+            raise ValidationException(
+                f"Gig cannot be claimed in status {assignment.status.value}"
+            )
+
+        if await TaskAssignmentService.has_open_mandatory_through(
+            db, user_id, family_id, assignment.assigned_date
+        ):
+            raise ForbiddenException(
+                "Finish any open mandatory tasks (today + overdue) before claiming a gig"
+            )
+
+        assignment.status = AssignmentStatus.CLAIMED
+        assignment.claimed_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(assignment)
+        return assignment
+
+    @staticmethod
+    async def unclaim_gig(
+        db: AsyncSession,
+        assignment_id: UUID,
+        family_id: UUID,
+        user_id: UUID,
+    ) -> TaskAssignment:
+        """Release a claim and return the gig to PENDING."""
+        assignment = await TaskAssignmentService.get_assignment(
+            db, assignment_id, family_id
+        )
+        if assignment.assigned_to != user_id:
+            raise ForbiddenException("Only the assignee can release a claim")
+        if assignment.status != AssignmentStatus.CLAIMED:
+            raise ValidationException(
+                f"Only CLAIMED gigs can be unclaimed (current: {assignment.status.value})"
+            )
+        assignment.status = AssignmentStatus.PENDING
+        assignment.claimed_at = None
+        await db.commit()
+        await db.refresh(assignment)
         return assignment
 
     # ─── Gig approval (parent-only) ──────────────────────────────────
@@ -695,8 +780,16 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             await PointsService.award_gig_points(
                 db, assignment.assigned_to, assignment.id, assignment.template.points
             )
+            # Increment trust streak so the child graduates to
+            # auto-approval after enough consecutive approvals.
+            child = await get_user_by_id(db, assignment.assigned_to)
+            child.gig_trust_streak += 1
         else:
             assignment.approval_status = ApprovalStatus.REJECTED
+            # Reset trust streak — a rejection signals the child still
+            # needs review on subsequent gigs.
+            child = await get_user_by_id(db, assignment.assigned_to)
+            child.gig_trust_streak = 0
 
         await db.commit()
         await db.refresh(assignment)

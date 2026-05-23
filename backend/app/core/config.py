@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key-change-this-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
+
+    # Trust-score auto-approval: once a user has this many consecutive
+    # approved gigs, subsequent gig completions auto-approve and credit
+    # points immediately. A parent rejection resets the streak to 0.
+    GIG_AUTO_APPROVE_STREAK: int = 3
     
     # Google OAuth
     # GOOGLE_CLIENT_ID is the primary Web client (legacy single-value field,

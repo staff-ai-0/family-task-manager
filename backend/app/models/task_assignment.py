@@ -30,6 +30,7 @@ class AssignmentStatus(str, enum.Enum):
     """Assignment completion status"""
 
     PENDING = "pending"
+    CLAIMED = "claimed"
     COMPLETED = "completed"
     OVERDUE = "overdue"
     CANCELLED = "cancelled"
@@ -115,6 +116,7 @@ class TaskAssignment(Base):
 
     # Completion
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    claimed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Metadata
     created_at = Column(
@@ -156,4 +158,13 @@ class TaskAssignment(Base):
     @property
     def can_complete(self) -> bool:
         """Check if assignment can be marked as completed"""
-        return self.status in [AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]
+        return self.status in [
+            AssignmentStatus.PENDING,
+            AssignmentStatus.CLAIMED,
+            AssignmentStatus.OVERDUE,
+        ]
+
+    @property
+    def can_claim(self) -> bool:
+        """Only PENDING gigs are claimable (mandatory has no claim semantic)."""
+        return self.status == AssignmentStatus.PENDING
