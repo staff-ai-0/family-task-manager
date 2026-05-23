@@ -290,3 +290,44 @@ async def sample_family(db_session: AsyncSession):
     await db_session.commit()
     await db_session.refresh(fam)
     return fam
+
+
+# Task template factories for gig gating tests
+
+
+@pytest_asyncio.fixture
+async def mandatory_template_factory(db_session: AsyncSession):
+    """Factory for a mandatory (is_bonus=False) task template."""
+    from uuid import uuid4
+    from app.models.task_template import TaskTemplate, AssignmentType
+
+    async def _make(*, family, points: int = 0, title: str = "Brush teeth"):
+        t = TaskTemplate(
+            id=uuid4(), title=title, points=points, interval_days=1,
+            assignment_type=AssignmentType.AUTO, is_bonus=False, is_active=True,
+            family_id=family.id,
+        )
+        db_session.add(t)
+        await db_session.commit()
+        return t
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def gig_template_factory(db_session: AsyncSession):
+    """Factory for a gig (is_bonus=True) task template."""
+    from uuid import uuid4
+    from app.models.task_template import TaskTemplate, AssignmentType
+
+    async def _make(*, family, points: int = 20, title: str = "Learn topic"):
+        t = TaskTemplate(
+            id=uuid4(), title=title, points=points, interval_days=7,
+            assignment_type=AssignmentType.AUTO, is_bonus=True, is_active=True,
+            family_id=family.id,
+        )
+        db_session.add(t)
+        await db_session.commit()
+        return t
+
+    return _make

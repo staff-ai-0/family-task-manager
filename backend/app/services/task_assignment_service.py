@@ -13,7 +13,7 @@ from datetime import datetime, date, timedelta
 from uuid import UUID
 
 from app.models.task_template import TaskTemplate, AssignmentType
-from app.models.task_assignment import TaskAssignment, AssignmentStatus
+from app.models.task_assignment import TaskAssignment, AssignmentStatus, ApprovalStatus
 from app.models.user import User
 from app.models.point_transaction import PointTransaction, TransactionType
 from app.core.exceptions import (
@@ -590,57 +590,57 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         assignment_id: UUID,
         family_id: UUID,
         user_id: UUID,
+        proof_text: Optional[str] = None,
     ) -> TaskAssignment:
         """
-        Mark an assignment as completed, award points, and enforce bonus gating.
+        Mark an assignment as completed.
+
+        Mandatory (is_bonus=false): completes silently, awards no points.
+        Gig (is_bonus=true): requires all today's mandatory done first, requires
+        proof_text, and enters PENDING approval state. Points are credited only
+        when a parent approves via approve_gig().
         """
         assignment = await TaskAssignmentService.get_assignment(
             db, assignment_id, family_id
         )
 
-        # Validate assignment can be completed
         if not assignment.can_complete:
             raise ValidationException(
                 f"Assignment cannot be completed. Current status: {assignment.status.value}"
             )
 
-        # Verify user is the assigned user
         if assignment.assigned_to != user_id:
             raise ForbiddenException(
                 "Only the assigned user can complete this assignment"
             )
 
-        # Check bonus gating: if this is a bonus task, required tasks must be done first
         template = assignment.template
+
         if template.is_bonus:
-            all_required_done = (
-                await TaskAssignmentService.check_all_required_done_today(
-                    db, user_id, family_id, assignment.assigned_date
-                )
+            # Gig path
+            all_required_done = await TaskAssignmentService.check_all_required_done_today(
+                db, user_id, family_id, assignment.assigned_date
             )
             if not all_required_done:
                 raise ForbiddenException(
-                    "Complete all required tasks for today before accessing bonus tasks"
+                    "Complete today's mandatory tasks before claiming a gig"
                 )
 
-        # Mark as completed
-        assignment.status = AssignmentStatus.COMPLETED
-        assignment.completed_at = datetime.utcnow()
+            if not proof_text or not proof_text.strip():
+                raise ValidationException("Gigs require proof text describing what you did")
 
-        # Award points
-        user = await get_user_by_id(db, user_id)
-        transaction = PointTransaction.create_assignment_completion(
-            user_id=user_id,
-            assignment_id=assignment.id,
-            points=template.points,
-            balance_before=user.points,
-        )
-        user.points += template.points
+            assignment.status = AssignmentStatus.COMPLETED
+            assignment.completed_at = datetime.utcnow()
+            assignment.approval_status = ApprovalStatus.PENDING
+            assignment.proof_text = proof_text.strip()
+        else:
+            # Mandatory path — silent, no points, no approval
+            assignment.status = AssignmentStatus.COMPLETED
+            assignment.completed_at = datetime.utcnow()
+            # approval_status stays NONE; no PointTransaction row
 
-        db.add(transaction)
         await db.commit()
         await db.refresh(assignment)
-
         return assignment
 
     # ─── Parent Edit (reassign / reschedule / cancel) ────────────────
