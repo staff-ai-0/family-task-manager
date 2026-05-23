@@ -239,6 +239,19 @@ async def update_current_user_profile(
     return user
 
 
+@router.post("/ack-gigs-intro", response_model=UserResponse)
+async def ack_gigs_intro(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently dismiss the mandatory=0 / gigs=points intro banner."""
+    if not current_user.acknowledged_gigs_intro:
+        current_user.acknowledged_gigs_intro = True
+        await db.commit()
+        await db.refresh(current_user)
+    return current_user
+
+
 @router.put("/password", response_model=UserResponse)
 async def update_password(
     password_data: UserPasswordUpdate,

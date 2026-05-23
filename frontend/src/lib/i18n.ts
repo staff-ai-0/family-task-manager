@@ -432,6 +432,11 @@ export const translations = {
         fab_another: "+ Another",
         fab_close: "Close",
         fab_auto_rule: "rule ✓",
+
+        // Gigs intro banner (one-time after scope change)
+        intro_banner_title: "What changed",
+        intro_banner_body: "Daily mandatory tasks now award 0 points — they're expected. Gigs (bonus tasks) are the only way to earn points, and a parent reviews your proof before points are credited.",
+        intro_banner_dismiss: "Got it",
     },
     es: {
         // Common / Nav
@@ -860,6 +865,11 @@ export const translations = {
         fab_another: "+ Otro gasto",
         fab_close: "Cerrar",
         fab_auto_rule: "regla ✓",
+
+        // Gigs intro banner (one-time after scope change)
+        intro_banner_title: "Qué cambió",
+        intro_banner_body: "Las tareas obligatorias diarias ahora dan 0 puntos — son lo esperado. Los gigs (tareas bonus) son la única forma de ganar puntos, y un padre revisa tu evidencia antes de acreditarlos.",
+        intro_banner_dismiss: "Entendido",
     },
 } as const;
 
