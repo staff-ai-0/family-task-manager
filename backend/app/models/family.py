@@ -22,6 +22,7 @@ class Family(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     name = Column(String(100), nullable=False)
+    timezone = Column(String(64), nullable=False, default="UTC", server_default="UTC")
     created_by = Column(UUID(as_uuid=True), nullable=True)  # Nullable during creation, set after user created
     join_code = Column(String(10), unique=True, nullable=True, index=True)  # Short code for family invites
     is_active = Column(Boolean, default=True, nullable=False)
