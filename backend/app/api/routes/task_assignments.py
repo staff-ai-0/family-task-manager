@@ -321,6 +321,47 @@ async def complete_assignment(
     return _assignment_to_detail(assignment)
 
 
+@router.post("/{assignment_id}/claim", response_model=TaskAssignmentWithDetails)
+async def claim_assignment(
+    assignment_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reserve a gig before working on it. Transitions PENDING → CLAIMED.
+    Mandatory rows reject; gating still applies."""
+    family_id = to_uuid_required(current_user.family_id)
+    await TaskAssignmentService.claim_gig(
+        db,
+        assignment_id,
+        family_id=family_id,
+        user_id=to_uuid_required(current_user.id),
+    )
+    assignment = await TaskAssignmentService.get_assignment(
+        db, assignment_id, family_id
+    )
+    return _assignment_to_detail(assignment)
+
+
+@router.post("/{assignment_id}/unclaim", response_model=TaskAssignmentWithDetails)
+async def unclaim_assignment(
+    assignment_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Release a claim. Transitions CLAIMED → PENDING."""
+    family_id = to_uuid_required(current_user.family_id)
+    await TaskAssignmentService.unclaim_gig(
+        db,
+        assignment_id,
+        family_id=family_id,
+        user_id=to_uuid_required(current_user.id),
+    )
+    assignment = await TaskAssignmentService.get_assignment(
+        db, assignment_id, family_id
+    )
+    return _assignment_to_detail(assignment)
+
+
 @router.post("/{assignment_id}/approve", response_model=TaskAssignmentWithDetails)
 async def approve_assignment(
     assignment_id: UUID,
