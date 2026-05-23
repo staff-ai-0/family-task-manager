@@ -4,12 +4,24 @@ Family Pydantic schemas
 Request and response models for family-related operations.
 """
 
-from pydantic import BaseModel, Field
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from uuid import UUID
 
 from app.schemas.user import UserResponse
 from app.schemas.base import EntityResponse
+
+
+def _validate_iana_tz(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return value
+    try:
+        ZoneInfo(value)
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(f"Unknown IANA timezone: {value}") from exc
+    return value
 
 
 # Base schemas
@@ -31,6 +43,12 @@ class FamilyUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     is_active: Optional[bool] = None
+    timezone: Optional[str] = Field(None, max_length=64)
+
+    @field_validator("timezone")
+    @classmethod
+    def _check_tz(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_iana_tz(v)
 
 
 # Response schemas
@@ -40,6 +58,7 @@ class FamilyResponse(EntityResponse):
     name: str = Field(..., min_length=1, max_length=100)
     created_by: Optional[UUID] = None  # Optional for legacy data
     is_active: bool
+    timezone: str = "UTC"
 
 
 class FamilyWithMembers(FamilyResponse):
