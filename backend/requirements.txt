@@ -66,6 +66,11 @@ pymupdf>=1.24.0
 # Scheduler
 apscheduler==3.10.4
 
+# Web Push (VAPID) for parent gig-approval notifications. pywebpush is
+# sync — call via asyncio.to_thread() to keep the gig submission path
+# non-blocking.
+pywebpush==1.14.0
+
 # Utilities
 python-dotenv==1.0.1
 email-validator==2.1.0.post1

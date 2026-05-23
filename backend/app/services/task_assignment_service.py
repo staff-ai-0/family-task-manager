@@ -643,14 +643,14 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         await db.commit()
         await db.refresh(assignment)
 
-        # Fire-and-forget notification on gig submission. Failures are
-        # swallowed inside the email helper so the API response is never
-        # blocked by an upstream issue. Skip for auto-approved gigs —
-        # parents don't need a heads-up on something already credited.
+        # Fire-and-forget notifications on gig submission. Failures are
+        # swallowed so the API response is never blocked by an upstream
+        # issue. Skip for auto-approved gigs — parents don't need a
+        # heads-up on something already credited.
         if template.is_bonus and assignment.approval_status == ApprovalStatus.PENDING:
+            child = await get_user_by_id(db, user_id)
             try:
                 from app.services.email_service import EmailService
-                child = await get_user_by_id(db, user_id)
                 await EmailService.notify_parents_gig_pending(
                     db,
                     family_id=family_id,
@@ -662,6 +662,18 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             except Exception:
                 import logging
                 logging.getLogger(__name__).exception("notify_parents_gig_pending failed")
+            try:
+                from app.services.push_service import PushService
+                await PushService.fan_out_pending_gig(
+                    db,
+                    family_id=family_id,
+                    child_name=child.name,
+                    gig_title=template.title,
+                    points=template.points,
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception("fan_out_pending_gig push failed")
 
         return assignment
 
