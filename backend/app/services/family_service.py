@@ -19,6 +19,31 @@ from app.core.exceptions import NotFoundException, ValidationException
 class FamilyService:
     """Service for family-related operations"""
 
+    DEFAULT_GIGS = [
+        ("Learn a topic + writeup", "Pick something new (podman, git, a recipe). Read up, then write 5-10 sentences on what you learned.", 30),
+        ("Read book chapter + discuss", "Read a chapter, then sit with a parent to discuss the main idea.", 20),
+        ("Plan next 3 days of meals", "Propose breakfasts, lunches, and dinners for the next 3 days. List groceries needed.", 25),
+        ("Help with grocery shopping", "Help compile the list, go to the store, and help carry/put away.", 15),
+        ("Cook family dinner", "Plan, cook, and serve a family dinner with parent supervision.", 25),
+        ("Tech-help parent (15 min)", "Help a parent with a phone/computer task for at least 15 minutes.", 10),
+    ]
+
+    @staticmethod
+    async def _seed_default_gigs(db: AsyncSession, family_id: UUID) -> None:
+        from app.models.task_template import TaskTemplate, AssignmentType
+        for title, description, points in FamilyService.DEFAULT_GIGS:
+            db.add(TaskTemplate(
+                title=title,
+                description=description,
+                points=points,
+                interval_days=7,
+                assignment_type=AssignmentType.AUTO,
+                is_bonus=True,
+                is_active=True,
+                family_id=family_id,
+            ))
+        await db.flush()
+
     @staticmethod
     async def create_family(
         db: AsyncSession,
@@ -31,10 +56,14 @@ class FamilyService:
             created_by=created_by,
             is_active=True,
         )
-        
+
         db.add(family)
         await db.commit()
         await db.refresh(family)
+
+        await FamilyService._seed_default_gigs(db, family.id)
+        await db.commit()
+
         return family
 
     @staticmethod
