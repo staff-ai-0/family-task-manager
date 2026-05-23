@@ -33,6 +33,24 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
     model = TaskAssignment
 
+    @staticmethod
+    async def _user_local_today(db: AsyncSession, user_id: UUID) -> date:
+        """Return today's date in the user's family timezone."""
+        from zoneinfo import ZoneInfo
+        from app.models.family import Family
+        from app.services.base_service import get_user_by_id
+        user = await get_user_by_id(db, user_id)
+        tz_name = "UTC"
+        if user.family_id is not None:
+            family = await db.get(Family, user.family_id)
+            if family and family.timezone:
+                tz_name = family.timezone
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = ZoneInfo("UTC")
+        return datetime.now(tz).date()
+
     # ─── Shuffle Algorithm ───────────────────────────────────────────
 
     @staticmethod
