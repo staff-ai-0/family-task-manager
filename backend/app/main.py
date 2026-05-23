@@ -104,6 +104,13 @@ app.add_middleware(
 # Register exception handlers
 register_exception_handlers(app)
 
+# Static files (gig proof images, etc.). The container mounts the volume at
+# /app/uploads; subdirectories like /app/uploads/gig-proofs/ are created on demand.
+import os
+from fastapi.staticfiles import StaticFiles
+os.makedirs("/app/uploads/gig-proofs", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="/app/uploads"), name="uploads")
+
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(oauth.router, prefix="/api/oauth", tags=["OAuth"])

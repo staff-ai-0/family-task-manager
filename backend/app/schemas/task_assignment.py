@@ -72,6 +72,7 @@ class TaskAssignmentWithDetails(TaskAssignmentResponse):
     is_locked: bool = False
     approval_status: str = "none"
     proof_text: Optional[str] = None
+    proof_image_url: Optional[str] = None
 
 
 class ShuffleResponse(BaseModel):
@@ -120,7 +121,9 @@ class DailyProgressResponse(BaseModel):
 
 
 class CompleteAssignmentRequest(BaseModel):
+    """Schema for completing an assignment with optional proof."""
     proof_text: Optional[str] = Field(None, max_length=4000)
+    proof_image_url: Optional[str] = Field(None, max_length=512)
 
 
 class ApprovalDecision(BaseModel):
@@ -137,5 +140,6 @@ class GigApprovalRow(BaseModel):
     assigned_to_name: str
     completed_at: datetime
     proof_text: Optional[str] = None
+    proof_image_url: Optional[str] = None
 
     model_config = {"from_attributes": True}

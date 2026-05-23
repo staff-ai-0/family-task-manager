@@ -116,3 +116,25 @@ async def test_list_pending_approvals_family_scoped(
     rows = await TaskAssignmentService.list_pending_approvals(db_session, test_family.id)
     assert len(rows) == 1
     assert rows[0].approval_status == ApprovalStatus.PENDING
+
+
+@pytest.mark.asyncio
+async def test_gig_approval_hits_monthly_cap(
+    db_session, test_family, test_parent_user, test_child_user, gig_template_factory,
+):
+    """(cap+1)th approval should raise ValidationException on free-tier cap (3)."""
+    from app.services.usage_service import UsageService
+
+    for _ in range(3):
+        await UsageService.try_increment_within_limit(
+            db_session, test_family.id, "gig_completion", 3, amount=1,
+        )
+
+    gig = await gig_template_factory(family=test_family, points=10)
+    assignment = await _make_pending_gig(db_session, test_family, test_child_user, gig)
+
+    with pytest.raises(ValidationException, match="monthly gig"):
+        await TaskAssignmentService.approve_gig(
+            db_session, assignment.id, test_family.id, test_parent_user.id,
+            approve=True, notes=None,
+        )

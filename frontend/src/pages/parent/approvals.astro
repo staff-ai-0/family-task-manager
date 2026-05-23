@@ -88,6 +88,15 @@ if (flash) Astro.cookies.delete("flash", { path: "/" });
                             <p class="text-sm bg-brand-cream-deep rounded-lg p-3 mb-3 whitespace-pre-wrap text-brand-ink">
                                 {row.proof_text || (lang === "es" ? "(sin texto)" : "(no proof text)")}
                             </p>
+                            {row.proof_image_url && (
+                                <a href={row.proof_image_url} target="_blank" rel="noopener noreferrer" class="block mb-3">
+                                    <img
+                                        src={row.proof_image_url}
+                                        alt={lang === "es" ? "Foto de prueba" : "Proof image"}
+                                        class="max-w-full max-h-48 rounded-lg border border-brand-ink/20 object-cover"
+                                    />
+                                </a>
+                            )}
                             <textarea
                                 data-notes
                                 rows="2"
