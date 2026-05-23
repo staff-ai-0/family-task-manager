@@ -320,6 +320,15 @@ function isToday(d: Date): boolean {
                                                                 <path stroke-linecap="round" stroke-linejoin="round" d={statusIcon} />
                                                             </svg>
                                                         )}
+                                                        {task.is_locked && (
+                                                            <span class="text-[10px] flex-shrink-0" title={lang === "es" ? "Bloqueada" : "Locked"}>🔒</span>
+                                                        )}
+                                                        {task.approval_status === "pending" && (
+                                                            <span class="text-[10px] flex-shrink-0" title={lang === "es" ? "Por aprobar" : "Awaiting approval"}>⏳</span>
+                                                        )}
+                                                        {task.approval_status === "rejected" && (
+                                                            <span class="text-[10px] flex-shrink-0" title={lang === "es" ? "Rechazada" : "Rejected"}>✕</span>
+                                                        )}
                                                         <span class="truncate text-[10px] leading-tight">
                                                             {displayTitle.length > 6
                                                                 ? displayTitle.slice(0, 6) + ".."
@@ -386,10 +395,31 @@ function isToday(d: Date): boolean {
                                                             data-points={task.template_points}
                                                             data-is-bonus={task.template_is_bonus ? "1" : "0"}
                                                         >
-                                                            <span class="text-sm font-medium truncate">
-                                                                {displayTitle}
+                                                            <span class="text-sm font-medium truncate flex items-center gap-1.5 flex-wrap">
+                                                                <span class="truncate">{displayTitle}</span>
                                                                 {task.template_is_bonus && (
-                                                                    <span class="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand-sun-deep">{t(lang, "dashboard_bonus_badge")}</span>
+                                                                    <span class="text-[10px] font-semibold uppercase tracking-wide text-brand-sun-deep">{t(lang, "dashboard_bonus_badge")}</span>
+                                                                )}
+                                                                {task.is_locked && (
+                                                                    <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-800" title={lang === "es" ? "Termina las tareas obligatorias para desbloquear" : "Finish required tasks to unlock"}>
+                                                                        <svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                                                        {lang === "es" ? "Bloqueada" : "Locked"}
+                                                                    </span>
+                                                                )}
+                                                                {task.approval_status === "pending" && (
+                                                                    <span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-800">
+                                                                        {lang === "es" ? "Por aprobar" : "Awaiting"}
+                                                                    </span>
+                                                                )}
+                                                                {task.approval_status === "approved" && (
+                                                                    <span class="px-1.5 py-0.5 text-[10px] rounded bg-green-100 text-green-800">
+                                                                        {lang === "es" ? "Aprobada" : "Approved"}
+                                                                    </span>
+                                                                )}
+                                                                {task.approval_status === "rejected" && (
+                                                                    <span class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 text-red-800">
+                                                                        {lang === "es" ? "Rechazada" : "Rejected"}
+                                                                    </span>
                                                                 )}
                                                             </span>
                                                             <span class="text-xs font-semibold whitespace-nowrap">+{task.template_points}</span>

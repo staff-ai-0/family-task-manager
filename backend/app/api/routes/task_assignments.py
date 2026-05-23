@@ -5,7 +5,8 @@ Handles weekly shuffle, assignment queries, completion with bonus gating,
 and daily progress tracking.
 """
 
-from fastapi import APIRouter, Depends, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from datetime import date
@@ -23,8 +24,12 @@ from app.schemas.task_assignment import (
     TaskAssignmentWithDetails,
     DailyProgressResponse,
     AssignmentPatch,
+    CompleteAssignmentRequest,
+    ApprovalDecision,
+    GigApprovalRow,
 )
 from app.models import User
+from app.models.user import UserRole
 from app.models.task_assignment import AssignmentStatus
 
 router = APIRouter()
@@ -87,13 +92,32 @@ async def list_week_assignments(
 ):
     """List all assignments for a given week"""
     target = week_of or date.today()
+    family_id = to_uuid_required(current_user.family_id)
     assignments = await TaskAssignmentService.list_assignments_for_week(
         db,
-        family_id=to_uuid_required(current_user.family_id),
+        family_id=family_id,
         week_of=target,
         user_id=user_id,
         status=status,
     )
+
+    # Per-user, per-date lock cache. Only today (or future) can be locked;
+    # historical dates always render unlocked since the day has passed.
+    # "today" is computed in the viewer's family timezone.
+    today = await TaskAssignmentService._user_local_today(db, current_user.id)
+    lock_cache: dict[tuple, bool] = {}
+    for a in assignments:
+        is_bonus = a.template.is_bonus if a.template else False
+        if is_bonus and a.assigned_date == today and a.status != AssignmentStatus.COMPLETED:
+            key = (a.assigned_to, a.assigned_date)
+            if key not in lock_cache:
+                all_done = await TaskAssignmentService.check_all_required_done_today(
+                    db, a.assigned_to, family_id, a.assigned_date
+                )
+                lock_cache[key] = not all_done
+            a._is_locked = lock_cache[key]
+        else:
+            a._is_locked = False
 
     return [_assignment_to_detail(a) for a in assignments]
 
@@ -106,12 +130,30 @@ async def list_today_assignments(
 ):
     """List assignments for today (defaults to current user)"""
     target_user = user_id or to_uuid_required(current_user.id)
+    family_id = to_uuid_required(current_user.family_id)
+    today = await TaskAssignmentService._user_local_today(db, target_user)
     assignments = await TaskAssignmentService.list_assignments_for_date(
         db,
-        family_id=to_uuid_required(current_user.family_id),
-        target_date=date.today(),
+        family_id=family_id,
+        target_date=today,
         user_id=target_user,
     )
+
+    # Compute lock state once per (user, date) — needed because /today may
+    # include multiple users when filtered by user_id query param.
+    lock_cache: dict[tuple, bool] = {}
+    for a in assignments:
+        is_bonus = a.template.is_bonus if a.template else False
+        if is_bonus and a.status != AssignmentStatus.COMPLETED:
+            key = (a.assigned_to, a.assigned_date)
+            if key not in lock_cache:
+                all_done = await TaskAssignmentService.check_all_required_done_today(
+                    db, a.assigned_to, family_id, a.assigned_date
+                )
+                lock_cache[key] = not all_done
+            a._is_locked = lock_cache[key]
+        else:
+            a._is_locked = False
 
     return [_assignment_to_detail(a) for a in assignments]
 
@@ -136,6 +178,44 @@ async def get_daily_progress(
     progress["assignments"] = [_assignment_to_detail(a) for a in progress["assignments"]]
 
     return DailyProgressResponse(**progress)
+
+
+# ─── Approvals ───────────────────────────────────────────────────────
+# NOTE: must be registered BEFORE @router.get("/{assignment_id}") so FastAPI
+# doesn't try to coerce "pending-approvals" into a UUID.
+
+@router.get("/pending-approvals", response_model=List[GigApprovalRow])
+async def list_pending_approvals(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List gigs awaiting parent approval (parents only)."""
+    if current_user.role != UserRole.PARENT:
+        raise HTTPException(status_code=403, detail="Parents only")
+
+    family_id = to_uuid_required(current_user.family_id)
+    rows = await TaskAssignmentService.list_pending_approvals(db, family_id)
+
+    # One query for assignee names — avoids N+1.
+    user_ids = list({r.assigned_to for r in rows})
+    user_names: dict = {}
+    if user_ids:
+        q = sa_select(User.id, User.name).where(User.id.in_(user_ids))
+        user_names = {uid: name for uid, name in (await db.execute(q)).all()}
+
+    return [
+        GigApprovalRow(
+            assignment_id=r.id,
+            template_id=r.template_id,
+            template_title=r.template.title if r.template else "",
+            points=r.template.points if r.template else 0,
+            assigned_to=r.assigned_to,
+            assigned_to_name=user_names.get(r.assigned_to, ""),
+            completed_at=r.completed_at,
+            proof_text=r.proof_text,
+        )
+        for r in rows
+    ]
 
 
 # ─── Assignment Actions ──────────────────────────────────────────────
@@ -178,23 +258,54 @@ async def patch_assignment(
 @router.patch("/{assignment_id}/complete", response_model=TaskAssignmentWithDetails)
 async def complete_assignment(
     assignment_id: UUID,
+    payload: Optional[CompleteAssignmentRequest] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Mark an assignment as completed.
-    Awards points automatically. Bonus tasks require all required tasks to be done first.
+
+    Mandatory tasks complete silently (no points). Gigs (is_bonus=true) require
+    `proof_text` in the body and enter PENDING approval — points are credited
+    only when a parent approves via POST /{id}/approve.
     """
-    assignment = await TaskAssignmentService.complete_assignment(
+    family_id = to_uuid_required(current_user.family_id)
+    await TaskAssignmentService.complete_assignment(
         db,
         assignment_id,
-        family_id=to_uuid_required(current_user.family_id),
+        family_id=family_id,
         user_id=to_uuid_required(current_user.id),
+        proof_text=(payload.proof_text if payload else None),
     )
 
     # Re-fetch with template loaded
     assignment = await TaskAssignmentService.get_assignment(
-        db, assignment_id, to_uuid_required(current_user.family_id)
+        db, assignment_id, family_id
+    )
+    return _assignment_to_detail(assignment)
+
+
+@router.post("/{assignment_id}/approve", response_model=TaskAssignmentWithDetails)
+async def approve_assignment(
+    assignment_id: UUID,
+    decision: ApprovalDecision,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Parent decision on a pending gig. Approve credits points; reject does not.
+    """
+    family_id = to_uuid_required(current_user.family_id)
+    await TaskAssignmentService.approve_gig(
+        db,
+        assignment_id=assignment_id,
+        family_id=family_id,
+        parent_id=to_uuid_required(current_user.id),
+        approve=decision.approve,
+        notes=decision.notes,
+    )
+    assignment = await TaskAssignmentService.get_assignment(
+        db, assignment_id, family_id
     )
     return _assignment_to_detail(assignment)
 
@@ -214,7 +325,12 @@ async def check_overdue_assignments(
 # ─── Helpers ─────────────────────────────────────────────────────────
 
 def _assignment_to_detail(assignment) -> dict:
-    """Convert a TaskAssignment ORM object to TaskAssignmentWithDetails dict"""
+    """Convert a TaskAssignment ORM object to TaskAssignmentWithDetails dict.
+
+    Synthetic enrichment: callers may set assignment._is_locked = True on the
+    Python object before calling this helper (used by /today and /week to
+    surface bonus-gating state without re-querying).
+    """
     template = assignment.template
     assigned_user = getattr(assignment, "assigned_user", None)
     return {
@@ -241,4 +357,12 @@ def _assignment_to_detail(assignment) -> dict:
         # Computed
         "is_overdue": assignment.is_overdue,
         "can_complete": assignment.can_complete,
+        # Gig gating + approval enrichment
+        "is_locked": bool(getattr(assignment, "_is_locked", False)),
+        "approval_status": (
+            assignment.approval_status.value
+            if getattr(assignment, "approval_status", None)
+            else "none"
+        ),
+        "proof_text": getattr(assignment, "proof_text", None),
     }

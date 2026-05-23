@@ -30,8 +30,16 @@ const bonusAssignments = assignments.filter((a: any) => a.template_is_bonus);
 
 const pendingRequired = requiredAssignments.filter((a: any) => a.status === "pending");
 const completedRequired = requiredAssignments.filter((a: any) => a.status === "completed");
+// Gigs that are completed but awaiting/already had parent decision live in
+// the "pending" bucket from a UI point of view (the assignment row is COMPLETED
+// but approval_status drives the badge). Keep "completed" as the final state.
 const pendingBonus = bonusAssignments.filter((a: any) => a.status === "pending");
-const completedBonus = bonusAssignments.filter((a: any) => a.status === "completed");
+const awaitingApprovalBonus = bonusAssignments.filter(
+    (a: any) => a.status === "completed" && a.approval_status === "pending"
+);
+const completedBonus = bonusAssignments.filter(
+    (a: any) => a.status === "completed" && a.approval_status !== "pending"
+);
 
 const allDone = requiredCompleted >= requiredTotal && bonusCompleted >= bonusTotal && (requiredTotal + bonusTotal) > 0;
 const noTasks = requiredTotal === 0 && bonusTotal === 0;
@@ -166,7 +174,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     </div>
                                 </div>
                                 {a.can_complete && (
-                                    <form method="POST" action="/api/assignments/complete">
+                                    <form method="POST" action="/api/assignments/complete" data-complete-form data-is-bonus="0">
                                         <input type="hidden" name="assignment_id" value={a.id} />
                                         <button
                                             type="submit"
@@ -264,8 +272,9 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                             </div>
                                         </div>
                                         {a.can_complete && (
-                                            <form method="POST" action="/api/assignments/complete">
+                                            <form method="POST" action="/api/assignments/complete" data-complete-form data-is-bonus="1">
                                                 <input type="hidden" name="assignment_id" value={a.id} />
+                                                <input type="hidden" name="proof_text" value="" />
                                                 <button
                                                     type="submit"
                                                     class="h-12 w-12 rounded-full bg-brand-sun/20 text-brand-sun-deep flex items-center justify-center hover:bg-brand-sun-deep hover:text-white transition-colors active:scale-95 flex-shrink-0 shadow-[var(--shadow-card)]"
@@ -280,6 +289,35 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                 ))}
                             </div>
 
+                            <!-- Gigs awaiting parent approval -->
+                            {awaitingApprovalBonus.length > 0 && (
+                                <div class="mt-4 space-y-2">
+                                    <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider px-1">
+                                        {lang === "es" ? "Pendiente de aprobación" : "Awaiting approval"}
+                                    </p>
+                                    {awaitingApprovalBonus.map((a: any) => (
+                                        <div class="bg-brand-cream/80 rounded-2xl px-5 py-3 border border-brand-sun flex items-center gap-4">
+                                            <div class="h-8 w-8 rounded-full bg-brand-sun/20 flex items-center justify-center flex-shrink-0">
+                                                <svg class="h-4 w-4 text-brand-sun-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                            </div>
+                                            <div class="flex-1 min-w-0">
+                                                <p class="font-medium text-brand-ink truncate">
+                                                    {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
+                                                </p>
+                                                <p class="text-xs text-brand-ink-soft">
+                                                    {lang === "es" ? "Un padre la revisará pronto" : "A parent will review soon"} · +{a.template_points} pts
+                                                </p>
+                                            </div>
+                                            <span class="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-sun/20 text-brand-sun-deep">
+                                                {lang === "es" ? "Pendiente" : "Pending"}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
                             <!-- Completed bonus tasks -->
                             {completedBonus.length > 0 && (
                                 <details class="mt-3 group">
@@ -290,21 +328,45 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                         </span>
                                     </summary>
                                     <div class="space-y-2">
-                                        {completedBonus.map((a: any) => (
-                                            <div class="bg-brand-cream/60 rounded-2xl px-5 py-3 border border-brand-sun flex items-center gap-4 opacity-70">
-                                                <div class="h-8 w-8 rounded-full bg-brand-mint/20 flex items-center justify-center flex-shrink-0">
-                                                    <svg class="h-4 w-4 text-brand-mint-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                                    </svg>
+                                        {completedBonus.map((a: any) => {
+                                            const rejected = a.approval_status === "rejected";
+                                            return (
+                                                <div class:list={[
+                                                    "rounded-2xl px-5 py-3 border flex items-center gap-4 opacity-80",
+                                                    rejected
+                                                        ? "bg-red-50 border-red-200"
+                                                        : "bg-brand-cream/60 border-brand-sun",
+                                                ]}>
+                                                    <div class:list={[
+                                                        "h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0",
+                                                        rejected ? "bg-red-100" : "bg-brand-mint/20",
+                                                    ]}>
+                                                        {rejected ? (
+                                                            <svg class="h-4 w-4 text-red-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        ) : (
+                                                            <svg class="h-4 w-4 text-brand-mint-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        )}
+                                                    </div>
+                                                    <div class="flex-1 min-w-0">
+                                                        <p class:list={[
+                                                            "font-medium truncate",
+                                                            rejected ? "text-red-700" : "text-brand-ink-soft line-through",
+                                                        ]}>
+                                                            {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
+                                                        </p>
+                                                        <p class="text-xs text-brand-ink-soft">
+                                                            {rejected
+                                                                ? (lang === "es" ? "Rechazada" : "Rejected")
+                                                                : t(lang, "dashboard_earned")(a.template_points)}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p class="font-medium text-brand-ink-soft line-through">
-                                                        {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
-                                                    </p>
-                                                    <p class="text-xs text-brand-ink-soft">{t(lang, "dashboard_earned")(a.template_points)}</p>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </details>
                             )}
@@ -316,4 +378,98 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 
         <BottomNav active="tasks" role={user.role} lang={lang} />
     </div>
+
+    <!-- Gig proof-of-work modal (only triggered for bonus tasks) -->
+    <dialog id="gig-proof-modal" class="rounded-2xl p-0 backdrop:bg-black/40 max-w-md w-full md:w-[28rem] border-2 border-brand-ink shadow-[var(--shadow-pop)] bg-brand-cream">
+        <div class="p-5 space-y-3">
+            <div>
+                <p class="text-xs font-medium text-brand-sun-deep uppercase tracking-wider">{t(lang, "dashboard_bonus_badge")}</p>
+                <h3 class="text-lg font-bold text-brand-ink">
+                    {lang === "es" ? "Cuéntanos qué hiciste" : "Tell us what you did"}
+                </h3>
+                <p class="text-sm text-brand-ink-soft mt-1">
+                    {lang === "es"
+                        ? "Un padre revisará esto y aprobará los puntos."
+                        : "A parent will review this and approve the points."}
+                </p>
+            </div>
+            <textarea
+                id="gig-proof-text"
+                rows="5"
+                class="w-full border border-brand-ink/20 rounded-lg p-3 bg-brand-cream text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                placeholder={lang === "es"
+                    ? "¿Qué aprendiste / hiciste / lograste?"
+                    : "What did you learn / make / accomplish?"}
+            ></textarea>
+            <div class="flex justify-end gap-2 pt-1">
+                <button type="button" id="gig-proof-cancel" class="px-4 py-2 rounded-lg bg-brand-cream-deep text-brand-ink font-semibold text-sm">
+                    {lang === "es" ? "Cancelar" : "Cancel"}
+                </button>
+                <button type="button" id="gig-proof-submit" class="px-4 py-2 rounded-lg bg-brand-sun-deep text-white font-semibold text-sm shadow-[var(--shadow-card)]">
+                    {lang === "es" ? "Enviar para aprobación" : "Submit for approval"}
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <script>
+        document.addEventListener("astro:page-load", () => {
+            const modal = document.getElementById("gig-proof-modal") as HTMLDialogElement | null;
+            if (!modal) return;
+            const textarea = document.getElementById("gig-proof-text") as HTMLTextAreaElement | null;
+            const cancelBtn = document.getElementById("gig-proof-cancel");
+            const submitBtn = document.getElementById("gig-proof-submit");
+            if (!textarea || !cancelBtn || !submitBtn) return;
+
+            // Track which form opened the modal so we can submit it on confirm.
+            let pendingForm: HTMLFormElement | null = null;
+
+            document.querySelectorAll<HTMLFormElement>("form[data-complete-form]").forEach((f) => {
+                f.addEventListener("submit", (ev) => {
+                    const isBonus = f.dataset.isBonus === "1";
+                    if (!isBonus) return; // mandatory: submit normally (no proof needed)
+                    ev.preventDefault();
+                    pendingForm = f;
+                    textarea.value = "";
+                    modal.showModal();
+                    setTimeout(() => textarea.focus(), 50);
+                });
+            });
+
+            cancelBtn.addEventListener("click", () => {
+                pendingForm = null;
+                modal.close();
+            });
+
+            submitBtn.addEventListener("click", () => {
+                const text = textarea.value.trim();
+                if (!text) {
+                    textarea.focus();
+                    textarea.classList.add("ring-2", "ring-red-400");
+                    setTimeout(() => textarea.classList.remove("ring-2", "ring-red-400"), 1500);
+                    return;
+                }
+                if (!pendingForm) {
+                    modal.close();
+                    return;
+                }
+                const proofInput = pendingForm.querySelector<HTMLInputElement>('input[name="proof_text"]');
+                if (proofInput) proofInput.value = text;
+                const submittingForm = pendingForm;
+                pendingForm = null;
+                modal.close();
+                // submit() bypasses our submit listener, avoiding a re-trigger of the modal.
+                submittingForm.submit();
+            });
+
+            // Close on backdrop click
+            modal.addEventListener("click", (e) => {
+                const rect = (e.target as HTMLDialogElement).getBoundingClientRect?.();
+                if (e.target === modal) {
+                    pendingForm = null;
+                    modal.close();
+                }
+            });
+        });
+    </script>
 </Layout>

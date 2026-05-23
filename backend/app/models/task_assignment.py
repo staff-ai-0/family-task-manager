@@ -14,6 +14,7 @@ from sqlalchemy import (
     DateTime,
     Date,
     ForeignKey,
+    Text,
     Enum as SQLEnum,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -32,6 +33,14 @@ class AssignmentStatus(str, enum.Enum):
     COMPLETED = "completed"
     OVERDUE = "overdue"
     CANCELLED = "cancelled"
+
+
+class ApprovalStatus(str, enum.Enum):
+    """Gig approval lifecycle."""
+    NONE = "none"
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 class TaskAssignment(Base):
@@ -73,6 +82,26 @@ class TaskAssignment(Base):
         nullable=False,
         index=True,
     )
+
+    approval_status = Column(
+        SQLEnum(
+            ApprovalStatus,
+            values_callable=lambda x: [e.value for e in x],
+            name="approval_status",
+        ),
+        nullable=False,
+        default=ApprovalStatus.NONE,
+        server_default="none",
+        index=True,
+    )
+    proof_text = Column(Text, nullable=True)
+    approved_by = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    approval_notes = Column(Text, nullable=True)
 
     # Scheduling
     assigned_date = Column(Date, nullable=False)  # The specific date this task is for

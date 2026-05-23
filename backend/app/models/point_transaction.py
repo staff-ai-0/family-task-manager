@@ -19,6 +19,7 @@ class TransactionType(str, enum.Enum):
     REWARD_REDEEMED = "reward_redeemed"  # Points spent on reward
     PARENT_ADJUSTMENT = "parent_adjustment"  # Manual adjustment by parent
     BONUS = "bonus"  # Bonus points
+    GIG_APPROVED = "gig_approved"  # Points credited after parent approves a gig
     PENALTY = "penalty"  # Point deduction
     TRANSFER = "transfer"  # Transfer between users
 
@@ -85,6 +86,18 @@ class PointTransaction(Base):
             balance_before=balance_before,
             balance_after=balance_before + points,
             description=f"Completed task and earned {points} points"
+        )
+
+    @classmethod
+    def create_gig_approval(cls, user_id, assignment_id, points: int, balance_before: int):
+        return cls(
+            type=TransactionType.GIG_APPROVED,
+            user_id=user_id,
+            assignment_id=assignment_id,
+            points=points,
+            balance_before=balance_before,
+            balance_after=balance_before + points,
+            description=f"Gig approved — earned {points} points",
         )
 
     @classmethod
