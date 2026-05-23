@@ -69,6 +69,9 @@ class TaskAssignmentWithDetails(TaskAssignmentResponse):
     assigned_user_name: str = ""
     is_overdue: bool = False
     can_complete: bool = True
+    is_locked: bool = False
+    approval_status: str = "none"
+    proof_text: Optional[str] = None
 
 
 class ShuffleResponse(BaseModel):
@@ -114,3 +117,25 @@ class DailyProgressResponse(BaseModel):
     bonus_total: int
     bonus_completed: int
     assignments: List[TaskAssignmentWithDetails]
+
+
+class CompleteAssignmentRequest(BaseModel):
+    proof_text: Optional[str] = Field(None, max_length=4000)
+
+
+class ApprovalDecision(BaseModel):
+    approve: bool
+    notes: Optional[str] = Field(None, max_length=2000)
+
+
+class GigApprovalRow(BaseModel):
+    assignment_id: UUID
+    template_id: UUID
+    template_title: str
+    points: int
+    assigned_to: UUID
+    assigned_to_name: str
+    completed_at: datetime
+    proof_text: Optional[str] = None
+
+    model_config = {"from_attributes": True}
