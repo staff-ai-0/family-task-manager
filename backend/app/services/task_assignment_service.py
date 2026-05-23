@@ -591,6 +591,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         family_id: UUID,
         user_id: UUID,
         proof_text: Optional[str] = None,
+        proof_image_url: Optional[str] = None,
     ) -> TaskAssignment:
         """
         Mark an assignment as completed.
@@ -633,6 +634,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             assignment.completed_at = datetime.now(timezone.utc)
             assignment.approval_status = ApprovalStatus.PENDING
             assignment.proof_text = proof_text.strip()
+            if proof_image_url:
+                assignment.proof_image_url = proof_image_url
         else:
             # Mandatory path — silent, no points, no approval
             assignment.status = AssignmentStatus.COMPLETED
@@ -641,6 +644,26 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         await db.commit()
         await db.refresh(assignment)
+
+        # Fire-and-forget notification on gig submission. Failures are
+        # swallowed inside the email helper so the API response is never
+        # blocked by an upstream issue.
+        if template.is_bonus:
+            try:
+                from app.services.email_service import EmailService
+                child = await get_user_by_id(db, user_id)
+                await EmailService.notify_parents_gig_pending(
+                    db,
+                    family_id=family_id,
+                    child_name=child.name,
+                    gig_title=template.title,
+                    proof_text=assignment.proof_text or "",
+                    proof_image_url=assignment.proof_image_url,
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception("notify_parents_gig_pending failed")
+
         return assignment
 
     # ─── Gig approval (parent-only) ──────────────────────────────────
@@ -656,6 +679,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     ) -> TaskAssignment:
         from app.models.user import UserRole
         from app.services.points_service import PointsService
+        from app.core.premium import get_family_plan
+        from app.services.usage_service import UsageService
 
         parent = await get_user_by_id(db, parent_id)
         if parent.family_id != family_id or parent.role != UserRole.PARENT:
@@ -673,6 +698,18 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         assignment.approval_notes = notes
 
         if approve:
+            # Enforce per-family monthly gig approval cap. Atomic increment
+            # prevents two concurrent approvals from slipping past the limit.
+            plan = await get_family_plan(db, parent)
+            limit = int(plan.limits.get("max_gigs_per_month", 3))
+            new_count = await UsageService.try_increment_within_limit(
+                db, family_id, "gig_completion", limit, amount=1,
+            )
+            if new_count is None:
+                raise ValidationException(
+                    f"Family has hit the monthly gig approval cap ({limit}). "
+                    "Upgrade to raise the cap."
+                )
             assignment.approval_status = ApprovalStatus.APPROVED
             await PointsService.award_gig_points(
                 db, assignment.assigned_to, assignment.id, assignment.template.points

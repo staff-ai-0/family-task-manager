@@ -95,6 +95,7 @@ class TaskAssignment(Base):
         index=True,
     )
     proof_text = Column(Text, nullable=True)
+    proof_image_url = Column(String(512), nullable=True)
     approved_by = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),

@@ -5,7 +5,7 @@ Handles weekly shuffle, assignment queries, completion with bonus gating,
 and daily progress tracking.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile
 from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
@@ -180,6 +180,42 @@ async def get_daily_progress(
     return DailyProgressResponse(**progress)
 
 
+# ─── Gig proof upload ────────────────────────────────────────────────
+# Must also be registered BEFORE @router.get("/{assignment_id}").
+
+@router.post("/proof-upload")
+async def upload_gig_proof(
+    file: UploadFile = File(..., description="Proof image (JPEG, PNG, WebP). Max 5MB."),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload a proof image for a gig. Returns the URL to store on the assignment.
+
+    Stateless — the URL is not bound to a specific assignment here; the caller
+    submits the URL via the `/complete` endpoint's proof_image_url field.
+    """
+    import uuid as _uuid
+    import os as _os
+
+    allowed = {"image/jpeg", "image/png", "image/webp"}
+    content_type = (file.content_type or "").lower()
+    if content_type not in allowed:
+        raise HTTPException(status_code=415, detail=f"Unsupported type {content_type}")
+
+    body = await file.read()
+    if len(body) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (max 5MB)")
+
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[content_type]
+    fname = f"{_uuid.uuid4().hex}.{ext}"
+    dest_dir = "/app/uploads/gig-proofs"
+    _os.makedirs(dest_dir, exist_ok=True)
+    dest = _os.path.join(dest_dir, fname)
+    with open(dest, "wb") as fh:
+        fh.write(body)
+
+    return {"proof_image_url": f"/uploads/gig-proofs/{fname}"}
+
+
 # ─── Approvals ───────────────────────────────────────────────────────
 # NOTE: must be registered BEFORE @router.get("/{assignment_id}") so FastAPI
 # doesn't try to coerce "pending-approvals" into a UUID.
@@ -213,6 +249,7 @@ async def list_pending_approvals(
             assigned_to_name=user_names.get(r.assigned_to, ""),
             completed_at=r.completed_at,
             proof_text=r.proof_text,
+            proof_image_url=r.proof_image_url,
         )
         for r in rows
     ]
@@ -276,6 +313,7 @@ async def complete_assignment(
         family_id=family_id,
         user_id=to_uuid_required(current_user.id),
         proof_text=(payload.proof_text if payload else None),
+        proof_image_url=(payload.proof_image_url if payload else None),
     )
 
     # Re-fetch with template loaded
@@ -365,4 +403,5 @@ def _assignment_to_detail(assignment) -> dict:
             else "none"
         ),
         "proof_text": getattr(assignment, "proof_text", None),
+        "proof_image_url": getattr(assignment, "proof_image_url", None),
     }
