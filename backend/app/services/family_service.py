@@ -19,6 +19,12 @@ from app.core.exceptions import NotFoundException, ValidationException
 class FamilyService:
     """Service for family-related operations"""
 
+    # Default gig starter pack.
+    # NOTE: this list is duplicated in
+    # `backend/migrations/versions/2026_05_22_mandatory_zero_points_and_gigs.py`
+    # because migrations must be self-contained (they cannot safely import
+    # application code that changes over time). Keep the two copies in sync
+    # if the canonical content ever changes.
     DEFAULT_GIGS = [
         ("Learn a topic + writeup", "Pick something new (podman, git, a recipe). Read up, then write 5-10 sentences on what you learned.", 30),
         ("Read book chapter + discuss", "Read a chapter, then sit with a parent to discuss the main idea.", 20),
@@ -31,7 +37,19 @@ class FamilyService:
     @staticmethod
     async def _seed_default_gigs(db: AsyncSession, family_id: UUID) -> None:
         from app.models.task_template import TaskTemplate, AssignmentType
+
+        titles = [t for t, _, _ in FamilyService.DEFAULT_GIGS]
+        existing = (await db.execute(
+            select(TaskTemplate.title).where(
+                TaskTemplate.family_id == family_id,
+                TaskTemplate.title.in_(titles),
+            )
+        )).scalars().all()
+        existing_set = set(existing)
+
         for title, description, points in FamilyService.DEFAULT_GIGS:
+            if title in existing_set:
+                continue
             db.add(TaskTemplate(
                 title=title,
                 description=description,
