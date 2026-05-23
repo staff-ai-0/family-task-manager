@@ -70,10 +70,25 @@ async def get_family(
 async def update_family(
     family_data: FamilyUpdate,
     family_id: UUID = Depends(verify_family_id),
+    current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update family information"""
+    """Update family information (parent only — non-parents can shift
+    family-wide settings like timezone otherwise, bypassing gig gating)."""
     family = await FamilyService.update_family(db, family_id, family_data)
+    return family
+
+
+@router.patch("/me", response_model=FamilyResponse)
+async def update_my_family(
+    family_data: FamilyUpdate,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parent-only update of the caller's own family (name, timezone, etc.)."""
+    family = await FamilyService.update_family(
+        db, to_uuid_required(current_user.family_id), family_data
+    )
     return family
 
 

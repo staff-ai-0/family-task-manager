@@ -1,0 +1,59 @@
+---
+import { t } from "../lib/i18n";
+
+interface Props {
+    lang: string;
+    show: boolean;
+}
+
+const { lang, show } = Astro.props;
+---
+
+{show && (
+    <div
+        id="gigs-intro-banner"
+        class="mx-4 mt-4 rounded-2xl border border-brand-sun bg-brand-cream p-4 shadow-[var(--shadow-card)]"
+        role="region"
+        aria-label="Scope change explanation"
+    >
+        <div class="flex items-start gap-3">
+            <div class="flex-shrink-0 mt-0.5">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-brand-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <div class="flex-1">
+                <h3 class="font-semibold text-brand-ink mb-1">{t(lang, "intro_banner_title")}</h3>
+                <p class="text-sm text-brand-ink/80 mb-3">{t(lang, "intro_banner_body")}</p>
+                <button
+                    id="gigs-intro-dismiss"
+                    class="px-4 py-2 bg-brand-sky-deep text-white rounded-lg text-sm font-medium hover:bg-brand-sky transition-colors"
+                    type="button"
+                >
+                    {t(lang, "intro_banner_dismiss")}
+                </button>
+            </div>
+        </div>
+    </div>
+)}
+
+<script>
+    const btn = document.getElementById("gigs-intro-dismiss");
+    if (btn) {
+        btn.addEventListener("click", async () => {
+            btn.setAttribute("disabled", "true");
+            try {
+                const r = await fetch("/api/auth/ack-gigs-intro", { method: "POST" });
+                if (r.ok) {
+                    document.getElementById("gigs-intro-banner")?.remove();
+                } else {
+                    btn.removeAttribute("disabled");
+                    console.error("ack-gigs-intro failed:", await r.text());
+                }
+            } catch (e) {
+                btn.removeAttribute("disabled");
+                console.error("ack-gigs-intro error:", e);
+            }
+        });
+    }
+</script>
