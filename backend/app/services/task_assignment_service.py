@@ -685,6 +685,46 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         return assignment
 
     @staticmethod
+    async def list_for_user_today_with_locks(
+        db: AsyncSession,
+        user_id: UUID,
+        family_id: UUID,
+    ) -> list[dict]:
+        """Return today's assignments for a user with is_locked + approval fields."""
+        today = await TaskAssignmentService._user_local_today(db, user_id)
+        all_done = await TaskAssignmentService.check_all_required_done_today(
+            db, user_id, family_id, today
+        )
+        q = (
+            select(TaskAssignment)
+            .options(selectinload(TaskAssignment.template))
+            .where(
+                TaskAssignment.assigned_to == user_id,
+                TaskAssignment.family_id == family_id,
+                TaskAssignment.assigned_date == today,
+            )
+            .order_by(TaskAssignment.assigned_date)
+        )
+        rows = (await db.execute(q)).scalars().all()
+        out = []
+        for r in rows:
+            is_bonus = r.template.is_bonus
+            out.append({
+                "id": r.id,
+                "template_id": r.template_id,
+                "title": r.template.title,
+                "points": r.template.points,
+                "is_bonus": is_bonus,
+                "status": r.status.value,
+                "approval_status": r.approval_status.value if r.approval_status else "none",
+                "proof_text": r.proof_text,
+                "is_locked": is_bonus and not all_done and r.status != AssignmentStatus.COMPLETED,
+                "assigned_date": r.assigned_date,
+                "completed_at": r.completed_at,
+            })
+        return out
+
+    @staticmethod
     async def list_pending_approvals(
         db: AsyncSession,
         family_id: UUID,
