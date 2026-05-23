@@ -20,18 +20,24 @@ const labels = {
         title: "Settings",
         subscription: "Subscription",
         subscription_desc: "Manage your plan and billing",
+        family: "Family",
+        family_desc: "Timezone and family-wide preferences",
         back: "Back",
     },
     es: {
         title: "Configuraci\u00f3n",
         subscription: "Suscripci\u00f3n",
         subscription_desc: "Administra tu plan y facturaci\u00f3n",
+        family: "Familia",
+        family_desc: "Zona horaria y preferencias de la familia",
         back: "Volver",
     },
 }[lang] ?? {
     title: "Settings",
     subscription: "Subscription",
     subscription_desc: "Manage your plan and billing",
+    family: "Family",
+    family_desc: "Timezone and family-wide preferences",
     back: "Back",
 };
 ---
@@ -66,6 +72,26 @@ const labels = {
                     <div>
                         <p class="font-bold text-brand-ink">{labels.subscription}</p>
                         <p class="text-xs text-brand-ink-soft">{labels.subscription_desc}</p>
+                    </div>
+                    <svg class="w-5 h-5 text-brand-ink-soft ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </a>
+
+                <a
+                    href="/parent/settings/family"
+                    class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-sky transition-all flex items-center gap-4"
+                >
+                    <div class="w-12 h-12 rounded-xl bg-brand-sky/20 flex items-center justify-center flex-shrink-0">
+                        <svg class="h-6 w-6 text-brand-sky-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-brand-ink">{labels.family}</p>
+                        <p class="text-xs text-brand-ink-soft">{labels.family_desc}</p>
                     </div>
                     <svg class="w-5 h-5 text-brand-ink-soft ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />

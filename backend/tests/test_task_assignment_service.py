@@ -357,13 +357,14 @@ class TestBonusGating:
             )
             assert completed.status == AssignmentStatus.COMPLETED
 
-    async def test_check_all_required_done_true_when_no_required(
+    async def test_no_open_mandatory_when_none_exist(
         self, db_session, test_family, test_child_user
     ):
-        result = await TaskAssignmentService.check_all_required_done_today(
-            db_session, test_child_user.id, test_family.id
+        from datetime import date
+        result = await TaskAssignmentService.has_open_mandatory_through(
+            db_session, test_child_user.id, test_family.id, date.today()
         )
-        assert result is True  # No required tasks = unlocked
+        assert result is False  # No required tasks = nothing open = unlocked
 
 
 # ─── Daily Progress ──────────────────────────────────────────────────

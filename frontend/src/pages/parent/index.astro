@@ -1,6 +1,7 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import BottomNav from "../../components/BottomNav.astro";
+import GigsIntroBanner from "../../components/GigsIntroBanner.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 
@@ -38,6 +39,8 @@ const pendingApprovals = Array.isArray(pending) ? pending.length : 0;
                 {t(lang, "parent_members_count")(family?.members?.length ?? 0)}
             </p>
         </header>
+
+        <GigsIntroBanner lang={lang} show={!user.acknowledged_gigs_intro} />
 
         <main class="flex-1 px-4 py-6">
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
