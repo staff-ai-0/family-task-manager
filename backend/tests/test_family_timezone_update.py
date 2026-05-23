@@ -49,6 +49,28 @@ async def test_child_cannot_update_family(client: AsyncClient, test_child_user):
 
 
 @pytest.mark.asyncio
+async def test_child_cannot_update_family_via_legacy_put(
+    client: AsyncClient, test_child_user, test_family,
+):
+    """Regression: legacy PUT /{family_id} must reject non-parents.
+    Otherwise a child can shift the family's timezone via the older
+    route and bypass carry-over gig gating."""
+    login = await client.post(
+        "/api/auth/login",
+        json={"email": "child@test.com", "password": "password123"},
+    )
+    assert login.status_code == 200
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    r = await client.put(
+        f"/api/families/{test_family.id}",
+        json={"timezone": "Pacific/Kiritimati"},
+        headers=headers,
+    )
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_get_my_family_exposes_timezone(client: AsyncClient, auth_headers):
     r = await client.get("/api/families/me", headers=auth_headers)
     assert r.status_code == 200
