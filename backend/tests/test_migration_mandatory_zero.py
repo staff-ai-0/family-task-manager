@@ -19,6 +19,29 @@ async def test_all_mandatory_templates_have_zero_points(db_session):
 
 
 @pytest.mark.asyncio
+async def test_new_family_gets_default_gigs(db_session):
+    from uuid import uuid4
+    from app.services.family_service import FamilyService
+    from app.schemas.family import FamilyCreate
+
+    family = await FamilyService.create_family(
+        db_session,
+        FamilyCreate(name="Brand New Fam"),
+        created_by=uuid4(),
+    )
+
+    count = await db_session.scalar(
+        select(func.count())
+        .select_from(TaskTemplate)
+        .where(
+            TaskTemplate.family_id == family.id,
+            TaskTemplate.is_bonus.is_(True),
+        )
+    )
+    assert count == len(FamilyService.DEFAULT_GIGS)
+
+
+@pytest.mark.asyncio
 async def test_check_constraint_rejects_nonzero_mandatory_insert(db_session, test_family):
     from sqlalchemy.exc import IntegrityError
 
