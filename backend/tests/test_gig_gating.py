@@ -149,3 +149,149 @@ async def test_list_marks_gigs_locked_when_mandatory_pending(
     locked = [r for r in rows if r["is_locked"]]
     assert len(locked) == 1
     assert locked[0]["is_bonus"] is True
+
+
+@pytest.mark.asyncio
+async def test_carry_over_overdue_mandatory_blocks_today_gig(
+    db_session, test_family, test_child_user,
+    mandatory_template_factory, gig_template_factory,
+):
+    """An OVERDUE mandatory from yesterday should block today's gigs."""
+    mand = await mandatory_template_factory(family=test_family)
+    gig = await gig_template_factory(family=test_family, points=20)
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    week_of = today - timedelta(days=today.weekday())
+
+    db_session.add_all([
+        # Yesterday's mandatory left OVERDUE
+        TaskAssignment(
+            id=uuid4(), template_id=mand.id, assigned_to=test_child_user.id,
+            family_id=test_family.id, assigned_date=yesterday, week_of=week_of,
+            status=AssignmentStatus.OVERDUE,
+        ),
+        # Today's gig (no pending mandatory today)
+        gig_assignment := TaskAssignment(
+            id=uuid4(), template_id=gig.id, assigned_to=test_child_user.id,
+            family_id=test_family.id, assigned_date=today, week_of=week_of,
+            status=AssignmentStatus.PENDING,
+        ),
+    ])
+    await db_session.commit()
+
+    with pytest.raises(ForbiddenException, match="mandatory"):
+        await TaskAssignmentService.complete_assignment(
+            db_session, gig_assignment.id, test_family.id, test_child_user.id,
+            proof_text="trying to skip",
+        )
+
+
+@pytest.mark.asyncio
+async def test_carry_over_pending_from_yesterday_blocks_today_gig(
+    db_session, test_family, test_child_user,
+    mandatory_template_factory, gig_template_factory,
+):
+    """A still-PENDING mandatory from yesterday should also block."""
+    mand = await mandatory_template_factory(family=test_family)
+    gig = await gig_template_factory(family=test_family, points=20)
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    week_of = today - timedelta(days=today.weekday())
+
+    db_session.add_all([
+        TaskAssignment(
+            id=uuid4(), template_id=mand.id, assigned_to=test_child_user.id,
+            family_id=test_family.id, assigned_date=yesterday, week_of=week_of,
+            status=AssignmentStatus.PENDING,
+        ),
+        gig_assignment := TaskAssignment(
+            id=uuid4(), template_id=gig.id, assigned_to=test_child_user.id,
+            family_id=test_family.id, assigned_date=today, week_of=week_of,
+            status=AssignmentStatus.PENDING,
+        ),
+    ])
+    await db_session.commit()
+
+    has_open = await TaskAssignmentService.has_open_mandatory_through(
+        db_session, test_child_user.id, test_family.id, today
+    )
+    assert has_open is True
+
+    with pytest.raises(ForbiddenException):
+        await TaskAssignmentService.complete_assignment(
+            db_session, gig_assignment.id, test_family.id, test_child_user.id,
+            proof_text="trying again",
+        )
+
+
+@pytest.mark.asyncio
+async def test_cancelled_mandatory_does_not_block(
+    db_session, test_family, test_child_user,
+    mandatory_template_factory, gig_template_factory,
+):
+    """CANCELLED mandatory (parent waived) does not block gigs."""
+    mand = await mandatory_template_factory(family=test_family)
+    gig = await gig_template_factory(family=test_family, points=20)
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    week_of = today - timedelta(days=today.weekday())
+
+    db_session.add_all([
+        TaskAssignment(
+            id=uuid4(), template_id=mand.id, assigned_to=test_child_user.id,
+            family_id=test_family.id, assigned_date=yesterday, week_of=week_of,
+            status=AssignmentStatus.CANCELLED,
+        ),
+        gig_assignment := TaskAssignment(
+            id=uuid4(), template_id=gig.id, assigned_to=test_child_user.id,
+            family_id=test_family.id, assigned_date=today, week_of=week_of,
+            status=AssignmentStatus.PENDING,
+        ),
+    ])
+    await db_session.commit()
+
+    has_open = await TaskAssignmentService.has_open_mandatory_through(
+        db_session, test_child_user.id, test_family.id, today
+    )
+    assert has_open is False
+
+    result = await TaskAssignmentService.complete_assignment(
+        db_session, gig_assignment.id, test_family.id, test_child_user.id,
+        proof_text="cancelled mandatory didn't block",
+    )
+    assert result.approval_status == ApprovalStatus.PENDING
+
+
+@pytest.mark.asyncio
+async def test_progress_bonus_unlocked_respects_carry_over(
+    db_session, test_family, test_child_user,
+    mandatory_template_factory, gig_template_factory,
+):
+    """get_daily_progress.bonus_unlocked must be False when overdue mandatory exists."""
+    mand = await mandatory_template_factory(family=test_family)
+    gig = await gig_template_factory(family=test_family, points=20)
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    week_of = today - timedelta(days=today.weekday())
+
+    db_session.add_all([
+        TaskAssignment(
+            id=uuid4(), template_id=mand.id, assigned_to=test_child_user.id,
+            family_id=test_family.id, assigned_date=yesterday, week_of=week_of,
+            status=AssignmentStatus.OVERDUE,
+        ),
+        TaskAssignment(
+            id=uuid4(), template_id=gig.id, assigned_to=test_child_user.id,
+            family_id=test_family.id, assigned_date=today, week_of=week_of,
+            status=AssignmentStatus.PENDING,
+        ),
+    ])
+    await db_session.commit()
+
+    progress = await TaskAssignmentService.get_daily_progress(
+        db_session, test_child_user.id, test_family.id, today,
+    )
+    assert progress["bonus_unlocked"] is False
+    # No mandatory on `today` itself
+    assert progress["required_total"] == 0
+    assert progress["bonus_total"] == 1
