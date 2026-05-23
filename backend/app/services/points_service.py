@@ -70,6 +70,25 @@ class PointsService:
         return transaction
 
     @staticmethod
+    async def award_gig_points(
+        db: AsyncSession,
+        user_id: UUID,
+        assignment_id: UUID,
+        points: int,
+    ) -> PointTransaction:
+        """Credit gig points after parent approval. Caller commits."""
+        user = await get_user_by_id(db, user_id)
+        transaction = PointTransaction.create_gig_approval(
+            user_id=user_id,
+            assignment_id=assignment_id,
+            points=points,
+            balance_before=user.points,
+        )
+        user.points += points
+        db.add(transaction)
+        return transaction
+
+    @staticmethod
     async def deduct_points_for_reward(
         db: AsyncSession,
         user_id: UUID,

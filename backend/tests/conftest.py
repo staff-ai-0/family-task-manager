@@ -72,9 +72,10 @@ async def test_engine_session():
             ("userrole", ["PARENT", "CHILD", "TEEN"]),
             ("taskstatus", ["PENDING", "COMPLETED", "OVERDUE", "CANCELLED"]),
             ("taskfrequency", ["DAILY", "WEEKLY", "MONTHLY", "ONE_TIME"]),
-            ("transactiontype", ["TASK_COMPLETED", "REWARD_REDEEMED", "PARENT_ADJUSTMENT", "BONUS", "PENALTY", "TRANSFER"]),
+            ("transactiontype", ["TASK_COMPLETED", "REWARD_REDEEMED", "PARENT_ADJUSTMENT", "BONUS", "PENALTY", "TRANSFER", "GIG_APPROVED"]),
             ("rewardcategory", ["SCREEN_TIME", "TREATS", "ACTIVITIES", "PRIVILEGES", "MONEY", "TOYS"]),
             ("assignmentstatus", ["pending", "completed", "overdue", "cancelled"]),
+            ("approval_status", ["none", "pending", "approved", "rejected"]),
             ("invitationstatus", ["PENDING", "ACCEPTED", "REJECTED", "EXPIRED"]),
             ("restrictiontype", ["SCREEN_TIME", "REWARDS", "EXTRA_TASKS", "ALLOWANCE", "ACTIVITIES", "CUSTOM"]),
             ("consequenceseverity", ["LOW", "MEDIUM", "HIGH"]),
@@ -201,6 +202,27 @@ async def test_child_user(db_session: AsyncSession, test_family):
         family_id=test_family.id,
         email_verified=True,
         points=100,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def test_teen_user(db_session: AsyncSession, test_family):
+    """Create a test teen user (used for non-parent permission tests)."""
+    from app.models.user import User, UserRole
+    from app.core.security import get_password_hash
+
+    user = User(
+        email="teen@test.local",
+        password_hash=get_password_hash("password123"),
+        name="Test Teen",
+        role=UserRole.TEEN,
+        family_id=test_family.id,
+        email_verified=True,
+        points=0,
     )
     db_session.add(user)
     await db_session.commit()
