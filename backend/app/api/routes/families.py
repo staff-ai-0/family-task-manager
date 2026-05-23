@@ -77,6 +77,19 @@ async def update_family(
     return family
 
 
+@router.patch("/me", response_model=FamilyResponse)
+async def update_my_family(
+    family_data: FamilyUpdate,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parent-only update of the caller's own family (name, timezone, etc.)."""
+    family = await FamilyService.update_family(
+        db, to_uuid_required(current_user.family_id), family_data
+    )
+    return family
+
+
 @router.get("/{family_id}/members", response_model=List[UserResponse])
 async def get_family_members(
     family_id: UUID = Depends(verify_family_id),
