@@ -72,9 +72,10 @@ async def test_engine_session():
             ("userrole", ["PARENT", "CHILD", "TEEN"]),
             ("taskstatus", ["PENDING", "COMPLETED", "OVERDUE", "CANCELLED"]),
             ("taskfrequency", ["DAILY", "WEEKLY", "MONTHLY", "ONE_TIME"]),
-            ("transactiontype", ["TASK_COMPLETED", "REWARD_REDEEMED", "PARENT_ADJUSTMENT", "BONUS", "PENALTY", "TRANSFER"]),
+            ("transactiontype", ["TASK_COMPLETED", "REWARD_REDEEMED", "PARENT_ADJUSTMENT", "BONUS", "PENALTY", "TRANSFER", "GIG_APPROVED"]),
             ("rewardcategory", ["SCREEN_TIME", "TREATS", "ACTIVITIES", "PRIVILEGES", "MONEY", "TOYS"]),
             ("assignmentstatus", ["pending", "completed", "overdue", "cancelled"]),
+            ("approval_status", ["none", "pending", "approved", "rejected"]),
             ("invitationstatus", ["PENDING", "ACCEPTED", "REJECTED", "EXPIRED"]),
             ("restrictiontype", ["SCREEN_TIME", "REWARDS", "EXTRA_TASKS", "ALLOWANCE", "ACTIVITIES", "CUSTOM"]),
             ("consequenceseverity", ["LOW", "MEDIUM", "HIGH"]),
@@ -209,6 +210,27 @@ async def test_child_user(db_session: AsyncSession, test_family):
 
 
 @pytest_asyncio.fixture
+async def test_teen_user(db_session: AsyncSession, test_family):
+    """Create a test teen user (used for non-parent permission tests)."""
+    from app.models.user import User, UserRole
+    from app.core.security import get_password_hash
+
+    user = User(
+        email="teen@test.local",
+        password_hash=get_password_hash("password123"),
+        name="Test Teen",
+        role=UserRole.TEEN,
+        family_id=test_family.id,
+        email_verified=True,
+        points=0,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
 async def test_task(
     db_session: AsyncSession, test_family, test_child_user, test_parent_user
 ):
@@ -290,3 +312,44 @@ async def sample_family(db_session: AsyncSession):
     await db_session.commit()
     await db_session.refresh(fam)
     return fam
+
+
+# Task template factories for gig gating tests
+
+
+@pytest_asyncio.fixture
+async def mandatory_template_factory(db_session: AsyncSession):
+    """Factory for a mandatory (is_bonus=False) task template."""
+    from uuid import uuid4
+    from app.models.task_template import TaskTemplate, AssignmentType
+
+    async def _make(*, family, points: int = 0, title: str = "Brush teeth"):
+        t = TaskTemplate(
+            id=uuid4(), title=title, points=points, interval_days=1,
+            assignment_type=AssignmentType.AUTO, is_bonus=False, is_active=True,
+            family_id=family.id,
+        )
+        db_session.add(t)
+        await db_session.commit()
+        return t
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def gig_template_factory(db_session: AsyncSession):
+    """Factory for a gig (is_bonus=True) task template."""
+    from uuid import uuid4
+    from app.models.task_template import TaskTemplate, AssignmentType
+
+    async def _make(*, family, points: int = 20, title: str = "Learn topic"):
+        t = TaskTemplate(
+            id=uuid4(), title=title, points=points, interval_days=7,
+            assignment_type=AssignmentType.AUTO, is_bonus=True, is_active=True,
+            family_id=family.id,
+        )
+        db_session.add(t)
+        await db_session.commit()
+        return t
+
+    return _make

@@ -14,6 +14,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Text,
+    CheckConstraint,
     Enum as SQLEnum,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -36,6 +37,12 @@ class TaskTemplate(Base):
     """Reusable task template for weekly assignment generation"""
 
     __tablename__ = "task_templates"
+    __table_args__ = (
+        CheckConstraint(
+            "is_bonus = true OR points = 0",
+            name="chk_mandatory_zero_points",
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     title = Column(String(200), nullable=False)

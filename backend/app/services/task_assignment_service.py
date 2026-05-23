@@ -13,7 +13,7 @@ from datetime import datetime, date, timedelta
 from uuid import UUID
 
 from app.models.task_template import TaskTemplate, AssignmentType
-from app.models.task_assignment import TaskAssignment, AssignmentStatus
+from app.models.task_assignment import TaskAssignment, AssignmentStatus, ApprovalStatus
 from app.models.user import User
 from app.models.point_transaction import PointTransaction, TransactionType
 from app.core.exceptions import (
@@ -32,6 +32,24 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     """Service for task assignment operations including shuffle and gating"""
 
     model = TaskAssignment
+
+    @staticmethod
+    async def _user_local_today(db: AsyncSession, user_id: UUID) -> date:
+        """Return today's date in the user's family timezone."""
+        from zoneinfo import ZoneInfo
+        from app.models.family import Family
+        from app.services.base_service import get_user_by_id
+        user = await get_user_by_id(db, user_id)
+        tz_name = "UTC"
+        if user.family_id is not None:
+            family = await db.get(Family, user.family_id)
+            if family and family.timezone:
+                tz_name = family.timezone
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = ZoneInfo("UTC")
+        return datetime.now(tz).date()
 
     # ─── Shuffle Algorithm ───────────────────────────────────────────
 
@@ -572,58 +590,157 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         assignment_id: UUID,
         family_id: UUID,
         user_id: UUID,
+        proof_text: Optional[str] = None,
     ) -> TaskAssignment:
         """
-        Mark an assignment as completed, award points, and enforce bonus gating.
+        Mark an assignment as completed.
+
+        Mandatory (is_bonus=false): completes silently, awards no points.
+        Gig (is_bonus=true): requires all today's mandatory done first, requires
+        proof_text, and enters PENDING approval state. Points are credited only
+        when a parent approves via approve_gig().
         """
         assignment = await TaskAssignmentService.get_assignment(
             db, assignment_id, family_id
         )
 
-        # Validate assignment can be completed
         if not assignment.can_complete:
             raise ValidationException(
                 f"Assignment cannot be completed. Current status: {assignment.status.value}"
             )
 
-        # Verify user is the assigned user
         if assignment.assigned_to != user_id:
             raise ForbiddenException(
                 "Only the assigned user can complete this assignment"
             )
 
-        # Check bonus gating: if this is a bonus task, required tasks must be done first
         template = assignment.template
+
         if template.is_bonus:
-            all_required_done = (
-                await TaskAssignmentService.check_all_required_done_today(
-                    db, user_id, family_id, assignment.assigned_date
-                )
+            # Gig path
+            all_required_done = await TaskAssignmentService.check_all_required_done_today(
+                db, user_id, family_id, assignment.assigned_date
             )
             if not all_required_done:
                 raise ForbiddenException(
-                    "Complete all required tasks for today before accessing bonus tasks"
+                    "Complete today's mandatory tasks before claiming a gig"
                 )
 
-        # Mark as completed
-        assignment.status = AssignmentStatus.COMPLETED
-        assignment.completed_at = datetime.utcnow()
+            if not proof_text or not proof_text.strip():
+                raise ValidationException("Gigs require proof text describing what you did")
 
-        # Award points
-        user = await get_user_by_id(db, user_id)
-        transaction = PointTransaction.create_assignment_completion(
-            user_id=user_id,
-            assignment_id=assignment.id,
-            points=template.points,
-            balance_before=user.points,
-        )
-        user.points += template.points
+            assignment.status = AssignmentStatus.COMPLETED
+            assignment.completed_at = datetime.utcnow()
+            assignment.approval_status = ApprovalStatus.PENDING
+            assignment.proof_text = proof_text.strip()
+        else:
+            # Mandatory path — silent, no points, no approval
+            assignment.status = AssignmentStatus.COMPLETED
+            assignment.completed_at = datetime.utcnow()
+            # approval_status stays NONE; no PointTransaction row
 
-        db.add(transaction)
         await db.commit()
         await db.refresh(assignment)
-
         return assignment
+
+    # ─── Gig approval (parent-only) ──────────────────────────────────
+
+    @staticmethod
+    async def approve_gig(
+        db: AsyncSession,
+        assignment_id: UUID,
+        family_id: UUID,
+        parent_id: UUID,
+        approve: bool,
+        notes: Optional[str] = None,
+    ) -> TaskAssignment:
+        from app.models.user import UserRole
+        from app.services.points_service import PointsService
+
+        parent = await get_user_by_id(db, parent_id)
+        if parent.family_id != family_id or parent.role != UserRole.PARENT:
+            raise ForbiddenException("Only parents in this family can approve gigs")
+
+        assignment = await TaskAssignmentService.get_assignment(db, assignment_id, family_id)
+
+        if assignment.approval_status != ApprovalStatus.PENDING:
+            raise ValidationException(
+                f"Gig already decided (status: {assignment.approval_status.value})"
+            )
+
+        assignment.approved_by = parent_id
+        assignment.approved_at = datetime.utcnow()
+        assignment.approval_notes = notes
+
+        if approve:
+            assignment.approval_status = ApprovalStatus.APPROVED
+            await PointsService.award_gig_points(
+                db, assignment.assigned_to, assignment.id, assignment.template.points
+            )
+        else:
+            assignment.approval_status = ApprovalStatus.REJECTED
+
+        await db.commit()
+        await db.refresh(assignment)
+        return assignment
+
+    @staticmethod
+    async def list_for_user_today_with_locks(
+        db: AsyncSession,
+        user_id: UUID,
+        family_id: UUID,
+    ) -> list[dict]:
+        """Return today's assignments for a user with is_locked + approval fields."""
+        today = await TaskAssignmentService._user_local_today(db, user_id)
+        all_done = await TaskAssignmentService.check_all_required_done_today(
+            db, user_id, family_id, today
+        )
+        q = (
+            select(TaskAssignment)
+            .options(selectinload(TaskAssignment.template))
+            .where(
+                TaskAssignment.assigned_to == user_id,
+                TaskAssignment.family_id == family_id,
+                TaskAssignment.assigned_date == today,
+            )
+            .order_by(TaskAssignment.assigned_date)
+        )
+        rows = (await db.execute(q)).scalars().all()
+        out = []
+        for r in rows:
+            is_bonus = r.template.is_bonus
+            out.append({
+                "id": r.id,
+                "template_id": r.template_id,
+                "title": r.template.title,
+                "points": r.template.points,
+                "is_bonus": is_bonus,
+                "status": r.status.value,
+                "approval_status": r.approval_status.value if r.approval_status else "none",
+                "proof_text": r.proof_text,
+                "is_locked": is_bonus and not all_done and r.status != AssignmentStatus.COMPLETED,
+                "assigned_date": r.assigned_date,
+                "completed_at": r.completed_at,
+            })
+        return out
+
+    @staticmethod
+    async def list_pending_approvals(
+        db: AsyncSession,
+        family_id: UUID,
+    ) -> list[TaskAssignment]:
+        from sqlalchemy.orm import selectinload
+        q = (
+            select(TaskAssignment)
+            .options(selectinload(TaskAssignment.template))
+            .where(
+                TaskAssignment.family_id == family_id,
+                TaskAssignment.approval_status == ApprovalStatus.PENDING,
+            )
+            .order_by(TaskAssignment.completed_at.asc())
+        )
+        result = await db.execute(q)
+        return list(result.scalars().all())
 
     # ─── Parent Edit (reassign / reschedule / cancel) ────────────────
 
@@ -691,8 +808,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         """
         Get daily progress summary for a user.
         Returns required/bonus counts and whether bonus is unlocked.
+        "today" is computed in the user's family timezone when target_date is None.
         """
-        check_date = target_date or date.today()
+        check_date = target_date or await TaskAssignmentService._user_local_today(db, user_id)
 
         assignments = await TaskAssignmentService.list_assignments_for_date(
             db, family_id, check_date, user_id

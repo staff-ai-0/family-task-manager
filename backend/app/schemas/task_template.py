@@ -4,7 +4,7 @@ TaskTemplate Pydantic schemas
 Request and response models for task template operations.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List
 from uuid import UUID
 
@@ -35,7 +35,14 @@ class TaskTemplateBase(BaseModel):
 class TaskTemplateCreate(TaskTemplateBase):
     """Schema for creating a new task template"""
 
-    pass
+    @model_validator(mode="after")
+    def _enforce_mandatory_zero_points(self):
+        if not self.is_bonus and self.points != 0:
+            raise ValueError(
+                "Mandatory tasks (is_bonus=false) must have points=0. "
+                "Set is_bonus=true to award points."
+            )
+        return self
 
 
 class TaskTemplateUpdate(BaseModel):
@@ -52,6 +59,16 @@ class TaskTemplateUpdate(BaseModel):
     assignment_type: Optional[AssignmentType] = None
     assigned_user_ids: Optional[List[UUID]] = None
     allowed_roles: Optional[List[str]] = None
+
+    @model_validator(mode="after")
+    def _enforce_mandatory_zero_points(self):
+        # Only validate if both fields are present in the update; otherwise
+        # we cannot know the combined state without the existing row.
+        if self.is_bonus is False and self.points is not None and self.points != 0:
+            raise ValueError(
+                "Mandatory tasks (is_bonus=false) must have points=0."
+            )
+        return self
 
 
 # Response schemas
