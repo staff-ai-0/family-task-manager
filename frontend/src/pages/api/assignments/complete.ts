@@ -16,6 +16,8 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         const assignmentId = formData.get("assignment_id")?.toString();
         const proofTextRaw = formData.get("proof_text")?.toString();
         const proofText = proofTextRaw && proofTextRaw.trim().length > 0 ? proofTextRaw.trim() : null;
+        const proofImageRaw = formData.get("proof_image_url")?.toString();
+        const proofImageUrl = proofImageRaw && proofImageRaw.trim().length > 0 ? proofImageRaw.trim() : null;
 
         if (!assignmentId) {
             const headers = new Headers({ Location: "/dashboard" });
@@ -30,7 +32,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
                 "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ proof_text: proofText }),
+            body: JSON.stringify({ proof_text: proofText, proof_image_url: proofImageUrl }),
         });
 
         const headers = new Headers({ Location: "/dashboard" });
