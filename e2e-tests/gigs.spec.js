@@ -35,7 +35,7 @@ test.describe('Gigs lifecycle', () => {
     const modal = page.locator('#gig-proof-modal');
     await expect(modal).toBeVisible();
     await page.fill('#gig-proof-text', 'learned about rootless podman storage layout');
-    await page.locator('#gig-proof-form button[type="submit"]').click();
+    await page.locator('#gig-proof-submit').click();
     await page.waitForLoadState('networkidle');
 
     // After redirect, the row should show "Awaiting approval" or live in the pending section
