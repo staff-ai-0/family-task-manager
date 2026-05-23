@@ -46,6 +46,13 @@ class User(Base):
         Boolean, default=False, nullable=False, server_default="false"
     )
 
+    # Consecutive approved-gig count. Hits the GIG_AUTO_APPROVE_STREAK
+    # threshold (default 3) and subsequent gigs auto-approve on completion.
+    # A parent rejection resets to 0.
+    gig_trust_streak = Column(
+        Integer, default=0, nullable=False, server_default="0"
+    )
+
     oauth_provider = Column(String(50), nullable=True)
     oauth_id = Column(String(255), nullable=True)
     

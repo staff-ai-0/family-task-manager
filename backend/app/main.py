@@ -12,7 +12,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
-from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion, invitations, subscriptions
+from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion, invitations, subscriptions, push
 from app.api.routes.budget import router as budget_router
 from app.jobs.subscription_sweep import run_sweep
 from app.services.task_assignment_service import TaskAssignmentService
@@ -134,6 +134,7 @@ app.include_router(
     tags=["Subscriptions"],
 )
 app.include_router(sync.router, tags=["Sync"])
+app.include_router(push.router, prefix="/api/push", tags=["Push"])
 
 
 @app.get("/")
