@@ -111,10 +111,9 @@ async def list_week_assignments(
         if is_bonus and a.assigned_date == today and a.status != AssignmentStatus.COMPLETED:
             key = (a.assigned_to, a.assigned_date)
             if key not in lock_cache:
-                all_done = await TaskAssignmentService.check_all_required_done_today(
+                lock_cache[key] = await TaskAssignmentService.has_open_mandatory_through(
                     db, a.assigned_to, family_id, a.assigned_date
                 )
-                lock_cache[key] = not all_done
             a._is_locked = lock_cache[key]
         else:
             a._is_locked = False
@@ -147,10 +146,9 @@ async def list_today_assignments(
         if is_bonus and a.status != AssignmentStatus.COMPLETED:
             key = (a.assigned_to, a.assigned_date)
             if key not in lock_cache:
-                all_done = await TaskAssignmentService.check_all_required_done_today(
+                lock_cache[key] = await TaskAssignmentService.has_open_mandatory_through(
                     db, a.assigned_to, family_id, a.assigned_date
                 )
-                lock_cache[key] = not all_done
             a._is_locked = lock_cache[key]
         else:
             a._is_locked = False

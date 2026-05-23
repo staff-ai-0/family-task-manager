@@ -533,6 +533,39 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     # ─── Completion + Gating ─────────────────────────────────────────
 
     @staticmethod
+    async def has_open_mandatory_through(
+        db: AsyncSession,
+        user_id: UUID,
+        family_id: UUID,
+        through_date: date,
+    ) -> bool:
+        """
+        True if any mandatory (non-bonus) assignment with assigned_date
+        on or before ``through_date`` is still open (PENDING or OVERDUE).
+
+        Carry-over semantics: an unfinished mandatory from yesterday
+        blocks today's gigs. CANCELLED counts as resolved (parent waived).
+        Future-dated mandatory rows are intentionally ignored.
+        """
+        q = (
+            select(func.count())
+            .select_from(TaskAssignment)
+            .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
+            .where(
+                and_(
+                    TaskAssignment.assigned_to == user_id,
+                    TaskAssignment.family_id == family_id,
+                    TaskAssignment.assigned_date <= through_date,
+                    TaskTemplate.is_bonus == False,  # noqa: E712 — SQL boolean
+                    TaskAssignment.status.in_(
+                        [AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]
+                    ),
+                )
+            )
+        )
+        return (await db.execute(q)).scalar_one() > 0
+
+    @staticmethod
     async def check_all_required_done_today(
         db: AsyncSession,
         user_id: UUID,
@@ -619,12 +652,12 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         if template.is_bonus:
             # Gig path
-            all_required_done = await TaskAssignmentService.check_all_required_done_today(
+            has_open_mandatory = await TaskAssignmentService.has_open_mandatory_through(
                 db, user_id, family_id, assignment.assigned_date
             )
-            if not all_required_done:
+            if has_open_mandatory:
                 raise ForbiddenException(
-                    "Complete today's mandatory tasks before claiming a gig"
+                    "Finish any open mandatory tasks (today + overdue) before claiming a gig"
                 )
 
             if not proof_text or not proof_text.strip():
@@ -729,7 +762,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     ) -> list[dict]:
         """Return today's assignments for a user with is_locked + approval fields."""
         today = await TaskAssignmentService._user_local_today(db, user_id)
-        all_done = await TaskAssignmentService.check_all_required_done_today(
+        has_open = await TaskAssignmentService.has_open_mandatory_through(
             db, user_id, family_id, today
         )
         q = (
@@ -755,7 +788,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "status": r.status.value,
                 "approval_status": r.approval_status.value if r.approval_status else "none",
                 "proof_text": r.proof_text,
-                "is_locked": is_bonus and not all_done and r.status != AssignmentStatus.COMPLETED,
+                "is_locked": is_bonus and has_open and r.status != AssignmentStatus.COMPLETED,
                 "assigned_date": r.assigned_date,
                 "completed_at": r.completed_at,
             })
@@ -863,7 +896,13 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             1 for a in bonus_assignments if a.status == AssignmentStatus.COMPLETED
         )
 
-        bonus_unlocked = required_completed >= len(required_assignments)
+        # Carry-over: also block bonus when any prior-day mandatory is
+        # still PENDING/OVERDUE. has_open_mandatory_through covers both
+        # same-day and historical opens.
+        has_open_mandatory = await TaskAssignmentService.has_open_mandatory_through(
+            db, user_id, family_id, check_date
+        )
+        bonus_unlocked = not has_open_mandatory
 
         return {
             "date": check_date,
