@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, delete as sql_delete
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from uuid import UUID
 
 from app.models.task_template import TaskTemplate, AssignmentType
@@ -630,13 +630,13 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 raise ValidationException("Gigs require proof text describing what you did")
 
             assignment.status = AssignmentStatus.COMPLETED
-            assignment.completed_at = datetime.utcnow()
+            assignment.completed_at = datetime.now(timezone.utc)
             assignment.approval_status = ApprovalStatus.PENDING
             assignment.proof_text = proof_text.strip()
         else:
             # Mandatory path — silent, no points, no approval
             assignment.status = AssignmentStatus.COMPLETED
-            assignment.completed_at = datetime.utcnow()
+            assignment.completed_at = datetime.now(timezone.utc)
             # approval_status stays NONE; no PointTransaction row
 
         await db.commit()
@@ -669,7 +669,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             )
 
         assignment.approved_by = parent_id
-        assignment.approved_at = datetime.utcnow()
+        assignment.approved_at = datetime.now(timezone.utc)
         assignment.approval_notes = notes
 
         if approve:
@@ -841,11 +841,24 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     # ─── Overdue Check ───────────────────────────────────────────────
 
     @staticmethod
+    async def _family_local_today(db: AsyncSession, family_id: UUID) -> date:
+        """Today's date in the family's timezone (fallback UTC)."""
+        from zoneinfo import ZoneInfo
+        from app.models.family import Family
+        family = await db.get(Family, family_id)
+        tz_name = (family.timezone if family and family.timezone else None) or "UTC"
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = ZoneInfo("UTC")
+        return datetime.now(tz).date()
+
+    @staticmethod
     async def check_overdue_assignments(
         db: AsyncSession, family_id: UUID
     ) -> List[TaskAssignment]:
-        """Check for overdue assignments and update their status"""
-        today = date.today()
+        """Check for overdue assignments and update their status (family-tz aware)."""
+        today = await TaskAssignmentService._family_local_today(db, family_id)
 
         query = select(TaskAssignment).where(
             and_(
@@ -869,21 +882,29 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     async def mark_overdue_all(db: AsyncSession) -> int:
         """
         Sweep across ALL families: flip PENDING rows with assigned_date < today
-        to OVERDUE. Returns row count. Intended for the background scheduler.
+        to OVERDUE, where "today" is each family's local date. Intended for the
+        background scheduler.
         """
-        today = date.today()
         from sqlalchemy import update as sql_update
+        from app.models.family import Family
 
-        stmt = (
-            sql_update(TaskAssignment)
-            .where(
-                and_(
-                    TaskAssignment.status == AssignmentStatus.PENDING,
-                    TaskAssignment.assigned_date < today,
+        family_rows = (await db.execute(select(Family.id))).scalars().all()
+        now_utc = datetime.now(timezone.utc)
+        total = 0
+        for family_id in family_rows:
+            today = await TaskAssignmentService._family_local_today(db, family_id)
+            stmt = (
+                sql_update(TaskAssignment)
+                .where(
+                    and_(
+                        TaskAssignment.family_id == family_id,
+                        TaskAssignment.status == AssignmentStatus.PENDING,
+                        TaskAssignment.assigned_date < today,
+                    )
                 )
+                .values(status=AssignmentStatus.OVERDUE, updated_at=now_utc)
             )
-            .values(status=AssignmentStatus.OVERDUE, updated_at=datetime.utcnow())
-        )
-        result = await db.execute(stmt)
+            result = await db.execute(stmt)
+            total += result.rowcount or 0
         await db.commit()
-        return result.rowcount or 0
+        return total
