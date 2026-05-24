@@ -18,19 +18,56 @@ from app.core.exceptions import NotFoundException, ValidationException
 from app.models.frankie_schedule import FrankieSchedule, VALID_CHANNELS
 
 
+def _translate_dow_linux_to_apscheduler(field: str) -> str:
+    """Translate cron day-of-week field from Linux (0=Sun) to APScheduler (0=Mon).
+
+    Handles digits, ranges (1-5), lists (1,3,5), step (*/2), wildcard, and
+    day-name aliases (sun, mon, ...). APScheduler accepts day names directly
+    so this only rewrites bare integers.
+    """
+    if not field or field == "*" or "/" in field and field.startswith("*/"):
+        return field
+
+    def _digit_to_apsched(d: str) -> str:
+        try:
+            n = int(d)
+        except ValueError:
+            return d  # leave alpha day-name alone
+        # Linux: 0=Sun, 1=Mon, ..., 6=Sat, 7=Sun
+        # APScheduler: 0=Mon, 1=Tue, ..., 6=Sun
+        if n in (0, 7):
+            return "6"
+        return str(n - 1)
+
+    parts = []
+    for chunk in field.split(","):
+        if "-" in chunk:
+            lo, hi = chunk.split("-", 1)
+            parts.append(f"{_digit_to_apsched(lo)}-{_digit_to_apsched(hi)}")
+        else:
+            parts.append(_digit_to_apsched(chunk))
+    return ",".join(parts)
+
+
 def _parse_cron(expr: str) -> CronTrigger:
     """Parse 5-field standard Linux cron expression.
 
-    Uses CronTrigger.from_crontab so day-of-week follows Linux convention
-    (0=Sun, 1=Mon, ..., 6=Sat, 7=Sun) — NOT APScheduler's native 0=Mon.
+    User-facing day-of-week follows Linux convention (0=Sun, 1=Mon, ...,
+    6=Sat, 7=Sun). We translate to APScheduler's 0=Mon convention here
+    so '0 9 * * 1' fires on Monday as users expect.
     """
     expr = (expr or "").strip()
-    if len(expr.split()) != 5:
+    parts = expr.split()
+    if len(parts) != 5:
         raise ValidationException(
             "cron_expr must be 5 fields (minute hour day month dow)"
         )
+    minute, hour, day, month, dow = parts
+    dow = _translate_dow_linux_to_apscheduler(dow)
     try:
-        return CronTrigger.from_crontab(expr)
+        return CronTrigger(
+            minute=minute, hour=hour, day=day, month=month, day_of_week=dow,
+        )
     except Exception as exc:
         raise ValidationException(f"Invalid cron_expr: {exc}")
 
