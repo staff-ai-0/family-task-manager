@@ -97,6 +97,28 @@ class StripeService:
         return {"checkout_url": session.url, "session_id": session.id}
 
     @staticmethod
+    async def create_portal_session(
+        db: AsyncSession,
+        family_id: UUID,
+        return_url: str,
+    ) -> dict:
+        """Stripe customer portal — self-service subscription management."""
+        if not StripeService.is_configured():
+            raise ValidationException("Stripe not configured")
+        fsub_q = select(FamilySubscription).where(
+            FamilySubscription.family_id == family_id
+        )
+        fsub = (await db.execute(fsub_q)).scalar_one_or_none()
+        if fsub is None or not fsub.stripe_customer_id:
+            raise ValidationException("No Stripe customer for this family")
+        stripe = StripeService._client()
+        session = stripe.billing_portal.Session.create(
+            customer=fsub.stripe_customer_id,
+            return_url=return_url,
+        )
+        return {"portal_url": session.url}
+
+    @staticmethod
     async def handle_webhook_event(
         db: AsyncSession, event: dict
     ) -> Optional[str]:

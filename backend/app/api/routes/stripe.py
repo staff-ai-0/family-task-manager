@@ -60,6 +60,32 @@ async def create_checkout(
     return result
 
 
+class PortalRequest(BaseModel):
+    return_url: str = Field(..., max_length=512)
+
+
+@router.post("/portal")
+async def create_portal(
+    data: PortalRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns Stripe billing portal URL for customer self-service."""
+    if not StripeService.is_configured():
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    try:
+        result = await StripeService.create_portal_session(
+            db,
+            family_id=to_uuid_required(current_user.family_id),
+            return_url=data.return_url,
+        )
+    except ValidationException as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Stripe error: {exc}")
+    return result
+
+
 @router.post("/webhook")
 async def webhook(
     request: Request,

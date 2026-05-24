@@ -1,0 +1,134 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BottomNav from "../components/BottomNav.astro";
+import { apiFetch } from "../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+let errorMsg = "";
+
+if (Astro.request.method === "POST") {
+    const data = await Astro.request.formData();
+    const action = data.get("action");
+    if (action === "create_thread") {
+        const ids = data.getAll("participant_ids[]").filter(Boolean);
+        if (ids.length > 0) {
+            const { ok, data: t, error } = await apiFetch<any>("/api/dm/threads", {
+                method: "POST",
+                token,
+                body: JSON.stringify({ participant_ids: ids }),
+            });
+            if (ok && t?.id) {
+                return Astro.redirect(`/dm/${t.id}`);
+            }
+            errorMsg = error || "Error";
+        }
+    }
+}
+
+const [{ data: user }, { data: threadsRaw }, { data: familyRaw }] = await Promise.all([
+    apiFetch<any>("/api/auth/me", { token }),
+    apiFetch<any[]>("/api/dm/threads", { token }),
+    apiFetch<any>("/api/families/me", { token }),
+]);
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+const threads: any[] = Array.isArray(threadsRaw) ? threadsRaw : [];
+const members: any[] = (familyRaw?.members ?? []).filter((m: any) => m.id !== user.id);
+const memberMap = new Map<string, string>(
+    (familyRaw?.members ?? []).map((m: any) => [m.id, m.name]),
+);
+
+function summarize(t: any): string {
+    const others = (t.participant_ids ?? []).filter((p: string) => p !== user.id);
+    return others.map((p: string) => memberMap.get(p) ?? "?").join(", ") || "(solo)";
+}
+
+function timeAgo(iso: string): string {
+    const ms = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(ms / 60000);
+    if (m < 1) return lang === "es" ? "ahora" : "now";
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    return `${Math.floor(h / 24)}d`;
+}
+
+const labels = {
+    title: lang === "es" ? "Mensajes directos" : "Direct messages",
+    subtitle: lang === "es" ? "Privados entre miembros" : "Private between members",
+    new_thread: lang === "es" ? "Nueva conversación" : "New thread",
+    start: lang === "es" ? "Iniciar" : "Start",
+    empty: lang === "es" ? "Sin conversaciones." : "No threads yet.",
+};
+---
+
+<Layout title={`${labels.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col">
+        <header class="bg-gradient-to-br from-indigo-600 to-purple-600 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+            <h1 class="text-2xl font-bold mb-1">✉️ {labels.title}</h1>
+            <p class="text-indigo-200 text-xs">{labels.subtitle}</p>
+        </header>
+
+        <main class="flex-1 px-4 py-6 space-y-4">
+            {errorMsg && (
+                <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
+                    {errorMsg}
+                </div>
+            )}
+
+            {members.length > 0 && (
+                <details class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                    <summary class="p-3 font-bold text-brand-ink cursor-pointer text-sm">
+                        ➕ {labels.new_thread}
+                    </summary>
+                    <form method="POST" class="p-3 space-y-2">
+                        <input type="hidden" name="action" value="create_thread" />
+                        <div class="space-y-1">
+                            {members.map((m: any) => (
+                                <label class="flex items-center gap-2 cursor-pointer p-2 hover:bg-brand-cream-deep rounded">
+                                    <input type="checkbox" name="participant_ids[]" value={m.id} class="w-4 h-4 rounded" />
+                                    <span class="text-sm text-brand-ink">{m.name}</span>
+                                    <span class="text-[10px] text-brand-ink-soft ml-auto capitalize">{m.role}</span>
+                                </label>
+                            ))}
+                        </div>
+                        <button type="submit" class="w-full py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700">
+                            {labels.start}
+                        </button>
+                    </form>
+                </details>
+            )}
+
+            {threads.length === 0 ? (
+                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                    <p class="text-brand-ink-soft text-sm">{labels.empty}</p>
+                </div>
+            ) : (
+                <ul class="space-y-2">
+                    {threads.map((t: any) => (
+                        <li>
+                            <a href={`/dm/${t.id}`} class="block bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)] hover:border-indigo-400">
+                                <div class="flex items-baseline justify-between">
+                                    <p class="font-bold text-brand-ink text-sm">
+                                        ✉️ {summarize(t)}
+                                    </p>
+                                    <span class="text-xs text-brand-ink-soft">{timeAgo(t.updated_at)}</span>
+                                </div>
+                                <p class="text-[10px] text-brand-ink-soft mt-1">
+                                    {t.participant_ids.length} {lang === "es" ? "participantes" : "participants"}
+                                </p>
+                            </a>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </main>
+
+        <BottomNav active="tasks" role={user.role} lang={lang} />
+    </div>
+</Layout>

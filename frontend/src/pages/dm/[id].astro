@@ -1,0 +1,129 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BottomNav from "../../components/BottomNav.astro";
+import { apiFetch } from "../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+const threadId = Astro.params.id;
+if (!threadId) return Astro.redirect("/dm");
+
+let errorMsg = "";
+
+if (Astro.request.method === "POST") {
+    const data = await Astro.request.formData();
+    const body = String(data.get("body") || "").trim();
+    if (body) {
+        const { ok, error } = await apiFetch(`/api/dm/threads/${threadId}/messages`, {
+            method: "POST",
+            token,
+            body: JSON.stringify({ body }),
+        });
+        if (!ok) errorMsg = error || "Error";
+    }
+    return Astro.redirect(`/dm/${threadId}`);
+}
+
+const [{ data: user }, { data: msgsRaw }, { data: familyRaw }] = await Promise.all([
+    apiFetch<any>("/api/auth/me", { token }),
+    apiFetch<any[]>(`/api/dm/threads/${threadId}/messages`, { token }),
+    apiFetch<any>("/api/families/me", { token }),
+]);
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+const msgs: any[] = Array.isArray(msgsRaw) ? msgsRaw : [];
+const memberMap = new Map<string, string>(
+    (familyRaw?.members ?? []).map((m: any) => [m.id, m.name]),
+);
+memberMap.set(user.id, user.name);
+
+function timeAgo(iso: string): string {
+    const ms = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(ms / 60000);
+    if (m < 1) return lang === "es" ? "ahora" : "now";
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    return `${Math.floor(h / 24)}d`;
+}
+
+const labels = {
+    title: lang === "es" ? "Conversación" : "Thread",
+    placeholder: lang === "es" ? "Mensaje privado…" : "Private message…",
+    send: lang === "es" ? "Enviar" : "Send",
+    empty: lang === "es" ? "Sin mensajes." : "No messages.",
+    back: lang === "es" ? "← Mensajes" : "← Inbox",
+};
+---
+
+<Layout title={`${labels.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col h-screen">
+        <header class="bg-gradient-to-br from-indigo-600 to-purple-600 text-white pt-12 pb-4 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] flex-shrink-0">
+            <a href="/dm" class="text-xs text-indigo-200 underline">{labels.back}</a>
+            <h1 class="text-xl font-bold mt-1">✉️ {labels.title}</h1>
+        </header>
+
+        <main id="dm-feed" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+            {errorMsg && (
+                <div class="p-2 bg-red-100 border border-red-200 text-red-700 text-xs rounded-lg">
+                    {errorMsg}
+                </div>
+            )}
+
+            {msgs.length === 0 ? (
+                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10">
+                    <p class="text-brand-ink-soft text-sm">{labels.empty}</p>
+                </div>
+            ) : (
+                msgs.map((m: any) => {
+                    const mine = m.sender_id === user.id;
+                    const name = memberMap.get(m.sender_id) ?? "?";
+                    return (
+                        <div class={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                            <div class={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
+                                mine ? "bg-indigo-600 text-white" : "bg-brand-cream border border-brand-ink/10 text-brand-ink"
+                            }`}>
+                                {!mine && (
+                                    <p class="text-[10px] font-bold text-brand-ink-soft mb-0.5">{name}</p>
+                                )}
+                                <p class="whitespace-pre-wrap">{m.body}</p>
+                                <p class={`text-[10px] mt-1 ${mine ? "text-indigo-200" : "text-brand-ink-soft"}`}>
+                                    {timeAgo(m.created_at)}
+                                </p>
+                            </div>
+                        </div>
+                    );
+                })
+            )}
+        </main>
+
+        <form method="POST" class="p-3 border-t border-brand-ink/10 bg-brand-cream flex-shrink-0 flex gap-2">
+            <input
+                type="text"
+                name="body"
+                required
+                maxlength="2000"
+                placeholder={labels.placeholder}
+                class="flex-1 px-3 py-2.5 rounded-xl border border-brand-ink/20 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+            <button
+                type="submit"
+                class="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 active:scale-95"
+            >
+                {labels.send}
+            </button>
+        </form>
+
+        <BottomNav active="tasks" role={user.role} lang={lang} />
+    </div>
+</Layout>
+
+<script>
+    document.addEventListener("astro:page-load", () => {
+        const feed = document.getElementById("dm-feed");
+        if (feed) feed.scrollTo({ top: feed.scrollHeight });
+    });
+</script>
