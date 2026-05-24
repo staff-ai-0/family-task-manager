@@ -19,20 +19,18 @@ from app.models.frankie_schedule import FrankieSchedule, VALID_CHANNELS
 
 
 def _parse_cron(expr: str) -> CronTrigger:
-    """Parse 5-field cron expression. Raises on invalid."""
-    parts = (expr or "").strip().split()
-    if len(parts) != 5:
+    """Parse 5-field standard Linux cron expression.
+
+    Uses CronTrigger.from_crontab so day-of-week follows Linux convention
+    (0=Sun, 1=Mon, ..., 6=Sat, 7=Sun) — NOT APScheduler's native 0=Mon.
+    """
+    expr = (expr or "").strip()
+    if len(expr.split()) != 5:
         raise ValidationException(
             "cron_expr must be 5 fields (minute hour day month dow)"
         )
     try:
-        return CronTrigger(
-            minute=parts[0],
-            hour=parts[1],
-            day=parts[2],
-            month=parts[3],
-            day_of_week=parts[4],
-        )
+        return CronTrigger.from_crontab(expr)
     except Exception as exc:
         raise ValidationException(f"Invalid cron_expr: {exc}")
 
