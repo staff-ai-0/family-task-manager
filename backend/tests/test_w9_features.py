@@ -211,27 +211,4 @@ class TestDM:
         assert msgs[0].body == "hello kid"
 
 
-# ─── W9.4 Stripe ──────────────────────────────────────────────────────
-
-
-class TestStripe:
-    def test_not_configured_by_default(self, monkeypatch):
-        from app.core import config
-        from app.services.stripe_service import StripeService
-
-        monkeypatch.setattr(config.settings, "STRIPE_SECRET_KEY", "")
-        assert StripeService.is_configured() is False
-
-    def test_price_lookup_missing_setting(self, monkeypatch):
-        from app.core import config
-        from app.services.stripe_service import StripeService
-
-        monkeypatch.setattr(config.settings, "STRIPE_PRICE_PLUS_MONTHLY", "")
-        with pytest.raises(ValidationException):
-            StripeService.price_for("plus", "monthly")
-
-    def test_price_lookup_invalid_combo(self):
-        from app.services.stripe_service import StripeService
-
-        with pytest.raises(ValidationException):
-            StripeService.price_for("ultra", "monthly")
+# Stripe section removed 2026-05-24 — Stripe path was rejected, PayPal only.

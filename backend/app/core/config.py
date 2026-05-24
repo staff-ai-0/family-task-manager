@@ -46,15 +46,8 @@ class Settings(BaseSettings):
     # on the LiteLLM proxy. 0 = unlimited.
     FRANKIE_DAILY_MESSAGE_CAP: int = 100
 
-    # Stripe billing (W9.4). Empty key disables the /api/stripe routes
-    # without breaking app startup. Set STRIPE_PRICE_* to the Stripe price
-    # IDs for each plan tier.
-    STRIPE_SECRET_KEY: str = ""
-    STRIPE_WEBHOOK_SECRET: str = ""
-    STRIPE_PRICE_PLUS_MONTHLY: str = ""
-    STRIPE_PRICE_PLUS_ANNUAL: str = ""
-    STRIPE_PRICE_PRO_MONTHLY: str = ""
-    STRIPE_PRICE_PRO_ANNUAL: str = ""
+    # Stripe settings removed 2026-05-24. PayPal is the canonical
+    # billing path. See feedback_no_stripe memory entry.
 
     # Web Push (VAPID). Generate keys with:
     #   python -c "from py_vapid import Vapid; v=Vapid(); v.generate_keys(); print(v.private_pem(), v.public_key.to_string())"
