@@ -1,0 +1,303 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BottomNav from "../components/BottomNav.astro";
+import { apiFetch } from "../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+let errorMsg = "";
+
+if (Astro.request.method === "POST") {
+    const data = await Astro.request.formData();
+    const action = data.get("action");
+    if (action === "add_entry") {
+        const payload = {
+            plan_date: data.get("plan_date"),
+            meal_type: data.get("meal_type"),
+            title: data.get("title"),
+            recipe_id: data.get("recipe_id") || null,
+            notes: data.get("notes") || null,
+        };
+        const { ok, error } = await apiFetch("/api/meals/plan", {
+            method: "POST",
+            token,
+            body: JSON.stringify(payload),
+        });
+        if (!ok) errorMsg = error || "Error";
+    } else if (action === "delete_entry") {
+        const id = data.get("entry_id");
+        if (id) {
+            await apiFetch(`/api/meals/plan/${id}`, { method: "DELETE", token });
+        }
+    } else if (action === "add_recipe") {
+        const payload = {
+            name: data.get("recipe_name"),
+            ingredients_text: data.get("ingredients") || null,
+            prep_minutes: Number(data.get("prep_minutes")) || null,
+        };
+        if (payload.name) {
+            const { ok, error } = await apiFetch("/api/meals/recipes", {
+                method: "POST",
+                token,
+                body: JSON.stringify(payload),
+            });
+            if (!ok) errorMsg = error || "Error";
+        }
+    }
+    return Astro.redirect("/meals");
+}
+
+const today = new Date();
+const dow = (today.getDay() + 6) % 7;  // Mon=0
+const monday = new Date(today);
+monday.setDate(today.getDate() - dow);
+const sunday = new Date(monday);
+sunday.setDate(monday.getDate() + 6);
+
+const fmt = (d: Date) => d.toISOString().slice(0, 10);
+
+const [{ data: user }, { data: planRaw }, { data: recipesRaw }] = await Promise.all([
+    apiFetch<any>("/api/auth/me", { token }),
+    apiFetch<any[]>(`/api/meals/plan?start=${fmt(monday)}&end=${fmt(sunday)}`, { token }),
+    apiFetch<any[]>("/api/meals/recipes", { token }),
+]);
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+const plan: any[] = Array.isArray(planRaw) ? planRaw : [];
+const recipes: any[] = Array.isArray(recipesRaw) ? recipesRaw : [];
+
+const days: { date: Date; key: string; label: string }[] = [];
+for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    days.push({
+        date: d,
+        key: fmt(d),
+        label: d.toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
+            weekday: "short",
+            day: "numeric",
+        }),
+    });
+}
+
+const mealTypes = ["breakfast", "lunch", "dinner", "snack"] as const;
+const mealLabel = (m: string): string => {
+    const map: Record<string, [string, string]> = {
+        breakfast: ["Desayuno", "Breakfast"],
+        lunch: ["Comida", "Lunch"],
+        dinner: ["Cena", "Dinner"],
+        snack: ["Snack", "Snack"],
+    };
+    return map[m]?.[lang === "es" ? 0 : 1] ?? m;
+};
+
+// Bucket entries by (date, meal_type)
+const cell = new Map<string, any[]>();
+for (const e of plan) {
+    const k = `${e.plan_date}|${e.meal_type}`;
+    if (!cell.has(k)) cell.set(k, []);
+    cell.get(k)!.push(e);
+}
+
+const labels = {
+    title: lang === "es" ? "Plan de comidas" : "Meal plan",
+    subtitle: lang === "es" ? "Semana actual" : "Current week",
+    add_meal: lang === "es" ? "Agregar comida" : "Add meal",
+    add_recipe: lang === "es" ? "Nueva receta" : "New recipe",
+    title_ph: lang === "es" ? "Título o platillo" : "Title or dish",
+    recipe_opt: lang === "es" ? "Receta (opcional)" : "Recipe (optional)",
+    none: lang === "es" ? "Sin receta" : "No recipe",
+    save: lang === "es" ? "Guardar" : "Save",
+    recipe_name_ph: lang === "es" ? "Nombre receta" : "Recipe name",
+    ingredients_ph: lang === "es" ? "Ingredientes" : "Ingredients",
+    prep_ph: lang === "es" ? "Minutos prep" : "Prep min",
+    no_recipes: lang === "es" ? "Sin recetas guardadas" : "No saved recipes",
+};
+---
+
+<Layout title={`${labels.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col">
+        <header class="bg-gradient-to-br from-orange-500 to-amber-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+            <h1 class="text-2xl font-bold mb-1">🍽️ {labels.title}</h1>
+            <p class="text-amber-100 text-sm">
+                {labels.subtitle} · {days[0].key} → {days[6].key}
+            </p>
+        </header>
+
+        <main class="flex-1 px-4 py-6 space-y-4">
+            {errorMsg && (
+                <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
+                    {errorMsg}
+                </div>
+            )}
+
+            <details class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                <summary class="p-3 font-bold text-brand-ink cursor-pointer text-sm">
+                    ➕ {labels.add_meal}
+                </summary>
+                <form method="POST" class="p-3 grid grid-cols-2 gap-2">
+                    <input type="hidden" name="action" value="add_entry" />
+                    <select name="plan_date" required class="px-2 py-1.5 rounded-lg border border-brand-ink/20 text-xs bg-brand-cream">
+                        {days.map((d) => (<option value={d.key}>{d.label}</option>))}
+                    </select>
+                    <select name="meal_type" required class="px-2 py-1.5 rounded-lg border border-brand-ink/20 text-xs bg-brand-cream">
+                        {mealTypes.map((m) => (<option value={m}>{mealLabel(m)}</option>))}
+                    </select>
+                    <input type="text" name="title" required maxlength="200" placeholder={labels.title_ph} class="col-span-2 px-2 py-1.5 rounded-lg border border-brand-ink/20 text-xs" />
+                    <select name="recipe_id" class="col-span-2 px-2 py-1.5 rounded-lg border border-brand-ink/20 text-xs bg-brand-cream">
+                        <option value="">{labels.none}</option>
+                        {recipes.map((r: any) => (<option value={r.id}>{r.name}</option>))}
+                    </select>
+                    <button type="submit" class="col-span-2 py-2 rounded-lg bg-brand-ink text-brand-cream text-sm font-bold hover:bg-brand-ink-soft">
+                        {labels.save}
+                    </button>
+                </form>
+            </details>
+
+            <section class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)] overflow-x-auto">
+                <table class="w-full text-xs border-collapse">
+                    <thead>
+                        <tr class="bg-brand-cream-deep/60">
+                            <th class="px-2 py-2 text-left font-bold text-brand-ink-soft"></th>
+                            {days.map((d) => (
+                                <th class="px-1 py-2 font-bold text-brand-ink capitalize text-center min-w-[60px]">
+                                    {d.label}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {mealTypes.map((mt) => (
+                            <tr class="border-t border-brand-ink/10">
+                                <td class="px-2 py-2 font-bold text-brand-ink-soft whitespace-nowrap text-[10px] uppercase">
+                                    {mealLabel(mt)}
+                                </td>
+                                {days.map((d) => {
+                                    const entries = cell.get(`${d.key}|${mt}`) ?? [];
+                                    return (
+                                        <td class="px-1 py-1 align-top">
+                                            <div class="space-y-1">
+                                                {entries.map((e: any) => (
+                                                    <div class="bg-amber-50 border border-amber-200 rounded p-1 flex items-start justify-between gap-1">
+                                                        <span class="text-[11px] text-brand-ink flex-1 leading-tight">
+                                                            {e.title}
+                                                        </span>
+                                                        <form method="POST" class="inline">
+                                                            <input type="hidden" name="action" value="delete_entry" />
+                                                            <input type="hidden" name="entry_id" value={e.id} />
+                                                            <button type="submit" class="text-brand-ink-soft hover:text-red-600 text-xs leading-none">×</button>
+                                                        </form>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </section>
+
+            <details class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                <summary class="p-3 font-bold text-brand-ink cursor-pointer text-sm">
+                    📖 {labels.add_recipe}
+                </summary>
+                <div class="px-3 pb-3">
+                    <div class="mb-3 p-2 border border-dashed border-brand-ink/20 rounded-lg space-y-2">
+                        <p class="text-xs text-brand-ink-soft font-semibold">
+                            {lang === "es" ? "🔗 Importar desde URL (IA)" : "🔗 Import from URL (AI)"}
+                        </p>
+                        <div class="flex gap-2">
+                            <input
+                                type="url"
+                                id="recipe-import-url"
+                                placeholder="https://…"
+                                class="flex-1 px-2 py-1.5 rounded-lg border border-brand-ink/20 text-xs"
+                            />
+                            <button
+                                type="button"
+                                id="recipe-import-btn"
+                                class="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-bold hover:bg-violet-700"
+                            >
+                                {lang === "es" ? "Importar" : "Import"}
+                            </button>
+                        </div>
+                        <p id="recipe-import-status" class="text-xs text-brand-ink-soft hidden"></p>
+                    </div>
+                </div>
+                <form method="POST" class="px-3 pb-3 space-y-2">
+                    <input type="hidden" name="action" value="add_recipe" />
+                    <input type="text" id="form-recipe-name" name="recipe_name" required maxlength="200" placeholder={labels.recipe_name_ph} class="w-full px-2 py-1.5 rounded-lg border border-brand-ink/20 text-sm" />
+                    <textarea id="form-ingredients" name="ingredients" rows="3" maxlength="4000" placeholder={labels.ingredients_ph} class="w-full px-2 py-1.5 rounded-lg border border-brand-ink/20 text-xs"></textarea>
+                    <input type="number" id="form-prep" name="prep_minutes" min="1" max="600" placeholder={labels.prep_ph} class="w-full px-2 py-1.5 rounded-lg border border-brand-ink/20 text-xs" />
+                    <button type="submit" class="w-full py-2 rounded-lg bg-brand-sky-deep text-white text-sm font-bold hover:bg-brand-ink">
+                        {labels.save}
+                    </button>
+                </form>
+                {recipes.length > 0 ? (
+                    <ul class="px-3 pb-3 space-y-1 text-xs">
+                        {recipes.map((r: any) => (
+                            <li class="text-brand-ink-soft">
+                                · <span class="font-semibold text-brand-ink">{r.name}</span>
+                                {r.prep_minutes && <span> ({r.prep_minutes}m)</span>}
+                            </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p class="px-3 pb-3 text-xs text-brand-ink-soft">{labels.no_recipes}</p>
+                )}
+            </details>
+        </main>
+
+        <BottomNav active="tasks" role={user.role} lang={lang} />
+    </div>
+</Layout>
+
+<script define:vars={{ lang }}>
+    document.addEventListener("astro:page-load", () => {
+        const btn = document.getElementById("recipe-import-btn");
+        const input = document.getElementById("recipe-import-url");
+        const status = document.getElementById("recipe-import-status");
+        const fName = document.getElementById("form-recipe-name");
+        const fIng = document.getElementById("form-ingredients");
+        const fPrep = document.getElementById("form-prep");
+        if (!btn || !input) return;
+
+        btn.addEventListener("click", async () => {
+            const url = (input.value || "").trim();
+            if (!url) return;
+            status.textContent = lang === "es" ? "Importando…" : "Importing…";
+            status.classList.remove("hidden", "text-red-600");
+            btn.disabled = true;
+            try {
+                const resp = await fetch("/api/meals/recipes/import", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    status.textContent = data.detail || "Error";
+                    status.classList.add("text-red-600");
+                    return;
+                }
+                fName.value = data.name || "";
+                fIng.value = data.ingredients_text || "";
+                if (data.prep_minutes) fPrep.value = String(data.prep_minutes);
+                const conf = Math.round((data.confidence || 0) * 100);
+                status.textContent = (lang === "es" ? "Listo · confianza " : "Loaded · confidence ") + conf + "%";
+                input.value = "";
+            } catch (err) {
+                status.textContent = String(err);
+                status.classList.add("text-red-600");
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    });
+</script>

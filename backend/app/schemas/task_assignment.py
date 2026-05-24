@@ -73,6 +73,9 @@ class TaskAssignmentWithDetails(TaskAssignmentResponse):
     approval_status: str = "none"
     proof_text: Optional[str] = None
     proof_image_url: Optional[str] = None
+    ai_validation_score: Optional[float] = None
+    ai_validation_notes: Optional[str] = None
+    approval_notes: Optional[str] = None
 
 
 class ShuffleResponse(BaseModel):
@@ -141,5 +144,7 @@ class GigApprovalRow(BaseModel):
     completed_at: datetime
     proof_text: Optional[str] = None
     proof_image_url: Optional[str] = None
+    ai_validation_score: Optional[float] = None
+    ai_validation_notes: Optional[str] = None
 
     model_config = {"from_attributes": True}

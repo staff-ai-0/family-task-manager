@@ -13,6 +13,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Date,
+    Float,
     ForeignKey,
     Text,
     Enum as SQLEnum,
@@ -97,6 +98,8 @@ class TaskAssignment(Base):
     )
     proof_text = Column(Text, nullable=True)
     proof_image_url = Column(String(512), nullable=True)
+    ai_validation_score = Column(Float, nullable=True)
+    ai_validation_notes = Column(Text, nullable=True)
     approved_by = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),

@@ -33,6 +33,25 @@ class AssignmentType(str, Enum):
     ROTATE = "rotate"  # Rotate among specific users in order
 
 
+class GigMode(str, Enum):
+    """How a gig (is_bonus=True) resolves when multiple members are eligible.
+
+    - claim:         one assignment per member, first claimer locks it. (default)
+    - rotation:      same as claim but assigned_user_ids cycle per week.
+    - competition:   one assignment per member, first to CLAIM wins —
+                     others' assignments auto-cancel.
+    - collaboration: assignment is shared; N members must complete it
+                     (collaboration_min_count). Points split equally.
+    """
+    CLAIM = "claim"
+    ROTATION = "rotation"
+    COMPETITION = "competition"
+    COLLABORATION = "collaboration"
+
+
+EFFORT_MULTIPLIERS: dict[int, float] = {1: 1.0, 2: 1.5, 3: 2.0}
+
+
 class TaskTemplate(Base):
     """Reusable task template for weekly assignment generation"""
 
@@ -42,6 +61,10 @@ class TaskTemplate(Base):
             "is_bonus = true OR points = 0",
             name="chk_mandatory_zero_points",
         ),
+        CheckConstraint(
+            "effort_level BETWEEN 1 AND 3",
+            name="chk_effort_level_range",
+        ),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
@@ -50,6 +73,37 @@ class TaskTemplate(Base):
     title_es = Column(String(200), nullable=True)
     description_es = Column(Text, nullable=True)
     points = Column(Integer, nullable=False, default=10)
+    effort_level = Column(Integer, nullable=False, default=1, server_default="1")
+
+    # Auto late penalty (W1.2). When auto_late_penalty=True and an assignment
+    # flips PENDING → OVERDUE during the family-tz daily sweep, a Consequence
+    # row is auto-instantiated for the assigned user. restriction_type and
+    # severity stored as raw strings to avoid a circular import with the
+    # Consequence enums; values mirror RestrictionType / ConsequenceSeverity.
+    auto_late_penalty = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    late_restriction_type = Column(String(32), nullable=True)
+    late_severity = Column(String(16), nullable=True)
+    late_duration_days = Column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+
+    # Chore locking (W1.3). When True, any open assignment (PENDING/OVERDUE)
+    # for this template will block reward redemption for the assigned user
+    # until the assignment is completed or cancelled.
+    blocks_rewards = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    # Gig resolution mode (W4.1). Only meaningful when is_bonus=True.
+    gig_mode = Column(
+        String(16), nullable=False, default=GigMode.CLAIM.value,
+        server_default=GigMode.CLAIM.value,
+    )
+    collaboration_min_count = Column(
+        Integer, nullable=False, default=2, server_default="2"
+    )
 
     # Scheduling: how often per week (1=daily, 3=every 3 days, 7=weekly)
     interval_days = Column(Integer, nullable=False, default=1)
@@ -118,3 +172,21 @@ class TaskTemplate(Base):
             return "weekly"
         else:
             return f"every {self.interval_days} days"
+
+    @property
+    def effective_points(self) -> int:
+        """Points after effort multiplier (1=×1.0, 2=×1.5, 3=×2.0)."""
+        mult = EFFORT_MULTIPLIERS.get(self.effort_level or 1, 1.0)
+        return int(round((self.points or 0) * mult))
+
+    @property
+    def award_points_per_completer(self) -> int:
+        """Points credited to a single completer.
+
+        For collaboration-mode gigs the pot is split N ways. For all other
+        modes each completer earns the full effective_points.
+        """
+        if (self.gig_mode or "claim") == "collaboration":
+            split = max(1, int(self.collaboration_min_count or 1))
+            return self.effective_points // split
+        return self.effective_points

@@ -83,7 +83,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/api/oauth/google",
         "/api/lang",
         "/api/oauth/google/",
-        "/api/invitations/accept" // Only public endpoint is accepting an invitation (no auth needed)
+        "/api/invitations/accept", // Only public endpoint is accepting an invitation (no auth needed)
+        "/kiosk",  // Wall display — token gated via ?token=...
+        "/api/kiosk/snapshot",
     ];
     const isPublicRoute = publicRoutes.some(route => path === route || path.startsWith("/api/translate"));
 

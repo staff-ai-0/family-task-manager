@@ -1,0 +1,183 @@
+# ================================
+# GCP Deployment — Family Task Manager
+# ================================
+# Source of truth. Rsync from local → /home/jc/family-task-manager/ on VM.
+# Do not edit the VM copy in place — overwritten on next deploy.
+#
+# Cloudflare Tunnel for ingress (no open ports, no static IP).
+# Secrets loaded from .env (cp .env.gcp.example .env).
+#
+# Services: postgres, redis, backend, frontend, tunnel.
+# AI traffic (receipt scanner + auto-translate) routes to on-prem LiteLLM
+# at https://litellm.agent-ia.mx (no in-VM litellm or vault).
+#
+# Usage:
+#   sudo docker compose --env-file .env -f docker-compose.gcp.yml up -d
+#
+# First deploy:
+#   1. cp .env.gcp.example .env && fill secrets
+#   2. sudo docker compose --env-file .env -f docker-compose.gcp.yml up -d
+#   3. sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T backend alembic upgrade head
+#   4. ./scripts/deploy-gcp.sh --seed   # optional demo data
+# ================================
+
+services:
+
+  # ── Database ──────────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: gcp_family_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
+  # ── Cache ─────────────────────────────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    container_name: gcp_family_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  # ── Application ───────────────────────────────────────────────────────────
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gcp_family_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      BASE_URL: ${PUBLIC_API_URL}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      LITELLM_API_BASE: ${LITELLM_API_BASE:-https://litellm.agent-ia.mx}
+      ENVIRONMENT: production
+      DEBUG: "false"
+      VAULT_ENABLED: "false"
+    volumes:
+      - receipt_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+      - frontend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips="*"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:8000/health\", timeout=3).status==200 else 1)'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        PUBLIC_GOOGLE_CLIENT_ID: ${PUBLIC_GOOGLE_CLIENT_ID:-}
+    container_name: gcp_family_frontend
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://backend:8000
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_URL}
+      PORT: 3000
+      HOST: 0.0.0.0
+      NODE_ENV: production
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - frontend
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  # ── Access ────────────────────────────────────────────────────────────────
+  # Hostnames configured in Cloudflare Zero Trust:
+  #   gcp-family.agent-ia.mx     → http://frontend:3000
+  #   api-gcp-family.agent-ia.mx → http://backend:8000
+  # (Flat naming chosen so CF Universal SSL covers the cert — *.agent-ia.mx
+  # is one level only; gcp.family.agent-ia.mx would need Advanced Cert Manager.)
+  # After cutover, swap to family.agent-ia.mx + api.family.agent-ia.mx.
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: gcp_family_tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - frontend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+networks:
+  backend:
+    driver: bridge
+    internal: true   # postgres/redis not reachable from outside the stack
+  frontend:
+    driver: bridge   # frontend, backend, tunnel share
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  receipt_uploads:
+    driver: local

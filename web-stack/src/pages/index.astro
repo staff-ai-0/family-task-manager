@@ -1,0 +1,75 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Logo from "../components/brand/Logo.astro";
+import Mark from "../components/brand/Mark.astro";
+import Wordmark from "../components/brand/Wordmark.astro";
+import Button from "../components/ui/Button.astro";
+import Card from "../components/ui/Card.astro";
+import Badge from "../components/ui/Badge.astro";
+import RoleBadge from "../components/ui/RoleBadge.astro";
+---
+
+<BaseLayout title="Family Task Manager — demo">
+  <!-- Top bar -->
+  <header class="sticky top-0 z-50 bg-brand-cream border-b-2 border-brand-ink px-6 py-3 flex items-center gap-6">
+    <Logo size="sm" href="/" />
+    <nav class="ml-auto flex gap-1">
+      <a class="font-sans font-bold text-sm text-brand-ink px-3 py-2 rounded-full hover:bg-brand-cream-deep" href="/today">Today</a>
+      <a class="font-sans font-bold text-sm text-brand-ink px-3 py-2 rounded-full hover:bg-brand-cream-deep" href="/rewards">Rewards</a>
+      <a class="font-sans font-bold text-sm text-brand-ink px-3 py-2 rounded-full hover:bg-brand-cream-deep" href="/family">Family</a>
+    </nav>
+    <Badge tone="sun">Beta</Badge>
+  </header>
+
+  <!-- Hero -->
+  <section class="bg-brand-sky border-b-2 border-brand-ink px-6 py-20">
+    <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-12 items-center">
+      <div>
+        <Badge tone="cream">Bilingual EN · ES</Badge>
+        <h1 class="font-display text-6xl md:text-7xl mt-4">
+          Chores, rewards, budget — together.
+        </h1>
+        <p class="mt-5 text-lg font-sans font-medium max-w-md">
+          A gamified family task app for parents managing kids ages 6–17.
+        </p>
+        <div class="mt-7 flex gap-3 flex-wrap">
+          <Button variant="primary" size="lg" href="/signup">Start your family →</Button>
+          <Button variant="ghost"   size="lg" href="/learn">See how it works</Button>
+        </div>
+      </div>
+      <Card tone="cream" pop class="flex items-center justify-center">
+        <Mark size={220} />
+      </Card>
+    </div>
+  </section>
+
+  <!-- Role badges row -->
+  <section class="bg-brand-cream px-6 py-16">
+    <div class="max-w-6xl mx-auto">
+      <p class="font-sans font-extrabold text-xs tracking-[0.18em] uppercase text-brand-ink-soft">Roles</p>
+      <h2 class="font-display text-4xl mt-2">Three people, one screen.</h2>
+      <div class="mt-8 grid md:grid-cols-3 gap-6">
+        <Card><div class="flex items-center gap-4"><RoleBadge role="parent" size={72} /><div><h3 class="font-display text-xl">Parent</h3><p class="text-sm text-brand-ink-soft mt-1">Approves chores, sets payouts, runs the family.</p></div></div></Card>
+        <Card><div class="flex items-center gap-4"><RoleBadge role="teen" size={72} /><div><h3 class="font-display text-xl">Teen</h3><p class="text-sm text-brand-ink-soft mt-1">Claims chores, requests rewards, tracks stats.</p></div></div></Card>
+        <Card><div class="flex items-center gap-4"><RoleBadge role="child" size={72} /><div><h3 class="font-display text-xl">Child</h3><p class="text-sm text-brand-ink-soft mt-1">Big numerals, larger taps, tutorial mode.</p></div></div></Card>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats / numerals demo -->
+  <section class="bg-brand-cream-deep px-6 py-16 border-y-2 border-brand-ink">
+    <div class="max-w-6xl mx-auto grid md:grid-cols-3 gap-6">
+      <Card tone="mint"><p class="font-sans font-extrabold text-xs tracking-[0.12em] uppercase">This week</p><p class="font-display text-5xl mt-2 num">+1,240 pts</p></Card>
+      <Card tone="sun"><p class="font-sans font-extrabold text-xs tracking-[0.12em] uppercase">Wallet</p><p class="font-display text-5xl mt-2 num">$48.00</p></Card>
+      <Card tone="coral"><p class="font-sans font-extrabold text-xs tracking-[0.12em] uppercase">Streak</p><p class="font-display text-5xl mt-2 num">3 days</p></Card>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-brand-ink text-brand-cream px-6 py-10">
+    <div class="max-w-6xl mx-auto flex items-center justify-between gap-6">
+      <Logo size="sm" tone="mono-cream" />
+      <p class="font-sans text-xs text-brand-cream/70">family.agent-ia.mx · © 2026</p>
+    </div>
+  </footer>
+</BaseLayout>

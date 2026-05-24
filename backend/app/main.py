@@ -12,10 +12,13 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
-from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion, invitations, subscriptions, push
+from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, frankie, meals, family_chat, frankie_schedules, dm
 from app.api.routes.budget import router as budget_router
 from app.jobs.subscription_sweep import run_sweep
 from app.services.task_assignment_service import TaskAssignmentService
+from app.services.pet_service import PetService
+from app.services.analytics_service import AnalyticsService
+from app.services.frankie_schedule_service import FrankieScheduleService
 
 # Configure logging
 logging.basicConfig(
@@ -56,8 +59,39 @@ async def lifespan(app: FastAPI):
 
     overdue_task = asyncio.create_task(_overdue_sweep_loop())
 
+    async def _pet_decay_sweep():
+        async with AsyncSessionLocal() as session:
+            try:
+                n = await PetService.sweep_decay_all(session)
+                if n:
+                    logger.info("Pet decay sweep notified %d owner(s)", n)
+            except Exception:
+                logger.exception("Pet decay sweep failed")
+
+    async def _pup_snapshot_sweep():
+        async with AsyncSessionLocal() as session:
+            try:
+                n = await AnalyticsService.write_all_snapshots(session)
+                if n:
+                    logger.info("PUP snapshot wrote %d family rows", n)
+            except Exception:
+                logger.exception("PUP snapshot sweep failed")
+
     scheduler = AsyncIOScheduler()
     scheduler.add_job(run_sweep, "cron", hour=3, minute=0, id="subscription_sweep")
+    scheduler.add_job(_pet_decay_sweep, "cron", hour=8, minute=0, id="pet_decay_sweep")
+    scheduler.add_job(_pup_snapshot_sweep, "cron", hour=23, minute=30, id="pup_snapshot_sweep")
+
+    async def _frankie_schedule_sweep():
+        async with AsyncSessionLocal() as session:
+            try:
+                n = await FrankieScheduleService.sweep_due(session)
+                if n:
+                    logger.info("Frankie schedule sweep fired %d", n)
+            except Exception:
+                logger.exception("Frankie schedule sweep failed")
+    scheduler.add_job(_frankie_schedule_sweep, "cron", minute="*/5", id="frankie_sched_sweep")
+
     scheduler.start()
 
     yield
@@ -135,6 +169,17 @@ app.include_router(
 )
 app.include_router(sync.router, tags=["Sync"])
 app.include_router(push.router, prefix="/api/push", tags=["Push"])
+app.include_router(shopping.router, prefix="/api/shopping", tags=["Shopping"])
+app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
+app.include_router(kiosk.router, prefix="/api/kiosk", tags=["Kiosk"])
+app.include_router(pet.router, prefix="/api/pet", tags=["Pet"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
+app.include_router(frankie.router, prefix="/api/frankie", tags=["Frankie"])
+app.include_router(meals.router, prefix="/api/meals", tags=["Meals"])
+app.include_router(family_chat.router, prefix="/api/chat", tags=["Chat"])
+app.include_router(frankie_schedules.router, prefix="/api/frankie/schedules", tags=["Frankie Schedules"])
+app.include_router(dm.router, prefix="/api/dm", tags=["DM"])
 
 
 @app.get("/")

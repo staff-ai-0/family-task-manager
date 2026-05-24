@@ -1,0 +1,148 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BottomNav from "../components/BottomNav.astro";
+import { apiFetch } from "../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+if (Astro.request.method === "POST") {
+    const data = await Astro.request.formData();
+    const action = data.get("action");
+    if (action === "mark_read") {
+        const id = data.get("notif_id");
+        if (id) {
+            await apiFetch(`/api/notifications/${id}/read`, {
+                method: "POST",
+                token,
+            });
+        }
+    } else if (action === "read_all") {
+        await apiFetch("/api/notifications/read-all", {
+            method: "POST",
+            token,
+        });
+    }
+    return Astro.redirect("/notifications");
+}
+
+const [{ data: user }, { data: feedRaw }] = await Promise.all([
+    apiFetch<any>("/api/auth/me", { token }),
+    apiFetch<any>("/api/notifications/", { token }),
+]);
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+const feed = feedRaw ?? { unread: 0, items: [] };
+
+const labels = {
+    title: lang === "es" ? "Notificaciones" : "Notifications",
+    empty: lang === "es" ? "Sin notificaciones." : "No notifications.",
+    mark_all: lang === "es" ? "Marcar todas leídas" : "Mark all read",
+    unread: lang === "es" ? "sin leer" : "unread",
+};
+
+function timeAgo(iso: string): string {
+    const ms = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(ms / 60000);
+    if (mins < 1) return lang === "es" ? "ahora" : "now";
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d`;
+}
+
+const iconFor = (type: string): string => {
+    const map: Record<string, string> = {
+        gig_approved: "✅",
+        gig_rejected: "❌",
+        gig_pending_review: "🛎️",
+        late_penalty_applied: "⏰",
+        rewards_locked: "🔒",
+        calendar_event_added: "📅",
+        shopping_item_added: "🛒",
+    };
+    return map[type] ?? "🔔";
+};
+---
+
+<Layout title={`${labels.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col">
+        <header class="bg-gradient-to-br from-fuchsia-500 to-rose-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+            <h1 class="text-2xl font-bold mb-1">🔔 {labels.title}</h1>
+            <p class="text-rose-100 text-sm">
+                {feed.unread} {labels.unread}
+            </p>
+        </header>
+
+        <main class="flex-1 px-4 py-6 space-y-3">
+            {feed.unread > 0 && (
+                <form method="POST" class="flex justify-end">
+                    <input type="hidden" name="action" value="read_all" />
+                    <button
+                        type="submit"
+                        class="text-xs font-semibold text-brand-ink-soft hover:text-brand-ink underline"
+                    >
+                        {labels.mark_all}
+                    </button>
+                </form>
+            )}
+
+            {feed.items.length === 0 ? (
+                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                    <p class="text-brand-ink-soft text-sm">{labels.empty}</p>
+                </div>
+            ) : (
+                <ul class="space-y-2">
+                    {feed.items.map((n: any) => (
+                        <li class={`bg-brand-cream rounded-2xl p-4 border shadow-[var(--shadow-card)] ${n.is_read ? "border-brand-ink/10 opacity-70" : "border-brand-ink/30"}`}>
+                            <div class="flex items-start gap-3">
+                                <span class="text-2xl flex-shrink-0">{iconFor(n.type)}</span>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-baseline justify-between gap-2">
+                                        <p class={`font-semibold text-sm ${n.is_read ? "text-brand-ink-soft" : "text-brand-ink"}`}>
+                                            {n.title}
+                                        </p>
+                                        <span class="text-xs text-brand-ink-soft whitespace-nowrap">
+                                            {timeAgo(n.created_at)}
+                                        </span>
+                                    </div>
+                                    {n.body && (
+                                        <p class="text-xs text-brand-ink-soft mt-1">{n.body}</p>
+                                    )}
+                                    <div class="flex gap-2 mt-2">
+                                        {n.link && (
+                                            <a
+                                                href={n.link}
+                                                class="text-xs font-semibold text-brand-sky-deep hover:underline"
+                                            >
+                                                {lang === "es" ? "Ver →" : "View →"}
+                                            </a>
+                                        )}
+                                        {!n.is_read && (
+                                            <form method="POST" class="inline">
+                                                <input type="hidden" name="action" value="mark_read" />
+                                                <input type="hidden" name="notif_id" value={n.id} />
+                                                <button
+                                                    type="submit"
+                                                    class="text-xs text-brand-ink-soft hover:text-brand-ink underline"
+                                                >
+                                                    {lang === "es" ? "Marcar leída" : "Mark read"}
+                                                </button>
+                                            </form>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </main>
+
+        <BottomNav active="tasks" role={user.role} lang={lang} />
+    </div>
+</Layout>

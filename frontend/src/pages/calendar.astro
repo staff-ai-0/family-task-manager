@@ -1,0 +1,311 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BottomNav from "../components/BottomNav.astro";
+import { apiFetch } from "../lib/api";
+import { t } from "../lib/i18n";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+let errorMsg = "";
+
+if (Astro.request.method === "POST") {
+    const data = await Astro.request.formData();
+    const action = data.get("action");
+
+    if (action === "create_event") {
+        const title = String(data.get("title") || "").trim();
+        const dateStr = String(data.get("date") || "");
+        const timeStr = String(data.get("time") || "");
+        const location = String(data.get("location") || "").trim() || null;
+        const allDay = data.get("all_day") === "on";
+
+        if (title && dateStr) {
+            const start = allDay || !timeStr
+                ? `${dateStr}T00:00:00`
+                : `${dateStr}T${timeStr}:00`;
+            const recurrence = String(data.get("recurrence") || "");
+            const recurrenceRule = recurrence
+                ? ({
+                    daily: "FREQ=DAILY",
+                    weekly: "FREQ=WEEKLY",
+                    weekdays: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+                    monthly: "FREQ=MONTHLY",
+                } as Record<string, string>)[recurrence]
+                : null;
+            const payload = {
+                title,
+                location,
+                start_ts: new Date(start).toISOString(),
+                all_day: allDay,
+                source: "manual",
+                recurrence_rule: recurrenceRule,
+            };
+            const { ok, error } = await apiFetch("/api/calendar/events", {
+                method: "POST",
+                token,
+                body: JSON.stringify(payload),
+            });
+            if (!ok) errorMsg = error || "Error";
+        }
+    } else if (action === "delete_event") {
+        const eventId = data.get("event_id");
+        if (eventId) {
+            await apiFetch(`/api/calendar/events/${eventId}`, {
+                method: "DELETE",
+                token,
+            });
+        }
+    } else if (action === "import_scanned") {
+        const count = Number(data.get("scanned_count")) || 0;
+        for (let i = 0; i < count; i++) {
+            if (data.get(`accept_${i}`) !== "on") continue;
+            const payload = {
+                title: data.get(`title_${i}`),
+                start_ts: data.get(`start_${i}`),
+                end_ts: data.get(`end_${i}`) || null,
+                all_day: data.get(`all_day_${i}`) === "true",
+                location: data.get(`location_${i}`) || null,
+                description: data.get(`description_${i}`) || null,
+                source: "ocr_flyer",
+            };
+            await apiFetch("/api/calendar/events", {
+                method: "POST",
+                token,
+                body: JSON.stringify(payload),
+            });
+        }
+    }
+    return Astro.redirect("/calendar");
+}
+
+const now = new Date();
+const rangeEnd = new Date(now);
+rangeEnd.setDate(rangeEnd.getDate() + 60);
+const startISO = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+const endISO = rangeEnd.toISOString();
+
+const [{ data: user }, { data: eventsRaw }] = await Promise.all([
+    apiFetch<any>("/api/auth/me", { token }),
+    apiFetch<any[]>(
+        `/api/calendar/events?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`,
+        { token },
+    ),
+]);
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+const events: any[] = Array.isArray(eventsRaw) ? eventsRaw : [];
+
+const groups = new Map<string, any[]>();
+for (const evt of events) {
+    const d = new Date(evt.start_ts);
+    const key = d.toISOString().slice(0, 10);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(evt);
+}
+
+function formatDay(iso: string): string {
+    const d = new Date(iso + "T12:00:00Z");
+    return d.toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+    });
+}
+
+function formatTime(iso: string, allDay: boolean): string {
+    if (allDay) return lang === "es" ? "Todo el día" : "All day";
+    const d = new Date(iso);
+    return d.toLocaleTimeString(lang === "es" ? "es-MX" : "en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+    });
+}
+
+const sortedDays = [...groups.entries()].sort((a, b) =>
+    a[0].localeCompare(b[0]),
+);
+
+const labels = {
+    title: lang === "es" ? "Calendario" : "Calendar",
+    subtitle:
+        lang === "es" ? "Eventos próximos de la familia" : "Upcoming family events",
+    add_title: lang === "es" ? "Nuevo evento" : "New event",
+    title_ph: lang === "es" ? "Título" : "Title",
+    location_ph: lang === "es" ? "Lugar (opcional)" : "Location (optional)",
+    all_day: lang === "es" ? "Todo el día" : "All day",
+    add: lang === "es" ? "Agregar" : "Add",
+    empty:
+        lang === "es"
+            ? "Nada en los próximos 60 días. Agrega arriba."
+            : "Nothing in the next 60 days. Add above.",
+    scan_hint:
+        lang === "es"
+            ? "Tip: pronto podrás escanear volantes escolares."
+            : "Tip: school flyer scanning coming soon.",
+};
+
+const sourceIcon = (src: string): string => {
+    if (src === "ocr_flyer") return "📄";
+    if (src === "school_import") return "🏫";
+    if (src === "recurring") return "🔁";
+    return "📅";
+};
+---
+
+<Layout title={`${labels.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col">
+        <header class="bg-gradient-to-br from-sky-500 to-indigo-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+            <div class="flex items-baseline justify-between gap-2">
+                <div>
+                    <h1 class="text-2xl font-bold mb-1">📅 {labels.title}</h1>
+                    <p class="text-sky-100 text-sm">{labels.subtitle}</p>
+                </div>
+                <a
+                    href="/calendar/month"
+                    class="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs font-semibold whitespace-nowrap"
+                >
+                    {lang === "es" ? "Vista mes" : "Month view"}
+                </a>
+            </div>
+        </header>
+
+        <main class="flex-1 px-4 py-6 space-y-4">
+            {errorMsg && (
+                <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
+                    {errorMsg}
+                </div>
+            )}
+
+            {user.role === "parent" && (
+                <a
+                    href="/calendar/scan"
+                    class="block bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl p-4 shadow-[var(--shadow-card)] active:scale-[0.98] transition-transform"
+                >
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="font-bold text-sm">
+                                📄 {lang === "es" ? "Escanear volante escolar" : "Scan school flyer"}
+                            </p>
+                            <p class="text-xs text-purple-100 mt-0.5">
+                                {lang === "es"
+                                    ? "Foto → eventos automáticos"
+                                    : "Photo → automatic events"}
+                            </p>
+                        </div>
+                        <span class="text-2xl">→</span>
+                    </div>
+                </a>
+            )}
+
+            <details class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                <summary class="p-4 font-bold text-brand-ink cursor-pointer">
+                    ➕ {labels.add_title}
+                </summary>
+                <form method="POST" class="px-4 pb-4 space-y-2">
+                    <input type="hidden" name="action" value="create_event" />
+                    <input
+                        type="text"
+                        name="title"
+                        required
+                        maxlength="200"
+                        placeholder={labels.title_ph}
+                        class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
+                    />
+                    <div class="grid grid-cols-2 gap-2">
+                        <input
+                            type="date"
+                            name="date"
+                            required
+                            class="px-3 py-2 rounded-lg border border-brand-ink/20 text-sm bg-brand-cream"
+                        />
+                        <input
+                            type="time"
+                            name="time"
+                            class="px-3 py-2 rounded-lg border border-brand-ink/20 text-sm bg-brand-cream"
+                        />
+                    </div>
+                    <input
+                        type="text"
+                        name="location"
+                        maxlength="200"
+                        placeholder={labels.location_ph}
+                        class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
+                    />
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="all_day" class="w-4 h-4 rounded" />
+                        <span class="text-sm text-brand-ink">{labels.all_day}</span>
+                    </label>
+                    <select name="recurrence" class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm bg-brand-cream">
+                        <option value="">{lang === "es" ? "Sin repetición" : "Does not repeat"}</option>
+                        <option value="daily">{lang === "es" ? "Diario" : "Daily"}</option>
+                        <option value="weekdays">{lang === "es" ? "Lun-Vie" : "Weekdays"}</option>
+                        <option value="weekly">{lang === "es" ? "Semanal" : "Weekly"}</option>
+                        <option value="monthly">{lang === "es" ? "Mensual" : "Monthly"}</option>
+                    </select>
+                    <button
+                        type="submit"
+                        class="w-full py-2 rounded-lg bg-brand-ink text-brand-cream text-sm font-semibold hover:bg-brand-ink-soft"
+                    >
+                        {labels.add}
+                    </button>
+                </form>
+            </details>
+
+            {sortedDays.length === 0 ? (
+                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                    <p class="text-brand-ink-soft text-sm">{labels.empty}</p>
+                    <p class="text-brand-ink-soft text-xs mt-2">{labels.scan_hint}</p>
+                </div>
+            ) : (
+                <div class="space-y-3">
+                    {sortedDays.map(([day, items]) => (
+                        <section class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
+                            <div class="bg-brand-cream-deep/60 px-4 py-2 font-semibold text-sm text-brand-ink capitalize">
+                                {formatDay(day)}
+                            </div>
+                            <ul class="divide-y divide-brand-ink/10">
+                                {items.map((evt: any) => (
+                                    <li class="flex items-start gap-3 p-4">
+                                        <span class="text-lg flex-shrink-0">
+                                            {sourceIcon(evt.source)}
+                                        </span>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="font-semibold text-brand-ink text-sm">
+                                                {evt.title}
+                                            </p>
+                                            <p class="text-xs text-brand-ink-soft">
+                                                {formatTime(evt.start_ts, evt.all_day)}
+                                                {evt.location && (
+                                                    <span> · {evt.location}</span>
+                                                )}
+                                            </p>
+                                        </div>
+                                        {user.role === "parent" && (
+                                            <form method="POST">
+                                                <input type="hidden" name="action" value="delete_event" />
+                                                <input type="hidden" name="event_id" value={evt.id} />
+                                                <button
+                                                    type="submit"
+                                                    class="text-brand-ink-soft hover:text-red-600 text-lg leading-none px-1"
+                                                    aria-label="Delete"
+                                                >
+                                                    ×
+                                                </button>
+                                            </form>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+                    ))}
+                </div>
+            )}
+        </main>
+
+        <BottomNav active="tasks" role={user.role} lang={lang} />
+    </div>
+</Layout>

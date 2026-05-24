@@ -1,0 +1,93 @@
+---
+/**
+ * Head — drop-in <head> for every page.
+ *
+ * Includes: favicon chain, apple-touch-icon, PWA manifest,
+ * OG + Twitter card meta, theme-color, font preconnect + load.
+ *
+ * Usage:
+ *   ---
+ *   import Head from "../components/meta/Head.astro";
+ *   ---
+ *   <html lang="en">
+ *     <head><Head title="..." description="..." /></head>
+ *     <body>...</body>
+ *   </html>
+ */
+interface Props {
+  title?: string;
+  description?: string;
+  ogImage?: string;          // absolute or relative URL
+  canonical?: string;
+  lang?: "en" | "es";
+}
+const {
+  title = "Family Task Manager — Chores, rewards, budget, together.",
+  description = "A gamified family chore + rewards + budget app. Bilingual EN/ES. Live at family.agent-ia.mx.",
+  ogImage = "/og.png",
+  canonical,
+  lang = "en",
+} = Astro.props;
+---
+
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="generator" content={Astro.generator} />
+
+<title>{title}</title>
+<meta name="description" content={description} />
+{canonical && <link rel="canonical" href={canonical} />}
+
+<!-- Theme + status bar -->
+<meta name="theme-color" content="#4FB8E6" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#0F1A24" media="(prefers-color-scheme: dark)" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Family Task" />
+
+<!-- Favicons -->
+<link rel="icon" href="/favicon.ico" sizes="any" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+<link rel="mask-icon" href="/favicon.svg" color="#1F2937" />
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.webmanifest" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Family Task Manager" />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:image" content={ogImage} />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:locale" content={lang === "es" ? "es_MX" : "en_US"} />
+<meta property="og:locale:alternate" content={lang === "es" ? "en_US" : "es_MX"} />
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={ogImage} />
+
+<!--
+  FONTS — two strategies, pick one:
+
+  A) Google Fonts CDN (simpler, one less dep):
+     Uncomment the three lines below.
+
+  B) Self-host with @fontsource (recommended, no FOUT, no privacy hit):
+     `npm i @fontsource-variable/plus-jakarta-sans @fontsource-variable/nunito`
+     Then in src/styles/global.css add:
+       @import "@fontsource-variable/plus-jakarta-sans";
+       @import "@fontsource-variable/nunito";
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+  rel="stylesheet"
+/>

@@ -1,0 +1,272 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BottomNav from "../components/BottomNav.astro";
+import { apiFetch } from "../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+let errorMsg = "";
+
+if (Astro.request.method === "POST") {
+    const data = await Astro.request.formData();
+    const body = String(data.get("body") || "").trim();
+    if (body) {
+        const { ok, error } = await apiFetch("/api/chat/", {
+            method: "POST",
+            token,
+            body: JSON.stringify({ body }),
+        });
+        if (!ok) errorMsg = error || "Error";
+    }
+    return Astro.redirect("/chat");
+}
+
+// Mark all chat as read on every render of /chat (W8.5)
+await apiFetch("/api/chat/mark-read", { method: "POST", token });
+
+const [{ data: user }, { data: msgsRaw }, { data: familyRaw }] = await Promise.all([
+    apiFetch<any>("/api/auth/me", { token }),
+    apiFetch<any[]>("/api/chat/?limit=100", { token }),
+    apiFetch<any>("/api/families/me", { token }),
+]);
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+const msgs: any[] = Array.isArray(msgsRaw) ? msgsRaw : [];
+const memberLookup = new Map<string, string>();
+const members: any[] = familyRaw?.members ?? [];
+for (const m of members) memberLookup.set(m.id, m.name);
+memberLookup.set(user.id, user.name);
+
+function timeAgo(iso: string): string {
+    const ms = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(ms / 60000);
+    if (mins < 1) return lang === "es" ? "ahora" : "now";
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
+    return `${Math.floor(hrs / 24)}d`;
+}
+
+const labels = {
+    title: lang === "es" ? "Chat familiar" : "Family chat",
+    subtitle:
+        lang === "es"
+            ? "Mensajes rápidos entre miembros"
+            : "Quick pings between family",
+    placeholder: lang === "es" ? "Escribe un mensaje…" : "Type a message…",
+    send: lang === "es" ? "Enviar" : "Send",
+    empty: lang === "es" ? "Sin mensajes aún." : "No messages yet.",
+};
+---
+
+<Layout title={`${labels.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col h-screen">
+        <header class="bg-gradient-to-br from-cyan-500 to-blue-600 text-white pt-12 pb-4 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] flex-shrink-0">
+            <h1 class="text-2xl font-bold">💬 {labels.title}</h1>
+            <p class="text-cyan-100 text-xs mt-1">{labels.subtitle}</p>
+        </header>
+
+        <main id="chat-feed" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+            {errorMsg && (
+                <div class="p-2 bg-red-100 border border-red-200 text-red-700 text-xs rounded-lg">
+                    {errorMsg}
+                </div>
+            )}
+
+            {msgs.length === 0 ? (
+                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10">
+                    <p class="text-brand-ink-soft text-sm">{labels.empty}</p>
+                </div>
+            ) : (
+                msgs.map((m: any) => {
+                    const mine = m.sender_id === user.id;
+                    const name = memberLookup.get(m.sender_id) ?? "Family";
+                    const reactions: any[] = Array.isArray(m.reactions) ? m.reactions : [];
+                    return (
+                        <div data-created-at={m.created_at} data-msg-id={m.id} class={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                            <div class={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
+                                mine
+                                    ? "bg-brand-ink text-brand-cream"
+                                    : "bg-brand-cream border border-brand-ink/10 text-brand-ink"
+                            }`}>
+                                {!mine && (
+                                    <p class="text-[10px] font-bold text-brand-ink-soft mb-0.5">
+                                        {name}
+                                    </p>
+                                )}
+                                <p class="whitespace-pre-wrap">{m.body}</p>
+                                <p class={`text-[10px] mt-1 ${mine ? "text-brand-cream/60" : "text-brand-ink-soft"}`}>
+                                    {timeAgo(m.created_at)}
+                                </p>
+                                {reactions.length > 0 && (
+                                    <div class="flex flex-wrap gap-1 mt-1">
+                                        {reactions.map((r: any) => (
+                                            <button
+                                                type="button"
+                                                data-react={m.id}
+                                                data-emoji={r.emoji}
+                                                data-toggle={r.user_ids.includes(user.id) ? "off" : "on"}
+                                                class={`text-[11px] px-1.5 py-0.5 rounded-full ${
+                                                    r.user_ids.includes(user.id)
+                                                        ? "bg-cyan-500 text-white"
+                                                        : "bg-brand-cream-deep text-brand-ink"
+                                                }`}
+                                            >
+                                                {r.emoji} {r.count}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                <div class="mt-1 flex gap-1 opacity-40 hover:opacity-100 transition-opacity">
+                                    {["👍","❤️","😂","🎉","🙏","✅"].map((e) => (
+                                        <button type="button" data-react={m.id} data-emoji={e} data-toggle="on"
+                                            class="text-xs hover:scale-125 transition-transform">
+                                            {e}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })
+            )}
+        </main>
+
+        <form method="POST" class="p-3 border-t border-brand-ink/10 bg-brand-cream flex-shrink-0 flex gap-2">
+            <input
+                type="text"
+                name="body"
+                required
+                maxlength="2000"
+                placeholder={labels.placeholder}
+                class="flex-1 px-3 py-2.5 rounded-xl border border-brand-ink/20 text-sm focus:ring-2 focus:ring-cyan-500 outline-none"
+            />
+            <button
+                type="submit"
+                class="px-4 py-2.5 rounded-xl bg-cyan-600 text-white text-sm font-bold hover:bg-cyan-700 active:scale-95"
+            >
+                {labels.send}
+            </button>
+        </form>
+
+        <BottomNav active="tasks" role={user.role} lang={lang} />
+    </div>
+</Layout>
+
+<script define:vars={{ currentUserId: user.id, memberMap: Object.fromEntries(memberLookup), lang }}>
+    document.addEventListener("astro:page-load", () => {
+        const feed = document.getElementById("chat-feed");
+        if (!feed) return;
+        feed.scrollTo({ top: feed.scrollHeight });
+
+        // Find the most recent timestamp already rendered.
+        const allBubbles = feed.querySelectorAll("[data-created-at]");
+        let cursor = allBubbles.length
+            ? allBubbles[allBubbles.length - 1].getAttribute("data-created-at")
+            : new Date().toISOString();
+
+        function timeAgo(iso) {
+            const ms = Date.now() - new Date(iso).getTime();
+            const mins = Math.floor(ms / 60000);
+            if (mins < 1) return lang === "es" ? "ahora" : "now";
+            if (mins < 60) return `${mins}m`;
+            const hrs = Math.floor(mins / 60);
+            if (hrs < 24) return `${hrs}h`;
+            return `${Math.floor(hrs / 24)}d`;
+        }
+
+        function appendBubble(msg) {
+            const mine = msg.sender_id === currentUserId;
+            const name = memberMap[msg.sender_id] ?? "Family";
+            const wrapper = document.createElement("div");
+            wrapper.className = `flex ${mine ? "justify-end" : "justify-start"}`;
+            wrapper.setAttribute("data-created-at", msg.created_at);
+            const headerHtml = mine ? "" : `<p class="text-[10px] font-bold text-brand-ink-soft mb-0.5"></p>`;
+            wrapper.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
+                mine ? "bg-brand-ink text-brand-cream" : "bg-brand-cream border border-brand-ink/10 text-brand-ink"
+            }">${headerHtml}<p class="whitespace-pre-wrap"></p><p class="text-[10px] mt-1 ${
+                mine ? "text-brand-cream/60" : "text-brand-ink-soft"
+            }"></p></div>`;
+            const ps = wrapper.querySelectorAll("p");
+            if (!mine) (ps[0]).textContent = name;
+            const bodyP = mine ? ps[0] : ps[1];
+            const timeP = mine ? ps[1] : ps[2];
+            bodyP.textContent = msg.body;
+            timeP.textContent = timeAgo(msg.created_at);
+            feed.appendChild(wrapper);
+            feed.scrollTo({ top: feed.scrollHeight, behavior: "smooth" });
+        }
+
+        // Reaction click delegation (W8.6)
+        feed.addEventListener("click", async (ev) => {
+            const btn = (ev.target as HTMLElement).closest("[data-react]") as HTMLElement | null;
+            if (!btn) return;
+            const msgId = btn.getAttribute("data-react");
+            const emoji = btn.getAttribute("data-emoji");
+            const toggle = btn.getAttribute("data-toggle") || "on";
+            if (!msgId || !emoji) return;
+            try {
+                if (toggle === "on") {
+                    await fetch(`/api/chat/${msgId}/reactions`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ emoji }),
+                    });
+                } else {
+                    await fetch(`/api/chat/${msgId}/reactions?emoji=${encodeURIComponent(emoji)}`, {
+                        method: "DELETE",
+                    });
+                }
+                location.reload();
+            } catch {}
+        });
+
+        let aborted = false;
+        async function connect() {
+            while (!aborted) {
+                try {
+                    const url = `/api/chat/stream?after_ts=${encodeURIComponent(cursor)}`;
+                    const resp = await fetch(url, { headers: { Accept: "text/event-stream" } });
+                    if (!resp.ok || !resp.body) {
+                        await new Promise((r) => setTimeout(r, 3000));
+                        continue;
+                    }
+                    const reader = resp.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buf = "";
+                    while (!aborted) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        buf += decoder.decode(value, { stream: true });
+                        let idx;
+                        while ((idx = buf.indexOf("\n\n")) >= 0) {
+                            const chunk = buf.slice(0, idx);
+                            buf = buf.slice(idx + 2);
+                            let event = "message";
+                            let dataStr = "";
+                            for (const line of chunk.split("\n")) {
+                                if (line.startsWith("event: ")) event = line.slice(7).trim();
+                                else if (line.startsWith("data: ")) dataStr += line.slice(6);
+                            }
+                            if (event === "message" && dataStr) {
+                                try {
+                                    const msg = JSON.parse(dataStr);
+                                    appendBubble(msg);
+                                    cursor = msg.created_at;
+                                } catch {}
+                            }
+                        }
+                    }
+                } catch (e) {
+                    await new Promise((r) => setTimeout(r, 3000));
+                }
+            }
+        }
+        connect();
+        document.addEventListener("astro:before-swap", () => { aborted = true; }, { once: true });
+    });
+</script>

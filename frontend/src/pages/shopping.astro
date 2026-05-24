@@ -1,0 +1,298 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BottomNav from "../components/BottomNav.astro";
+import { apiFetch } from "../lib/api";
+import { t } from "../lib/i18n";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+let errorMsg = "";
+
+if (Astro.request.method === "POST") {
+    const data = await Astro.request.formData();
+    const action = data.get("action");
+
+    if (action === "create_list") {
+        const name = String(data.get("name") || "").trim();
+        if (name) {
+            const { ok, error } = await apiFetch("/api/shopping/lists", {
+                method: "POST",
+                token,
+                body: JSON.stringify({ name }),
+            });
+            if (!ok) errorMsg = error || "Error";
+        }
+    } else if (action === "add_item") {
+        const listId = data.get("list_id");
+        const name = String(data.get("item_name") || "").trim();
+        const qty = String(data.get("qty") || "").trim() || null;
+        if (listId && name) {
+            const { ok, error } = await apiFetch(
+                `/api/shopping/lists/${listId}/items`,
+                {
+                    method: "POST",
+                    token,
+                    body: JSON.stringify({ name, qty }),
+                },
+            );
+            if (!ok) errorMsg = error || "Error";
+        }
+    } else if (action === "toggle_item") {
+        const itemId = data.get("item_id");
+        const checked = data.get("checked") === "true";
+        if (itemId) {
+            await apiFetch(`/api/shopping/items/${itemId}`, {
+                method: "PATCH",
+                token,
+                body: JSON.stringify({ is_checked: !checked }),
+            });
+        }
+    } else if (action === "delete_item") {
+        const itemId = data.get("item_id");
+        if (itemId) {
+            await apiFetch(`/api/shopping/items/${itemId}`, {
+                method: "DELETE",
+                token,
+            });
+        }
+    } else if (action === "archive_list") {
+        const listId = data.get("list_id");
+        if (listId) {
+            await apiFetch(`/api/shopping/lists/${listId}`, {
+                method: "PATCH",
+                token,
+                body: JSON.stringify({ is_archived: true }),
+            });
+        }
+    } else if (action === "delete_list") {
+        const listId = data.get("list_id");
+        if (listId) {
+            await apiFetch(`/api/shopping/lists/${listId}`, {
+                method: "DELETE",
+                token,
+            });
+        }
+    }
+    return Astro.redirect("/shopping" + (Astro.url.searchParams.get("list") ? `?list=${Astro.url.searchParams.get("list")}` : ""));
+}
+
+const [{ data: user }, { data: listsRaw }] = await Promise.all([
+    apiFetch<any>("/api/auth/me", { token }),
+    apiFetch<any[]>("/api/shopping/lists", { token }),
+]);
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+const lists: any[] = Array.isArray(listsRaw) ? listsRaw : [];
+
+const selectedId =
+    Astro.url.searchParams.get("list") || (lists[0]?.id ?? null);
+
+let detail: any = null;
+if (selectedId) {
+    const { data } = await apiFetch<any>(
+        `/api/shopping/lists/${selectedId}`,
+        { token },
+    );
+    detail = data;
+}
+
+const labels = {
+    title: lang === "es" ? "Compras" : "Shopping",
+    subtitle:
+        lang === "es"
+            ? "Listas compartidas de la familia"
+            : "Shared family lists",
+    new_list_ph: lang === "es" ? "Nueva lista (e.g. Costco)" : "New list (e.g. Costco)",
+    add: lang === "es" ? "Agregar" : "Add",
+    add_item_ph: lang === "es" ? "Agregar artículo" : "Add item",
+    qty_ph: lang === "es" ? "Cant." : "Qty",
+    empty_lists:
+        lang === "es"
+            ? "Aún no hay listas. Crea una arriba."
+            : "No lists yet. Create one above.",
+    empty_items:
+        lang === "es" ? "Lista vacía. Agrega algo." : "Empty list. Add something.",
+    pending: lang === "es" ? "pendientes" : "pending",
+    archive: lang === "es" ? "Archivar" : "Archive",
+    delete: lang === "es" ? "Eliminar" : "Delete",
+    confirm_delete: lang === "es" ? "¿Borrar lista?" : "Delete list?",
+};
+---
+
+<Layout title={`${labels.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col">
+        <header class="bg-gradient-to-br from-emerald-500 to-teal-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+            <h1 class="text-2xl font-bold mb-1">🛒 {labels.title}</h1>
+            <p class="text-emerald-100 text-sm">{labels.subtitle}</p>
+        </header>
+
+        <main class="flex-1 px-4 py-6 space-y-4">
+            {errorMsg && (
+                <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
+                    {errorMsg}
+                </div>
+            )}
+
+            <form method="POST" class="bg-brand-cream rounded-2xl p-3 border border-brand-ink/10 shadow-[var(--shadow-card)] flex gap-2">
+                <input type="hidden" name="action" value="create_list" />
+                <input
+                    type="text"
+                    name="name"
+                    required
+                    maxlength="120"
+                    placeholder={labels.new_list_ph}
+                    class="flex-1 px-3 py-2 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
+                />
+                <button
+                    type="submit"
+                    class="px-4 py-2 rounded-lg bg-brand-ink text-brand-cream text-sm font-semibold hover:bg-brand-ink-soft active:scale-95"
+                >
+                    {labels.add}
+                </button>
+            </form>
+
+            {lists.length === 0 ? (
+                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                    <p class="text-brand-ink-soft text-sm">{labels.empty_lists}</p>
+                </div>
+            ) : (
+                <div class="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4">
+                    {lists.map((l: any) => (
+                        <a
+                            href={`/shopping?list=${l.id}`}
+                            class={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap border-2 transition-all ${
+                                l.id === selectedId
+                                    ? "bg-brand-ink text-brand-cream border-brand-ink"
+                                    : "bg-brand-cream text-brand-ink border-brand-ink/20 hover:border-brand-ink"
+                            }`}
+                        >
+                            {l.name}
+                            {l.pending_count > 0 && (
+                                <span class="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-brand-coral text-white">
+                                    {l.pending_count}
+                                </span>
+                            )}
+                        </a>
+                    ))}
+                </div>
+            )}
+
+            {detail && (
+                <section class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
+                    <div class="p-4 border-b border-brand-ink/10 flex items-center justify-between gap-2">
+                        <div>
+                            <h2 class="font-bold text-brand-ink text-lg">{detail.name}</h2>
+                            <p class="text-xs text-brand-ink-soft">
+                                {detail.item_count} · {detail.pending_count} {labels.pending}
+                            </p>
+                        </div>
+                        <div class="flex gap-1">
+                            <form method="POST">
+                                <input type="hidden" name="action" value="archive_list" />
+                                <input type="hidden" name="list_id" value={detail.id} />
+                                <button
+                                    type="submit"
+                                    class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-ink/10"
+                                >
+                                    {labels.archive}
+                                </button>
+                            </form>
+                            <form method="POST" onsubmit={`return confirm('${labels.confirm_delete}')`}>
+                                <input type="hidden" name="action" value="delete_list" />
+                                <input type="hidden" name="list_id" value={detail.id} />
+                                <button
+                                    type="submit"
+                                    class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200"
+                                >
+                                    {labels.delete}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <form method="POST" class="p-3 border-b border-brand-ink/10 flex gap-2">
+                        <input type="hidden" name="action" value="add_item" />
+                        <input type="hidden" name="list_id" value={detail.id} />
+                        <input
+                            type="text"
+                            name="item_name"
+                            required
+                            maxlength="200"
+                            placeholder={labels.add_item_ph}
+                            class="flex-1 px-3 py-2 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
+                        />
+                        <input
+                            type="text"
+                            name="qty"
+                            maxlength="40"
+                            placeholder={labels.qty_ph}
+                            class="w-20 px-3 py-2 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
+                        />
+                        <button
+                            type="submit"
+                            class="px-4 py-2 rounded-lg bg-brand-sun-deep text-brand-ink text-sm font-semibold hover:bg-brand-sun active:scale-95"
+                        >
+                            +
+                        </button>
+                    </form>
+
+                    {detail.items.length === 0 ? (
+                        <p class="text-brand-ink-soft text-sm text-center py-8">
+                            {labels.empty_items}
+                        </p>
+                    ) : (
+                        <ul class="divide-y divide-brand-ink/10">
+                            {detail.items.map((item: any) => (
+                                <li class="flex items-center gap-2 p-3">
+                                    <form method="POST" class="flex-1 flex items-center gap-3">
+                                        <input type="hidden" name="action" value="toggle_item" />
+                                        <input type="hidden" name="item_id" value={item.id} />
+                                        <input type="hidden" name="checked" value={String(item.is_checked)} />
+                                        <button
+                                            type="submit"
+                                            class={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                                item.is_checked
+                                                    ? "bg-brand-mint border-brand-mint-deep text-brand-ink"
+                                                    : "border-brand-ink/30 hover:border-brand-ink"
+                                            }`}
+                                            aria-label={item.is_checked ? "Uncheck" : "Check"}
+                                        >
+                                            {item.is_checked && (
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            )}
+                                        </button>
+                                        <div class={`flex-1 text-sm ${item.is_checked ? "line-through text-brand-ink-soft" : "text-brand-ink"}`}>
+                                            <span class="font-medium">{item.name}</span>
+                                            {item.qty && (
+                                                <span class="ml-2 text-xs text-brand-ink-soft">· {item.qty}</span>
+                                            )}
+                                        </div>
+                                    </form>
+                                    <form method="POST">
+                                        <input type="hidden" name="action" value="delete_item" />
+                                        <input type="hidden" name="item_id" value={item.id} />
+                                        <button
+                                            type="submit"
+                                            class="text-brand-ink-soft hover:text-red-600 text-lg leading-none px-2"
+                                            aria-label="Delete"
+                                        >
+                                            ×
+                                        </button>
+                                    </form>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </section>
+            )}
+        </main>
+
+        <BottomNav active="tasks" role={user.role} lang={lang} />
+    </div>
+</Layout>

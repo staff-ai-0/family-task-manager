@@ -242,15 +242,52 @@ async def list_pending_approvals(
             assignment_id=r.id,
             template_id=r.template_id,
             template_title=r.template.title if r.template else "",
-            points=r.template.points if r.template else 0,
+            points=r.template.award_points_per_completer if r.template else 0,
             assigned_to=r.assigned_to,
             assigned_to_name=user_names.get(r.assigned_to, ""),
             completed_at=r.completed_at,
             proof_text=r.proof_text,
             proof_image_url=r.proof_image_url,
+            ai_validation_score=r.ai_validation_score,
+            ai_validation_notes=r.ai_validation_notes,
         )
         for r in rows
     ]
+
+
+@router.get("/blocking-rewards", response_model=List[str])
+async def list_blocking_rewards(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Titles of tasks (templates with blocks_rewards=True) that currently lock
+    reward redemption for the caller. Empty list = nothing blocking.
+    """
+    from app.models.task_assignment import TaskAssignment, AssignmentStatus
+    from app.models.task_template import TaskTemplate
+    from sqlalchemy import and_
+
+    family_id = to_uuid_required(current_user.family_id)
+    user_id = to_uuid_required(current_user.id)
+    q = (
+        sa_select(TaskTemplate.title)
+        .join(TaskAssignment, TaskAssignment.template_id == TaskTemplate.id)
+        .where(
+            and_(
+                TaskAssignment.assigned_to == user_id,
+                TaskAssignment.family_id == family_id,
+                TaskAssignment.status.in_(
+                    [AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]
+                ),
+                TaskTemplate.blocks_rewards.is_(True),
+            )
+        )
+        .distinct()
+        .limit(10)
+    )
+    rows = (await db.execute(q)).all()
+    return [r[0] for r in rows]
 
 
 # ─── Assignment Actions ──────────────────────────────────────────────

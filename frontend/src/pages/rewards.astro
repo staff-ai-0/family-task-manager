@@ -31,15 +31,18 @@ if (Astro.request.method === "POST") {
     return Astro.redirect("/rewards");
 }
 
-const [{ data: user }, { data: rewardsRaw }] = await Promise.all([
+const [{ data: user }, { data: rewardsRaw }, { data: blockingRaw }] = await Promise.all([
     apiFetch<any>("/api/auth/me", { token }),
     apiFetch<any[]>("/api/rewards", { token }),
+    apiFetch<any[]>("/api/task-assignments/blocking-rewards", { token }),
 ]);
 if (!user) {
     Astro.cookies.delete("access_token", { path: "/" });
     return Astro.redirect("/login");
 }
 const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
+const blockingTitles: string[] = Array.isArray(blockingRaw) ? blockingRaw : [];
+const isLocked = blockingTitles.length > 0;
 
 const flash = Astro.cookies.get("flash")?.value;
 const flashError = Astro.cookies.get("flash_error")?.value;
@@ -94,6 +97,30 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 )
             }
             {
+                isLocked && (
+                    <div class="mb-4 p-4 bg-brand-coral/15 border-2 border-brand-coral text-brand-coral-deep rounded-xl">
+                        <div class="flex items-start gap-2">
+                            <span class="text-2xl leading-none">🔒</span>
+                            <div class="flex-1">
+                                <p class="font-bold text-sm">
+                                    {lang === "es" ? "Recompensas bloqueadas" : "Rewards locked"}
+                                </p>
+                                <p class="text-xs mt-1">
+                                    {lang === "es"
+                                        ? "Termina estas tareas para poder canjear:"
+                                        : "Finish these tasks before redeeming:"}
+                                </p>
+                                <ul class="mt-2 text-xs space-y-0.5 list-disc list-inside">
+                                    {blockingTitles.map((title: string) => (
+                                        <li>{title}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+            {
                 flashError && (
                     <div class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                         {flashError}
@@ -130,9 +157,10 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {rewards.map((reward: any) => {
                             const canAfford = user.points >= reward.points_cost;
+                            const canRedeem = canAfford && !isLocked;
                             return (
                                 <div
-                                    class={`bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border transition-all ${canAfford ? "border-brand-ink/10 hover:shadow-[var(--shadow-card)]" : "border-brand-ink/10 opacity-60"}`}
+                                    class={`bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border transition-all ${canRedeem ? "border-brand-ink/10 hover:shadow-[var(--shadow-card)]" : "border-brand-ink/10 opacity-60"}`}
                                 >
                                     <div class="flex justify-between items-start mb-3">
                                         <div class="flex-1 pr-3">
@@ -170,10 +198,12 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                         />
                                         <button
                                             type="submit"
-                                            disabled={!canAfford}
-                                            class={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${canAfford ? "bg-brand-sun-deep hover:bg-brand-ink text-brand-ink shadow-[var(--shadow-card)] active:scale-95" : "bg-brand-cream-deep text-brand-ink-soft cursor-not-allowed"}`}
+                                            disabled={!canRedeem}
+                                            class={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${canRedeem ? "bg-brand-sun-deep hover:bg-brand-ink text-brand-ink shadow-[var(--shadow-card)] active:scale-95" : "bg-brand-cream-deep text-brand-ink-soft cursor-not-allowed"}`}
                                         >
-                                            {canAfford
+                                            {isLocked
+                                                ? (lang === "es" ? "🔒 Bloqueado" : "🔒 Locked")
+                                                : canAfford
                                                 ? t(lang, "rewards_redeem")
                                                 : t(lang, "rewards_not_enough")}
                                         </button>

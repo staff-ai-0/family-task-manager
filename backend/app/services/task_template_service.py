@@ -66,6 +66,7 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
             title_es=title_es,
             description_es=description_es,
             points=data.points,
+            effort_level=data.effort_level,
             interval_days=data.interval_days,
             assignment_type=data.assignment_type,
             assigned_user_ids=(
@@ -79,6 +80,13 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
                 else None
             ),
             is_bonus=data.is_bonus,
+            auto_late_penalty=data.auto_late_penalty,
+            late_restriction_type=data.late_restriction_type,
+            late_severity=data.late_severity,
+            late_duration_days=data.late_duration_days,
+            blocks_rewards=data.blocks_rewards,
+            gig_mode=data.gig_mode.value if hasattr(data.gig_mode, "value") else data.gig_mode,
+            collaboration_min_count=data.collaboration_min_count,
             created_by=created_by,
             family_id=family_id,
         )

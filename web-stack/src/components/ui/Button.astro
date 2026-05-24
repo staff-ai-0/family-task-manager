@@ -1,0 +1,52 @@
+---
+/**
+ * Button — the press-down hard-shadow button.
+ *
+ * @prop variant  "primary" | "secondary" | "ghost"  default "primary"
+ *                primary  = coral fill (kid/teen CTA — see brand guide)
+ *                secondary = sky fill
+ *                ghost    = transparent + ink outline
+ * @prop size     "sm" | "md" | "lg"  default "md"
+ * @prop href     Render as <a> instead of <button>.
+ */
+interface Props {
+  variant?: "primary" | "secondary" | "ghost";
+  size?: "sm" | "md" | "lg";
+  href?: string;
+  type?: "button" | "submit" | "reset";
+  class?: string;
+  [key: string]: any;
+}
+const {
+  variant = "primary",
+  size = "md",
+  href,
+  type = "button",
+  class: className = "",
+  ...rest
+} = Astro.props;
+
+const base =
+  "press inline-flex items-center justify-center gap-2 font-display font-extrabold " +
+  "border-2 border-brand-ink rounded-full shadow-[var(--shadow-card)] " +
+  "tracking-tight whitespace-nowrap select-none cursor-pointer";
+
+const sizes = {
+  sm: "px-4 py-2 text-sm",
+  md: "px-5 py-3 text-base",
+  lg: "px-7 py-4 text-lg",
+};
+
+const variants = {
+  primary:   "bg-brand-coral text-brand-ink hover:bg-brand-coral-deep",
+  secondary: "bg-brand-sky  text-brand-ink hover:bg-brand-sky-deep",
+  ghost:     "bg-transparent text-brand-ink hover:bg-brand-cream-deep",
+};
+
+const cls = `${base} ${sizes[size]} ${variants[variant]} ${className}`;
+const Tag = href ? "a" : "button";
+---
+
+<Tag class={cls} href={href} type={!href ? type : undefined} {...rest}>
+  <slot />
+</Tag>

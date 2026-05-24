@@ -97,6 +97,24 @@ if (flash) Astro.cookies.delete("flash", { path: "/" });
                                     />
                                 </a>
                             )}
+                            {row.ai_validation_score != null && (
+                                <div class={`mb-3 p-2 rounded-lg border text-xs ${
+                                    row.ai_validation_score >= 0.7
+                                        ? "bg-brand-mint/15 border-brand-mint-deep/30 text-brand-mint-deep"
+                                        : row.ai_validation_score >= 0.4
+                                            ? "bg-brand-sun/15 border-brand-sun-deep/30 text-brand-sun-deep"
+                                            : "bg-red-50 border-red-200 text-red-700"
+                                }`}>
+                                    <p class="font-semibold">
+                                        🤖 {lang === "es" ? "AI:" : "AI:"} {Math.round(row.ai_validation_score * 100)}%
+                                        {row.ai_validation_score >= 0.7 && " ✓"}
+                                        {row.ai_validation_score < 0.4 && " ⚠️"}
+                                    </p>
+                                    {row.ai_validation_notes && (
+                                        <p class="mt-1 italic">{row.ai_validation_notes}</p>
+                                    )}
+                                </div>
+                            )}
                             <textarea
                                 data-notes
                                 rows="2"

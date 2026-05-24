@@ -15,6 +15,10 @@ if (!user) {
 }
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
+const { data: pushHealth } = await apiFetch<any>("/api/push/health", { token });
+const pushOk = pushHealth?.configured && pushHealth?.valid_keys;
+const pushSubs = pushHealth?.subscription_count ?? 0;
+
 const labels = {
     en: {
         title: "Settings",
@@ -22,6 +26,10 @@ const labels = {
         subscription_desc: "Manage your plan and billing",
         family: "Family",
         family_desc: "Timezone and family-wide preferences",
+        kiosk: "Wall displays",
+        kiosk_desc: "Echo Show, iPad, Fire TV",
+        analytics: "Analytics",
+        analytics_desc: "PUP Score + completion trends",
         back: "Back",
     },
     es: {
@@ -30,6 +38,10 @@ const labels = {
         subscription_desc: "Administra tu plan y facturaci\u00f3n",
         family: "Familia",
         family_desc: "Zona horaria y preferencias de la familia",
+        kiosk: "Pantallas de pared",
+        kiosk_desc: "Echo Show, iPad, Fire TV",
+        analytics: "Anal\u00edtica",
+        analytics_desc: "PUP Score + tendencias",
         back: "Volver",
     },
 }[lang] ?? {
@@ -38,6 +50,10 @@ const labels = {
     subscription_desc: "Manage your plan and billing",
     family: "Family",
     family_desc: "Timezone and family-wide preferences",
+    kiosk: "Wall displays",
+    kiosk_desc: "Echo Show, iPad, Fire TV",
+    analytics: "Analytics",
+    analytics_desc: "PUP Score + completion trends",
     back: "Back",
 };
 ---
@@ -57,6 +73,21 @@ const labels = {
         </header>
 
         <main class="flex-1 px-4 py-6">
+            <div class={`mb-4 p-3 rounded-xl text-sm border ${pushOk ? "bg-brand-mint/15 border-brand-mint-deep text-brand-mint-deep" : "bg-red-50 border-red-200 text-red-700"}`}>
+                <p class="font-semibold">
+                    {pushOk ? "🔔" : "⚠️"} {lang === "es" ? "Web Push" : "Web Push"}
+                </p>
+                <p class="text-xs mt-1">
+                    {pushOk
+                        ? (lang === "es"
+                            ? `Configurado · ${pushSubs} dispositivo(s) suscrito(s)`
+                            : `Configured · ${pushSubs} device(s) subscribed`)
+                        : (lang === "es"
+                            ? "VAPID no configurado — las notificaciones push no funcionarán."
+                            : "VAPID not configured — push notifications will not fire.")}
+                </p>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <a
                     href="/parent/settings/subscription"
@@ -92,6 +123,64 @@ const labels = {
                     <div>
                         <p class="font-bold text-brand-ink">{labels.family}</p>
                         <p class="text-xs text-brand-ink-soft">{labels.family_desc}</p>
+                    </div>
+                    <svg class="w-5 h-5 text-brand-ink-soft ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </a>
+
+                <a
+                    href="/parent/frankie"
+                    class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-violet-600 transition-all flex items-center gap-4"
+                >
+                    <div class="w-12 h-12 rounded-xl bg-violet-600/15 flex items-center justify-center flex-shrink-0">
+                        <span class="text-2xl">🤖</span>
+                    </div>
+                    <div>
+                        <p class="font-bold text-brand-ink">Frankie</p>
+                        <p class="text-xs text-brand-ink-soft">
+                            {lang === "es" ? "Copiloto familiar IA" : "AI family copilot"}
+                        </p>
+                    </div>
+                    <svg class="w-5 h-5 text-brand-ink-soft ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </a>
+
+                <a
+                    href="/parent/analytics"
+                    class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-fuchsia-500 transition-all flex items-center gap-4"
+                >
+                    <div class="w-12 h-12 rounded-xl bg-fuchsia-500/15 flex items-center justify-center flex-shrink-0">
+                        <svg class="h-6 w-6 text-fuchsia-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                            />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-brand-ink">{labels.analytics}</p>
+                        <p class="text-xs text-brand-ink-soft">{labels.analytics_desc}</p>
+                    </div>
+                    <svg class="w-5 h-5 text-brand-ink-soft ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </a>
+
+                <a
+                    href="/parent/kiosk"
+                    class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-slate-700 transition-all flex items-center gap-4"
+                >
+                    <div class="w-12 h-12 rounded-xl bg-slate-700/15 flex items-center justify-center flex-shrink-0">
+                        <svg class="h-6 w-6 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 17v2m-3 0h6m-7-6h8a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z"
+                            />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="font-bold text-brand-ink">{labels.kiosk}</p>
+                        <p class="text-xs text-brand-ink-soft">{labels.kiosk_desc}</p>
                     </div>
                     <svg class="w-5 h-5 text-brand-ink-soft ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />

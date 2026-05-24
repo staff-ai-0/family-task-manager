@@ -1,0 +1,238 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BottomNav from "../components/BottomNav.astro";
+import { apiFetch } from "../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+let errorMsg = "";
+
+if (Astro.request.method === "POST") {
+    const data = await Astro.request.formData();
+    const action = data.get("action");
+    if (action === "create") {
+        const name = String(data.get("name") || "").trim();
+        const species = String(data.get("species") || "cat");
+        if (name) {
+            const { ok, error } = await apiFetch("/api/pet/", {
+                method: "POST",
+                token,
+                body: JSON.stringify({ name, species }),
+            });
+            if (!ok) errorMsg = error || "Error";
+        }
+    } else if (action === "feed") {
+        await apiFetch("/api/pet/feed", { method: "POST", token });
+    } else if (action === "play") {
+        await apiFetch("/api/pet/play", { method: "POST", token });
+    } else if (action === "treat") {
+        const treatType = String(data.get("treat_type") || "");
+        if (treatType) {
+            const { ok, error } = await apiFetch("/api/pet/treat", {
+                method: "POST",
+                token,
+                body: JSON.stringify({ treat_type: treatType }),
+            });
+            if (!ok) errorMsg = error || "Error";
+        }
+    }
+    return Astro.redirect("/pet");
+}
+
+const { data: treatsRaw } = await apiFetch<any[]>("/api/pet/treats", { token });
+const treats: any[] = Array.isArray(treatsRaw) ? treatsRaw : [];
+
+const [{ data: user }, { data: petRaw }] = await Promise.all([
+    apiFetch<any>("/api/auth/me", { token }),
+    apiFetch<any>("/api/pet/", { token }),
+]);
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+const pet = petRaw;
+
+const speciesEmoji: Record<string, string> = {
+    cat: "🐱",
+    dog: "🐶",
+    dragon: "🐲",
+    fox: "🦊",
+    owl: "🦉",
+    bunny: "🐰",
+};
+
+function moodFace(p: any): string {
+    if (!p) return "🥚";
+    if (p.status_label === "starving") return "😫";
+    if (p.status_label === "sad") return "😞";
+    if (p.status_label === "happy") return "🤩";
+    return speciesEmoji[p.species] ?? "🐾";
+}
+
+const labels = {
+    title: lang === "es" ? "Mi mascota" : "My pet",
+    no_pet: lang === "es" ? "Aún no tienes mascota." : "No pet yet.",
+    pick_species: lang === "es" ? "Elige especie:" : "Pick species:",
+    name_ph: lang === "es" ? "Nombre" : "Name",
+    adopt: lang === "es" ? "Adoptar" : "Adopt",
+    feed: lang === "es" ? "Alimentar" : "Feed",
+    play: lang === "es" ? "Jugar" : "Play",
+    mood: lang === "es" ? "Ánimo" : "Mood",
+    hunger: lang === "es" ? "Hambre" : "Hunger",
+    level: lang === "es" ? "Nivel" : "Level",
+    xp: "XP",
+};
+---
+
+<Layout title={`${labels.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col">
+        <header class="bg-gradient-to-br from-pink-400 to-violet-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+            <h1 class="text-2xl font-bold mb-1">🐾 {labels.title}</h1>
+        </header>
+
+        <main class="flex-1 px-4 py-6 space-y-4">
+            {errorMsg && (
+                <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
+                    {errorMsg}
+                </div>
+            )}
+
+            {!pet ? (
+                <form method="POST" class="bg-brand-cream rounded-2xl p-6 border border-brand-ink/10 shadow-[var(--shadow-card)] space-y-3">
+                    <input type="hidden" name="action" value="create" />
+                    <p class="text-brand-ink font-semibold">{labels.no_pet}</p>
+                    <input
+                        type="text"
+                        name="name"
+                        required
+                        maxlength="40"
+                        placeholder={labels.name_ph}
+                        class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
+                    />
+                    <div>
+                        <p class="text-xs text-brand-ink-soft mb-2">{labels.pick_species}</p>
+                        <div class="grid grid-cols-3 gap-2">
+                            {(["cat", "dog", "dragon", "fox", "owl", "bunny"] as const).map((s, i) => (
+                                <label class="flex flex-col items-center gap-1 p-3 rounded-xl border-2 border-brand-ink/10 cursor-pointer hover:border-brand-ink has-[:checked]:border-brand-ink has-[:checked]:bg-brand-sun/15">
+                                    <input type="radio" name="species" value={s} class="sr-only" checked={i === 0} />
+                                    <span class="text-3xl">{speciesEmoji[s]}</span>
+                                    <span class="text-xs capitalize">{s}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                    <button
+                        type="submit"
+                        class="w-full py-2.5 rounded-lg bg-brand-ink text-brand-cream font-semibold hover:bg-brand-ink-soft"
+                    >
+                        {labels.adopt}
+                    </button>
+                </form>
+            ) : (
+                <>
+                    <div class="bg-brand-cream rounded-2xl p-6 border border-brand-ink/10 shadow-[var(--shadow-card)] text-center">
+                        <p class="text-7xl">{moodFace(pet)}</p>
+                        <p class="text-xl font-bold text-brand-ink mt-2">{pet.name}</p>
+                        <p class="text-xs text-brand-ink-soft capitalize">
+                            {pet.species} · {labels.level} {pet.level}
+                        </p>
+                    </div>
+
+                    <div class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)] space-y-3">
+                        <div>
+                            <div class="flex justify-between text-xs text-brand-ink-soft mb-1">
+                                <span>😊 {labels.mood}</span>
+                                <span>{pet.mood}/100</span>
+                            </div>
+                            <div class="h-2 bg-brand-cream-deep rounded-full overflow-hidden">
+                                <div class="h-full bg-brand-mint-deep transition-all" style={`width: ${pet.mood}%`}></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs text-brand-ink-soft mb-1">
+                                <span>🍖 {labels.hunger}</span>
+                                <span>{pet.hunger}/100</span>
+                            </div>
+                            <div class="h-2 bg-brand-cream-deep rounded-full overflow-hidden">
+                                <div class={`h-full transition-all ${pet.hunger > 70 ? "bg-brand-coral-deep" : pet.hunger > 40 ? "bg-brand-sun-deep" : "bg-brand-mint-deep"}`} style={`width: ${pet.hunger}%`}></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs text-brand-ink-soft mb-1">
+                                <span>⭐ {labels.xp}</span>
+                                <span>{pet.xp} / {pet.xp_to_next_level}</span>
+                            </div>
+                            <div class="h-2 bg-brand-cream-deep rounded-full overflow-hidden">
+                                <div class="h-full bg-brand-sky-deep transition-all" style={`width: ${Math.min(100, (pet.xp / pet.xp_to_next_level) * 100)}%`}></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <form method="POST">
+                            <input type="hidden" name="action" value="feed" />
+                            <button type="submit" class="w-full py-3 rounded-xl bg-brand-mint-deep text-white font-bold hover:opacity-90 active:scale-95">
+                                🍖 {labels.feed}
+                            </button>
+                        </form>
+                        <form method="POST">
+                            <input type="hidden" name="action" value="play" />
+                            <button type="submit" class="w-full py-3 rounded-xl bg-brand-sun-deep text-brand-ink font-bold hover:opacity-90 active:scale-95">
+                                🎾 {labels.play}
+                            </button>
+                        </form>
+                    </div>
+
+                    <section class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                        <h3 class="text-sm font-bold text-brand-ink mb-2">
+                            🛍️ {lang === "es" ? "Tienda de premios" : "Treat shop"}
+                            <span class="ml-2 text-xs font-normal text-brand-ink-soft">
+                                ({user.points} pts)
+                            </span>
+                        </h3>
+                        <div class="grid grid-cols-2 gap-2">
+                            {treats.map((t: any) => {
+                                const canAfford = user.points >= t.cost;
+                                return (
+                                    <form method="POST">
+                                        <input type="hidden" name="action" value="treat" />
+                                        <input type="hidden" name="treat_type" value={t.type} />
+                                        <button
+                                            type="submit"
+                                            disabled={!canAfford}
+                                            class={`w-full p-3 rounded-xl text-sm font-semibold transition-all text-left ${
+                                                canAfford
+                                                    ? "bg-brand-cream-deep hover:bg-brand-sun/15 text-brand-ink"
+                                                    : "bg-brand-cream-deep text-brand-ink-soft cursor-not-allowed opacity-60"
+                                            }`}
+                                        >
+                                            <p class="font-bold">{t.label}</p>
+                                            <p class="text-[10px] text-brand-ink-soft mt-0.5">
+                                                {t.hunger !== 0 && <span>🍖{t.hunger > 0 ? "+" : ""}{t.hunger} </span>}
+                                                {t.mood !== 0 && <span>😊+{t.mood} </span>}
+                                                {t.xp !== 0 && <span>⭐+{t.xp}</span>}
+                                            </p>
+                                            <p class="text-xs font-bold text-brand-sun-deep mt-1">
+                                                -{t.cost} pts
+                                            </p>
+                                        </button>
+                                    </form>
+                                );
+                            })}
+                        </div>
+                    </section>
+
+                    <p class="text-xs text-brand-ink-soft text-center">
+                        {lang === "es"
+                            ? "Completa tareas para subir el XP de tu mascota."
+                            : "Complete tasks to level up your pet."}
+                    </p>
+                </>
+            )}
+        </main>
+
+        <BottomNav active="tasks" role={user.role} lang={lang} />
+    </div>
+</Layout>

@@ -160,3 +160,26 @@
 .animate-countdown {
   animation: countdown var(--toast-duration, 4s) linear forwards;
 }
+
+/* ---------- Teen UI mode (W4.2) ----------
+   Activated by data-ui-mode="teen" on <body>. Less saturated colors,
+   slightly denser type, less playful corner rounding. Functionality
+   stays the same — this is purely a visual register shift. */
+body[data-ui-mode="teen"] {
+  --color-brand-cream:      #ECECEF;
+  --color-brand-cream-deep: #D8D8DE;
+  --color-brand-sun:        #B8B8C2;
+  --color-brand-sun-deep:   #8A8AA0;
+  --color-brand-coral:      #5C7CFA;
+  --color-brand-coral-deep: #3B5BDB;
+  --color-brand-mint:       #20C997;
+  --color-brand-mint-deep:  #12B886;
+}
+
+body[data-ui-mode="teen"] .rounded-2xl { border-radius: 0.75rem; }
+body[data-ui-mode="teen"] .rounded-xl  { border-radius: 0.5rem; }
+
+body[data-ui-mode="adult"] {
+  --color-brand-cream:      #FAFAFA;
+  --color-brand-cream-deep: #EEEEEE;
+}

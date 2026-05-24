@@ -369,6 +369,19 @@ async def scan_and_create_transaction(
 
     transaction = await TransactionService.create(db, family_id, transaction_data)
 
+    # W5.1: Cross-check receipt items against pending shopping items and
+    # auto-mark matches as bought. Failures here must NOT block the
+    # receipt scan response, so we swallow errors after logging.
+    auto_checked: list[str] = []
+    try:
+        from app.services.shopping_service import ShoppingService  # noqa
+        auto_checked = await _auto_check_shopping_items(
+            db, family_id, [i.get("name", "") for i in receipt.items]
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("shopping auto-check failed")
+
     return {
         "success": True,
         "draft_id": None,
@@ -381,5 +394,58 @@ async def scan_and_create_transaction(
             "currency": receipt.currency,
         },
         "transaction_id": str(transaction.id),
+        "shopping_auto_checked": auto_checked,
         "message": "Transaction created from receipt scan.",
     }
+
+
+async def _auto_check_shopping_items(
+    db: AsyncSession,
+    family_id: UUID,
+    receipt_item_names: list,
+) -> list:
+    """Fuzzy-match receipt items against pending shopping items and check them off.
+
+    Match rule: difflib.SequenceMatcher ratio >= 0.72 on lowercased names,
+    OR one name appears as a token substring of the other. Each shopping
+    item is checked at most once per call.
+    """
+    from datetime import datetime, timezone
+    from difflib import SequenceMatcher
+    from app.models.shopping import ShoppingItem, ShoppingList
+
+    receipt_names = [n.strip().lower() for n in receipt_item_names if n and n.strip()]
+    if not receipt_names:
+        return []
+
+    pending_q = (
+        select(ShoppingItem)
+        .join(ShoppingList, ShoppingItem.list_id == ShoppingList.id)
+        .where(
+            ShoppingList.family_id == family_id,
+            ShoppingList.is_archived.is_(False),
+            ShoppingItem.is_checked.is_(False),
+        )
+    )
+    pending = list((await db.execute(pending_q)).scalars().all())
+    if not pending:
+        return []
+
+    matched_names: list = []
+    now = datetime.now(timezone.utc)
+    for item in pending:
+        item_name = (item.name or "").strip().lower()
+        if not item_name:
+            continue
+        for r_name in receipt_names:
+            ratio = SequenceMatcher(None, item_name, r_name).ratio()
+            substr = item_name in r_name or r_name in item_name
+            if ratio >= 0.72 or (substr and min(len(item_name), len(r_name)) >= 4):
+                item.is_checked = True
+                item.checked_at = now
+                matched_names.append(item.name)
+                break
+
+    if matched_names:
+        await db.commit()
+    return matched_names

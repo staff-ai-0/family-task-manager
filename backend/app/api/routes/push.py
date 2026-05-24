@@ -38,6 +38,39 @@ async def get_vapid_public_key():
     return {"public_key": settings.VAPID_PUBLIC_KEY}
 
 
+@router.get("/health")
+async def push_health(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Diagnostic for parents — confirms VAPID keys are present and
+    the user has subscriptions on file. Returns booleans + counts."""
+    from sqlalchemy import func, select
+    from app.models.push_subscription import PushSubscription
+
+    pub = settings.VAPID_PUBLIC_KEY or ""
+    priv = settings.VAPID_PRIVATE_KEY or ""
+    configured = bool(pub and priv)
+    # Sanity: VAPID public key in raw form is 65 bytes → 87 base64url chars.
+    # Private key in PEM is multi-line ~200 chars. Allow some slack.
+    valid_keys = configured and len(pub) >= 80 and len(priv) >= 60
+
+    sub_count = int((await db.execute(
+        select(func.count()).select_from(PushSubscription).where(
+            PushSubscription.user_id == to_uuid_required(current_user.id)
+        )
+    )).scalar() or 0)
+
+    return {
+        "configured": configured,
+        "valid_keys": valid_keys,
+        "claim_email": settings.VAPID_CLAIM_EMAIL,
+        "subscription_count": sub_count,
+        "public_key_length": len(pub),
+        "private_key_length": len(priv),
+    }
+
+
 @router.post("/subscribe")
 async def subscribe(
     body: PushSubscribeRequest,

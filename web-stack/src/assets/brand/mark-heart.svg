@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Family Task Manager — Heart variant">
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="#FFF8F0" stroke="#1F2937" stroke-width="8"></rect>
+  <path d="M128,212 C 60,168 28,128 28,88 C 28,58 52,40 78,40 C 100,40 120,52 128,72 C 136,52 156,40 178,40 C 204,40 228,58 228,88 C 228,128 196,168 128,212 Z" fill="#FF8A65" stroke="#1F2937" stroke-width="8" stroke-linejoin="round"></path>
+  <g stroke="#1F2937" stroke-width="7" stroke-linecap="round">
+    <circle cx="70" cy="86" r="10" fill="#FFC857"></circle>
+    <path d="M64,86 L70,92 L78,80" fill="none" stroke="#1F2937" stroke-width="5"></path>
+    <line x1="92" y1="86" x2="176" y2="86"></line>
+    <circle cx="70" cy="118" r="10" fill="#5DD4A8"></circle>
+    <path d="M64,118 L70,124 L78,112" fill="none" stroke="#1F2937" stroke-width="5"></path>
+    <line x1="92" y1="118" x2="186" y2="118"></line>
+    <circle cx="70" cy="150" r="10" fill="#4FB8E6"></circle>
+    <path d="M64,150 L70,156 L78,144" fill="none" stroke="#1F2937" stroke-width="5"></path>
+    <line x1="92" y1="150" x2="172" y2="150"></line>
+  </g>
+</svg>

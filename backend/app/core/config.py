@@ -34,6 +34,28 @@ class Settings(BaseSettings):
     # points immediately. A parent rejection resets the streak to 0.
     GIG_AUTO_APPROVE_STREAK: int = 3
 
+    # AI photo validation: when a gig is submitted with a proof image and
+    # the user has NOT yet earned trust-streak auto-approval, the photo is
+    # sent to the vision model for cross-check against the template title.
+    # Score >= GIG_AI_AUTO_APPROVE_THRESHOLD → auto-approve. Set to 1.1 to
+    # disable AI auto-approval (forces manual review when no trust streak).
+    GIG_AI_AUTO_APPROVE_THRESHOLD: float = 0.8
+
+    # Frankie copilot daily message cap per family. Each user → assistant
+    # exchange counts as one message. Prevents accidental spend overruns
+    # on the LiteLLM proxy. 0 = unlimited.
+    FRANKIE_DAILY_MESSAGE_CAP: int = 100
+
+    # Stripe billing (W9.4). Empty key disables the /api/stripe routes
+    # without breaking app startup. Set STRIPE_PRICE_* to the Stripe price
+    # IDs for each plan tier.
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PRICE_PLUS_MONTHLY: str = ""
+    STRIPE_PRICE_PLUS_ANNUAL: str = ""
+    STRIPE_PRICE_PRO_MONTHLY: str = ""
+    STRIPE_PRICE_PRO_ANNUAL: str = ""
+
     # Web Push (VAPID). Generate keys with:
     #   python -c "from py_vapid import Vapid; v=Vapid(); v.generate_keys(); print(v.private_pem(), v.public_key.to_string())"
     # If unset, PushService.send no-ops with a warning log; the app

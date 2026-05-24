@@ -1,0 +1,204 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BottomNav from "../../components/BottomNav.astro";
+import { apiFetch } from "../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+// ym=YYYY-MM controls the month being shown. Defaults to current month.
+const now = new Date();
+const ymParam = Astro.url.searchParams.get("ym") ?? "";
+const ymMatch = ymParam.match(/^(\d{4})-(\d{2})$/);
+const year = ymMatch ? parseInt(ymMatch[1], 10) : now.getFullYear();
+const month = ymMatch ? parseInt(ymMatch[2], 10) - 1 : now.getMonth();  // 0-indexed
+
+const monthStart = new Date(year, month, 1);
+const monthEnd = new Date(year, month + 1, 1);
+
+// Grid starts on Monday of the week containing day 1.
+const firstDow = (monthStart.getDay() + 6) % 7;  // Mon=0
+const gridStart = new Date(year, month, 1 - firstDow);
+const gridEnd = new Date(gridStart);
+gridEnd.setDate(gridStart.getDate() + 42);  // 6 weeks
+
+const { data: eventsRaw } = await apiFetch<any[]>(
+    `/api/calendar/events?start=${encodeURIComponent(gridStart.toISOString())}&end=${encodeURIComponent(gridEnd.toISOString())}`,
+    { token },
+);
+const events: any[] = Array.isArray(eventsRaw) ? eventsRaw : [];
+
+// Bucket events by YYYY-MM-DD
+const byDay = new Map<string, any[]>();
+for (const e of events) {
+    const d = new Date(e.start_ts);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key)!.push(e);
+}
+
+// Build 42 cells
+const cells: { date: Date; key: string; inMonth: boolean; isToday: boolean }[] = [];
+const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    cells.push({
+        date: d,
+        key,
+        inMonth: d.getMonth() === month,
+        isToday: key === todayKey,
+    });
+}
+
+const selectedDayKey = Astro.url.searchParams.get("day") ?? todayKey;
+const selectedDayEvents = byDay.get(selectedDayKey) ?? [];
+
+const monthLabel = monthStart.toLocaleDateString(
+    lang === "es" ? "es-MX" : "en-US",
+    { month: "long", year: "numeric" },
+);
+
+const prevMonth = new Date(year, month - 1, 1);
+const nextMonth = new Date(year, month + 1, 1);
+const prevYm = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, "0")}`;
+const nextYm = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}`;
+
+const dowLabels = lang === "es"
+    ? ["L", "M", "M", "J", "V", "S", "D"]
+    : ["M", "T", "W", "T", "F", "S", "S"];
+
+const sourceColor = (src: string): string => ({
+    manual: "bg-brand-sky-deep",
+    ocr_flyer: "bg-fuchsia-500",
+    school_import: "bg-emerald-500",
+    recurring: "bg-amber-500",
+}[src] ?? "bg-brand-ink-soft");
+
+function formatTime(iso: string, allDay: boolean): string {
+    if (allDay) return lang === "es" ? "Todo el día" : "All day";
+    return new Date(iso).toLocaleTimeString(
+        lang === "es" ? "es-MX" : "en-US",
+        { hour: "numeric", minute: "2-digit" },
+    );
+}
+
+const labels = {
+    title: lang === "es" ? "Calendario" : "Calendar",
+    back_agenda: lang === "es" ? "Vista agenda" : "Agenda view",
+    no_events: lang === "es" ? "Sin eventos este día" : "No events on this day",
+};
+---
+
+<Layout title={`${labels.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col">
+        <header class="bg-gradient-to-br from-sky-500 to-indigo-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+            <div class="flex items-center justify-between gap-2">
+                <a
+                    href={`/calendar/month?ym=${prevYm}`}
+                    class="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-sm"
+                >
+                    ←
+                </a>
+                <h1 class="text-xl font-bold capitalize">{monthLabel}</h1>
+                <a
+                    href={`/calendar/month?ym=${nextYm}`}
+                    class="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-sm"
+                >
+                    →
+                </a>
+            </div>
+            <div class="mt-3 flex justify-center">
+                <a href="/calendar" class="text-xs text-sky-100 underline">
+                    {labels.back_agenda}
+                </a>
+            </div>
+        </header>
+
+        <main class="flex-1 px-4 py-4 space-y-4">
+            <div class="bg-brand-cream rounded-2xl p-2 border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-brand-ink-soft mb-1">
+                    {dowLabels.map((l) => (<div>{l}</div>))}
+                </div>
+                <div class="grid grid-cols-7 gap-1">
+                    {cells.map((cell) => {
+                        const evts = byDay.get(cell.key) ?? [];
+                        const sources = [...new Set(evts.map((e: any) => e.source))].slice(0, 3);
+                        const isSelected = cell.key === selectedDayKey;
+                        return (
+                            <a
+                                href={`/calendar/month?ym=${String(year).padStart(4, "0")}-${String(month + 1).padStart(2, "0")}&day=${cell.key}`}
+                                class={`aspect-square flex flex-col items-center justify-center rounded-lg border transition-all ${
+                                    isSelected
+                                        ? "bg-brand-ink text-brand-cream border-brand-ink"
+                                        : cell.isToday
+                                            ? "bg-brand-sun/30 border-brand-sun-deep text-brand-ink"
+                                            : cell.inMonth
+                                                ? "bg-brand-cream-deep/40 border-transparent text-brand-ink hover:bg-brand-cream-deep"
+                                                : "text-brand-ink-soft/50 border-transparent"
+                                }`}
+                            >
+                                <span class="text-sm font-semibold leading-none">
+                                    {cell.date.getDate()}
+                                </span>
+                                {sources.length > 0 && (
+                                    <div class="flex gap-0.5 mt-1">
+                                        {sources.map((src: any) => (
+                                            <span class={`w-1.5 h-1.5 rounded-full ${sourceColor(src)}`}></span>
+                                        ))}
+                                    </div>
+                                )}
+                                {evts.length > 1 && (
+                                    <span class={`text-[9px] mt-0.5 ${isSelected ? "text-brand-cream/80" : "text-brand-ink-soft"}`}>
+                                        {evts.length}
+                                    </span>
+                                )}
+                            </a>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <section class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
+                <div class="bg-brand-cream-deep/60 px-4 py-2 font-semibold text-sm text-brand-ink capitalize">
+                    {new Date(selectedDayKey + "T12:00:00").toLocaleDateString(
+                        lang === "es" ? "es-MX" : "en-US",
+                        { weekday: "long", month: "short", day: "numeric" },
+                    )}
+                </div>
+                {selectedDayEvents.length === 0 ? (
+                    <p class="text-brand-ink-soft text-sm text-center py-6">
+                        {labels.no_events}
+                    </p>
+                ) : (
+                    <ul class="divide-y divide-brand-ink/10">
+                        {selectedDayEvents.map((evt: any) => (
+                            <li class="p-3 flex items-start gap-3">
+                                <span class={`w-2 h-2 mt-1.5 rounded-full ${sourceColor(evt.source)} flex-shrink-0`}></span>
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-semibold text-brand-ink text-sm">
+                                        {evt.title}
+                                    </p>
+                                    <p class="text-xs text-brand-ink-soft">
+                                        {formatTime(evt.start_ts, evt.all_day)}
+                                        {evt.location && (<span> · {evt.location}</span>)}
+                                    </p>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </section>
+        </main>
+
+        <BottomNav active="tasks" role={user.role} lang={lang} />
+    </div>
+</Layout>

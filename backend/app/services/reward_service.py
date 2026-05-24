@@ -12,6 +12,8 @@ from uuid import UUID
 
 from app.models import Reward, User, PointTransaction, Consequence
 from app.models.reward import RewardCategory
+from app.models.task_assignment import TaskAssignment, AssignmentStatus
+from app.models.task_template import TaskTemplate
 from app.schemas.reward import RewardCreate, RewardUpdate
 from app.core.exceptions import (
     NotFoundException,
@@ -119,6 +121,30 @@ class RewardService(BaseFamilyService[Reward]):
         if active_restrictions:
             raise ForbiddenException(
                 "You have an active consequence that prevents reward redemption"
+            )
+
+        # Chore locking (W1.3): any open assignment from a template with
+        # blocks_rewards=True gates redemption. PENDING and OVERDUE both count.
+        locking_q = (
+            select(TaskTemplate.title)
+            .join(TaskAssignment, TaskAssignment.template_id == TaskTemplate.id)
+            .where(
+                and_(
+                    TaskAssignment.assigned_to == user_id,
+                    TaskAssignment.family_id == family_id,
+                    TaskAssignment.status.in_(
+                        [AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]
+                    ),
+                    TaskTemplate.blocks_rewards.is_(True),
+                )
+            )
+            .limit(5)
+        )
+        locking_titles = [row[0] for row in (await db.execute(locking_q)).all()]
+        if locking_titles:
+            joined = ", ".join(locking_titles)
+            raise ForbiddenException(
+                f"Finish your locked chores before redeeming rewards: {joined}"
             )
 
         # Deduct points using PointsService

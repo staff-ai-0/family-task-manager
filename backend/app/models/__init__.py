@@ -35,6 +35,18 @@ from app.models.subscription import (
     FamilySubscription,
     UsageTracking,
 )
+from app.models.shopping import ShoppingList, ShoppingItem
+from app.models.calendar_event import CalendarEvent
+from app.models.notification import Notification, NotificationType
+from app.models.kiosk_device import KioskDevice
+from app.models.kid_pet import KidPet
+from app.models.frankie_message import FrankieMessage
+from app.models.pup_snapshot import PupScoreSnapshot
+from app.models.meal import Recipe, MealPlanEntry
+from app.models.family_chat import FamilyChatMessage
+from app.models.family_chat_reaction import FamilyChatReaction
+from app.models.frankie_schedule import FrankieSchedule
+from app.models.dm import DMThread, DMMessage
 
 __all__ = [
     "Base",
@@ -62,6 +74,33 @@ __all__ = [
     "SubscriptionPlan",
     "FamilySubscription",
     "UsageTracking",
+    # Shopping Models
+    "ShoppingList",
+    "ShoppingItem",
+    # Calendar Models
+    "CalendarEvent",
+    # Notifications
+    "Notification",
+    "NotificationType",
+    # Kiosk
+    "KioskDevice",
+    # Virtual pet
+    "KidPet",
+    # Frankie copilot
+    "FrankieMessage",
+    # Analytics snapshots
+    "PupScoreSnapshot",
+    # Meals
+    "Recipe",
+    "MealPlanEntry",
+    # Family chat
+    "FamilyChatMessage",
+    "FamilyChatReaction",
+    # Frankie schedules
+    "FrankieSchedule",
+    # DM
+    "DMThread",
+    "DMMessage",
     # Enums
     "UserRole",
     "TaskStatus",

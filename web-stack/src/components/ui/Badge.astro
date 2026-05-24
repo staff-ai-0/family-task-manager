@@ -1,0 +1,25 @@
+---
+/**
+ * Badge — small status pill.
+ * @prop tone  "mint" | "coral" | "sky" | "sun" | "ink" | "cream"
+ */
+interface Props {
+  tone?: "mint" | "coral" | "sky" | "sun" | "ink" | "cream";
+  class?: string;
+}
+const { tone = "mint", class: className = "" } = Astro.props;
+const tones = {
+  mint:  "bg-brand-mint  text-brand-ink",
+  coral: "bg-brand-coral text-brand-ink",
+  sky:   "bg-brand-sky   text-brand-ink",
+  sun:   "bg-brand-sun   text-brand-ink",
+  ink:   "bg-brand-ink   text-brand-cream",
+  cream: "bg-brand-cream text-brand-ink",
+};
+---
+
+<span
+  class={`inline-flex items-center gap-1.5 border-2 border-brand-ink rounded-full px-2.5 py-0.5 text-[11px] font-extrabold tracking-[0.05em] uppercase font-sans ${tones[tone]} ${className}`}
+>
+  <slot />
+</span>

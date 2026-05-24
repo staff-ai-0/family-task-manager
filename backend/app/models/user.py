@@ -58,6 +58,9 @@ class User(Base):
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Family chat read receipt (W8.5). Null = never visited chat.
+    chat_last_read_at = Column(DateTime(timezone=True), nullable=True)
     
     # Relationships
     family = relationship("Family", back_populates="members")

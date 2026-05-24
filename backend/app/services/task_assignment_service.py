@@ -317,9 +317,38 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             dates = TaskAssignmentService._expand_dates(
                 week_monday, template.interval_days
             )
-            for d in dates:
-                for member in members:
-                    assignments.append(_new_assignment(template.id, member.id, d))
+
+            # Filter eligible members by allowed_roles + assigned_user_ids.
+            eligible = list(members)
+            allowed = template.allowed_roles or None
+            if allowed:
+                allowed_lower = {r.lower() for r in allowed}
+                eligible = [
+                    m for m in eligible
+                    if (m.role.value if hasattr(m.role, "value") else str(m.role)).lower()
+                    in allowed_lower
+                ]
+            if template.assigned_user_ids:
+                target_ids = set(template.assigned_user_ids)
+                eligible = [m for m in eligible if str(m.id) in target_ids]
+            if not eligible:
+                continue
+
+            mode = getattr(template, "gig_mode", "claim") or "claim"
+
+            if mode == "rotation":
+                # One assignment per date, member cycled by week index so
+                # week 1 → member 0, week 2 → member 1, etc.
+                week_idx = week_monday.toordinal() // 7
+                for i, d in enumerate(dates):
+                    chosen = eligible[(week_idx + i) % len(eligible)]
+                    assignments.append(_new_assignment(template.id, chosen.id, d))
+            else:
+                # claim / competition / collaboration: every eligible
+                # member gets a row per date so they all see the gig.
+                for d in dates:
+                    for member in eligible:
+                        assignments.append(_new_assignment(template.id, member.id, d))
 
         return assignments, totals
 
@@ -617,21 +646,59 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             if proof_image_url:
                 assignment.proof_image_url = proof_image_url
 
-            # Trust-score auto-approval: a user who has earned enough
-            # consecutive parent approvals graduates to auto-approval.
-            # Credit points immediately and skip the parent queue.
+            # Auto-approval has two independent paths:
+            #   1. Trust streak — user has earned N consecutive approvals.
+            #   2. AI photo validation — vision model agrees the photo
+            #      shows the task done, above settings threshold.
+            # If either path approves, points credit immediately.
             from app.core.config import settings
             from app.services.points_service import PointsService
+            from app.services.task_proof_validator import validate_proof_photo
             child = await get_user_by_id(db, user_id)
             threshold = max(1, settings.GIG_AUTO_APPROVE_STREAK)
+
+            auto_approved = False
+            approval_reason = ""
+
             if child.gig_trust_streak >= threshold:
+                auto_approved = True
+                approval_reason = "Auto-approved via trust streak"
+            elif assignment.proof_image_url:
+                validation = await validate_proof_photo(
+                    assignment.proof_image_url,
+                    template.title,
+                    template.description,
+                )
+                if validation is not None:
+                    assignment.ai_validation_score = validation.score
+                    assignment.ai_validation_notes = validation.explanation
+                    if validation.score >= settings.GIG_AI_AUTO_APPROVE_THRESHOLD:
+                        auto_approved = True
+                        approval_reason = (
+                            f"Auto-approved via AI photo check "
+                            f"(score {validation.score:.2f}): {validation.explanation}"
+                        )
+
+            if auto_approved:
                 assignment.approval_status = ApprovalStatus.APPROVED
                 assignment.approved_at = datetime.now(timezone.utc)
-                assignment.approval_notes = "Auto-approved via trust streak"
+                assignment.approval_notes = approval_reason
                 await PointsService.award_gig_points(
-                    db, user_id, assignment.id, template.points
+                    db, user_id, assignment.id, template.award_points_per_completer
                 )
                 child.gig_trust_streak += 1
+                from app.services.notification_service import NotificationService
+                from app.services.pet_service import PetService
+                from app.models.notification import NotificationType as NT
+                await NotificationService.create_no_commit(
+                    db,
+                    family_id=family_id,
+                    user_id=user_id,
+                    type=NT.GIG_APPROVED,
+                    title=f"✅ +{template.award_points_per_completer} pts",
+                    body=f"'{template.title}' approved automatically. {approval_reason}",
+                )
+                await PetService.on_task_completed(db, user_id, is_bonus=True)
             else:
                 assignment.approval_status = ApprovalStatus.PENDING
         else:
@@ -639,6 +706,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             assignment.status = AssignmentStatus.COMPLETED
             assignment.completed_at = datetime.now(timezone.utc)
             # approval_status stays NONE; no PointTransaction row
+            from app.services.pet_service import PetService
+            await PetService.on_task_completed(db, user_id, is_bonus=False)
 
         await db.commit()
         await db.refresh(assignment)
@@ -663,13 +732,29 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 import logging
                 logging.getLogger(__name__).exception("notify_parents_gig_pending failed")
             try:
+                from app.services.notification_service import NotificationService
+                from app.models.notification import NotificationType as NT
+                # Family-wide notification (parents see it on dashboard)
+                await NotificationService.create(
+                    db,
+                    family_id=family_id,
+                    user_id=None,
+                    type=NT.GIG_PENDING_REVIEW,
+                    title="🛎️ Gig pending review",
+                    body=f"{child.name} finished '{template.title}'. Approve or reject in /parent/approvals.",
+                    link="/parent/approvals",
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception("notification create failed")
+            try:
                 from app.services.push_service import PushService
                 await PushService.fan_out_pending_gig(
                     db,
                     family_id=family_id,
                     child_name=child.name,
                     gig_title=template.title,
-                    points=template.points,
+                    points=template.award_points_per_completer,
                 )
             except Exception:
                 import logging
@@ -717,6 +802,27 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         assignment.status = AssignmentStatus.CLAIMED
         assignment.claimed_at = datetime.utcnow()
+
+        # Competition mode: first claim wins, cancel sibling assignments for
+        # the same template+week so other kids see the gig disappear.
+        tmpl = assignment.template
+        if tmpl and tmpl.is_bonus and tmpl.gig_mode == "competition":
+            from sqlalchemy import update as sql_update
+            stmt = (
+                sql_update(TaskAssignment)
+                .where(
+                    and_(
+                        TaskAssignment.family_id == family_id,
+                        TaskAssignment.template_id == tmpl.id,
+                        TaskAssignment.week_of == assignment.week_of,
+                        TaskAssignment.id != assignment.id,
+                        TaskAssignment.status == AssignmentStatus.PENDING,
+                    )
+                )
+                .values(status=AssignmentStatus.CANCELLED)
+            )
+            await db.execute(stmt)
+
         await db.commit()
         await db.refresh(assignment)
         return assignment
@@ -790,18 +896,50 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 )
             assignment.approval_status = ApprovalStatus.APPROVED
             await PointsService.award_gig_points(
-                db, assignment.assigned_to, assignment.id, assignment.template.points
+                db,
+                assignment.assigned_to,
+                assignment.id,
+                assignment.template.award_points_per_completer,
             )
             # Increment trust streak so the child graduates to
             # auto-approval after enough consecutive approvals.
             child = await get_user_by_id(db, assignment.assigned_to)
             child.gig_trust_streak += 1
+            from app.services.notification_service import NotificationService
+            from app.services.pet_service import PetService
+            from app.models.notification import NotificationType as NT
+            await PetService.on_task_completed(
+                db, assignment.assigned_to, is_bonus=True
+            )
+            await db.commit()
+            # NotificationService.create commits + fans out push.
+            await NotificationService.create(
+                db,
+                family_id=family_id,
+                user_id=assignment.assigned_to,
+                type=NT.GIG_APPROVED,
+                title=f"✅ +{assignment.template.award_points_per_completer} pts",
+                body=f"'{assignment.template.title}' approved by parent.",
+                link="/dashboard",
+            )
         else:
             assignment.approval_status = ApprovalStatus.REJECTED
             # Reset trust streak — a rejection signals the child still
             # needs review on subsequent gigs.
             child = await get_user_by_id(db, assignment.assigned_to)
             child.gig_trust_streak = 0
+            from app.services.notification_service import NotificationService
+            from app.models.notification import NotificationType as NT
+            await db.commit()
+            await NotificationService.create(
+                db,
+                family_id=family_id,
+                user_id=assignment.assigned_to,
+                type=NT.GIG_REJECTED,
+                title="❌ Gig rejected",
+                body=f"'{assignment.template.title}' was not approved. {notes or ''}".strip(),
+                link="/dashboard",
+            )
 
         await db.commit()
         await db.refresh(assignment)
@@ -1013,17 +1151,26 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         Sweep across ALL families: flip PENDING rows with assigned_date < today
         to OVERDUE, where "today" is each family's local date. Intended for the
         background scheduler.
+
+        When a flipped assignment's template has ``auto_late_penalty`` set, a
+        Consequence row is instantiated for the assigned user (idempotent
+        because status only transitions PENDING → OVERDUE once).
         """
-        from sqlalchemy import update as sql_update
         from app.models.family import Family
+        from app.models.consequence import (
+            Consequence,
+            ConsequenceSeverity,
+            RestrictionType,
+        )
 
         family_rows = (await db.execute(select(Family.id))).scalars().all()
         now_utc = datetime.now(timezone.utc)
         total = 0
         for family_id in family_rows:
             today = await TaskAssignmentService._family_local_today(db, family_id)
-            stmt = (
-                sql_update(TaskAssignment)
+            stale_q = (
+                select(TaskAssignment)
+                .options(selectinload(TaskAssignment.template))
                 .where(
                     and_(
                         TaskAssignment.family_id == family_id,
@@ -1031,9 +1178,59 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                         TaskAssignment.assigned_date < today,
                     )
                 )
-                .values(status=AssignmentStatus.OVERDUE, updated_at=now_utc)
             )
-            result = await db.execute(stmt)
-            total += result.rowcount or 0
+            stale = list((await db.execute(stale_q)).scalars().all())
+            for a in stale:
+                a.status = AssignmentStatus.OVERDUE
+                a.updated_at = now_utc
+                tmpl = a.template
+                if tmpl is None or not tmpl.auto_late_penalty:
+                    continue
+                if not tmpl.late_restriction_type:
+                    continue
+                try:
+                    restriction = RestrictionType(tmpl.late_restriction_type)
+                except ValueError:
+                    continue
+                severity_raw = tmpl.late_severity or "low"
+                try:
+                    severity = ConsequenceSeverity(severity_raw)
+                except ValueError:
+                    severity = ConsequenceSeverity.LOW
+                duration = max(1, min(30, int(tmpl.late_duration_days or 1)))
+                end_dt = now_utc + timedelta(days=duration)
+                title = f"Late: {tmpl.title}"[:200]
+                penalty = Consequence(
+                    title=title,
+                    description=(
+                        f"Auto-applied because task '{tmpl.title}' "
+                        f"({a.assigned_date.isoformat()}) was not completed on time."
+                    ),
+                    severity=severity,
+                    restriction_type=restriction,
+                    duration_days=duration,
+                    active=True,
+                    resolved=False,
+                    triggered_by_assignment_id=a.id,
+                    applied_to_user=a.assigned_to,
+                    family_id=family_id,
+                    start_date=now_utc,
+                    end_date=end_dt,
+                )
+                db.add(penalty)
+                from app.services.notification_service import NotificationService
+                from app.models.notification import NotificationType as NT
+                await NotificationService.create_no_commit(
+                    db,
+                    family_id=family_id,
+                    user_id=a.assigned_to,
+                    type=NT.LATE_PENALTY_APPLIED,
+                    title=f"⏰ Late: {tmpl.title}",
+                    body=(
+                        f"Auto-penalty applied: {restriction.value} "
+                        f"for {duration} day(s)."
+                    ),
+                )
+            total += len(stale)
         await db.commit()
         return total
