@@ -31,7 +31,9 @@ from app.services.budget.receipt_scanner_service import RECEIPT_MODEL
 from app.services.frankie_tools import REGISTRY, dispatch, tool_definitions
 
 
-CHAT_MODEL = RECEIPT_MODEL  # reuse the proxy-registered alias
+# Frankie model alias — defaults to receipt scanner's claude-haiku for
+# shared LiteLLM budget. Override via FRANKIE_MODEL env var.
+CHAT_MODEL = settings.FRANKIE_MODEL or RECEIPT_MODEL
 
 SYSTEM_BASE = (
     "You are Frankie, a calm, practical family-routines copilot. You help "

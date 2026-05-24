@@ -1,5 +1,7 @@
-"""DM service (W9.3)."""
+"""DM service (W9.3 + W11B SSE)."""
 
+import asyncio
+import json
 from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
@@ -14,6 +16,10 @@ from app.core.exceptions import (
 )
 from app.models.dm import DMMessage, DMThread
 from app.models.user import User
+
+
+STREAM_WINDOW_SECONDS = 30
+STREAM_POLL_SECONDS = 2.0
 
 
 class DMService:
@@ -80,6 +86,50 @@ class DMService:
         if str(user_id) not in (t.participant_ids or []):
             raise ForbiddenException("Not a participant")
         return t
+
+    @staticmethod
+    async def stream_messages(
+        db: AsyncSession,
+        thread_id: UUID,
+        user_id: UUID,
+        family_id: UUID,
+        after_ts: Optional[datetime] = None,
+    ):
+        """SSE generator — same pattern as family chat. Verifies participant."""
+        await DMService._get_thread_for_user(db, thread_id, user_id, family_id)
+        cursor = after_ts or datetime.now(timezone.utc)
+        elapsed = 0.0
+        last_heartbeat = 0.0
+        while elapsed < STREAM_WINDOW_SECONDS:
+            q = (
+                select(DMMessage)
+                .where(
+                    and_(
+                        DMMessage.thread_id == thread_id,
+                        DMMessage.created_at > cursor,
+                    )
+                )
+                .order_by(DMMessage.created_at.asc())
+                .limit(50)
+            )
+            rows = list((await db.execute(q)).scalars().all())
+            for m in rows:
+                payload = {
+                    "id": str(m.id),
+                    "thread_id": str(m.thread_id),
+                    "sender_id": str(m.sender_id) if m.sender_id else None,
+                    "body": m.body,
+                    "created_at": m.created_at.isoformat(),
+                }
+                yield "event: message\ndata: " + json.dumps(payload) + "\n\n"
+                cursor = m.created_at
+            await asyncio.sleep(STREAM_POLL_SECONDS)
+            elapsed += STREAM_POLL_SECONDS
+            last_heartbeat += STREAM_POLL_SECONDS
+            if last_heartbeat >= 10:
+                last_heartbeat = 0
+                yield ": heartbeat\n\n"
+        yield "event: done\ndata: {}\n\n"
 
     @staticmethod
     async def list_messages(

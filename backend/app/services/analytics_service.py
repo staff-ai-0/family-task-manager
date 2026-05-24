@@ -160,6 +160,31 @@ class AnalyticsService:
 
         score = max(0, min(100, score))
 
+        # Week-over-week delta from snapshot history (W11A insight).
+        delta_text: Optional[str] = None
+        try:
+            from app.models.pup_snapshot import PupScoreSnapshot
+            hist_q = (
+                select(PupScoreSnapshot.score)
+                .where(PupScoreSnapshot.family_id == family_id)
+                .order_by(PupScoreSnapshot.snapshot_date.desc())
+                .limit(8)
+            )
+            recent_scores = [int(r) for r in (await db.execute(hist_q)).scalars().all()]
+            if len(recent_scores) >= 7:
+                last_week_avg = sum(recent_scores[1:8]) / 7.0
+                diff = score - last_week_avg
+                if diff <= -8:
+                    delta_text = f"Down {abs(diff):.0f} pts vs last week — improving."
+                elif diff >= 8:
+                    delta_text = f"Up {diff:.0f} pts vs last week — friction rising."
+                else:
+                    delta_text = "Roughly flat vs last week."
+        except Exception:
+            pass
+        if delta_text:
+            notes.append(delta_text)
+
         return {
             "pup_score": score,
             "label": (

@@ -102,6 +102,75 @@ async def delete_event(
     return None
 
 
+@router.get("/feed.ics")
+async def ical_feed(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """iCal subscription feed. Returns next 6 months of family events.
+
+    Recurring events emit a single VEVENT with RRULE so calendar clients
+    expand them locally.
+    """
+    from fastapi.responses import PlainTextResponse
+    from datetime import datetime as dt, timedelta as td, timezone as tz
+
+    now = dt.now(tz.utc)
+    end = now + td(days=180)
+
+    # Fetch raw rows (not expanded — clients handle RRULE themselves).
+    from sqlalchemy import select as sa_select
+    from app.models.calendar_event import CalendarEvent
+    q = sa_select(CalendarEvent).where(
+        CalendarEvent.family_id == to_uuid_required(current_user.family_id)
+    )
+    rows = list((await db.execute(q)).scalars().all())
+
+    def _fmt(t: dt) -> str:
+        return t.astimezone(tz.utc).strftime("%Y%m%dT%H%M%SZ")
+
+    def _escape(s: str) -> str:
+        return (s or "").replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", "\\n")
+
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Family Task Manager//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+    ]
+    for e in rows:
+        # Skip non-recurring events older than 30 days to keep feed small.
+        if not e.recurrence_rule and e.start_ts < now - td(days=30):
+            continue
+        # Skip non-recurring events more than 6 months out.
+        if not e.recurrence_rule and e.start_ts > end:
+            continue
+        lines.append("BEGIN:VEVENT")
+        lines.append(f"UID:{e.id}@family-task-manager")
+        lines.append(f"DTSTAMP:{_fmt(now)}")
+        lines.append(f"DTSTART:{_fmt(e.start_ts)}")
+        if e.end_ts:
+            lines.append(f"DTEND:{_fmt(e.end_ts)}")
+        else:
+            lines.append(f"DTEND:{_fmt(e.start_ts + td(hours=1))}")
+        lines.append(f"SUMMARY:{_escape(e.title)}")
+        if e.description:
+            lines.append(f"DESCRIPTION:{_escape(e.description)}")
+        if e.location:
+            lines.append(f"LOCATION:{_escape(e.location)}")
+        if e.recurrence_rule:
+            lines.append(f"RRULE:{e.recurrence_rule}")
+        lines.append("END:VEVENT")
+    lines.append("END:VCALENDAR")
+
+    return PlainTextResponse(
+        "\r\n".join(lines) + "\r\n",
+        media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="family.ics"'},
+    )
+
+
 class ScannedEventOut(BaseModel):
     title: str
     start_ts: datetime

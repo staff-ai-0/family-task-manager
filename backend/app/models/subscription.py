@@ -52,10 +52,6 @@ class FamilySubscription(Base):
     billing_cycle: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
     paypal_subscription_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    # stripe_* columns kept in DB (migration stripe_v1) but unused. Stripe
-    # path removed 2026-05-24; PayPal is the only billing processor.
-    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     current_period_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     current_period_end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

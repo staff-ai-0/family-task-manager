@@ -26,14 +26,18 @@ if (Astro.request.method === "POST") {
                 ? `${dateStr}T00:00:00`
                 : `${dateStr}T${timeStr}:00`;
             const recurrence = String(data.get("recurrence") || "");
-            const recurrenceRule = recurrence
-                ? ({
+            const customRule = String(data.get("recurrence_custom") || "").trim();
+            let recurrenceRule: string | null = null;
+            if (recurrence === "custom" && customRule) {
+                recurrenceRule = customRule;
+            } else if (recurrence && recurrence !== "custom") {
+                recurrenceRule = ({
                     daily: "FREQ=DAILY",
                     weekly: "FREQ=WEEKLY",
                     weekdays: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
                     monthly: "FREQ=MONTHLY",
-                } as Record<string, string>)[recurrence]
-                : null;
+                } as Record<string, string>)[recurrence] ?? null;
+            }
             const payload = {
                 title,
                 location,
@@ -245,7 +249,14 @@ const sourceIcon = (src: string): string => {
                         <option value="weekdays">{lang === "es" ? "Lun-Vie" : "Weekdays"}</option>
                         <option value="weekly">{lang === "es" ? "Semanal" : "Weekly"}</option>
                         <option value="monthly">{lang === "es" ? "Mensual" : "Monthly"}</option>
+                        <option value="custom">{lang === "es" ? "Personalizado (RRULE)" : "Custom (RRULE)"}</option>
                     </select>
+                    <input
+                        type="text"
+                        name="recurrence_custom"
+                        placeholder="FREQ=WEEKLY;BYDAY=MO,WE,FR"
+                        class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-xs font-mono bg-brand-cream/60"
+                    />
                     <button
                         type="submit"
                         class="w-full py-2 rounded-lg bg-brand-ink text-brand-cream text-sm font-semibold hover:bg-brand-ink-soft"

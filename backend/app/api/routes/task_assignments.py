@@ -466,6 +466,10 @@ def _assignment_to_detail(assignment) -> dict:
         "template_description_es": template.description_es if template else None,
         "template_points": template.points if template else 0,
         "template_is_bonus": template.is_bonus if template else False,
+        "template_gig_mode": (template.gig_mode if template else "claim") or "claim",
+        "template_collaboration_min_count": (
+            template.collaboration_min_count if template else 2
+        ),
         # User details
         "assigned_user_name": assigned_user.name if assigned_user else "",
         # Computed

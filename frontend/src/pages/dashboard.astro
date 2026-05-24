@@ -257,13 +257,30 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                 {pendingBonus.map((a: any) => (
                                     <div class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-sun hover:shadow-[var(--shadow-card)] transition-all flex justify-between items-center">
                                         <div class="pr-4 flex-1">
-                                            <div class="flex items-center gap-2 mb-1">
+                                            <div class="flex items-center gap-2 mb-1 flex-wrap">
                                                 <h3 class="font-bold text-brand-ink text-lg">
                                                     {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
                                                 </h3>
                                                 <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-sun/20 text-brand-sun-deep">
                                                     {t(lang, "dashboard_bonus_badge")}
                                                 </span>
+                                                {a.template_gig_mode === "competition" && (
+                                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                                                        🏆 {lang === "es" ? "Competencia" : "First wins"}
+                                                    </span>
+                                                )}
+                                                {a.template_gig_mode === "rotation" && (
+                                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-sky/20 text-brand-sky-deep">
+                                                        🔄 {lang === "es" ? "Tu turno" : "Your turn"}
+                                                    </span>
+                                                )}
+                                                {a.template_gig_mode === "collaboration" && (
+                                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-mint/20 text-brand-mint-deep">
+                                                        🤝 {lang === "es"
+                                                            ? `Colab (÷${a.template_collaboration_min_count})`
+                                                            : `Collab (÷${a.template_collaboration_min_count})`}
+                                                    </span>
+                                                )}
                                             </div>
                                             <p class="text-brand-ink-soft text-sm line-clamp-2">
                                                 {(lang === "es" && a.template_description_es ? a.template_description_es : a.template_description) || "--"}

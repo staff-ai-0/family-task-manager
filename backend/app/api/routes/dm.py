@@ -4,7 +4,8 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,6 +98,28 @@ async def create_thread(
         family_id=t.family_id,
         participant_ids=[UUID(p) for p in (t.participant_ids or [])],
         updated_at=t.updated_at,
+    )
+
+
+@router.get("/threads/{thread_id}/stream")
+async def stream(
+    thread_id: UUID,
+    after_ts: Optional[datetime] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """SSE poll-stream of new DM messages in this thread. Reconnect ~30s."""
+    gen = DMService.stream_messages(
+        db,
+        thread_id,
+        to_uuid_required(current_user.id),
+        to_uuid_required(current_user.family_id),
+        after_ts=after_ts,
+    )
+    return StreamingResponse(
+        gen,
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

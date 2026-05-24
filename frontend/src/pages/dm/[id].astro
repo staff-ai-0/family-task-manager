@@ -82,7 +82,7 @@ const labels = {
                     const mine = m.sender_id === user.id;
                     const name = memberMap.get(m.sender_id) ?? "?";
                     return (
-                        <div class={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                        <div data-created-at={m.created_at} class={`flex ${mine ? "justify-end" : "justify-start"}`}>
                             <div class={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
                                 mine ? "bg-indigo-600 text-white" : "bg-brand-cream border border-brand-ink/10 text-brand-ink"
                             }`}>
@@ -121,9 +121,84 @@ const labels = {
     </div>
 </Layout>
 
-<script>
+<script define:vars={{ currentUserId: user.id, threadId, memberMap: Object.fromEntries(memberMap), lang }}>
     document.addEventListener("astro:page-load", () => {
         const feed = document.getElementById("dm-feed");
-        if (feed) feed.scrollTo({ top: feed.scrollHeight });
+        if (!feed) return;
+        feed.scrollTo({ top: feed.scrollHeight });
+
+        const bubbles = feed.querySelectorAll("[data-created-at]");
+        let cursor = bubbles.length
+            ? bubbles[bubbles.length - 1].getAttribute("data-created-at")
+            : new Date().toISOString();
+
+        function timeAgo(iso) {
+            const ms = Date.now() - new Date(iso).getTime();
+            const m = Math.floor(ms / 60000);
+            if (m < 1) return lang === "es" ? "ahora" : "now";
+            if (m < 60) return `${m}m`;
+            const h = Math.floor(m / 60);
+            if (h < 24) return `${h}h`;
+            return `${Math.floor(h / 24)}d`;
+        }
+
+        function appendBubble(msg) {
+            const mine = msg.sender_id === currentUserId;
+            const name = memberMap[msg.sender_id] ?? "?";
+            const wrap = document.createElement("div");
+            wrap.className = `flex ${mine ? "justify-end" : "justify-start"}`;
+            wrap.setAttribute("data-created-at", msg.created_at);
+            const headerHtml = mine ? "" : `<p class="text-[10px] font-bold text-brand-ink-soft mb-0.5"></p>`;
+            wrap.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
+                mine ? "bg-indigo-600 text-white" : "bg-brand-cream border border-brand-ink/10 text-brand-ink"
+            }">${headerHtml}<p class="whitespace-pre-wrap"></p><p class="text-[10px] mt-1 ${
+                mine ? "text-indigo-200" : "text-brand-ink-soft"
+            }"></p></div>`;
+            const ps = wrap.querySelectorAll("p");
+            if (!mine) ps[0].textContent = name;
+            (mine ? ps[0] : ps[1]).textContent = msg.body;
+            (mine ? ps[1] : ps[2]).textContent = timeAgo(msg.created_at);
+            feed.appendChild(wrap);
+            feed.scrollTo({ top: feed.scrollHeight, behavior: "smooth" });
+        }
+
+        let aborted = false;
+        async function connect() {
+            while (!aborted) {
+                try {
+                    const url = `/api/dm/threads/${threadId}/stream?after_ts=${encodeURIComponent(cursor)}`;
+                    const resp = await fetch(url, { headers: { Accept: "text/event-stream" } });
+                    if (!resp.ok || !resp.body) { await new Promise(r => setTimeout(r, 3000)); continue; }
+                    const reader = resp.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buf = "";
+                    while (!aborted) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        buf += decoder.decode(value, { stream: true });
+                        let idx;
+                        while ((idx = buf.indexOf("\n\n")) >= 0) {
+                            const chunk = buf.slice(0, idx);
+                            buf = buf.slice(idx + 2);
+                            let ev = "message";
+                            let dataStr = "";
+                            for (const line of chunk.split("\n")) {
+                                if (line.startsWith("event: ")) ev = line.slice(7).trim();
+                                else if (line.startsWith("data: ")) dataStr += line.slice(6);
+                            }
+                            if (ev === "message" && dataStr) {
+                                try {
+                                    const msg = JSON.parse(dataStr);
+                                    appendBubble(msg);
+                                    cursor = msg.created_at;
+                                } catch {}
+                            }
+                        }
+                    }
+                } catch { await new Promise(r => setTimeout(r, 3000)); }
+            }
+        }
+        connect();
+        document.addEventListener("astro:before-swap", () => { aborted = true; }, { once: true });
     });
 </script>

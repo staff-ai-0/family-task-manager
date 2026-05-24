@@ -56,6 +56,18 @@ async def create_family(
     return family
 
 
+@router.get("/members", response_model=List[UserResponse])
+async def get_my_family_members(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Members of caller's own family. Path before /{family_id} so 'members'
+    isn't parsed as a UUID."""
+    return await FamilyService.get_family_members(
+        db, to_uuid_required(current_user.family_id)
+    )
+
+
 @router.get("/{family_id}", response_model=FamilyResponse)
 async def get_family(
     family_id: UUID = Depends(verify_family_id),
