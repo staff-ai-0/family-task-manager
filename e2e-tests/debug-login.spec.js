@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 test('debug login response headers', async ({ page }) => {
-  const BASE_URL = 'https://family.agent-ia.mx';
+  const BASE_URL = 'https://gcp-family.agent-ia.mx';
   
   // Capture response headers
   page.on('response', async response => {

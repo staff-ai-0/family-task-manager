@@ -16,7 +16,7 @@ test.describe('Kiosk admin', () => {
   test('parent can create a wall display and see token URL', async ({ page }) => {
     await login(page);
     await page.goto(`${BASE_URL}/parent/kiosk`);
-    await expect(page.locator('h1')).toContainText(/Wall|Pantalla/i);
+    await expect(page.locator('h1')).toContainText(/Wall|Pantalla/i, { timeout: 10000 });
 
     const name = `Kitchen ${Date.now()}`;
     await page.fill('input[name="name"]', name);

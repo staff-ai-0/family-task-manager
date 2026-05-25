@@ -22,10 +22,10 @@ test.describe('Shopping list', () => {
     await page.fill('input[name="name"][maxlength="120"]', listName);
     await page.getByRole('button', { name: /add|agregar/i }).first().click();
     await page.waitForLoadState('networkidle');
-    await expect(page.getByText(listName)).toBeVisible();
+    await expect(page.getByRole('heading', { name: listName })).toBeVisible();
 
-    // Select the list (it's the first chip)
-    await page.getByText(listName).first().click();
+    // Select the list (chip link contains list name)
+    await page.locator(`a:has-text("${listName}")`).first().click();
     await page.waitForLoadState('networkidle');
 
     // Add item
