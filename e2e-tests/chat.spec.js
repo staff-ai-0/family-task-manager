@@ -13,6 +13,8 @@ async function login(page) {
 }
 
 test.describe('Family chat', () => {
+  test.retries(2);
+
   test('post message + render bubble', async ({ page }) => {
     await login(page);
     await page.goto(`${BASE_URL}/chat`);

@@ -25,7 +25,7 @@ test.describe('Kiosk admin', () => {
 
     // Token URL banner appears once
     await expect(page.getByText(/Save this URL|Guarda esta URL/i)).toBeVisible();
-    await expect(page.locator('code')).toContainText('/kiosk?token=');
+    await expect(page.locator('code').first()).toContainText('/kiosk?token=');
 
     // Device row also visible
     await expect(page.getByText(name)).toBeVisible();

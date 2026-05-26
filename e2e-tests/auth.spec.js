@@ -48,8 +48,8 @@ test.describe('Authentication', () => {
       // Submit form
       await page.click('button[type="submit"]');
 
-      // Wait for error message
-      const errorMessage = page.locator('.bg-red-50');
+      // Wait for error message (toast or inline error)
+      const errorMessage = page.locator('[class*="border-red-500"], .bg-red-100, .bg-red-50').first();
       await errorMessage.waitFor({ timeout: 5000 });
 
       // Verify error message is visible
@@ -92,7 +92,7 @@ test.describe('Authentication', () => {
       // Fill in registration form
       await page.fill('input[name="email"]', NEW_USER.email);
       await page.fill('input[name="password"]', NEW_USER.password);
-      await page.fill('input[name="confirm_password"]', NEW_USER.password);
+      await page.fill('input[name="password_confirm"]', NEW_USER.password);
       await page.fill('input[name="name"]', 'John Doe');
       await page.fill('input[name="family_name"]', NEW_USER.familyName);
 
@@ -117,7 +117,7 @@ test.describe('Authentication', () => {
       // Fill in registration form with mismatched passwords
       await page.fill('input[name="email"]', NEW_USER.email);
       await page.fill('input[name="password"]', NEW_USER.password);
-      await page.fill('input[name="confirm_password"]', 'DifferentPassword123!');
+      await page.fill('input[name="password_confirm"]', 'DifferentPassword123!');
       await page.fill('input[name="name"]', 'John Doe');
       await page.fill('input[name="family_name"]', NEW_USER.familyName);
 
