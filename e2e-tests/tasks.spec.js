@@ -31,6 +31,11 @@ test.describe('Task Management', () => {
         await nameInput.fill(taskName);
 
         if (await pointsInput.count() > 0) {
+          // Must check is_bonus first: API requires points=0 for mandatory tasks
+          const bonusCheckbox = page.locator('input[name="is_bonus"]').first();
+          if (await bonusCheckbox.count() > 0) {
+            await bonusCheckbox.check({ force: true });
+          }
           await pointsInput.fill('50');
         }
 
