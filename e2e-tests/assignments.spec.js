@@ -3,8 +3,8 @@ const { test, expect } = require('@playwright/test');
 test.describe('Assignment Management', () => {
   const BASE_URL = 'http://localhost:3003';
   const DEMO_USER = {
-    email: 'mom@demo.com',
-    password: 'password123',
+    email: 'e2e-fresh@example.com',
+    password: 'fresh1234',
   };
 
   test.beforeEach(async ({ page }) => {
@@ -171,8 +171,8 @@ test.describe('Assignment Management', () => {
       
       await page.goto(`${BASE_URL}/login`);
       await page.waitForLoadState('networkidle');
-      await page.fill('input[name="email"]', 'emma@demo.com');
-      await page.fill('input[name="password"]', 'password123');
+      await page.fill('input[name="email"]', process.env.E2E_CHILD_EMAIL || 'emma@demo.com');
+      await page.fill('input[name="password"]', process.env.E2E_CHILD_PASSWORD || 'password123');
       await page.click('button[type="submit"]');
       await page.waitForURL('**/dashboard', { timeout: 10000 });
 

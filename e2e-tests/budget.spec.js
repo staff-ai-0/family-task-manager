@@ -3,8 +3,8 @@ const { test, expect } = require('@playwright/test');
 test.describe('Budget & Finance Management', () => {
   const BASE_URL = 'http://localhost:3003';
   const DEMO_USER = {
-    email: 'mom@demo.com',
-    password: 'password123',
+    email: 'e2e-fresh@example.com',
+    password: 'fresh1234',
   };
 
   test.beforeEach(async ({ page }) => {

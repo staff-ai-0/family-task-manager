@@ -22,8 +22,8 @@ test('debug login response headers', async ({ page }) => {
   });
   
   await page.goto(`${BASE_URL}/login`);
-  await page.fill('input[name="email"]', 'mom@demo.com');
-  await page.fill('input[name="password"]', 'password123');
+  await page.fill('input[name="email"]', 'e2e-fresh@example.com');
+  await page.fill('input[name="password"]', 'fresh1234');
   
   // Click and wait
   await page.click('button[type="submit"]');

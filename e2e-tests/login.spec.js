@@ -37,8 +37,8 @@ test.describe('Login Flow', () => {
 
     // Fill in email and password
     console.log('4. Filling in credentials...');
-    await page.fill('input[name="email"]', 'mom@demo.com');
-    await page.fill('input[name="password"]', 'password123');
+    await page.fill('input[name="email"]', 'e2e-fresh@example.com');
+    await page.fill('input[name="password"]', 'fresh1234');
     
     // Take screenshot before submit
     await page.screenshot({ path: 'before-submit.png' });

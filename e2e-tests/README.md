@@ -127,25 +127,18 @@ Key settings:
 - **Videos**: Retained on failure
 - **Reporter**: HTML report + JUnit XML (for CI/CD)
 
-## Demo User Credentials
+## Test Credentials
 
-Tests use these demo users (from seed_data.py):
+Tests use env vars with sensible defaults. Set these in your environment or a `.env` file:
 
-```
-Parent:
-- Email: mom@demo.com
-- Password: password123
-- Email: dad@demo.com
-- Password: password123
+| Variable | Default | Role |
+|---|---|---|
+| `E2E_EMAIL` | `e2e-fresh@example.com` | Parent (most tests) |
+| `E2E_PASSWORD` | `fresh1234` | Parent password |
+| `E2E_CHILD_EMAIL` | `emma@demo.com` | Child (redemption / child-view tests) |
+| `E2E_CHILD_PASSWORD` | `password123` | Child password |
 
-Child:
-- Email: emma@demo.com
-- Password: password123
-
-Teen:
-- Email: lucas@demo.com
-- Password: password123
-```
+The `e2e-fresh@example.com` parent account must exist in the DB before running tests. Demo seed accounts (`emma@demo.com`, `lucas@demo.com`) use `password123` (from `seed_data.py`). Set `E2E_CHILD_*` vars to a child member of the same family as `E2E_EMAIL` to enable the full gig-approval flow; otherwise those tests skip automatically.
 
 ## Test Environment Requirements
 

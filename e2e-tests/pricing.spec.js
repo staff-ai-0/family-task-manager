@@ -1,8 +1,8 @@
 const { test, expect } = require('@playwright/test');
 
 const BASE_URL = process.env.BASE_URL || 'https://gcp-family.agent-ia.mx';
-const EMAIL = process.env.E2E_EMAIL || 'mom@demo.com';
-const PASSWORD = process.env.E2E_PASSWORD || 'password123';
+const EMAIL = process.env.E2E_EMAIL || 'e2e-fresh@example.com';
+const PASSWORD = process.env.E2E_PASSWORD || 'fresh1234';
 
 async function login(page) {
   await page.goto(`${BASE_URL}/login`);
@@ -24,10 +24,9 @@ test.describe('Pricing / upgrade (PayPal)', () => {
   test('manage link routes to subscription settings', async ({ page }) => {
     await login(page);
     await page.goto(`${BASE_URL}/pricing/upgrade`);
-    const manage = page.getByRole('link', { name: /Administrar|Manage/i });
-    if (await manage.count()) {
-      await expect(manage).toHaveAttribute('href', /\/parent\/settings\/subscription/);
-    }
+    // Explicit href avoids matching ambiguity with other "Manage" links.
+    const manage = page.locator('a[href="/parent/settings/subscription"]');
+    await expect(manage).toBeVisible({ timeout: 10000 });
   });
 });
 

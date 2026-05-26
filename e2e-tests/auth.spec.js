@@ -3,8 +3,8 @@ const { test, expect } = require('@playwright/test');
 test.describe('Authentication', () => {
   const BASE_URL = 'http://localhost:3003';
   const DEMO_USER = {
-    email: 'mom@demo.com',
-    password: 'password123',
+    email: 'e2e-fresh@example.com',
+    password: 'fresh1234',
   };
   const NEW_USER = {
     email: `test-${Date.now()}@demo.com`,
