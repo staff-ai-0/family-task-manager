@@ -29,7 +29,7 @@ const { data: historyRaw } = await apiFetch<any[]>("/api/frankie/history", {
 const history: any[] = Array.isArray(historyRaw) ? historyRaw : [];
 
 const labels = {
-    title: lang === "es" ? "Frankie" : "Frankie",
+    title: lang === "es" ? "Jarvis" : "Jarvis",
     subtitle:
         lang === "es"
             ? "Copiloto familiar — pregunta lo que sea"
@@ -40,8 +40,8 @@ const labels = {
     send: lang === "es" ? "Enviar" : "Send",
     clear: lang === "es" ? "Limpiar historial" : "Clear history",
     empty: lang === "es"
-        ? "Sin mensajes aún. Pregúntale algo."
-        : "No messages yet. Ask Frankie something.",
+        ? "Sin mensajes aún. Pregúntale algo a Jarvis."
+        : "No messages yet. Ask Jarvis something.",
     thinking: lang === "es" ? "Pensando…" : "Thinking…",
 };
 ---
