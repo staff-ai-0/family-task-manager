@@ -53,7 +53,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         </div>
 
         <!-- Step 1: Preset Grid -->
-        <div id="tcm-step1" class="flex flex-col flex-1 overflow-hidden">
+        <div id="tcm-step-1" class="flex flex-col flex-1 overflow-hidden">
             <!-- Search -->
             <div class="px-5 pt-4 pb-3 flex-shrink-0">
                 <div class="relative">
@@ -119,7 +119,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         </div>
 
         <!-- Step 2: Mini-form -->
-        <div id="tcm-step2" class="hidden flex-col flex-1 overflow-hidden">
+        <div id="tcm-step-2" class="hidden flex-col flex-1 overflow-hidden">
             <div class="flex-1 overflow-y-auto px-5 pt-4 pb-3 space-y-5">
 
                 <!-- 1. Task name -->
@@ -301,14 +301,14 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                 <button
                     id="tcm-back"
                     type="button"
-                    class="flex-none py-2.5 px-4 text-sm font-semibold border-2 border-brand-ink/20 text-brand-ink rounded-xl hover:bg-brand-cream-deep transition-colors"
+                    class="hidden flex-none py-2.5 px-4 text-sm font-semibold border-2 border-brand-ink/20 text-brand-ink rounded-xl hover:bg-brand-cream-deep transition-colors"
                 >
                     ← {lang === "es" ? "Volver" : "Back"}
                 </button>
                 <button
                     id="tcm-submit"
                     type="button"
-                    class="flex-1 py-2.5 bg-brand-sky-deep hover:bg-brand-ink active:scale-[0.98] text-white font-semibold text-sm rounded-xl shadow-[var(--shadow-card)] transition-all duration-150"
+                    class="hidden flex-1 py-2.5 bg-brand-sky-deep hover:bg-brand-ink active:scale-[0.98] text-white font-semibold text-sm rounded-xl shadow-[var(--shadow-card)] transition-all duration-150"
                 >
                     {lang === "es" ? "Crear tarea" : "Create Task"}
                 </button>
@@ -322,8 +322,8 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
 (function initTaskCreateModal() {
     const backdrop = document.getElementById("tcm-backdrop");
     const modal = document.getElementById("tcm-modal");
-    const step1 = document.getElementById("tcm-step1");
-    const step2 = document.getElementById("tcm-step2");
+    const step1 = document.getElementById("tcm-step-1");
+    const step2 = document.getElementById("tcm-step-2");
     const closeBtn = document.getElementById("tcm-close");
     const backBtn = document.getElementById("tcm-back");
     const submitBtn = document.getElementById("tcm-submit");
