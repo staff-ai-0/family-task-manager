@@ -135,25 +135,25 @@ gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
   --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T backend pytest tests/ -v'
 ```
 
-### Local docker-compose dev
+### Local dev (podman compose)
 
 ```bash
-docker compose up -d                                          # Start all services
-docker compose ps                                             # Status
-docker compose logs -f backend                               # Logs
+podman compose up -d                                          # Start all services
+podman compose ps                                             # Status
+podman compose logs -f backend                               # Logs
 
 # Tests (run inside container)
-docker exec -e PYTHONPATH=/app family_app_backend pytest tests/ -v
-docker exec -e PYTHONPATH=/app family_app_backend pytest tests/test_auth.py -v
-docker exec -e PYTHONPATH=/app family_app_backend pytest -k "test_name" -v
-docker exec -e PYTHONPATH=/app family_app_backend pytest tests/ --cov=app --cov-report=html
+podman exec -e PYTHONPATH=/app family_app_backend pytest tests/ -v
+podman exec -e PYTHONPATH=/app family_app_backend pytest tests/test_auth.py -v
+podman exec -e PYTHONPATH=/app family_app_backend pytest -k "test_name" -v
+podman exec -e PYTHONPATH=/app family_app_backend pytest tests/ --cov=app --cov-report=html
 
 # Migrations
-docker exec family_app_backend alembic upgrade head
-docker exec family_app_backend alembic revision --autogenerate -m "description"
+podman exec family_app_backend alembic upgrade head
+podman exec family_app_backend alembic revision --autogenerate -m "description"
 
 # Seed demo data
-docker exec family_app_backend python /app/seed_data.py
+podman exec family_app_backend python /app/seed_data.py
 ```
 
 ### Local development (without Docker)

@@ -145,7 +145,7 @@ The `e2e-fresh@example.com` parent account must exist in the DB before running t
 - Local development server running on `http://localhost:3003`
 - Backend API on `http://localhost:8002`
 - Demo database with seeded data
-- All Docker services running (`docker compose up`)
+- All services running (`podman compose up`)
 
 ## Best Practices
 
@@ -232,7 +232,7 @@ npx playwright show-report
 
 ## Development Workflow
 
-1. Start dev environment: `docker compose up`
+1. Start dev environment: `podman compose up`
 2. Make UI changes
 3. Run affected tests: `npm run test:[feature]`
 4. Fix failing tests

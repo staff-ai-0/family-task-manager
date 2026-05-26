@@ -46,35 +46,35 @@ $DC ps
 ### Start Development Environment
 ```bash
 # Start all services
-docker compose up -d
+podman compose up -d
 
 # Check service status
-docker compose ps
+podman compose ps
 
 # View logs
-docker compose logs -f backend
-docker compose logs -f frontend
+podman compose logs -f backend
+podman compose logs -f frontend
 ```
 
 ### Run Tests
 ```bash
 # Run all tests
-docker exec -e PYTHONPATH=/app family_app_backend pytest tests/ -v
+podman exec -e PYTHONPATH=/app family_app_backend pytest tests/ -v
 
 # Run with coverage (ensure 70%+ coverage)
-docker exec -e PYTHONPATH=/app family_app_backend pytest tests/ --cov=app --cov-report=html
+podman exec -e PYTHONPATH=/app family_app_backend pytest tests/ --cov=app --cov-report=html
 ```
 
 ### Database Operations
 ```bash
 # Run migrations
-docker exec family_app_backend alembic upgrade head
+podman exec family_app_backend alembic upgrade head
 
 # Create new migration
-docker exec family_app_backend alembic revision --autogenerate -m "description"
+podman exec family_app_backend alembic revision --autogenerate -m "description"
 
 # Seed demo data
-docker exec family_app_backend python /app/seed_data.py
+podman exec family_app_backend python /app/seed_data.py
 ```
 
 ### Budget API Operations
@@ -177,7 +177,7 @@ lucas@demo.com / password123 (TEEN, 280 points)
 
 1. **Make Changes** → Edit code in `backend/app/` or `frontend/src/`
 2. **Write Tests** → Add tests in `backend/tests/`
-3. **Run Tests** → `docker exec family_app_backend pytest tests/` (must pass)
+3. **Run Tests** → `podman exec family_app_backend pytest tests/` (must pass)
 4. **Check Coverage** → Ensure 70%+ coverage
 5. **Test Manually** → Visit http://localhost:3003
 6. **Commit & Push** → Create PR with clear commit message
