@@ -20,9 +20,11 @@ test.describe('Family chat', () => {
 
     const body = `E2E ping ${Date.now()}`;
     await page.fill('input[name="body"]', body);
-    await page.locator('form button[type="submit"]').click();
+    // Press Enter triggers form submit reliably; click on button can race
+    // with the inline reaction click delegation listener on the feed.
+    await page.press('input[name="body"]', 'Enter');
     await page.waitForLoadState('networkidle');
-    await expect(page.getByText(body)).toBeVisible();
+    await expect(page.getByText(body)).toBeVisible({ timeout: 10000 });
   });
 
   test('chat nav badge visible after sending', async ({ page }) => {

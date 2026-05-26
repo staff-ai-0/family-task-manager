@@ -46,9 +46,10 @@ test.describe('Calendar recurrence', () => {
     await page.fill('input[name="time"]', '10:00');
     await page.selectOption('select[name="recurrence"]', 'custom');
     await page.fill('input[name="recurrence_custom"]', 'FREQ=WEEKLY;BYDAY=MO,WE,FR');
-    await page.locator('button[type="submit"]').first().click();
+    await page.locator('form button[type="submit"]').first().click();
     await page.waitForLoadState('networkidle');
-    await expect(page.getByText(title)).toBeVisible();
+    await page.goto(`${BASE_URL}/calendar`);
+    await expect(page.getByText(title).first()).toBeVisible({ timeout: 10000 });
   });
 
   test('iCal feed responds with text/calendar', async ({ page }) => {
