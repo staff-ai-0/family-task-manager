@@ -1,0 +1,732 @@
+---
+/**
+ * Two-step task creation modal.
+ * Step 1: Preset grid with search.
+ * Step 2: 5-field mini-form (name, difficulty, frequency, assignment, bonus).
+ *
+ * The trigger button (id="tcm-trigger") is placed by the PARENT PAGE (tasks.astro).
+ */
+import { TASK_PRESETS } from "@lib/task-presets";
+
+interface Props {
+    lang: "en" | "es";
+    token: string;
+    memberList: Array<{ id: string; name: string; role: string }>;
+}
+
+const { lang, token, memberList } = Astro.props;
+
+const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_days: 1 };
+---
+
+<!-- Backdrop -->
+<div
+    id="tcm-backdrop"
+    class="fixed inset-0 bg-black/50 z-40 hidden opacity-0 transition-opacity duration-300"
+></div>
+
+<!-- Dialog -->
+<div
+    id="tcm-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="tcm-dialog-title"
+    class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+>
+    <div class="w-full sm:max-w-lg bg-brand-cream rounded-t-[var(--radius-card)] sm:rounded-[var(--radius-card)] shadow-[var(--shadow-pop)] max-h-[90vh] flex flex-col">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b border-brand-ink/10 flex-shrink-0">
+            <h2 id="tcm-dialog-title" class="font-display text-lg font-extrabold text-brand-ink">
+                {lang === "es" ? "Nueva tarea" : "New Task"}
+            </h2>
+            <button
+                id="tcm-close"
+                type="button"
+                class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink-soft hover:text-brand-ink flex items-center justify-center transition-colors"
+                aria-label={lang === "es" ? "Cerrar" : "Close"}
+            >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Step 1: Preset Grid -->
+        <div id="tcm-step1" class="flex flex-col flex-1 overflow-hidden">
+            <!-- Search -->
+            <div class="px-5 pt-4 pb-3 flex-shrink-0">
+                <div class="relative">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-ink-soft" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input
+                        id="tcm-search"
+                        type="search"
+                        placeholder={lang === "es" ? "Buscar tarea…" : "Search task…"}
+                        class="w-full pl-9 pr-4 py-2 text-sm border border-brand-ink/20 rounded-xl focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none bg-brand-cream"
+                        autocomplete="off"
+                    />
+                </div>
+            </div>
+
+            <!-- Preset cards grid -->
+            <div class="flex-1 overflow-y-auto px-5 pb-5">
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {TASK_PRESETS.map((p) => (
+                        <button
+                            type="button"
+                            class="tcm-preset-card text-left p-3 bg-brand-cream-deep hover:bg-brand-sky/10 border-2 border-transparent hover:border-brand-sky-deep rounded-[var(--radius-card)] transition-all duration-150 active:scale-[0.97]"
+                            data-preset={JSON.stringify(p)}
+                        >
+                            <div class="text-2xl mb-1.5">{p.emoji}</div>
+                            <p class="text-xs font-semibold text-brand-ink leading-snug line-clamp-2">{p.title}</p>
+                            <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                <span class={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                                    p.effort_level === 3 ? "bg-brand-coral/15 text-brand-coral-deep" :
+                                    p.effort_level === 2 ? "bg-brand-sun/20 text-brand-sun-deep" :
+                                    "bg-brand-mint/15 text-brand-mint-deep"
+                                }`}>
+                                    {p.effort_level === 3 ? (lang === "es" ? "Difícil" : "Hard") :
+                                     p.effort_level === 2 ? (lang === "es" ? "Medio" : "Medium") :
+                                     (lang === "es" ? "Fácil" : "Easy")}
+                                </span>
+                                <span class="text-[10px] text-brand-ink-soft">
+                                    {p.interval_days === 1 ? (lang === "es" ? "Diario" : "Daily") :
+                                     p.interval_days === 7 ? (lang === "es" ? "Semanal" : "Weekly") :
+                                     (lang === "es" ? `c/${p.interval_days}d` : `${p.interval_days}d`)}
+                                </span>
+                            </div>
+                        </button>
+                    ))}
+
+                    <!-- Custom card -->
+                    <button
+                        type="button"
+                        class="tcm-preset-card text-left p-3 bg-brand-cream-deep hover:bg-brand-sky/10 border-2 border-dashed border-brand-ink/20 hover:border-brand-sky-deep rounded-[var(--radius-card)] transition-all duration-150 active:scale-[0.97]"
+                        data-preset={JSON.stringify(customPreset)}
+                    >
+                        <div class="text-2xl mb-1.5">✏️</div>
+                        <p class="text-xs font-semibold text-brand-ink-soft leading-snug">
+                            {lang === "es" ? "Personalizada" : "Custom"}
+                        </p>
+                        <p class="text-[10px] text-brand-ink-soft mt-1">
+                            {lang === "es" ? "Desde cero" : "Start from scratch"}
+                        </p>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Mini-form -->
+        <div id="tcm-step2" class="hidden flex-col flex-1 overflow-hidden">
+            <div class="flex-1 overflow-y-auto px-5 pt-4 pb-3 space-y-5">
+
+                <!-- 1. Task name -->
+                <div>
+                    <label for="tcm-name" class="block text-xs font-semibold text-brand-ink-soft uppercase tracking-wider mb-1.5">
+                        {lang === "es" ? "Nombre de la tarea" : "Task name"}
+                    </label>
+                    <input
+                        id="tcm-name"
+                        type="text"
+                        autocomplete="off"
+                        placeholder={lang === "es" ? "Ej. Lavar platos" : "e.g. Wash Dishes"}
+                        class="w-full px-3 py-2.5 border border-brand-ink/20 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none bg-brand-cream"
+                    />
+                </div>
+
+                <!-- 2. Difficulty chips -->
+                <div>
+                    <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider mb-2">
+                        {lang === "es" ? "Dificultad" : "Difficulty"}
+                    </p>
+                    <div class="flex gap-2" data-chipgroup="effort">
+                        <button type="button" class="tcm-chip flex-1 py-2 px-3 text-sm font-semibold rounded-xl border-2 transition-colors" data-value="1">
+                            {lang === "es" ? "Fácil ×1" : "Easy ×1"}
+                        </button>
+                        <button type="button" class="tcm-chip flex-1 py-2 px-3 text-sm font-semibold rounded-xl border-2 transition-colors" data-value="2">
+                            {lang === "es" ? "Medio ×1.5" : "Med ×1.5"}
+                        </button>
+                        <button type="button" class="tcm-chip flex-1 py-2 px-3 text-sm font-semibold rounded-xl border-2 transition-colors" data-value="3">
+                            {lang === "es" ? "Difícil ×2" : "Hard ×2"}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3. How Often chips -->
+                <div>
+                    <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider mb-2">
+                        {lang === "es" ? "¿Con qué frecuencia?" : "How Often"}
+                    </p>
+                    <div class="flex gap-2" data-chipgroup="interval">
+                        <button type="button" class="tcm-chip flex-1 py-2 px-3 text-sm font-semibold rounded-xl border-2 transition-colors" data-value="1">
+                            {lang === "es" ? "Diario" : "Daily"}
+                        </button>
+                        <button type="button" class="tcm-chip flex-1 py-2 px-3 text-sm font-semibold rounded-xl border-2 transition-colors" data-value="3">
+                            {lang === "es" ? "c/3 días" : "Every 3d"}
+                        </button>
+                        <button type="button" class="tcm-chip flex-1 py-2 px-3 text-sm font-semibold rounded-xl border-2 transition-colors" data-value="7">
+                            {lang === "es" ? "Semanal" : "Weekly"}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4. Assign To chips -->
+                <div>
+                    <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider mb-2">
+                        {lang === "es" ? "Asignar a" : "Assign To"}
+                    </p>
+                    <div class="flex gap-2" data-chipgroup="assignment">
+                        <button type="button" class="tcm-chip flex-1 py-2 px-2 text-xs font-semibold rounded-xl border-2 transition-colors" data-value="auto">
+                            {lang === "es" ? "Auto" : "Auto"}
+                        </button>
+                        <button type="button" class="tcm-chip flex-1 py-2 px-2 text-xs font-semibold rounded-xl border-2 transition-colors" data-value="fixed">
+                            {lang === "es" ? "Fijo" : "Fixed"}
+                        </button>
+                        <button type="button" class="tcm-chip flex-1 py-2 px-2 text-xs font-semibold rounded-xl border-2 transition-colors" data-value="rotate">
+                            {lang === "es" ? "Rotación" : "Rotate"}
+                        </button>
+                    </div>
+
+                    <!-- Member checkboxes (revealed for fixed/rotate) -->
+                    <div id="tcm-members" class="hidden mt-3 space-y-2 p-3 bg-brand-cream-deep rounded-xl border border-brand-ink/10">
+                        {memberList.map((member) => (
+                            <label class="flex items-center gap-2 cursor-pointer hover:bg-brand-cream px-2 py-1.5 rounded-lg transition-colors">
+                                <input
+                                    type="checkbox"
+                                    class="tcm-member-cb w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep"
+                                    value={member.id}
+                                    data-name={member.name}
+                                />
+                                <span class="text-sm text-brand-ink flex-1">{member.name}</span>
+                                <span class="text-xs text-brand-ink-soft">{member.role.toLowerCase()}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                <!-- 5. Bonus toggle -->
+                <div class="flex items-center gap-3 py-1">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input id="tcm-bonus" type="checkbox" class="sr-only peer" />
+                        <div class="w-9 h-5 bg-brand-cream-deep rounded-full peer peer-checked:bg-brand-sun-deep peer-focus:ring-2 peer-focus:ring-amber-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-brand-cream after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                    <div>
+                        <span class="text-sm font-medium text-brand-ink">⭐ {lang === "es" ? "Tarea bonus" : "Bonus task"}</span>
+                        <p class="text-xs text-brand-ink-soft">
+                            {lang === "es" ? "Opcional, no se penaliza si no se hace." : "Optional, no penalty if skipped."}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Advanced collapse -->
+                <details class="bg-brand-cream-deep/50 rounded-xl border border-brand-ink/10">
+                    <summary class="px-4 py-3 text-sm font-medium text-brand-ink cursor-pointer select-none">
+                        {lang === "es" ? "⚙️ Opciones avanzadas" : "⚙️ Advanced options"}
+                    </summary>
+                    <div class="px-4 pb-4 pt-2 space-y-4">
+                        <!-- Description -->
+                        <div>
+                            <label for="tcm-desc" class="block text-xs font-medium text-brand-ink-soft mb-1">
+                                {lang === "es" ? "Descripción" : "Description"}
+                            </label>
+                            <textarea
+                                id="tcm-desc"
+                                rows={2}
+                                placeholder={lang === "es" ? "Instrucciones opcionales…" : "Optional instructions…"}
+                                class="w-full px-3 py-2 text-sm border border-brand-ink/20 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none resize-none bg-brand-cream"
+                            ></textarea>
+                        </div>
+
+                        <!-- Allowed roles -->
+                        <div>
+                            <p class="text-xs font-medium text-brand-ink-soft mb-2">
+                                {lang === "es" ? "Roles permitidos" : "Allowed roles"}
+                            </p>
+                            <div class="flex gap-4 flex-wrap">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" class="tcm-role-cb w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" value="parent" />
+                                    <span class="text-sm text-brand-ink">{lang === "es" ? "Padre/Madre" : "Parent"}</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" class="tcm-role-cb w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" value="teen" />
+                                    <span class="text-sm text-brand-ink">{lang === "es" ? "Teen" : "Teen"}</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" class="tcm-role-cb w-4 h-4 text-brand-sky-deep border-brand-ink/20 rounded focus:ring-2 focus:ring-brand-sky-deep" value="child" />
+                                    <span class="text-sm text-brand-ink">{lang === "es" ? "Niño/a" : "Child"}</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Gig mode -->
+                        <div>
+                            <label for="tcm-gig" class="block text-xs font-medium text-brand-ink-soft mb-1">
+                                {lang === "es" ? "Modo de gig" : "Gig mode"}
+                            </label>
+                            <select
+                                id="tcm-gig"
+                                class="w-full px-3 py-2 text-sm border border-brand-ink/20 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none bg-brand-cream"
+                            >
+                                <option value="claim">{lang === "es" ? "Reservar (default)" : "Claim (default)"}</option>
+                                <option value="competition">{lang === "es" ? "🏆 Competencia" : "🏆 Competition"}</option>
+                                <option value="rotation">{lang === "es" ? "🔄 Rotación" : "🔄 Rotation"}</option>
+                                <option value="collaboration">{lang === "es" ? "🤝 Colaboración" : "🤝 Collaboration"}</option>
+                            </select>
+                        </div>
+
+                        <!-- Blocks rewards -->
+                        <div class="flex items-center gap-3">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input id="tcm-blocks-rewards" type="checkbox" class="sr-only peer" />
+                                <div class="w-9 h-5 bg-brand-cream-deep rounded-full peer peer-checked:bg-brand-coral-deep peer-focus:ring-2 peer-focus:ring-red-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-brand-cream after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                            </label>
+                            <div>
+                                <span class="text-sm font-medium text-brand-ink">🔒 {lang === "es" ? "Bloquea recompensas" : "Blocks rewards"}</span>
+                                <p class="text-xs text-brand-ink-soft">
+                                    {lang === "es" ? "No se pueden canjear mientras esté pendiente." : "Can't redeem rewards while open."}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Error div -->
+                <div id="tcm-error" class="hidden text-sm text-red-600 px-1"></div>
+            </div>
+
+            <!-- Footer buttons -->
+            <div class="flex gap-3 px-5 py-4 border-t border-brand-ink/10 flex-shrink-0">
+                <button
+                    id="tcm-back"
+                    type="button"
+                    class="flex-none py-2.5 px-4 text-sm font-semibold border-2 border-brand-ink/20 text-brand-ink rounded-xl hover:bg-brand-cream-deep transition-colors"
+                >
+                    ← {lang === "es" ? "Volver" : "Back"}
+                </button>
+                <button
+                    id="tcm-submit"
+                    type="button"
+                    class="flex-1 py-2.5 bg-brand-sky-deep hover:bg-brand-ink active:scale-[0.98] text-white font-semibold text-sm rounded-xl shadow-[var(--shadow-card)] transition-all duration-150"
+                >
+                    {lang === "es" ? "Crear tarea" : "Create Task"}
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script define:vars={{ token }}>
+(function initTaskCreateModal() {
+    const backdrop = document.getElementById("tcm-backdrop");
+    const modal = document.getElementById("tcm-modal");
+    const step1 = document.getElementById("tcm-step1");
+    const step2 = document.getElementById("tcm-step2");
+    const closeBtn = document.getElementById("tcm-close");
+    const backBtn = document.getElementById("tcm-back");
+    const submitBtn = document.getElementById("tcm-submit");
+    const nameInput = document.getElementById("tcm-name");
+    const searchInput = document.getElementById("tcm-search");
+    const bonusChk = document.getElementById("tcm-bonus");
+    const blocksChk = document.getElementById("tcm-blocks-rewards");
+    const gigSelect = document.getElementById("tcm-gig");
+    const descTA = document.getElementById("tcm-desc");
+    const membersDiv = document.getElementById("tcm-members");
+    const errorDiv = document.getElementById("tcm-error");
+
+    if (!backdrop || !modal) return;
+
+    // ----- Chip state -----
+    const chipState = { effort: "1", interval: "1", assignment: "auto" };
+
+    function activateChip(group, value) {
+        chipState[group] = String(value);
+        const container = modal.querySelector(`[data-chipgroup="${group}"]`);
+        if (!container) return;
+        container.querySelectorAll(".tcm-chip").forEach((btn) => {
+            const isActive = String(btn.dataset.value) === String(value);
+            btn.classList.toggle("bg-brand-sky-deep", isActive);
+            btn.classList.toggle("text-white", isActive);
+            btn.classList.toggle("border-brand-sky-deep", isActive);
+            btn.classList.toggle("bg-brand-cream-deep", !isActive);
+            btn.classList.toggle("text-brand-ink-soft", !isActive);
+            btn.classList.toggle("border-transparent", !isActive);
+        });
+
+        // Show/hide member list for assignment chips
+        if (group === "assignment" && membersDiv) {
+            if (value === "fixed" || value === "rotate") {
+                membersDiv.classList.remove("hidden");
+            } else {
+                membersDiv.classList.add("hidden");
+            }
+        }
+    }
+
+    // Wire chip groups
+    modal.querySelectorAll("[data-chipgroup]").forEach((group) => {
+        group.querySelectorAll(".tcm-chip").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const groupName = group.dataset.chipgroup;
+                activateChip(groupName, btn.dataset.value);
+            });
+        });
+    });
+
+    // ----- Open / Close -----
+    function openModal() {
+        resetModal();
+        backdrop.classList.remove("hidden");
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+        requestAnimationFrame(() => {
+            backdrop.classList.remove("opacity-0");
+            backdrop.classList.add("opacity-100");
+        });
+        setTimeout(() => searchInput?.focus(), 200);
+    }
+
+    function closeModal() {
+        backdrop.classList.remove("opacity-100");
+        backdrop.classList.add("opacity-0");
+        setTimeout(() => {
+            backdrop.classList.add("hidden");
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+            resetModal();
+        }, 300);
+    }
+
+    function resetModal() {
+        showStep(1);
+        if (nameInput) nameInput.value = "";
+        if (searchInput) searchInput.value = "";
+        if (descTA) descTA.value = "";
+        if (bonusChk) bonusChk.checked = false;
+        if (blocksChk) blocksChk.checked = false;
+        if (gigSelect) gigSelect.value = "claim";
+        if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+        if (membersDiv) membersDiv.classList.add("hidden");
+        modal.querySelectorAll(".tcm-member-cb").forEach((cb) => { cb.checked = false; });
+        modal.querySelectorAll(".tcm-role-cb").forEach((cb) => { cb.checked = false; });
+        // Reset chips to defaults
+        activateChip("effort", "1");
+        activateChip("interval", "1");
+        activateChip("assignment", "auto");
+        // Show all presets
+        filterPresets("");
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtn.dataset.originalText || submitBtn.textContent; }
+    }
+
+    // ----- Step navigation -----
+    function showStep(n) {
+        if (n === 1) {
+            step1.classList.remove("hidden");
+            step1.classList.add("flex");
+            step2.classList.add("hidden");
+            step2.classList.remove("flex");
+            if (backBtn) backBtn.classList.add("hidden");
+            if (submitBtn) submitBtn.classList.add("hidden");
+        } else {
+            step1.classList.add("hidden");
+            step1.classList.remove("flex");
+            step2.classList.remove("hidden");
+            step2.classList.add("flex");
+            if (backBtn) backBtn.classList.remove("hidden");
+            if (submitBtn) submitBtn.classList.remove("hidden");
+            setTimeout(() => nameInput?.focus(), 100);
+        }
+    }
+
+    // ----- Filter presets -----
+    function filterPresets(query) {
+        const q = (query || "").toLowerCase().trim();
+        modal.querySelectorAll(".tcm-preset-card").forEach((card) => {
+            if (!q) {
+                card.style.display = "";
+                return;
+            }
+            try {
+                const preset = JSON.parse(card.dataset.preset || "{}");
+                const title = (preset.title || "").toLowerCase();
+                card.style.display = title.includes(q) ? "" : "none";
+            } catch (_) {
+                card.style.display = "";
+            }
+        });
+    }
+
+    // ----- Preset card click -----
+    modal.querySelectorAll(".tcm-preset-card").forEach((card) => {
+        card.addEventListener("click", () => {
+            try {
+                const preset = JSON.parse(card.dataset.preset || "{}");
+                if (nameInput) nameInput.value = preset.title || "";
+                activateChip("effort", String(preset.effort_level || "1"));
+                activateChip("interval", String(preset.interval_days || "1"));
+                showStep(2);
+            } catch (_) { /* silent */ }
+        });
+    });
+
+    // ----- Create handler -----
+    async function handleCreate() {
+        if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+
+        const title = (nameInput?.value || "").trim();
+        if (!title) {
+            showError(document.documentElement.lang === "es"
+                ? "Ingresa el nombre de la tarea"
+                : "Enter a task name");
+            nameInput?.focus();
+            return;
+        }
+
+        const isBonus = bonusChk?.checked || false;
+        const blocksRewards = blocksChk?.checked || false;
+        const gigMode = gigSelect?.value || "claim";
+        const description = (descTA?.value || "").trim() || null;
+        const assignedUserIds = Array.from(modal.querySelectorAll(".tcm-member-cb:checked")).map((cb) => cb.value);
+        const allowedRoles = Array.from(modal.querySelectorAll(".tcm-role-cb:checked")).map((cb) => cb.value);
+
+        const payload = {
+            title,
+            description,
+            title_es: null,
+            description_es: null,
+            points: isBonus ? 10 : 0,
+            effort_level: parseInt(chipState.effort, 10),
+            interval_days: parseInt(chipState.interval, 10),
+            is_bonus: isBonus,
+            blocks_rewards: blocksRewards,
+            gig_mode: gigMode,
+            collaboration_min_count: 2,
+            auto_late_penalty: false,
+            late_restriction_type: null,
+            late_severity: null,
+            late_duration_days: 1,
+            assignment_type: chipState.assignment,
+            assigned_user_ids: assignedUserIds.length > 0 ? assignedUserIds : null,
+            allowed_roles: allowedRoles.length > 0 ? allowedRoles : null,
+        };
+
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "…"; }
+
+        try {
+            const res = await fetch("/api/task-templates/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || `Error ${res.status}`);
+            }
+
+            const created = await res.json();
+            closeModal();
+            refreshTemplateList();
+
+            // Background auto-translate (fire-and-forget)
+            autoTranslate(created.id, created.title, created.description || "");
+        } catch (err) {
+            showError(err.message || "Error creating task");
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = submitBtn.dataset.originalText || "Create Task";
+            }
+        }
+    }
+
+    // ----- Auto-translate -----
+    async function autoTranslate(templateId, title, description) {
+        try {
+            const transRes = await fetch(`/api/task-templates/${templateId}/translate`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                },
+                body: JSON.stringify({ source_lang: "en", target_lang: "es" }),
+            });
+            if (!transRes.ok) return;
+            const transData = await transRes.json();
+
+            if (transData.title_es) {
+                const putRes = await fetch(`/api/task-templates/${templateId}`, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        title_es: transData.title_es,
+                        description_es: transData.description_es || null,
+                    }),
+                });
+                if (putRes.ok) {
+                    refreshTemplateList();
+                }
+            }
+        } catch (_) { /* silent */ }
+    }
+
+    // ----- Refresh template list -----
+    async function refreshTemplateList() {
+        try {
+            const res = await fetch("/api/task-templates/", {
+                headers: { "Authorization": `Bearer ${token}` },
+            });
+            if (!res.ok) return;
+            const templates = await res.json();
+
+            const container = document.getElementById("template-list-container");
+            if (!container) return;
+
+            if (!Array.isArray(templates) || templates.length === 0) {
+                container.innerHTML = `<p class="text-brand-ink-soft text-sm text-center py-6">No tasks yet.</p>`;
+                return;
+            }
+
+            container.innerHTML = templates.map(renderTemplateCard).join("");
+        } catch (_) { /* silent — leave stale list */ }
+    }
+
+    // ----- Render a template card matching the SSR structure -----
+    function renderTemplateCard(tmpl) {
+        const isActive = tmpl.is_active !== false;
+        const isBonus = !!tmpl.is_bonus;
+        const effortLevel = tmpl.effort_level || 1;
+        const pts = tmpl.points || 0;
+        const effectivePts = Math.round(pts * (effortLevel === 3 ? 2 : effortLevel === 2 ? 1.5 : 1));
+        const multiplierNote = effortLevel > 1
+            ? `<span class="ml-1 text-brand-ink-soft font-normal">(${pts} × ${effortLevel === 3 ? "2" : "1.5"})</span>`
+            : "";
+
+        const freqMap = { 1: "Daily", 3: "Every 3 days", 7: "Weekly" };
+        const freqLabel = freqMap[tmpl.interval_days] || `Every ${tmpl.interval_days} days`;
+
+        const esMissingBadge = !tmpl.title_es
+            ? `<span class="inline-block ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title="Translation missing">ES missing</span>`
+            : "";
+
+        const bonusBadgeClass = isBonus
+            ? "bg-brand-sun/20 text-brand-sun-deep"
+            : "bg-brand-sky/15 text-brand-sky-deep";
+        const bonusBadgeText = isBonus ? "Bonus" : "Regular";
+
+        const assignmentBadge = (tmpl.assignment_type && tmpl.assignment_type !== "auto")
+            ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full ${tmpl.assignment_type === "fixed" ? "bg-brand-coral/15 text-brand-coral-deep" : "bg-brand-mint/20 text-brand-mint-deep"}">${tmpl.assignment_type === "fixed" ? "📌 Fixed" : "🔄 Rotate"}</span>`
+            : "";
+
+        const inactiveBadge = !isActive
+            ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">Inactive</span>`
+            : "";
+
+        const descriptionHtml = tmpl.description
+            ? `<p class="text-xs text-brand-ink-soft line-clamp-1">${tmpl.description}</p>`
+            : "";
+
+        const toggleIcon = isActive
+            ? `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />`
+            : `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />`;
+        const toggleClass = isActive
+            ? "bg-brand-mint/20 text-brand-mint-deep hover:bg-brand-mint"
+            : "bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-mint/20 hover:text-brand-mint-deep";
+
+        return `
+<div class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border ${isActive ? "border-brand-ink/10" : "border-brand-ink/10 opacity-60"}">
+    <div class="flex items-start justify-between gap-3">
+        <div class="flex-1">
+            <div class="flex items-center gap-2 flex-wrap mb-1">
+                <h3 class="font-bold text-brand-ink text-sm">
+                    ${tmpl.title}${esMissingBadge}
+                </h3>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${bonusBadgeClass}">${bonusBadgeText}</span>
+                <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-cream-deep text-brand-ink-soft">${freqLabel}</span>
+                ${assignmentBadge}
+                ${inactiveBadge}
+            </div>
+            ${descriptionHtml}
+            <p class="text-xs text-brand-sun-deep font-semibold mt-1">
+                +${effectivePts} pts${multiplierNote}
+            </p>
+        </div>
+        <div class="flex gap-1.5 flex-shrink-0">
+            <form method="POST">
+                <input type="hidden" name="action" value="toggle" />
+                <input type="hidden" name="template_id" value="${tmpl.id}" />
+                <button type="submit" title="${isActive ? "Deactivate" : "Activate"}"
+                    class="h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${toggleClass}">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">${toggleIcon}</svg>
+                </button>
+            </form>
+            <a href="/parent/tasks/${tmpl.id}/edit"
+                class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink-soft hover:text-brand-sky-deep flex items-center justify-center transition-colors">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+            </a>
+            <form method="POST">
+                <input type="hidden" name="action" value="delete" />
+                <input type="hidden" name="template_id" value="${tmpl.id}" />
+                <button type="submit"
+                    onclick="return confirm('Delete this task template?')"
+                    class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-red-100 text-brand-ink-soft hover:text-red-500 flex items-center justify-center transition-colors">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>`;
+    }
+
+    // ----- Helpers -----
+    function showError(msg) {
+        if (errorDiv) {
+            errorDiv.textContent = msg;
+            errorDiv.classList.remove("hidden");
+        }
+    }
+
+    // ----- Wire events -----
+    // Trigger is in tasks.astro (id="tcm-trigger")
+    const triggerBtn = document.getElementById("tcm-trigger");
+    if (triggerBtn) triggerBtn.addEventListener("click", openModal);
+
+    if (closeBtn) closeBtn.addEventListener("click", closeModal);
+    backdrop.addEventListener("click", closeModal);
+    if (backBtn) backBtn.addEventListener("click", () => showStep(1));
+    if (submitBtn) {
+        submitBtn.dataset.originalText = submitBtn.textContent;
+        submitBtn.addEventListener("click", handleCreate);
+    }
+    if (searchInput) searchInput.addEventListener("input", (e) => filterPresets(e.target.value));
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !backdrop.classList.contains("hidden")) {
+            closeModal();
+        }
+    });
+
+    // Initialize chip active styles on load
+    activateChip("effort", "1");
+    activateChip("interval", "1");
+    activateChip("assignment", "auto");
+
+    // Back-compat: hide back/submit at init (step 1 is shown)
+    if (backBtn) backBtn.classList.add("hidden");
+    if (submitBtn) submitBtn.classList.add("hidden");
+
+    // View Transitions re-init
+    document.addEventListener("astro:after-swap", initTaskCreateModal);
+})();
+</script>
