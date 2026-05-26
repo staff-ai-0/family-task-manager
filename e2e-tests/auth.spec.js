@@ -128,7 +128,8 @@ test.describe('Authentication', () => {
       // Should either be disabled or show error on submit
       if (!isDisabled) {
         await page.click('button[type="submit"]');
-        const errorMessage = page.locator('.bg-red-50');
+        // Register page shows error in #register-error (.bg-red-100)
+        const errorMessage = page.locator('#register-error, .bg-red-100, .bg-red-50').first();
         await errorMessage.waitFor({ timeout: 5000 });
         const errorText = await errorMessage.textContent();
         expect(errorText).toBeTruthy();

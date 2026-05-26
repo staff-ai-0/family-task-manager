@@ -38,8 +38,8 @@ test.describe('Task Management', () => {
         const submitButton = page.locator('button:has-text("Create"), button:has-text("Add"), button[type="submit"]').first();
         await submitButton.click();
 
-        // Wait for success message or task to appear in list
-        await page.waitForTimeout(1000);
+        // Wait for Astro SSR to process the POST and re-render
+        await page.waitForLoadState('networkidle');
 
         // Verify task appears somewhere on the page
         const taskInPage = page.getByText(taskName);
