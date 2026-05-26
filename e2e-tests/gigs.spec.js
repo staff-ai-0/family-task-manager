@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-const BASE_URL = 'http://localhost:3003';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3003';
 const PARENT = { email: process.env.E2E_EMAIL || 'e2e-fresh@example.com', password: process.env.E2E_PASSWORD || 'fresh1234' };
 const CHILD = { email: process.env.E2E_CHILD_EMAIL || 'lucas@demo.com', password: process.env.E2E_CHILD_PASSWORD || 'password123' };
 

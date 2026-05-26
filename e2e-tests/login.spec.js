@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 test.describe('Login Flow', () => {
-  const BASE_URL = 'https://gcp-family.agent-ia.mx';
+  const BASE_URL = process.env.BASE_URL || 'https://gcp-family.agent-ia.mx';
 
   test('should login with email and password and redirect to dashboard', async ({ page }) => {
     // Enable console logging

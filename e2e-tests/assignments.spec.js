@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 test.describe('Assignment Management', () => {
-  const BASE_URL = 'http://localhost:3003';
+  const BASE_URL = process.env.BASE_URL || 'http://localhost:3003';
   const DEMO_USER = {
     email: 'e2e-fresh@example.com',
     password: 'fresh1234',
