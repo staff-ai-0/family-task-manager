@@ -283,7 +283,6 @@ test.describe('Reward Management', () => {
   });
 
   test.describe('Category Options', () => {
-    test.retries(2);
     test('should have all reward categories available', async ({ page }) => {
       await page.goto(`${BASE_URL}/parent/rewards`);
       await page.waitForLoadState('networkidle');
