@@ -335,6 +335,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
     const descTA = document.getElementById("tcm-desc");
     const membersDiv = document.getElementById("tcm-members");
     const errorDiv = document.getElementById("tcm-error");
+    const submitBtnOriginalText = submitBtn?.textContent ?? "";
 
     if (!backdrop || !modal) return;
 
@@ -376,6 +377,10 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
     });
 
     // ----- Open / Close -----
+    function handleEscape(e) {
+        if (e.key === "Escape") closeModal();
+    }
+
     function openModal() {
         resetModal();
         backdrop.classList.remove("hidden");
@@ -385,10 +390,12 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             backdrop.classList.remove("opacity-0");
             backdrop.classList.add("opacity-100");
         });
+        document.addEventListener("keydown", handleEscape);
         setTimeout(() => searchInput?.focus(), 200);
     }
 
     function closeModal() {
+        document.removeEventListener("keydown", handleEscape);
         backdrop.classList.remove("opacity-100");
         backdrop.classList.add("opacity-0");
         setTimeout(() => {
@@ -417,7 +424,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         activateChip("assignment", "auto");
         // Show all presets
         filterPresets("");
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtn.dataset.originalText || submitBtn.textContent; }
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtnOriginalText; }
     }
 
     // ----- Step navigation -----
@@ -496,7 +503,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             description,
             title_es: null,
             description_es: null,
-            points: isBonus ? 10 : 0,
+            points: isBonus ? 10 : 0, // non-bonus tasks always earn 0 pts; editable via edit page
             effort_level: parseInt(chipState.effort, 10),
             interval_days: parseInt(chipState.interval, 10),
             is_bonus: isBonus,
@@ -539,7 +546,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             showError(err.message || "Error creating task");
             if (submitBtn) {
                 submitBtn.disabled = false;
-                submitBtn.textContent = submitBtn.dataset.originalText || "Create Task";
+                submitBtn.textContent = submitBtnOriginalText;
             }
         }
     }
@@ -598,6 +605,15 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         } catch (_) { /* silent — leave stale list */ }
     }
 
+    // ----- HTML escape helper (prevents XSS when interpolating user data into innerHTML) -----
+    function escapeHtml(str) {
+        return String(str ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+    }
+
     // ----- Render a template card matching the SSR structure -----
     function renderTemplateCard(tmpl) {
         const isActive = tmpl.is_active !== false;
@@ -630,7 +646,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             : "";
 
         const descriptionHtml = tmpl.description
-            ? `<p class="text-xs text-brand-ink-soft line-clamp-1">${tmpl.description}</p>`
+            ? `<p class="text-xs text-brand-ink-soft line-clamp-1">${escapeHtml(tmpl.description)}</p>`
             : "";
 
         const toggleIcon = isActive
@@ -646,7 +662,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         <div class="flex-1">
             <div class="flex items-center gap-2 flex-wrap mb-1">
                 <h3 class="font-bold text-brand-ink text-sm">
-                    ${tmpl.title}${esMissingBadge}
+                    ${escapeHtml(tmpl.title)}${esMissingBadge}
                 </h3>
                 <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${bonusBadgeClass}">${bonusBadgeText}</span>
                 <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-cream-deep text-brand-ink-soft">${freqLabel}</span>
@@ -661,13 +677,13 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         <div class="flex gap-1.5 flex-shrink-0">
             <form method="POST">
                 <input type="hidden" name="action" value="toggle" />
-                <input type="hidden" name="template_id" value="${tmpl.id}" />
+                <input type="hidden" name="template_id" value="${escapeHtml(tmpl.id)}" />
                 <button type="submit" title="${isActive ? "Deactivate" : "Activate"}"
                     class="h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${toggleClass}">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">${toggleIcon}</svg>
                 </button>
             </form>
-            <a href="/parent/tasks/${tmpl.id}/edit"
+            <a href="/parent/tasks/${escapeHtml(tmpl.id)}/edit"
                 class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink-soft hover:text-brand-sky-deep flex items-center justify-center transition-colors">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -675,7 +691,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             </a>
             <form method="POST">
                 <input type="hidden" name="action" value="delete" />
-                <input type="hidden" name="template_id" value="${tmpl.id}" />
+                <input type="hidden" name="template_id" value="${escapeHtml(tmpl.id)}" />
                 <button type="submit"
                     onclick="return confirm('Delete this task template?')"
                     class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-red-100 text-brand-ink-soft hover:text-red-500 flex items-center justify-center transition-colors">
@@ -706,16 +722,9 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
     backdrop.addEventListener("click", closeModal);
     if (backBtn) backBtn.addEventListener("click", () => showStep(1));
     if (submitBtn) {
-        submitBtn.dataset.originalText = submitBtn.textContent;
         submitBtn.addEventListener("click", handleCreate);
     }
     if (searchInput) searchInput.addEventListener("input", (e) => filterPresets(e.target.value));
-
-    document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && !backdrop.classList.contains("hidden")) {
-            closeModal();
-        }
-    });
 
     // Initialize chip active styles on load
     activateChip("effort", "1");
