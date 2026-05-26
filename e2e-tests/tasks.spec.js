@@ -22,22 +22,21 @@ test.describe('Task Management', () => {
       await page.goto(`${BASE_URL}/parent/tasks`);
       await page.waitForLoadState('networkidle');
 
-      // Find create task form
-      const nameInput = page.locator('input[name="name"], input[placeholder*="task"], input[placeholder*="Task"]').first();
-      const pointsInput = page.locator('input[name="points_value"], input[name="points"], input[type="number"]').first();
+      // Use exact name attribute to target the English title field
+      const nameInput = page.locator('input[name="title"]').first();
 
       if (await nameInput.count() > 0) {
         const taskName = `Test Task ${Date.now()}`;
         await nameInput.fill(taskName);
 
-        if (await pointsInput.count() > 0) {
-          // Must check is_bonus first: API requires points=0 for mandatory tasks
-          const bonusCheckbox = page.locator('input[name="is_bonus"]').first();
-          if (await bonusCheckbox.count() > 0) {
-            await bonusCheckbox.check({ force: true });
-          }
-          await pointsInput.fill('50');
-        }
+        // Use JS to set is_bonus=true + points=50 (sr-only checkbox is not reliably
+        // clickable via Playwright; API requires is_bonus=true for non-zero points)
+        await page.evaluate(() => {
+          const cb = document.querySelector('input[name="is_bonus"]');
+          if (cb) cb.checked = true;
+          const pts = document.querySelector('input[name="points"]');
+          if (pts) pts.value = '50';
+        });
 
         // Submit form — use role to avoid matching "Shuffle Tasks" (also type=submit, appears first in DOM)
         const submitButton = page.getByRole('button', { name: /create|crear/i }).first();
@@ -46,12 +45,17 @@ test.describe('Task Management', () => {
         // Wait for Astro SSR to process the POST and re-render
         await page.waitForLoadState('networkidle');
 
-        // Navigate fresh to ensure we get the latest DB state
-        await page.goto(`${BASE_URL}/parent/tasks`);
-        await page.waitForLoadState('networkidle');
-
-        // Verify task appears in the list (search within the All Templates section)
-        await expect(page.getByText(taskName)).toBeVisible({ timeout: 10000 });
+        // Check POST response page for success message (bg-brand-mint) or task in list
+        const successBanner = page.locator('[class*="brand-mint"]').first();
+        if (await successBanner.count() > 0) {
+          // POST succeeded — task should already be visible in re-rendered list
+          await expect(page.getByText(taskName)).toBeVisible({ timeout: 5000 });
+        } else {
+          // No success banner (possible timing) — navigate fresh and check
+          await page.goto(`${BASE_URL}/parent/tasks`);
+          await page.waitForLoadState('networkidle');
+          await expect(page.getByText(taskName)).toBeVisible({ timeout: 10000 });
+        }
       }
     });
 
