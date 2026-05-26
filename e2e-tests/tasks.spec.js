@@ -34,8 +34,8 @@ test.describe('Task Management', () => {
           await pointsInput.fill('50');
         }
 
-        // Submit form
-        const submitButton = page.locator('button:has-text("Create"), button:has-text("Add"), button[type="submit"]').first();
+        // Submit form — use role to avoid matching "Shuffle Tasks" (also type=submit, appears first in DOM)
+        const submitButton = page.getByRole('button', { name: /create|crear/i }).first();
         await submitButton.click();
 
         // Wait for Astro SSR to process the POST and re-render

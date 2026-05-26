@@ -122,7 +122,7 @@ test.describe('Authentication', () => {
       await page.fill('input[name="family_name"]', NEW_USER.familyName);
 
       // Try to submit
-      const submitButton = page.locator('button[type="submit"]');
+      const submitButton = page.locator('button[type="submit"]').first();
       const isDisabled = await submitButton.evaluate(el => el.disabled);
       
       // Should either be disabled or show error on submit

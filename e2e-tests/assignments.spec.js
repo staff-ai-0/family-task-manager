@@ -181,7 +181,7 @@ test.describe('Assignment Management', () => {
       await page.goto(`${BASE_URL}/dashboard`);
       await page.waitForLoadState('networkidle');
 
-      const assignmentsLink = page.locator('a:has-text("Assignments"), text=Assignments').first();
+      const assignmentsLink = page.getByText('Assignments').first();
       if (await assignmentsLink.count() > 0) {
         expect(true).toBe(true);
       }
