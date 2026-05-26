@@ -46,6 +46,10 @@ test.describe('Task Management', () => {
         // Wait for Astro SSR to process the POST and re-render
         await page.waitForLoadState('networkidle');
 
+        // Reload to ensure the DB write has committed and the template list is fresh
+        await page.reload();
+        await page.waitForLoadState('networkidle');
+
         // Verify task appears somewhere on the page
         const taskInPage = page.getByText(taskName);
         expect(await taskInPage.count()).toBeGreaterThan(0);
