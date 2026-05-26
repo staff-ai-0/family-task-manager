@@ -87,9 +87,9 @@ async def lifespan(app: FastAPI):
             try:
                 n = await FrankieScheduleService.sweep_due(session)
                 if n:
-                    logger.info("Frankie schedule sweep fired %d", n)
+                    logger.info("Jarvis schedule sweep fired %d", n)
             except Exception:
-                logger.exception("Frankie schedule sweep failed")
+                logger.exception("Jarvis schedule sweep failed")
     scheduler.add_job(_frankie_schedule_sweep, "cron", minute="*/5", id="frankie_sched_sweep")
 
     scheduler.start()

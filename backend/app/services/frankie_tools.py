@@ -501,7 +501,7 @@ _DEF_SCHEDULE_FRANKIE = {
     "function": {
         "name": "schedule_frankie_prompt",
         "description": (
-            "Set up a recurring Frankie prompt that runs on a cron schedule "
+            "Set up a recurring Jarvis prompt that runs on a cron schedule "
             "(e.g. 'weekly Sunday summary at 6pm'). Output goes to the "
             "in-app notifications feed (or chat channel)."
         ),
@@ -511,7 +511,7 @@ _DEF_SCHEDULE_FRANKIE = {
                 "name": {"type": "string", "description": "Short label."},
                 "prompt": {
                     "type": "string",
-                    "description": "Prompt Frankie will answer each run.",
+                    "description": "Prompt Jarvis will answer each run.",
                 },
                 "cron_expr": {
                     "type": "string",

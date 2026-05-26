@@ -36,7 +36,7 @@ from app.services.frankie_tools import REGISTRY, dispatch, tool_definitions
 CHAT_MODEL = settings.FRANKIE_MODEL or RECEIPT_MODEL
 
 SYSTEM_BASE = (
-    "You are Frankie, a calm, practical family-routines copilot. You help "
+    "You are Jarvis, a calm, practical family-routines copilot. You help "
     "the parent see what's going on across chores, gigs, calendar, and "
     "kids' moods. Be concise — 2-4 sentences, then a clear next step. "
     "Avoid platitudes. If you don't know, say so."
@@ -178,7 +178,7 @@ class FrankieService:
         """
         try:
             if not settings.LITELLM_API_KEY:
-                raise ValidationError("Frankie not configured. Set LITELLM_API_KEY.")
+                raise ValidationError("Jarvis not configured. Set LITELLM_API_KEY.")
             msg = (message or "").strip()
             if not msg:
                 raise ValidationError("Message is empty.")
@@ -186,7 +186,7 @@ class FrankieService:
             if cap > 0:
                 if await FrankieService._today_message_count(db, family_id) >= cap:
                     raise ValidationError(
-                        f"Daily Frankie cap reached ({cap}). Try again tomorrow."
+                        f"Daily Jarvis cap reached ({cap}). Try again tomorrow."
                     )
 
             yield "event: thinking\ndata: {}\n\n"
@@ -297,7 +297,7 @@ class FrankieService:
         except ValidationError as exc:
             yield "event: error\ndata: " + json.dumps({"detail": str(exc)}) + "\n\n"
         except Exception as exc:
-            yield "event: error\ndata: " + json.dumps({"detail": f"Frankie failed: {exc}"}) + "\n\n"
+            yield "event: error\ndata: " + json.dumps({"detail": f"Jarvis failed: {exc}"}) + "\n\n"
         finally:
             yield "event: done\ndata: {}\n\n"
 
@@ -310,7 +310,7 @@ class FrankieService:
     ) -> dict:
         if not settings.LITELLM_API_KEY:
             raise ValidationError(
-                "Frankie not configured. Set LITELLM_API_KEY."
+                "Jarvis not configured. Set LITELLM_API_KEY."
             )
         message = (message or "").strip()
         if not message:
@@ -321,7 +321,7 @@ class FrankieService:
             sent_today = await FrankieService._today_message_count(db, family_id)
             if sent_today >= cap:
                 raise ValidationError(
-                    f"Daily Frankie cap reached ({cap}). Try again tomorrow."
+                    f"Daily Jarvis cap reached ({cap}). Try again tomorrow."
                 )
 
         history = await FrankieService._load_history(
@@ -355,7 +355,7 @@ class FrankieService:
                     tool_choice="auto",
                 )
             except Exception as exc:
-                raise ValidationError(f"Frankie chat failed: {exc}")
+                raise ValidationError(f"Jarvis chat failed: {exc}")
 
             choice = completion.choices[0].message
             tool_calls = getattr(choice, "tool_calls", None) or []

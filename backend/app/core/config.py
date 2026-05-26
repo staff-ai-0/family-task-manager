@@ -41,11 +41,11 @@ class Settings(BaseSettings):
     # disable AI auto-approval (forces manual review when no trust streak).
     GIG_AI_AUTO_APPROVE_THRESHOLD: float = 0.8
 
-    # Frankie copilot daily message cap per family. Each user → assistant
+    # Jarvis copilot daily message cap per family. Each user → assistant
     # exchange counts as one message. Prevents accidental spend overruns
     # on the LiteLLM proxy. 0 = unlimited.
     FRANKIE_DAILY_MESSAGE_CAP: int = 100
-    # LiteLLM model alias for Frankie chat. Defaults to receipt scanner's
+    # LiteLLM model alias for Jarvis chat. Defaults to receipt scanner's
     # claude-haiku for shared budget. Override via FRANKIE_MODEL env.
     FRANKIE_MODEL: str = "claude-haiku"
 

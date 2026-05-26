@@ -204,7 +204,7 @@ class FrankieScheduleService:
                 if s.channel == "chat" and s.created_by:
                     await FamilyChatService.post_message(
                         db, s.family_id, s.created_by,
-                        f"🤖 Frankie ({s.name}): {reply}",
+                        f"🤖 Jarvis ({s.name}): {reply}",
                     )
                 else:
                     await NotificationService.create(
@@ -222,7 +222,7 @@ class FrankieScheduleService:
             except Exception:
                 import logging
                 logging.getLogger(__name__).exception(
-                    "Frankie schedule %s failed", s.id
+                    "Jarvis schedule %s failed", s.id
                 )
             # advance regardless of success
             s.last_run_at = now
