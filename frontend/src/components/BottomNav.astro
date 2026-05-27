@@ -1,8 +1,6 @@
 ---
 import { t } from "../lib/i18n";
 import { apiFetch } from "../lib/api";
-import { NAV_VERSION } from "../lib/nav-version";
-
 interface Props {
     active?: "tasks" | "rewards" | "profile" | "parent" | "budget" | "notifications" | "pet" | "chat";
     role?: string;
@@ -31,12 +29,10 @@ const itemIdle = "text-brand-ink-soft hover:text-brand-ink";
 const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shadow-[2px_2px_0_var(--color-brand-ink)]";
 ---
 
-<div class="bottom-nav-spacer" aria-hidden="true" transition:persist="bottom-nav-spacer"></div>
+<div class="bottom-nav-spacer" aria-hidden="true"></div>
 
 <nav
-    data-nav-ver={NAV_VERSION}
     class="fixed bottom-0 left-0 right-0 bg-brand-cream border-t-2 border-brand-ink safe-area-bottom z-50"
-    transition:persist="bottom-nav"
 >
     <div class="max-w-md mx-auto flex justify-around items-center px-1 py-2">
         <a href="/dashboard" data-nav-key="tasks" class={`${itemBase} ${active === "tasks" ? itemActive : itemIdle}`}>
@@ -152,15 +148,15 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
     const IDLE   = "text-brand-ink-soft hover:text-brand-ink";
 
     function urlToKey(path: string): string {
-        if (path.startsWith("/budget"))       return "budget";
-        if (path.startsWith("/parent/frankie")) return "parent"; // Jarvis lives under parent nav
-        if (path.startsWith("/parent"))       return "parent";
-        if (path.startsWith("/rewards"))      return "rewards";
+        if (path.startsWith("/budget"))        return "budget";
+        if (path.startsWith("/parent/frankie")) return "parent";
+        if (path.startsWith("/parent"))        return "parent";
+        if (path.startsWith("/rewards"))       return "rewards";
         if (path.startsWith("/notifications")) return "notifications";
-        if (path.startsWith("/chat"))         return "chat";
-        if (path.startsWith("/pet"))          return "pet";
-        if (path.startsWith("/profile"))      return "profile";
-        return "tasks"; // /dashboard and everything else
+        if (path.startsWith("/chat"))          return "chat";
+        if (path.startsWith("/pet"))           return "pet";
+        if (path.startsWith("/profile"))       return "profile";
+        return "tasks";
     }
 
     function syncNav() {
@@ -172,17 +168,8 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
         });
     }
 
-    document.addEventListener("astro:page-load", () => {
-        // Stale-nav guard: persisted nav predates a server restart/deploy.
-        // Versions differ → force a hard reload so the fresh nav is rendered.
-        const navVer = document.querySelector<HTMLElement>("[data-nav-ver]")?.dataset?.navVer;
-        const pageVer = document.querySelector<HTMLMetaElement>('meta[name="nav-ver"]')?.content;
-        if (navVer && pageVer && navVer !== pageVer) {
-            window.location.reload();
-            return;
-        }
-        syncNav();
-    });
+    // Sync active item after every navigation (full load or view transition).
+    document.addEventListener("astro:page-load", syncNav);
 </script>
 
 <style>

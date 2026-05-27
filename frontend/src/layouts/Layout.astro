@@ -4,8 +4,6 @@ import { ClientRouter } from "astro:transitions";
 import { t } from "../lib/i18n";
 import ToastContainer from "../components/ToastContainer.astro";
 import Head from "../components/meta/Head.astro";
-import { NAV_VERSION } from "../lib/nav-version";
-
 interface Props {
 	title?: string;
 	description?: string;
@@ -44,7 +42,6 @@ const bannerCopy = {
 <html lang={lang} data-theme={theme === "dark" ? "dark" : undefined}>
 	<head>
 		<Head title={title} description={description} lang={lang} />
-		<meta name="nav-ver" content={NAV_VERSION} />
 		<ClientRouter />
 		{theme === "system" && (
 			<script is:inline>
