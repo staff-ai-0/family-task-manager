@@ -293,6 +293,7 @@ class FrankieService:
                     "reply": reply,
                     "actions": actions_taken,
                     "message_id": str(bot_row.id),
+                    "model": effective_model,
                 })
                 + "\n\n"
             )

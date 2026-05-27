@@ -328,6 +328,19 @@ verify() {
         fi
     done
 
+    info "Nav sanity check (Inbox + Chat links in SSR bundle)…"
+    NAV_BUNDLE=$(gssh "sudo docker exec gcp_family_frontend grep -rl 'href=\"/notifications\"' /app/dist/server/ 2>/dev/null | head -1")
+    if [[ -n "$NAV_BUNDLE" ]]; then
+        CHAT_OK=$(gssh "sudo docker exec gcp_family_frontend grep -c 'href=\"/chat\"' '$NAV_BUNDLE' 2>/dev/null || echo 0")
+        if [[ "$CHAT_OK" -gt 0 ]]; then
+            success "Nav SSR bundle has /notifications and /chat ✅"
+        else
+            warning "Nav sanity FAILED — /chat missing from $NAV_BUNDLE — stale Docker image, rebuild required"
+        fi
+    else
+        warning "Nav sanity FAILED — /notifications not found in /app/dist/server/ — stale Docker image, rebuild required"
+    fi
+
     info "Container status:"
     gssh "cd $REMOTE_PATH && sudo docker compose --env-file .env -f $COMPOSE_FILE ps"
 }

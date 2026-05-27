@@ -223,13 +223,23 @@ const labels = {
                         } else if (event === "reply") {
                             pending?.classList.add("hidden");
                             if (scroll) {
+                                const MODEL_META: Record<string, {label: string; icon: string; color: string}> = {
+                                    "claude-haiku":     { label: "Claude Haiku",       icon: "⚡", color: "bg-orange-100 text-orange-700" },
+                                    "claude-sonnet":    { label: "Claude Sonnet",      icon: "🧠", color: "bg-violet-100 text-violet-700" },
+                                    "gpt-4o":           { label: "GPT-4o",             icon: "🟢", color: "bg-green-100 text-green-700" },
+                                    "gemini-2.5-flash": { label: "Gemini 2.5 Flash",   icon: "💎", color: "bg-sky-100 text-sky-700" },
+                                    "qwen3":            { label: "Qwen 2.5 3B · GPU",  icon: "🖥️", color: "bg-gray-100 text-gray-600" },
+                                };
                                 const bot = document.createElement("div");
-                                bot.className = "flex justify-start";
+                                bot.className = "flex justify-start flex-col gap-1";
                                 const actions: string[] = Array.isArray(payload.actions) ? payload.actions : liveActions;
                                 const actionBadges = actions.length
                                     ? `<div class="mt-2 flex flex-wrap gap-1">${actions.map(() => `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700"></span>`).join("")}</div>`
                                     : "";
-                                bot.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-brand-cream border border-brand-ink/10 text-brand-ink"><p class="whitespace-pre-wrap"></p>${actionBadges}</div>`;
+                                const modelKey = payload.model ?? selectedModel;
+                                const meta = MODEL_META[modelKey] ?? { label: modelKey, icon: "🤖", color: "bg-gray-100 text-gray-600" };
+                                const modelCard = `<div class="flex items-center gap-1 pl-1"><span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${meta.color}">${meta.icon} ${meta.label}</span></div>`;
+                                bot.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-brand-cream border border-brand-ink/10 text-brand-ink"><p class="whitespace-pre-wrap"></p>${actionBadges}</div>${modelCard}`;
                                 (bot.querySelector("p") as HTMLElement).textContent = payload.reply ?? "";
                                 bot.querySelectorAll("span.bg-violet-100").forEach((el, i) => {
                                     (el as HTMLElement).textContent = "⚡ " + actions[i];

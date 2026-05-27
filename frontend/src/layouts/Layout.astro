@@ -1,6 +1,5 @@
 ---
 import "../styles/global.css";
-import { ClientRouter } from "astro:transitions";
 import { t } from "../lib/i18n";
 import ToastContainer from "../components/ToastContainer.astro";
 import Head from "../components/meta/Head.astro";
@@ -42,7 +41,6 @@ const bannerCopy = {
 <html lang={lang} data-theme={theme === "dark" ? "dark" : undefined}>
 	<head>
 		<Head title={title} description={description} lang={lang} />
-		<ClientRouter />
 		{theme === "system" && (
 			<script is:inline>
 				try {
