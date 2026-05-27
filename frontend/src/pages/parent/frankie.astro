@@ -80,7 +80,7 @@ const labels = {
                     <option value="claude-sonnet">🧠 Claude Sonnet — smarter, slower</option>
                     <option value="gpt-4o">🟢 GPT-4o</option>
                     <option value="gemini-2.5-flash">💎 Gemini 2.5 Flash</option>
-                    <option value="qwen-coder">🖥️ Qwen-Coder — local GPU, free</option>
+                    <option value="mistral-nemo">🖥️ Mistral Nemo — local GPU, free</option>
                 </select>
             </div>
         </header>
@@ -141,8 +141,12 @@ const labels = {
         const scroll = document.getElementById("chat-scroll");
         if (!form || !input) return;
 
-        // Restore persisted model choice
-        const savedModel = localStorage.getItem("jarvis-model") || "claude-haiku";
+        // Restore persisted model choice (migrate deprecated qwen-coder → mistral-nemo)
+        let savedModel = localStorage.getItem("jarvis-model") || "claude-haiku";
+        if (savedModel === "qwen-coder") {
+            savedModel = "mistral-nemo";
+            localStorage.setItem("jarvis-model", savedModel);
+        }
         if (modelSelect) {
             modelSelect.value = savedModel;
             modelSelect.addEventListener("change", () => {

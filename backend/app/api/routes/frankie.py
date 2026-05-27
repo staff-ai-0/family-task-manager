@@ -20,7 +20,7 @@ from app.services.frankie_service import FrankieService
 router = APIRouter()
 
 
-ALLOWED_MODELS = {"claude-haiku", "claude-sonnet", "qwen-coder", "gpt-4o", "gemini-2.5-flash"}
+ALLOWED_MODELS = {"claude-haiku", "claude-sonnet", "mistral-nemo", "gpt-4o", "gemini-2.5-flash"}
 
 
 class ChatRequest(BaseModel):
