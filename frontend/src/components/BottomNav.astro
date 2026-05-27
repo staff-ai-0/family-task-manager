@@ -1,6 +1,7 @@
 ---
 import { t } from "../lib/i18n";
 import { apiFetch } from "../lib/api";
+import { NAV_VERSION } from "../lib/nav-version";
 
 interface Props {
     active?: "tasks" | "rewards" | "profile" | "parent" | "budget" | "notifications" | "pet" | "chat";
@@ -33,6 +34,7 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
 <div class="bottom-nav-spacer" aria-hidden="true" transition:persist="bottom-nav-spacer"></div>
 
 <nav
+    data-nav-ver={NAV_VERSION}
     class="fixed bottom-0 left-0 right-0 bg-brand-cream border-t-2 border-brand-ink safe-area-bottom z-50"
     transition:persist="bottom-nav"
 >
@@ -170,7 +172,17 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
         });
     }
 
-    document.addEventListener("astro:page-load", syncNav);
+    document.addEventListener("astro:page-load", () => {
+        // Stale-nav guard: persisted nav predates a server restart/deploy.
+        // Versions differ → force a hard reload so the fresh nav is rendered.
+        const navVer = document.querySelector<HTMLElement>("[data-nav-ver]")?.dataset?.navVer;
+        const pageVer = document.querySelector<HTMLMetaElement>('meta[name="nav-ver"]')?.content;
+        if (navVer && pageVer && navVer !== pageVer) {
+            window.location.reload();
+            return;
+        }
+        syncNav();
+    });
 </script>
 
 <style>
