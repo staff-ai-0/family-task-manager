@@ -80,6 +80,12 @@ const bannerCopy = {
     <slot name="overlays" />
 
     <script define:vars={{ sentLabel: bannerCopy.sent, resendLabel: bannerCopy.resend }}>
+        // ClientRouter removed — dispatch astro:page-load once on initial load.
+        // rAF ensures all module scripts have registered their listeners first.
+        requestAnimationFrame(() => {
+            document.dispatchEvent(new Event('astro:page-load'));
+        });
+
         document.addEventListener('astro:page-load', () => {
             (async () => {
                 try {
