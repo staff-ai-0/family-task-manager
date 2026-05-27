@@ -20,8 +20,12 @@ from app.services.frankie_service import FrankieService
 router = APIRouter()
 
 
+ALLOWED_MODELS = {"claude-haiku", "claude-sonnet", "qwen-coder", "gpt-4o", "gemini-2.5-flash"}
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
+    model: Optional[str] = Field(None, description="LiteLLM model alias override")
 
 
 class ChatReply(BaseModel):
@@ -45,12 +49,14 @@ async def chat(
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
+    model = data.model if data.model in ALLOWED_MODELS else None
     try:
         return await FrankieService.chat(
             db,
             family_id=to_uuid_required(current_user.family_id),
             user_id=to_uuid_required(current_user.id),
             message=data.message,
+            model=model,
         )
     except ValidationError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
@@ -63,11 +69,13 @@ async def chat_stream(
     db: AsyncSession = Depends(get_db),
 ):
     """SSE stream of chat progress. Client consumes via fetch + ReadableStream."""
+    model = data.model if data.model in ALLOWED_MODELS else None
     gen = FrankieService.chat_stream(
         db,
         family_id=to_uuid_required(current_user.family_id),
         user_id=to_uuid_required(current_user.id),
         message=data.message,
+        model=model,
     )
     return StreamingResponse(
         gen,

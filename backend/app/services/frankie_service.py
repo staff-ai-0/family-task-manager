@@ -162,6 +162,7 @@ class FrankieService:
         family_id: UUID,
         user_id: UUID,
         message: str,
+        model: str | None = None,
     ):
         """Async generator yielding SSE event lines.
 
@@ -210,10 +211,11 @@ class FrankieService:
 
             actions_taken: list[str] = []
             reply = ""
+            effective_model = model or CHAT_MODEL
 
             for hop in range(MAX_TOOL_HOPS + 1):
                 completion = client.chat.completions.create(
-                    model=CHAT_MODEL,
+                    model=effective_model,
                     max_tokens=512,
                     messages=msgs,
                     tools=tool_definitions(),
@@ -307,6 +309,7 @@ class FrankieService:
         family_id: UUID,
         user_id: UUID,
         message: str,
+        model: str | None = None,
     ) -> dict:
         if not settings.LITELLM_API_KEY:
             raise ValidationError(
@@ -344,11 +347,12 @@ class FrankieService:
 
         actions_taken: list[str] = []
         reply = ""
+        effective_model = model or CHAT_MODEL
 
         for hop in range(MAX_TOOL_HOPS + 1):
             try:
                 completion = client.chat.completions.create(
-                    model=CHAT_MODEL,
+                    model=effective_model,
                     max_tokens=512,
                     messages=msgs,
                     tools=tool_definitions(),
