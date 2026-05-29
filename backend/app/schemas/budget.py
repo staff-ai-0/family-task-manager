@@ -4,7 +4,9 @@ Budget-related Pydantic schemas
 Request and response models for budget management operations.
 """
 
-from pydantic import BaseModel, Field, field_validator
+from decimal import Decimal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, List
 from datetime import date as DateType, datetime
 from uuid import UUID
@@ -113,6 +115,11 @@ class AccountBase(BaseModel):
             raise ValueError(f'type must be one of: {", ".join(allowed_types)}')
         return v
 
+    card_last4: Optional[str] = Field(
+        None, min_length=4, max_length=4, pattern=r"^\d{4}$",
+        description="Last 4 digits of the card; used for receipt scanner auto-detect",
+    )
+
     @field_validator('currency')
     @classmethod
     def validate_currency(cls, v):
@@ -136,6 +143,10 @@ class AccountUpdate(BaseModel):
     sort_order: Optional[int] = Field(None, ge=0)
     starting_balance: Optional[int] = Field(None, description="Initial account balance in cents")
     currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    card_last4: Optional[str] = Field(
+        None, min_length=4, max_length=4, pattern=r"^\d{4}$",
+        description="Last 4 digits of the card; used for receipt scanner auto-detect",
+    )
 
     @field_validator('type')
     @classmethod
@@ -779,3 +790,65 @@ class ReceiptDraftResponse(BaseModel):
 # Rebuild models to resolve forward references
 CategoryWithGroup.model_rebuild()
 CategoryGroupWithCategories.model_rebuild()
+
+
+# ============================================================================
+# RECEIPT SCANNER V2 SCHEMAS
+# ============================================================================
+
+class TransactionItemRead(BaseModel):
+    id: UUID
+    transaction_id: UUID
+    name: str
+    normalized_name: str
+    qty: Optional[Decimal] = None
+    unit_price_cents: Optional[int] = None
+    total_cents: int
+    category_id: Optional[UUID] = None
+    brand: Optional[str] = None
+    raw_text: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ItemTrend(BaseModel):
+    normalized_name: str
+    avg_unit_cents: int
+    last_unit_cents: int
+    pct_change: float  # e.g. 0.142 = +14.2%
+    sample_size: int
+
+
+class AccountMatch(BaseModel):
+    strategy: str  # "card_last4" | "last_used" | "override"
+    matched_card_last4: Optional[str] = None
+
+
+class DupWarning(BaseModel):
+    existing_transaction_id: UUID
+    scanned_at: datetime
+    payee: Optional[str] = None
+    amount_cents: int
+
+
+class FXInfo(BaseModel):
+    rate: Decimal
+    original_amount_cents: int
+    original_currency: str
+
+
+class ScanReceiptResponse(BaseModel):
+    success: bool
+    transaction_id: Optional[UUID] = None
+    transaction: Optional[TransactionResponse] = None
+    items: list[TransactionItemRead] = []
+    account_match: Optional[AccountMatch] = None
+    fx: Optional[FXInfo] = None
+    trends: list[ItemTrend] = []
+    confidence: float = 0.0
+    shopping_auto_checked: list[str] = []
+    warnings: list[str] = []
+    dup_warning: Optional[DupWarning] = None
+    scanned_preview: Optional[dict] = None
+    draft_id: Optional[UUID] = None
+    message: Optional[str] = None
