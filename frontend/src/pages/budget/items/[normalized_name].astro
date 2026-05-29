@@ -1,0 +1,50 @@
+---
+import Layout from "@layouts/Layout.astro";
+import BudgetNavNew from "@components/BudgetNavNew.astro";
+import BottomNav from "@components/BottomNav.astro";
+import DrawerMenu from "@components/DrawerMenu.astro";
+import { apiFetch } from "@lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
+const { normalized_name } = Astro.params;
+
+const { data: items } = await apiFetch<any[]>(
+  `/api/budget/items?normalized_name=${encodeURIComponent(normalized_name || "")}&limit=100`,
+  { token },
+);
+const { data: trend } = await apiFetch<any>(
+  `/api/budget/items/trend?normalized_name=${encodeURIComponent(normalized_name || "")}`,
+  { token },
+);
+---
+
+<Layout title={normalized_name} lang={lang}>
+  <DrawerMenu lang={lang} />
+  <BudgetNavNew lang={lang} active="transactions" pendingDrafts={0} />
+  <main class="px-4 pb-32 pt-6 max-w-md mx-auto">
+    <h1 class="text-2xl font-display capitalize">{normalized_name}</h1>
+    {trend && (
+      <div class="card p-3 my-3 text-sm">
+        <div>{lang === "es" ? "Promedio 90 días" : "90-day average"}:
+          ${(trend.avg_unit_cents / 100).toFixed(2)}</div>
+        <div>{lang === "es" ? "Último" : "Last"}:
+          ${(trend.last_unit_cents / 100).toFixed(2)}
+          ({(trend.pct_change * 100).toFixed(1)}%)</div>
+      </div>
+    )}
+    <ul class="divide-y divide-fg/10">
+      {(items || []).map(it => (
+        <li class="py-2 flex justify-between">
+          <a href={`/budget/transactions/${it.transaction_id}`} class="flex-1">
+            <div class="text-sm">{it.name}</div>
+            <div class="text-xs text-fg/60">{it.qty ?? 1} × ${(it.unit_price_cents ?? it.total_cents) / 100}</div>
+          </a>
+          <span class="text-sm">${(it.total_cents / 100).toFixed(2)}</span>
+        </li>
+      ))}
+    </ul>
+  </main>
+  <BottomNav lang={lang} active="budget" />
+</Layout>

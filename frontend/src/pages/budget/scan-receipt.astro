@@ -285,7 +285,7 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
                     ? `<span class="text-xs text-brand-ink-soft mr-1">${esc(it.qty)}×</span>`
                     : "";
                 return `<li class="flex justify-between items-center py-1.5 text-sm">
-                    <span class="text-brand-ink">${qtyLabel}${esc(it.name)}${badge}</span>
+                    <span class="text-brand-ink">${qtyLabel}<a href="/budget/items/${encodeURIComponent(it.normalized_name)}" class="underline-offset-4 hover:underline">${esc(it.name)}</a>${badge}</span>
                     <span class="text-brand-ink font-medium num">${money(it.total_cents, currency)}</span>
                 </li>`;
             }).join("");
