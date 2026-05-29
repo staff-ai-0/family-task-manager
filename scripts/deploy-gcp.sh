@@ -249,8 +249,8 @@ sync_code() {
 }
 
 # ── Build & start ─────────────────────────────────────────────────────────
-build_and_start() {
-    section "Building and Starting Services"
+build_only() {
+    section "Building Images"
     gssh_heredoc <<ENDSSH
 set -e
 cd $REMOTE_PATH
@@ -264,9 +264,57 @@ fi
 if [[ "$SKIP_BUILD" != "true" ]]; then
     echo "🏗️  Building images…"
     sudo docker compose --env-file .env -f $COMPOSE_FILE build --no-cache backend frontend
+else
+    echo "⏭️  Skip build (using cached images)"
 fi
+ENDSSH
+    success "Images ready"
+}
 
-echo "🚀 Starting services…"
+# Run migrations against the NEW backend image BEFORE recreating the long-
+# running backend container. Uses 'docker compose run --rm' so the old
+# backend keeps serving traffic until 'up -d' replaces it after the schema
+# is migrated. Closes the zero-downtime gap where 'up -d' would otherwise
+# bring a new-code container against an old schema and crash on missing
+# columns until 'migrate' ran.
+migrate_pre_start() {
+    section "Running Alembic Migrations (pre-start, against new image)"
+    gssh_heredoc <<ENDSSH
+set -e
+cd $REMOTE_PATH
+
+# postgres + redis must be up so the new-image alembic run can connect.
+# 'up -d --no-recreate' brings them up if needed without touching backend.
+sudo docker compose --env-file .env -f $COMPOSE_FILE up -d --no-recreate postgres redis
+
+# Wait for postgres healthy (60s budget — enough for cold start).
+TIMEOUT=60; ELAPSED=0
+while [[ \$ELAPSED -lt \$TIMEOUT ]]; do
+    if sudo docker compose --env-file .env -f $COMPOSE_FILE ps --format json 2>/dev/null \
+        | grep -E '"Service":"postgres"' | grep -q '"Health":"healthy"'; then
+        break
+    fi
+    sleep 2; ELAPSED=\$((ELAPSED+2)); echo -n "."
+done
+echo
+
+# 'run --rm' uses the freshly-built image without recreating the running
+# backend container. Old backend keeps serving traffic during alembic.
+sudo docker compose --env-file .env -f $COMPOSE_FILE run --rm -T \
+    --no-deps backend alembic upgrade head
+sudo docker compose --env-file .env -f $COMPOSE_FILE run --rm -T \
+    --no-deps backend alembic current
+ENDSSH
+    success "Migrations done — DB schema matches new image"
+}
+
+start_services() {
+    section "Starting Services"
+    gssh_heredoc <<ENDSSH
+set -e
+cd $REMOTE_PATH
+
+echo "🚀 Recreating containers with new image (DB already migrated)…"
 sudo docker compose --env-file .env -f $COMPOSE_FILE up -d
 
 echo "⏳ Waiting for healthchecks (max 180s)…"
@@ -290,13 +338,12 @@ ENDSSH
     success "Services running"
 }
 
-# ── Migrate ───────────────────────────────────────────────────────────────
+# ── Migrate (verification only — real migration ran pre-start) ────────────
 migrate() {
-    section "Running Alembic Migrations"
+    section "Verifying Alembic Head"
     gssh_heredoc <<ENDSSH
 set -e
 cd $REMOTE_PATH
-sudo docker compose --env-file .env -f $COMPOSE_FILE exec -T backend alembic upgrade head
 sudo docker compose --env-file .env -f $COMPOSE_FILE exec -T backend alembic current
 ENDSSH
     success "Migrations done"
@@ -377,7 +424,9 @@ main() {
     confirm
     [[ "$SKIP_BACKUP"     == "true" ]] || backup_db
     sync_code
-    build_and_start
+    build_only
+    [[ "$SKIP_MIGRATIONS" == "true" ]] || migrate_pre_start
+    start_services
     [[ "$SKIP_MIGRATIONS" == "true" ]] || migrate
     [[ "$SKIP_SEED"       == "true" ]] || seed
     verify
