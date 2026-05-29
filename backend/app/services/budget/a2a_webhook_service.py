@@ -9,7 +9,7 @@ from typing import Optional
 from uuid import UUID
 
 import httpx
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.a2a import A2AWebhookDelivery, FamilyA2AWebhook
@@ -148,6 +148,8 @@ class A2AWebhookService:
     @staticmethod
     async def sweep_retries(db: AsyncSession, limit: int = 50) -> int:
         now = datetime.now(timezone.utc)
+        # SELECT ... FOR UPDATE SKIP LOCKED so two concurrent sweeps
+        # (cron + manual trigger) never claim the same row.
         result = await db.execute(
             select(A2AWebhookDelivery.id).where(or_(
                 A2AWebhookDelivery.status == "pending",
@@ -156,9 +158,20 @@ class A2AWebhookService:
                     A2AWebhookDelivery.next_retry_at.isnot(None),
                     A2AWebhookDelivery.next_retry_at <= now,
                 ),
-            )).limit(limit)
+            )).with_for_update(skip_locked=True).limit(limit)
         )
         ids = [r[0] for r in result.all()]
+        if ids:
+            # Push next_retry_at 10 minutes into the future so a parallel
+            # sweep that started before this commit cannot re-claim these
+            # rows. dispatch_once will overwrite next_retry_at with the
+            # real backoff value (or clear it on success).
+            await db.execute(
+                update(A2AWebhookDelivery).where(
+                    A2AWebhookDelivery.id.in_(ids)
+                ).values(next_retry_at=now + timedelta(minutes=10))
+            )
+            await db.commit()
         for _id in ids:
             await A2AWebhookService.dispatch_once(db, _id)
         return len(ids)
