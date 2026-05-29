@@ -442,9 +442,16 @@ async def scan_and_create_transaction(
     # v1 implementation re-queried both per gate / per item, which made
     # an 80-item receipt issue ~165 redundant SELECTs.
     from app.models.user import User as _User
-    _user_row = (await db.execute(
-        select(_User).where(_User.family_id == family_id).limit(1)
-    )).scalar_one_or_none()
+    _user_row = None
+    if user_id is not None:
+        _user_row = await db.get(_User, user_id)
+    if _user_row is None:
+        # Fallback: any user in the family (preserves v1-test-path behavior
+        # where user_id may be None). Plans are family-scoped so the result
+        # is still correct.
+        _user_row = (await db.execute(
+            select(_User).where(_User.family_id == family_id).limit(1)
+        )).scalar_one_or_none()
     _plan = await get_family_plan(db, _user_row) if _user_row else None
     _plan_name = _plan.name if _plan else "free"
     _plan_rank = PLAN_ORDER.get(_plan_name, 0)
@@ -627,8 +634,15 @@ async def scan_and_create_transaction(
     # (6) Auto-categorize (transaction header + each item) ------------------
     # Uses the cached rule list resolved at the top of this function — one
     # SELECT instead of N+1 over the items.
+    # Pass the merchant name as `description` too so rules keyed on
+    # match_field='description' or 'both' fire the same as v1, which
+    # categorized off the BudgetTransaction.notes value (the notes here
+    # are built from receipt.payee_name via _build_notes).
+    _header_notes_for_match = receipt.payee_name or ""
     header_cat = CategorizationRuleService.match_with_cached_rules(
-        cached_rules, payee=receipt.payee_name,
+        cached_rules,
+        payee=receipt.payee_name,
+        description=_header_notes_for_match,
     )
     if header_cat:
         txn.category_id = header_cat
@@ -636,6 +650,7 @@ async def scan_and_create_transaction(
         it.category_id = CategorizationRuleService.match_with_cached_rules(
             cached_rules,
             payee=receipt.payee_name,
+            description=receipt.payee_name,
             item_name=it.name,
         )
     await db.commit()
@@ -817,21 +832,25 @@ async def _find_or_create_payee(
     but NOT committed — the caller's commit / rollback boundary controls
     durability.
     """
-    if not payee_name:
+    if not payee_name or not payee_name.strip():
         return None
-    # Case-insensitive match — vision models often emit "HEB", "Heb",
-    # "h.e.b." for the same store; the v1 strict equality created
-    # duplicate payee rows on every casing variation.
+    # Case-insensitive AND trim-insensitive match. Vision models often emit
+    # "HEB", " Heb ", "h.e.b." for the same store, and may pad with leading
+    # or trailing whitespace; the v1 strict equality created duplicate payee
+    # rows on every casing/whitespace variation. Normalize BOTH sides via
+    # lower(trim()) so an existing " heb " (legacy) still matches "HEB".
     from sqlalchemy import func as _func
-    normalized = payee_name.lower().strip()
+    raw = payee_name.strip()
+    normalized = raw.lower()
     stmt = select(BudgetPayee).where(
         BudgetPayee.family_id == family_id,
-        _func.lower(BudgetPayee.name) == normalized,
+        _func.lower(_func.trim(BudgetPayee.name)) == normalized,
     )
     payee = (await db.execute(stmt)).scalars().first()
     if payee:
         return payee.id
-    new_payee = BudgetPayee(family_id=family_id, name=payee_name)
+    # Store the trimmed value so we don't accumulate whitespace variants.
+    new_payee = BudgetPayee(family_id=family_id, name=raw)
     db.add(new_payee)
     await db.flush()
     return new_payee.id
