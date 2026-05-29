@@ -259,7 +259,17 @@ async def test_pipeline_stores_fx_when_currencies_differ(
         "app.services.fx_service.FXService.get_rate", fake_fx,
     )
 
-    # Pro plan: fx_cross_charge is allowed
+    # Pro plan: fx_cross_charge is allowed. The scanner pipeline resolves
+    # the plan once per request via ``get_family_plan`` and reuses the
+    # rank, so patch the resolver directly. (The legacy
+    # ``is_feature_enabled`` patch is kept for the deprecated helper path.)
+    from app.core.premium import FamilyPlan
+    async def fake_plan(_db, _user):
+        return FamilyPlan(name="pro", limits={}, status="active")
+    monkeypatch.setattr(
+        "app.services.budget.receipt_scanner_service.get_family_plan",
+        fake_plan,
+    )
     monkeypatch.setattr(
         "app.services.budget.receipt_scanner_service.is_feature_enabled",
         AsyncMock(return_value=True),
