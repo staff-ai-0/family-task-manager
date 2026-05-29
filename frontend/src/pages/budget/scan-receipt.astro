@@ -182,11 +182,13 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
 
         // ── Scan helpers (inline fetch — keeps script self-contained) ─────────
         async function scanReceipt(file, opts) {
+            // account_id rides the multipart form body (Form(...) on the
+            // route); force stays as a Query parameter.
             const form = new FormData();
             form.append("file", file);
+            if (opts && opts.account_id) form.append("account_id", opts.account_id);
             const q = new URLSearchParams();
             if (opts && opts.force) q.set("force", "true");
-            if (opts && opts.account_id) q.set("account_id", opts.account_id);
             const url = `/api/budget/transactions/scan-receipt${q.toString() ? "?" + q : ""}`;
             const resp = await fetch(url, {
                 method: "POST",

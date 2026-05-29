@@ -941,11 +941,14 @@ export async function scanReceipt(
     file: File,
     opts: { force?: boolean; account_id?: string } = {},
 ): Promise<{ status: number; body: ScanReceiptResponse }> {
+    // account_id is declared on the backend as a Form field (it lives in
+    // the multipart body alongside the file). force stays in the query
+    // string because the route declares it as Query(...).
     const form = new FormData();
     form.append("file", file);
+    if (opts.account_id) form.append("account_id", opts.account_id);
     const q = new URLSearchParams();
     if (opts.force) q.set("force", "true");
-    if (opts.account_id) q.set("account_id", opts.account_id);
     const url = `/api/budget/transactions/scan-receipt${q.toString() ? "?" + q : ""}`;
     const resp = await fetch(url, {
         method: "POST",
