@@ -479,11 +479,9 @@ async def account_factory(db: AsyncSession):
 async def transaction_factory_for_account(db: AsyncSession, family):
     """Factory that creates a BudgetTransaction on a specific account.
 
-    NOTE: BudgetTransaction has no created_by_id / user_id column as of the
-    current schema (only deleted_by_id exists). The user_id kwarg is accepted
-    for API compatibility with the test but is not persisted.
-    TODO: introduce created_by_id on budget_transactions to enable per-user
-    last-used fallback in AccountMatchingService.
+    The ``user_id`` kwarg is persisted as ``created_by_id`` so the per-user
+    last-used fallback in AccountMatchingService (Strategy 3a) actually
+    exercises the filter path under test.
     """
     from app.models.budget import BudgetTransaction
     from datetime import date as date_type
@@ -494,6 +492,7 @@ async def transaction_factory_for_account(db: AsyncSession, family):
             account_id=account_id,
             date=date_type.today(),
             amount=amount,
+            created_by_id=user_id,
         )
         db.add(tx)
         await db.commit()

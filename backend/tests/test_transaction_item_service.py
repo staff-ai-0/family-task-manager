@@ -36,6 +36,22 @@ async def test_bulk_create_persists_items(db, family, transaction):
     assert items[0].normalized_name == "leche alpura"
     assert items[1].normalized_name == "pan integral"
 
+    # bulk_create only flushes now; durability requires explicit commit.
+    # Without this, the assertions above pass on in-memory Python objects
+    # that may never reach disk — a regression where bulk_create silently
+    # drops the flush would still fly through the test.
+    await db.commit()
+
+    # Re-read straight from the DB to prove the rows actually persisted.
+    from app.models.budget import BudgetTransactionItem
+    from sqlalchemy import func, select
+    count = (await db.execute(
+        select(func.count(BudgetTransactionItem.id)).where(
+            BudgetTransactionItem.transaction_id == transaction.id,
+        )
+    )).scalar_one()
+    assert count == 2
+
 
 @pytest.mark.asyncio
 async def test_get_trend_returns_none_below_sample_size(db, family):

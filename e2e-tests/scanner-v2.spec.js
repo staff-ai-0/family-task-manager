@@ -10,7 +10,13 @@ test.describe('Scanner v2', () => {
     await expect(page.locator('#confirm-card.hidden')).toHaveCount(1);
   });
 
-  // TODO: add real E2E coverage for: duplicate modal flow, FX cross-currency display,
-  // IVA pill rendering, item-trend badges. Each needs a mock-able backend stub for the
-  // /api/budget/transactions/scan-receipt POST. Tracked in: TBD-followup.
+  // The following four flows need a mock-able backend stub for the
+  // /api/budget/transactions/scan-receipt POST. Each is shipped as test.skip
+  // (with a comment pointing at the backend coverage that DOES exist) so
+  // CI shows "skipped: 4" and the coverage gap stays visible — better than
+  // silently passing with one happy-path test.
+  test.skip("duplicate modal flow — needs API mock layer (see test_endpoint_returns_409_on_dup)", () => {});
+  test.skip("FX display when accounts differ — covered by test_pipeline_stores_fx_when_currencies_differ", () => {});
+  test.skip("IVA pill renders when present — covered by test_pipeline_creates_tx_with_items_and_fx", () => {});
+  test.skip("trend badges only when sample_size >= 3 — covered by test_get_trend_returns_null_below_sample", () => {});
 });
