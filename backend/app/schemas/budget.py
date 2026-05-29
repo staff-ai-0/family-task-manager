@@ -106,6 +106,10 @@ class AccountBase(BaseModel):
         min_length=3, max_length=3,
         description="ISO 4217 currency code. All accounts in a family must share the same currency — reports/balances do not convert.",
     )
+    card_last4: Optional[str] = Field(
+        None, min_length=4, max_length=4, pattern=r"^\d{4}$",
+        description="Last 4 digits of the card; used for receipt scanner auto-detect",
+    )
 
     @field_validator('type')
     @classmethod
@@ -114,11 +118,6 @@ class AccountBase(BaseModel):
         if v not in allowed_types:
             raise ValueError(f'type must be one of: {", ".join(allowed_types)}')
         return v
-
-    card_last4: Optional[str] = Field(
-        None, min_length=4, max_length=4, pattern=r"^\d{4}$",
-        description="Last 4 digits of the card; used for receipt scanner auto-detect",
-    )
 
     @field_validator('currency')
     @classmethod
@@ -272,6 +271,12 @@ class TransactionResponse(TransactionBase):
     family_id: UUID
     created_at: datetime
     updated_at: datetime
+    # Scanner v2 fields — populated by the receipt scanner pipeline
+    card_last4: Optional[str] = Field(None, min_length=4, max_length=4, pattern=r"^\d{4}$")
+    iva_cents: Optional[int] = None
+    fx_rate: Optional[Decimal] = None
+    original_amount_cents: Optional[int] = None
+    original_currency: Optional[str] = Field(None, min_length=3, max_length=3)
 
     class Config:
         from_attributes = True

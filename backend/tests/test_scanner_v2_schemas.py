@@ -14,6 +14,12 @@ def test_account_card_last4_validates_format():
         AccountCreate(name="x", type="credit", currency="MXN", card_last4="12a4")
     with pytest.raises(PydanticValidationError):
         AccountCreate(name="x", type="credit", currency="MXN", card_last4="12345")
+    # 3-digit should be rejected (min_length=4)
+    with pytest.raises(PydanticValidationError):
+        AccountCreate(name="x", type="credit", currency="MXN", card_last4="123")
+    # None is allowed (optional field)
+    a = AccountCreate(name="x", type="credit", currency="MXN", card_last4=None)
+    assert a.card_last4 is None
 
 
 def test_item_trend_round_trip():
