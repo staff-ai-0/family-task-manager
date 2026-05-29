@@ -60,21 +60,23 @@ async def test_wave4_new_columns_exist(db: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_card_last4_backfill_from_name(db: AsyncSession, family):
-    """Migration backfill regex captures **9222 / ***313 / 'terminada en 1234' patterns."""
+    """Migration backfill regex captures **9222 / ***313 / 'terminada en 1234' / XXXX4321 patterns."""
     from app.models.budget import BudgetAccount
     a1 = BudgetAccount(family_id=family.id, name="Mastercard **9222", type="credit")
     a2 = BudgetAccount(family_id=family.id, name="Cheques Banamex ***313", type="checking")
     a3 = BudgetAccount(family_id=family.id, name="Tarjeta terminada en 1234", type="credit")
-    db.add_all([a1, a2, a3])
+    a4 = BudgetAccount(family_id=family.id, name="XXXX4321", type="credit")
+    db.add_all([a1, a2, a3, a4])
     await db.commit()
     # Re-run the backfill UPDATE the migration emits; it must be idempotent.
     await db.execute(text(
         "UPDATE budget_accounts SET card_last4 = "
-        "regexp_replace(name, '.*(?:\\*{2,}|terminada en )(\\d{4}).*', '\\1') "
-        "WHERE name ~* '(\\*{2,}|terminada en )\\d{4}' AND card_last4 IS NULL"
+        "regexp_replace(name, '.*(?:\\*{2,}|terminada en |XXXX|xxxx)(\\d{4}).*', '\\1') "
+        "WHERE name ~* '(\\*{2,}|terminada en |XXXX|xxxx)\\d{4}' AND card_last4 IS NULL"
     ))
     await db.commit()
-    await db.refresh(a1); await db.refresh(a2); await db.refresh(a3)
+    await db.refresh(a1); await db.refresh(a2); await db.refresh(a3); await db.refresh(a4)
     assert a1.card_last4 == "9222"
     assert a2.card_last4 == "313" or a2.card_last4 is None  # 3-digit suffix won't backfill (4 required)
     assert a3.card_last4 == "1234"
+    assert a4.card_last4 == "4321"
