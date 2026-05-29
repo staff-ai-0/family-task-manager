@@ -54,3 +54,45 @@ async def test_returns_none_when_no_accounts_at_all(db, family, user):
         card_last4=None, receipt_currency="MXN",
     )
     assert pick.account_id is None
+    assert pick.strategy == "none"
+
+
+@pytest.mark.asyncio
+async def test_override_account_id_wins_when_valid(db, family, user, account_factory):
+    a = await account_factory(family.id, name="Override target", currency="MXN")
+    pick = await AccountMatchingService.match(
+        db, family.id, user_id=user.id,
+        card_last4="9222", receipt_currency="MXN",
+        override_account_id=a.id,
+    )
+    assert pick.strategy == "override"
+    assert pick.account_id == a.id
+
+
+@pytest.mark.asyncio
+async def test_override_from_other_family_is_silently_ignored(
+    db, family, other_family, user, account_factory,
+):
+    """An override pointing to another family's account is dropped silently,
+    matching the documented behavior. The method falls through to the next
+    strategy (here: 'none' because no other accounts exist)."""
+    other_acct = await account_factory(other_family.id, name="OF", currency="MXN")
+    pick = await AccountMatchingService.match(
+        db, family.id, user_id=user.id,
+        card_last4=None, receipt_currency="MXN",
+        override_account_id=other_acct.id,
+    )
+    assert pick.strategy != "override"
+    assert pick.account_id is None
+
+
+@pytest.mark.asyncio
+async def test_card_last4_skips_closed_account(db, family, user, account_factory):
+    closed_acct = await account_factory(
+        family.id, name="closed", card_last4="9222", currency="MXN", closed=True,
+    )
+    pick = await AccountMatchingService.match(
+        db, family.id, user_id=user.id,
+        card_last4="9222", receipt_currency="MXN",
+    )
+    assert pick.strategy != "card_last4"

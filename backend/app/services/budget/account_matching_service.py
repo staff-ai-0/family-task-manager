@@ -56,6 +56,12 @@ class AccountMatchingService:
                              same card_last4), or None.
         override_account_id: Explicit account chosen by the caller; validated
                              for ownership before accepting.
+
+        NOTE: an `override_account_id` that does NOT belong to ``family_id``
+        is silently ignored — the method falls through to the next strategy
+        rather than raising. Callers are expected to pre-validate ownership
+        of an explicit override (the scan-receipt endpoint does this via
+        ``AccountService.get_by_id``).
         """
 
         # --- Strategy 1: caller override ----------------------------------------

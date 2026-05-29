@@ -457,13 +457,15 @@ async def account_factory(db: AsyncSession):
     async def _make(family_id, *, name: str = "Test Account",
                     card_last4: str | None = None,
                     currency: str = "MXN",
-                    account_type: str = "checking"):
+                    account_type: str = "checking",
+                    closed: bool = False):
         acct = BudgetAccount(
             family_id=family_id,
             name=name,
             type=account_type,
             currency=currency,
             card_last4=card_last4,
+            closed=closed,
         )
         db.add(acct)
         await db.commit()
