@@ -22,6 +22,7 @@ import os
 import re
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from uuid import UUID
 
@@ -32,11 +33,18 @@ from openai import OpenAI
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
+from app.core.premium import FEATURE_MIN_PLAN, get_family_plan
 from app.models.budget import BudgetPayee, BudgetTransaction
 from app.schemas.budget import TransactionCreate
 from app.services.budget.transaction_service import TransactionService
 from app.services.budget.categorization_rule_service import CategorizationRuleService
 from app.services.budget.receipt_draft_service import ReceiptDraftService
+
+
+# Plan rank used by is_feature_enabled() to compare a family's plan against
+# the minimum plan required for a given feature. Mirrors core/premium.py's
+# tier ordering without importing the SubscriptionPlan model.
+_PLAN_ORDER = {"free": 0, "plus": 1, "pro": 2}
 
 
 # LiteLLM model alias. Registered in /mnt/nvme/docker-prod/litellm-proxy/
@@ -298,123 +306,336 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
     )
 
 
+async def is_feature_enabled(
+    db: AsyncSession, family_id: UUID, feature: str,
+) -> bool:
+    """Cheap boolean check for an optional pipeline feature.
+
+    Unlike ``app.core.premium.require_feature``, this never raises and
+    does not increment usage. Used for the per-call gates inside the
+    scan pipeline — fx_cross_charge, item_trends, a2a_webhook — where a
+    "False" result silently disables the feature rather than rejecting
+    the request.
+
+    Resolves any user in the family to read the plan via
+    ``get_family_plan`` and compares the plan tier to ``FEATURE_MIN_PLAN``.
+    Returns False when no user exists for the family (shouldn't happen
+    in practice but is the safe default).
+    """
+    from app.models.user import User
+
+    r = await db.execute(
+        select(User).where(User.family_id == family_id).limit(1)
+    )
+    user = r.scalar_one_or_none()
+    if user is None:
+        return False
+    plan = await get_family_plan(db, user)
+    min_plan = FEATURE_MIN_PLAN.get(feature, "free")
+    return _PLAN_ORDER.get(plan.name, 0) >= _PLAN_ORDER.get(min_plan, 0)
+
+
 async def scan_and_create_transaction(
     db: AsyncSession,
     family_id: UUID,
-    account_id: UUID,
-    image_bytes: bytes,
-    media_type: str,
+    account_id: Optional[UUID] = None,
+    image_bytes: bytes = b"",
+    media_type: str = "image/jpeg",
+    user_id: Optional[UUID] = None,
+    force: bool = False,
 ) -> dict:
-    """Scan a receipt and create a transaction from the extracted data.
+    """Run the v2 7-stage receipt-scan pipeline.
+
+    Stages:
+        (1) Vision extract
+        (2) Account auto-detect (card_last4 → last_used → none)
+        (3) Drafts routing (low confidence | no accounts | currency mismatch
+            on non-Pro plans)
+        (4) Duplicate guard (60-second / 1% same-payee window)
+        (5) FX cross-charge (for Pro plans when receipt currency != account
+            currency)
+        (6) Persist transaction + items + auto-categorize header and each
+            line item
+        (7) Fan-out: shopping auto-check, item-price trends, a2a webhook
 
     Args:
-        db: Database session
-        family_id: Family ID
-        account_id: Target account
-        image_bytes: Receipt image bytes
-        media_type: Image MIME type
+        db: Async DB session
+        family_id: Tenant scope
+        account_id: Caller-supplied account override; when None the
+            AccountMatchingService picks one
+        image_bytes: Raw bytes of the receipt image / rasterized PDF page
+        media_type: MIME type
+        user_id: Authenticated user — reserved for the future per-user
+            last-used account fallback once ``created_by_id`` is added to
+            ``budget_transactions``. Optional (defaults to None) to keep
+            the v1 endpoint callable until T10 lands.
+        force: When True, bypass the duplicate guard. Set by the endpoint
+            in response to the 409 dup_warning prompt.
 
     Returns:
-        Dict with scanned data, created transaction ID, and metadata
+        dict with the v2 response shape (success, transaction_id, items,
+        account_match, fx, trends, confidence, shopping_auto_checked,
+        warnings, dup_warning, scanned_preview, draft_id, message).
     """
-    # Scan the receipt
+    # Lazy imports — these services live in the same package and would
+    # otherwise create an import cycle at module-load time.
+    from app.services.budget.account_matching_service import (
+        AccountMatchingService,
+    )
+    from app.services.budget.duplicate_guard_service import (
+        DuplicateGuardService,
+    )
+    from app.services.budget.transaction_item_service import (
+        TransactionItemService,
+    )
+    from app.services.budget.a2a_webhook_service import A2AWebhookService
+    from app.services.fx_service import FXService
+
+    # (1) Vision extract -----------------------------------------------------
     receipt = await scan_receipt(image_bytes, media_type)
 
-    scanned_data_dict = {
+    scanned_dict = {
         "date": receipt.date.isoformat() if receipt.date else None,
         "total_amount": receipt.total_amount,
         "payee_name": receipt.payee_name,
         "items": receipt.items,
         "currency": receipt.currency,
+        "card_last4": receipt.card_last4,
+        "iva_cents": receipt.iva_cents,
     }
 
+    # HITL: low confidence routes to the drafts queue (unchanged from v1)
     if receipt.confidence < 0.3 or receipt.total_amount is None:
-        # Save for human review instead of silently discarding
-        draft = await ReceiptDraftService.create(
-            db=db,
-            family_id=family_id,
-            account_id=account_id,
-            scanned_data=scanned_data_dict,
-            confidence=receipt.confidence,
+        return await _route_to_drafts(
+            db, family_id, account_id, image_bytes, receipt, scanned_dict,
+            reason="low_confidence",
         )
-        # Persist the image so the review queue can display it
-        try:
-            os.makedirs(RECEIPT_UPLOADS_DIR, exist_ok=True)
-            img_path = os.path.join(RECEIPT_UPLOADS_DIR, f"{draft.id}.jpg")
-            with open(img_path, "wb") as f:
-                f.write(image_bytes)  # already JPEG (rasterized if PDF)
-            draft.image_url = f"/api/budget/receipt-drafts/{draft.id}/image"
-            await db.commit()
-        except Exception:
-            pass  # image storage failure is non-fatal — draft still exists
-        return {
-            "success": False,
-            "draft_id": str(draft.id),
-            "confidence": receipt.confidence,
-            "scanned_data": scanned_data_dict,
-            "message": "Low confidence — saved for review in the receipt queue.",
-            "transaction_id": None,
-        }
 
-    # Find or create payee
-    payee_id = None
-    if receipt.payee_name:
-        stmt = select(BudgetPayee).where(
-            BudgetPayee.family_id == family_id,
-            BudgetPayee.name == receipt.payee_name,
+    # (2) Account auto-detect ------------------------------------------------
+    match = await AccountMatchingService.match(
+        db, family_id, user_id=user_id,
+        card_last4=receipt.card_last4,
+        receipt_currency=receipt.currency,
+        override_account_id=account_id,
+    )
+    if match.account_id is None:
+        # No accounts at all — drafts queue with no account binding.
+        return await _route_to_drafts(
+            db, family_id, None, image_bytes, receipt, scanned_dict,
+            reason="no_accounts",
         )
-        result = await db.execute(stmt)
-        payee = result.scalars().first()
-        if payee:
-            payee_id = payee.id
-        else:
-            new_payee = BudgetPayee(
-                family_id=family_id,
-                name=receipt.payee_name,
-            )
-            db.add(new_payee)
-            await db.flush()
-            payee_id = new_payee.id
 
-    # Auto-categorize via rules
-    category_id = await CategorizationRuleService.suggest_category(
-        db, family_id,
-        payee=receipt.payee_name,
-        description=None,
+    # Drafts gate: non-Pro and currency mismatch routes to drafts queue.
+    fx_allowed = await is_feature_enabled(db, family_id, "fx_cross_charge")
+    if (
+        match.matched_account_currency
+        and receipt.currency
+        and match.matched_account_currency != receipt.currency
+        and not fx_allowed
+    ):
+        return await _route_to_drafts(
+            db, family_id, match.account_id, image_bytes, receipt,
+            scanned_dict, reason="currency_mismatch",
+        )
+
+    # Resolve payee (needed for dup-guard regardless of force flag — we
+    # want subsequent force=True retries to find the same payee row)
+    payee_id = await _find_or_create_payee(
+        db, family_id, receipt.payee_name,
     )
 
-    # Create the transaction
+    # (3) Duplicate guard ----------------------------------------------------
+    if not force:
+        dup = await DuplicateGuardService.check(
+            db, family_id, payee_id=payee_id,
+            amount_cents=receipt.total_amount,
+        )
+        if dup is not None:
+            # Do NOT commit — the flushed-but-uncommitted new payee row
+            # (if any) will be rolled back when the session closes at the
+            # request boundary. A subsequent force=True call will find/
+            # reuse this payee idempotently via _find_or_create_payee.
+            # We intentionally do not call db.rollback() here: callers
+            # (tests + endpoint) often hold other in-flight reads on the
+            # same session that we must not invalidate.
+            return {
+                "success": False,
+                "transaction_id": None,
+                "dup_warning": {
+                    "existing_transaction_id": str(
+                        dup.existing_transaction_id
+                    ),
+                    "scanned_at": dup.scanned_at.isoformat(),
+                    "amount_cents": dup.amount_cents,
+                    "payee": receipt.payee_name,
+                },
+                "scanned_preview": scanned_dict,
+                "confidence": receipt.confidence,
+                "items": [],
+                "account_match": {
+                    "strategy": match.strategy,
+                    "matched_card_last4": match.matched_card_last4,
+                },
+                "fx": None,
+                "trends": [],
+                "shopping_auto_checked": [],
+                "warnings": [],
+            }
+
+    # (4) FX cross-charge ----------------------------------------------------
+    fx_info: Optional[dict] = None
+    final_amount = receipt.total_amount
+    original_amount_cents: Optional[int] = None
+    original_currency: Optional[str] = None
+    fx_rate: Optional[Decimal] = None
+    warnings: list[str] = []
+    if (
+        match.matched_account_currency
+        and receipt.currency
+        and match.matched_account_currency != receipt.currency
+        and fx_allowed
+    ):
+        rate = await FXService.get_rate(
+            receipt.currency, match.matched_account_currency,
+            on_date=receipt.date or date.today(),
+        )
+        if rate is None:
+            warnings.append("fx_unavailable")
+        else:
+            original_amount_cents = receipt.total_amount
+            original_currency = receipt.currency
+            fx_rate = rate
+            # Convert (signed) — quantize to whole cents with ROUND_HALF_UP
+            final_amount = int(
+                (Decimal(receipt.total_amount) * rate).quantize(
+                    Decimal("1"), rounding=ROUND_HALF_UP,
+                )
+            )
+            fx_info = {
+                "rate": str(rate),
+                "original_amount_cents": original_amount_cents,
+                "original_currency": original_currency,
+            }
+
+    # (5) Persist transaction ------------------------------------------------
     txn_date = receipt.date or date.today()
-    transaction_data = TransactionCreate(
-        account_id=account_id,
+    txn = BudgetTransaction(
+        family_id=family_id,
+        account_id=match.account_id,
         date=txn_date,
-        amount=receipt.total_amount,
+        amount=final_amount,
         payee_id=payee_id,
-        category_id=category_id,
-        notes=_build_notes(receipt.payee_name, receipt.items, receipt.currency),
+        notes=_build_notes(
+            receipt.payee_name, receipt.items, receipt.currency,
+        ),
         cleared=False,
         reconciled=False,
+        card_last4=receipt.card_last4,
+        iva_cents=receipt.iva_cents,
+        fx_rate=fx_rate,
+        original_amount_cents=original_amount_cents,
+        original_currency=original_currency,
+    )
+    db.add(txn)
+    await db.flush()
+
+    # (5b) Persist items ----------------------------------------------------
+    items_persisted = await TransactionItemService.bulk_create(
+        db, family_id, txn.id, items=receipt.items or [],
     )
 
-    transaction = await TransactionService.create(db, family_id, transaction_data)
+    # (6) Auto-categorize (transaction header + each item) ------------------
+    header_cat = await CategorizationRuleService.suggest_category(
+        db, family_id, payee=receipt.payee_name, description=None,
+    )
+    if header_cat:
+        txn.category_id = header_cat
+    for it in items_persisted:
+        it.category_id = await CategorizationRuleService.suggest_category(
+            db, family_id,
+            payee=receipt.payee_name,
+            description=None,
+            item_name=it.name,
+        )
+    await db.commit()
+    await db.refresh(txn)
 
-    # W5.1: Cross-check receipt items against pending shopping items and
-    # auto-mark matches as bought. Failures here must NOT block the
-    # receipt scan response, so we swallow errors after logging.
-    auto_checked: list[str] = []
+    # (7a) Shopping auto-check ----------------------------------------------
+    shopping_auto_checked: list[str] = []
     try:
-        from app.services.shopping_service import ShoppingService  # noqa
-        auto_checked = await _auto_check_shopping_items(
-            db, family_id, [i.get("name", "") for i in receipt.items]
+        shopping_auto_checked = await _auto_check_shopping_items(
+            db, family_id, [i.get("name", "") for i in (receipt.items or [])]
         )
     except Exception:
         import logging
-        logging.getLogger(__name__).exception("shopping auto-check failed")
+        logging.getLogger(__name__).exception(
+            "shopping auto-check failed",
+        )
+
+    # (7b) Trends per item ---------------------------------------------------
+    trends: list[dict] = []
+    if items_persisted and await is_feature_enabled(
+        db, family_id, "item_trends",
+    ):
+        seen: set[str] = set()
+        for it in items_persisted:
+            if it.normalized_name in seen:
+                continue
+            seen.add(it.normalized_name)
+            trend = await TransactionItemService.get_trend(
+                db, family_id, normalized_name=it.normalized_name,
+            )
+            if trend:
+                trends.append(trend.model_dump())
+
+    # (7c) A2A webhook enqueue ----------------------------------------------
+    if await is_feature_enabled(db, family_id, "a2a_webhook"):
+        try:
+            payload = _build_webhook_payload(
+                family_id, txn, items_persisted, receipt.currency,
+                payee_name=receipt.payee_name,
+            )
+            delivery = await A2AWebhookService.enqueue(
+                db, family_id, txn.id, payload=payload,
+            )
+            if delivery is not None:
+                # Best-effort first attempt inline; sweep handles retries.
+                await A2AWebhookService.dispatch_once(db, delivery.id)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "a2a enqueue/dispatch failed",
+            )
 
     return {
         "success": True,
+        "transaction_id": str(txn.id),
         "draft_id": None,
+        "items": [
+            {
+                "id": str(it.id),
+                "name": it.name,
+                "normalized_name": it.normalized_name,
+                "qty": float(it.qty) if it.qty is not None else None,
+                "unit_price_cents": it.unit_price_cents,
+                "total_cents": it.total_cents,
+                "brand": it.brand,
+                "category_id": str(it.category_id) if it.category_id else None,
+            }
+            for it in items_persisted
+        ],
+        "account_match": {
+            "strategy": match.strategy,
+            "matched_card_last4": match.matched_card_last4,
+        },
+        "fx": fx_info,
+        "trends": trends,
         "confidence": receipt.confidence,
+        "shopping_auto_checked": shopping_auto_checked,
+        "warnings": warnings,
+        "dup_warning": None,
+        "scanned_preview": None,
+        # Back-compat with v1 callers that still read `scanned_data`.
         "scanned_data": {
             "date": txn_date.isoformat(),
             "total_amount": receipt.total_amount,
@@ -422,8 +643,6 @@ async def scan_and_create_transaction(
             "items": receipt.items,
             "currency": receipt.currency,
         },
-        "transaction_id": str(transaction.id),
-        "shopping_auto_checked": auto_checked,
         "message": "Transaction created from receipt scan.",
     }
 
@@ -478,3 +697,167 @@ async def _auto_check_shopping_items(
     if matched_names:
         await db.commit()
     return matched_names
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers for the v2 pipeline.
+# These are module-private (single-underscore) and not part of the public
+# surface — they exist solely to keep scan_and_create_transaction linear
+# and readable. They share the same family-tenant assumptions as the
+# caller (every input is already scoped by family_id).
+# ---------------------------------------------------------------------------
+
+
+async def _find_or_create_payee(
+    db: AsyncSession, family_id: UUID, payee_name: Optional[str],
+) -> Optional[UUID]:
+    """Resolve a payee_id for the given name, inserting a new row if needed.
+
+    Returns None when payee_name is None/empty (anonymous receipt). The
+    new payee row is flushed (so the FK exists for the transaction insert)
+    but NOT committed — the caller's commit / rollback boundary controls
+    durability.
+    """
+    if not payee_name:
+        return None
+    stmt = select(BudgetPayee).where(
+        BudgetPayee.family_id == family_id,
+        BudgetPayee.name == payee_name,
+    )
+    payee = (await db.execute(stmt)).scalars().first()
+    if payee:
+        return payee.id
+    new_payee = BudgetPayee(family_id=family_id, name=payee_name)
+    db.add(new_payee)
+    await db.flush()
+    return new_payee.id
+
+
+async def _route_to_drafts(
+    db: AsyncSession,
+    family_id: UUID,
+    account_id: Optional[UUID],
+    image_bytes: bytes,
+    receipt: "ScannedReceipt",
+    scanned_dict: dict,
+    reason: str = "low_confidence",
+) -> dict:
+    """HITL fallback — persist a BudgetReceiptDraft for human review.
+
+    Used for three cases:
+        - low_confidence: vision returned < 0.3 or no total
+        - no_accounts: family has no active accounts (cannot place tx)
+        - currency_mismatch: receipt currency differs from account
+          currency on a plan that does not allow fx_cross_charge
+
+    When account_id is None (no_accounts case), we cannot create a
+    draft row because ``BudgetReceiptDraft.account_id`` is non-nullable.
+    Returns an error-shape dict in that case instead of crashing.
+    """
+    if account_id is None:
+        # Try to fall back to ANY active, non-deleted account in the family
+        # so the draft has somewhere to live. If there is truly no account
+        # at all we report the error instead of crashing on a NOT-NULL FK.
+        from app.models.budget import BudgetAccount
+        stmt = (
+            select(BudgetAccount)
+            .where(
+                BudgetAccount.family_id == family_id,
+                BudgetAccount.closed.is_(False),
+                BudgetAccount.deleted_at.is_(None),
+            )
+            .limit(1)
+        )
+        fallback = (await db.execute(stmt)).scalars().first()
+        if fallback is None:
+            return {
+                "success": False,
+                "transaction_id": None,
+                "draft_id": None,
+                "confidence": receipt.confidence,
+                "scanned_data": scanned_dict,
+                "message": (
+                    f"No budget account available to attach this receipt "
+                    f"to ({reason})."
+                ),
+            }
+        account_id = fallback.id
+
+    draft = await ReceiptDraftService.create(
+        db=db,
+        family_id=family_id,
+        account_id=account_id,
+        scanned_data=scanned_dict,
+        confidence=receipt.confidence,
+    )
+    # Persist the image so the review queue can render it. Failures here
+    # are non-fatal — the draft row still exists for review.
+    try:
+        os.makedirs(RECEIPT_UPLOADS_DIR, exist_ok=True)
+        img_path = os.path.join(RECEIPT_UPLOADS_DIR, f"{draft.id}.jpg")
+        with open(img_path, "wb") as f:
+            f.write(image_bytes)
+        draft.image_url = f"/api/budget/receipt-drafts/{draft.id}/image"
+        await db.commit()
+    except Exception:
+        pass
+
+    # Surface the routing reason in the message but keep the legacy
+    # "Low confidence" wording so existing v1 UI strings keep working.
+    if reason == "low_confidence":
+        message = "Low confidence — saved for review in the receipt queue."
+    elif reason == "currency_mismatch":
+        message = (
+            "Currency mismatch — saved for review in the receipt queue. "
+            "Upgrade to Pro for automatic FX conversion."
+        )
+    else:
+        message = f"Routed to drafts queue: {reason}"
+
+    return {
+        "success": False,
+        "transaction_id": None,
+        "draft_id": str(draft.id),
+        "confidence": receipt.confidence,
+        "scanned_data": scanned_dict,
+        "message": message,
+    }
+
+
+def _build_webhook_payload(
+    family_id: UUID,
+    txn: BudgetTransaction,
+    items: list,
+    currency: Optional[str],
+    payee_name: Optional[str] = None,
+) -> dict:
+    """Build the a2a webhook payload for a freshly persisted scan.
+
+    Schema: family-budget.receipt.v1 — versioned so external agents can
+    pin against a contract. Mirrors the dispatch headers' X-A2A-Schema.
+    """
+    return {
+        "schema": "family-budget.receipt.v1",
+        "family_id": str(family_id),
+        "transaction_id": str(txn.id),
+        "occurred_at": txn.created_at.isoformat() if txn.created_at else None,
+        "payee": payee_name,
+        "currency": currency,
+        "total_cents": int(txn.amount),
+        "iva_cents": txn.iva_cents,
+        "items": [
+            {
+                "name": it.name,
+                "normalized_name": it.normalized_name,
+                "qty": float(it.qty) if it.qty is not None else None,
+                "unit_price_cents": it.unit_price_cents,
+                "total_cents": it.total_cents,
+                "category": (
+                    str(it.category_id) if it.category_id else None
+                ),
+                "brand": it.brand,
+            }
+            for it in items
+        ],
+        "location_hint": None,
+    }
