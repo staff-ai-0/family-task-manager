@@ -9,10 +9,11 @@ This module contains all models for the budget management feature:
 - Budget Allocations (monthly budget amounts)
 """
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CHAR, Date, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -103,6 +104,10 @@ class BudgetAccount(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     starting_balance: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False, comment="Initial account balance in cents at creation time")
     currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="MXN", comment="ISO 4217 currency code (e.g. MXN, USD, EUR)")
+    card_last4: Mapped[Optional[str]] = mapped_column(
+        CHAR(4), nullable=True,
+        comment="Last 4 digits of the card associated with this account; used for receipt auto-match",
+    )
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True, comment="Soft delete timestamp")
     deleted_by_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, comment="User who deleted this account")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -157,6 +162,11 @@ class BudgetTransaction(Base):
     account_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_accounts.id", ondelete="CASCADE"), nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False, comment="Amount in cents (negative=expense, positive=income)")
+    card_last4: Mapped[Optional[str]] = mapped_column(CHAR(4), nullable=True)
+    iva_cents: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    fx_rate: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 6), nullable=True)
+    original_amount_cents: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    original_currency: Mapped[Optional[str]] = mapped_column(CHAR(3), nullable=True)
     payee_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_payees.id", ondelete="SET NULL"), nullable=True)
     category_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_categories.id", ondelete="SET NULL"), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -179,6 +189,11 @@ class BudgetTransaction(Base):
     category: Mapped[Optional["BudgetCategory"]] = relationship("BudgetCategory", back_populates="transactions", foreign_keys=[category_id])
     parent_transaction: Mapped[Optional["BudgetTransaction"]] = relationship("BudgetTransaction", remote_side=[id], back_populates="split_transactions")
     split_transactions: Mapped[list["BudgetTransaction"]] = relationship("BudgetTransaction", back_populates="parent_transaction", cascade="all, delete-orphan")
+    items: Mapped[list["BudgetTransactionItem"]] = relationship(
+        "BudgetTransactionItem",
+        back_populates="transaction",
+        cascade="all, delete-orphan",
+    )
 
 
 class BudgetSyncState(Base):
@@ -426,3 +441,45 @@ class BudgetReceiptDraft(Base):
     # Relationships
     family: Mapped["Family"] = relationship("Family")
     account: Mapped["BudgetAccount"] = relationship("BudgetAccount")
+
+
+class BudgetTransactionItem(Base):
+    """Line items extracted from a receipt scan or manual transaction edit."""
+
+    __tablename__ = "budget_transaction_items"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("families.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    transaction_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("budget_transactions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_name: Mapped[str] = mapped_column(Text, nullable=False)
+    qty: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 3), nullable=True)
+    unit_price_cents: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    total_cents: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    category_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("budget_categories.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    brand: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    raw_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(),
+        onupdate=func.now(), nullable=False,
+    )
+
+    transaction: Mapped["BudgetTransaction"] = relationship(
+        "BudgetTransaction", back_populates="items"
+    )
+    category: Mapped[Optional["BudgetCategory"]] = relationship("BudgetCategory")
