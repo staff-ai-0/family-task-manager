@@ -180,6 +180,8 @@ app.include_router(meals.router, prefix="/api/meals", tags=["Meals"])
 app.include_router(family_chat.router, prefix="/api/chat", tags=["Chat"])
 app.include_router(frankie_schedules.router, prefix="/api/frankie/schedules", tags=["Frankie Schedules"])
 app.include_router(dm.router, prefix="/api/dm", tags=["DM"])
+from app.api.routes.internal import a2a_retry as _internal_a2a  # noqa: E402
+app.include_router(_internal_a2a.router, prefix="/api/internal", tags=["internal"])
 
 
 @app.get("/")

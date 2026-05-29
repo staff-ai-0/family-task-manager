@@ -232,3 +232,35 @@ async def test_get_webhook_hides_secret(
     assert resp.status_code == 200
     body = resp.json()
     assert "secret" not in body
+
+
+# ---------------------------------------------------------------------------
+# Task 13: /api/internal/a2a/retry sweep endpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_internal_retry_requires_token(client: AsyncClient):
+    resp = await client.post("/api/internal/a2a/retry")
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_internal_retry_calls_sweep(client: AsyncClient, monkeypatch):
+    monkeypatch.setattr("app.core.config.settings.INTERNAL_API_TOKEN", "tkn")
+    called = {}
+
+    async def fake_sweep(db, limit=50):
+        called["n"] = limit
+        return 3
+
+    monkeypatch.setattr(
+        "app.services.budget.a2a_webhook_service.A2AWebhookService.sweep_retries",
+        fake_sweep,
+    )
+    resp = await client.post(
+        "/api/internal/a2a/retry",
+        headers={"X-Internal-Token": "tkn"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["processed"] == 3
