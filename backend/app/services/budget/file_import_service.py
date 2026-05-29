@@ -328,6 +328,7 @@ async def import_file_transactions(
     account_id: UUID,
     filename: str,
     file_bytes: bytes,
+    user_id: Optional[UUID] = None,
 ) -> dict:
     """Import transactions from a file (OFX/QIF/CAMT).
 
@@ -347,6 +348,20 @@ async def import_file_transactions(
         parsed = parse_camt(file_bytes)
     else:
         return {"imported": 0, "skipped": 0, "errors": ["Unsupported format. Use CSV import for CSV files."]}
+
+    # Load categorization rules ONCE — see CSV importer comment.
+    from app.models.budget import BudgetCategorizationRule
+    cached_rules = list((await db.execute(
+        select(BudgetCategorizationRule)
+        .where(
+            BudgetCategorizationRule.family_id == family_id,
+            BudgetCategorizationRule.enabled.is_(True),
+        )
+        .order_by(
+            BudgetCategorizationRule.priority.desc(),
+            BudgetCategorizationRule.created_at.asc(),
+        )
+    )).scalars().all())
 
     imported = 0
     skipped = 0
@@ -387,9 +402,9 @@ async def import_file_transactions(
                     await db.flush()
                     payee_id = new_payee.id
 
-            # Auto-categorize
-            category_id = await CategorizationRuleService.suggest_category(
-                db, family_id,
+            # Auto-categorize (in-memory, against pre-loaded rule set)
+            category_id = CategorizationRuleService.match_with_cached_rules(
+                cached_rules,
                 payee=txn.payee_name,
                 description=txn.notes or None,
             )
@@ -406,7 +421,9 @@ async def import_file_transactions(
                 reconciled=False,
             )
 
-            await TransactionService.create(db, family_id, transaction_data)
+            await TransactionService.create(
+                db, family_id, transaction_data, user_id=user_id,
+            )
             imported += 1
         except Exception as e:
             errors.append(f"Row {txn.payee_name}/{txn.date}: {str(e)}")
