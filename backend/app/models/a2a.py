@@ -54,7 +54,7 @@ class A2AWebhookDelivery(Base):
     transaction_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("budget_transactions.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=False, index=True,
     )
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")

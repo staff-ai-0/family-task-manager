@@ -35,8 +35,8 @@ def upgrade() -> None:
     # later to set the correct last-4.
     op.execute(sa.text(
         "UPDATE budget_accounts SET card_last4 = "
-        "regexp_replace(name, '.*(?:\\*{2,}|terminada en |XXXX|xxxx)(\\d{4}).*', '\\1') "
-        "WHERE name ~* '(\\*{2,}|terminada en |XXXX|xxxx)\\d{4}' "
+        "regexp_replace(name, '.*(?:\\*{2,}|terminada en |XXXX)(\\d{4}).*', '\\1') "
+        "WHERE name ~* '(\\*{2,}|terminada en |XXXX)\\d{4}' "
         "AND card_last4 IS NULL"
     ))
 
@@ -136,9 +136,12 @@ def upgrade() -> None:
                     postgresql_where=sa.text("status IN ('pending', 'failed')"))
     op.create_index("ix_a2a_deliveries_family",
                     "a2a_webhook_deliveries", ["family_id"])
+    op.create_index("ix_a2a_deliveries_transaction",
+                    "a2a_webhook_deliveries", ["transaction_id"])
 
 
 def downgrade() -> None:
+    op.drop_index("ix_a2a_deliveries_transaction", table_name="a2a_webhook_deliveries")
     op.drop_index("ix_a2a_deliveries_family", table_name="a2a_webhook_deliveries")
     op.drop_index("ix_a2a_deliveries_due", table_name="a2a_webhook_deliveries")
     op.drop_table("a2a_webhook_deliveries")

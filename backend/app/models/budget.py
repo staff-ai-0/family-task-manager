@@ -482,4 +482,6 @@ class BudgetTransactionItem(Base):
     transaction: Mapped["BudgetTransaction"] = relationship(
         "BudgetTransaction", back_populates="items"
     )
-    category: Mapped[Optional["BudgetCategory"]] = relationship("BudgetCategory")
+    category: Mapped[Optional["BudgetCategory"]] = relationship(
+        "BudgetCategory", foreign_keys=[category_id]
+    )

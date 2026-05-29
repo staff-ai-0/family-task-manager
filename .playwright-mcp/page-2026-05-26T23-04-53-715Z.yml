@@ -1,0 +1,78 @@
+- generic [ref=e173]:
+  - generic [ref=e175]:
+    - banner [ref=e176]:
+      - generic [ref=e177]:
+        - generic [ref=e178]: S
+        - generic [ref=e179]:
+          - heading "Sarah Johnson" [level=1] [ref=e180]
+          - paragraph [ref=e181]: mom@demo.com
+          - generic [ref=e182]: parent
+    - main [ref=e183]:
+      - generic [ref=e184]:
+        - heading "Resumen de Puntos" [level=2] [ref=e185]
+        - generic [ref=e186]:
+          - generic [ref=e187]:
+            - paragraph [ref=e188]: "0"
+            - paragraph [ref=e189]: Ganados
+          - generic [ref=e190]:
+            - paragraph [ref=e191]: "0"
+            - paragraph [ref=e192]: Gastados
+          - generic [ref=e193]:
+            - paragraph [ref=e194]: "500"
+            - paragraph [ref=e195]: Saldo
+      - generic [ref=e196]:
+        - heading "Idioma Preferido" [level=2] [ref=e197]
+        - generic [ref=e198]:
+          - combobox [ref=e199]:
+            - option "Ingles" [selected]
+            - option "Espanol"
+          - button "Guardar Cambios" [ref=e200]
+      - generic [ref=e201]:
+        - heading "Cambiar Contraseña" [level=2] [ref=e202]
+        - generic [ref=e203]:
+          - generic [ref=e204]:
+            - generic [ref=e205]: Contraseña Actual
+            - textbox "Contraseña Actual" [ref=e206]:
+              - /placeholder: ••••••••
+          - generic [ref=e207]:
+            - generic [ref=e208]: Nueva Contraseña
+            - textbox "Nueva Contraseña" [ref=e209]:
+              - /placeholder: ••••••••
+          - button "Actualizar Contraseña" [ref=e210]
+    - navigation [ref=e95]:
+      - generic [ref=e96]:
+        - link "Tareas" [ref=e97] [cursor=pointer]:
+          - /url: /dashboard
+          - img [ref=e98]
+          - generic [ref=e100]: Tareas
+        - link "Premios" [ref=e101] [cursor=pointer]:
+          - /url: /rewards
+          - img [ref=e102]
+          - generic [ref=e104]: Premios
+        - link "Avisos" [ref=e105] [cursor=pointer]:
+          - /url: /notifications
+          - img [ref=e106]
+          - generic [ref=e108]: Avisos
+        - link "Chat" [ref=e109] [cursor=pointer]:
+          - /url: /chat
+          - img [ref=e110]
+          - generic [ref=e112]: Chat
+        - link "Perfil" [active] [ref=e113] [cursor=pointer]:
+          - /url: /profile
+          - img [ref=e114]
+          - generic [ref=e116]: Perfil
+        - link "Budget" [ref=e117] [cursor=pointer]:
+          - /url: /budget/month
+          - img [ref=e118]
+          - generic [ref=e120]: Budget
+        - link "Gestion" [ref=e121] [cursor=pointer]:
+          - /url: /parent
+          - img [ref=e122]
+          - generic [ref=e125]: Gestion
+        - button "EN" [ref=e127]:
+          - img [ref=e128]
+          - generic [ref=e130]: EN
+        - button "Salir" [ref=e132]:
+          - img [ref=e133]
+          - generic [ref=e135]: Salir
+  - generic [ref=e211]: Perfil - Family Task Manager

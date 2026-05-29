@@ -71,12 +71,12 @@ async def test_card_last4_backfill_from_name(db: AsyncSession, family):
     # Re-run the backfill UPDATE the migration emits; it must be idempotent.
     await db.execute(text(
         "UPDATE budget_accounts SET card_last4 = "
-        "regexp_replace(name, '.*(?:\\*{2,}|terminada en |XXXX|xxxx)(\\d{4}).*', '\\1') "
-        "WHERE name ~* '(\\*{2,}|terminada en |XXXX|xxxx)\\d{4}' AND card_last4 IS NULL"
+        "regexp_replace(name, '.*(?:\\*{2,}|terminada en |XXXX)(\\d{4}).*', '\\1') "
+        "WHERE name ~* '(\\*{2,}|terminada en |XXXX)\\d{4}' AND card_last4 IS NULL"
     ))
     await db.commit()
     await db.refresh(a1); await db.refresh(a2); await db.refresh(a3); await db.refresh(a4)
     assert a1.card_last4 == "9222"
-    assert a2.card_last4 == "313" or a2.card_last4 is None  # 3-digit suffix won't backfill (4 required)
+    assert a2.card_last4 is None  # ***313 is 3 digits; regex requires 4
     assert a3.card_last4 == "1234"
     assert a4.card_last4 == "4321"
