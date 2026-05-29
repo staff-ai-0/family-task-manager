@@ -8,7 +8,8 @@ subscription_state transitions.
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -52,7 +53,7 @@ async def _dedupe_event(event_id: str) -> bool:
 
 
 @router.post("/webhook", status_code=200)
-async def receive_webhook(request: Request):
+async def receive_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """
     Verify + dispatch a PayPal webhook event.
 
@@ -107,33 +108,30 @@ async def receive_webhook(request: Request):
         logger.warning("Webhook event %s has no resource.id", event_id)
         return {"received": True}
 
-    async for db in get_db():
-        try:
-            if event_type == "BILLING.SUBSCRIPTION.ACTIVATED":
-                next_billing = (resource.get("billing_info") or {}).get(
-                    "next_billing_time"
-                )
-                period_end = (
-                    datetime.fromisoformat(next_billing.replace("Z", "+00:00"))
-                    if next_billing
-                    else datetime.now(timezone.utc)
-                )
-                await apply_activated(
-                    db,
-                    paypal_subscription_id=subscription_id,
-                    period_end=period_end,
-                )
-            elif event_type == "BILLING.SUBSCRIPTION.CANCELLED":
-                await apply_cancelled(db, paypal_subscription_id=subscription_id)
-            elif event_type == "BILLING.SUBSCRIPTION.PAYMENT.FAILED":
-                await apply_payment_failed(
-                    db, paypal_subscription_id=subscription_id
-                )
-            else:
-                logger.info("Ignoring webhook event_type %s", event_type)
-        except Exception as e:
-            logger.exception("Webhook dispatch failed for %s: %s", event_id, e)
-        finally:
-            break
+    try:
+        if event_type == "BILLING.SUBSCRIPTION.ACTIVATED":
+            next_billing = (resource.get("billing_info") or {}).get(
+                "next_billing_time"
+            )
+            period_end = (
+                datetime.fromisoformat(next_billing.replace("Z", "+00:00"))
+                if next_billing
+                else datetime.now(timezone.utc)
+            )
+            await apply_activated(
+                db,
+                paypal_subscription_id=subscription_id,
+                period_end=period_end,
+            )
+        elif event_type == "BILLING.SUBSCRIPTION.CANCELLED":
+            await apply_cancelled(db, paypal_subscription_id=subscription_id)
+        elif event_type == "BILLING.SUBSCRIPTION.PAYMENT.FAILED":
+            await apply_payment_failed(
+                db, paypal_subscription_id=subscription_id
+            )
+        else:
+            logger.info("Ignoring webhook event_type %s", event_type)
+    except Exception as e:
+        logger.exception("Webhook dispatch failed for %s: %s", event_id, e)
 
     return {"received": True}

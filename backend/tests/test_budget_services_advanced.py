@@ -253,11 +253,13 @@ class TestDeleteWithReassign:
         assert txn1.category_id == target_cat.id
         assert txn2.category_id == target_cat.id
 
-        # Source category must be gone
+        # Source category must be soft-deleted (deleted_at set)
         deleted = await db.execute(
             select(BudgetCategory).where(BudgetCategory.id == source_cat.id)
         )
-        assert deleted.scalar_one_or_none() is None
+        soft_deleted_cat = deleted.scalar_one_or_none()
+        assert soft_deleted_cat is not None
+        assert soft_deleted_cat.deleted_at is not None
 
 
 # ===========================================================================

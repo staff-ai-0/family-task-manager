@@ -108,7 +108,12 @@ class TestGetNetWorthHistory:
     async def test_net_worth_history_closed_accounts_excluded(
         self, db: AsyncSession, family_id
     ):
-        """Closed accounts are excluded from net worth history."""
+        """Closed accounts ARE included in net worth history.
+
+        Historical net worth must include closed accounts so the chart does
+        not artificially spike/drop on close events. Soft-deleted accounts
+        are excluded via list_by_family.
+        """
         # Create open account
         open_acct = await AccountService.create(
             db, family_id,
@@ -134,8 +139,8 @@ class TestGetNetWorthHistory:
 
         series = result["series"]
         assert len(series) == 1
-        # Only the open account's starting balance transaction should be counted
-        assert series[0]["net_worth"] == 50_000
+        # Both accounts' starting balance synthetic txns contribute.
+        assert series[0]["net_worth"] == 250_000
 
 
 class TestGetBudgetVsActual:

@@ -185,32 +185,10 @@ class TestFamilyStats:
         assert "total_rewards" in stats
         assert "active_consequences" in stats
 
-    async def test_get_stats_with_tasks(
-        self, db_session, test_family, test_parent_user, test_task
-    ):
-        """Test stats include task counts"""
-        # test_task fixture already exists
-        stats = await FamilyService.get_family_stats(db_session, test_family.id)
-
-        assert stats["total_tasks"] >= 1
-        assert stats["pending_tasks"] >= 1
-
-    async def test_get_stats_with_completed_tasks(
-        self, db_session, test_family, test_child_user, test_task
-    ):
-        """Test stats count completed tasks"""
-        from app.models.task import TaskStatus
-        from datetime import datetime
-
-        # Complete the task
-        test_task.status = TaskStatus.COMPLETED
-        test_task.completed_at = datetime.utcnow()
-        test_task.completed_by = test_child_user.id
-        await db_session.commit()
-
-        stats = await FamilyService.get_family_stats(db_session, test_family.id)
-
-        assert stats["completed_tasks"] >= 1
+    # NOTE: test_get_stats_with_tasks and test_get_stats_with_completed_tasks
+    # were removed — they relied on the legacy Task model (test_task fixture),
+    # while FamilyService.get_family_stats now counts TaskAssignment rows from
+    # the current task-templates/task-assignments system.
 
     async def test_get_stats_with_rewards(self, db_session, test_family, test_reward):
         """Test stats include reward counts"""
