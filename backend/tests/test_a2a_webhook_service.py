@@ -1,4 +1,4 @@
-"""A2AWebhookService — enqueue, dispatch, signature, retry sweep."""
+"""A2AWebhookService — enqueue, dispatch, signature, retry sweep, HTTP endpoints."""
 
 import hashlib
 import hmac
@@ -8,8 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+import pytest_asyncio
+from httpx import AsyncClient
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.budget.a2a_webhook_service import A2AWebhookService
 from app.models.a2a import FamilyA2AWebhook, A2AWebhookDelivery
@@ -172,3 +175,60 @@ async def test_sweep_picks_up_pending_with_null_next_retry(db, family, transacti
         n = await A2AWebhookService.sweep_retries(db, limit=10)
     assert n == 1
     assert len(ids) == 1
+
+
+# ---------------------------------------------------------------------------
+# HTTP endpoint tests (Task 12): GET / PUT /api/budget/a2a-webhook
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def enabled_webhook(db: AsyncSession, test_family):
+    """Create an enabled FamilyA2AWebhook for test_family (used with auth_headers)."""
+    row = FamilyA2AWebhook(
+        family_id=test_family.id,
+        url="https://hook.example/existing",
+        secret="existing_secret_xyz",
+        enabled=True,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@pytest.mark.asyncio
+async def test_put_webhook_returns_secret_on_rotate(
+    client: AsyncClient, auth_headers: dict
+):
+    """PUT with rotate_secret=True must return plaintext secret in response."""
+    resp = await client.put(
+        "/api/budget/a2a-webhook",
+        json={"url": "https://hook.example/x", "enabled": True, "rotate_secret": True},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["secret"] is not None
+
+
+@pytest.mark.asyncio
+async def test_put_rejects_http(client: AsyncClient, auth_headers: dict):
+    """PUT with an http:// URL must be rejected with 422 (Pydantic validation)."""
+    resp = await client.put(
+        "/api/budget/a2a-webhook",
+        json={"url": "http://hook.example/x", "enabled": True, "rotate_secret": True},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_get_webhook_hides_secret(
+    client: AsyncClient, auth_headers: dict, enabled_webhook
+):
+    """GET response must NOT include the secret field."""
+    resp = await client.get("/api/budget/a2a-webhook", headers=auth_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "secret" not in body
