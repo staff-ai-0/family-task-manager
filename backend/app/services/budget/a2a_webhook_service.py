@@ -9,7 +9,7 @@ from typing import Optional
 from uuid import UUID
 
 import httpx
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.a2a import A2AWebhookDelivery, FamilyA2AWebhook
@@ -149,10 +149,13 @@ class A2AWebhookService:
     async def sweep_retries(db: AsyncSession, limit: int = 50) -> int:
         now = datetime.now(timezone.utc)
         result = await db.execute(
-            select(A2AWebhookDelivery.id).where(and_(
-                A2AWebhookDelivery.status.in_(["pending", "failed"]),
-                A2AWebhookDelivery.next_retry_at.isnot(None),
-                A2AWebhookDelivery.next_retry_at <= now,
+            select(A2AWebhookDelivery.id).where(or_(
+                A2AWebhookDelivery.status == "pending",
+                and_(
+                    A2AWebhookDelivery.status == "failed",
+                    A2AWebhookDelivery.next_retry_at.isnot(None),
+                    A2AWebhookDelivery.next_retry_at <= now,
+                ),
             )).limit(limit)
         )
         ids = [r[0] for r in result.all()]

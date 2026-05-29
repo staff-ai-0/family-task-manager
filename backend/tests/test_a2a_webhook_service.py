@@ -9,6 +9,8 @@ from uuid import uuid4
 
 import pytest
 
+from sqlalchemy import select
+
 from app.services.budget.a2a_webhook_service import A2AWebhookService
 from app.models.a2a import FamilyA2AWebhook, A2AWebhookDelivery
 
@@ -83,6 +85,14 @@ async def test_dispatch_once_signs_and_marks_sent(db, family, transaction):
     ).hexdigest()
     assert sent_headers["X-A2A-Signature"] == expected
 
+    # cfg-side state updates
+    cfg = (await db.execute(
+        select(FamilyA2AWebhook).where(FamilyA2AWebhook.family_id == family.id)
+    )).scalar_one()
+    assert cfg.last_success_at is not None
+    assert cfg.failure_count == 0
+    assert cfg.last_error is None
+
 
 @pytest.mark.asyncio
 async def test_dispatch_failure_schedules_retry(db, family, transaction):
@@ -109,6 +119,12 @@ async def test_dispatch_failure_schedules_retry(db, family, transaction):
     assert delivery.next_retry_at is not None
     assert delivery.next_retry_at > datetime.now(timezone.utc)
 
+    cfg = (await db.execute(
+        select(FamilyA2AWebhook).where(FamilyA2AWebhook.family_id == family.id)
+    )).scalar_one()
+    assert cfg.failure_count == 1
+    assert cfg.last_error is not None
+
 
 @pytest.mark.asyncio
 async def test_sweep_picks_up_due_failed(db, family, transaction):
@@ -131,5 +147,28 @@ async def test_sweep_picks_up_due_failed(db, family, transaction):
                       side_effect=fake_dispatch):
         n = await A2AWebhookService.sweep_retries(db, limit=10)
 
+    assert n == 1
+    assert len(ids) == 1
+
+
+@pytest.mark.asyncio
+async def test_sweep_picks_up_pending_with_null_next_retry(db, family, transaction):
+    """Pending rows must be picked up by the sweep even when next_retry_at is NULL
+    (the freshly-enqueued state). Regression test for the sweep delivery hole."""
+    db.add(FamilyA2AWebhook(
+        family_id=family.id, url="https://x", secret="s", enabled=True,
+    ))
+    db.add(A2AWebhookDelivery(
+        family_id=family.id, transaction_id=transaction.id,
+        payload_json={"a": 1}, status="pending", attempts=0,
+        next_retry_at=None,
+    ))
+    await db.commit()
+    ids: list = []
+    async def fake_dispatch(_db, _id):
+        ids.append(_id)
+    with patch.object(A2AWebhookService, "dispatch_once",
+                      side_effect=fake_dispatch):
+        n = await A2AWebhookService.sweep_retries(db, limit=10)
     assert n == 1
     assert len(ids) == 1
