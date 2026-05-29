@@ -34,7 +34,7 @@ from openai import OpenAI
 from app.core.config import settings
 from app.core.exceptions import ValidationError
 from app.core.premium import FEATURE_MIN_PLAN, get_family_plan
-from app.models.budget import BudgetPayee, BudgetTransaction
+from app.models.budget import BudgetAccount, BudgetPayee, BudgetTransaction
 from app.schemas.budget import TransactionCreate
 from app.services.budget.transaction_service import TransactionService
 from app.services.budget.categorization_rule_service import CategorizationRuleService
@@ -289,13 +289,33 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
         else None
     )
 
-    # Validate iva_cents: only accept int
+    # Coerce total_amount: vision models sometimes emit a float ("-15050.0")
+    # which asyncpg refuses to bind to an INTEGER column ("expected int,
+    # got float"). bool is a subclass of int — reject it explicitly so
+    # `true` in the JSON doesn't get persisted as 1.
+    raw_total = data.get("total_amount")
+    if isinstance(raw_total, bool):
+        parsed_total = None
+    elif isinstance(raw_total, (int, float)):
+        parsed_total = int(raw_total)
+    else:
+        parsed_total = None
+
+    # Same coercion for iva_cents (also INTEGER on the column). Same
+    # bool-rejection trick as above.
     raw_iva = data.get("iva_cents")
-    parsed_iva_cents = raw_iva if isinstance(raw_iva, int) else None
+    if isinstance(raw_iva, bool):
+        parsed_iva_cents = None
+    elif isinstance(raw_iva, int):
+        parsed_iva_cents = raw_iva
+    elif isinstance(raw_iva, float):
+        parsed_iva_cents = int(raw_iva)
+    else:
+        parsed_iva_cents = None
 
     return ScannedReceipt(
         date=parsed_date,
-        total_amount=data.get("total_amount"),
+        total_amount=parsed_total,
         payee_name=data.get("payee_name"),
         items=data.get("items", []),
         currency=data.get("currency", "MXN"),
@@ -444,11 +464,57 @@ async def scan_and_create_transaction(
         db, family_id, receipt.payee_name,
     )
 
-    # (3) Duplicate guard ----------------------------------------------------
+    # (3) FX cross-charge ----------------------------------------------------
+    # Compute final_amount BEFORE dup-guard so cross-currency duplicates
+    # actually compare like-for-like values. Persisted rows hold post-FX
+    # cents — checking against pre-FX would never match.
+    fx_info: Optional[dict] = None
+    final_amount = receipt.total_amount
+    original_amount_cents: Optional[int] = None
+    original_currency: Optional[str] = None
+    fx_rate: Optional[Decimal] = None
+    warnings: list[str] = []
+    if (
+        match.matched_account_currency
+        and receipt.currency
+        and match.matched_account_currency != receipt.currency
+        and fx_allowed
+    ):
+        rate = await FXService.get_rate(
+            receipt.currency, match.matched_account_currency,
+            on_date=receipt.date or date.today(),
+        )
+        if rate is None:
+            # No FX rate available — route to drafts instead of writing the
+            # raw foreign-currency cents into a local-currency account
+            # (would create a ~17x amount error MXN→USD or similar).
+            return await _route_to_drafts(
+                db, family_id, match.account_id, image_bytes, receipt,
+                scanned_dict, reason="fx_unavailable",
+            )
+        original_amount_cents = receipt.total_amount
+        original_currency = receipt.currency
+        fx_rate = rate
+        # Convert (signed) — quantize to whole cents with ROUND_HALF_UP
+        final_amount = int(
+            (Decimal(receipt.total_amount) * rate).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP,
+            )
+        )
+        fx_info = {
+            "rate": str(rate),
+            "original_amount_cents": original_amount_cents,
+            "original_currency": original_currency,
+        }
+
+    # (4) Duplicate guard ----------------------------------------------------
+    # Compare against the post-FX amount (the value that would actually
+    # land in the database). Pre-FX comparison would let cross-currency
+    # duplicates through.
     if not force:
         dup = await DuplicateGuardService.check(
             db, family_id, payee_id=payee_id,
-            amount_cents=receipt.total_amount,
+            amount_cents=final_amount,
         )
         if dup is not None:
             # Do NOT commit — the flushed-but-uncommitted new payee row
@@ -476,49 +542,27 @@ async def scan_and_create_transaction(
                     "strategy": match.strategy,
                     "matched_card_last4": match.matched_card_last4,
                 },
-                "fx": None,
+                "fx": fx_info,
                 "trends": [],
                 "shopping_auto_checked": [],
-                "warnings": [],
-            }
-
-    # (4) FX cross-charge ----------------------------------------------------
-    fx_info: Optional[dict] = None
-    final_amount = receipt.total_amount
-    original_amount_cents: Optional[int] = None
-    original_currency: Optional[str] = None
-    fx_rate: Optional[Decimal] = None
-    warnings: list[str] = []
-    if (
-        match.matched_account_currency
-        and receipt.currency
-        and match.matched_account_currency != receipt.currency
-        and fx_allowed
-    ):
-        rate = await FXService.get_rate(
-            receipt.currency, match.matched_account_currency,
-            on_date=receipt.date or date.today(),
-        )
-        if rate is None:
-            warnings.append("fx_unavailable")
-        else:
-            original_amount_cents = receipt.total_amount
-            original_currency = receipt.currency
-            fx_rate = rate
-            # Convert (signed) — quantize to whole cents with ROUND_HALF_UP
-            final_amount = int(
-                (Decimal(receipt.total_amount) * rate).quantize(
-                    Decimal("1"), rounding=ROUND_HALF_UP,
-                )
-            )
-            fx_info = {
-                "rate": str(rate),
-                "original_amount_cents": original_amount_cents,
-                "original_currency": original_currency,
+                "warnings": warnings,
             }
 
     # (5) Persist transaction ------------------------------------------------
     txn_date = receipt.date or date.today()
+    # Month-locking gate: a parent may have closed the month after the
+    # receipt date. Route to drafts so the human can re-date or unlock.
+    from app.services.budget.month_locking_service import MonthLockingService
+    try:
+        await MonthLockingService.validate_month_not_closed(
+            db, family_id, date(txn_date.year, txn_date.month, 1),
+        )
+    except ValidationError as exc:
+        scanned_dict["locked_month_error"] = str(exc)
+        return await _route_to_drafts(
+            db, family_id, match.account_id, image_bytes, receipt,
+            scanned_dict, reason="locked_month",
+        )
     txn = BudgetTransaction(
         family_id=family_id,
         account_id=match.account_id,
@@ -595,21 +639,41 @@ async def scan_and_create_transaction(
                 family_id, txn, items_persisted, receipt.currency,
                 payee_name=receipt.payee_name,
             )
-            delivery = await A2AWebhookService.enqueue(
+            # Enqueue only — DO NOT dispatch inline. The webhook target
+            # may be slow (or unreachable) and a 10 s timeout would block
+            # the scan response. The retry sweep (cron, runs every 5 min)
+            # picks up pending deliveries and dispatches them off the hot
+            # path. This keeps the user-facing scan ≤2 s.
+            await A2AWebhookService.enqueue(
                 db, family_id, txn.id, payload=payload,
             )
-            if delivery is not None:
-                # Best-effort first attempt inline; sweep handles retries.
-                await A2AWebhookService.dispatch_once(db, delivery.id)
         except Exception:
             import logging
             logging.getLogger(__name__).exception(
-                "a2a enqueue/dispatch failed",
+                "a2a enqueue failed",
             )
+
+    # Build a small `transaction` sub-object so the confirm card on the
+    # client can render { payee, amount, currency, account_name, iva }
+    # without an extra round-trip. The full TransactionResponse is more
+    # than the card needs and would force a Decimal-aware decoder client
+    # side.
+    matched_account = await db.get(BudgetAccount, match.account_id)
+    display_currency = match.matched_account_currency or receipt.currency
+    transaction_summary = {
+        "id": str(txn.id),
+        "account_id": str(match.account_id),
+        "account_name": matched_account.name if matched_account else None,
+        "amount": int(final_amount),
+        "currency": display_currency,
+        "payee_name": receipt.payee_name,
+        "iva_cents": receipt.iva_cents,
+    }
 
     return {
         "success": True,
         "transaction_id": str(txn.id),
+        "transaction": transaction_summary,
         "draft_id": None,
         "items": [
             {

@@ -50,6 +50,9 @@ class DuplicateGuardService:
             .where(and_(
                 BudgetTransaction.family_id == family_id,
                 BudgetTransaction.payee_id == payee_id,
+                # Exclude soft-deleted rows so the recycle bin can't
+                # resurrect a dup-warning on a re-scan.
+                BudgetTransaction.deleted_at.is_(None),
                 BudgetTransaction.created_at >= cutoff,
                 BudgetTransaction.amount.between(
                     amount_cents - tol, amount_cents + tol
