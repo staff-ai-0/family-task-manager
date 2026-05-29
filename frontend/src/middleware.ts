@@ -170,11 +170,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 // Plan fetch failure is non-fatal — default to free
             }
         } catch (error) {
-            console.error("Token validation error:", error);
-            cookies.delete("access_token", { path: "/" });
+            // fetch() throws only on NETWORK failures (DNS, connection refused,
+            // timeout) — never on HTTP errors (those reach line 147 via !response.ok).
+            // The token may be perfectly valid; the backend just isn't reachable.
+            // Surface that clearly and DO NOT delete the cookie.
+            console.error("Backend unreachable during auth check:", error);
             return new Response(
-                JSON.stringify({ detail: "Authentication error" }),
-                { status: 500, headers: { "Content-Type": "application/json" } }
+                JSON.stringify({
+                    detail: "Backend temporarily unavailable. Retry shortly.",
+                    code: "backend_unreachable",
+                }),
+                { status: 503, headers: { "Content-Type": "application/json" } }
             );
         }
     }
