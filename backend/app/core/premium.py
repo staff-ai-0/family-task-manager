@@ -31,6 +31,9 @@ DEFAULT_FREE_LIMITS: dict[str, Any] = {
     "max_receipt_scans_per_month": 0,
     "ai_features": False,
     "max_gigs_per_month": 3,
+    "a2a_webhook": False,
+    "item_trends": False,
+    "fx_cross_charge": False,
 }
 
 # Maps feature name → limit key in the plan's limits dict
@@ -47,6 +50,10 @@ FEATURE_LIMIT_MAP: dict[str, str] = {
     "family_member": "max_family_members",
     "budget_account": "max_budget_accounts",
     "gig_completion": "max_gigs_per_month",
+    # Scanner v2 boolean features
+    "a2a_webhook": "a2a_webhook",
+    "item_trends": "item_trends",
+    "fx_cross_charge": "fx_cross_charge",
 }
 
 # Minimum plan tier required for each feature (omitted → available on free)
@@ -59,6 +66,10 @@ FEATURE_MIN_PLAN: dict[str, str] = {
     "recurring_transaction": "plus",
     # gig_completion available on free with low cap; plus tier raises it
     "gig_completion": "plus",
+    # Scanner v2 features
+    "a2a_webhook": "plus",
+    "item_trends": "plus",
+    "fx_cross_charge": "pro",
 }
 
 

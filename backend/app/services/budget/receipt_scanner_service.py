@@ -808,7 +808,7 @@ async def _route_to_drafts(
         message = "Low confidence — saved for review in the receipt queue."
     elif reason == "currency_mismatch":
         message = (
-            "Currency mismatch — saved for review in the receipt queue. "
+            "currency_mismatch — saved for review in the receipt queue. "
             "Upgrade to Pro for automatic FX conversion."
         )
     else:
