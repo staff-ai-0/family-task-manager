@@ -19,9 +19,17 @@ from app.core.config import settings
 
 _REDIS_TTL_SECONDS = 24 * 3600
 
+# Module-level singleton. aioredis.from_url() returns a Redis client backed
+# by a connection pool — instantiating one per call leaks pools and bloats
+# Redis-side connection counts. The pool is lazy-connected on first use.
+_redis_client = None
+
 
 def _get_redis():
-    return aioredis.from_url(settings.REDIS_URL, decode_responses=False)
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=False)
+    return _redis_client
 
 
 def _cache_key(from_ccy: str, to_ccy: str, on_date: date) -> str:
