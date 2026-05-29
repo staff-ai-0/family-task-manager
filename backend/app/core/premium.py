@@ -56,6 +56,13 @@ FEATURE_LIMIT_MAP: dict[str, str] = {
     "fx_cross_charge": "fx_cross_charge",
 }
 
+# Tier ordering for plan-rank comparisons. Used by lightweight gates
+# (e.g. ``receipt_scanner_service.is_feature_enabled``) that need to ask
+# "does this family's plan meet the minimum tier for feature X" without
+# raising / metering. The canonical source — do NOT redefine elsewhere.
+PLAN_ORDER: dict[str, int] = {"free": 0, "plus": 1, "pro": 2}
+
+
 # Minimum plan tier required for each feature (omitted → available on free)
 FEATURE_MIN_PLAN: dict[str, str] = {
     "budget_reports": "plus",

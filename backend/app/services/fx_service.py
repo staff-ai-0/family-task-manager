@@ -7,6 +7,7 @@ returns rates as of a given date. We cache (from, to, date) → rate in Redis
 for 24h since historical rates are immutable.
 """
 
+import asyncio
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -19,9 +20,29 @@ from app.core.config import settings
 
 _REDIS_TTL_SECONDS = 24 * 3600
 
+# Module-level singleton. aioredis.from_url() returns a Redis client backed
+# by a connection pool — instantiating one per call leaks pools and bloats
+# Redis-side connection counts. The pool is lazy-connected on first use.
+#
+# We track the event loop the client was bound to. Under pytest's
+# function-scoped event loops the singleton would otherwise outlive its loop
+# and the next test would get "Event loop is closed" errors. In production
+# one loop runs forever so the rebind path never fires — the cache hit rate
+# is identical.
+_redis_client = None
+_redis_client_loop = None
+
 
 def _get_redis():
-    return aioredis.from_url(settings.REDIS_URL, decode_responses=False)
+    global _redis_client, _redis_client_loop
+    try:
+        current_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+    if _redis_client is None or _redis_client_loop is not current_loop:
+        _redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=False)
+        _redis_client_loop = current_loop
+    return _redis_client
 
 
 def _cache_key(from_ccy: str, to_ccy: str, on_date: date) -> str:

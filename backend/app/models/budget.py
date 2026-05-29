@@ -178,9 +178,15 @@ class BudgetTransaction(Base):
     transfer_account_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_accounts.id", ondelete="SET NULL"), nullable=True, comment="Target account for transfers")
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True, comment="Soft delete timestamp")
     deleted_by_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, comment="User who deleted this transaction")
+    created_by_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="User who originally created this transaction (for per-user last-used account fallback in receipt scanner)",
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    
+
     # Relationships
     family: Mapped["Family"] = relationship("Family", back_populates="budget_transactions")
     account: Mapped["BudgetAccount"] = relationship("BudgetAccount", back_populates="transactions", foreign_keys=[account_id])

@@ -73,6 +73,7 @@ async def create_account(
         db,
         family_id=to_uuid_required(current_user.family_id),
         data=data,
+        user_id=current_user.id,
     )
     return account
 

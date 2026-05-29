@@ -3,12 +3,9 @@
 Strategy order:
 1. Caller-supplied account_id (validated to belong to family) → strategy="override"
 2. Match BudgetAccount.card_last4 → narrow by receipt currency if >1  → strategy="card_last4"
-3. Most-recent transaction in the family (any user) → strategy="last_used"
-   NOTE: BudgetTransaction has no created_by_id / user_id column as of the
-   current schema, so per-user disambiguation is not possible.
-   TODO: add created_by_id to budget_transactions and introduce a
-   per-user step between card_last4 and the family-wide fallback.
-4. None → strategy="none"
+3. Most-recent transaction created by this user → strategy="last_used"
+4. Most-recent transaction in the family (any user) → strategy="last_used"
+5. None → strategy="none"
 """
 
 from dataclasses import dataclass, field
@@ -35,7 +32,7 @@ class AccountMatchingService:
     async def match(
         db: AsyncSession,
         family_id: UUID,
-        user_id: UUID,
+        user_id: Optional[UUID],
         card_last4: Optional[str],
         receipt_currency: Optional[str],
         override_account_id: Optional[UUID] = None,
@@ -46,9 +43,9 @@ class AccountMatchingService:
         ----------
         db:                  Async SQLAlchemy session.
         family_id:           Tenant scope — all queries are filtered by this.
-        user_id:             Authenticated user (reserved for future per-user
-                             last-used step once created_by_id is added to
-                             budget_transactions).
+        user_id:             Authenticated user. When set, used as the
+                             narrowing step between card_last4 and the
+                             family-wide last-used fallback.
         card_last4:          4-digit suffix extracted from the receipt by the
                              vision model, or None.
         receipt_currency:    ISO-4217 currency detected on the receipt (used
@@ -107,11 +104,30 @@ class AccountMatchingService:
                         matched_account_currency=by_ccy[0].currency,
                     )
 
-        # --- Strategy 3: most-recent transaction in family ----------------------
-        # Per-user narrowing is intentionally skipped here because
-        # BudgetTransaction.created_by_id does not exist yet.
-        # TODO: once created_by_id is added, insert a per-user step before
-        # this family-wide fallback.
+        # --- Strategy 3a: most-recent transaction by THIS user ------------------
+        if user_id is not None:
+            stmt = (
+                select(BudgetTransaction.account_id, BudgetAccount.currency)
+                .join(BudgetAccount, BudgetAccount.id == BudgetTransaction.account_id)
+                .where(and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.created_by_id == user_id,
+                    BudgetTransaction.deleted_at.is_(None),
+                    BudgetAccount.deleted_at.is_(None),
+                    BudgetAccount.closed.is_(False),
+                ))
+                .order_by(desc(BudgetTransaction.created_at))
+                .limit(1)
+            )
+            result = (await db.execute(stmt)).first()
+            if result:
+                return AccountMatchResult(
+                    account_id=result[0],
+                    strategy="last_used",
+                    matched_account_currency=result[1],
+                )
+
+        # --- Strategy 3b: most-recent transaction in family (any user) ----------
         stmt = (
             select(BudgetTransaction.account_id, BudgetAccount.currency)
             .join(BudgetAccount, BudgetAccount.id == BudgetTransaction.account_id)

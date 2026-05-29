@@ -33,18 +33,17 @@ from openai import OpenAI
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
-from app.core.premium import FEATURE_MIN_PLAN, get_family_plan
-from app.models.budget import BudgetAccount, BudgetPayee, BudgetTransaction
+from app.core.premium import FEATURE_MIN_PLAN, PLAN_ORDER, get_family_plan
+from app.models.budget import (
+    BudgetAccount,
+    BudgetCategorizationRule,
+    BudgetPayee,
+    BudgetTransaction,
+)
 from app.schemas.budget import TransactionCreate
 from app.services.budget.transaction_service import TransactionService
 from app.services.budget.categorization_rule_service import CategorizationRuleService
 from app.services.budget.receipt_draft_service import ReceiptDraftService
-
-
-# Plan rank used by is_feature_enabled() to compare a family's plan against
-# the minimum plan required for a given feature. Mirrors core/premium.py's
-# tier ordering without importing the SubscriptionPlan model.
-_PLAN_ORDER = {"free": 0, "plus": 1, "pro": 2}
 
 
 # LiteLLM model alias. Registered in /mnt/nvme/docker-prod/litellm-proxy/
@@ -331,6 +330,13 @@ async def is_feature_enabled(
 ) -> bool:
     """Cheap boolean check for an optional pipeline feature.
 
+    .. deprecated::
+        Inside ``scan_and_create_transaction`` the plan is now resolved
+        once per request and reused — see the ``_allows`` closure there.
+        This helper is kept for external callers (and per-feature gates
+        outside the scanner pipeline) where the single-call overhead is
+        acceptable.
+
     Unlike ``app.core.premium.require_feature``, this never raises and
     does not increment usage. Used for the per-call gates inside the
     scan pipeline — fx_cross_charge, item_trends, a2a_webhook — where a
@@ -352,7 +358,7 @@ async def is_feature_enabled(
         return False
     plan = await get_family_plan(db, user)
     min_plan = FEATURE_MIN_PLAN.get(feature, "free")
-    return _PLAN_ORDER.get(plan.name, 0) >= _PLAN_ORDER.get(min_plan, 0)
+    return PLAN_ORDER.get(plan.name, 0) >= PLAN_ORDER.get(min_plan, 0)
 
 
 async def scan_and_create_transaction(
@@ -385,10 +391,10 @@ async def scan_and_create_transaction(
             AccountMatchingService picks one
         image_bytes: Raw bytes of the receipt image / rasterized PDF page
         media_type: MIME type
-        user_id: Authenticated user — reserved for the future per-user
-            last-used account fallback once ``created_by_id`` is added to
-            ``budget_transactions``. Optional (defaults to None) to keep
-            the v1 endpoint callable until T10 lands.
+        user_id: Authenticated user — stamped on the persisted transaction
+            as ``created_by_id`` and used by ``AccountMatchingService`` for
+            the per-user last-used fallback. Optional (defaults to None)
+            to keep test callers and the v1 endpoint working.
         force: When True, bypass the duplicate guard. Set by the endpoint
             in response to the 409 dup_warning prompt.
 
@@ -431,6 +437,42 @@ async def scan_and_create_transaction(
             reason="low_confidence",
         )
 
+    # Resolve family plan ONCE for all subsequent feature gates and load
+    # the categorization rule set ONCE for header + per-item lookups. The
+    # v1 implementation re-queried both per gate / per item, which made
+    # an 80-item receipt issue ~165 redundant SELECTs.
+    from app.models.user import User as _User
+    _user_row = None
+    if user_id is not None:
+        _user_row = await db.get(_User, user_id)
+    if _user_row is None:
+        # Fallback: any user in the family (preserves v1-test-path behavior
+        # where user_id may be None). Plans are family-scoped so the result
+        # is still correct.
+        _user_row = (await db.execute(
+            select(_User).where(_User.family_id == family_id).limit(1)
+        )).scalar_one_or_none()
+    _plan = await get_family_plan(db, _user_row) if _user_row else None
+    _plan_name = _plan.name if _plan else "free"
+    _plan_rank = PLAN_ORDER.get(_plan_name, 0)
+
+    def _allows(feature: str) -> bool:
+        """Cheap in-memory tier check using the per-request cached plan."""
+        min_plan = FEATURE_MIN_PLAN.get(feature, "free")
+        return _plan_rank >= PLAN_ORDER.get(min_plan, 0)
+
+    cached_rules = list((await db.execute(
+        select(BudgetCategorizationRule)
+        .where(
+            BudgetCategorizationRule.family_id == family_id,
+            BudgetCategorizationRule.enabled.is_(True),
+        )
+        .order_by(
+            BudgetCategorizationRule.priority.desc(),
+            BudgetCategorizationRule.created_at.asc(),
+        )
+    )).scalars().all())
+
     # (2) Account auto-detect ------------------------------------------------
     match = await AccountMatchingService.match(
         db, family_id, user_id=user_id,
@@ -446,7 +488,7 @@ async def scan_and_create_transaction(
         )
 
     # Drafts gate: non-Pro and currency mismatch routes to drafts queue.
-    fx_allowed = await is_feature_enabled(db, family_id, "fx_cross_charge")
+    fx_allowed = _allows("fx_cross_charge")
     if (
         match.matched_account_currency
         and receipt.currency
@@ -579,6 +621,7 @@ async def scan_and_create_transaction(
         fx_rate=fx_rate,
         original_amount_cents=original_amount_cents,
         original_currency=original_currency,
+        created_by_id=user_id,
     )
     db.add(txn)
     await db.flush()
@@ -589,16 +632,25 @@ async def scan_and_create_transaction(
     )
 
     # (6) Auto-categorize (transaction header + each item) ------------------
-    header_cat = await CategorizationRuleService.suggest_category(
-        db, family_id, payee=receipt.payee_name, description=None,
+    # Uses the cached rule list resolved at the top of this function — one
+    # SELECT instead of N+1 over the items.
+    # Pass the merchant name as `description` too so rules keyed on
+    # match_field='description' or 'both' fire the same as v1, which
+    # categorized off the BudgetTransaction.notes value (the notes here
+    # are built from receipt.payee_name via _build_notes).
+    _header_notes_for_match = receipt.payee_name or ""
+    header_cat = CategorizationRuleService.match_with_cached_rules(
+        cached_rules,
+        payee=receipt.payee_name,
+        description=_header_notes_for_match,
     )
     if header_cat:
         txn.category_id = header_cat
     for it in items_persisted:
-        it.category_id = await CategorizationRuleService.suggest_category(
-            db, family_id,
+        it.category_id = CategorizationRuleService.match_with_cached_rules(
+            cached_rules,
             payee=receipt.payee_name,
-            description=None,
+            description=receipt.payee_name,
             item_name=it.name,
         )
     await db.commit()
@@ -618,9 +670,7 @@ async def scan_and_create_transaction(
 
     # (7b) Trends per item ---------------------------------------------------
     trends: list[dict] = []
-    if items_persisted and await is_feature_enabled(
-        db, family_id, "item_trends",
-    ):
+    if items_persisted and _allows("item_trends"):
         seen: set[str] = set()
         for it in items_persisted:
             if it.normalized_name in seen:
@@ -633,7 +683,7 @@ async def scan_and_create_transaction(
                 trends.append(trend.model_dump())
 
     # (7c) A2A webhook enqueue ----------------------------------------------
-    if await is_feature_enabled(db, family_id, "a2a_webhook"):
+    if _allows("a2a_webhook"):
         try:
             payload = _build_webhook_payload(
                 family_id, txn, items_persisted, receipt.currency,
@@ -782,16 +832,25 @@ async def _find_or_create_payee(
     but NOT committed — the caller's commit / rollback boundary controls
     durability.
     """
-    if not payee_name:
+    if not payee_name or not payee_name.strip():
         return None
+    # Case-insensitive AND trim-insensitive match. Vision models often emit
+    # "HEB", " Heb ", "h.e.b." for the same store, and may pad with leading
+    # or trailing whitespace; the v1 strict equality created duplicate payee
+    # rows on every casing/whitespace variation. Normalize BOTH sides via
+    # lower(trim()) so an existing " heb " (legacy) still matches "HEB".
+    from sqlalchemy import func as _func
+    raw = payee_name.strip()
+    normalized = raw.lower()
     stmt = select(BudgetPayee).where(
         BudgetPayee.family_id == family_id,
-        BudgetPayee.name == payee_name,
+        _func.lower(_func.trim(BudgetPayee.name)) == normalized,
     )
     payee = (await db.execute(stmt)).scalars().first()
     if payee:
         return payee.id
-    new_payee = BudgetPayee(family_id=family_id, name=payee_name)
+    # Store the trimmed value so we don't accumulate whitespace variants.
+    new_payee = BudgetPayee(family_id=family_id, name=raw)
     db.add(new_payee)
     await db.flush()
     return new_payee.id

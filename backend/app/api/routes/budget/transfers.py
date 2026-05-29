@@ -65,6 +65,7 @@ async def transfer_between_accounts(
         amount=transfer.amount,
         date=transfer.date,
         notes=transfer.notes,
+        user_id=current_user.id,
     )
     return transactions
 

@@ -5,7 +5,7 @@ Business logic for transferring money between accounts and categories.
 """
 
 from datetime import date, datetime
-from typing import List
+from typing import List, Optional
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
@@ -32,6 +32,7 @@ class TransferService:
         amount: int,
         date: str,
         notes: str | None = None,
+        user_id: Optional[UUID] = None,
     ) -> List[BudgetTransaction]:
         """
         Transfer money between two accounts.
@@ -107,9 +108,10 @@ class TransferService:
             notes=transfer_notes,
             transfer_account_id=to_account_id,
             cleared=True,  # Transfers are auto-cleared
+            created_by_id=user_id,
         )
         db.add(withdrawal)
-        
+
         # Create deposit transaction (positive amount)
         deposit = BudgetTransaction(
             id=uuid4(),
@@ -120,6 +122,7 @@ class TransferService:
             notes=transfer_notes,
             transfer_account_id=from_account_id,
             cleared=True,  # Transfers are auto-cleared
+            created_by_id=user_id,
         )
         db.add(deposit)
         

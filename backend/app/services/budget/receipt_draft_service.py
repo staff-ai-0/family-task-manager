@@ -88,6 +88,7 @@ class ReceiptDraftService:
         draft_id: UUID,
         family_id: UUID,
         overrides: ReceiptDraftApprove,
+        user_id: Optional[UUID] = None,
     ) -> dict:
         """Approve a draft: apply human corrections, create the transaction.
 
@@ -150,7 +151,9 @@ class ReceiptDraftService:
             card_last4=sd.get("card_last4"),
             iva_cents=sd.get("iva_cents"),
         )
-        transaction = await TransactionService.create(db, family_id, txn_data)
+        transaction = await TransactionService.create(
+            db, family_id, txn_data, user_id=user_id,
+        )
 
         # Mark draft approved
         draft.status = "approved"

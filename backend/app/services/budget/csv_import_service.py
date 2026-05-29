@@ -254,6 +254,7 @@ class CSVImportService:
         skip_header_rows: int = 0,
         create_payees: bool = True,
         prevent_duplicates: bool = True,
+        user_id: Optional[UUID] = None,
     ) -> CSVImportResult:
         """
         Import transactions from CSV file
@@ -316,7 +317,24 @@ class CSVImportService:
         if not amount_col:
             result.add_import_error("Could not find amount column")
             return result
-        
+
+        # Load categorization rules ONCE — the per-row
+        # ``CategorizationRuleService.suggest_category`` call below would
+        # otherwise issue N SELECTs across the whole rules table (one per
+        # CSV row) and dominate import time for large statements.
+        from app.models.budget import BudgetCategorizationRule
+        cached_rules = list((await db.execute(
+            select(BudgetCategorizationRule)
+            .where(
+                BudgetCategorizationRule.family_id == family_id,
+                BudgetCategorizationRule.enabled.is_(True),
+            )
+            .order_by(
+                BudgetCategorizationRule.priority.desc(),
+                BudgetCategorizationRule.created_at.asc(),
+            )
+        )).scalars().all())
+
         # Process each row
         for row_data in rows:
             # Parse date
@@ -400,9 +418,8 @@ class CSVImportService:
             
             # If no category found, try auto-categorization based on payee/description
             if not category_id:
-                category_id = await CategorizationRuleService.suggest_category(
-                    db,
-                    family_id,
+                category_id = CategorizationRuleService.match_with_cached_rules(
+                    cached_rules,
                     payee=description,  # Description is used as payee
                     description=None,  # We don't have a separate description field from CSV
                 )
@@ -429,7 +446,9 @@ class CSVImportService:
                     transfer_account_id=None,
                 )
                 
-                await TransactionService.create(db, family_id, transaction_data)
+                await TransactionService.create(
+                    db, family_id, transaction_data, user_id=user_id,
+                )
                 result.add_success()
             
             except Exception as e:

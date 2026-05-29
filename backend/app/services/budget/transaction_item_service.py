@@ -56,7 +56,17 @@ class TransactionItemService:
         transaction_id: UUID,
         items: list[dict],
     ) -> list[BudgetTransactionItem]:
-        """Insert a batch of items as children of a transaction."""
+        """Insert a batch of items as children of a transaction.
+
+        The caller owns the transaction lifecycle — this method only
+        ``db.add()``s rows and ``db.flush()``es to populate server-default
+        primary keys. It does NOT commit and does NOT refresh, which keeps
+        the unit of work intact across the scanner pipeline (transaction
+        header, items, categorization all commit together). Server-default
+        timestamps like ``created_at`` are NOT populated on the returned
+        Python objects — callers that need them must ``db.refresh()`` the
+        rows themselves after their own commit.
+        """
         rows: list[BudgetTransactionItem] = []
         for it in items:
             name = (it.get("name") or "").strip()
@@ -76,9 +86,10 @@ class TransactionItemService:
             )
             db.add(row)
             rows.append(row)
-        await db.commit()
-        for r in rows:
-            await db.refresh(r)
+        # Populate id from gen_random_uuid() default without committing —
+        # the scanner pipeline still needs to assign category_id per row
+        # and wants a single atomic commit.
+        await db.flush()
         return rows
 
     @staticmethod

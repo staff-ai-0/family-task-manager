@@ -145,10 +145,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
             });
 
             if (!response.ok) {
-                cookies.delete("access_token", { path: "/" });
+                // Only treat 401/403 as "token is bad" — those are authoritative
+                // signals from the auth check. 5xx / 502 / 504 / etc. are likely
+                // transient (backend restart, deploy, proxy hiccup) and the
+                // user's token may be perfectly valid. Surface a 503 without
+                // wiping the cookie so the user can retry.
+                if (response.status === 401 || response.status === 403) {
+                    cookies.delete("access_token", { path: "/" });
+                    return new Response(
+                        JSON.stringify({ detail: "Invalid or expired token" }),
+                        { status: 401, headers: { "Content-Type": "application/json" } }
+                    );
+                }
                 return new Response(
-                    JSON.stringify({ detail: "Invalid or expired token" }),
-                    { status: 401, headers: { "Content-Type": "application/json" } }
+                    JSON.stringify({
+                        detail: "Backend temporarily unavailable. Retry shortly.",
+                        code: "backend_error",
+                    }),
+                    { status: 503, headers: { "Content-Type": "application/json" } }
                 );
             }
 
@@ -170,11 +184,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 // Plan fetch failure is non-fatal — default to free
             }
         } catch (error) {
-            console.error("Token validation error:", error);
-            cookies.delete("access_token", { path: "/" });
+            // fetch() throws only on NETWORK failures (DNS, connection refused,
+            // timeout) — never on HTTP errors (those reach line 147 via !response.ok).
+            // The token may be perfectly valid; the backend just isn't reachable.
+            // Surface that clearly and DO NOT delete the cookie.
+            console.error("Backend unreachable during auth check:", error);
             return new Response(
-                JSON.stringify({ detail: "Authentication error" }),
-                { status: 500, headers: { "Content-Type": "application/json" } }
+                JSON.stringify({
+                    detail: "Backend temporarily unavailable. Retry shortly.",
+                    code: "backend_unreachable",
+                }),
+                { status: 503, headers: { "Content-Type": "application/json" } }
             );
         }
     }

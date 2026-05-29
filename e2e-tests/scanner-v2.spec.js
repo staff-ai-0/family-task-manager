@@ -10,20 +10,13 @@ test.describe('Scanner v2', () => {
     await expect(page.locator('#confirm-card.hidden')).toHaveCount(1);
   });
 
-  test('duplicate modal flow', async ({ page }) => {
-    // requires a backend stub or pre-seeded recent tx; left as a fixture spec
-    test.skip(true, 'needs backend stub for dup-flow; covered by API test 26');
-  });
-
-  test('FX display when accounts differ', async ({ page }) => {
-    test.skip(true, 'needs backend stub; covered by API test 14');
-  });
-
-  test('IVA pill renders when present', async ({ page }) => {
-    test.skip(true, 'needs backend stub; covered by API test 16');
-  });
-
-  test('trend badges only when sample_size >= 3', async ({ page }) => {
-    test.skip(true, 'needs seeded item history');
-  });
+  // The following four flows need a mock-able backend stub for the
+  // /api/budget/transactions/scan-receipt POST. Each is shipped as test.skip
+  // (with a comment pointing at the backend coverage that DOES exist) so
+  // CI shows "skipped: 4" and the coverage gap stays visible — better than
+  // silently passing with one happy-path test.
+  test.skip("duplicate modal flow — needs API mock layer (see test_endpoint_returns_409_on_dup)", () => {});
+  test.skip("FX display when accounts differ — covered by test_pipeline_stores_fx_when_currencies_differ", () => {});
+  test.skip("IVA pill renders when present — covered by test_pipeline_creates_tx_with_items_and_fx", () => {});
+  test.skip("trend badges only when sample_size >= 3 — covered by test_get_trend_returns_null_below_sample", () => {});
 });

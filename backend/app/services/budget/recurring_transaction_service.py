@@ -467,6 +467,7 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         recurring: BudgetRecurringTransaction,
         family_id: UUID,
         transaction_date: date,
+        user_id: Optional[UUID] = None,
     ) -> BudgetTransaction:
         """Internal helper: build a transaction from an already-loaded
         recurring template and update its scheduling state without
@@ -487,6 +488,7 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
             notes=recurring.description or recurring.name,
             cleared=False,
             reconciled=False,
+            created_by_id=user_id,
         )
         db.add(transaction)
 
@@ -524,19 +526,24 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         recurring_id: UUID,
         family_id: UUID,
         transaction_date: Optional[date] = None,
+        user_id: Optional[UUID] = None,
     ) -> BudgetTransaction:
         """Post a transaction from a recurring template.
 
         Single-row entry point: loads the template via get_by_id and commits
         its own work. Bulk callers should pre-load templates and call
         _post_recurring_no_commit directly to avoid the per-row fetch.
+
+        ``user_id`` (optional) is stamped on the persisted transaction as
+        ``created_by_id``. Cron-driven sweeps leave it None — that's the
+        intended behavior, since no human triggered the post.
         """
         if transaction_date is None:
             transaction_date = date.today()
 
         recurring = await cls.get_by_id(db, recurring_id, family_id)
         transaction = cls._post_recurring_no_commit(
-            db, recurring, family_id, transaction_date
+            db, recurring, family_id, transaction_date, user_id=user_id,
         )
         await db.commit()
         await db.refresh(transaction)
@@ -548,6 +555,7 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         db: AsyncSession,
         family_id: UUID,
         as_of_date: Optional[date] = None,
+        user_id: Optional[UUID] = None,
     ) -> dict:
         """Post all active recurring transactions due on or before as_of_date.
 
@@ -570,7 +578,7 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
             (
                 recurring,
                 cls._post_recurring_no_commit(
-                    db, recurring, family_id, as_of_date
+                    db, recurring, family_id, as_of_date, user_id=user_id,
                 ),
             )
             for recurring in due

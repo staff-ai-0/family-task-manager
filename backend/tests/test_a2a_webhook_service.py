@@ -98,6 +98,43 @@ async def test_dispatch_once_signs_and_marks_sent(db, family, transaction):
 
 
 @pytest.mark.asyncio
+async def test_dispatch_canonical_body_is_sorted_compact_json(db, family, transaction):
+    """The HMAC body MUST be json.dumps(payload, separators=(',',':'), sort_keys=True).
+    Receivers re-serialize with the same canonical form to verify signatures."""
+    secret = "abc123"
+    db.add(FamilyA2AWebhook(
+        family_id=family.id, url="https://hook.example/x",
+        secret=secret, enabled=True,
+    ))
+    await db.commit()
+    payload = {"z": 1, "a": 2, "m": {"y": 1, "x": 2}}  # unsorted keys
+    delivery = await A2AWebhookService.enqueue(
+        db, family.id, transaction.id, payload=payload,
+    )
+
+    fake_resp = MagicMock(status_code=202, text="ok")
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_resp)
+    fake_client.__aenter__.return_value = fake_client
+    fake_client.__aexit__.return_value = False
+    with patch("app.services.budget.a2a_webhook_service.httpx.AsyncClient",
+               return_value=fake_client):
+        await A2AWebhookService.dispatch_once(db, delivery.id)
+
+    sent_body = fake_client.post.await_args.kwargs["content"]
+    canonical = json.dumps(payload, separators=(",", ":"),
+                           sort_keys=True).encode("utf-8")
+    assert sent_body == canonical, (
+        f"HMAC body must be sort_keys=True compact JSON; got {sent_body!r}"
+    )
+    expected_sig = "sha256=" + hmac.new(
+        secret.encode(), canonical, hashlib.sha256
+    ).hexdigest()
+    sent_sig = fake_client.post.await_args.kwargs["headers"]["X-A2A-Signature"]
+    assert sent_sig == expected_sig
+
+
+@pytest.mark.asyncio
 async def test_dispatch_failure_schedules_retry(db, family, transaction):
     db.add(FamilyA2AWebhook(
         family_id=family.id, url="https://x", secret="s", enabled=True,

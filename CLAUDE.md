@@ -10,8 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Environments**:
 - Local (dev): frontend `http://localhost:3003`, backend `http://localhost:8003/docs` — secrets in `.env`
-- **Production (GCP)**: `https://gcp-family.agent-ia.mx` + `https://api-gcp-family.agent-ia.mx` (Cloudflare Tunnel `gcp-family`). VM `agentia-family-hub` (preemptible e2-standard-2) in project `agentia-prod-497016`, zone `us-central1-a`. App at `/home/jc/family-task-manager/`, compose file `docker-compose.gcp.yml`, secrets in `.env` on host. Deploy via `./scripts/deploy-gcp.sh`.
-- **On-prem (10.1.0.99) — DECOMMISSIONED 2026-05-23**: was `https://family.agent-ia.mx` under rootless podman. systemd unit disabled, containers stopped. DB dump retained at `/mnt/nvme/docker-prod/family-task-manager/backups/pre-gig-photo-*.sql`. Repo + volumes preserved in case of rollback. Do NOT redeploy without a full reassessment — preemptible-VM crash recovery already pulled the canonical DB to GCP.
+- **Production (GCP)**: `https://gcp-family.agent-ia.mx` + `https://api-gcp-family.agent-ia.mx` (Cloudflare Tunnel `gcp-family`). VM `family-app` (e2-medium) in project `family-prod`, zone `us-central1-a`. App at `/home/jc/family-task-manager/`, compose file `docker-compose.gcp.yml`, secrets in `.env` on host. Deploy via `./scripts/deploy-gcp.sh`. Canonical GCP env config (project, zone, instance name) lives in `.deploy.gcp.env` at the repo root and is sourced by every `scripts/*.sh` helper.
+- **On-prem (10.1.0.99) — DECOMMISSIONED 2026-05-23**: was `https://family.agent-ia.mx` under rootless podman. systemd unit disabled, containers stopped. DB dump retained at `/mnt/nvme/docker-prod/family-task-manager/backups/pre-gig-photo-*.sql`. Repo + volumes preserved in case of rollback. Do NOT redeploy without a full reassessment — the canonical DB now lives on the GCP VM.
 
 **Production deployment**: `./scripts/deploy-gcp.sh` is the canonical path — rsyncs source, builds images, brings the stack up, runs alembic migrations, smoke-checks the public endpoints. Local `docker-compose.yml` is for dev only.
 
@@ -19,18 +19,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## Production runtime — GCP VM `agentia-family-hub`
+## Production runtime — GCP VM `family-app`
 
-Standard Docker CE under user `jc`. Preemptible e2-standard-2 in `agentia-prod-497016` / `us-central1-a`. All AI traffic routes through the on-prem LiteLLM proxy at `https://litellm.agent-ia.mx`. No Vault — secrets live in `.env` on the VM at `/home/jc/family-task-manager/.env` (template at `.env.gcp.example`).
+Standard Docker CE under user `jc`. e2-medium in `family-prod` / `us-central1-a`. All AI traffic routes through the on-prem LiteLLM proxy at `https://litellm.agent-ia.mx`. No Vault — secrets live in `.env` on the VM at `/home/jc/family-task-manager/.env` (template at `.env.gcp.example`). The project/zone/instance identifiers used by every `scripts/*.sh` helper are sourced from `.deploy.gcp.env` at the repo root — update them there, not in individual scripts.
 
-**Preemptible-VM risk**: GCP can reclaim this instance at any time. If it disappears (deploy script reports `VM ... is not RUNNING` and `gcloud compute instances list` shows it missing), recreate via:
+**Recovery**: if the instance is ever deleted or otherwise needs to be recreated (deploy script reports `VM ... is not RUNNING` and `gcloud compute instances list` shows it missing), recreate via:
 
 ```bash
-gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
-    compute instances create agentia-family-hub \
-    --zone=us-central1-a --machine-type=e2-standard-2 \
+gcloud --account=info@agent-ia.mx --project=family-prod \
+    compute instances create family-app \
+    --zone=us-central1-a --machine-type=e2-medium \
     --image-family=debian-12 --image-project=debian-cloud \
-    --preemptible --tags=http-server,https-server --boot-disk-size=30GB
+    --tags=http-server,https-server --boot-disk-size=30GB
 ```
 
 Then `./scripts/gcp-bootstrap.sh` → scp .env → `./scripts/deploy-gcp.sh` → restore DB from the most recent dump.
@@ -45,7 +45,7 @@ The on-prem `family.agent-ia.mx` apex is **retired**. Canonical URL is `gcp-fami
 
 ```bash
 ./scripts/gcp-bootstrap.sh         # installs docker + compose-plugin, creates app dir
-gcloud compute scp .env.gcp.example jc@agentia-family-hub:/home/jc/family-task-manager/.env --zone=us-central1-a
+gcloud compute scp .env.gcp.example jc@family-app:/home/jc/family-task-manager/.env --zone=us-central1-a
 # Fill in secrets in the VM's .env (or scp a complete one from local), then:
 ./scripts/deploy-gcp.sh
 ```
@@ -54,26 +54,26 @@ gcloud compute scp .env.gcp.example jc@agentia-family-hub:/home/jc/family-task-m
 
 ```bash
 # Status
-gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
-  compute ssh agentia-family-hub --zone=us-central1-a \
+gcloud --account=info@agent-ia.mx --project=family-prod \
+  compute ssh family-app --zone=us-central1-a \
   --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml ps'
 
 # Logs (backend)
-gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
-  compute ssh agentia-family-hub --zone=us-central1-a \
+gcloud --account=info@agent-ia.mx --project=family-prod \
+  compute ssh family-app --zone=us-central1-a \
   --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml logs -f backend'
 
 # Quick redeploy (skip backup + cached images)
 ./scripts/deploy-gcp.sh --skip-backup --skip-build -y
 
 # Run migrations only
-gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
-  compute ssh agentia-family-hub --zone=us-central1-a \
+gcloud --account=info@agent-ia.mx --project=family-prod \
+  compute ssh family-app --zone=us-central1-a \
   --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T backend alembic upgrade head'
 
 # DB shell
-gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
-  compute ssh agentia-family-hub --zone=us-central1-a \
+gcloud --account=info@agent-ia.mx --project=family-prod \
+  compute ssh family-app --zone=us-central1-a \
   --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T postgres psql -U familyapp familyapp'
 ```
 
@@ -94,17 +94,17 @@ sudo docker compose --env-file .env -f docker-compose.gcp.yml restart backend
 Backups under `/home/jc/family-task-manager/backups/` (created by `./scripts/deploy-gcp.sh` unless `--skip-backup`). To dump on demand:
 
 ```bash
-gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
-  compute ssh agentia-family-hub --zone=us-central1-a \
+gcloud --account=info@agent-ia.mx --project=family-prod \
+  compute ssh family-app --zone=us-central1-a \
   --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T postgres pg_dump -U familyapp familyapp' > /tmp/family-backup.sql
 ```
 
 Restore (after stopping or with empty target DB):
 
 ```bash
-gcloud compute scp /tmp/family-backup.sql jc@agentia-family-hub:/tmp/restore.sql --zone=us-central1-a
-gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
-  compute ssh agentia-family-hub --zone=us-central1-a \
+gcloud compute scp /tmp/family-backup.sql jc@family-app:/tmp/restore.sql --zone=us-central1-a
+gcloud --account=info@agent-ia.mx --project=family-prod \
+  compute ssh family-app --zone=us-central1-a \
   --command='cd /home/jc/family-task-manager && sudo docker cp /tmp/restore.sql gcp_family_db:/tmp/restore.sql && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T postgres bash -c "psql -U \$POSTGRES_USER \$POSTGRES_DB < /tmp/restore.sql"'
 ```
 
@@ -126,12 +126,12 @@ The on-prem stack is stopped (`systemctl --user disable --now family-task-manage
 ./scripts/deploy-gcp.sh --skip-backup --skip-build -y
 
 # Status / logs (helpers — see Common Ops above for full incantations)
-gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
-  compute ssh agentia-family-hub --zone=us-central1-a --command='sudo docker ps'
+gcloud --account=info@agent-ia.mx --project=family-prod \
+  compute ssh family-app --zone=us-central1-a --command='sudo docker ps'
 
 # Run backend tests inside the running container
-gcloud --account=info@agent-ia.mx --project=agentia-prod-497016 \
-  compute ssh agentia-family-hub --zone=us-central1-a \
+gcloud --account=info@agent-ia.mx --project=family-prod \
+  compute ssh family-app --zone=us-central1-a \
   --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T backend pytest tests/ -v'
 ```
 

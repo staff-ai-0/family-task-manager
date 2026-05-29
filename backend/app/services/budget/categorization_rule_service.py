@@ -263,6 +263,34 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
 
         return None
 
+    @staticmethod
+    def match_with_cached_rules(
+        rules: list,
+        *,
+        payee: Optional[str] = None,
+        description: Optional[str] = None,
+        item_name: Optional[str] = None,
+    ) -> Optional[UUID]:
+        """In-memory match against an already-loaded rule list (no DB IO).
+
+        Mirrors ``suggest_category`` but accepts a pre-loaded list of
+        ``BudgetCategorizationRule`` rows. Callers that need to match many
+        candidates (e.g. the receipt scanner running once per line item)
+        should fetch the rule set once and reuse this method to avoid an
+        N+1 SELECT on the rules table.
+
+        Note: callers must respect the same ordering contract
+        ``suggest_category`` relies on — load rules with
+        ``list_rules(enabled_only=True)`` (priority DESC, created_at ASC)
+        so the first match here is the highest-priority enabled rule.
+        """
+        if not payee and not description and not item_name:
+            return None
+        for rule in rules:
+            if CategorizationRuleService._match_rule(rule, payee, description, item_name):
+                return rule.category_id
+        return None
+
     @classmethod
     async def apply_rule(
         cls,
