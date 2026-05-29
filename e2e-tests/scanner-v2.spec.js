@@ -10,20 +10,7 @@ test.describe('Scanner v2', () => {
     await expect(page.locator('#confirm-card.hidden')).toHaveCount(1);
   });
 
-  test('duplicate modal flow', async ({ page }) => {
-    // requires a backend stub or pre-seeded recent tx; left as a fixture spec
-    test.skip(true, 'needs backend stub for dup-flow; covered by API test 26');
-  });
-
-  test('FX display when accounts differ', async ({ page }) => {
-    test.skip(true, 'needs backend stub; covered by API test 14');
-  });
-
-  test('IVA pill renders when present', async ({ page }) => {
-    test.skip(true, 'needs backend stub; covered by API test 16');
-  });
-
-  test('trend badges only when sample_size >= 3', async ({ page }) => {
-    test.skip(true, 'needs seeded item history');
-  });
+  // TODO: add real E2E coverage for: duplicate modal flow, FX cross-currency display,
+  // IVA pill rendering, item-trend badges. Each needs a mock-able backend stub for the
+  // /api/budget/transactions/scan-receipt POST. Tracked in: TBD-followup.
 });
