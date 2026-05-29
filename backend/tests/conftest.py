@@ -353,3 +353,75 @@ async def gig_template_factory(db_session: AsyncSession):
         return t
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# Shared fixtures for scanner-v2 tasks (T4+)
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def family(db: AsyncSession):
+    """A fresh family for scanner-v2 service tests."""
+    from app.models.family import Family
+    fam = Family(name="Test Family")
+    db.add(fam)
+    await db.commit()
+    await db.refresh(fam)
+    return fam
+
+
+@pytest_asyncio.fixture
+async def other_family(db: AsyncSession):
+    """A second family for tenant-isolation tests."""
+    from app.models.family import Family
+    fam = Family(name="Other Family")
+    db.add(fam)
+    await db.commit()
+    await db.refresh(fam)
+    return fam
+
+
+@pytest_asyncio.fixture
+async def transaction(db: AsyncSession, family):
+    """A minimal BudgetTransaction attached to the shared family fixture."""
+    from app.models.budget import BudgetAccount, BudgetTransaction
+    from datetime import date
+    acct = BudgetAccount(family_id=family.id, name="Cash", type="checking",
+                         currency="MXN")
+    db.add(acct)
+    await db.commit()
+    await db.refresh(acct)
+    tx = BudgetTransaction(
+        family_id=family.id, account_id=acct.id, date=date.today(),
+        amount=-10000,
+    )
+    db.add(tx)
+    await db.commit()
+    await db.refresh(tx)
+    return tx
+
+
+@pytest_asyncio.fixture
+async def transaction_factory(db: AsyncSession, family):
+    """Factory that creates BudgetTransaction rows for the shared family."""
+    from app.models.budget import BudgetAccount, BudgetTransaction
+    acct = BudgetAccount(family_id=family.id, name="F", type="checking",
+                         currency="MXN")
+    db.add(acct)
+    await db.commit()
+    await db.refresh(acct)
+
+    async def _make(**kwargs):
+        tx = BudgetTransaction(
+            family_id=kwargs.get("family_id", family.id),
+            account_id=acct.id,
+            date=kwargs.get("date"),
+            amount=kwargs.get("amount", -10000),
+        )
+        db.add(tx)
+        await db.commit()
+        await db.refresh(tx)
+        return tx
+
+    return _make
