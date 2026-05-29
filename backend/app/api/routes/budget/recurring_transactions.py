@@ -171,5 +171,6 @@ async def post_recurring_transaction(
         recurring_id,
         to_uuid_required(current_user.family_id),
         transaction_date=transaction_date,
+        user_id=current_user.id,
     )
     return transaction

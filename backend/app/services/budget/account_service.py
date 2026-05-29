@@ -61,6 +61,7 @@ class AccountService(BaseFamilyService[BudgetAccount]):
         db: AsyncSession,
         family_id: UUID,
         data: AccountCreate,
+        user_id: Optional[UUID] = None,
     ) -> BudgetAccount:
         """
         Create a new account.
@@ -111,6 +112,7 @@ class AccountService(BaseFamilyService[BudgetAccount]):
                 cleared=True,
                 reconciled=False,
                 is_parent=False,
+                created_by_id=user_id,
             )
             db.add(starting_txn)
 

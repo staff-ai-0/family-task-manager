@@ -85,6 +85,7 @@ async def create_transaction(
         db,
         family_id=to_uuid_required(current_user.family_id),
         data=data,
+        user_id=current_user.id,
     )
     await UsageService.increment(db, current_user.family_id, "budget_transaction")
     return transaction
@@ -225,6 +226,7 @@ async def finish_reconciliation(
         account_id=data.account_id,
         statement_balance=data.statement_balance,
         transaction_ids=data.transaction_ids,
+        user_id=current_user.id,
     )
 
 
@@ -250,6 +252,7 @@ async def create_split_transaction(
         notes=data.notes,
         cleared=data.cleared,
         reconciled=data.reconciled,
+        user_id=current_user.id,
     )
     # Charge usage per child leg; the parent row is a virtual aggregator and
     # is not user-visible as an independent transaction.
@@ -283,7 +286,7 @@ async def update_split_transaction(
     """Replace child legs of a split parent (parent only)."""
     family_id = to_uuid_required(current_user.family_id)
     parent = await TransactionService.replace_split_children(
-        db, transaction_id, family_id, data.splits
+        db, transaction_id, family_id, data.splits, user_id=current_user.id,
     )
     children = await TransactionService.get_split_children(db, parent.id, family_id)
     return _build_split_response(parent, children)
@@ -380,6 +383,7 @@ async def import_csv_transactions(
             skip_header_rows=skip_header_rows,
             create_payees=create_payees,
             prevent_duplicates=prevent_duplicates,
+            user_id=current_user.id,
         )
         
         return {
@@ -425,6 +429,7 @@ async def import_file_transactions_endpoint(
             account_id=account_id,
             filename=file.filename or "unknown",
             file_bytes=file_bytes,
+            user_id=current_user.id,
         )
         return result
     except Exception as e:

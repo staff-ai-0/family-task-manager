@@ -27,6 +27,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         db: AsyncSession,
         family_id: UUID,
         data: TransactionCreate,
+        user_id: Optional[UUID] = None,
     ) -> BudgetTransaction:
         """
         Create a new transaction.
@@ -35,6 +36,10 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             db: Database session
             family_id: Family ID
             data: Transaction creation data
+            user_id: Authenticated user creating the transaction; stamped
+                as ``created_by_id`` for the per-user last-used account
+                fallback in AccountMatchingService. Optional to keep
+                test callers and legacy paths working.
 
         Returns:
             Created transaction
@@ -91,6 +96,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             # is promoted to a real transaction).
             card_last4=getattr(data, "card_last4", None),
             iva_cents=getattr(data, "iva_cents", None),
+            created_by_id=user_id,
         )
 
         db.add(transaction)
@@ -448,6 +454,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         notes: Optional[str] = None,
         cleared: bool = False,
         reconciled: bool = False,
+        user_id: Optional[UUID] = None,
     ) -> BudgetTransaction:
         """Create a parent split transaction with N child legs.
 
@@ -495,6 +502,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             cleared=cleared,
             reconciled=reconciled,
             is_parent=True,
+            created_by_id=user_id,
         )
         db.add(parent)
         await db.flush()
@@ -512,6 +520,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
                 reconciled=reconciled,
                 parent_id=parent.id,
                 is_parent=False,
+                created_by_id=user_id,
             )
             db.add(child)
 
@@ -551,6 +560,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         parent_id: UUID,
         family_id: UUID,
         splits: List[SplitChild],
+        user_id: Optional[UUID] = None,
     ) -> BudgetTransaction:
         """Replace child legs of a split parent. Updates parent total."""
         if len(splits) < 2:
@@ -605,6 +615,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
                 reconciled=parent.reconciled,
                 parent_id=parent.id,
                 is_parent=False,
+                created_by_id=user_id,
             )
             db.add(child)
 
@@ -759,6 +770,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         account_id: UUID,
         statement_balance: int,
         transaction_ids: List[UUID],
+        user_id: Optional[UUID] = None,
     ) -> dict:
         """Mark transactions cleared+reconciled, create adjustment if balance mismatches.
 
@@ -812,6 +824,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
                 notes="Ajuste de Conciliación",
                 cleared=True,
                 reconciled=True,
+                created_by_id=user_id,
             )
             db.add(adj)
             await db.flush()

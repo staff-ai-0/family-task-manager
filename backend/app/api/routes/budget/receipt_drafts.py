@@ -90,7 +90,8 @@ async def approve_receipt_draft(
     AI-extracted value.
     """
     return await ReceiptDraftService.approve(
-        db, draft_id, to_uuid_required(current_user.family_id), data
+        db, draft_id, to_uuid_required(current_user.family_id), data,
+        user_id=current_user.id,
     )
 
 
