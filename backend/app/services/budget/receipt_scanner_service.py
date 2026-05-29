@@ -142,10 +142,13 @@ class ScannedReceipt:
     date: Optional[date]
     total_amount: Optional[int]  # in cents
     payee_name: Optional[str]
-    items: list  # [{name, amount_cents}]
+    items: list  # [{name, amount_cents, ...}]
     currency: str = "MXN"
     raw_text: str = ""
     confidence: float = 0.0
+    # v2 fields
+    card_last4: Optional[str] = None
+    iva_cents: Optional[int] = None
 
 
 RECEIPT_PROMPT = """Analyze this receipt image and extract the following information. Return ONLY valid JSON, no markdown or explanation.
@@ -153,9 +156,20 @@ RECEIPT_PROMPT = """Analyze this receipt image and extract the following informa
 {
   "date": "YYYY-MM-DD or null if unreadable",
   "total_amount": <total in the receipt's smallest currency unit (cents/centavos), as integer, NEGATIVE for expenses>,
+  "iva_cents": <tax/IVA line as positive integer cents, or null if not present>,
   "payee_name": "store/business name or null",
-  "items": [{"name": "item description", "amount_cents": <price in cents as integer>}],
+  "card_last4": "4-digit string (last 4 of the card used) or null",
   "currency": "MXN or USD or other ISO code",
+  "items": [
+    {
+      "name": "item description",
+      "qty": <number or null>,
+      "unit_price_cents": <positive integer cents per unit, or null>,
+      "total_cents": <positive integer cents for the line>,
+      "brand": "string or null",
+      "raw_text": "the original line as printed on the receipt"
+    }
+  ],
   "confidence": <0.0-1.0 how confident you are in the extraction>
 }
 
@@ -163,8 +177,9 @@ Rules:
 - total_amount MUST be negative (it's an expense)
 - If the receipt shows MXN $150.50, total_amount = -15050
 - If the receipt shows $42.99 USD, total_amount = -4299
-- Extract the business/store name as payee_name
-- List individual items if visible
+- card_last4: look for "**1234", "XXXX1234", "terminada en 1234", "Card: ...1234"
+- iva_cents: look for "IVA", "Tax", "Impuesto" line; extract as POSITIVE cents
+- Per item: extract qty when explicit ("2 x", "2 PZA"), brand when present
 - Set confidence based on image clarity and readability
 - If you cannot read the receipt at all, set confidence to 0 and all values to null"""
 
@@ -258,6 +273,18 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
         except (ValueError, TypeError):
             pass
 
+    # Validate card_last4: only accept exactly 4 digit characters
+    raw_card = data.get("card_last4")
+    parsed_card_last4 = (
+        raw_card
+        if (isinstance(raw_card, str) and len(raw_card) == 4 and raw_card.isdigit())
+        else None
+    )
+
+    # Validate iva_cents: only accept int
+    raw_iva = data.get("iva_cents")
+    parsed_iva_cents = raw_iva if isinstance(raw_iva, int) else None
+
     return ScannedReceipt(
         date=parsed_date,
         total_amount=data.get("total_amount"),
@@ -266,6 +293,8 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
         currency=data.get("currency", "MXN"),
         raw_text=response_text,
         confidence=data.get("confidence", 0.0),
+        card_last4=parsed_card_last4,
+        iva_cents=parsed_iva_cents,
     )
 
 
