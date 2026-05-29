@@ -142,8 +142,17 @@ async def test_list_items_filters_by_family(
 async def test_trend_returns_null_when_below_sample(
     client: AsyncClient,
     auth_headers: dict,
+    monkeypatch,
 ):
-    """GET /api/budget/items/trend for unknown name returns 200 with null body."""
+    """GET /api/budget/items/trend for unknown name returns 200 with null body.
+
+    The endpoint is gated behind the Pro-only ``item_trends`` feature, so
+    we patch the require_feature dependency to a no-op for this test.
+    """
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr(
+        "app.api.routes.budget.items.require_feature", AsyncMock(),
+    )
     resp = await client.get(
         "/api/budget/items/trend?normalized_name=nonexistent",
         headers=auth_headers,

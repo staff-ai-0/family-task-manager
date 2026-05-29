@@ -483,12 +483,17 @@ async def test_endpoint_force_true_commits(client, auth_headers,
 async def test_endpoint_account_id_overrides_auto_detect(
     client, auth_headers, account_factory_authed,
 ):
-    """account_id query param flows to pipeline and strategy is 'override'."""
+    """account_id form-data flows to pipeline and strategy is 'override'."""
     a = await account_factory_authed(currency="MXN")
+    # account_id rides the multipart form (Form(...) on the endpoint), not
+    # the query string — pin that contract here so a regression to
+    # ?account_id=... gets caught.
     files = {"file": ("r.jpg", b"\xff\xd8\xff\xe0", "image/jpeg")}
+    data = {"account_id": str(a.id)}
     resp = await client.post(
-        f"/api/budget/transactions/scan-receipt?account_id={a.id}",
+        "/api/budget/transactions/scan-receipt",
         files=files,
+        data=data,
         headers=auth_headers,
     )
     assert resp.status_code == 200
