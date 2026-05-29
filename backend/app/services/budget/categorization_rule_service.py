@@ -221,30 +221,44 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
         family_id: UUID,
         payee: Optional[str] = None,
         description: Optional[str] = None,
+        item_name: Optional[str] = None,
     ) -> Optional[UUID]:
         """
-        Suggest a category for a transaction based on payee/description and rules.
+        Suggest a category for a transaction based on payee/description/item_name and rules.
 
         Rules are evaluated in priority order (highest priority first).
         Returns the category_id from the first matching rule, or None if no match.
+
+        The match field semantics:
+          - rule.match_field == "payee"        → match against `payee`
+          - rule.match_field == "description"  → match against `description`,
+            falling back to `item_name` when description is None
+          - rule.match_field == "both"         → match if payee OR description
+            OR item_name matches
+
+        `item_name` enables per-line categorization for receipt scans
+        (e.g. a rule keyed on "leche" categorizes the milk line item even
+        when the receipt's payee/description doesn't mention it).
 
         Args:
             db: Database session
             family_id: Family ID
             payee: Payee name (optional)
             description: Transaction description (optional)
+            item_name: Single line-item name to match against
+                description-pattern rules (optional)
 
         Returns:
             Suggested category_id or None if no rule matches
         """
-        if not payee and not description:
+        if not payee and not description and not item_name:
             return None
 
         # Get all enabled rules for this family, ordered by priority
         rules = await cls.list_rules(db, family_id, enabled_only=True)
 
         for rule in rules:
-            if cls._match_rule(rule, payee, description):
+            if cls._match_rule(rule, payee, description, item_name):
                 return rule.category_id
 
         return None
@@ -294,14 +308,19 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
         rule: BudgetCategorizationRule,
         payee: Optional[str],
         description: Optional[str],
+        item_name: Optional[str] = None,
     ) -> bool:
         """
-        Check if a rule matches the given payee and/or description.
+        Check if a rule matches the given payee/description/item_name.
 
         Args:
             rule: The categorization rule
             payee: Payee name (optional)
             description: Transaction description (optional)
+            item_name: Receipt line-item name (optional). Used as an
+                additional source when match_field is 'description' or
+                'both' — receipt scans don't have a free-form description
+                column but each line item can drive categorization.
 
         Returns:
             True if the rule matches
@@ -311,11 +330,15 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
                 rule.pattern, payee, rule.rule_type
             )
         elif rule.match_field == "description":
-            return description is not None and CategorizationRuleService._match_pattern(
+            desc_match = description is not None and CategorizationRuleService._match_pattern(
                 rule.pattern, description, rule.rule_type
             )
+            item_match = item_name is not None and CategorizationRuleService._match_pattern(
+                rule.pattern, item_name, rule.rule_type
+            )
+            return desc_match or item_match
         elif rule.match_field == "both":
-            # For "both", match if either payee or description matches
+            # For "both", match if payee OR description OR item_name matches
             payee_match = (
                 payee is not None
                 and CategorizationRuleService._match_pattern(
@@ -328,7 +351,13 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
                     rule.pattern, description, rule.rule_type
                 )
             )
-            return payee_match or description_match
+            item_match = (
+                item_name is not None
+                and CategorizationRuleService._match_pattern(
+                    rule.pattern, item_name, rule.rule_type
+                )
+            )
+            return payee_match or description_match or item_match
         else:
             return False
 

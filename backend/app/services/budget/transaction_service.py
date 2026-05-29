@@ -86,6 +86,11 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             parent_id=data.parent_id,
             is_parent=data.is_parent,
             transfer_account_id=data.transfer_account_id,
+            # Scanner v2 fields (forwarded by ReceiptDraftService.approve
+            # so the v2 metadata isn't dropped on the floor when a draft
+            # is promoted to a real transaction).
+            card_last4=getattr(data, "card_last4", None),
+            iva_cents=getattr(data, "iva_cents", None),
         )
 
         db.add(transaction)

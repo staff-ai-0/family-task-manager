@@ -1,0 +1,45 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - paragraph [ref=e7]: Hola,
+        - heading "Sarah Johnson" [level=1] [ref=e8]
+      - generic [ref=e9]: S
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - paragraph [ref=e12]: Mis Puntos
+        - paragraph [ref=e13]: "500"
+      - img [ref=e15]
+  - main [ref=e17]:
+    - heading "Hoy" [level=2] [ref=e20]
+    - generic [ref=e21]:
+      - img [ref=e23]
+      - paragraph [ref=e25]: No hay tareas asignadas para hoy. Pide a un padre que haga el shuffle!
+  - navigation [ref=e26]:
+    - generic [ref=e27]:
+      - link "Tareas" [ref=e28] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e29]
+        - generic [ref=e31]: Tareas
+      - link "Premios" [ref=e32] [cursor=pointer]:
+        - /url: /rewards
+        - img [ref=e33]
+        - generic [ref=e35]: Premios
+      - link "Perfil" [ref=e36] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e37]
+        - generic [ref=e39]: Perfil
+      - link "Budget" [ref=e40] [cursor=pointer]:
+        - /url: /budget/month
+        - img [ref=e41]
+        - generic [ref=e43]: Budget
+      - link "Gestion" [ref=e44] [cursor=pointer]:
+        - /url: /parent
+        - img [ref=e45]
+        - generic [ref=e48]: Gestion
+      - button "EN" [ref=e50]:
+        - img [ref=e51]
+        - generic [ref=e53]: EN
+      - button "Salir" [ref=e55]:
+        - img [ref=e56]
+        - generic [ref=e58]: Salir

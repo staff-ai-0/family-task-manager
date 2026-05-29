@@ -1,8 +1,19 @@
 ---
 /**
- * Receipt Scanner Page
- * Allows scanning receipts with camera or file upload to create transactions automatically
- * Premium feature (Plus/Pro plans)
+ * Receipt Scanner Page (v2 — one-tap snap UX)
+ *
+ * The user picks a photo or file. The page kicks off the v2 scan-receipt
+ * endpoint, shows an animated overlay through the 4 server-side stages, then
+ * renders a confirm card with auto-detected account, total, optional FX line,
+ * optional IVA pill, itemized list with inline price-trend badges, and a
+ * primary "Looks good — save" plus "Delete & re-scan" actions.
+ *
+ * Branching:
+ *   - 409 Conflict + dup_warning → modal with "Open original" / "Save anyway"
+ *   - body.draft_id            → redirect to /budget/receipt-drafts (low confidence)
+ *   - otherwise                → confirm card
+ *
+ * Premium feature (Plus/Pro plans), parent-only.
  */
 
 import Layout from "@layouts/Layout.astro";
@@ -10,13 +21,11 @@ import BottomNav from "@components/BottomNav.astro";
 import BudgetNavNew from "@components/BudgetNavNew.astro";
 import DrawerMenu from "@components/DrawerMenu.astro";
 import { apiFetch } from "@lib/api";
-import { getAccounts } from "@lib/api/budget";
-import type { BudgetAccount } from "@lib/api/budget";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
 if (!userOk) {
@@ -28,440 +37,418 @@ if (user.role !== "parent") {
     return Astro.redirect("/dashboard");
 }
 
-const { data: accounts, ok: accountsOk } = await getAccounts(token);
-const { data: draftsCount } = await apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token });
+const { data: draftsCount } = await apiFetch<{ count: number }>(
+    "/api/budget/receipt-drafts/count",
+    { token },
+);
 const pendingDraftsCount = draftsCount?.count ?? 0;
 
-const l = {
-    en: {
-        title: "Scan Receipt",
-        subtitle: "Take a photo or upload a receipt to create a transaction automatically",
-        account: "Target Account",
-        accountPlaceholder: "Select account...",
-        accountHelp: "Transaction will be added to this account",
-        takePhoto: "Take Photo",
-        uploadFile: "Upload Image",
-        or: "or",
-        scanning: "Analyzing receipt...",
-        scanBtn: "Scan Receipt",
-        success: "Transaction Created!",
-        lowConfidence: "Low confidence - please review",
-        date: "Date",
-        amount: "Amount",
-        payee: "Payee",
-        items: "Items",
-        confidence: "Confidence",
-        viewTransaction: "View Transactions",
-        tryAgain: "Scan Another",
-        premiumRequired: "Receipt scanning requires a Plus or Pro plan",
-        upgrade: "Upgrade Plan",
-        noImage: "Please select or capture a receipt image",
-        noAccount: "Please select a target account",
-        error: "Error scanning receipt",
-        dragDrop: "Drag & drop receipt here",
-        maxSize: "Max 10MB - JPEG, PNG, or WebP",
-    },
-    es: {
-        title: "Escanear Recibo",
-        subtitle: "Toma una foto o sube un recibo para crear una transaccion automaticamente",
-        account: "Cuenta Destino",
-        accountPlaceholder: "Seleccionar cuenta...",
-        accountHelp: "La transaccion se agregara a esta cuenta",
-        takePhoto: "Tomar Foto",
-        uploadFile: "Subir Imagen",
-        or: "o",
-        scanning: "Analizando recibo...",
-        scanBtn: "Escanear Recibo",
-        success: "Transaccion Creada!",
-        lowConfidence: "Baja confianza - por favor revisa",
-        date: "Fecha",
-        amount: "Monto",
-        payee: "Beneficiario",
-        items: "Articulos",
-        confidence: "Confianza",
-        viewTransaction: "Ver Transacciones",
-        tryAgain: "Escanear Otro",
-        premiumRequired: "El escaneo de recibos requiere un plan Plus o Pro",
-        upgrade: "Mejorar Plan",
-        noImage: "Por favor selecciona o captura una imagen del recibo",
-        noAccount: "Por favor selecciona una cuenta destino",
-        error: "Error al escanear recibo",
-        dragDrop: "Arrastra y suelta el recibo aqui",
-        maxSize: "Max 10MB - JPEG, PNG o WebP",
-    },
-};
-const t = l[lang as keyof typeof l] || l.en;
+const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
 ---
 
-<Layout title={`${t.title} - Budget`}>
+<Layout title={`${title} - Budget`}>
     <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen">
         <!-- Header -->
         <header class="bg-gradient-to-br from-brand-coral to-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center justify-between mb-2">
                 <a href="/budget/transactions" class="text-white hover:text-brand-cream transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </a>
-                <h1 class="text-2xl font-bold">{t.title}</h1>
+                <h1 class="text-2xl font-display font-extrabold">{title}</h1>
                 <div class="w-6"></div>
             </div>
-
-            <div class="bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
-                <div class="flex items-center gap-3">
-                    <div class="bg-brand-cream/30 rounded-full p-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                    </div>
-                    <p class="text-white/90 text-sm">{t.subtitle}</p>
-                </div>
-            </div>
+            <p class="text-white/80 text-sm text-center">
+                {lang === "es"
+                    ? "Toma una foto y deja que la IA llene todo."
+                    : "Snap a photo and let AI fill in the rest."}
+            </p>
         </header>
 
         <BudgetNavNew active="none" lang={lang} pendingDrafts={pendingDraftsCount} />
         <DrawerMenu lang={lang} />
 
         <!-- Main Content -->
-        <main class="px-6 py-6 flex-grow max-w-lg mx-auto w-full">
-            <!-- Scan Form -->
-            <div id="scan-form" class="space-y-5">
-                <!-- Account Selection -->
-                <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5">
-                    <label for="account-id" class="block text-sm font-semibold text-brand-ink mb-2">
-                        {t.account}
-                    </label>
-                    <select
-                        id="account-id"
-                        required
-                        class="w-full px-4 py-3 border-2 border-brand-ink/10 rounded-xl focus:ring-2 focus:ring-brand-coral focus:border-brand-coral bg-brand-cream-deep"
-                    >
-                        <option value="">{t.accountPlaceholder}</option>
-                        {accountsOk && accounts && accounts.map((account: BudgetAccount) => (
-                            <option value={account.id}>{account.name} ({account.type})</option>
-                        ))}
-                    </select>
-                    <p class="text-xs text-brand-ink-soft mt-1.5">{t.accountHelp}</p>
-                </div>
-
-                <!-- Image Capture/Upload -->
-                <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5">
-                    <!-- Preview Area -->
-                    <div
-                        id="drop-zone"
-                        class="relative border-2 border-dashed border-brand-ink/20 rounded-xl p-8 text-center hover:border-brand-coral transition cursor-pointer"
-                    >
-                        <div id="placeholder-content">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-brand-ink-soft mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <p class="text-sm font-medium text-brand-ink-soft">{t.dragDrop}</p>
-                            <p class="text-xs text-brand-ink-soft mt-1">{t.maxSize}</p>
-                        </div>
-                        <img id="preview-image" class="hidden max-h-64 mx-auto rounded-lg" alt="Receipt preview" />
-                        <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" class="hidden" />
-                    </div>
-
-                    <!-- Action Buttons -->
-                    <div class="flex gap-3 mt-4">
-                        <button
-                            id="camera-btn"
-                            type="button"
-                            class="flex-1 flex items-center justify-center gap-2 bg-brand-coral-deep text-white px-4 py-3 rounded-xl font-semibold hover:bg-brand-coral-deep transition"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                            <span class="text-sm">{t.takePhoto}</span>
-                        </button>
-                        <button
-                            id="upload-btn"
-                            type="button"
-                            class="flex-1 flex items-center justify-center gap-2 bg-brand-cream-deep text-brand-ink px-4 py-3 rounded-xl font-semibold hover:bg-brand-cream-deep transition border border-brand-ink/10"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <span class="text-sm">{t.uploadFile}</span>
-                        </button>
-                    </div>
-                    <!-- Camera capture input (hidden, for mobile) -->
-                    <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" />
-                </div>
-
-                <!-- Scan Button -->
-                <button
-                    id="scan-btn"
-                    type="button"
-                    disabled
-                    class="w-full bg-gradient-to-r from-brand-coral to-brand-sky-deep text-white px-6 py-4 rounded-xl font-bold text-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-[var(--shadow-pop)]"
-                >
-                    {t.scanBtn}
-                </button>
+        <main class="px-6 py-8 flex-grow max-w-lg mx-auto w-full">
+            <div id="scan-actions" class="flex flex-col gap-3">
+                <label class="cursor-pointer block w-full text-center bg-brand-coral-deep text-white px-6 py-4 rounded-2xl font-bold text-lg shadow-[var(--shadow-card)] press">
+                    {lang === "es" ? "📷 Tomar foto" : "📷 Snap receipt"}
+                    <input
+                        id="cam-input"
+                        type="file"
+                        accept="image/*,application/pdf"
+                        capture="environment"
+                        class="hidden"
+                    />
+                </label>
+                <label class="cursor-pointer block w-full text-center bg-brand-cream text-brand-ink px-6 py-4 rounded-2xl font-bold text-lg border-2 border-brand-ink/10 press">
+                    {lang === "es" ? "⬆ Subir imagen" : "⬆ Upload image"}
+                    <input
+                        id="up-input"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                        class="hidden"
+                    />
+                </label>
             </div>
 
-            <!-- Loading State -->
-            <div id="loading-state" class="hidden">
-                <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-8 text-center">
-                    <div class="animate-pulse">
-                        <div class="bg-brand-coral/15 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-brand-coral-deep animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                        </div>
-                        <p class="text-lg font-semibold text-brand-ink">{t.scanning}</p>
-                        <p class="text-sm text-brand-ink-soft mt-2">AI is reading your receipt...</p>
-                    </div>
-                </div>
-            </div>
+            <!-- Confirm card target -->
+            <section id="confirm-card" class="hidden mt-8"></section>
 
-            <!-- Results -->
-            <div id="results-state" class="hidden space-y-4">
-                <div id="result-card" class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5">
-                    <!-- Filled by JS -->
-                </div>
-
-                <div class="flex gap-3">
-                    <a
-                        href="/budget/transactions"
-                        class="flex-1 text-center bg-brand-coral-deep text-white px-4 py-3 rounded-xl font-semibold hover:bg-brand-coral-deep transition"
-                    >
-                        {t.viewTransaction}
-                    </a>
-                    <button
-                        id="try-again-btn"
-                        type="button"
-                        class="flex-1 bg-brand-cream-deep text-brand-ink px-4 py-3 rounded-xl font-semibold hover:bg-brand-cream-deep transition border border-brand-ink/10"
-                    >
-                        {t.tryAgain}
-                    </button>
-                </div>
-            </div>
+            <!-- Duplicate modal -->
+            <dialog
+                id="dup-modal"
+                class="rounded-2xl p-0 bg-transparent backdrop:bg-brand-ink/40"
+            ></dialog>
         </main>
+
+        <!-- Full-screen overlay (covers the page during scan) -->
+        <div
+            id="scan-overlay"
+            class="hidden fixed inset-0 z-50 bg-brand-cream/95 flex flex-col items-center justify-center p-6"
+        >
+            <div class="size-32 rounded-2xl bg-brand-coral/15 mb-6 animate-pulse flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-brand-coral-deep animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+            </div>
+            <ul id="scan-stages" class="text-brand-ink text-sm space-y-1 text-center font-medium">
+                <li data-stage="0">{lang === "es" ? "Leyendo…" : "Reading…"}</li>
+                <li data-stage="1" class="opacity-30">{lang === "es" ? "Detectando cuenta…" : "Matching account…"}</li>
+                <li data-stage="2" class="opacity-30">{lang === "es" ? "Categorizando…" : "Categorizing…"}</li>
+                <li data-stage="3" class="opacity-30">{lang === "es" ? "Buscando duplicados…" : "Checking duplicates…"}</li>
+            </ul>
+        </div>
 
         <BottomNav active="budget" role={user.role} lang={lang} />
     </div>
 </Layout>
 
-<script define:vars={{ t }}>
-    document.addEventListener('astro:page-load', () => {
-        const fileInput = document.getElementById('file-input');
-        const cameraInput = document.getElementById('camera-input');
-        const cameraBtn = document.getElementById('camera-btn');
-        const uploadBtn = document.getElementById('upload-btn');
-        const scanBtn = document.getElementById('scan-btn');
-        const dropZone = document.getElementById('drop-zone');
-        const previewImage = document.getElementById('preview-image');
-        const placeholderContent = document.getElementById('placeholder-content');
-        const scanForm = document.getElementById('scan-form');
-        const loadingState = document.getElementById('loading-state');
-        const resultsState = document.getElementById('results-state');
-        const resultCard = document.getElementById('result-card');
-        const tryAgainBtn = document.getElementById('try-again-btn');
+<script define:vars={{ lang, token }}>
+    document.addEventListener("astro:page-load", () => {
+        const camInput = document.getElementById("cam-input");
+        const upInput = document.getElementById("up-input");
+        const overlay = document.getElementById("scan-overlay");
+        const confirmCard = document.getElementById("confirm-card");
+        const dupModal = document.getElementById("dup-modal");
 
-        if (!fileInput || !scanBtn) return;
+        if (!camInput || !upInput || !overlay || !confirmCard || !dupModal) return;
 
-        let selectedFile = null;
-
-        // Camera button
-        cameraBtn?.addEventListener('click', () => {
-            cameraInput?.click();
-        });
-
-        // Upload button
-        uploadBtn?.addEventListener('click', () => {
-            fileInput?.click();
-        });
-
-        // Drop zone click
-        dropZone?.addEventListener('click', () => {
-            fileInput?.click();
-        });
-
-        // Drag and drop
-        dropZone?.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('border-brand-coral', 'bg-brand-coral/15');
-        });
-
-        dropZone?.addEventListener('dragleave', () => {
-            dropZone.classList.remove('border-brand-coral', 'bg-brand-coral/15');
-        });
-
-        dropZone?.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('border-brand-coral', 'bg-brand-coral/15');
-            const files = e.dataTransfer?.files;
-            if (files?.[0]) handleFileSelect(files[0]);
-        });
-
-        // File selection handlers
-        fileInput?.addEventListener('change', (e) => {
-            const file = e.target?.files?.[0];
-            if (file) handleFileSelect(file);
-        });
-
-        cameraInput?.addEventListener('change', (e) => {
-            const file = e.target?.files?.[0];
-            if (file) handleFileSelect(file);
-        });
-
-        function handleFileSelect(file) {
-            selectedFile = file;
-
-            // Show preview
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                previewImage.src = e.target.result;
-                previewImage.classList.remove('hidden');
-                placeholderContent.classList.add('hidden');
-            };
-            reader.readAsDataURL(file);
-
-            // Enable scan button
-            scanBtn.disabled = false;
+        // ── Helpers ───────────────────────────────────────────────────────────
+        function money(cents, ccy) {
+            const c = Number(cents || 0);
+            const sign = c < 0 ? "-" : "";
+            const abs = Math.abs(c) / 100;
+            return `${sign}$${abs.toFixed(2)} ${ccy || ""}`.trim();
         }
 
-        // Scan button
-        scanBtn?.addEventListener('click', async () => {
-            const accountId = document.getElementById('account-id')?.value;
+        function esc(s) {
+            return String(s || "").replace(/[<>&"']/g, (c) => ({
+                "<": "&lt;",
+                ">": "&gt;",
+                "&": "&amp;",
+                "\"": "&quot;",
+                "'": "&#39;",
+            }[c]));
+        }
 
-            if (!accountId) {
-                alert(t.noAccount);
-                return;
-            }
+        function timeAgo(iso, l) {
+            const sec = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+            if (sec < 60) return l === "es" ? `hace ${sec}s` : `${sec}s ago`;
+            return l === "es"
+                ? `hace ${Math.round(sec / 60)}m`
+                : `${Math.round(sec / 60)}m ago`;
+        }
 
-            if (!selectedFile) {
-                alert(t.noImage);
-                return;
-            }
+        // ── Overlay tick animation (advances stage labels every 700ms) ───────
+        function tickStages() {
+            const stages = overlay.querySelectorAll("#scan-stages li");
+            let i = 0;
+            return setInterval(() => {
+                if (i > 0 && stages[i - 1]) stages[i - 1].classList.remove("opacity-30");
+                if (i < stages.length && stages[i]) stages[i].classList.remove("opacity-30");
+                i = Math.min(stages.length, i + 1);
+            }, 700);
+        }
 
-            // Show loading
-            scanForm.classList.add('hidden');
-            loadingState.classList.remove('hidden');
+        function resetStages() {
+            const stages = overlay.querySelectorAll("#scan-stages li");
+            stages.forEach((el, idx) => {
+                if (idx === 0) el.classList.remove("opacity-30");
+                else el.classList.add("opacity-30");
+            });
+        }
 
+        // ── Scan helpers (inline fetch — keeps script self-contained) ─────────
+        async function scanReceipt(file, opts) {
+            // account_id rides the multipart form body (Form(...) on the
+            // route); force stays as a Query parameter.
+            const form = new FormData();
+            form.append("file", file);
+            if (opts && opts.account_id) form.append("account_id", opts.account_id);
+            const q = new URLSearchParams();
+            if (opts && opts.force) q.set("force", "true");
+            const url = `/api/budget/transactions/scan-receipt${q.toString() ? "?" + q : ""}`;
+            const resp = await fetch(url, {
+                method: "POST",
+                body: form,
+                headers: { "Authorization": `Bearer ${token}` },
+            });
+            const body = await resp.json().catch(() => ({}));
+            return { status: resp.status, body };
+        }
+
+        // ── Top-level: run a scan ─────────────────────────────────────────────
+        async function runScan(file) {
+            resetStages();
+            overlay.classList.remove("hidden");
+            const ticker = tickStages();
             try {
-                const formData = new FormData();
-                formData.append('file', selectedFile);
-                formData.append('account_id', accountId);
+                const { status, body } = await scanReceipt(file);
+                clearInterval(ticker);
+                overlay.classList.add("hidden");
 
-                const response = await fetch('/api/budget/transactions/scan-receipt', {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                const data = await response.json();
-
-                if (response.status === 403) {
-                    // Premium required
-                    loadingState.classList.add('hidden');
-                    scanForm.classList.remove('hidden');
-                    alert(t.premiumRequired);
+                if (status === 403) {
+                    alert(lang === "es"
+                        ? "El escaneo de recibos requiere un plan Plus o Pro."
+                        : "Receipt scanning requires a Plus or Pro plan.");
                     return;
                 }
-
-                // Show results
-                loadingState.classList.add('hidden');
-                resultsState.classList.remove('hidden');
-                displayResults(data);
-
-            } catch (error) {
-                loadingState.classList.add('hidden');
-                scanForm.classList.remove('hidden');
-                alert(t.error + ': ' + error.message);
+                if (status === 409 && body && body.dup_warning) {
+                    showDupModal(file, body);
+                    return;
+                }
+                if (body && body.draft_id) {
+                    window.location.href = "/budget/receipt-drafts";
+                    return;
+                }
+                if (status >= 400 || !body || !body.success) {
+                    alert(lang === "es"
+                        ? "Error escaneando."
+                        : "Scan failed.");
+                    return;
+                }
+                showConfirmCard(body);
+            } catch (e) {
+                clearInterval(ticker);
+                overlay.classList.add("hidden");
+                alert(lang === "es" ? "Error escaneando." : "Scan failed.");
             }
-        });
+        }
 
-        // Try again
-        tryAgainBtn?.addEventListener('click', () => {
-            resultsState.classList.add('hidden');
-            scanForm.classList.remove('hidden');
-            selectedFile = null;
-            previewImage.classList.add('hidden');
-            previewImage.src = '';
-            placeholderContent.classList.remove('hidden');
-            scanBtn.disabled = true;
-            fileInput.value = '';
-            cameraInput.value = '';
-        });
+        // ── Render the confirm card from a successful response ────────────────
+        function showConfirmCard(body) {
+            const tx = body.transaction || {};
+            const currency = tx.currency || "MXN";
 
-        function displayResults(data) {
-            const scanned = data.scanned_data || {};
-            const isSuccess = data.success;
-            const confidence = Math.round((data.confidence || 0) * 100);
+            // FX line — only when present
+            const fxLine = body.fx
+                ? `<div class="text-sm text-brand-ink-soft mt-1">≈ ${money(
+                    body.fx.original_amount_cents,
+                    body.fx.original_currency,
+                )} @ ${esc(body.fx.rate)}</div>`
+                : "";
 
-            const confidenceColor = confidence >= 80 ? 'text-brand-mint-deep bg-brand-mint/20' :
-                                   confidence >= 50 ? 'text-yellow-600 bg-brand-sun/20' :
-                                   'text-red-600 bg-red-100';
+            // IVA pill — only when transaction has iva_cents
+            const ivaPill = tx.iva_cents
+                ? `<div class="inline-block px-3 py-1 rounded-full bg-brand-cream-deep text-xs font-semibold text-brand-ink">
+                       IVA ${money(tx.iva_cents, currency)}
+                   </div>`
+                : "";
 
-            const amount = scanned.total_amount != null
-                ? (scanned.total_amount / 100).toFixed(2)
-                : '—';
+            // Match strategy → indicator
+            const strategy = body.account_match && body.account_match.strategy;
+            const matchBadge = strategy === "card_last4"
+                ? `<span class="inline-block text-brand-mint-deep font-bold">✓</span>`
+                : strategy === "override"
+                    ? `<span class="inline-block text-brand-ink font-bold">●</span>`
+                    : `<span class="inline-block text-yellow-600 font-bold" title="${
+                        lang === "es" ? "Mejor estimación" : "Best guess"
+                    }">●</span>`;
 
-            let itemsHtml = '';
-            if (scanned.items?.length > 0) {
-                itemsHtml = `
-                    <div class="mt-3 pt-3 border-t border-brand-ink/10">
-                        <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider mb-2">${t.items}</p>
-                        <div class="space-y-1">
-                            ${scanned.items.map(item => `
-                                <div class="flex justify-between text-sm">
-                                    <span class="text-brand-ink-soft">${item.name}</span>
-                                    <span class="text-brand-ink font-medium">$${(item.amount_cents / 100).toFixed(2)}</span>
-                                </div>
-                            `).join('')}
+            // Trend badges (only when sample_size >= 3 AND |pct_change| >= 0.05)
+            const trendsMap = new Map(
+                (body.trends || []).map((t) => [t.normalized_name, t]),
+            );
+
+            const items = body.items || [];
+            const itemsHtml = items.map((it) => {
+                const t = trendsMap.get(it.normalized_name);
+                let badge = "";
+                if (t && t.sample_size >= 3 && Math.abs(t.pct_change) >= 0.05) {
+                    const up = t.pct_change > 0;
+                    const color = up ? "text-red-600" : "text-brand-mint-deep";
+                    const arrow = up ? "📈" : "📉";
+                    const pct = (t.pct_change * 100).toFixed(0);
+                    badge = `<span class="ml-2 text-xs font-semibold ${color}">${arrow} ${pct}%</span>`;
+                }
+                const qtyLabel = it.qty && Number(it.qty) > 1
+                    ? `<span class="text-xs text-brand-ink-soft mr-1">${esc(it.qty)}×</span>`
+                    : "";
+                return `<li class="flex justify-between items-center py-1.5 text-sm">
+                    <span class="text-brand-ink">${qtyLabel}<a href="/budget/items/${encodeURIComponent(it.normalized_name)}" class="underline-offset-4 hover:underline">${esc(it.name)}</a>${badge}</span>
+                    <span class="text-brand-ink font-medium num">${money(it.total_cents, currency)}</span>
+                </li>`;
+            }).join("");
+
+            const itemsBlock = items.length
+                ? `<ul class="border-t border-brand-ink/10 pt-3 divide-y divide-brand-ink/5">${itemsHtml}</ul>`
+                : "";
+
+            // Total — tx.amount is already cents (negative for expenses)
+            const totalDisplay = money(
+                typeof tx.amount === "number" ? Math.abs(tx.amount) : 0,
+                currency,
+            );
+
+            confirmCard.innerHTML = `
+                <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5 space-y-4">
+                    <div>
+                        <h2 class="text-xl font-display font-extrabold text-brand-ink">
+                            ${esc(tx.payee_name || (lang === "es" ? "Ticket" : "Receipt"))}
+                        </h2>
+                        <div class="text-3xl font-display font-extrabold text-brand-coral-deep num mt-1">
+                            ${totalDisplay}
+                        </div>
+                        ${fxLine}
+                    </div>
+
+                    <div class="text-sm">
+                        <div class="text-brand-ink-soft text-xs uppercase tracking-wider font-semibold mb-1">
+                            ${lang === "es" ? "Cuenta" : "Account"}
+                        </div>
+                        <div class="flex items-center gap-2">
+                            ${matchBadge}
+                            <span class="text-brand-ink font-medium">${esc(tx.account_name || "—")}</span>
                         </div>
                     </div>
-                `;
+
+                    ${ivaPill}
+
+                    ${itemsBlock}
+
+                    <div class="flex flex-col gap-2 pt-3">
+                        <a
+                            href="/budget/transactions"
+                            class="block w-full text-center bg-brand-coral-deep text-white px-4 py-3 rounded-xl font-semibold press"
+                        >
+                            ${lang === "es" ? "✓ Listo, guardar" : "✓ Looks good — save"}
+                        </a>
+                        <div class="flex gap-2">
+                            <a
+                                href="/budget/transactions/${esc(body.transaction_id || "")}"
+                                class="flex-1 text-center bg-brand-cream-deep text-brand-ink px-4 py-3 rounded-xl font-semibold border border-brand-ink/10 press"
+                            >
+                                ${lang === "es" ? "Editar" : "Edit"}
+                            </a>
+                            <button
+                                id="del-tx"
+                                type="button"
+                                class="flex-1 text-center bg-brand-cream-deep text-brand-ink px-4 py-3 rounded-xl font-semibold border border-brand-ink/10 press"
+                            >
+                                ${lang === "es" ? "Borrar y re-escanear" : "Delete & re-scan"}
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            confirmCard.classList.remove("hidden");
+
+            // Hide CTAs once the card is visible
+            const actions = document.getElementById("scan-actions");
+            if (actions) actions.classList.add("hidden");
+
+            const delBtn = document.getElementById("del-tx");
+            if (delBtn) {
+                delBtn.onclick = async () => {
+                    if (!body.transaction_id) {
+                        window.location.reload();
+                        return;
+                    }
+                    try {
+                        await fetch(`/api/budget/transactions/${body.transaction_id}`, {
+                            method: "DELETE",
+                            headers: { "Authorization": `Bearer ${token}` },
+                        });
+                    } catch (_) {
+                        // swallow — reload regardless so user can re-try
+                    }
+                    window.location.reload();
+                };
+            }
+        }
+
+        // ── Duplicate modal: open original or force-save through ──────────────
+        function showDupModal(file, body) {
+            const dup = body.dup_warning || {};
+            const ccy = (body.transaction && body.transaction.currency) || "MXN";
+            dupModal.innerHTML = `
+                <form method="dialog" class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5 space-y-3 max-w-sm mx-auto">
+                    <h3 class="text-lg font-display font-extrabold text-brand-ink">
+                        ${lang === "es" ? "⚠ Ya escaneado" : "⚠ Already scanned"}
+                    </h3>
+                    <p class="text-sm text-brand-ink-soft">
+                        ${esc(dup.payee || (lang === "es" ? "Comercio" : "Merchant"))} ·
+                        ${money(dup.amount_cents, ccy)} ·
+                        ${esc(timeAgo(dup.scanned_at, lang))}
+                    </p>
+                    <div class="flex gap-2 justify-end pt-2">
+                        <a
+                            href="/budget/transactions/${esc(dup.existing_transaction_id || "")}"
+                            class="bg-brand-cream-deep text-brand-ink px-4 py-2 rounded-xl font-semibold border border-brand-ink/10 press"
+                        >
+                            ${lang === "es" ? "Ver original" : "Open original"}
+                        </a>
+                        <button
+                            id="force-save"
+                            type="button"
+                            class="bg-brand-coral-deep text-white px-4 py-2 rounded-xl font-semibold press"
+                        >
+                            ${lang === "es" ? "Guardar de todas formas" : "Save anyway"}
+                        </button>
+                    </div>
+                </form>`;
+            try {
+                dupModal.showModal();
+            } catch (_) {
+                // <dialog> not supported — fall back to inline render
+                dupModal.classList.remove("hidden");
             }
 
-            resultCard.innerHTML = `
-                <div class="flex items-center gap-3 mb-4">
-                    ${isSuccess
-                        ? `<div class="bg-brand-mint/20 rounded-full p-2">
-                               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-brand-mint-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                               </svg>
-                           </div>
-                           <div>
-                               <p class="font-bold text-brand-mint-deep">${t.success}</p>
-                               <p class="text-xs text-brand-ink-soft">${data.message || ''}</p>
-                           </div>`
-                        : `<div class="bg-brand-sun/20 rounded-full p-2">
-                               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                               </svg>
-                           </div>
-                           <div>
-                               <p class="font-bold text-brand-ink">${t.lowConfidence}</p>
-                               <p class="text-xs text-brand-ink-soft">${data.message || ''}</p>
-                           </div>`
+            const forceBtn = document.getElementById("force-save");
+            if (forceBtn) {
+                forceBtn.addEventListener("click", async (e) => {
+                    e.preventDefault();
+                    try { dupModal.close(); } catch (_) {}
+                    resetStages();
+                    overlay.classList.remove("hidden");
+                    const ticker = tickStages();
+                    try {
+                        const { body: r2 } = await scanReceipt(file, { force: true });
+                        clearInterval(ticker);
+                        overlay.classList.add("hidden");
+                        if (r2 && r2.success) {
+                            showConfirmCard(r2);
+                        } else {
+                            alert(lang === "es" ? "Error guardando." : "Save failed.");
+                        }
+                    } catch (_) {
+                        clearInterval(ticker);
+                        overlay.classList.add("hidden");
+                        alert(lang === "es" ? "Error guardando." : "Save failed.");
                     }
-                </div>
-
-                <div class="space-y-3">
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm text-brand-ink-soft">${t.confidence}</span>
-                        <span class="text-sm font-bold px-2.5 py-0.5 rounded-full ${confidenceColor}">${confidence}%</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm text-brand-ink-soft">${t.date}</span>
-                        <span class="text-sm font-medium text-brand-ink">${scanned.date || '—'}</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm text-brand-ink-soft">${t.amount}</span>
-                        <span class="text-lg font-bold text-red-600">$${amount} ${scanned.currency || ''}</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm text-brand-ink-soft">${t.payee}</span>
-                        <span class="text-sm font-medium text-brand-ink">${scanned.payee_name || '—'}</span>
-                    </div>
-                </div>
-
-                ${itemsHtml}
-            `;
+                });
+            }
         }
+
+        // ── Wire up the inputs ────────────────────────────────────────────────
+        camInput.addEventListener("change", (e) => {
+            const f = e.target && e.target.files && e.target.files[0];
+            if (f) runScan(f);
+        });
+        upInput.addEventListener("change", (e) => {
+            const f = e.target && e.target.files && e.target.files[0];
+            if (f) runScan(f);
+        });
     });
 </script>

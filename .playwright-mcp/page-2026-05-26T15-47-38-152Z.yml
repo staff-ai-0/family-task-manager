@@ -1,0 +1,97 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - link "Panel de Padres" [ref=e5] [cursor=pointer]:
+      - /url: /parent
+      - img [ref=e6]
+      - text: Panel de Padres
+    - heading "Gestionar Tareas" [level=1] [ref=e8]
+    - paragraph [ref=e9]: 0 plantillas en la familia
+  - main [ref=e10]:
+    - generic [ref=e11]:
+      - heading "Shuffle Semanal" [level=2] [ref=e13]
+      - paragraph [ref=e14]: Asignar plantillas aleatoriamente a los miembros para esta semana
+      - generic [ref=e15]:
+        - button "Vista previa" [ref=e16]:
+          - img [ref=e17]
+          - text: Vista previa
+        - button "Mezclar Tareas" [ref=e21]:
+          - img [ref=e22]
+          - text: Mezclar Tareas
+    - generic [ref=e24]:
+      - heading "Crear Nueva Plantilla" [level=2] [ref=e25]
+      - generic [ref=e26]:
+        - generic [ref=e27]:
+          - generic [ref=e28]:
+            - heading "English" [level=3] [ref=e29]
+            - textbox "Titulo de la tarea" [ref=e30]
+            - textbox "Descripcion (opcional)" [ref=e31]
+          - generic [ref=e32]:
+            - heading "Español" [level=3] [ref=e33]
+            - textbox "Titulo (Espanol)" [ref=e34]
+            - textbox "Descripcion (Espanol)" [ref=e35]
+        - generic [ref=e36]:
+          - generic [ref=e37]:
+            - generic [ref=e38]: Puntos
+            - spinbutton [ref=e39]: "10"
+          - generic [ref=e40]:
+            - generic [ref=e41]: Frecuencia
+            - combobox [ref=e42]:
+              - option "Diaria" [selected]
+              - option "Cada 3 dias"
+              - option "Semanal"
+        - generic [ref=e43]:
+          - generic [ref=e44]: Tipo de Asignacion
+          - combobox [ref=e45]:
+            - option "Auto - Balance de carga (predeterminado)" [selected]
+            - option "Fija - Siempre la(s) misma(s) persona(s)"
+            - option "Rotativa - Ciclar entre personas especificas"
+        - generic [ref=e46]:
+          - generic [ref=e47]: Quien puede hacer esta tarea
+          - generic [ref=e48]:
+            - generic [ref=e49] [cursor=pointer]:
+              - checkbox "Padre/Madre" [ref=e50]
+              - generic [ref=e51]: Padre/Madre
+            - generic [ref=e52] [cursor=pointer]:
+              - checkbox "Adolescente" [ref=e53]
+              - generic [ref=e54]: Adolescente
+            - generic [ref=e55] [cursor=pointer]:
+              - checkbox "Nino" [ref=e56]
+              - generic [ref=e57]: Nino
+          - paragraph [ref=e58]: Auto solo elige miembros con el rol marcado. Deja todo en blanco para permitir a todos.
+        - generic [ref=e59]:
+          - checkbox [ref=e61]
+          - generic [ref=e63]:
+            - text: Tarea bonus
+            - paragraph [ref=e64]: Las tareas bonus se desbloquean al completar las obligatorias del dia
+        - button "Crear Plantilla" [ref=e65]
+    - generic [ref=e66]:
+      - heading "Todas las Plantillas" [level=2] [ref=e67]
+      - paragraph [ref=e69]: Sin plantillas. Crea una arriba!
+  - navigation [ref=e70]:
+    - generic [ref=e71]:
+      - link "Tareas" [ref=e72] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e73]
+        - generic [ref=e75]: Tareas
+      - link "Premios" [ref=e76] [cursor=pointer]:
+        - /url: /rewards
+        - img [ref=e77]
+        - generic [ref=e79]: Premios
+      - link "Perfil" [ref=e80] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e81]
+        - generic [ref=e83]: Perfil
+      - link "Budget" [ref=e84] [cursor=pointer]:
+        - /url: /budget/month
+        - img [ref=e85]
+        - generic [ref=e87]: Budget
+      - link "Gestion" [ref=e88] [cursor=pointer]:
+        - /url: /parent
+        - img [ref=e89]
+        - generic [ref=e92]: Gestion
+      - button "EN" [ref=e94]:
+        - img [ref=e95]
+        - generic [ref=e97]: EN
+      - button "Salir" [ref=e99]:
+        - img [ref=e100]
+        - generic [ref=e102]: Salir

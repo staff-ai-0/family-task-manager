@@ -4,7 +4,9 @@ Budget-related Pydantic schemas
 Request and response models for budget management operations.
 """
 
-from pydantic import BaseModel, Field, field_validator
+from decimal import Decimal
+
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 from typing import Optional, List
 from datetime import date as DateType, datetime
 from uuid import UUID
@@ -104,6 +106,10 @@ class AccountBase(BaseModel):
         min_length=3, max_length=3,
         description="ISO 4217 currency code. All accounts in a family must share the same currency — reports/balances do not convert.",
     )
+    card_last4: Optional[str] = Field(
+        None, min_length=4, max_length=4, pattern=r"^\d{4}$",
+        description="Last 4 digits of the card; used for receipt scanner auto-detect",
+    )
 
     @field_validator('type')
     @classmethod
@@ -136,6 +142,10 @@ class AccountUpdate(BaseModel):
     sort_order: Optional[int] = Field(None, ge=0)
     starting_balance: Optional[int] = Field(None, description="Initial account balance in cents")
     currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    card_last4: Optional[str] = Field(
+        None, min_length=4, max_length=4, pattern=r"^\d{4}$",
+        description="Last 4 digits of the card; used for receipt scanner auto-detect",
+    )
 
     @field_validator('type')
     @classmethod
@@ -236,6 +246,10 @@ class TransactionBase(BaseModel):
 class TransactionCreate(TransactionBase):
     """Schema for creating a transaction"""
     payee_name: Optional[str] = Field(None, max_length=255, description="Payee name; creates payee if payee_id is absent")
+    # Scanner v2 fields — let the draft-approval path carry these through
+    # so the resulting BudgetTransaction is not stripped of card_last4 / iva.
+    card_last4: Optional[str] = Field(None, min_length=4, max_length=4, pattern=r"^\d{4}$")
+    iva_cents: Optional[int] = None
 
 
 class TransactionUpdate(BaseModel):
@@ -261,6 +275,20 @@ class TransactionResponse(TransactionBase):
     family_id: UUID
     created_at: datetime
     updated_at: datetime
+    # Scanner v2 fields — populated by the receipt scanner pipeline
+    card_last4: Optional[str] = Field(None, min_length=4, max_length=4, pattern=r"^\d{4}$")
+    iva_cents: Optional[int] = None
+    fx_rate: Optional[Decimal] = None
+    original_amount_cents: Optional[int] = None
+    original_currency: Optional[str] = Field(None, min_length=3, max_length=3)
+
+    # Force JSON to emit a real number for Decimal fields. Pydantic v2's
+    # default is to serialize Decimal as a string, which breaks strict
+    # mobile clients (Swift Codable / Kotlin kotlinx.serialization) that
+    # expect a numeric token. See CLAUDE.md note on Decimal serialization.
+    @field_serializer("fx_rate")
+    def _serialize_fx_rate(self, v: Optional[Decimal]) -> Optional[float]:
+        return float(v) if v is not None else None
 
     class Config:
         from_attributes = True
@@ -779,3 +807,77 @@ class ReceiptDraftResponse(BaseModel):
 # Rebuild models to resolve forward references
 CategoryWithGroup.model_rebuild()
 CategoryGroupWithCategories.model_rebuild()
+
+
+# ============================================================================
+# RECEIPT SCANNER V2 SCHEMAS
+# ============================================================================
+
+class TransactionItemRead(BaseModel):
+    id: UUID
+    transaction_id: UUID
+    name: str
+    normalized_name: str
+    qty: Optional[Decimal] = None
+    unit_price_cents: Optional[int] = None
+    total_cents: int
+    category_id: Optional[UUID] = None
+    brand: Optional[str] = None
+    raw_text: Optional[str] = None
+
+    # See TransactionResponse.fx_rate — keep Decimal numeric in JSON for
+    # strict-decoding mobile clients.
+    @field_serializer("qty")
+    def _serialize_qty(self, v: Optional[Decimal]) -> Optional[float]:
+        return float(v) if v is not None else None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ItemTrend(BaseModel):
+    normalized_name: str
+    avg_unit_cents: int
+    last_unit_cents: int
+    pct_change: float  # e.g. 0.142 = +14.2%
+    sample_size: int
+
+
+class AccountMatch(BaseModel):
+    strategy: str  # "card_last4" | "last_used" | "override"
+    matched_card_last4: Optional[str] = None
+
+
+class DupWarning(BaseModel):
+    existing_transaction_id: UUID
+    scanned_at: datetime
+    payee: Optional[str] = None
+    amount_cents: int
+
+
+class FXInfo(BaseModel):
+    rate: Decimal
+    original_amount_cents: int
+    original_currency: str
+
+    # See TransactionResponse.fx_rate — keep Decimal numeric in JSON for
+    # strict-decoding mobile clients.
+    @field_serializer("rate")
+    def _serialize_rate(self, v: Decimal) -> float:
+        return float(v)
+
+
+class ScanReceiptResponse(BaseModel):
+    success: bool
+    transaction_id: Optional[UUID] = None
+    transaction: Optional[TransactionResponse] = None
+    items: list[TransactionItemRead] = []
+    account_match: Optional[AccountMatch] = None
+    fx: Optional[FXInfo] = None
+    trends: list[ItemTrend] = []
+    confidence: float = 0.0
+    shopping_auto_checked: list[str] = []
+    warnings: list[str] = []
+    dup_warning: Optional[DupWarning] = None
+    scanned_preview: Optional[dict] = None
+    draft_id: Optional[UUID] = None
+    message: Optional[str] = None

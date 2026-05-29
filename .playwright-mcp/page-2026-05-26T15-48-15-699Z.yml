@@ -1,0 +1,60 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - link "Panel de Padres" [ref=e5] [cursor=pointer]:
+      - /url: /parent
+      - img [ref=e6]
+      - text: Panel de Padres
+    - generic [ref=e8]:
+      - heading "Gestionar Tareas" [level=1] [ref=e9]
+      - button "Nueva tarea" [ref=e10]: +
+    - paragraph [ref=e11]: 0 plantillas en la familia
+  - main [ref=e12]:
+    - generic [ref=e13]:
+      - heading "Shuffle Semanal" [level=2] [ref=e15]
+      - paragraph [ref=e16]: Asignar plantillas aleatoriamente a los miembros para esta semana
+      - generic [ref=e17]:
+        - button "Vista previa" [ref=e18]:
+          - img [ref=e19]
+          - text: Vista previa
+        - button "Mezclar Tareas" [ref=e23]:
+          - img [ref=e24]
+          - text: Mezclar Tareas
+    - generic [ref=e26]:
+      - heading "Todas las Plantillas" [level=2] [ref=e27]
+      - paragraph [ref=e29]: Sin plantillas. Crea una arriba!
+  - navigation [ref=e30]:
+    - generic [ref=e31]:
+      - link "Tareas" [ref=e32] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e33]
+        - generic [ref=e35]: Tareas
+      - link "Premios" [ref=e36] [cursor=pointer]:
+        - /url: /rewards
+        - img [ref=e37]
+        - generic [ref=e39]: Premios
+      - link "Avisos" [ref=e40] [cursor=pointer]:
+        - /url: /notifications
+        - img [ref=e41]
+        - generic [ref=e43]: Avisos
+      - link "Chat" [ref=e44] [cursor=pointer]:
+        - /url: /chat
+        - img [ref=e45]
+        - generic [ref=e47]: Chat
+      - link "Perfil" [ref=e48] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e49]
+        - generic [ref=e51]: Perfil
+      - link "Budget" [ref=e52] [cursor=pointer]:
+        - /url: /budget/month
+        - img [ref=e53]
+        - generic [ref=e55]: Budget
+      - link "Gestion" [ref=e56] [cursor=pointer]:
+        - /url: /parent
+        - img [ref=e57]
+        - generic [ref=e60]: Gestion
+      - button "EN" [ref=e62]:
+        - img [ref=e63]
+        - generic [ref=e65]: EN
+      - button "Salir" [ref=e67]:
+        - img [ref=e68]
+        - generic [ref=e70]: Salir

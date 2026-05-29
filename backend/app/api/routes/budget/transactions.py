@@ -4,7 +4,7 @@ Transaction routes
 CRUD endpoints for budget transactions.
 """
 
-from fastapi import APIRouter, Body, Depends, status, Query, File, UploadFile, Form
+from fastapi import APIRouter, Body, Depends, Response, status, Query, File, UploadFile, Form
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
@@ -434,9 +434,11 @@ async def import_file_transactions_endpoint(
 @router.post("/scan-receipt", status_code=status.HTTP_200_OK)
 async def scan_receipt_endpoint(
     file: UploadFile = File(..., description="Receipt photo or scanned PDF (JPEG, PNG, WebP, GIF, PDF)"),
-    account_id: UUID = Form(..., description="Target account for the transaction"),
+    account_id: Optional[UUID] = Form(None, description="Target account; omit for auto-detect"),
+    force: bool = Query(False, description="Bypass duplicate guard and commit the transaction"),
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
+    response: Response = None,
 ):
     """Scan a receipt (image or PDF) and create a transaction (parent only, premium feature).
 
@@ -449,6 +451,9 @@ async def scan_receipt_endpoint(
     Auto-creates the payee if new, applies categorization rules, and
     creates the transaction. Returns scanned data, confidence score,
     and the created transaction ID.
+
+    When a duplicate is detected, returns HTTP 409 with a ``dup_warning``
+    field. Pass ``?force=true`` to bypass the guard and commit anyway.
     """
     family_id = to_uuid_required(current_user.family_id)
 
@@ -458,12 +463,16 @@ async def scan_receipt_endpoint(
     await require_feature("ai_features", db, current_user)
     await require_feature("receipt_scan", db, current_user)
 
-    # Track usage
-    await UsageService.increment(db, family_id, "receipt_scan")
+    # Track usage. force=True is a retry after a dup-warning; the original
+    # attempt already incremented the meter, so we skip to avoid charging
+    # the user twice for the same logical scan.
+    if not force:
+        await UsageService.increment(db, family_id, "receipt_scan")
 
-    # Validate account belongs to family
-    from app.services.budget.account_service import AccountService
-    await AccountService.get_by_id(db, account_id, family_id)
+    # Validate caller-supplied account belongs to this family (404 on mismatch)
+    if account_id is not None:
+        from app.services.budget.account_service import AccountService
+        await AccountService.get_by_id(db, account_id, family_id)
 
     # Validate file type. PDF is accepted — receipt_scanner_service
     # rasterizes the first page to PNG in memory before the vision call.
@@ -500,9 +509,17 @@ async def scan_receipt_endpoint(
     result = await scan_and_create_transaction(
         db=db,
         family_id=family_id,
+        user_id=current_user.id,
         account_id=account_id,
         image_bytes=file_bytes,
         media_type=content_type,
+        force=force,
     )
+
+    # Signal duplicate to callers: HTTP 409 lets them prompt "scan again?" or
+    # redirect to the existing transaction without an extra GET round-trip.
+    if result.get("dup_warning") is not None:
+        response.status_code = status.HTTP_409_CONFLICT
+
     return result
 

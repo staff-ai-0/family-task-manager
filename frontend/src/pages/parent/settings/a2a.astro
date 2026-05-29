@@ -1,0 +1,69 @@
+---
+import Layout from "@layouts/Layout.astro";
+import BottomNav from "@components/BottomNav.astro";
+import DrawerMenu from "@components/DrawerMenu.astro";
+import { apiFetch } from "@lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (user?.role !== "parent") return Astro.redirect("/dashboard");
+const { data: cfg } = await apiFetch<any>("/api/budget/a2a-webhook", { token });
+---
+
+<Layout title={lang === "es" ? "Agente de precios" : "Price Agent"} lang={lang}>
+  <DrawerMenu lang={lang} />
+  <main class="px-4 pb-32 pt-6 max-w-md mx-auto">
+    <h1 class="text-2xl font-display mb-4">{lang === "es" ? "Agente de precios" : "Price Agent"}</h1>
+
+    <form id="form" class="card p-4 space-y-3">
+      <label class="block">
+        <span class="text-sm">URL</span>
+        <input id="url" type="url" required pattern="https://.*"
+               value={cfg?.url ?? ""} class="brand-input w-full" />
+      </label>
+      <label class="flex items-center gap-2">
+        <input id="enabled" type="checkbox" checked={cfg?.enabled} />
+        <span>{lang === "es" ? "Activo" : "Enabled"}</span>
+      </label>
+      <label class="flex items-center gap-2">
+        <input id="rotate" type="checkbox" />
+        <span>{lang === "es" ? "Rotar secreto" : "Rotate secret"}</span>
+      </label>
+      <div class="text-xs text-fg/60">
+        {lang === "es" ? "Último éxito" : "Last success"}: {cfg?.last_success_at ?? "—"}<br/>
+        {lang === "es" ? "Fallas" : "Failures"}: {cfg?.failure_count ?? 0}
+      </div>
+      <button class="brand-btn brand-btn-primary w-full">
+        {lang === "es" ? "Guardar" : "Save"}
+      </button>
+      <pre id="secret-out" class="hidden text-xs bg-fg/5 p-2 rounded"></pre>
+    </form>
+  </main>
+  <BottomNav lang={lang} active="parent" />
+</Layout>
+
+<script type="module" define:vars={{ token, lang }}>
+  document.getElementById("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const resp = await fetch("/api/budget/a2a-webhook", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json",
+                 "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({
+        url: document.getElementById("url").value,
+        enabled: document.getElementById("enabled").checked,
+        rotate_secret: document.getElementById("rotate").checked,
+      }),
+    });
+    const body = await resp.json();
+    if (body.secret) {
+      const out = document.getElementById("secret-out");
+      out.classList.remove("hidden");
+      out.textContent = (lang === "es" ? "Secreto nuevo (cópialo): " : "New secret (copy now): ") + body.secret;
+    } else {
+      alert(lang === "es" ? "Guardado." : "Saved.");
+    }
+  });
+</script>

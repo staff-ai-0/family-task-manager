@@ -1,0 +1,52 @@
+- main [ref=e3]:
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - heading "Gestiona tu familia" [level=2] [ref=e9]
+        - paragraph [ref=e10]: Tareas, recompensas y control parental en un solo lugar
+      - generic [ref=e11]:
+        - generic [ref=e12]:
+          - img [ref=e14]
+          - generic [ref=e16]:
+            - paragraph [ref=e17]: Asignación de tareas
+            - paragraph [ref=e18]: Crea y asigna tareas con puntos
+        - generic [ref=e19]:
+          - img [ref=e21]
+          - generic [ref=e23]:
+            - paragraph [ref=e24]: Sistema de recompensas
+            - paragraph [ref=e25]: Motiva con recompensas atractivas
+        - generic [ref=e26]:
+          - img [ref=e28]
+          - generic [ref=e30]:
+            - paragraph [ref=e31]: Finanzas familiares
+            - paragraph [ref=e32]: Presupuesto y control de gastos
+    - generic [ref=e33]:
+      - generic [ref=e34]:
+        - heading "Bienvenido" [level=1] [ref=e35]
+        - paragraph [ref=e36]: Iniciar sesión en Family Task Manager
+      - generic [ref=e39]:
+        - button "Acceder con Google. Se abre en una pestaña nueva" [ref=e41] [cursor=pointer]:
+          - generic [ref=e43]:
+            - img [ref=e45]
+            - generic [ref=e52]: Acceder con Google
+        - iframe
+      - generic [ref=e57]: O continúa con correo
+      - generic [ref=e58]:
+        - generic [ref=e59]:
+          - generic [ref=e60]: Correo Electrónico
+          - textbox "Correo Electrónico" [ref=e61]:
+            - /placeholder: parent@demo.com
+        - generic [ref=e62]:
+          - generic [ref=e63]: Contraseña
+          - textbox "Contraseña" [ref=e64]:
+            - /placeholder: ••••••••
+        - link "¿Olvidaste tu contraseña?" [ref=e66] [cursor=pointer]:
+          - /url: /forgot-password
+        - button "Iniciar Sesión" [ref=e67]
+      - paragraph [ref=e68]:
+        - text: ¿No tienes cuenta?
+        - link "Crear cuenta" [ref=e69] [cursor=pointer]:
+          - /url: /register
+      - button "English" [ref=e71]:
+        - img [ref=e72]
+        - text: English

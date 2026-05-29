@@ -353,3 +353,213 @@ async def gig_template_factory(db_session: AsyncSession):
         return t
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# Shared fixtures for scanner-v2 tasks (T4+)
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def family(db: AsyncSession):
+    """A fresh family for scanner-v2 service tests."""
+    from app.models.family import Family
+    fam = Family(name="Test Family")
+    db.add(fam)
+    await db.commit()
+    await db.refresh(fam)
+    return fam
+
+
+@pytest_asyncio.fixture
+async def other_family(db: AsyncSession):
+    """A second family for tenant-isolation tests."""
+    from app.models.family import Family
+    fam = Family(name="Other Family")
+    db.add(fam)
+    await db.commit()
+    await db.refresh(fam)
+    return fam
+
+
+@pytest_asyncio.fixture
+async def transaction(db: AsyncSession, family):
+    """A minimal BudgetTransaction attached to the shared family fixture."""
+    from app.models.budget import BudgetAccount, BudgetTransaction
+    from datetime import date
+    acct = BudgetAccount(family_id=family.id, name="Cash", type="checking",
+                         currency="MXN")
+    db.add(acct)
+    await db.commit()
+    await db.refresh(acct)
+    tx = BudgetTransaction(
+        family_id=family.id, account_id=acct.id, date=date.today(),
+        amount=-10000,
+    )
+    db.add(tx)
+    await db.commit()
+    await db.refresh(tx)
+    return tx
+
+
+@pytest_asyncio.fixture
+async def transaction_factory(db: AsyncSession, family):
+    """Factory that creates BudgetTransaction rows for the shared family."""
+    from app.models.budget import BudgetAccount, BudgetTransaction
+    acct = BudgetAccount(family_id=family.id, name="F", type="checking",
+                         currency="MXN")
+    db.add(acct)
+    await db.commit()
+    await db.refresh(acct)
+
+    async def _make(**kwargs):
+        tx = BudgetTransaction(
+            family_id=kwargs.get("family_id", family.id),
+            account_id=acct.id,
+            date=kwargs.get("date"),
+            amount=kwargs.get("amount", -10000),
+        )
+        db.add(tx)
+        await db.commit()
+        await db.refresh(tx)
+        return tx
+
+    return _make
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for Task 5: AccountMatchingService
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def user(db: AsyncSession, family):
+    """A minimal PARENT user belonging to the shared family fixture."""
+    from app.models.user import User, UserRole
+    u = User(
+        email="acct-match-test@example.com",
+        name="Test Parent",
+        role=UserRole.PARENT,
+        family_id=family.id,
+        email_verified=True,
+    )
+    db.add(u)
+    await db.commit()
+    await db.refresh(u)
+    return u
+
+
+@pytest_asyncio.fixture
+async def account_factory(db: AsyncSession):
+    """Factory that creates BudgetAccount rows with optional card_last4."""
+    from app.models.budget import BudgetAccount
+
+    async def _make(family_id, *, name: str = "Test Account",
+                    card_last4: str | None = None,
+                    currency: str = "MXN",
+                    account_type: str = "checking",
+                    closed: bool = False):
+        acct = BudgetAccount(
+            family_id=family_id,
+            name=name,
+            type=account_type,
+            currency=currency,
+            card_last4=card_last4,
+            closed=closed,
+        )
+        db.add(acct)
+        await db.commit()
+        await db.refresh(acct)
+        return acct
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def transaction_factory_for_account(db: AsyncSession, family):
+    """Factory that creates a BudgetTransaction on a specific account.
+
+    NOTE: BudgetTransaction has no created_by_id / user_id column as of the
+    current schema (only deleted_by_id exists). The user_id kwarg is accepted
+    for API compatibility with the test but is not persisted.
+    TODO: introduce created_by_id on budget_transactions to enable per-user
+    last-used fallback in AccountMatchingService.
+    """
+    from app.models.budget import BudgetTransaction
+    from datetime import date as date_type
+
+    async def _make(account_id, *, user_id=None, amount: int = -10000):
+        tx = BudgetTransaction(
+            family_id=family.id,
+            account_id=account_id,
+            date=date_type.today(),
+            amount=amount,
+        )
+        db.add(tx)
+        await db.commit()
+        await db.refresh(tx)
+        return tx
+
+    return _make
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for Task 6: DuplicateGuardService
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def payee(db: AsyncSession, family):
+    """A BudgetPayee belonging to the shared family fixture."""
+    from app.models.budget import BudgetPayee
+    p = BudgetPayee(family_id=family.id, name="Test Payee")
+    db.add(p)
+    await db.commit()
+    await db.refresh(p)
+    return p
+
+
+@pytest_asyncio.fixture
+async def transaction_factory_with_payee(db: AsyncSession, family):
+    """Factory: creates a BudgetTransaction with a specific payee + amount.
+
+    If created_at is provided, the timestamp is forced after flush because
+    the column uses server_default=now() — SQLAlchemy only populates it on
+    INSERT, so we override it with a direct UPDATE after the flush.
+    """
+    from app.models.budget import BudgetAccount, BudgetTransaction
+    from datetime import date as date_type
+
+    acct = BudgetAccount(
+        family_id=family.id, name="DupGuard Account",
+        type="checking", currency="MXN",
+    )
+    db.add(acct)
+    await db.commit()
+    await db.refresh(acct)
+
+    async def _make(family_id, payee_id, *, amount: int = -10000,
+                    created_at=None):
+        tx = BudgetTransaction(
+            family_id=family_id,
+            account_id=acct.id,
+            date=date_type.today(),
+            amount=amount,
+            payee_id=payee_id,
+        )
+        db.add(tx)
+        await db.flush()          # assigns PK + server_default created_at
+        if created_at is not None:
+            # Override the server-generated timestamp with the requested value
+            from sqlalchemy import update
+            from app.models.budget import BudgetTransaction as _BT
+            await db.execute(
+                update(_BT)
+                .where(_BT.id == tx.id)
+                .values(created_at=created_at)
+            )
+        await db.commit()
+        await db.refresh(tx)
+        return tx
+
+    return _make

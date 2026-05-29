@@ -1,0 +1,68 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: J
+      - generic [ref=e7]:
+        - heading "Juan Carlos Martinez" [level=1] [ref=e8]
+        - paragraph [ref=e9]: juan.mtz79@gmail.com
+        - generic [ref=e10]: parent
+  - main [ref=e11]:
+    - generic [ref=e12]:
+      - heading "Points Summary" [level=2] [ref=e13]
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - paragraph [ref=e16]: "0"
+          - paragraph [ref=e17]: Earned
+        - generic [ref=e18]:
+          - paragraph [ref=e19]: "0"
+          - paragraph [ref=e20]: Spent
+        - generic [ref=e21]:
+          - paragraph [ref=e22]: "0"
+          - paragraph [ref=e23]: Balance
+    - generic [ref=e24]:
+      - heading "Preferred Language" [level=2] [ref=e25]
+      - generic [ref=e26]:
+        - combobox [ref=e27]:
+          - option "English" [selected]
+          - option "Spanish"
+        - button "Save Changes" [ref=e28]
+    - generic [ref=e29]:
+      - heading "Change Password" [level=2] [ref=e30]
+      - generic [ref=e31]:
+        - generic [ref=e32]:
+          - generic [ref=e33]: Current Password
+          - textbox "Current Password" [ref=e34]:
+            - /placeholder: ••••••••
+        - generic [ref=e35]:
+          - generic [ref=e36]: New Password
+          - textbox "New Password" [ref=e37]:
+            - /placeholder: ••••••••
+        - button "Update Password" [ref=e38]
+  - navigation [ref=e39]:
+    - generic [ref=e40]:
+      - link "Tasks" [ref=e41] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e42]
+        - generic [ref=e44]: Tasks
+      - link "Rewards" [ref=e45] [cursor=pointer]:
+        - /url: /rewards
+        - img [ref=e46]
+        - generic [ref=e48]: Rewards
+      - link "Profile" [ref=e49] [cursor=pointer]:
+        - /url: /profile
+        - img [ref=e50]
+        - generic [ref=e52]: Profile
+      - link "Budget" [ref=e53] [cursor=pointer]:
+        - /url: /budget/month
+        - img [ref=e54]
+        - generic [ref=e56]: Budget
+      - link "Manage" [ref=e57] [cursor=pointer]:
+        - /url: /parent
+        - img [ref=e58]
+        - generic [ref=e61]: Manage
+      - button "ES" [ref=e63]:
+        - img [ref=e64]
+        - generic [ref=e66]: ES
+      - button "Logout" [ref=e68]:
+        - img [ref=e69]
+        - generic [ref=e71]: Logout

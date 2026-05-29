@@ -1,0 +1,54 @@
+- generic [active] [ref=e74]:
+  - generic [ref=e132]:
+    - img [ref=e133]
+    - paragraph [ref=e135]: Invalid email or password
+    - button "×" [ref=e136]
+  - main [ref=e76]:
+    - generic [ref=e79]:
+      - generic [ref=e80]:
+        - generic [ref=e81]:
+          - heading "Gestiona tu familia" [level=2] [ref=e82]
+          - paragraph [ref=e83]: Tareas, recompensas y control parental en un solo lugar
+        - generic [ref=e84]:
+          - generic [ref=e85]:
+            - img [ref=e87]
+            - generic [ref=e89]:
+              - paragraph [ref=e90]: Asignación de tareas
+              - paragraph [ref=e91]: Crea y asigna tareas con puntos
+          - generic [ref=e92]:
+            - img [ref=e94]
+            - generic [ref=e96]:
+              - paragraph [ref=e97]: Sistema de recompensas
+              - paragraph [ref=e98]: Motiva con recompensas atractivas
+          - generic [ref=e99]:
+            - img [ref=e101]
+            - generic [ref=e103]:
+              - paragraph [ref=e104]: Finanzas familiares
+              - paragraph [ref=e105]: Presupuesto y control de gastos
+      - generic [ref=e106]:
+        - generic [ref=e107]:
+          - heading "Bienvenido" [level=1] [ref=e108]
+          - paragraph [ref=e109]: Iniciar sesión en Family Task Manager
+        - generic [ref=e114]: O continúa con correo
+        - generic [ref=e115]:
+          - generic [ref=e116]:
+            - generic [ref=e117]: Correo Electrónico
+            - textbox "Correo Electrónico" [ref=e118]:
+              - /placeholder: parent@demo.com
+              - text: mom@demo.com
+          - generic [ref=e119]:
+            - generic [ref=e120]: Contraseña
+            - textbox "Contraseña" [ref=e121]:
+              - /placeholder: ••••••••
+              - text: password123
+          - link "¿Olvidaste tu contraseña?" [ref=e123] [cursor=pointer]:
+            - /url: /forgot-password
+          - button "Iniciar Sesión" [ref=e124]
+        - paragraph [ref=e125]:
+          - text: ¿No tienes cuenta?
+          - link "Crear cuenta" [ref=e126] [cursor=pointer]:
+            - /url: /register
+        - button "English" [ref=e128]:
+          - img [ref=e129]
+          - text: English
+  - generic [ref=e131]: Iniciar Sesión - Family Task Manager
