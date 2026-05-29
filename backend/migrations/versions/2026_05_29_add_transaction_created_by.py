@@ -25,10 +25,13 @@ def upgrade() -> None:
             nullable=True,
         ),
     )
+    # created_at DESC matches the AccountMatchingService Strategy 3a query
+    # (ORDER BY created_at DESC LIMIT 1) so the planner can read the index
+    # in physical order without an extra sort step.
     op.create_index(
         "ix_budget_transactions_created_by",
         "budget_transactions",
-        ["family_id", "created_by_id", "created_at"],
+        ["family_id", "created_by_id", sa.text("created_at DESC")],
     )
 
 

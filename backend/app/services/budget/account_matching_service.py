@@ -32,7 +32,7 @@ class AccountMatchingService:
     async def match(
         db: AsyncSession,
         family_id: UUID,
-        user_id: UUID,
+        user_id: Optional[UUID],
         card_last4: Optional[str],
         receipt_currency: Optional[str],
         override_account_id: Optional[UUID] = None,
