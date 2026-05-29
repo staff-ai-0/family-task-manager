@@ -488,8 +488,13 @@ class ReportService:
         ]
         oldest_month = month_starts[0]
 
-        starting_balance_by_acct = {a.id: a.starting_balance for a in accounts}
-        account_ids = list(starting_balance_by_acct.keys())
+        # NOTE: account.starting_balance is also materialized as a synthetic
+        # "Starting Balance" BudgetTransaction at account create time (see
+        # AccountService.create). Including a.starting_balance here would
+        # double-count. Initialize running balances to 0 — the synthetic txn
+        # is picked up by either the prior-period sum or the per-month query
+        # depending on its date relative to the window.
+        account_ids = [a.id for a in accounts]
 
         # Prior-period sum (everything strictly before the oldest displayed month)
         prior_q = (
@@ -534,7 +539,7 @@ class ReportService:
             activity[(row.account_id, date(month_key.year, month_key.month, 1))] = row.amt
 
         running = {
-            acct_id: starting_balance_by_acct[acct_id] + prior_by_acct.get(acct_id, 0)
+            acct_id: prior_by_acct.get(acct_id, 0)
             for acct_id in account_ids
         }
 
