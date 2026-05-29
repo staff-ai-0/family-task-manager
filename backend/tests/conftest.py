@@ -425,3 +425,77 @@ async def transaction_factory(db: AsyncSession, family):
         return tx
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for Task 5: AccountMatchingService
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def user(db: AsyncSession, family):
+    """A minimal PARENT user belonging to the shared family fixture."""
+    from app.models.user import User, UserRole
+    u = User(
+        email="acct-match-test@example.com",
+        name="Test Parent",
+        role=UserRole.PARENT,
+        family_id=family.id,
+        email_verified=True,
+    )
+    db.add(u)
+    await db.commit()
+    await db.refresh(u)
+    return u
+
+
+@pytest_asyncio.fixture
+async def account_factory(db: AsyncSession):
+    """Factory that creates BudgetAccount rows with optional card_last4."""
+    from app.models.budget import BudgetAccount
+
+    async def _make(family_id, *, name: str = "Test Account",
+                    card_last4: str | None = None,
+                    currency: str = "MXN",
+                    account_type: str = "checking"):
+        acct = BudgetAccount(
+            family_id=family_id,
+            name=name,
+            type=account_type,
+            currency=currency,
+            card_last4=card_last4,
+        )
+        db.add(acct)
+        await db.commit()
+        await db.refresh(acct)
+        return acct
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def transaction_factory_for_account(db: AsyncSession, family):
+    """Factory that creates a BudgetTransaction on a specific account.
+
+    NOTE: BudgetTransaction has no created_by_id / user_id column as of the
+    current schema (only deleted_by_id exists). The user_id kwarg is accepted
+    for API compatibility with the test but is not persisted.
+    TODO: introduce created_by_id on budget_transactions to enable per-user
+    last-used fallback in AccountMatchingService.
+    """
+    from app.models.budget import BudgetTransaction
+    from datetime import date as date_type
+
+    async def _make(account_id, *, user_id=None, amount: int = -10000):
+        tx = BudgetTransaction(
+            family_id=family.id,
+            account_id=account_id,
+            date=date_type.today(),
+            amount=amount,
+        )
+        db.add(tx)
+        await db.commit()
+        await db.refresh(tx)
+        return tx
+
+    return _make
