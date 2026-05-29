@@ -93,7 +93,7 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
                 </label>
             </div>
 
-            <!-- Confirm card target -->
+            <!-- Confirm card target (populated from #confirm-card-tpl via cloneNode + textContent) -->
             <section id="confirm-card" class="hidden mt-8"></section>
 
             <!-- Duplicate modal -->
@@ -101,6 +101,91 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
                 id="dup-modal"
                 class="rounded-2xl p-0 bg-transparent backdrop:bg-brand-ink/40"
             ></dialog>
+
+            <!--
+              ══════════════════════════════════════════════════════════════════
+              Templates — Astro renders these once at SSR with the static structure.
+              JS clones the template and uses .textContent (not innerHTML) to fill
+              user-controlled values (payee name, item name, etc.), so injected
+              HTML from a malicious LLM payload renders as text, not markup.
+              Any future field added to either template is XSS-safe by default —
+              you'd have to explicitly switch to innerHTML to introduce a vuln.
+              ══════════════════════════════════════════════════════════════════
+            -->
+            <template id="confirm-card-tpl">
+                <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5 space-y-4">
+                    <div>
+                        <h2 data-slot="payee-name" class="text-xl font-display font-extrabold text-brand-ink"></h2>
+                        <div data-slot="total" class="text-3xl font-display font-extrabold text-brand-coral-deep num mt-1"></div>
+                        <div data-slot="fx-line" class="text-sm text-brand-ink-soft mt-1 hidden"></div>
+                    </div>
+
+                    <div class="text-sm">
+                        <div data-slot="account-label" class="text-brand-ink-soft text-xs uppercase tracking-wider font-semibold mb-1">
+                            {lang === "es" ? "Cuenta" : "Account"}
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span data-slot="match-badge" class="inline-block font-bold"></span>
+                            <span data-slot="account-name" class="text-brand-ink font-medium"></span>
+                        </div>
+                    </div>
+
+                    <div data-slot="iva-pill" class="inline-block px-3 py-1 rounded-full bg-brand-cream-deep text-xs font-semibold text-brand-ink hidden"></div>
+
+                    <ul data-slot="items" class="border-t border-brand-ink/10 pt-3 divide-y divide-brand-ink/5 hidden"></ul>
+
+                    <div class="flex flex-col gap-2 pt-3">
+                        <a
+                            href="/budget/transactions"
+                            class="block w-full text-center bg-brand-coral-deep text-white px-4 py-3 rounded-xl font-semibold press"
+                        >
+                            {lang === "es" ? "✓ Listo, guardar" : "✓ Looks good — save"}
+                        </a>
+                        <div class="flex gap-2">
+                            <a
+                                data-slot="edit-link"
+                                class="flex-1 text-center bg-brand-cream-deep text-brand-ink px-4 py-3 rounded-xl font-semibold border border-brand-ink/10 press"
+                            >{lang === "es" ? "Editar" : "Edit"}</a>
+                            <button
+                                id="del-tx"
+                                type="button"
+                                class="flex-1 text-center bg-brand-cream-deep text-brand-ink px-4 py-3 rounded-xl font-semibold border border-brand-ink/10 press"
+                            >{lang === "es" ? "Borrar y re-escanear" : "Delete & re-scan"}</button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+            <template id="confirm-item-tpl">
+                <li class="flex justify-between items-center py-1.5 text-sm">
+                    <span class="text-brand-ink">
+                        <span data-slot="qty" class="text-xs text-brand-ink-soft mr-1 hidden"></span>
+                        <a data-slot="name-link" class="underline-offset-4 hover:underline"></a>
+                        <span data-slot="trend-badge" class="ml-2 text-xs font-semibold hidden"></span>
+                    </span>
+                    <span data-slot="total" class="text-brand-ink font-medium num"></span>
+                </li>
+            </template>
+
+            <template id="dup-modal-tpl">
+                <form method="dialog" class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5 space-y-3 max-w-sm mx-auto">
+                    <h3 class="text-lg font-display font-extrabold text-brand-ink">
+                        {lang === "es" ? "⚠ Ya escaneado" : "⚠ Already scanned"}
+                    </h3>
+                    <p data-slot="summary" class="text-sm text-brand-ink-soft"></p>
+                    <div class="flex gap-2 justify-end pt-2">
+                        <a
+                            data-slot="open-original"
+                            class="bg-brand-cream-deep text-brand-ink px-4 py-2 rounded-xl font-semibold border border-brand-ink/10 press"
+                        >{lang === "es" ? "Ver original" : "Open original"}</a>
+                        <button
+                            id="force-save"
+                            type="button"
+                            class="bg-brand-coral-deep text-white px-4 py-2 rounded-xl font-semibold press"
+                        >{lang === "es" ? "Guardar de todas formas" : "Save anyway"}</button>
+                    </div>
+                </form>
+            </template>
         </main>
 
         <!-- Full-screen overlay (covers the page during scan) -->
@@ -143,15 +228,8 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
             return `${sign}$${abs.toFixed(2)} ${ccy || ""}`.trim();
         }
 
-        function esc(s) {
-            return String(s || "").replace(/[<>&"']/g, (c) => ({
-                "<": "&lt;",
-                ">": "&gt;",
-                "&": "&amp;",
-                "\"": "&quot;",
-                "'": "&#39;",
-            }[c]));
-        }
+        // esc() removed: all rendering now goes through textContent on cloned
+        // <template> nodes (XSS-safe by default).
 
         function timeAgo(iso, l) {
             const sec = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
@@ -238,120 +316,98 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
         }
 
         // ── Render the confirm card from a successful response ────────────────
+        // Clones the static <template id="confirm-card-tpl"> and populates each
+        // data-slot via textContent (XSS-safe — browser never parses HTML from
+        // the value). Item rows clone <template id="confirm-item-tpl">.
         function showConfirmCard(body) {
             const tx = body.transaction || {};
             const currency = tx.currency || "MXN";
 
-            // FX line — only when present
-            const fxLine = body.fx
-                ? `<div class="text-sm text-brand-ink-soft mt-1">≈ ${money(
-                    body.fx.original_amount_cents,
-                    body.fx.original_currency,
-                )} @ ${esc(body.fx.rate)}</div>`
-                : "";
+            const tpl = document.getElementById("confirm-card-tpl");
+            const node = tpl.content.firstElementChild.cloneNode(true);
+            const slot = (name) => node.querySelector(`[data-slot="${name}"]`);
 
-            // IVA pill — only when transaction has iva_cents
-            const ivaPill = tx.iva_cents
-                ? `<div class="inline-block px-3 py-1 rounded-full bg-brand-cream-deep text-xs font-semibold text-brand-ink">
-                       IVA ${money(tx.iva_cents, currency)}
-                   </div>`
-                : "";
+            slot("payee-name").textContent =
+                tx.payee_name || (lang === "es" ? "Ticket" : "Receipt");
 
-            // Match strategy → indicator
-            const strategy = body.account_match && body.account_match.strategy;
-            const matchBadge = strategy === "card_last4"
-                ? `<span class="inline-block text-brand-mint-deep font-bold">✓</span>`
-                : strategy === "override"
-                    ? `<span class="inline-block text-brand-ink font-bold">●</span>`
-                    : `<span class="inline-block text-yellow-600 font-bold" title="${
-                        lang === "es" ? "Mejor estimación" : "Best guess"
-                    }">●</span>`;
-
-            // Trend badges (only when sample_size >= 3 AND |pct_change| >= 0.05)
-            const trendsMap = new Map(
-                (body.trends || []).map((t) => [t.normalized_name, t]),
-            );
-
-            const items = body.items || [];
-            const itemsHtml = items.map((it) => {
-                const t = trendsMap.get(it.normalized_name);
-                let badge = "";
-                if (t && t.sample_size >= 3 && Math.abs(t.pct_change) >= 0.05) {
-                    const up = t.pct_change > 0;
-                    const color = up ? "text-red-600" : "text-brand-mint-deep";
-                    const arrow = up ? "📈" : "📉";
-                    const pct = (t.pct_change * 100).toFixed(0);
-                    badge = `<span class="ml-2 text-xs font-semibold ${color}">${arrow} ${pct}%</span>`;
-                }
-                const qtyLabel = it.qty && Number(it.qty) > 1
-                    ? `<span class="text-xs text-brand-ink-soft mr-1">${esc(it.qty)}×</span>`
-                    : "";
-                return `<li class="flex justify-between items-center py-1.5 text-sm">
-                    <span class="text-brand-ink">${qtyLabel}<a href="/budget/items/${encodeURIComponent(it.normalized_name)}" class="underline-offset-4 hover:underline">${esc(it.name)}</a>${badge}</span>
-                    <span class="text-brand-ink font-medium num">${money(it.total_cents, currency)}</span>
-                </li>`;
-            }).join("");
-
-            const itemsBlock = items.length
-                ? `<ul class="border-t border-brand-ink/10 pt-3 divide-y divide-brand-ink/5">${itemsHtml}</ul>`
-                : "";
-
-            // Total — tx.amount is already cents (negative for expenses)
-            const totalDisplay = money(
+            slot("total").textContent = money(
                 typeof tx.amount === "number" ? Math.abs(tx.amount) : 0,
                 currency,
             );
 
-            confirmCard.innerHTML = `
-                <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5 space-y-4">
-                    <div>
-                        <h2 class="text-xl font-display font-extrabold text-brand-ink">
-                            ${esc(tx.payee_name || (lang === "es" ? "Ticket" : "Receipt"))}
-                        </h2>
-                        <div class="text-3xl font-display font-extrabold text-brand-coral-deep num mt-1">
-                            ${totalDisplay}
-                        </div>
-                        ${fxLine}
-                    </div>
+            if (body.fx) {
+                const fx = slot("fx-line");
+                fx.textContent = `≈ ${money(body.fx.original_amount_cents, body.fx.original_currency)} @ ${body.fx.rate}`;
+                fx.classList.remove("hidden");
+            }
 
-                    <div class="text-sm">
-                        <div class="text-brand-ink-soft text-xs uppercase tracking-wider font-semibold mb-1">
-                            ${lang === "es" ? "Cuenta" : "Account"}
-                        </div>
-                        <div class="flex items-center gap-2">
-                            ${matchBadge}
-                            <span class="text-brand-ink font-medium">${esc(tx.account_name || "—")}</span>
-                        </div>
-                    </div>
+            // Match strategy → indicator (no user-controlled text; safe to set
+            // textContent + colour class)
+            const strategy = body.account_match && body.account_match.strategy;
+            const badge = slot("match-badge");
+            if (strategy === "card_last4") {
+                badge.textContent = "✓";
+                badge.classList.add("text-brand-mint-deep");
+            } else if (strategy === "override") {
+                badge.textContent = "●";
+                badge.classList.add("text-brand-ink");
+            } else {
+                badge.textContent = "●";
+                badge.classList.add("text-yellow-600");
+                badge.title = lang === "es" ? "Mejor estimación" : "Best guess";
+            }
+            slot("account-name").textContent = tx.account_name || "—";
 
-                    ${ivaPill}
+            if (tx.iva_cents) {
+                const iva = slot("iva-pill");
+                iva.textContent = `IVA ${money(tx.iva_cents, currency)}`;
+                iva.classList.remove("hidden");
+            }
 
-                    ${itemsBlock}
+            const items = body.items || [];
+            if (items.length) {
+                const trendsMap = new Map(
+                    (body.trends || []).map((t) => [t.normalized_name, t]),
+                );
+                const itemTpl = document.getElementById("confirm-item-tpl");
+                const itemsList = slot("items");
+                itemsList.classList.remove("hidden");
+                for (const it of items) {
+                    const row = itemTpl.content.firstElementChild.cloneNode(true);
+                    const rslot = (n) => row.querySelector(`[data-slot="${n}"]`);
 
-                    <div class="flex flex-col gap-2 pt-3">
-                        <a
-                            href="/budget/transactions"
-                            class="block w-full text-center bg-brand-coral-deep text-white px-4 py-3 rounded-xl font-semibold press"
-                        >
-                            ${lang === "es" ? "✓ Listo, guardar" : "✓ Looks good — save"}
-                        </a>
-                        <div class="flex gap-2">
-                            <a
-                                href="/budget/transactions/${esc(body.transaction_id || "")}"
-                                class="flex-1 text-center bg-brand-cream-deep text-brand-ink px-4 py-3 rounded-xl font-semibold border border-brand-ink/10 press"
-                            >
-                                ${lang === "es" ? "Editar" : "Edit"}
-                            </a>
-                            <button
-                                id="del-tx"
-                                type="button"
-                                class="flex-1 text-center bg-brand-cream-deep text-brand-ink px-4 py-3 rounded-xl font-semibold border border-brand-ink/10 press"
-                            >
-                                ${lang === "es" ? "Borrar y re-escanear" : "Delete & re-scan"}
-                            </button>
-                        </div>
-                    </div>
-                </div>`;
+                    if (it.qty && Number(it.qty) > 1) {
+                        const q = rslot("qty");
+                        q.textContent = `${it.qty}×`;
+                        q.classList.remove("hidden");
+                    }
+
+                    const link = rslot("name-link");
+                    link.textContent = it.name || "";
+                    link.href = `/budget/items/${encodeURIComponent(it.normalized_name || "")}`;
+
+                    const t = trendsMap.get(it.normalized_name);
+                    if (t && t.sample_size >= 3 && Math.abs(t.pct_change) >= 0.05) {
+                        const up = t.pct_change > 0;
+                        const tb = rslot("trend-badge");
+                        tb.textContent = `${up ? "📈" : "📉"} ${(t.pct_change * 100).toFixed(0)}%`;
+                        tb.classList.add(up ? "text-red-600" : "text-brand-mint-deep");
+                        tb.classList.remove("hidden");
+                    }
+
+                    rslot("total").textContent = money(it.total_cents, currency);
+                    itemsList.appendChild(row);
+                }
+            }
+
+            const editLink = slot("edit-link");
+            if (body.transaction_id) {
+                editLink.href = `/budget/transactions/${encodeURIComponent(body.transaction_id)}`;
+            } else {
+                editLink.removeAttribute("href");
+            }
+
+            confirmCard.replaceChildren(node);
             confirmCard.classList.remove("hidden");
 
             // Hide CTAs once the card is visible
@@ -379,35 +435,30 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
         }
 
         // ── Duplicate modal: open original or force-save through ──────────────
+        // Clones <template id="dup-modal-tpl"> and fills via textContent + safe
+        // anchor href (encodeURIComponent on the txn id).
         function showDupModal(file, body) {
             const dup = body.dup_warning || {};
             const ccy = (body.transaction && body.transaction.currency) || "MXN";
-            dupModal.innerHTML = `
-                <form method="dialog" class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5 space-y-3 max-w-sm mx-auto">
-                    <h3 class="text-lg font-display font-extrabold text-brand-ink">
-                        ${lang === "es" ? "⚠ Ya escaneado" : "⚠ Already scanned"}
-                    </h3>
-                    <p class="text-sm text-brand-ink-soft">
-                        ${esc(dup.payee || (lang === "es" ? "Comercio" : "Merchant"))} ·
-                        ${money(dup.amount_cents, ccy)} ·
-                        ${esc(timeAgo(dup.scanned_at, lang))}
-                    </p>
-                    <div class="flex gap-2 justify-end pt-2">
-                        <a
-                            href="/budget/transactions/${esc(dup.existing_transaction_id || "")}"
-                            class="bg-brand-cream-deep text-brand-ink px-4 py-2 rounded-xl font-semibold border border-brand-ink/10 press"
-                        >
-                            ${lang === "es" ? "Ver original" : "Open original"}
-                        </a>
-                        <button
-                            id="force-save"
-                            type="button"
-                            class="bg-brand-coral-deep text-white px-4 py-2 rounded-xl font-semibold press"
-                        >
-                            ${lang === "es" ? "Guardar de todas formas" : "Save anyway"}
-                        </button>
-                    </div>
-                </form>`;
+
+            const tpl = document.getElementById("dup-modal-tpl");
+            const node = tpl.content.firstElementChild.cloneNode(true);
+            const slot = (n) => node.querySelector(`[data-slot="${n}"]`);
+
+            slot("summary").textContent = [
+                dup.payee || (lang === "es" ? "Comercio" : "Merchant"),
+                money(dup.amount_cents, ccy),
+                timeAgo(dup.scanned_at, lang),
+            ].join(" · ");
+
+            const openLink = slot("open-original");
+            if (dup.existing_transaction_id) {
+                openLink.href = `/budget/transactions/${encodeURIComponent(dup.existing_transaction_id)}`;
+            } else {
+                openLink.removeAttribute("href");
+            }
+
+            dupModal.replaceChildren(node);
             try {
                 dupModal.showModal();
             } catch (_) {
