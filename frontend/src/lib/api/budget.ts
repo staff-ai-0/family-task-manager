@@ -892,3 +892,66 @@ export async function transferBetweenAccounts(
         body: JSON.stringify(data),
     });
 }
+
+// ─── Receipt Scanner v2 ───────────────────────────────────────────────────────
+
+export interface ScanReceiptResponse {
+    success: boolean;
+    transaction_id: string | null;
+    transaction?: any;
+    items: Array<{
+        id: string;
+        name: string;
+        normalized_name: string;
+        qty: number | null;
+        unit_price_cents: number | null;
+        total_cents: number;
+        brand: string | null;
+        category_id: string | null;
+    }>;
+    account_match?: { strategy: string; matched_card_last4: string | null };
+    fx?: { rate: string; original_amount_cents: number; original_currency: string } | null;
+    trends: Array<{
+        normalized_name: string;
+        avg_unit_cents: number;
+        last_unit_cents: number;
+        pct_change: number;
+        sample_size: number;
+    }>;
+    confidence: number;
+    shopping_auto_checked: string[];
+    warnings: string[];
+    dup_warning: {
+        existing_transaction_id: string;
+        scanned_at: string;
+        amount_cents: number;
+        payee: string | null;
+    } | null;
+    scanned_preview?: Record<string, unknown> | null;
+    draft_id?: string | null;
+    message?: string | null;
+}
+
+/**
+ * Scan a receipt image/PDF via the v2 endpoint. Returns the parsed body together
+ * with the HTTP status so callers can branch on 409 (duplicate) versus 200/201.
+ */
+export async function scanReceipt(
+    token: string,
+    file: File,
+    opts: { force?: boolean; account_id?: string } = {},
+): Promise<{ status: number; body: ScanReceiptResponse }> {
+    const form = new FormData();
+    form.append("file", file);
+    const q = new URLSearchParams();
+    if (opts.force) q.set("force", "true");
+    if (opts.account_id) q.set("account_id", opts.account_id);
+    const url = `/api/budget/transactions/scan-receipt${q.toString() ? "?" + q : ""}`;
+    const resp = await fetch(url, {
+        method: "POST",
+        body: form,
+        headers: { "Authorization": `Bearer ${token}` },
+    });
+    const body = await resp.json();
+    return { status: resp.status, body };
+}
