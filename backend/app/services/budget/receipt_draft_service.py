@@ -134,6 +134,10 @@ class ReceiptDraftService:
             from app.services.budget.receipt_scanner_service import _build_notes
             notes = _build_notes(sd.get("payee_name"), sd.get("items", []), sd.get("currency", "MXN"))
 
+        # Carry v2 scanner fields (card_last4, iva_cents) from the draft
+        # through to the persisted transaction. FX fields are intentionally
+        # NOT propagated: FX rate lookup happens at scan time, not at
+        # draft-approval time, and the original FX context is gone by now.
         txn_data = TransactionCreate(
             account_id=draft.account_id,
             date=txn_date,
@@ -143,6 +147,8 @@ class ReceiptDraftService:
             notes=notes,
             cleared=False,
             reconciled=False,
+            card_last4=sd.get("card_last4"),
+            iva_cents=sd.get("iva_cents"),
         )
         transaction = await TransactionService.create(db, family_id, txn_data)
 

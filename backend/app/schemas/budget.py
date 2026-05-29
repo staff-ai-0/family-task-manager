@@ -6,7 +6,7 @@ Request and response models for budget management operations.
 
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 from typing import Optional, List
 from datetime import date as DateType, datetime
 from uuid import UUID
@@ -246,6 +246,10 @@ class TransactionBase(BaseModel):
 class TransactionCreate(TransactionBase):
     """Schema for creating a transaction"""
     payee_name: Optional[str] = Field(None, max_length=255, description="Payee name; creates payee if payee_id is absent")
+    # Scanner v2 fields — let the draft-approval path carry these through
+    # so the resulting BudgetTransaction is not stripped of card_last4 / iva.
+    card_last4: Optional[str] = Field(None, min_length=4, max_length=4, pattern=r"^\d{4}$")
+    iva_cents: Optional[int] = None
 
 
 class TransactionUpdate(BaseModel):
@@ -277,6 +281,14 @@ class TransactionResponse(TransactionBase):
     fx_rate: Optional[Decimal] = None
     original_amount_cents: Optional[int] = None
     original_currency: Optional[str] = Field(None, min_length=3, max_length=3)
+
+    # Force JSON to emit a real number for Decimal fields. Pydantic v2's
+    # default is to serialize Decimal as a string, which breaks strict
+    # mobile clients (Swift Codable / Kotlin kotlinx.serialization) that
+    # expect a numeric token. See CLAUDE.md note on Decimal serialization.
+    @field_serializer("fx_rate")
+    def _serialize_fx_rate(self, v: Optional[Decimal]) -> Optional[float]:
+        return float(v) if v is not None else None
 
     class Config:
         from_attributes = True
@@ -813,6 +825,12 @@ class TransactionItemRead(BaseModel):
     brand: Optional[str] = None
     raw_text: Optional[str] = None
 
+    # See TransactionResponse.fx_rate — keep Decimal numeric in JSON for
+    # strict-decoding mobile clients.
+    @field_serializer("qty")
+    def _serialize_qty(self, v: Optional[Decimal]) -> Optional[float]:
+        return float(v) if v is not None else None
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -840,6 +858,12 @@ class FXInfo(BaseModel):
     rate: Decimal
     original_amount_cents: int
     original_currency: str
+
+    # See TransactionResponse.fx_rate — keep Decimal numeric in JSON for
+    # strict-decoding mobile clients.
+    @field_serializer("rate")
+    def _serialize_rate(self, v: Decimal) -> float:
+        return float(v)
 
 
 class ScanReceiptResponse(BaseModel):
