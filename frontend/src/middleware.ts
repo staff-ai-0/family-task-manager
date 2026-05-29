@@ -145,10 +145,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
             });
 
             if (!response.ok) {
-                cookies.delete("access_token", { path: "/" });
+                // Only treat 401/403 as "token is bad" — those are authoritative
+                // signals from the auth check. 5xx / 502 / 504 / etc. are likely
+                // transient (backend restart, deploy, proxy hiccup) and the
+                // user's token may be perfectly valid. Surface a 503 without
+                // wiping the cookie so the user can retry.
+                if (response.status === 401 || response.status === 403) {
+                    cookies.delete("access_token", { path: "/" });
+                    return new Response(
+                        JSON.stringify({ detail: "Invalid or expired token" }),
+                        { status: 401, headers: { "Content-Type": "application/json" } }
+                    );
+                }
                 return new Response(
-                    JSON.stringify({ detail: "Invalid or expired token" }),
-                    { status: 401, headers: { "Content-Type": "application/json" } }
+                    JSON.stringify({
+                        detail: "Backend temporarily unavailable. Retry shortly.",
+                        code: "backend_error",
+                    }),
+                    { status: 503, headers: { "Content-Type": "application/json" } }
                 );
             }
 
