@@ -1,5 +1,7 @@
 """Internal retry sweep — invoked by external cron / scheduler."""
 
+import hmac
+
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +14,15 @@ router = APIRouter()
 
 
 def _require_token(x_internal_token: str = Header(None)):
-    if not settings.INTERNAL_API_TOKEN or x_internal_token != settings.INTERNAL_API_TOKEN:
+    # Constant-time comparison so an attacker can't time-side-channel the
+    # token byte by byte. Reject empty/missing on either side first to
+    # avoid passing None into compare_digest (which would TypeError).
+    expected = settings.INTERNAL_API_TOKEN or ""
+    if (
+        not expected
+        or not x_internal_token
+        or not hmac.compare_digest(x_internal_token, expected)
+    ):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "invalid internal token")
 
 

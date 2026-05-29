@@ -463,8 +463,11 @@ async def scan_receipt_endpoint(
     await require_feature("ai_features", db, current_user)
     await require_feature("receipt_scan", db, current_user)
 
-    # Track usage
-    await UsageService.increment(db, family_id, "receipt_scan")
+    # Track usage. force=True is a retry after a dup-warning; the original
+    # attempt already incremented the meter, so we skip to avoid charging
+    # the user twice for the same logical scan.
+    if not force:
+        await UsageService.increment(db, family_id, "receipt_scan")
 
     # Validate caller-supplied account belongs to this family (404 on mismatch)
     if account_id is not None:

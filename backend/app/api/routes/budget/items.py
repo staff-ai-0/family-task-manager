@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.premium import require_feature
 from app.core.type_utils import to_uuid_required
 from app.models import User
 from app.schemas.budget import ItemTrend, TransactionItemRead
@@ -54,6 +55,10 @@ async def get_trend(
     unit_price_cents — the caller should treat null as "no trend data".
     """
     family_id = to_uuid_required(current_user.family_id)
+    # Item-trend lookup is a Pro feature; the scanner pipeline already
+    # checks this with is_feature_enabled(), but the public endpoint also
+    # needs the gate so direct API callers can't bypass plan limits.
+    await require_feature("item_trends", db, current_user)
     return await TransactionItemService.get_trend(
         db,
         family_id,
