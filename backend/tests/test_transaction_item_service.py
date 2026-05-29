@@ -1,9 +1,12 @@
-"""TransactionItemService — normalize names + CRUD + trend."""
+"""TransactionItemService — normalize names + CRUD + trend + HTTP endpoints."""
 
 from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
+import pytest_asyncio
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.budget.transaction_item_service import (
     TransactionItemService, normalize_name,
@@ -81,3 +84,69 @@ async def test_tenant_isolation_on_list(db, family, other_family, transaction):
         db, family.id, normalized_name="bread",
     )
     assert rows == []
+
+
+# ---------------------------------------------------------------------------
+# HTTP endpoint tests — /api/budget/items
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def seeded_items(db: AsyncSession, test_parent_user):
+    """A few BudgetTransactionItem rows under the authed user's (test_parent_user) family."""
+    from app.models.budget import BudgetAccount, BudgetTransaction, BudgetTransactionItem
+    family_id = test_parent_user.family_id
+    # Create a minimal account + transaction to satisfy the FK
+    acct = BudgetAccount(family_id=family_id, name="Cash", type="checking", currency="MXN")
+    db.add(acct)
+    await db.commit()
+    await db.refresh(acct)
+    tx = BudgetTransaction(
+        family_id=family_id, account_id=acct.id, date=date.today(), amount=-10000,
+    )
+    db.add(tx)
+    await db.commit()
+    await db.refresh(tx)
+    now = datetime.now(timezone.utc)
+    for i in range(2):
+        db.add(BudgetTransactionItem(
+            family_id=family_id,
+            transaction_id=tx.id,
+            name="Leche Alpura 1L",
+            normalized_name="leche alpura",
+            qty=1,
+            unit_price_cents=3200 + i * 100,
+            total_cents=3200 + i * 100,
+            created_at=now - timedelta(days=i),
+        ))
+    await db.commit()
+
+
+@pytest.mark.asyncio
+async def test_list_items_filters_by_family(
+    client: AsyncClient,
+    auth_headers: dict,
+    seeded_items,
+):
+    """GET /api/budget/items?normalized_name=leche+alpura returns seeded rows."""
+    resp = await client.get(
+        "/api/budget/items/?normalized_name=leche+alpura",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) >= 1
+
+
+@pytest.mark.asyncio
+async def test_trend_returns_null_when_below_sample(
+    client: AsyncClient,
+    auth_headers: dict,
+):
+    """GET /api/budget/items/trend for unknown name returns 200 with null body."""
+    resp = await client.get(
+        "/api/budget/items/trend?normalized_name=nonexistent",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json() is None
