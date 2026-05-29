@@ -1,6 +1,5 @@
 """FXService — historical rate lookup via exchangerate.host with Redis cache."""
 
-import json
 from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -45,6 +44,8 @@ async def test_fetches_and_caches(monkeypatch):
         # Second call: redis returns cached
         rate2 = await FXService.get_rate("USD", "MXN", date(2026, 5, 28))
         assert rate2 == Decimal("17.15")
+        # Lock in cache-hit semantics: HTTP must NOT be called on the second invocation.
+        fake_client.get.assert_awaited_once()
 
 
 @pytest.mark.asyncio
