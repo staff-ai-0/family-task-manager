@@ -382,6 +382,8 @@ Body:
 
 `location_hint` reserved for a follow-up release (could be filled by geocoding the merchant address line if the vision model returns it). Always `null` in v1 of the webhook schema.
 
+**Canonical body for HMAC signature:** the signed body is `json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")` — UTF-8 bytes of a compact JSON serialization with sorted keys. Receivers MUST re-serialize the parsed payload with the same canonicalization (or hash the raw request body bytes) before computing HMAC-SHA256 — using a different JSON library default may produce a different byte string and a signature mismatch.
+
 Success: any 2xx response within 10 s. Anything else → retry per backoff schedule.
 
 ## 8. Vision prompt change
