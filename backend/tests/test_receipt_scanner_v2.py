@@ -1,6 +1,7 @@
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
+import pytest_asyncio
 
 from app.services.budget.receipt_scanner_service import (
     scan_and_create_transaction,
@@ -292,3 +293,204 @@ async def test_pipeline_stores_fx_when_currencies_differ(
     assert str(row.fx_rate) in ("17.150000", "17.15")  # numeric(12,6)
     # -4200 * 17.15 = -72030 (with ROUND_HALF_UP)
     assert row.amount in (-72030, -72031)
+
+
+# ---------------------------------------------------------------------------
+# T10 — Endpoint tests: force, 409 dup_warning, account_id override
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def family_with_recent_heb_tx(
+    db_session, test_family, test_parent_user, monkeypatch,
+):
+    """Set up: a BudgetAccount in the test family, a recent HEB tx, and
+    monkeypatch scan_and_create_transaction so subsequent endpoint calls
+    see a dup_warning (or success on force=True).
+    """
+    from app.models.budget import BudgetAccount, BudgetTransaction, BudgetPayee
+    from datetime import date as date_type
+
+    # Create account + payee + recent tx
+    acct = BudgetAccount(
+        family_id=test_family.id, name="HEB Card", type="credit", currency="MXN",
+    )
+    db_session.add(acct)
+    await db_session.flush()
+
+    payee = BudgetPayee(family_id=test_family.id, name="HEB")
+    db_session.add(payee)
+    await db_session.flush()
+
+    tx = BudgetTransaction(
+        family_id=test_family.id, account_id=acct.id,
+        date=date_type.today(), amount=-72040, payee_id=payee.id,
+    )
+    db_session.add(tx)
+    await db_session.commit()
+    await db_session.refresh(tx)
+
+    dup_result = {
+        "success": False,
+        "transaction_id": None,
+        "dup_warning": {
+            "existing_transaction_id": str(tx.id),
+            "scanned_at": "2026-05-28T10:00:00",
+            "amount_cents": -72040,
+            "payee": "HEB",
+        },
+        "items": [],
+        "account_match": {"strategy": "card_last4", "matched_card_last4": None},
+        "fx": None,
+        "trends": [],
+        "confidence": 0.92,
+        "shopping_auto_checked": [],
+        "warnings": [],
+        "scanned_preview": None,
+        "draft_id": None,
+        "message": None,
+    }
+
+    success_result = {
+        "success": True,
+        "transaction_id": str(tx.id),
+        "draft_id": None,
+        "items": [],
+        "account_match": {"strategy": "card_last4", "matched_card_last4": None},
+        "fx": None,
+        "trends": [],
+        "confidence": 0.92,
+        "shopping_auto_checked": [],
+        "warnings": [],
+        "dup_warning": None,
+        "scanned_preview": None,
+        "scanned_data": {"payee_name": "HEB", "total_amount": -72040,
+                         "date": "2026-05-28", "items": [], "currency": "MXN"},
+        "message": "Transaction created from receipt scan.",
+    }
+
+    async def _fake_pipeline(db, family_id, user_id, account_id,
+                             image_bytes, media_type, force=False):
+        if force:
+            return success_result
+        return dup_result
+
+    monkeypatch.setattr(
+        "app.api.routes.budget.transactions.scan_and_create_transaction",
+        _fake_pipeline,
+    )
+    monkeypatch.setattr(
+        "app.api.routes.budget.transactions.require_feature",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "app.api.routes.budget.transactions.UsageService.increment",
+        AsyncMock(),
+    )
+    return test_family
+
+
+@pytest_asyncio.fixture
+async def account_factory_authed(
+    db_session, test_family, monkeypatch,
+):
+    """Creates a BudgetAccount in the test family's context.
+    Also patches require_feature and scan_and_create_transaction with a
+    success result that echoes back 'override' strategy.
+    """
+    from app.models.budget import BudgetAccount
+
+    monkeypatch.setattr(
+        "app.api.routes.budget.transactions.require_feature",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "app.api.routes.budget.transactions.UsageService.increment",
+        AsyncMock(),
+    )
+
+    async def _make(*, currency: str = "MXN"):
+        acct = BudgetAccount(
+            family_id=test_family.id, name=f"Acct {currency}",
+            type="checking", currency=currency,
+        )
+        db_session.add(acct)
+        await db_session.commit()
+        await db_session.refresh(acct)
+
+        success_result = {
+            "success": True,
+            "transaction_id": "00000000-0000-0000-0000-000000000001",
+            "draft_id": None,
+            "items": [],
+            "account_match": {"strategy": "override", "matched_card_last4": None},
+            "fx": None,
+            "trends": [],
+            "confidence": 0.90,
+            "shopping_auto_checked": [],
+            "warnings": [],
+            "dup_warning": None,
+            "scanned_preview": None,
+            "scanned_data": {"payee_name": "Test", "total_amount": -1000,
+                             "date": "2026-05-28", "items": [], "currency": currency},
+            "message": "Transaction created from receipt scan.",
+        }
+
+        async def _fake_pipeline(db, family_id, user_id, account_id,
+                                 image_bytes, media_type, force=False):
+            return success_result
+
+        monkeypatch.setattr(
+            "app.api.routes.budget.transactions.scan_and_create_transaction",
+            _fake_pipeline,
+        )
+        return acct
+
+    return _make
+
+
+@pytest.mark.asyncio
+async def test_endpoint_returns_409_on_dup(client, auth_headers,
+                                           family_with_recent_heb_tx):
+    """Endpoint returns 409 and dup_warning body when pipeline detects duplicate."""
+    files = {"file": ("r.jpg", b"\xff\xd8\xff\xe0", "image/jpeg")}
+    resp = await client.post(
+        "/api/budget/transactions/scan-receipt",
+        files=files,
+        headers=auth_headers,
+    )
+    assert resp.status_code == 409
+    body = resp.json()
+    assert "dup_warning" in body
+    assert body["dup_warning"] is not None
+
+
+@pytest.mark.asyncio
+async def test_endpoint_force_true_commits(client, auth_headers,
+                                           family_with_recent_heb_tx):
+    """force=true query param bypasses dup guard and returns 200 success."""
+    files = {"file": ("r.jpg", b"\xff\xd8\xff\xe0", "image/jpeg")}
+    resp = await client.post(
+        "/api/budget/transactions/scan-receipt?force=true",
+        files=files,
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_endpoint_account_id_overrides_auto_detect(
+    client, auth_headers, account_factory_authed,
+):
+    """account_id query param flows to pipeline and strategy is 'override'."""
+    a = await account_factory_authed(currency="MXN")
+    files = {"file": ("r.jpg", b"\xff\xd8\xff\xe0", "image/jpeg")}
+    resp = await client.post(
+        f"/api/budget/transactions/scan-receipt?account_id={a.id}",
+        files=files,
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["account_match"]["strategy"] == "override"
