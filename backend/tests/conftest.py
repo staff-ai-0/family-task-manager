@@ -501,3 +501,65 @@ async def transaction_factory_for_account(db: AsyncSession, family):
         return tx
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for Task 6: DuplicateGuardService
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def payee(db: AsyncSession, family):
+    """A BudgetPayee belonging to the shared family fixture."""
+    from app.models.budget import BudgetPayee
+    p = BudgetPayee(family_id=family.id, name="Test Payee")
+    db.add(p)
+    await db.commit()
+    await db.refresh(p)
+    return p
+
+
+@pytest_asyncio.fixture
+async def transaction_factory_with_payee(db: AsyncSession, family):
+    """Factory: creates a BudgetTransaction with a specific payee + amount.
+
+    If created_at is provided, the timestamp is forced after flush because
+    the column uses server_default=now() — SQLAlchemy only populates it on
+    INSERT, so we override it with a direct UPDATE after the flush.
+    """
+    from app.models.budget import BudgetAccount, BudgetTransaction
+    from datetime import date as date_type
+
+    acct = BudgetAccount(
+        family_id=family.id, name="DupGuard Account",
+        type="checking", currency="MXN",
+    )
+    db.add(acct)
+    await db.commit()
+    await db.refresh(acct)
+
+    async def _make(family_id, payee_id, *, amount: int = -10000,
+                    created_at=None):
+        tx = BudgetTransaction(
+            family_id=family_id,
+            account_id=acct.id,
+            date=date_type.today(),
+            amount=amount,
+            payee_id=payee_id,
+        )
+        db.add(tx)
+        await db.flush()          # assigns PK + server_default created_at
+        if created_at is not None:
+            # Override the server-generated timestamp with the requested value
+            from sqlalchemy import update
+            from app.models.budget import BudgetTransaction as _BT
+            await db.execute(
+                update(_BT)
+                .where(_BT.id == tx.id)
+                .values(created_at=created_at)
+            )
+        await db.commit()
+        await db.refresh(tx)
+        return tx
+
+    return _make
