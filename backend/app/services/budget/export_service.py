@@ -7,7 +7,7 @@ Handles exporting all budget data as a ZIP archive and restoring from backup.
 import io
 import json
 import zipfile
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, List
 from uuid import UUID
 
@@ -123,7 +123,7 @@ class ExportService:
 
         metadata = {
             "version": "1.0",
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": datetime.now(timezone.utc).isoformat(),
             "family_id": str(family_id),
             "counts": {k: len(v) for k, v in budget_data.items()},
         }

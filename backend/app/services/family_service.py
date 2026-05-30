@@ -6,7 +6,7 @@ Business logic for family group management.
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from app.models import Family, User, Reward, Consequence
@@ -97,7 +97,7 @@ class FamilyService:
             )).scalar_one_or_none()
             if not existing:
                 family.join_code = code
-                family.updated_at = datetime.utcnow()
+                family.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 await db.commit()
                 await db.refresh(family)
                 return code
@@ -139,7 +139,7 @@ class FamilyService:
         for field, value in update_fields.items():
             setattr(family, field, value)
         
-        family.updated_at = datetime.utcnow()
+        family.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.commit()
         await db.refresh(family)
         return family

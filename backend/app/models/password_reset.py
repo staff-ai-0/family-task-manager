@@ -4,7 +4,7 @@ Password Reset Token Model
 from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 
 from app.core.database import Base
@@ -32,7 +32,7 @@ class PasswordResetToken(Base):
     def create_for_user(user_id, hours_valid: int = 24):
         """Create a new password reset token"""
         token = PasswordResetToken.generate_token()
-        expires_at = datetime.utcnow() + timedelta(hours=hours_valid)
+        expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=hours_valid)
         
         return PasswordResetToken(
             token=token,
@@ -42,4 +42,4 @@ class PasswordResetToken(Base):
     
     def is_valid(self) -> bool:
         """Check if token is still valid"""
-        return not self.is_used and datetime.utcnow() < self.expires_at
+        return not self.is_used and datetime.now(timezone.utc).replace(tzinfo=None) < self.expires_at

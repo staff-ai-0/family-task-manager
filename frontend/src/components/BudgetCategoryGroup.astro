@@ -143,9 +143,9 @@ const groupBorderColor = isIncome ? 'border-brand-mint' : 'border-brand-ink/10';
                     </div>
 
                     {/* Previous balance row */}
-                    {category.previous_balance > 0 && (
+                    {(category.previous_balance ?? 0) > 0 && (
                         <div class="text-xs text-brand-mint-deep font-semibold mb-1">
-                            {formatCurrency(category.previous_balance)} {t(lang, 'fin_prev_balance_label')}
+                            {formatCurrency(category.previous_balance ?? 0)} {t(lang, 'fin_prev_balance_label')}
                         </div>
                     )}
 

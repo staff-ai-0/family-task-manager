@@ -7,7 +7,7 @@ Business logic for consequence management and enforcement.
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from app.models import Consequence, User
@@ -140,7 +140,7 @@ class ConsequenceService(BaseFamilyService[Consequence]):
         db: AsyncSession, family_id: UUID
     ) -> List[Consequence]:
         """Check for expired consequences and auto-resolve them"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         query = select(Consequence).where(
             and_(

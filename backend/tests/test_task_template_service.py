@@ -21,7 +21,7 @@ class TestTemplateCreation:
             description="Make your bed neatly every morning",
             points=20,
             interval_days=1,
-            is_bonus=False,
+            is_bonus=True,
         )
         template = await TaskTemplateService.create_template(
             db_session, data, test_family.id, test_parent_user.id
@@ -29,7 +29,7 @@ class TestTemplateCreation:
         assert template.title == "Make Your Bed"
         assert template.points == 20
         assert template.interval_days == 1
-        assert template.is_bonus is False
+        assert template.is_bonus is True
         assert template.is_active is True
         assert template.family_id == test_family.id
         assert template.created_by == test_parent_user.id
@@ -55,7 +55,7 @@ class TestTemplateCreation:
             title="Clean Your Room",
             points=30,
             interval_days=7,
-            is_bonus=False,
+            is_bonus=True,
         )
         template = await TaskTemplateService.create_template(
             db_session, data, test_family.id, test_parent_user.id
@@ -67,7 +67,7 @@ class TestTemplateRetrieval:
     async def test_get_template_by_id(
         self, db_session, test_family, test_parent_user
     ):
-        data = TaskTemplateCreate(title="Test Task", points=10)
+        data = TaskTemplateCreate(title="Test Task", points=10, is_bonus=True)
         template = await TaskTemplateService.create_template(
             db_session, data, test_family.id, test_parent_user.id
         )
@@ -88,7 +88,7 @@ class TestTemplateRetrieval:
     async def test_get_template_wrong_family_raises(
         self, db_session, test_family, test_parent_user
     ):
-        data = TaskTemplateCreate(title="Test Task", points=10)
+        data = TaskTemplateCreate(title="Test Task", points=10, is_bonus=True)
         template = await TaskTemplateService.create_template(
             db_session, data, test_family.id, test_parent_user.id
         )
@@ -103,7 +103,7 @@ class TestTemplateListing:
         self, db_session, test_family, test_parent_user
     ):
         for i in range(3):
-            data = TaskTemplateCreate(title=f"Task {i}", points=10)
+            data = TaskTemplateCreate(title=f"Task {i}", points=10, is_bonus=True)
             await TaskTemplateService.create_template(
                 db_session, data, test_family.id, test_parent_user.id
             )
@@ -115,8 +115,8 @@ class TestTemplateListing:
     async def test_list_templates_filter_by_active(
         self, db_session, test_family, test_parent_user
     ):
-        active_data = TaskTemplateCreate(title="Active", points=10)
-        inactive_data = TaskTemplateCreate(title="Inactive", points=10)
+        active_data = TaskTemplateCreate(title="Active", points=10, is_bonus=True)
+        inactive_data = TaskTemplateCreate(title="Inactive", points=10, is_bonus=True)
         active = await TaskTemplateService.create_template(
             db_session, active_data, test_family.id, test_parent_user.id
         )
@@ -136,7 +136,7 @@ class TestTemplateListing:
     async def test_list_templates_filter_by_bonus(
         self, db_session, test_family, test_parent_user
     ):
-        regular_data = TaskTemplateCreate(title="Regular", points=10, is_bonus=False)
+        regular_data = TaskTemplateCreate(title="Regular", points=0, is_bonus=False)
         bonus_data = TaskTemplateCreate(title="Bonus", points=20, is_bonus=True)
         await TaskTemplateService.create_template(
             db_session, regular_data, test_family.id, test_parent_user.id
@@ -154,7 +154,7 @@ class TestTemplateListing:
     async def test_list_templates_family_isolation(
         self, db_session, test_family, test_parent_user
     ):
-        data = TaskTemplateCreate(title="Family A Task", points=10)
+        data = TaskTemplateCreate(title="Family A Task", points=10, is_bonus=True)
         await TaskTemplateService.create_template(
             db_session, data, test_family.id, test_parent_user.id
         )
@@ -168,7 +168,7 @@ class TestTemplateUpdate:
     async def test_update_template_title_and_points(
         self, db_session, test_family, test_parent_user
     ):
-        data = TaskTemplateCreate(title="Old Title", points=10)
+        data = TaskTemplateCreate(title="Old Title", points=10, is_bonus=True)
         template = await TaskTemplateService.create_template(
             db_session, data, test_family.id, test_parent_user.id
         )
@@ -182,7 +182,7 @@ class TestTemplateUpdate:
     async def test_update_template_partial(
         self, db_session, test_family, test_parent_user
     ):
-        data = TaskTemplateCreate(title="Keep Title", points=10, interval_days=1)
+        data = TaskTemplateCreate(title="Keep Title", points=10, interval_days=1, is_bonus=True)
         template = await TaskTemplateService.create_template(
             db_session, data, test_family.id, test_parent_user.id
         )
@@ -207,7 +207,7 @@ class TestTemplateToggle:
     async def test_toggle_active_to_inactive(
         self, db_session, test_family, test_parent_user
     ):
-        data = TaskTemplateCreate(title="Toggle Test", points=10)
+        data = TaskTemplateCreate(title="Toggle Test", points=10, is_bonus=True)
         template = await TaskTemplateService.create_template(
             db_session, data, test_family.id, test_parent_user.id
         )
@@ -220,7 +220,7 @@ class TestTemplateToggle:
     async def test_toggle_inactive_to_active(
         self, db_session, test_family, test_parent_user
     ):
-        data = TaskTemplateCreate(title="Toggle Test", points=10)
+        data = TaskTemplateCreate(title="Toggle Test", points=10, is_bonus=True)
         template = await TaskTemplateService.create_template(
             db_session, data, test_family.id, test_parent_user.id
         )
@@ -237,7 +237,7 @@ class TestTemplateDeletion:
     async def test_delete_template(
         self, db_session, test_family, test_parent_user
     ):
-        data = TaskTemplateCreate(title="To Delete", points=10)
+        data = TaskTemplateCreate(title="To Delete", points=10, is_bonus=True)
         template = await TaskTemplateService.create_template(
             db_session, data, test_family.id, test_parent_user.id
         )

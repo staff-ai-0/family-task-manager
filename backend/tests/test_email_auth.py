@@ -192,7 +192,7 @@ class TestPasswordReset:
         token = PasswordResetToken(
             token=PasswordResetToken.generate_token(),
             user_id=test_parent_user.id,
-            expires_at=datetime.utcnow() - timedelta(hours=2),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=2),
         )
         db.add(token)
         await db.commit()

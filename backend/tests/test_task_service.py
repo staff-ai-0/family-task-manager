@@ -11,7 +11,7 @@ Tests cover task management operations including:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4
 
@@ -40,7 +40,7 @@ class TestTaskCreation:
             is_default=True,
             frequency=TaskFrequency.DAILY,
             assigned_to=test_child_user.id,
-            due_date=datetime.utcnow() + timedelta(days=1),
+            due_date=datetime.now(timezone.utc) + timedelta(days=1),
         )
 
         task = await TaskService.create_task(
@@ -270,7 +270,7 @@ class TestOverdueTasks:
             assigned_to=test_child_user.id,
             created_by=test_parent_user.id,
             family_id=test_family.id,
-            due_date=datetime.utcnow() - timedelta(days=1),
+            due_date=datetime.now(timezone.utc) - timedelta(days=1),
             status=TaskStatus.PENDING,
         )
         db_session.add(overdue_task)
@@ -302,9 +302,9 @@ class TestOverdueTasks:
             assigned_to=test_child_user.id,
             created_by=test_parent_user.id,
             family_id=test_family.id,
-            due_date=datetime.utcnow() - timedelta(days=1),
+            due_date=datetime.now(timezone.utc) - timedelta(days=1),
             status=TaskStatus.COMPLETED,
-            completed_at=datetime.utcnow() - timedelta(days=2),
+            completed_at=datetime.now(timezone.utc) - timedelta(days=2),
         )
         db_session.add(completed_task)
         await db_session.commit()
@@ -359,7 +359,7 @@ class TestConsequenceTriggers:
             assigned_to=test_child_user.id,
             created_by=test_parent_user.id,
             family_id=test_family.id,
-            due_date=datetime.utcnow() - timedelta(days=1),
+            due_date=datetime.now(timezone.utc) - timedelta(days=1),
             status=TaskStatus.OVERDUE,
         )
         db_session.add(overdue_task)
@@ -390,7 +390,7 @@ class TestConsequenceTriggers:
             assigned_to=test_child_user.id,
             created_by=test_parent_user.id,
             family_id=test_family.id,
-            due_date=datetime.utcnow() - timedelta(days=1),
+            due_date=datetime.now(timezone.utc) - timedelta(days=1),
             status=TaskStatus.OVERDUE,
         )
         db_session.add(overdue_task)
@@ -416,7 +416,7 @@ class TestConsequenceTriggers:
             assigned_to=test_child_user.id,
             created_by=test_parent_user.id,
             family_id=test_family.id,
-            due_date=datetime.utcnow() - timedelta(days=1),
+            due_date=datetime.now(timezone.utc) - timedelta(days=1),
             status=TaskStatus.OVERDUE,
         )
         db_session.add(overdue_task)

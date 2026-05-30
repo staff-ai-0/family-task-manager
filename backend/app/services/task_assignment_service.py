@@ -801,7 +801,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             )
 
         assignment.status = AssignmentStatus.CLAIMED
-        assignment.claimed_at = datetime.utcnow()
+        assignment.claimed_at = datetime.now(timezone.utc)
 
         # Competition mode: first claim wins, cancel sibling assignments for
         # the same template+week so other kids see the gig disappear.

@@ -7,7 +7,7 @@ Business logic for task management operations.
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from app.models import Task, User, Family, PointTransaction, Consequence
@@ -122,7 +122,7 @@ class TaskService(BaseFamilyService[Task]):
 
         # Mark task as completed
         task.status = TaskStatus.COMPLETED
-        task.completed_at = datetime.utcnow()
+        task.completed_at = datetime.now(timezone.utc)
 
         # Award points using PointsService
         await PointsService.award_points_for_task(
@@ -140,7 +140,7 @@ class TaskService(BaseFamilyService[Task]):
     @staticmethod
     async def check_overdue_tasks(db: AsyncSession, family_id: UUID) -> List[Task]:
         """Check for overdue tasks and update their status"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         query = select(Task).where(
             and_(

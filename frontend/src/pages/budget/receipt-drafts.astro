@@ -15,7 +15,7 @@ export const prerender = false;
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
 if (!userOk) {
@@ -83,13 +83,13 @@ const l = {
         category: "Categoría",
         scanMore: "Escanear más recibos",
     },
-}[lang] ?? l.en;
+}[lang]!;
 ---
 
 <Layout title={l.title}>
     <div class="min-h-screen bg-brand-cream-deep pb-24">
-        <DrawerMenu user={user} />
-        <BudgetNavNew active="receipt-drafts" lang={lang as any} pendingDrafts={pendingDrafts.length} />
+        <DrawerMenu lang={lang} />
+        <BudgetNavNew active="receipt-drafts" lang={lang} pendingDrafts={pendingDrafts.length} />
 
         <main class="max-w-2xl mx-auto px-4 py-6">
             <!-- Header -->

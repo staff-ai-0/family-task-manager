@@ -20,7 +20,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import uuid
 import enum
 
@@ -155,7 +155,7 @@ class TaskAssignment(Base):
     def is_overdue(self) -> bool:
         """Check if assignment is past due date"""
         if self.due_date and self.status == AssignmentStatus.PENDING:
-            return datetime.utcnow() > self.due_date
+            return datetime.now(timezone.utc) > self.due_date
         return False
 
     @property

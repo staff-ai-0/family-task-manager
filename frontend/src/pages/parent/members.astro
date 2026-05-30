@@ -8,7 +8,7 @@ import { t } from "../../lib/i18n";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 const { data: user } = await apiFetch<any>("/api/auth/me", { token });
 if (!user) {
@@ -488,14 +488,15 @@ if (!joinCodeOk && joinCodeError) {
     });
 
     // Cancel pending invitation
-    window.cancelInvitation = async (invitationId, lang = 'en') => {
+    (window as any).cancelInvitation = async (invitationId: string, lang = 'en') => {
       if (!confirm(lang === "es" ? "¿Cancelar esta invitación?" : "Cancel this invitation?")) {
         return;
       }
 
       try {
         // Get family_id from page context (it's in the hidden form data or we can extract from URL)
-        const familyId = document.querySelector('input[name="family_id"]')?.value || 
+        const familyIdEl = document.querySelector('input[name="family_id"]');
+        const familyId = (familyIdEl instanceof HTMLInputElement ? familyIdEl.value : null) ||
                          window.location.pathname.split('/')[2]; // Fallback to extract from URL
         
         // Get token from localStorage or cookie
