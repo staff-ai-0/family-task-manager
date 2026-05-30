@@ -26,7 +26,7 @@ class InvitationService:
         invited_email: str,
         inviting_user: User,
         role: UserRole = UserRole.CHILD,
-        base_url: str = "https://family.agent-ia.mx"
+        base_url: str = ""
     ) -> FamilyInvitation:
         """
         Send a family invitation to an email address.

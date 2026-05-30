@@ -216,7 +216,7 @@ class GoogleOAuthService:
         try:
             from app.services.email_service import EmailService
             await EmailService.send_welcome_if_not_sent(
-                db=db, user=user, base_url=settings.BASE_URL
+                db=db, user=user, base_url=settings.email_link_base
             )
         except Exception:
             import logging

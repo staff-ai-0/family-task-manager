@@ -67,7 +67,7 @@ async def send_invitation(
             invited_email=request_data.email,
             inviting_user=current_user,
             role=request_data.role,
-            base_url=settings.BASE_URL,
+            base_url=settings.email_link_base,
         )
         return invitation
     except Exception as e:
@@ -164,7 +164,7 @@ async def accept_invitation(
         # trigger points (re-invitation, etc.) don't duplicate.
         try:
             await EmailService.send_welcome_if_not_sent(
-                db=db, user=user, base_url=settings.BASE_URL
+                db=db, user=user, base_url=settings.email_link_base
             )
         except Exception:
             import logging

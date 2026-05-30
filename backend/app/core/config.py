@@ -101,11 +101,22 @@ class Settings(BaseSettings):
     PAYPAL_PLAN_ID_PRO_MONTHLY: str = ""
     PAYPAL_PLAN_ID_PRO_ANNUAL: str = ""
     
-    # Email Configuration (Resend)
+    # Email Configuration
+    # Transport priority in EmailService._send: SMTP (when SMTP_HOST/USER/PASSWORD
+    # set) → Resend (when RESEND_API_KEY set) → no-op warning.
     RESEND_API_KEY: str = ""
     EMAIL_FROM: str = "noreply@agent-ia.mx"
     EMAIL_FROM_NAME: str = "Family Task Manager"
     EMAIL_VERIFICATION_EXPIRE_MINUTES: int = 1440  # 24 hours
+
+    # SMTP (Google Workspace via App Password). When set, takes precedence over
+    # Resend. EMAIL_FROM must match SMTP_USER (or one of its verified aliases),
+    # else Gmail rewrites/rejects the From header.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True  # STARTTLS on the SMTP_PORT
     
     # CORS
     ALLOWED_ORIGINS: Union[List[str], str] = [
@@ -120,7 +131,19 @@ class Settings(BaseSettings):
         if self.GOOGLE_REDIRECT_URI:
             return self.GOOGLE_REDIRECT_URI
         return f"{self.BASE_URL}/auth/google/callback"
-    
+
+    @property
+    def email_link_base(self) -> str:
+        """Origin for links embedded in transactional emails.
+
+        Every page an email links to (accept-invitation, verify-email,
+        reset-password, dashboard, parent/approvals) is a *frontend* route,
+        so links must point at the public frontend origin (PUBLIC_URL), NOT
+        BASE_URL — which is the API origin used for OAuth callbacks. Falls
+        back to BASE_URL when PUBLIC_URL is unset (e.g. local dev).
+        """
+        return (self.PUBLIC_URL or self.BASE_URL).rstrip("/")
+
     # Redis (Optional)
     REDIS_URL: str = "redis://redis:6379/0"
     
