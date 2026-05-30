@@ -98,7 +98,7 @@ class TestPUPScore:
                     family_id=test_family.id,
                     start_date=now - timedelta(days=2),
                     end_date=now + timedelta(days=1),
-                    triggered_by_assignment_id=uuid4(),  # synthetic but not enforced
+                    triggered_by_assignment_id=None,
                 )
             )
         await db_session.commit()

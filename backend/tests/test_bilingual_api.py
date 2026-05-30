@@ -21,7 +21,7 @@ async def test_create_bilingual_template(client: AsyncClient, test_parent_user: 
         "description": "Clean your room",
         "title_es": "Limpiar Cuarto",
         "description_es": "Limpia tu cuarto",
-        "points": 10,
+        "points": 0,
         "interval_days": 1,
         "is_bonus": False
     }
@@ -48,7 +48,7 @@ async def test_translate_endpoint(client: AsyncClient, test_parent_user: User):
     payload = {
         "title": "Wash Dishes",
         "description": "Wash the dishes",
-        "points": 10,
+        "points": 0,
         "interval_days": 1,
         "is_bonus": False
     }
