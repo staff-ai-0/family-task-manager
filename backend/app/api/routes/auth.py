@@ -137,7 +137,7 @@ async def register_family(
 
     # Send verification email (non-blocking)
     try:
-        await EmailService.send_verification_email(db, user, base_url=settings.BASE_URL)
+        await EmailService.send_verification_email(db, user, base_url=settings.email_link_base)
     except Exception:
         pass  # Don't block registration on email failure
 
@@ -296,7 +296,7 @@ async def resend_verification(
     if current_user.email_verified:
         return {"message": "Email is already verified."}
     await EmailService.send_verification_email(
-        db, current_user, base_url=settings.BASE_URL
+        db, current_user, base_url=settings.email_link_base
     )
     return {"message": "Verification email sent."}
 
@@ -315,7 +315,7 @@ async def forgot_password(
     user = result.scalar_one_or_none()
     if user and user.is_active:
         await EmailService.send_password_reset_email(
-            db, user, base_url=settings.BASE_URL
+            db, user, base_url=settings.email_link_base
         )
     # Always return the same response regardless of whether the email exists
     return {"message": "If an account with that email exists, a reset link has been sent."}

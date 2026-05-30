@@ -97,20 +97,14 @@ const {
                         name="role"
                         class="w-full px-4 py-2 border border-brand-ink/20 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep focus:border-transparent outline-none transition-all bg-brand-cream"
                     >
-                        <option value="child">
-                            {lang === "es" ? "Niño (Child)" : "Child"}
-                        </option>
-                        <option value="teen">
-                            {lang === "es" ? "Adolescente (Teen)" : "Teen"}
-                        </option>
                         <option value="parent">
                             {lang === "es" ? "Padre/Madre (Parent)" : "Parent"}
                         </option>
                     </select>
                     <p class="text-xs text-brand-ink-soft mt-1">
-                        {lang === "es" 
-                            ? "El rol puede ser cambiado después"
-                            : "Role can be changed later"}
+                        {lang === "es"
+                            ? "Las invitaciones por correo son solo para adultos (18+). Para agregar niños o adolescentes, comparte el código de familia."
+                            : "Email invitations are for adults (18+) only. To add children or teens, share the family code instead."}
                     </p>
                 </div>
                 <button

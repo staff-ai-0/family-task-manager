@@ -1,14 +1,17 @@
 """
 Email Service
 
-Sends transactional emails via Resend (resend.com).
+Sends transactional emails via Google Workspace SMTP (preferred) or Resend.
 Supports bilingual content (ES/EN) based on user.preferred_lang.
 """
+import logging
 import resend
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 from app.models.email_verification import EmailVerificationToken
 from app.models.password_reset import PasswordResetToken
 from app.models.user import User
@@ -209,7 +212,7 @@ def _build_html(*, heading: str, body: str, btn_text: str, btn_url: str,
     <p class="note">{expiry_note}</p>
     <p class="note">{ignore_note}</p>
   </div>
-  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="https://family.agent-ia.mx" style="color:#00D9FF;text-decoration:none">family.agent-ia.mx</a></div>
+  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="https://gcp-family.agent-ia.mx" style="color:#00D9FF;text-decoration:none">gcp-family.agent-ia.mx</a></div>
 </div>
 </body>
 </html>"""
@@ -306,7 +309,7 @@ def _build_welcome_html(
     <a href="{dashboard_url}" class="btn">{cta}</a>
     <a href="{guide_url}" class="guide-link">{guide_link_label}</a>
   </div>
-  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="https://family.agent-ia.mx" style="color:#00D9FF;text-decoration:none">family.agent-ia.mx</a></div>
+  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="https://gcp-family.agent-ia.mx" style="color:#00D9FF;text-decoration:none">gcp-family.agent-ia.mx</a></div>
 </div>
 </body>
 </html>"""
@@ -325,23 +328,99 @@ class EmailService:
 
     @staticmethod
     async def _send(*, to: str, subject: str, html: str) -> bool:
-        """Send email via Resend SDK. Returns True on success."""
-        if not settings.RESEND_API_KEY:
-            print("WARNING: RESEND_API_KEY not configured. Email not sent.")
-            print(f"  To: {to}  |  Subject: {subject}")
-            return False
+        """Send a transactional email. Returns True on success.
 
-        resend.api_key = settings.RESEND_API_KEY
+        Prefers SMTP (Google Workspace via App Password) when SMTP_HOST /
+        SMTP_USER / SMTP_PASSWORD are configured; otherwise falls back to the
+        Resend SDK. This lets prod send from info@agent-ia.mx over Workspace
+        SMTP while local/dev can still use Resend (or neither).
+        """
+        if settings.SMTP_HOST and settings.SMTP_USER and settings.SMTP_PASSWORD:
+            return await EmailService._send_smtp(to=to, subject=subject, html=html)
+
+        if settings.RESEND_API_KEY:
+            resend.api_key = settings.RESEND_API_KEY
+            try:
+                resend.Emails.send({
+                    "from": f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM}>",
+                    "to": [to],
+                    "subject": subject,
+                    "html": html,
+                })
+                return True
+            except Exception:
+                logger.warning("Resend send failed (to=%s, subject=%r)", to, subject, exc_info=True)
+                return False
+
+        logger.warning(
+            "No email transport configured (SMTP_* / RESEND_API_KEY); email not sent (to=%s, subject=%r)",
+            to, subject,
+        )
+        return False
+
+    @staticmethod
+    def _html_to_text(html: str) -> str:
+        """Crude HTML→text fallback for the multipart text/plain part.
+
+        Not a full renderer — strips tags and collapses whitespace so clients
+        (and spam filters) that prefer text/plain get something readable.
+        """
+        import re
+        from html import unescape
+
+        text = re.sub(r"(?is)<(script|style).*?</\1>", "", html)
+        text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+        text = re.sub(r"(?i)</(p|div|tr|h[1-6]|li)>", "\n", text)
+        text = re.sub(r"(?s)<[^>]+>", "", text)
+        text = unescape(text)
+        # Collapse runs of blank lines / trailing spaces.
+        lines = [ln.strip() for ln in text.splitlines()]
+        return "\n".join(ln for ln in lines if ln) or " "
+
+    @staticmethod
+    async def _send_smtp(*, to: str, subject: str, html: str) -> bool:
+        """Send via SMTP. Runs the blocking socket work off the event loop.
+
+        Transport security follows the port: 465 → implicit TLS (SMTP_SSL),
+        otherwise STARTTLS when SMTP_USE_TLS is set (587 / Gmail Workspace).
+
+        Gmail/Workspace rewrites or rejects a From that isn't the authenticated
+        mailbox or one of its verified aliases, so the From address must match
+        SMTP_USER (set EMAIL_FROM=info@agent-ia.mx in prod). We fall back to
+        SMTP_USER if EMAIL_FROM is left unset.
+        """
+        import asyncio
+        import smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.utils import formataddr
+
+        from_addr = settings.EMAIL_FROM or settings.SMTP_USER
+
+        def _blocking() -> None:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = formataddr((settings.EMAIL_FROM_NAME, from_addr))
+            msg["To"] = to
+            # text/plain must come first; clients pick the last part they can render.
+            msg.attach(MIMEText(EmailService._html_to_text(html), "plain", "utf-8"))
+            msg.attach(MIMEText(html, "html", "utf-8"))
+
+            if settings.SMTP_PORT == 465:
+                server_cm = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=20)
+            else:
+                server_cm = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=20)
+            with server_cm as server:
+                if settings.SMTP_PORT != 465 and settings.SMTP_USE_TLS:
+                    server.starttls()
+                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                server.send_message(msg)
+
         try:
-            resend.Emails.send({
-                "from": f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM}>",
-                "to": [to],
-                "subject": subject,
-                "html": html,
-            })
+            await asyncio.to_thread(_blocking)
             return True
-        except Exception as exc:
-            print(f"Resend error: {exc}")
+        except Exception:
+            logger.warning("SMTP send failed (to=%s, subject=%r)", to, subject, exc_info=True)
             return False
 
     # ------------------------------------------------------------------
@@ -370,7 +449,7 @@ class EmailService:
         from app.models.user import User as UserModel, UserRole
 
         logger = logging.getLogger(__name__)
-        base_url = (base_url or settings.BASE_URL or "https://family.agent-ia.mx").rstrip("/")
+        base_url = (base_url or settings.email_link_base).rstrip("/")
         approvals_url = f"{base_url}/parent/approvals"
 
         parents = (await db.execute(
@@ -444,9 +523,10 @@ class EmailService:
     async def send_verification_email(
         db: AsyncSession,
         user: User,
-        base_url: str = "https://family.agent-ia.mx",
+        base_url: str = "",
     ) -> bool:
         """Create a verification token and send the email."""
+        base_url = (base_url or settings.email_link_base).rstrip("/")
         lang = getattr(user, "preferred_lang", "en") or "en"
         token = await EmailService.create_verification_token(db, user)
         link = f"{base_url}/verify-email?token={token.token}"
@@ -503,7 +583,7 @@ class EmailService:
         if user and user.email_verified:
             try:
                 await EmailService.send_welcome_if_not_sent(
-                    db=db, user=user, base_url=settings.BASE_URL
+                    db=db, user=user, base_url=settings.email_link_base
                 )
             except Exception:
                 import logging
@@ -534,9 +614,10 @@ class EmailService:
     async def send_password_reset_email(
         db: AsyncSession,
         user: User,
-        base_url: str = "https://family.agent-ia.mx",
+        base_url: str = "",
     ) -> bool:
         """Create a reset token and send the email."""
+        base_url = (base_url or settings.email_link_base).rstrip("/")
         lang = getattr(user, "preferred_lang", "en") or "en"
         token = await EmailService.create_password_reset_token(db, user)
         link = f"{base_url}/reset-password?token={token.token}"
@@ -604,7 +685,7 @@ class EmailService:
         db: AsyncSession,
         user: User,
         family_name: str,
-        base_url: str = "https://family.agent-ia.mx",
+        base_url: str = "",
     ) -> bool:
         """
         Send a role-aware, bilingual welcome email with quick-start + manual link.
@@ -615,9 +696,10 @@ class EmailService:
         by actual registration/OAuth/invitation flows, call
         send_welcome_if_not_sent instead.
         """
+        base_url = (base_url or settings.email_link_base).rstrip("/")
         lang = _welcome_lang(user)
         variant = _welcome_variant(user)
-        dashboard_url = f"{base_url.rstrip('/')}/dashboard"
+        dashboard_url = f"{base_url}/dashboard"
         guide_url = _guide_url(base_url, lang)
 
         html = _build_welcome_html(
@@ -667,7 +749,7 @@ class EmailService:
             logger.debug(f"welcome already sent to {user.email}, skipping")
             return True
 
-        base_url = base_url or settings.BASE_URL
+        base_url = base_url or settings.email_link_base
         lang = _welcome_lang(user)
 
         try:
@@ -721,7 +803,7 @@ class EmailService:
         db: AsyncSession,
         invitation,  # FamilyInvitation model
         inviting_user: User,
-        base_url: str = "https://family.agent-ia.mx",
+        base_url: str = "",
     ) -> bool:
         """Send a family invitation email."""
         from app.models.family import Family
@@ -733,8 +815,10 @@ class EmailService:
         )
         family = family_result.scalar_one_or_none()
         family_name = family.name if family else "Tu Familia"
-        
-        # Build acceptance link
+
+        # Build acceptance link — points at the frontend origin (the
+        # /accept-invitation page is an Astro route, not a backend route).
+        base_url = (base_url or settings.email_link_base).rstrip("/")
         acceptance_link = f"{base_url}/accept-invitation?code={invitation.invitation_code}"
         
         # Format expiration date
