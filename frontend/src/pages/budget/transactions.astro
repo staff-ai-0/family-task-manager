@@ -370,6 +370,16 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
 
                     <div id="edit-error" class="hidden text-sm text-red-600 mb-3 px-1"></div>
 
+                    <!-- Price Comparison Panel -->
+                    <section id="price-comparison-panel" class="mt-6 mb-4 hidden" data-tx="">
+                        <h2 class="text-base font-display font-extrabold text-brand-ink mb-2">
+                            {lang === "es" ? "Comparación de precios" : "Price comparison"}
+                        </h2>
+                        <div id="pc-content" class="text-sm text-brand-ink-soft">
+                            {lang === "es" ? "Cargando…" : "Loading…"}
+                        </div>
+                    </section>
+
                     <div class="flex gap-3">
                         <button id="edit-cancel-btn" class="flex-1 py-3 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold rounded-xl transition">
                             {es ? "Cancelar" : "Cancel"}
@@ -615,5 +625,129 @@ document.addEventListener("astro:after-swap", initFilters);
     document.addEventListener("astro:after-swap", () => {
         initEditModal();
     });
+})();
+</script>
+
+<script define:vars={{ lang }}>
+(function initPriceComparison() {
+    function attachPriceComparison() {
+        const modal = document.getElementById("edit-modal");
+        const panel = document.getElementById("price-comparison-panel");
+        const out = document.getElementById("pc-content");
+        if (!modal || !panel || !out) return;
+
+        // Observe when the modal slides into view by watching for class removal
+        document.querySelectorAll(".tx-row").forEach((row) => {
+            row.addEventListener("click", async () => {
+                const txId = row.dataset.txId;
+                if (!txId) return;
+
+                panel.dataset.tx = txId;
+                panel.classList.remove("hidden");
+                out.textContent = lang === "es" ? "Cargando…" : "Loading…";
+
+                try {
+                    const r = await fetch(`/api/budget/price-comparison/${txId}`, {
+                        credentials: "include",
+                    });
+                    if (r.status === 404) {
+                        out.textContent = lang === "es"
+                            ? "Pendiente — revisa en 5 minutos."
+                            : "Pending — check back in 5 min.";
+                        return;
+                    }
+                    if (!r.ok) {
+                        out.textContent = lang === "es"
+                            ? "No disponible por ahora."
+                            : "Not available right now.";
+                        return;
+                    }
+                    const data = await r.json();
+                    const items = Array.isArray(data.items) ? data.items : [];
+                    if (!items.length) {
+                        out.textContent = lang === "es" ? "Sin artículos." : "No items.";
+                        return;
+                    }
+
+                    out.innerHTML = "";
+                    const list = document.createElement("ul");
+                    list.className = "space-y-3 divide-y divide-brand-ink/10";
+                    for (const it of items) {
+                        const li = document.createElement("li");
+                        li.className = "pt-3 first:pt-0";
+
+                        const head = document.createElement("div");
+                        head.className = "flex justify-between items-baseline";
+                        const name = document.createElement("span");
+                        name.className = "font-semibold text-brand-ink";
+                        name.textContent = it.item_name || it.normalized_name || "?";
+                        const paid = document.createElement("span");
+                        paid.className = "text-brand-ink-soft text-xs";
+                        paid.textContent = `$${(it.line_total_cents / 100).toFixed(2)} MXN`;
+                        head.append(name, paid);
+                        li.append(head);
+
+                        if (it.status === "done" && it.cheapest) {
+                            const row2 = document.createElement("div");
+                            row2.className = "mt-1 text-xs";
+                            const savings = it.cheapest.savings_cents;
+                            const verb = savings > 0
+                                ? (lang === "es" ? "ahorras" : "save")
+                                : (lang === "es" ? "ya tienes el mejor precio" : "you have the best price");
+                            const text = savings > 0
+                                ? `${it.cheapest.store}: $${it.cheapest.price_mxn} MXN — ${verb} $${(savings / 100).toFixed(2)}`
+                                : `${it.cheapest.store}: $${it.cheapest.price_mxn} MXN — ${verb}`;
+                            row2.textContent = text;
+                            if (it.cheapest.url) {
+                                const a = document.createElement("a");
+                                a.href = it.cheapest.url;
+                                a.target = "_blank";
+                                a.rel = "noopener";
+                                a.className = "ml-2 underline text-brand-coral-deep";
+                                a.textContent = lang === "es" ? "Ver →" : "View →";
+                                row2.append(a);
+                            }
+                            li.append(row2);
+                        } else if (it.status === "pending") {
+                            const row2 = document.createElement("div");
+                            row2.className = "mt-1 text-xs text-brand-ink-soft";
+                            row2.textContent = lang === "es" ? "Comparando…" : "Comparing…";
+                            li.append(row2);
+                        } else {
+                            const row2 = document.createElement("div");
+                            row2.className = "mt-1 text-xs text-brand-ink-soft";
+                            row2.textContent = lang === "es"
+                                ? "Sin datos disponibles."
+                                : "No data available.";
+                            li.append(row2);
+                        }
+
+                        list.append(li);
+                    }
+                    out.innerHTML = "";
+                    out.append(list);
+                } catch (e) {
+                    out.textContent = lang === "es"
+                        ? "Error cargando comparación."
+                        : "Error loading comparison.";
+                }
+            });
+        });
+
+        // Hide panel when modal closes
+        const cancelBtn = document.getElementById("edit-cancel-btn");
+        const backdrop = document.getElementById("edit-backdrop");
+        function hidePanel() {
+            panel.classList.add("hidden");
+            panel.dataset.tx = "";
+            if (out) out.textContent = "";
+        }
+        cancelBtn?.addEventListener("click", hidePanel);
+        backdrop?.addEventListener("click", hidePanel);
+    }
+
+    attachPriceComparison();
+    document.addEventListener("astro:after-swap", attachPriceComparison);
+    document.addEventListener("astro:page-load", attachPriceComparison);
 })();
 </script>
