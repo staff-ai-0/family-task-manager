@@ -340,6 +340,7 @@ async def test_send_prefers_smtp_over_resend(monkeypatch):
         def send_message(self, msg):
             seen["from"] = msg["From"]
             seen["to"] = msg["To"]
+            seen["parts"] = [p.get_content_type() for p in msg.walk()]
 
     monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
 
@@ -351,3 +352,5 @@ async def test_send_prefers_smtp_over_resend(monkeypatch):
     assert seen["login"] == ("info@agent-ia.mx", "app-pw")
     assert "info@agent-ia.mx" in seen["from"]
     assert seen["to"] == "dest@example.com"
+    # multipart/alternative with both a text and an html part
+    assert "text/plain" in seen["parts"] and "text/html" in seen["parts"]

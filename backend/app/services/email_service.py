@@ -1,14 +1,17 @@
 """
 Email Service
 
-Sends transactional emails via Resend (resend.com).
+Sends transactional emails via Google Workspace SMTP (preferred) or Resend.
 Supports bilingual content (ES/EN) based on user.preferred_lang.
 """
+import logging
 import resend
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 from app.models.email_verification import EmailVerificationToken
 from app.models.password_reset import PasswordResetToken
 from app.models.user import User
@@ -209,7 +212,7 @@ def _build_html(*, heading: str, body: str, btn_text: str, btn_url: str,
     <p class="note">{expiry_note}</p>
     <p class="note">{ignore_note}</p>
   </div>
-  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="https://gcp-family.agent-ia.mx" style="color:#00D9FF;text-decoration:none">family.agent-ia.mx</a></div>
+  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="https://gcp-family.agent-ia.mx" style="color:#00D9FF;text-decoration:none">gcp-family.agent-ia.mx</a></div>
 </div>
 </body>
 </html>"""
@@ -306,7 +309,7 @@ def _build_welcome_html(
     <a href="{dashboard_url}" class="btn">{cta}</a>
     <a href="{guide_url}" class="guide-link">{guide_link_label}</a>
   </div>
-  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="https://gcp-family.agent-ia.mx" style="color:#00D9FF;text-decoration:none">family.agent-ia.mx</a></div>
+  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="https://gcp-family.agent-ia.mx" style="color:#00D9FF;text-decoration:none">gcp-family.agent-ia.mx</a></div>
 </div>
 </body>
 </html>"""
@@ -345,17 +348,41 @@ class EmailService:
                     "html": html,
                 })
                 return True
-            except Exception as exc:
-                print(f"Resend error: {exc}")
+            except Exception:
+                logger.warning("Resend send failed (to=%s, subject=%r)", to, subject, exc_info=True)
                 return False
 
-        print("WARNING: no email transport configured (SMTP_* / RESEND_API_KEY). Email not sent.")
-        print(f"  To: {to}  |  Subject: {subject}")
+        logger.warning(
+            "No email transport configured (SMTP_* / RESEND_API_KEY); email not sent (to=%s, subject=%r)",
+            to, subject,
+        )
         return False
 
     @staticmethod
+    def _html_to_text(html: str) -> str:
+        """Crude HTML→text fallback for the multipart text/plain part.
+
+        Not a full renderer — strips tags and collapses whitespace so clients
+        (and spam filters) that prefer text/plain get something readable.
+        """
+        import re
+        from html import unescape
+
+        text = re.sub(r"(?is)<(script|style).*?</\1>", "", html)
+        text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+        text = re.sub(r"(?i)</(p|div|tr|h[1-6]|li)>", "\n", text)
+        text = re.sub(r"(?s)<[^>]+>", "", text)
+        text = unescape(text)
+        # Collapse runs of blank lines / trailing spaces.
+        lines = [ln.strip() for ln in text.splitlines()]
+        return "\n".join(ln for ln in lines if ln) or " "
+
+    @staticmethod
     async def _send_smtp(*, to: str, subject: str, html: str) -> bool:
-        """Send via SMTP (STARTTLS). Runs the blocking socket work off-loop.
+        """Send via SMTP. Runs the blocking socket work off the event loop.
+
+        Transport security follows the port: 465 → implicit TLS (SMTP_SSL),
+        otherwise STARTTLS when SMTP_USE_TLS is set (587 / Gmail Workspace).
 
         Gmail/Workspace rewrites or rejects a From that isn't the authenticated
         mailbox or one of its verified aliases, so the From address must match
@@ -375,9 +402,16 @@ class EmailService:
             msg["Subject"] = subject
             msg["From"] = formataddr((settings.EMAIL_FROM_NAME, from_addr))
             msg["To"] = to
+            # text/plain must come first; clients pick the last part they can render.
+            msg.attach(MIMEText(EmailService._html_to_text(html), "plain", "utf-8"))
             msg.attach(MIMEText(html, "html", "utf-8"))
-            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=20) as server:
-                if settings.SMTP_USE_TLS:
+
+            if settings.SMTP_PORT == 465:
+                server_cm = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=20)
+            else:
+                server_cm = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=20)
+            with server_cm as server:
+                if settings.SMTP_PORT != 465 and settings.SMTP_USE_TLS:
                     server.starttls()
                 server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
                 server.send_message(msg)
@@ -385,8 +419,8 @@ class EmailService:
         try:
             await asyncio.to_thread(_blocking)
             return True
-        except Exception as exc:
-            print(f"SMTP error: {exc}")
+        except Exception:
+            logger.warning("SMTP send failed (to=%s, subject=%r)", to, subject, exc_info=True)
             return False
 
     # ------------------------------------------------------------------
