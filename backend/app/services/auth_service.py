@@ -6,7 +6,7 @@ Business logic for user authentication and authorization.
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from app.models import User, Family
@@ -117,7 +117,7 @@ class AuthService:
         
         # Update password
         user.password_hash = get_password_hash(new_password)
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         
         await db.commit()
         await db.refresh(user)
@@ -128,7 +128,7 @@ class AuthService:
         """Deactivate a user account"""
         user = await AuthService.get_user_by_id(db, user_id)
         user.is_active = False
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         
         await db.commit()
         await db.refresh(user)
@@ -139,7 +139,7 @@ class AuthService:
         """Activate a user account"""
         user = await AuthService.get_user_by_id(db, user_id)
         user.is_active = True
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         
         await db.commit()
         await db.refresh(user)
@@ -154,7 +154,7 @@ class AuthService:
             if value is not None and hasattr(user, key):
                 setattr(user, key, value)
 
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.commit()
         await db.refresh(user)
         return user

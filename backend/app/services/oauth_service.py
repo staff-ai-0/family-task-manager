@@ -7,6 +7,7 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi import Request
 from typing import Optional, Dict, Any
 from uuid import UUID
+from datetime import datetime, timezone
 
 from app.core.config import settings
 from app.models.user import User, UserRole
@@ -89,8 +90,7 @@ class GoogleOAuthService:
             user.oauth_id = google_id
             if email_verified and not user.email_verified:
                 user.email_verified = True
-                from datetime import datetime
-                user.email_verified_at = datetime.utcnow()
+                user.email_verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
             await db.commit()
             await db.refresh(user)
             return user
@@ -107,7 +107,7 @@ class GoogleOAuthService:
             role=UserRole.PARENT,  # Default to parent for new OAuth users
             family_id=family_id,
             email_verified=email_verified,
-            email_verified_at=None if not email_verified else __import__('datetime').datetime.utcnow(),
+            email_verified_at=None if not email_verified else datetime.now(timezone.utc).replace(tzinfo=None),
             oauth_provider='google',
             oauth_id=google_id
         )

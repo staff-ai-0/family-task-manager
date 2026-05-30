@@ -4,7 +4,7 @@ Family Invitation Model
 Represents an invitation sent to a user to join a family.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4, UUID
 from sqlalchemy import String, DateTime, Boolean, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -51,7 +51,7 @@ class FamilyInvitation(Base):
 
     def is_expired(self) -> bool:
         """Check if invitation has expired"""
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc).replace(tzinfo=None) > self.expires_at
 
     def is_valid(self) -> bool:
         """Check if invitation is still valid"""

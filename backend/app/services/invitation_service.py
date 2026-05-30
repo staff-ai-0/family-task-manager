@@ -5,7 +5,7 @@ Handles invitation creation, acceptance, and email notifications.
 """
 
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -78,7 +78,7 @@ class InvitationService:
             invitation_code=invitation_code,
             status=InvitationStatus.PENDING,
             role=role,
-            expires_at=datetime.utcnow() + timedelta(days=30)
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30)
         )
         
         db.add(invitation)
@@ -161,7 +161,7 @@ class InvitationService:
 
         # Mark invitation as accepted
         invitation.status = InvitationStatus.ACCEPTED
-        invitation.accepted_at = datetime.utcnow()
+        invitation.accepted_at = datetime.now(timezone.utc).replace(tzinfo=None)
         invitation.accepted_by_user_id = user.id
         await db.flush()
 

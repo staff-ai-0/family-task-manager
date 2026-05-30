@@ -6,7 +6,7 @@ Represents penalties/restrictions triggered when default tasks are not completed
 from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Enum as SQLEnum, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 import enum
 
@@ -77,24 +77,24 @@ class Consequence(Base):
     @property
     def is_expired(self) -> bool:
         """Check if consequence has expired"""
-        return datetime.utcnow() > self.end_date
+        return datetime.now(timezone.utc) > self.end_date
 
     @property
     def days_remaining(self) -> int:
         """Calculate days remaining in consequence"""
         if self.resolved or self.is_expired:
             return 0
-        delta = self.end_date - datetime.utcnow()
+        delta = self.end_date - datetime.now(timezone.utc)
         return max(0, delta.days)
 
     def apply_consequence(self) -> None:
         """Apply consequence with calculated end date"""
         self.active = True
-        self.start_date = datetime.utcnow()
+        self.start_date = datetime.now(timezone.utc)
         self.end_date = self.start_date + timedelta(days=self.duration_days)
 
     def resolve_consequence(self) -> None:
         """Mark consequence as resolved"""
         self.active = False
         self.resolved = True
-        self.resolved_at = datetime.utcnow()
+        self.resolved_at = datetime.now(timezone.utc)

@@ -2,7 +2,7 @@
 Tests for the Family Invitations API
 """
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -132,7 +132,7 @@ async def test_accept_invitation_expired(client, test_family, test_parent_user, 
         invited_email="expired@example.com",
         invited_by_user_id=test_parent_user.id,
         invitation_code=FamilyInvitation.generate_code(),
-        expires_at=datetime.utcnow() - timedelta(days=1)
+        expires_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)
     )
     db_session.add(invitation)
     await db_session.commit()
