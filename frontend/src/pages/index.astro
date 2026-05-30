@@ -210,9 +210,9 @@ const es = lang === "es";
 <script>
   document.addEventListener('astro:page-load', () => {
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-      anchor.addEventListener('click', function (e) {
+      anchor.addEventListener('click', function (this: HTMLAnchorElement, e) {
         e.preventDefault();
-        const target = document.querySelector((this as HTMLAnchorElement).getAttribute('href') as string);
+        const target = document.querySelector(this.getAttribute('href') as string);
         if (target) (target as HTMLElement).scrollIntoView({ behavior: 'smooth' });
       });
     });

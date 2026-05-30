@@ -64,6 +64,7 @@ export interface BudgetTransaction {
     date: string;
     amount: number;
     payee_id?: string;
+    payee_name?: string;
     category_id?: string;
     notes?: string;
     cleared: boolean;

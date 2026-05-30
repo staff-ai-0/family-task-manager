@@ -183,6 +183,7 @@ export const translations = {
         pr_cat_activity: "Activity",
         pr_cat_privilege: "Privilege",
         pr_cat_item: "Item",
+        pr_cat_money: "Money",
 
         // Parent Members
         pm_title: "Family Members",
@@ -614,6 +615,7 @@ export const translations = {
         pr_cat_activity: "Actividad",
         pr_cat_privilege: "Privilegio",
         pr_cat_item: "Articulo",
+        pr_cat_money: "Dinero",
 
         // Parent Members
         pm_title: "Miembros de la Familia",
@@ -875,7 +877,7 @@ export const translations = {
 
 type TranslationKey = keyof typeof translations.en;
 
-export function t(lang: string, key: TranslationKey): any {
-    const locale = lang === "es" ? translations.es : translations.en;
-    return locale[key] ?? translations.en[key] ?? key;
+export function t(lang: string, key: string): any {
+    const locale = (lang === "es" ? translations.es : translations.en) as Record<string, unknown>;
+    return locale[key] ?? (translations.en as Record<string, unknown>)[key] ?? key;
 }

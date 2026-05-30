@@ -108,31 +108,36 @@ const sections = [
 
         if (!toggle || !close || !backdrop || !panel) return;
 
+        // Capture as non-null for use inside nested callbacks
+        const safeToggle: HTMLElement = toggle;
+        const safeBackdrop: HTMLElement = backdrop;
+        const safePanel: HTMLElement = panel;
+
         function openDrawer() {
-            backdrop.classList.remove("hidden");
+            safeBackdrop.classList.remove("hidden");
             requestAnimationFrame(() => {
-                backdrop.classList.remove("opacity-0");
-                panel.classList.remove("-translate-x-full");
+                safeBackdrop.classList.remove("opacity-0");
+                safePanel.classList.remove("-translate-x-full");
             });
-            toggle.setAttribute("aria-expanded", "true");
+            safeToggle.setAttribute("aria-expanded", "true");
         }
 
         function closeDrawer() {
-            backdrop.classList.add("opacity-0");
-            panel.classList.add("-translate-x-full");
-            toggle.setAttribute("aria-expanded", "false");
+            safeBackdrop.classList.add("opacity-0");
+            safePanel.classList.add("-translate-x-full");
+            safeToggle.setAttribute("aria-expanded", "false");
             setTimeout(() => {
-                backdrop.classList.add("hidden");
+                safeBackdrop.classList.add("hidden");
             }, 300);
         }
 
-        toggle.addEventListener("click", openDrawer);
+        safeToggle.addEventListener("click", openDrawer);
         close.addEventListener("click", closeDrawer);
-        backdrop.addEventListener("click", closeDrawer);
+        safeBackdrop.addEventListener("click", closeDrawer);
         document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape" && !backdrop.classList.contains("hidden")) {
+            if (e.key === "Escape" && !safeBackdrop.classList.contains("hidden")) {
                 closeDrawer();
-                toggle.focus();
+                safeToggle.focus();
             }
         });
     }

@@ -314,7 +314,7 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
             // with the same config, but cheap enough to always call.
             gid.initialize({
                 client_id: GOOGLE_CLIENT_ID,
-                callback: window.handleGoogleLogin,
+                callback: (window as any).handleGoogleLogin,
                 login_hint: loginHint,
                 auto_select: false,
             });

@@ -203,7 +203,7 @@ const labels = {
 
         // Reaction click delegation (W8.6)
         feed.addEventListener("click", async (ev) => {
-            const btn = (ev.target as HTMLElement).closest("[data-react]") as HTMLElement | null;
+            const btn = /** @type {HTMLElement | null} */ (ev.target instanceof Element ? ev.target.closest("[data-react]") : null);
             if (!btn) return;
             const msgId = btn.getAttribute("data-react");
             const emoji = btn.getAttribute("data-emoji");

@@ -15,6 +15,7 @@ export interface User {
 export interface LoginResponse {
     access_token: string;
     token_type: string;
+    user?: Record<string, unknown>;
 }
 
 export interface Assignment {
