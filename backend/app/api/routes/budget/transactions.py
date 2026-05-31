@@ -145,12 +145,14 @@ async def get_receipt_image(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """302-redirect to a 15-min GCS signed URL for the receipt image.
+    """Stream the receipt image through the backend.
 
-    Auth-bound (transaction must belong to caller's family) so the signed
-    URL is never handed to an unauthenticated party.
+    Auth-bound (transaction must belong to caller's family). We can't use a
+    GCS signed URL because Compute Engine ADC doesn't carry a private key —
+    streaming through the backend is the simplest auth-bound read path and
+    same-region GCS egress to the VM is free.
     """
-    from fastapi.responses import RedirectResponse
+    from fastapi.responses import Response
     from app.services.storage.gcs_receipt_service import GCSReceiptStorage
     from sqlalchemy import select
     from app.models.budget import BudgetTransaction
@@ -165,8 +167,13 @@ async def get_receipt_image(
         raise HTTPException(404, "transaction not found")
     if not txn.receipt_image_path:
         raise HTTPException(404, "no receipt image")
-    url = GCSReceiptStorage.signed_url(txn.receipt_image_path, expires_in_seconds=900)
-    return RedirectResponse(url=url, status_code=302)
+    data, content_type = GCSReceiptStorage.download_bytes(txn.receipt_image_path)
+    # Browser-cache for 15 min — the bytes are immutable per object key.
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Cache-Control": "private, max-age=900"},
+    )
 
 
 @router.put("/{transaction_id}", response_model=TransactionResponse)

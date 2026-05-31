@@ -67,13 +67,35 @@ class GCSReceiptStorage:
 
     @classmethod
     def signed_url(cls, path: str, *, expires_in_seconds: int = 900) -> str:
-        """Generate a v4 signed URL the browser can GET directly."""
+        """Generate a v4 signed URL the browser can GET directly.
+
+        NOTE: Compute Engine ADC has no private key — calling this from a GCE
+        VM raises AttributeError unless the SA is granted
+        roles/iam.serviceAccountTokenCreator on itself (so it can self-sign
+        via the iamcredentials.signBlob API). Project's prod backend instead
+        streams bytes through `download_bytes()`; signed URLs are kept here
+        for environments that supply a JSON key file.
+        """
         blob = cls._bucket().blob(path)
         return blob.generate_signed_url(
             version="v4",
             expiration=timedelta(seconds=expires_in_seconds),
             method="GET",
         )
+
+    @classmethod
+    def download_bytes(cls, path: str) -> tuple[bytes, str]:
+        """Stream bytes back through the backend. Returns (data, content_type).
+
+        Used by the /transactions/{id}/receipt endpoint as the primary read
+        path because Compute Engine ADC cannot sign URLs (see signed_url
+        docstring). Backend-VM-to-bucket egress is free (same region).
+        """
+        blob = cls._bucket().blob(path)
+        # reload() populates metadata (content_type) without fetching the body
+        blob.reload()
+        data = blob.download_as_bytes()
+        return data, blob.content_type or "application/octet-stream"
 
     @classmethod
     def delete(cls, path: str) -> None:
