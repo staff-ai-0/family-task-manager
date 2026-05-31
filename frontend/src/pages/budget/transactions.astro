@@ -287,7 +287,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
         <!-- Edit Transaction Bottom Sheet -->
         <div id="edit-backdrop" class="fixed inset-0 bg-black/50 z-40 hidden opacity-0 transition-opacity duration-300"></div>
         <div id="edit-modal" class="fixed bottom-0 left-0 right-0 z-50 translate-y-full transition-transform duration-300 ease-out">
-            <div class="max-w-md mx-auto bg-brand-cream rounded-t-[var(--radius-card)] shadow-[var(--shadow-stamp)] max-h-[90vh] overflow-y-auto">
+            <div class="max-w-md mx-auto bg-brand-cream rounded-t-[var(--radius-card)] shadow-[var(--shadow-stamp)] max-h-[90vh] overflow-y-auto overscroll-contain">
                 <div class="flex justify-center pt-3 pb-1">
                     <div class="w-10 h-1 bg-brand-cream-deep rounded-full"></div>
                 </div>
@@ -500,6 +500,7 @@ document.addEventListener("astro:after-swap", initFilters);
 
         if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
 
+        lockBodyScroll();
         backdrop.classList.remove("hidden");
         requestAnimationFrame(() => {
             backdrop.classList.remove("opacity-0");
@@ -514,6 +515,28 @@ document.addEventListener("astro:after-swap", initFilters);
         modal.classList.add("translate-y-full");
         setTimeout(() => backdrop.classList.add("hidden"), 300);
         currentTxId = null;
+        unlockBodyScroll();
+    }
+
+    // Body scroll lock — position:fixed is the only reliable way to stop the
+    // background page from scrolling behind the sheet on iOS Safari. Capture
+    // and restore scroll position so the page doesn't jump on close.
+    let _savedScrollY = 0;
+    function lockBodyScroll() {
+        _savedScrollY = window.scrollY;
+        document.body.style.position = "fixed";
+        document.body.style.top = `-${_savedScrollY}px`;
+        document.body.style.left = "0";
+        document.body.style.right = "0";
+        document.body.style.width = "100%";
+    }
+    function unlockBodyScroll() {
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.left = "";
+        document.body.style.right = "";
+        document.body.style.width = "";
+        window.scrollTo(0, _savedScrollY);
     }
 
     function setTypeUI(expense) {
