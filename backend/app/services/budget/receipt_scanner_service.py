@@ -588,6 +588,7 @@ async def scan_and_create_transaction(
             db, family_id, payee_id=payee_id,
             amount_cents=final_amount,
             transaction_date=receipt.date,
+            account_id=match.account_id,
         )
         if dup is not None:
             # Upgrade path: if the existing transaction is missing a receipt

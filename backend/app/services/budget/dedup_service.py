@@ -1,24 +1,26 @@
 """Find and merge duplicate transactions within a family.
 
-A "duplicate" is two rows with:
-  - same family_id
-  - same payee_id (non-null)
-  - same date
-  - amount within 1% tolerance
-  - neither is soft-deleted
-  - neither is a split child (parent_id IS NULL)
+A "duplicate" is two rows satisfying BOTH of:
+  1. Same family_id + account_id + date + amount within 1%
+  2. At most one of the pair has a receipt image (if both have images
+     they could be two separate purchases — skip to avoid data loss)
+  3. Neither is soft-deleted or a split child (parent_id IS NULL)
 
-When merging a pair, a "richness score" picks the winner. The loser is
-soft-deleted; its receipt image path (if any) is transferred to the winner
-first so no GCS object is orphaned.
+Payee names are intentionally NOT compared: bank statements often use the
+payment-terminal name ("KIOSKOS MIX") while receipt scans use the merchant
+name ("Cinépolis Cumbres Monterrey"). Matching on account+date+amount is a
+stronger and more reliable signal than payee name equality.
 
-Richness score (higher = keep):
+When merging a pair, a richness score picks the winner:
   +20  has receipt_image_path
   +10  has notes (non-empty)
    +5  has category_id
-   +2  per transaction item (via BudgetTransactionItem relationship)
+   +2  per transaction item
    +1  is cleared
-   -5  was created by CSV import (imported_id is set, no receipt image)
+   -5  was created by CSV import (imported_id set, no receipt image)
+
+The loser is soft-deleted; its receipt image path (if any) is transferred to
+the winner so no GCS object is orphaned.
 """
 
 import logging
@@ -67,34 +69,34 @@ class DeduplicateService:
         Returns:
             {merged: int, skipped: int, pairs: list[dict]}
         """
-        # Fetch all non-deleted, non-split-child transactions that have a payee.
         stmt = (
             select(BudgetTransaction)
             .where(
                 BudgetTransaction.family_id == family_id,
                 BudgetTransaction.deleted_at.is_(None),
                 BudgetTransaction.parent_id.is_(None),
-                BudgetTransaction.payee_id.isnot(None),
             )
-            .order_by(BudgetTransaction.date, BudgetTransaction.payee_id, BudgetTransaction.created_at)
+            .order_by(BudgetTransaction.date, BudgetTransaction.account_id, BudgetTransaction.created_at)
         )
         rows = list((await db.execute(stmt)).scalars().all())
 
         # Count items per transaction in one query.
-        item_count_stmt = (
-            select(
-                BudgetTransactionItem.transaction_id,
-                func.count(BudgetTransactionItem.id).label("cnt"),
+        if rows:
+            item_count_stmt = (
+                select(
+                    BudgetTransactionItem.transaction_id,
+                    func.count(BudgetTransactionItem.id).label("cnt"),
+                )
+                .where(BudgetTransactionItem.transaction_id.in_([r.id for r in rows]))
+                .group_by(BudgetTransactionItem.transaction_id)
             )
-            .where(BudgetTransactionItem.transaction_id.in_([r.id for r in rows]))
-            .group_by(BudgetTransactionItem.transaction_id)
-        )
-        item_counts: dict[UUID, int] = {
-            row.transaction_id: row.cnt
-            for row in (await db.execute(item_count_stmt)).all()
-        }
+            item_counts: dict[UUID, int] = {
+                row.transaction_id: row.cnt
+                for row in (await db.execute(item_count_stmt)).all()
+            }
+        else:
+            item_counts = {}
 
-        # Group rows into duplicate clusters (same date + payee + amount±1%).
         seen_ids: set[UUID] = set()
         merged = 0
         skipped = 0
@@ -107,20 +109,33 @@ class DeduplicateService:
             for b in rows[i + 1:]:
                 if b.id in seen_ids:
                     continue
+                # Rows sorted by date — once past this date, stop inner scan.
                 if b.date != a.date:
-                    break  # rows are sorted by date; once past, no more matches
-                if b.payee_id != a.payee_id:
+                    break
+                # Must be same account (same card/account means same purchase).
+                if b.account_id != a.account_id:
                     continue
+                # Amount within tolerance.
                 if not (int(a.amount) - tol <= int(b.amount) <= int(a.amount) + tol):
                     continue
-                # Found a dup pair (a, b).
+                # Safety: if BOTH have receipt images, skip — could be two
+                # separate purchases for the same amount on the same day.
+                if a.receipt_image_path and b.receipt_image_path:
+                    logger.info(
+                        "dedup: skipping pair %s/%s — both have receipt images",
+                        a.id, b.id,
+                    )
+                    continue
+
                 a_score = _score(a, item_counts.get(a.id, 0))
                 b_score = _score(b, item_counts.get(b.id, 0))
                 keeper, loser = (a, b) if a_score >= b_score else (b, a)
 
                 pairs.append({
                     "keeper_id": str(keeper.id),
+                    "keeper_payee": getattr(keeper, "_payee_name", None),
                     "loser_id": str(loser.id),
+                    "loser_payee": getattr(loser, "_payee_name", None),
                     "keeper_score": max(a_score, b_score),
                     "loser_score": min(a_score, b_score),
                     "date": str(a.date),
@@ -134,7 +149,7 @@ class DeduplicateService:
                 else:
                     skipped += 1
 
-        if not dry_run:
+        if not dry_run and merged > 0:
             await db.commit()
 
         return {"merged": merged, "skipped": skipped, "pairs": pairs, "dry_run": dry_run}
@@ -165,4 +180,7 @@ class DeduplicateService:
 
         db.add(keeper)
         db.add(loser)
-        logger.info("dedup: kept %s, removed %s (date=%s amt=%s)", keeper.id, loser.id, keeper.date, keeper.amount)
+        logger.info(
+            "dedup: kept %s (score), removed %s | date=%s amt=%s",
+            keeper.id, loser.id, keeper.date, keeper.amount,
+        )
