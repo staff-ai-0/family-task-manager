@@ -4,7 +4,7 @@ Transaction routes
 CRUD endpoints for budget transactions.
 """
 
-from fastapi import APIRouter, Body, Depends, Response, status, Query, File, UploadFile, Form
+from fastapi import APIRouter, Body, Depends, HTTPException, Response, status, Query, File, UploadFile, Form
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
@@ -137,6 +137,36 @@ async def get_transaction(
         to_uuid_required(current_user.family_id),
     )
     return transaction
+
+
+@router.get("/{transaction_id}/receipt")
+async def get_receipt_image(
+    transaction_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """302-redirect to a 15-min GCS signed URL for the receipt image.
+
+    Auth-bound (transaction must belong to caller's family) so the signed
+    URL is never handed to an unauthenticated party.
+    """
+    from fastapi.responses import RedirectResponse
+    from app.services.storage.gcs_receipt_service import GCSReceiptStorage
+    from sqlalchemy import select
+    from app.models.budget import BudgetTransaction
+
+    family_id = to_uuid_required(current_user.family_id)
+    stmt = select(BudgetTransaction).where(
+        BudgetTransaction.id == transaction_id,
+        BudgetTransaction.family_id == family_id,
+    )
+    txn = (await db.execute(stmt)).scalar_one_or_none()
+    if txn is None:
+        raise HTTPException(404, "transaction not found")
+    if not txn.receipt_image_path:
+        raise HTTPException(404, "no receipt image")
+    url = GCSReceiptStorage.signed_url(txn.receipt_image_path, expires_in_seconds=900)
+    return RedirectResponse(url=url, status_code=302)
 
 
 @router.put("/{transaction_id}", response_model=TransactionResponse)
