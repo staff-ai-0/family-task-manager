@@ -281,6 +281,7 @@ class TransactionResponse(TransactionBase):
     fx_rate: Optional[Decimal] = None
     original_amount_cents: Optional[int] = None
     original_currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    receipt_image_path: Optional[str] = None
 
     # Force JSON to emit a real number for Decimal fields. Pydantic v2's
     # default is to serialize Decimal as a string, which breaks strict
