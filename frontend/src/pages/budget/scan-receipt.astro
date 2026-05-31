@@ -91,7 +91,35 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
                         class="hidden"
                     />
                 </label>
+                <label class="cursor-pointer block w-full text-center bg-brand-cream text-brand-ink-soft px-6 py-3 rounded-2xl font-semibold text-sm border border-dashed border-brand-ink/20 press">
+                    {lang === "es" ? "📦 Subir varios (lote)" : "📦 Bulk upload (batch)"}
+                    <input
+                        id="bulk-input"
+                        type="file"
+                        multiple
+                        accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                        class="hidden"
+                    />
+                </label>
             </div>
+
+            <!-- Bulk progress panel — hidden until a batch is in flight -->
+            <section id="bulk-panel" class="hidden mt-6 bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5 space-y-3">
+                <div class="flex items-baseline justify-between">
+                    <h2 id="bulk-title" class="text-lg font-display font-extrabold text-brand-ink">
+                        {lang === "es" ? "Procesando lote" : "Processing batch"}
+                    </h2>
+                    <span id="bulk-counter" class="text-sm text-brand-ink-soft num"></span>
+                </div>
+                <div class="w-full h-2 bg-brand-cream-deep rounded-full overflow-hidden">
+                    <div id="bulk-bar" class="h-full bg-brand-coral-deep transition-all duration-300" style="width:0%"></div>
+                </div>
+                <ul id="bulk-list" class="text-sm divide-y divide-brand-ink/5"></ul>
+                <div id="bulk-summary" class="hidden pt-2 text-sm text-brand-ink-soft"></div>
+                <a id="bulk-done-link" href="/budget/transactions" class="hidden block w-full text-center bg-brand-coral-deep text-white px-4 py-3 rounded-xl font-semibold press">
+                    {lang === "es" ? "Ver transacciones" : "View transactions"}
+                </a>
+            </section>
 
             <!-- Confirm card target (populated from #confirm-card-tpl via cloneNode + textContent) -->
             <section id="confirm-card" class="hidden mt-8"></section>
@@ -214,6 +242,8 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
     document.addEventListener("astro:page-load", () => {
         const camInput = document.getElementById("cam-input");
         const upInput = document.getElementById("up-input");
+        const bulkInput = document.getElementById("bulk-input");
+        const bulkPanel = document.getElementById("bulk-panel");
         const overlay = document.getElementById("scan-overlay");
         const confirmCard = document.getElementById("confirm-card");
         const dupModal = document.getElementById("dup-modal");
@@ -492,6 +522,83 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
             }
         }
 
+        // ── Bulk: client-side serial loop over the existing /scan-receipt API
+        // (each file = one premium-metered scan). Sequential to keep ordering
+        // stable + avoid hammering Gemini's rate limit. Each file emits a row
+        // into #bulk-list with its outcome (✓ created / ⚠ to drafts / ✗ error).
+        async function runBulk(files) {
+            const filesArr = Array.from(files);
+            if (!filesArr.length) return;
+
+            // Hide other panels, show bulk panel.
+            confirmCard.classList.add("hidden");
+            const actions = document.getElementById("scan-actions");
+            if (actions) actions.classList.add("hidden");
+            bulkPanel.classList.remove("hidden");
+
+            const counter = document.getElementById("bulk-counter");
+            const bar = document.getElementById("bulk-bar");
+            const list = document.getElementById("bulk-list");
+            const summary = document.getElementById("bulk-summary");
+            const doneLink = document.getElementById("bulk-done-link");
+            list.replaceChildren();
+
+            let created = 0, drafts = 0, dups = 0, errors = 0;
+            const total = filesArr.length;
+
+            for (let i = 0; i < total; i++) {
+                const file = filesArr[i];
+                const row = document.createElement("li");
+                row.className = "flex items-center justify-between py-2 gap-2";
+                const name = document.createElement("span");
+                name.className = "truncate flex-1 text-brand-ink";
+                name.textContent = file.name;
+                const status = document.createElement("span");
+                status.className = "text-xs font-semibold whitespace-nowrap";
+                status.textContent = lang === "es" ? "Procesando…" : "Processing…";
+                row.append(name, status);
+                list.append(row);
+
+                counter.textContent = `${i + 1} / ${total}`;
+                bar.style.width = `${Math.round((i / total) * 100)}%`;
+
+                try {
+                    const { status: code, body } = await scanReceipt(file, { force: false });
+                    if (code === 409 && body.dup_warning) {
+                        // Auto-skip duplicates in bulk mode (user can re-scan
+                        // individually later if intentional).
+                        dups++;
+                        status.textContent = lang === "es" ? "⚠ Duplicado" : "⚠ Duplicate";
+                        status.classList.add("text-yellow-600");
+                    } else if (body && body.draft_id) {
+                        drafts++;
+                        status.textContent = lang === "es" ? "📋 Revisión" : "📋 Drafts";
+                        status.classList.add("text-yellow-600");
+                    } else if (body && body.success) {
+                        created++;
+                        status.textContent = lang === "es" ? "✓ Creado" : "✓ Created";
+                        status.classList.add("text-brand-mint-deep");
+                    } else {
+                        errors++;
+                        status.textContent = lang === "es" ? "✗ Falló" : "✗ Failed";
+                        status.classList.add("text-red-600");
+                    }
+                } catch (_e) {
+                    errors++;
+                    status.textContent = lang === "es" ? "✗ Error" : "✗ Error";
+                    status.classList.add("text-red-600");
+                }
+            }
+
+            bar.style.width = "100%";
+            counter.textContent = `${total} / ${total}`;
+            summary.classList.remove("hidden");
+            summary.textContent = lang === "es"
+                ? `✓ ${created} creados · 📋 ${drafts} en revisión · ⚠ ${dups} duplicados · ✗ ${errors} errores`
+                : `✓ ${created} created · 📋 ${drafts} drafts · ⚠ ${dups} duplicates · ✗ ${errors} errors`;
+            doneLink.classList.remove("hidden");
+        }
+
         // ── Wire up the inputs ────────────────────────────────────────────────
         camInput.addEventListener("change", (e) => {
             const f = e.target && e.target.files && e.target.files[0];
@@ -501,5 +608,11 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
             const f = e.target && e.target.files && e.target.files[0];
             if (f) runScan(f);
         });
+        if (bulkInput) {
+            bulkInput.addEventListener("change", (e) => {
+                const files = e.target && e.target.files;
+                if (files && files.length > 0) runBulk(files);
+            });
+        }
     });
 </script>
