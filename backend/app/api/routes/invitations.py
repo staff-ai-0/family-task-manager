@@ -212,3 +212,32 @@ async def cancel_invitation(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+@router.post("/{family_id}/{invitation_id}/resend", response_model=InvitationResponse)
+async def resend_invitation(
+    invitation_id: UUID,
+    family_id: UUID = Depends(verify_family_id),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Re-send a pending invitation email and refresh its expiry (parent only).
+    """
+    try:
+        invitation = await InvitationService.resend_invitation(
+            db,
+            invitation_id,
+            family_id,
+            base_url=settings.email_link_base,
+            fallback_user=current_user,
+        )
+        await db.commit()
+        return invitation
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )

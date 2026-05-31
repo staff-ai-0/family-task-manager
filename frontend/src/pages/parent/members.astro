@@ -114,13 +114,14 @@ if (Astro.request.method === "POST") {
 const { data: family } = await apiFetch<any>("/api/families/me", { token });
 const members: any[] = family?.members ?? [];
 
-// Fetch pending invitations server-side
+// Fetch pending invitations server-side.
+// Backend route is path-param (/{family_id}/pending) and returns a plain list.
 const { data: pendingInvitationsResult, ok: pendingInvOk, error: pendingInvError } = await apiFetch<any>(
-  `/api/invitations/pending?family_id=${user.family_id}`,
+  `/api/invitations/${user.family_id}/pending`,
   { token }
 );
-const pendingInvitations: any[] = pendingInvOk && pendingInvitationsResult?.pending_invitations 
-  ? pendingInvitationsResult.pending_invitations 
+const pendingInvitations: any[] = pendingInvOk && Array.isArray(pendingInvitationsResult)
+  ? pendingInvitationsResult
   : [];
 if (!pendingInvOk && pendingInvError) {
   console.error("Error fetching pending invitations:", pendingInvError);
@@ -301,15 +302,24 @@ if (!joinCodeOk && joinCodeError) {
                         </span>
                       </div>
                     </div>
-                    <button
-                      onclick={`cancelInvitation('${inv.id}', '${lang}')`}
-                      class="ml-3 flex-shrink-0 p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                      title={lang === "es" ? "Cancelar invitación" : "Cancel invitation"}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                    <div class="ml-3 flex-shrink-0 flex items-center gap-1">
+                      <button
+                        onclick={`resendInvitation('${inv.id}', '${user.family_id}', '${lang}', this)`}
+                        class="px-3 py-1.5 text-xs font-semibold text-brand-sky-deep bg-brand-sky/15 hover:bg-brand-sky/30 rounded-lg transition-colors whitespace-nowrap"
+                        title={lang === "es" ? "Reenviar invitación" : "Resend invitation"}
+                      >
+                        {lang === "es" ? "Reenviar" : "Resend"}
+                      </button>
+                      <button
+                        onclick={`cancelInvitation('${inv.id}', '${user.family_id}', '${lang}')`}
+                        class="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                        title={lang === "es" ? "Cancelar invitación" : "Cancel invitation"}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 ))
               }
@@ -487,50 +497,50 @@ if (!joinCodeOk && joinCodeError) {
       }
     });
 
-    // Cancel pending invitation
-    (window as any).cancelInvitation = async (invitationId: string, lang = 'en') => {
+    // Cancel pending invitation. Auth rides the httpOnly cookie via
+    // credentials:'include' — the proxy reads it server-side (locals.token),
+    // so we must NOT try to read access_token from document.cookie here.
+    (window as any).cancelInvitation = async (invitationId: string, familyId: string, lang = 'en') => {
       if (!confirm(lang === "es" ? "¿Cancelar esta invitación?" : "Cancel this invitation?")) {
         return;
       }
-
       try {
-        // Get family_id from page context (it's in the hidden form data or we can extract from URL)
-        const familyIdEl = document.querySelector('input[name="family_id"]');
-        const familyId = (familyIdEl instanceof HTMLInputElement ? familyIdEl.value : null) ||
-                         window.location.pathname.split('/')[2]; // Fallback to extract from URL
-        
-        // Get token from localStorage or cookie
-        const token = document.cookie
-          .split('; ')
-          .find(row => row.startsWith('access_token='))
-          ?.split('=')[1];
-
-        if (!token) {
-          showToast(lang === "es" ? "Error de autenticación" : "Authentication error", 'error');
-          return;
-        }
-
         const response = await fetch(
           `/api/invitations/${familyId}/${invitationId}`,
-          {
-            method: "DELETE",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            credentials: 'include'
-          }
+          { method: "DELETE", headers: { "Content-Type": "application/json" }, credentials: 'include' }
         );
-
         if (response.ok || response.status === 204) {
-          // Reload page to refresh the pending invitations list
           window.location.reload();
         } else {
-          const data = await response.json();
+          const data = await response.json().catch(() => ({}));
           showToast(data.error || (lang === "es" ? "Error al cancelar la invitación" : "Error canceling invitation"), 'error');
         }
       } catch (error) {
         console.error("Error canceling invitation:", error);
         showToast(lang === "es" ? "Error de conexión" : "Connection error", 'error');
+      }
+    };
+
+    // Resend pending invitation (refreshes expiry + re-sends the email).
+    (window as any).resendInvitation = async (invitationId: string, familyId: string, lang = 'en', btn?: HTMLButtonElement) => {
+      const original = btn?.textContent;
+      if (btn) { btn.disabled = true; btn.textContent = lang === "es" ? "Enviando…" : "Sending…"; }
+      try {
+        const response = await fetch(
+          `/api/invitations/${familyId}/${invitationId}/resend`,
+          { method: "POST", headers: { "Content-Type": "application/json" }, credentials: 'include' }
+        );
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data.success !== false) {
+          showToast(lang === "es" ? "Invitación reenviada" : "Invitation resent", 'success');
+        } else {
+          showToast(data.error || (lang === "es" ? "Error al reenviar la invitación" : "Error resending invitation"), 'error');
+        }
+      } catch (error) {
+        console.error("Error resending invitation:", error);
+        showToast(lang === "es" ? "Error de conexión" : "Connection error", 'error');
+      } finally {
+        if (btn) { btn.disabled = false; if (original) btn.textContent = original; }
       }
     };
     });
