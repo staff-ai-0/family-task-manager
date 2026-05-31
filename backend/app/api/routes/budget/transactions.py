@@ -139,6 +139,27 @@ async def get_transaction(
     return transaction
 
 
+@router.post("/deduplicate")
+async def deduplicate_transactions(
+    dry_run: bool = Query(False, description="Preview without deleting"),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Find and merge duplicate transactions (same date + payee + amount ±1%).
+
+    Keeps the richer copy (prefers the one with a receipt image). The loser is
+    soft-deleted so it remains visible in the recycle bin. Safe to re-run.
+    """
+    from app.services.budget.dedup_service import DeduplicateService
+    family_id = to_uuid_required(current_user.family_id)
+    result = await DeduplicateService.run(
+        db, family_id,
+        deleted_by_id=current_user.id,
+        dry_run=dry_run,
+    )
+    return result
+
+
 @router.get("/{transaction_id}/receipt")
 async def get_receipt_image(
     transaction_id: UUID,

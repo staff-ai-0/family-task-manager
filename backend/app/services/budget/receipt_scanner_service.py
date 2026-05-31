@@ -580,20 +580,62 @@ async def scan_and_create_transaction(
     # (4) Duplicate guard ----------------------------------------------------
     # Compare against the post-FX amount (the value that would actually
     # land in the database). Pre-FX comparison would let cross-currency
-    # duplicates through.
+    # duplicates through. Pass the receipt date so the guard can do an exact
+    # date match (catches bank-import vs re-scan, regardless of when the
+    # import ran — the old 60-second window only caught back-to-back scans).
     if not force:
         dup = await DuplicateGuardService.check(
             db, family_id, payee_id=payee_id,
             amount_cents=final_amount,
+            transaction_date=receipt.date,
         )
         if dup is not None:
+            # Upgrade path: if the existing transaction is missing a receipt
+            # image and this scan provides one, silently attach the image to
+            # the existing row instead of creating a duplicate or warning.
+            if not dup.existing_has_image:
+                existing = dup.existing_transaction
+                try:
+                    from app.services.storage.gcs_receipt_service import GCSReceiptStorage
+                    gcs_path = GCSReceiptStorage.upload(
+                        family_id=family_id,
+                        transaction_id=existing.id,
+                        image_bytes=image_bytes,
+                        content_type=media_type,
+                    )
+                    existing.receipt_image_path = gcs_path
+                    # Enrich notes with scanned items if existing notes are sparse.
+                    richer_notes = _build_notes(receipt.payee_name, receipt.items, receipt.currency)
+                    if richer_notes and len(richer_notes) > len(existing.notes or ""):
+                        existing.notes = richer_notes
+                    await db.commit()
+                    await db.refresh(existing)
+                except Exception:
+                    logger.exception("GCS upgrade failed for txn %s", existing.id)
+                    await db.rollback()
+                return {
+                    "success": True,
+                    "transaction_id": str(existing.id),
+                    "dup_warning": None,
+                    "scanned_preview": scanned_dict,
+                    "confidence": receipt.confidence,
+                    "items": [i.get("name", "") if isinstance(i, dict) else i for i in (receipt.items or [])],
+                    "account_match": {
+                        "strategy": match.strategy,
+                        "matched_card_last4": match.matched_card_last4,
+                    },
+                    "fx": fx_info,
+                    "trends": [],
+                    "shopping_auto_checked": [],
+                    "warnings": warnings + ["receipt_attached_to_existing"],
+                    "draft_id": None,
+                    "message": "Receipt image attached to existing transaction.",
+                }
+            # Existing has image (or same richness) — warn as before.
             # Do NOT commit — the flushed-but-uncommitted new payee row
             # (if any) will be rolled back when the session closes at the
             # request boundary. A subsequent force=True call will find/
             # reuse this payee idempotently via _find_or_create_payee.
-            # We intentionally do not call db.rollback() here: callers
-            # (tests + endpoint) often hold other in-flight reads on the
-            # same session that we must not invalidate.
             return {
                 "success": False,
                 "transaction_id": None,
@@ -601,8 +643,8 @@ async def scan_and_create_transaction(
                     "existing_transaction_id": str(
                         dup.existing_transaction_id
                     ),
-                    "scanned_at": dup.scanned_at.isoformat(),
-                    "amount_cents": dup.amount_cents,
+                    "scanned_at": dup.warning.scanned_at.isoformat(),
+                    "amount_cents": dup.warning.amount_cents,
                     "payee": receipt.payee_name,
                 },
                 "scanned_preview": scanned_dict,
@@ -616,6 +658,7 @@ async def scan_and_create_transaction(
                 "trends": [],
                 "shopping_auto_checked": [],
                 "warnings": warnings,
+                "draft_id": None,
             }
 
     # (5) Persist transaction ------------------------------------------------
