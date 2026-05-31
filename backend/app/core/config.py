@@ -155,6 +155,12 @@ class Settings(BaseSettings):
     # Anthropic API (for receipt scanning via Claude Vision)
     ANTHROPIC_API_KEY: str = ""
 
+    # Google Cloud Storage bucket for receipt image persistence. When
+    # empty (default in local dev / tests), the scanner skips the
+    # upload step and transactions are stored without an image.
+    # In production the VM .env sets this to `family-prod-receipts`.
+    GCS_RECEIPT_BUCKET: str = ""
+
     # Internal service-to-service token (for /api/internal/* endpoints).
     # If empty, all internal endpoints reject with 403.
     INTERNAL_API_TOKEN: str = ""

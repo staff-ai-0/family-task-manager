@@ -232,6 +232,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                                                 data-tx-account={transaction.account_id}
                                                 data-tx-notes={transaction.notes || ""}
                                                 data-tx-cleared={transaction.cleared ? "1" : "0"}
+                                                data-has-receipt-image={transaction.receipt_image_path ? "1" : "0"}
                                                 aria-label={es ? "Editar transacción" : "Edit transaction"}
                                             >
                                                 <div class="flex-1 min-w-0">
@@ -358,6 +359,13 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                         <label class="block text-sm font-medium text-brand-ink-soft mb-1">{es ? "Nota" : "Note"}</label>
                         <input id="edit-notes" type="text"
                             class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep outline-none text-sm" />
+                    </div>
+
+                    <!-- Receipt image thumbnail (when present) -->
+                    <div id="receipt-thumb-wrap" class="hidden mt-3">
+                        <a id="receipt-thumb-link" href="#" target="_blank" rel="noopener" class="block">
+                            <img id="receipt-thumb" src="" alt="Receipt" class="max-h-32 rounded-lg border border-brand-ink/10" />
+                        </a>
                     </div>
 
                     <!-- Cleared -->
@@ -524,8 +532,9 @@ document.addEventListener("astro:after-swap", initFilters);
     function attachRowHandlers() {
         document.querySelectorAll(".tx-row").forEach((row) => {
             row.addEventListener("click", () => {
+                const txId = row.dataset.txId;
                 openModal({
-                    id: row.dataset.txId,
+                    id: txId,
                     amount: row.dataset.txAmount,
                     date: row.dataset.txDate,
                     payee: row.dataset.txPayee,
@@ -534,6 +543,22 @@ document.addEventListener("astro:after-swap", initFilters);
                     notes: row.dataset.txNotes,
                     cleared: row.dataset.txCleared,
                 });
+
+                // Receipt thumbnail: show when this txn has an image,
+                // otherwise hide. The /receipt endpoint 302-redirects to a
+                // 15-min signed GCS URL.
+                const thumbWrap = document.getElementById("receipt-thumb-wrap");
+                const thumb = document.getElementById("receipt-thumb");
+                const thumbLink = document.getElementById("receipt-thumb-link");
+                if (thumbWrap && thumb && thumbLink && row.dataset.hasReceiptImage === "1") {
+                    const url = `/api/budget/transactions/${txId}/receipt`;
+                    thumb.src = url;
+                    thumbLink.href = url;
+                    thumbWrap.classList.remove("hidden");
+                } else if (thumbWrap) {
+                    thumbWrap.classList.add("hidden");
+                    if (thumb) thumb.src = "";
+                }
             });
         });
     }

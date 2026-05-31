@@ -73,6 +73,7 @@ export interface BudgetTransaction {
     parent_id?: string;
     is_parent: boolean;
     transfer_account_id?: string;
+    receipt_image_path?: string;
     created_at: string;
     updated_at: string;
 }

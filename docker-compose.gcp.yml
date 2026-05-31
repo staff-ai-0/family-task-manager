@@ -85,6 +85,7 @@ services:
       BASE_URL: ${PUBLIC_API_URL}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       LITELLM_API_BASE: ${LITELLM_API_BASE:-https://litellm.agent-ia.mx}
+      GCS_RECEIPT_BUCKET: ${GCS_RECEIPT_BUCKET:-family-prod-receipts}
       ENVIRONMENT: production
       DEBUG: "false"
       VAULT_ENABLED: "false"

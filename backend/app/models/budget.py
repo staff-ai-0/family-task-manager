@@ -184,6 +184,10 @@ class BudgetTransaction(Base):
         nullable=True,
         comment="User who originally created this transaction (for per-user last-used account fallback in receipt scanner)",
     )
+    receipt_image_path: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True,
+        comment="GCS object key under GCS_RECEIPT_BUCKET; null if no image stored.",
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
