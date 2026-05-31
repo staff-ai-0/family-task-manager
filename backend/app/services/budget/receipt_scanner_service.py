@@ -241,10 +241,17 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
     # forwarding to claude-haiku / claude-sonnet / claude-opus.
     data_uri = f"data:{media_type};base64,{image_b64}"
 
+    # max_tokens is sized for the *output* JSON only; Gemini 2.5 Flash also
+    # burns "reasoning_tokens" before emitting text, so a 1024 cap can cut the
+    # JSON mid-array on a long receipt. 4096 fits ~80 items easily.
+    # response_format json_object forces LiteLLM/Gemini to skip the prose
+    # wrapper ("I see a HEB receipt. Here is the JSON:...") and emit a single
+    # JSON value — eliminates the regex-extraction failure mode.
     try:
         completion = client.chat.completions.create(
             model=RECEIPT_MODEL,
-            max_tokens=1024,
+            max_tokens=4096,
+            response_format={"type": "json_object"},
             messages=[
                 {
                     "role": "user",
@@ -262,6 +269,14 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
         raise ValidationError(f"Receipt scan via LiteLLM failed: {exc}")
 
     response_text = (completion.choices[0].message.content or "").strip()
+    # If the model still returns nothing (Gemini sometimes burns the budget on
+    # reasoning and finishes with empty content), surface that explicitly
+    # instead of falling into the regex parse path.
+    if not response_text:
+        raise ValidationError(
+            "Vision model returned empty content "
+            f"(finish_reason={completion.choices[0].finish_reason!r})."
+        )
 
     # Parse JSON from response (handle potential markdown wrapping)
     json_match = re.search(r'\{[\s\S]*\}', response_text)
