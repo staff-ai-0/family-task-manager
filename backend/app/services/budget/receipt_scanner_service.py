@@ -18,6 +18,7 @@ leaks to the upstream provider.
 
 import base64
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -44,6 +45,9 @@ from app.schemas.budget import TransactionCreate
 from app.services.budget.transaction_service import TransactionService
 from app.services.budget.categorization_rule_service import CategorizationRuleService
 from app.services.budget.receipt_draft_service import ReceiptDraftService
+
+
+logger = logging.getLogger(__name__)
 
 
 # LiteLLM model alias. Registered in /mnt/nvme/docker-prod/litellm-proxy/
@@ -679,6 +683,22 @@ async def scan_and_create_transaction(
         )
     await db.commit()
     await db.refresh(txn)
+
+    # Persist the original image to GCS for audit / replay. Best-effort:
+    # an upload failure does NOT roll back the scan — the transaction stands
+    # without an image rather than losing the user's work.
+    try:
+        from app.services.storage.gcs_receipt_service import GCSReceiptStorage
+        gcs_path = GCSReceiptStorage.upload(
+            family_id=family_id,
+            transaction_id=txn.id,
+            image_bytes=image_bytes,
+            content_type=media_type,
+        )
+        txn.receipt_image_path = gcs_path
+        await db.commit()
+    except Exception:
+        logger.exception("GCS upload skipped for txn %s", txn.id)
 
     # (7a) Shopping auto-check ----------------------------------------------
     shopping_auto_checked: list[str] = []
