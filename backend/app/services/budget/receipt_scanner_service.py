@@ -47,11 +47,12 @@ from app.services.budget.receipt_draft_service import ReceiptDraftService
 
 
 # LiteLLM model alias. Registered in /mnt/nvme/docker-prod/litellm-proxy/
-# litellm_config.yaml. "claude-haiku" is anthropic/claude-haiku-4-5-*,
-# the cheapest current model that supports vision input. If a receipt
-# is particularly hard to parse, the caller can bump this to
-# "claude-sonnet" (anthropic/claude-sonnet-4-6) via a future override.
-RECEIPT_MODEL = "claude-haiku"
+# litellm_config.yaml. Override via env RECEIPT_MODEL without redeploy.
+# Default `gemini-2.5-flash` (cheap vision: ~$0.30/M input, ~$2.50/M output
+# vs claude-haiku ~$1/$5 — and bypasses the Anthropic credit balance issue
+# that bricked the previous "claude-haiku" default on 2026-05-30).
+# Alternatives: "claude-haiku", "claude-sonnet", "gpt-4o" (also registered).
+RECEIPT_MODEL = os.environ.get("RECEIPT_MODEL", "gemini-2.5-flash")
 
 RECEIPT_UPLOADS_DIR = "/app/uploads/receipt-drafts"
 
