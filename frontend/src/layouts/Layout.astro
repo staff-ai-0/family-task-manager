@@ -81,10 +81,23 @@ const bannerCopy = {
 
     <script define:vars={{ sentLabel: bannerCopy.sent, resendLabel: bannerCopy.resend }}>
         // ClientRouter removed — dispatch astro:page-load once on initial load.
-        // rAF ensures all module scripts have registered their listeners first.
-        requestAnimationFrame(() => {
-            document.dispatchEvent(new Event('astro:page-load'));
-        });
+        // Must fire AFTER deferred/module page scripts have executed and
+        // registered their listeners. Hoisted Astro scripts (any <script>
+        // with an import) ship as async-fetched `type=module` bundles, so a
+        // bare requestAnimationFrame can race ahead of them and the one-shot
+        // event gets missed (symptom: buttons whose handlers live in those
+        // bundles "do nothing"). DOMContentLoaded is the correct barrier —
+        // deferred + module scripts are guaranteed to have run by then.
+        (function firePageLoadOnce() {
+            var fire = function () {
+                document.dispatchEvent(new Event('astro:page-load'));
+            };
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', fire, { once: true });
+            } else {
+                fire();
+            }
+        })();
 
         document.addEventListener('astro:page-load', () => {
             (async () => {
