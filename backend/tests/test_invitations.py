@@ -254,6 +254,42 @@ async def test_invitation_code_generation(client, test_family, test_parent_user,
 
 
 @pytest.mark.asyncio
+async def test_resend_invitation_success(
+    client, test_family, test_parent_user, db_session: AsyncSession, auth_headers
+):
+    """Resending a pending invitation returns 200 and refreshes its expiry."""
+    send = await client.post(
+        "/api/invitations/send",
+        json={"email": "resend-me@example.com", "family_id": str(test_family.id), "role": "parent"},
+        headers=auth_headers,
+    )
+    assert send.status_code == status.HTTP_201_CREATED
+    inv_id = send.json()["id"]
+    old_expiry = send.json()["expires_at"]
+
+    resp = await client.post(
+        f"/api/invitations/{test_family.id}/{inv_id}/resend",
+        headers=auth_headers,
+    )
+    assert resp.status_code == status.HTTP_200_OK
+    body = resp.json()
+    assert body["id"] == inv_id
+    assert body["invited_email"] == "resend-me@example.com"
+    # expiry refreshed forward (or at least not earlier)
+    assert body["expires_at"] >= old_expiry
+
+
+@pytest.mark.asyncio
+async def test_resend_invitation_requires_auth(client, test_family):
+    """Resend requires authentication."""
+    import uuid
+    resp = await client.post(
+        f"/api/invitations/{test_family.id}/{uuid.uuid4()}/resend",
+    )
+    assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.asyncio
 async def test_invitation_email_link_uses_frontend_origin(
     test_family, test_parent_user, db_session: AsyncSession, monkeypatch
 ):

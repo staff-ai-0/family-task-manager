@@ -192,6 +192,65 @@ class InvitationService:
         return invitations
 
     @staticmethod
+    async def resend_invitation(
+        db: AsyncSession,
+        invitation_id: UUID,
+        family_id: UUID,
+        base_url: str = "",
+        fallback_user: User | None = None,
+    ) -> FamilyInvitation:
+        """
+        Re-send the email for a pending invitation and refresh its expiry.
+
+        Args:
+            db: Database session
+            invitation_id: Invitation to resend
+            family_id: Family ID (authorization scope)
+            base_url: Frontend origin for the acceptance link
+            fallback_user: Used as the "invited by" sender if the original
+                inviter can no longer be found
+
+        Returns:
+            The (expiry-refreshed) invitation
+
+        Raises:
+            NotFoundException: If invitation not found
+            ValidationException: If invitation is not pending
+        """
+        invitation = (await db.execute(
+            select(FamilyInvitation).where(
+                FamilyInvitation.id == invitation_id,
+                FamilyInvitation.family_id == family_id
+            )
+        )).scalar_one_or_none()
+
+        if not invitation:
+            raise NotFoundException("Invitation not found")
+
+        if invitation.status != InvitationStatus.PENDING:
+            raise ValidationException("Only pending invitations can be resent")
+
+        # Refresh the window so a stale-but-pending invite is valid again.
+        invitation.expires_at = (
+            datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30)
+        )
+        await db.flush()
+
+        inviter = (await db.execute(
+            select(User).where(User.id == invitation.invited_by_user_id)
+        )).scalar_one_or_none() or fallback_user
+
+        if inviter is not None:
+            await EmailService.send_invitation_email(
+                db=db,
+                invitation=invitation,
+                inviting_user=inviter,
+                base_url=base_url,
+            )
+
+        return invitation
+
+    @staticmethod
     async def cancel_invitation(
         db: AsyncSession,
         invitation_id: UUID,
