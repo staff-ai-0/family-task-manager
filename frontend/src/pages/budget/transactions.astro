@@ -184,6 +184,13 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                 value={searchFilter}
                 class="text-sm border border-brand-ink/10 rounded-lg px-2 py-1.5 bg-brand-cream-deep flex-1 min-w-[120px]"
             />
+            {user.role === "parent" && (
+                <button id="dedup-btn" title={es ? "Limpiar duplicados" : "Remove duplicates"}
+                    class="text-xs px-2 py-1.5 rounded-lg border border-brand-ink/10 bg-brand-cream-deep text-brand-ink-soft hover:bg-amber-100 hover:text-amber-700 hover:border-amber-300 transition flex items-center gap-1 whitespace-nowrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    {es ? "Dedup" : "Dedup"}
+                </button>
+            )}
         </div>
 
         <!-- Transactions List -->
@@ -774,5 +781,44 @@ document.addEventListener("astro:after-swap", initFilters);
     attachPriceComparison();
     document.addEventListener("astro:after-swap", attachPriceComparison);
     document.addEventListener("astro:page-load", attachPriceComparison);
+
+    // Dedup button
+    function attachDedup() {
+        const btn = document.getElementById("dedup-btn");
+        if (!btn) return;
+        btn.addEventListener("click", async () => {
+            const es = document.documentElement.lang === "es";
+            btn.disabled = true;
+            btn.textContent = es ? "Buscando..." : "Scanning...";
+            try {
+                // Dry run first to see count.
+                const preview = await fetch("/api/budget/transactions/deduplicate?dry_run=true", {
+                    method: "POST",
+                });
+                const data = await preview.json();
+                if (!data.pairs || data.pairs.length === 0) {
+                    alert(es ? "No se encontraron duplicados." : "No duplicates found.");
+                    return;
+                }
+                const msg = es
+                    ? `Se encontraron ${data.pairs.length} par(es) duplicado(s). ¿Limpiar ahora?`
+                    : `Found ${data.pairs.length} duplicate pair(s). Clean up now?`;
+                if (!confirm(msg)) return;
+                const res = await fetch("/api/budget/transactions/deduplicate", { method: "POST" });
+                const result = await res.json();
+                alert(es
+                    ? `${result.merged} duplicado(s) eliminado(s). Recargando...`
+                    : `${result.merged} duplicate(s) removed. Reloading...`);
+                window.location.reload();
+            } catch (e) {
+                alert(es ? "Error al limpiar duplicados." : "Error removing duplicates.");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Dedup";
+            }
+        });
+    }
+    attachDedup();
+    document.addEventListener("astro:page-load", attachDedup);
 })();
 </script>
