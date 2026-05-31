@@ -261,6 +261,14 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
                     ],
                 }
             ],
+            # Gemini 2.5 Flash defaults to "thinking" mode which spends
+            # hundreds of reasoning tokens BEFORE emitting any text. On a
+            # 4096-token budget that frequently leaves zero tokens for the
+            # actual JSON response → empty content → ValidationError. Disable
+            # thinking entirely; structured JSON extraction does not benefit
+            # from chain-of-thought. (LiteLLM forwards thinking_config via
+            # extra_body to the Gemini-vertex backend.)
+            extra_body={"thinking_config": {"thinking_budget": 0}},
         )
     except Exception as exc:
         # Surface all proxy-side failures (budget exceeded, rate limits,
