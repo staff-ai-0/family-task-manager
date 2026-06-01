@@ -22,7 +22,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from uuid import UUID
@@ -307,6 +307,15 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
             parsed_date = date.fromisoformat(data["date"])
         except (ValueError, TypeError):
             pass
+    # Sanity-guard the parsed date: vision models misread receipt dates
+    # (e.g. "2087-07-02", "2008-07-29"). Reject anything >30 days in the
+    # future or older than ~2 years → fall back to today downstream
+    # (`receipt.date or date.today()`), so reports never get garbage months.
+    if parsed_date is not None:
+        _today = date.today()
+        if parsed_date > _today + timedelta(days=30) or parsed_date < _today - timedelta(days=730):
+            logger.warning("discarding implausible receipt date %s", parsed_date)
+            parsed_date = None
 
     # Validate card_last4: only accept exactly 4 digit characters
     raw_card = data.get("card_last4")
