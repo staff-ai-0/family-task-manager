@@ -6,7 +6,7 @@ Business logic for budget reports and analytics.
 
 from datetime import date, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, case
+from sqlalchemy import select, and_, func, case, or_
 from typing import Dict, List
 from uuid import UUID
 
@@ -84,6 +84,7 @@ class ReportService:
                     BudgetTransaction.date <= end_date,
                     BudgetTransaction.category_id.isnot(None),
                     BudgetTransaction.deleted_at.is_(None),
+                    BudgetCategoryGroup.is_transfer.is_(False),
                 )
             )
             .group_by(BudgetCategory.id, BudgetCategory.name, BudgetCategoryGroup.name)
@@ -143,6 +144,7 @@ class ReportService:
                     BudgetTransaction.date <= end_date,
                     BudgetTransaction.category_id.isnot(None),
                     BudgetTransaction.deleted_at.is_(None),
+                    BudgetCategoryGroup.is_transfer.is_(False),
                 )
             )
             .group_by(BudgetCategoryGroup.id, BudgetCategoryGroup.name)
@@ -191,12 +193,19 @@ class ReportService:
                 func.sum(BudgetTransaction.amount).label('total'),
                 func.count(BudgetTransaction.id).label('transaction_count'),
             )
+            .select_from(BudgetTransaction)
+            .outerjoin(BudgetCategory, BudgetTransaction.category_id == BudgetCategory.id)
+            .outerjoin(BudgetCategoryGroup, BudgetCategory.group_id == BudgetCategoryGroup.id)
             .where(
                 and_(
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.date >= start_date,
                     BudgetTransaction.date <= end_date,
                     BudgetTransaction.deleted_at.is_(None),
+                    or_(
+                        BudgetCategoryGroup.is_transfer.is_(False),
+                        BudgetCategoryGroup.is_transfer.is_(None),
+                    ),
                 )
             )
             .group_by('month')
@@ -248,6 +257,8 @@ class ReportService:
             )
             .select_from(BudgetTransaction)
             .join(BudgetPayee, BudgetTransaction.payee_id == BudgetPayee.id)
+            .outerjoin(BudgetCategory, BudgetTransaction.category_id == BudgetCategory.id)
+            .outerjoin(BudgetCategoryGroup, BudgetCategory.group_id == BudgetCategoryGroup.id)
             .where(
                 and_(
                     BudgetTransaction.family_id == family_id,
@@ -255,6 +266,10 @@ class ReportService:
                     BudgetTransaction.date <= end_date,
                     BudgetTransaction.payee_id.isnot(None),
                     BudgetTransaction.deleted_at.is_(None),
+                    or_(
+                        BudgetCategoryGroup.is_transfer.is_(False),
+                        BudgetCategoryGroup.is_transfer.is_(None),
+                    ),
                 )
             )
             .group_by(BudgetPayee.id, BudgetPayee.name)
@@ -327,12 +342,19 @@ class ReportService:
                 func.sum(case((BudgetTransaction.amount < 0, -BudgetTransaction.amount), else_=0)).label('expense'),
                 func.sum(BudgetTransaction.amount).label('net'),
             )
+            .select_from(BudgetTransaction)
+            .outerjoin(BudgetCategory, BudgetTransaction.category_id == BudgetCategory.id)
+            .outerjoin(BudgetCategoryGroup, BudgetCategory.group_id == BudgetCategoryGroup.id)
             .where(
                 and_(
                     BudgetTransaction.family_id == family_id,
                     BudgetTransaction.date >= start_date,
                     BudgetTransaction.date <= end_date,
                     BudgetTransaction.deleted_at.is_(None),
+                    or_(
+                        BudgetCategoryGroup.is_transfer.is_(False),
+                        BudgetCategoryGroup.is_transfer.is_(None),
+                    ),
                 )
             )
             .group_by('period')
@@ -589,6 +611,7 @@ class ReportService:
                 and_(
                     BudgetCategoryGroup.family_id == family_id,
                     BudgetCategoryGroup.is_income == False,
+                    BudgetCategoryGroup.is_transfer == False,
                     BudgetCategoryGroup.deleted_at.is_(None),
                     BudgetCategory.deleted_at.is_(None),
                     BudgetCategory.hidden == False,

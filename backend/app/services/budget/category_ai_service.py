@@ -148,6 +148,11 @@ class CategoryAIService:
 
         Returns {scanned, applied}.
         """
+        # Make sure the family has a transfer bucket before we start labeling.
+        from app.services.budget.default_categories import ensure_transfer_group
+        from app.services.budget.transfer_detector import resolve_transfer_category_id
+        await ensure_transfer_group(db, family_id)
+
         rows = (await db.execute(
             select(BudgetTransaction).where(
                 BudgetTransaction.family_id == family_id,
@@ -171,7 +176,11 @@ class CategoryAIService:
                         payee_cache[txn.payee_id] = payee
 
             cat: Optional[UUID] = None
-            if payee and payee.default_category_id:
+            # Transfer detection first — keeps non-spending rows out of the AI.
+            cat = await resolve_transfer_category_id(
+                db, family_id, payee.name if payee else None, txn.notes,
+            )
+            if cat is None and payee and payee.default_category_id:
                 cat = payee.default_category_id
             if cat is None:
                 cat = await cls.suggest(
