@@ -143,16 +143,63 @@ class GigClaimService:
     async def get_pending_approvals(
         db: AsyncSession,
         family_id: UUID,
-    ) -> List[GigClaim]:
+    ) -> List[dict]:
+        """Return COMPLETED claims enriched with claimer name and gig title."""
+        from app.models.user import User
+        from sqlalchemy.orm import joinedload
+
         result = await db.execute(
-            select(GigClaim).where(
+            select(GigClaim)
+            .options(
+                joinedload(GigClaim.offering),
+                joinedload(GigClaim.claimer),
+            )
+            .where(
                 and_(
                     GigClaim.family_id == family_id,
                     GigClaim.status == GigClaimStatus.COMPLETED,
                 )
             ).order_by(GigClaim.completed_at.asc())
         )
-        return result.scalars().all()
+        claims = result.unique().scalars().all()
+        return [
+            {
+                "claim": c,
+                "claimer_name": c.claimer.name if c.claimer else str(c.claimed_by),
+                "gig_title": c.offering.title if c.offering else "—",
+                "gig_points": c.offering.points if c.offering else 0,
+            }
+            for c in claims
+        ]
+
+    @staticmethod
+    async def get_my_claims_enriched(
+        db: AsyncSession,
+        user_id: UUID,
+        family_id: UUID,
+    ) -> List[dict]:
+        """Return the user's claims enriched with the offering title and points."""
+        from sqlalchemy.orm import joinedload
+
+        result = await db.execute(
+            select(GigClaim)
+            .options(joinedload(GigClaim.offering))
+            .where(
+                and_(
+                    GigClaim.claimed_by == user_id,
+                    GigClaim.family_id == family_id,
+                )
+            ).order_by(GigClaim.created_at.desc())
+        )
+        claims = result.unique().scalars().all()
+        return [
+            {
+                "claim": c,
+                "gig_title": c.offering.title if c.offering else "—",
+                "gig_points": c.offering.points if c.offering else 0,
+            }
+            for c in claims
+        ]
 
     @staticmethod
     async def approve(

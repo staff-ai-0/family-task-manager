@@ -63,6 +63,10 @@ class GigClaimResponse(BaseModel):
     points_awarded: Optional[int]
     approved_by: Optional[UUID]
     approval_notes: Optional[str]
+    # Enriched fields (populated on list endpoints)
+    claimer_name: Optional[str] = None
+    gig_title: Optional[str] = None
+    gig_points: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -174,10 +178,18 @@ async def pending_approvals(
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    claims = await GigClaimService.get_pending_approvals(
+    items = await GigClaimService.get_pending_approvals(
         db, family_id=to_uuid_required(current_user.family_id)
     )
-    return claims
+    return [
+        GigClaimResponse(
+            **{k: v for k, v in GigClaimResponse.model_validate(item["claim"]).model_dump().items()},
+            claimer_name=item["claimer_name"],
+            gig_title=item["gig_title"],
+            gig_points=item["gig_points"],
+        )
+        for item in items
+    ]
 
 
 @router.get("/claims/my", response_model=List[GigClaimResponse])
@@ -185,12 +197,19 @@ async def my_claims(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    claims = await GigClaimService.get_my_claims(
+    items = await GigClaimService.get_my_claims_enriched(
         db,
         user_id=to_uuid_required(current_user.id),
         family_id=to_uuid_required(current_user.family_id),
     )
-    return claims
+    return [
+        GigClaimResponse(
+            **{k: v for k, v in GigClaimResponse.model_validate(item["claim"]).model_dump().items()},
+            gig_title=item["gig_title"],
+            gig_points=item["gig_points"],
+        )
+        for item in items
+    ]
 
 
 @router.post("/claims/{claim_id}/complete", response_model=GigClaimResponse)

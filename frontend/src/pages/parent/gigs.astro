@@ -145,14 +145,20 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     {pendingClaims.map((claim: any) => (
                         <div class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-amber-200">
                             <div class="flex justify-between items-start mb-3">
-                                <div>
-                                    <p class="text-xs text-brand-ink-soft mb-1">
-                                        {lang === "es" ? "Gig completada" : "Gig completed"} · {claim.completed_at ? new Date(claim.completed_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US") : "—"}
-                                    </p>
-                                    <p class="text-xs text-brand-ink-soft">
-                                        {lang === "es" ? "Reclamante:" : "Claimer:"} <strong class="text-brand-ink">{claim.claimed_by}</strong>
+                                <div class="flex-1">
+                                    <h3 class="font-bold text-brand-ink text-base leading-tight">{claim.gig_title ?? "—"}</h3>
+                                    <p class="text-sm text-brand-ink-soft mt-0.5">
+                                        <strong class="text-brand-ink">{claim.claimer_name ?? claim.claimed_by}</strong>
+                                        {" · "}
+                                        {claim.completed_at ? new Date(claim.completed_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US") : "—"}
                                     </p>
                                 </div>
+                                {claim.gig_points && (
+                                    <div class="text-right flex-shrink-0 ml-3">
+                                        <p class="text-xl font-extrabold text-violet-600">{claim.gig_points}</p>
+                                        <p class="text-xs text-brand-ink-soft">pts / ${claim.gig_points} MXN</p>
+                                    </div>
+                                )}
                             </div>
 
                             {claim.proof_text && (

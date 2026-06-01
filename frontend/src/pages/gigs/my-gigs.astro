@@ -76,7 +76,10 @@ const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
                         }`}>
                             <div class="flex justify-between items-start mb-3">
                                 <div class="flex-1">
-                                    <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold mb-2 ${
+                                    {claim.gig_title && (
+                                        <h3 class="font-bold text-brand-ink text-base leading-tight mb-1">{claim.gig_title}</h3>
+                                    )}
+                                    <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold mb-1 ${
                                         claim.status === "approved" ? "bg-emerald-100 text-emerald-700" :
                                         claim.status === "rejected" ? "bg-red-100 text-red-700" :
                                         claim.status === "completed" ? "bg-sky-100 text-sky-700" :
