@@ -1,0 +1,163 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BottomNav from "../../components/BottomNav.astro";
+import DifficultyChip from "../../components/DifficultyChip.astro";
+import { apiFetch } from "../../lib/api";
+import { t } from "../../lib/i18n";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role === "parent") return Astro.redirect("/parent/gigs");
+
+const { data: items } = await apiFetch<any[]>("/api/gigs/offerings", { token });
+const offerings: any[] = items ?? [];
+
+const flash = Astro.cookies.get("flash")?.value;
+if (flash) Astro.cookies.delete("flash", { path: "/" });
+const flashError = Astro.cookies.get("flash_error")?.value;
+if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
+
+const categoryLabels: Record<string, Record<string, string>> = {
+    chores:   { en: "Chores",   es: "Quehaceres" },
+    errands:  { en: "Errands",  es: "Mandados" },
+    creative: { en: "Creative", es: "Creativo" },
+    learning: { en: "Learning", es: "Aprendizaje" },
+    outdoor:  { en: "Outdoor",  es: "Al Aire Libre" },
+    other:    { en: "Other",    es: "Otro" },
+};
+const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
+---
+
+<Layout title={`Gigs - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen">
+        <header class="bg-gradient-to-br from-violet-700 to-violet-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <p class="text-violet-200 text-sm font-medium">{lang === "es" ? "¡Gana dinero extra!" : "Earn extra money!"}</p>
+                    <h1 class="text-2xl font-bold">{lang === "es" ? "Gigs" : "Gigs"}</h1>
+                </div>
+                <a href="/gigs/my-gigs" class="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-white/30 transition-colors">
+                    {lang === "es" ? "Mis Gigs" : "My Gigs"}
+                </a>
+            </div>
+            <div class="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 text-sm text-violet-100">
+                {lang === "es"
+                    ? "Reclama gigs, complétalas con evidencia y gana puntos que valen pesos."
+                    : "Claim gigs, complete them with proof, and earn points worth real pesos."}
+            </div>
+        </header>
+
+        <main class="flex-1 px-4 py-6">
+            {flash && (
+                <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
+                    {flash}
+                </div>
+            )}
+            {flashError && (
+                <div class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
+                    {flashError}
+                </div>
+            )}
+
+            {offerings.length === 0 ? (
+                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                    <div class="w-16 h-16 bg-violet-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <h3 class="font-bold text-brand-ink mb-1">{lang === "es" ? "Sin gigs disponibles" : "No gigs available"}</h3>
+                    <p class="text-brand-ink-soft text-sm">{lang === "es" ? "Tu papá/mamá publicará gigs pronto." : "Your parent will post gigs soon."}</p>
+                </div>
+            ) : (
+                <div class="space-y-4">
+                    {offerings.map((item: any) => {
+                        const o = item.offering;
+                        const claim = item.my_claim;
+                        const hasClaim = !!claim;
+                        const isApproved = claim?.status === "approved";
+                        const isCompleted = claim?.status === "completed";
+                        const isClaimed = claim?.status === "claimed";
+                        return (
+                            <div class={`bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border ${hasClaim ? "border-violet-200" : "border-brand-ink/10"} transition-all`}>
+                                <div class="flex justify-between items-start mb-3">
+                                    <div class="flex-1 pr-3">
+                                        <h3 class="font-bold text-brand-ink text-lg leading-tight">{o.title}</h3>
+                                        {o.description && (
+                                            <p class="text-brand-ink-soft text-sm mt-1 line-clamp-2">{o.description}</p>
+                                        )}
+                                    </div>
+                                    <div class="text-right flex-shrink-0">
+                                        <p class="text-2xl font-extrabold text-violet-600">{o.points}</p>
+                                        <p class="text-xs text-brand-ink-soft font-medium">pts / ${o.points} MXN</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 flex-wrap mb-4">
+                                    <DifficultyChip level={o.difficulty ?? 1} lang={lang} />
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">
+                                        {catLabel(o.category)}
+                                    </span>
+                                </div>
+
+                                {!hasClaim && (
+                                    <form method="POST" action="/api/gigs/claim">
+                                        <input type="hidden" name="gig_id" value={o.id} />
+                                        <button type="submit" class="w-full py-2.5 px-4 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 active:scale-[.98] transition-all text-sm">
+                                            {lang === "es" ? "Reclamar" : "Claim"}
+                                        </button>
+                                    </form>
+                                )}
+                                {isClaimed && (
+                                    <a href="/gigs/my-gigs" class="block w-full py-2.5 px-4 bg-amber-100 text-amber-700 font-semibold rounded-xl text-center text-sm hover:bg-amber-200 transition-colors">
+                                        {lang === "es" ? "Reclamada — Enviar evidencia →" : "Claimed — Submit proof →"}
+                                    </a>
+                                )}
+                                {isCompleted && (
+                                    <div class="w-full py-2.5 px-4 bg-sky-100 text-sky-700 font-semibold rounded-xl text-center text-sm">
+                                        {lang === "es" ? "⏳ Pendiente de aprobación" : "⏳ Awaiting approval"}
+                                    </div>
+                                )}
+                                {isApproved && (
+                                    <div class="w-full py-2.5 px-4 bg-emerald-100 text-emerald-700 font-semibold rounded-xl text-center text-sm">
+                                        ✅ {lang === "es" ? `Aprobada · +${claim.points_awarded} pts` : `Approved · +${claim.points_awarded} pts`}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </main>
+
+        <BottomNav active="gigs" role={user.role?.toLowerCase()} lang={lang} />
+    </div>
+</Layout>
+
+<script>
+document.querySelectorAll("form[action='/api/gigs/claim']").forEach(form => {
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const formEl = e.target as HTMLFormElement;
+        const gigId = (formEl.querySelector("[name=gig_id]") as HTMLInputElement).value;
+        const btn = formEl.querySelector("button") as HTMLButtonElement;
+        btn.disabled = true;
+        btn.textContent = "...";
+        const res = await fetch(`/api/gigs/offerings/${gigId}/claim`, { method: "POST" });
+        if (res.ok) {
+            window.location.href = "/gigs/my-gigs";
+        } else {
+            const err = await res.json().catch(() => ({ detail: "Error" }));
+            btn.disabled = false;
+            btn.textContent = btn.getAttribute("data-label") ?? "Claim";
+            alert(err.detail ?? "Error");
+        }
+    });
+});
+</script>

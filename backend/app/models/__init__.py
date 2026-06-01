@@ -49,6 +49,7 @@ from app.models.family_chat import FamilyChatMessage
 from app.models.family_chat_reaction import FamilyChatReaction
 from app.models.frankie_schedule import FrankieSchedule
 from app.models.dm import DMThread, DMMessage
+from app.models.gig import GigOffering, GigClaim, GigCategory, GigClaimStatus
 
 __all__ = [
     "Base",
@@ -107,6 +108,11 @@ __all__ = [
     # DM
     "DMThread",
     "DMMessage",
+    # Gigs
+    "GigOffering",
+    "GigClaim",
+    "GigCategory",
+    "GigClaimStatus",
     # Enums
     "UserRole",
     "TaskStatus",

@@ -1,0 +1,205 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BottomNav from "../../components/BottomNav.astro";
+import { apiFetch } from "../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role === "parent") return Astro.redirect("/parent/gigs");
+
+const { data: claims } = await apiFetch<any[]>("/api/gigs/claims/my", { token });
+const myClaims: any[] = claims ?? [];
+
+const flash = Astro.cookies.get("flash")?.value;
+if (flash) Astro.cookies.delete("flash", { path: "/" });
+const flashError = Astro.cookies.get("flash_error")?.value;
+if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
+
+const statusLabel: Record<string, Record<string, string>> = {
+    claimed:   { en: "In progress",        es: "En progreso" },
+    completed: { en: "Awaiting approval",  es: "Esperando aprobación" },
+    approved:  { en: "Approved",           es: "Aprobada" },
+    rejected:  { en: "Rejected",           es: "Rechazada" },
+};
+const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
+---
+
+<Layout title={`${lang === "es" ? "Mis Gigs" : "My Gigs"} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen">
+        <header class="bg-gradient-to-br from-violet-700 to-violet-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+            <div class="flex justify-between items-center">
+                <div>
+                    <a href="/gigs" class="text-violet-200 text-sm hover:text-white transition-colors">
+                        ← {lang === "es" ? "Tablero de Gigs" : "Gig Board"}
+                    </a>
+                    <h1 class="text-2xl font-bold mt-1">{lang === "es" ? "Mis Gigs" : "My Gigs"}</h1>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 px-4 py-6">
+            {flash && (
+                <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
+                    {flash}
+                </div>
+            )}
+            {flashError && (
+                <div class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
+                    {flashError}
+                </div>
+            )}
+
+            {myClaims.length === 0 ? (
+                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                    <p class="text-brand-ink-soft text-sm">
+                        {lang === "es" ? "No has reclamado ninguna gig aún." : "You haven't claimed any gigs yet."}
+                    </p>
+                    <a href="/gigs" class="inline-block mt-4 px-4 py-2 bg-violet-600 text-white text-sm font-semibold rounded-xl hover:bg-violet-700 transition-colors">
+                        {lang === "es" ? "Ver tablero de gigs" : "View gig board"}
+                    </a>
+                </div>
+            ) : (
+                <div class="space-y-4">
+                    {myClaims.map((claim: any) => (
+                        <div class={`bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border ${
+                            claim.status === "approved" ? "border-emerald-200" :
+                            claim.status === "rejected" ? "border-red-200" :
+                            claim.status === "completed" ? "border-sky-200" :
+                            "border-violet-200"
+                        }`}>
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="flex-1">
+                                    <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold mb-2 ${
+                                        claim.status === "approved" ? "bg-emerald-100 text-emerald-700" :
+                                        claim.status === "rejected" ? "bg-red-100 text-red-700" :
+                                        claim.status === "completed" ? "bg-sky-100 text-sky-700" :
+                                        "bg-violet-100 text-violet-700"
+                                    }`}>
+                                        {sl(claim.status)}
+                                    </span>
+                                    <p class="text-xs text-brand-ink-soft">
+                                        {lang === "es" ? "Reclamada" : "Claimed"}: {new Date(claim.created_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US")}
+                                    </p>
+                                </div>
+                                {claim.status === "approved" && (
+                                    <div class="text-right">
+                                        <p class="text-2xl font-extrabold text-emerald-600">+{claim.points_awarded}</p>
+                                        <p class="text-xs text-brand-ink-soft">pts / ${claim.points_awarded} MXN</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {claim.status === "rejected" && claim.approval_notes && (
+                                <div class="mb-3 p-3 bg-red-50 rounded-xl text-sm text-red-700">
+                                    <strong>{lang === "es" ? "Motivo:" : "Reason:"}</strong> {claim.approval_notes}
+                                </div>
+                            )}
+
+                            {/* Proof submission form — only when CLAIMED (not submitted yet) */}
+                            {claim.status === "claimed" && (
+                                <form class="space-y-3" data-complete-form data-claim-id={claim.id}>
+                                    <div>
+                                        <label class="block text-sm font-medium text-brand-ink mb-1">
+                                            {lang === "es" ? "¿Qué hiciste? (opcional)" : "What did you do? (optional)"}
+                                        </label>
+                                        <textarea
+                                            name="proof_text"
+                                            rows={3}
+                                            class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink placeholder-brand-ink-soft focus:outline-none focus:ring-2 focus:ring-violet-400"
+                                            placeholder={lang === "es" ? "Describe lo que hiciste..." : "Describe what you did..."}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-brand-ink mb-1">
+                                            {lang === "es" ? "Foto de evidencia (opcional)" : "Photo evidence (optional)"}
+                                        </label>
+                                        <input
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/webp"
+                                            name="proof_image"
+                                            class="w-full text-sm text-brand-ink-soft file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-violet-100 file:text-violet-700 hover:file:bg-violet-200"
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        class="w-full py-2.5 px-4 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 active:scale-[.98] transition-all text-sm"
+                                    >
+                                        {lang === "es" ? "Enviar para aprobación" : "Submit for approval"}
+                                    </button>
+                                </form>
+                            )}
+
+                            {claim.status === "completed" && claim.proof_text && (
+                                <div class="mt-2 p-3 bg-sky-50 rounded-xl text-sm text-sky-700">
+                                    <strong>{lang === "es" ? "Tu evidencia:" : "Your proof:"}</strong> {claim.proof_text}
+                                </div>
+                            )}
+                            {claim.status === "approved" && claim.proof_text && (
+                                <div class="mt-2 p-3 bg-emerald-50 rounded-xl text-sm text-emerald-700">
+                                    <strong>{lang === "es" ? "Evidencia enviada:" : "Submitted proof:"}</strong> {claim.proof_text}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </main>
+
+        <BottomNav active="gigs" role={user.role?.toLowerCase()} lang={lang} />
+    </div>
+</Layout>
+
+<script>
+const lang = document.cookie.split(";").find(c => c.trim().startsWith("lang="))?.split("=")[1] ?? "en";
+
+document.querySelectorAll("[data-complete-form]").forEach(form => {
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const formEl = e.target as HTMLFormElement;
+        const claimId = formEl.dataset.claimId;
+        const btn = formEl.querySelector("button[type=submit]") as HTMLButtonElement;
+        btn.disabled = true;
+        btn.textContent = "...";
+
+        const proofText = (formEl.querySelector("[name=proof_text]") as HTMLTextAreaElement)?.value || null;
+        const fileInput = formEl.querySelector("[name=proof_image]") as HTMLInputElement;
+        let proofImageUrl: string | null = null;
+
+        // Upload image if provided
+        if (fileInput?.files?.length) {
+            const uploadForm = new FormData();
+            uploadForm.append("file", fileInput.files[0]);
+            const uploadRes = await fetch("/api/task-assignments/proof-upload", {
+                method: "POST",
+                body: uploadForm,
+            });
+            if (uploadRes.ok) {
+                const uploadData = await uploadRes.json();
+                proofImageUrl = uploadData.url;
+            }
+        }
+
+        const res = await fetch(`/api/gigs/claims/${claimId}/complete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ proof_text: proofText, proof_image_url: proofImageUrl }),
+        });
+
+        if (res.ok) {
+            window.location.reload();
+        } else {
+            const err = await res.json().catch(() => ({ detail: "Error" }));
+            btn.disabled = false;
+            btn.textContent = lang === "es" ? "Enviar para aprobación" : "Submit for approval";
+            alert(err.detail ?? "Error");
+        }
+    });
+});
+</script>

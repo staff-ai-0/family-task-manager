@@ -2,6 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import BottomNav from "../../components/BottomNav.astro";
 import TaskCreateModal from "../../components/TaskCreateModal.astro";
+import DifficultyChip from "../../components/DifficultyChip.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 
@@ -68,7 +69,8 @@ const [{ data: templates }, { data: weekAssignments }, { data: familyMembers }] 
     apiFetch<any[]>("/api/task-assignments/week", { token }),
     apiFetch<any[]>(`/api/families/${user.family_id}/members`, { token }),
 ]);
-const templateList: any[] = Array.isArray(templates) ? templates : [];
+// Only show mandatory tasks (is_bonus=False) — gigs live in /parent/gigs
+const templateList: any[] = (Array.isArray(templates) ? templates : []).filter((t: any) => !t.is_bonus);
 const assignmentList: any[] = Array.isArray(weekAssignments) ? weekAssignments : [];
 const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
 
@@ -218,14 +220,9 @@ function freqLabel(interval: number): string {
                                         {tmpl.description && (
                                             <p class="text-xs text-brand-ink-soft line-clamp-1">{tmpl.description}</p>
                                         )}
-                                        <p class="text-xs text-brand-sun-deep font-semibold mt-1">
-                                            +{tmpl.effective_points ?? tmpl.points} pts
-                                            {tmpl.effort_level > 1 && (
-                                                <span class="ml-1 text-brand-ink-soft font-normal">
-                                                    ({tmpl.points} × {tmpl.effort_level === 3 ? "2" : "1.5"})
-                                                </span>
-                                            )}
-                                        </p>
+                                        <div class="mt-1">
+                                            <DifficultyChip level={tmpl.effort_level ?? 1} lang={lang} />
+                                        </div>
                                     </div>
                                     <div class="flex gap-1.5 flex-shrink-0">
                                         <!-- Toggle active -->

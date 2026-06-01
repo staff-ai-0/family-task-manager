@@ -465,6 +465,7 @@ def _assignment_to_detail(assignment) -> dict:
         "template_title_es": template.title_es if template else None,
         "template_description_es": template.description_es if template else None,
         "template_points": template.points if template else 0,
+        "template_effort_level": template.effort_level if template else 1,
         "template_is_bonus": template.is_bonus if template else False,
         "template_gig_mode": (template.gig_mode if template else "claim") or "claim",
         "template_collaboration_min_count": (

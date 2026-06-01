@@ -3,6 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import BottomNav from "../components/BottomNav.astro";
 import PointsConverter from "../components/PointsConverter.astro";
 import GigsIntroBanner from "../components/GigsIntroBanner.astro";
+import DifficultyChip from "../components/DifficultyChip.astro";
 import { apiFetch } from "../lib/api";
 import { t } from "../lib/i18n";
 
@@ -171,9 +172,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                         {(lang === "es" && a.template_description_es ? a.template_description_es : a.template_description) || "--"}
                                     </p>
                                     <div class="flex items-center gap-2 mt-3 flex-wrap">
-                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-cream-deep text-brand-sky-deep">
-                                            +{a.template_points} pts
-                                        </span>
+                                        <DifficultyChip level={a.template_effort_level ?? 1} lang={lang} />
                                     </div>
                                 </div>
                                 {a.can_complete && (

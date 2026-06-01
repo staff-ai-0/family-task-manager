@@ -1,0 +1,25 @@
+---
+interface Props {
+    level: 1 | 2 | 3;
+    lang?: string;
+}
+const { level, lang = "en" } = Astro.props;
+
+const labels: Record<number, Record<string, string>> = {
+    1: { en: "Easy",   es: "Fácil"  },
+    2: { en: "Medium", es: "Medio"  },
+    3: { en: "Hard",   es: "Difícil" },
+};
+const colors: Record<number, string> = {
+    1: "bg-emerald-100 text-emerald-700",
+    2: "bg-amber-100 text-amber-700",
+    3: "bg-red-100 text-red-700",
+};
+
+const label = labels[level]?.[lang] ?? labels[1][lang];
+const color = colors[level] ?? colors[1];
+---
+
+<span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${color}`}>
+    {label}
+</span>

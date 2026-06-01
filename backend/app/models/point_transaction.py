@@ -47,6 +47,7 @@ class PointTransaction(Base):
     task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)  # Legacy, to be removed
     assignment_id = Column(UUID(as_uuid=True), ForeignKey("task_assignments.id", ondelete="SET NULL"), nullable=True)
     reward_id = Column(UUID(as_uuid=True), ForeignKey("rewards.id", ondelete="SET NULL"), nullable=True)
+    gig_claim_id = Column(UUID(as_uuid=True), ForeignKey("gig_claims.id", ondelete="SET NULL"), nullable=True)
     
     # Metadata
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
@@ -57,6 +58,7 @@ class PointTransaction(Base):
     task = relationship("Task", back_populates="point_transactions")  # Legacy
     assignment = relationship("TaskAssignment", back_populates="point_transactions")
     reward = relationship("Reward", back_populates="redemptions")
+    gig_claim = relationship("GigClaim", back_populates="point_transactions")
     created_by_user = relationship("User", foreign_keys=[created_by])
 
     def __repr__(self):
@@ -98,6 +100,18 @@ class PointTransaction(Base):
             balance_before=balance_before,
             balance_after=balance_before + points,
             description=f"Gig approved — earned {points} points",
+        )
+
+    @classmethod
+    def create_gig_claim_approval(cls, user_id, gig_claim_id, points: int, balance_before: int):
+        return cls(
+            type=TransactionType.GIG_APPROVED,
+            user_id=user_id,
+            gig_claim_id=gig_claim_id,
+            points=points,
+            balance_before=balance_before,
+            balance_after=balance_before + points,
+            description=f"Gig aprobada — ganaste {points} puntos (${points} MXN)",
         )
 
     @classmethod
