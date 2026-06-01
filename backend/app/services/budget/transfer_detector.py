@@ -55,21 +55,18 @@ def detect_transfer_category_name(*texts: Optional[str]) -> Optional[str]:
     return None
 
 
-async def resolve_transfer_category_id(
-    db: AsyncSession,
-    family_id: UUID,
-    *texts: Optional[str],
-) -> Optional[UUID]:
-    """Detect a transfer and map it to a concrete category_id in the family's
-    transfer group. Falls back to any category in the transfer group when the
-    specific name is missing. None when the text isn't a transfer or the family
-    has no transfer group yet.
-    """
-    name = detect_transfer_category_name(*texts)
-    if name is None:
-        return None
+# Bank-alert "kind" (classified by the email-matcher LLM) → transfer category.
+# Lets the matcher agent classify the email TYPE directly (a far better signal
+# than regex over a truncated merchant string like "BBVA MEXICO").
+KIND_TO_TRANSFER_CATEGORY: dict[str, str] = {
+    "transfer": "Entre Cuentas",
+    "withdrawal": "Retiro de Efectivo",
+    "card_payment": "Pago de Tarjeta",
+}
 
-    rows = (await db.execute(
+
+async def _transfer_categories(db: AsyncSession, family_id: UUID) -> list[tuple]:
+    return (await db.execute(
         select(BudgetCategory.id, BudgetCategory.name)
         .join(BudgetCategoryGroup, BudgetCategory.group_id == BudgetCategoryGroup.id)
         .where(
@@ -79,8 +76,42 @@ async def resolve_transfer_category_id(
             BudgetCategoryGroup.deleted_at.is_(None),
         )
     )).all()
+
+
+async def resolve_transfer_category_by_name(
+    db: AsyncSession, family_id: UUID, name: str,
+) -> Optional[UUID]:
+    """Map a transfer category NAME to its id in the family's transfer group.
+    Falls back to any category in the transfer group. None if no group."""
+    rows = await _transfer_categories(db, family_id)
     if not rows:
         return None
-
     by_name = {r[1].lower(): r[0] for r in rows}
     return by_name.get(name.lower()) or rows[0][0]
+
+
+async def resolve_transfer_category_for_kind(
+    db: AsyncSession, family_id: UUID, kind: Optional[str],
+) -> Optional[UUID]:
+    """Resolve a transfer category from an email-matcher `kind`. None when the
+    kind isn't a transfer type (purchase/deposit/refund/fee/other → normal flow)."""
+    name = KIND_TO_TRANSFER_CATEGORY.get((kind or "").lower())
+    if name is None:
+        return None
+    return await resolve_transfer_category_by_name(db, family_id, name)
+
+
+async def resolve_transfer_category_id(
+    db: AsyncSession,
+    family_id: UUID,
+    *texts: Optional[str],
+) -> Optional[UUID]:
+    """Detect a transfer from free text and map it to a concrete category_id in
+    the family's transfer group. Falls back to any category in the transfer
+    group when the specific name is missing. None when the text isn't a transfer
+    or the family has no transfer group yet.
+    """
+    name = detect_transfer_category_name(*texts)
+    if name is None:
+        return None
+    return await resolve_transfer_category_by_name(db, family_id, name)

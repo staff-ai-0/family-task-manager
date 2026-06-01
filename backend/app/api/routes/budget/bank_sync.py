@@ -137,6 +137,7 @@ class CreateBody(BaseModel):
     merchant: str | None = None
     amount_cents: int = Field(..., gt=0)
     direction: str = "debit"  # debit=expense, credit=income
+    kind: str = "purchase"  # purchase|transfer|withdrawal|card_payment|deposit|refund|fee|other
     date: _date
     card_last4: str | None = None
     currency: str = "MXN"
@@ -214,9 +215,16 @@ async def create_from_alert(
     db.add(txn)
     await db.flush()
 
-    # Categorize: transfer detection → learned payee default → AI.
-    from app.services.budget.transfer_detector import resolve_transfer_category_id
-    cat = await resolve_transfer_category_id(db, family_id, body.merchant, txn.notes)
+    # Categorize: kind-based transfer (LLM-classified) → text transfer detection
+    # → learned payee default → AI. The matcher's `kind` is the strongest signal
+    # (e.g. a "Transferencia a BBVA" whose merchant is just "BBVA MEXICO").
+    from app.services.budget.transfer_detector import (
+        resolve_transfer_category_for_kind,
+        resolve_transfer_category_id,
+    )
+    cat = await resolve_transfer_category_for_kind(db, family_id, body.kind)
+    if cat is None:
+        cat = await resolve_transfer_category_id(db, family_id, body.merchant, txn.notes)
     if cat is None and payee_id is not None:
         from app.models.budget import BudgetPayee
         payee_row = await db.get(BudgetPayee, payee_id)

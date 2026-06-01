@@ -23,6 +23,7 @@ from app.services.budget.default_categories import (
 from app.services.budget.report_service import ReportService
 from app.services.budget.transfer_detector import (
     detect_transfer_category_name,
+    resolve_transfer_category_for_kind,
     resolve_transfer_category_id,
 )
 
@@ -329,3 +330,25 @@ async def test_spending_report_excludes_transfers(db_session, test_family):
     assert expense_cat.name in names
     assert transfer_cat.name not in names  # transfer excluded
     assert rep["total"] == -50000  # only the real expense
+
+
+@pytest.mark.parametrize("kind,expected_cat", [
+    ("transfer", "Entre Cuentas"),
+    ("withdrawal", "Retiro de Efectivo"),
+    ("card_payment", "Pago de Tarjeta"),
+])
+@pytest.mark.asyncio
+async def test_resolve_transfer_for_kind(db_session, test_family, kind, expected_cat):
+    await seed_default_categories(db_session, test_family.id)
+    cat_id = await resolve_transfer_category_for_kind(db_session, test_family.id, kind)
+    assert cat_id is not None
+    cat = await db_session.get(BudgetCategory, cat_id)
+    assert cat.name == expected_cat
+
+
+@pytest.mark.asyncio
+async def test_resolve_transfer_for_kind_purchase_is_none(db_session, test_family):
+    await seed_default_categories(db_session, test_family.id)
+    # purchase / deposit / fee are NOT transfers → normal categorization flow
+    assert await resolve_transfer_category_for_kind(db_session, test_family.id, "purchase") is None
+    assert await resolve_transfer_category_for_kind(db_session, test_family.id, "fee") is None
