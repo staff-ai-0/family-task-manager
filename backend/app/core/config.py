@@ -152,6 +152,11 @@ class Settings(BaseSettings):
     LITELLM_API_KEY: str = ""
     LITELLM_MODEL: str = "mistral-nemo"
 
+    # Vision model used for receipt scanning. Must be a registered alias in
+    # litellm_config.yaml. Per-family override stored in Redis takes precedence
+    # when set via /api/budget/ai-settings/models.
+    RECEIPT_MODEL: str = "gemini-2.5-flash"
+
     # Anthropic API (for receipt scanning via Claude Vision)
     ANTHROPIC_API_KEY: str = ""
 

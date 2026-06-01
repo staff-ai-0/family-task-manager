@@ -50,13 +50,10 @@ from app.services.budget.receipt_draft_service import ReceiptDraftService
 logger = logging.getLogger(__name__)
 
 
-# LiteLLM model alias. Registered in /mnt/nvme/docker-prod/litellm-proxy/
-# litellm_config.yaml. Override via env RECEIPT_MODEL without redeploy.
-# Default `gemini-2.5-flash` (cheap vision: ~$0.30/M input, ~$2.50/M output
-# vs claude-haiku ~$1/$5 — and bypasses the Anthropic credit balance issue
-# that bricked the previous "claude-haiku" default on 2026-05-30).
-# Alternatives: "claude-haiku", "claude-sonnet", "gpt-4o" (also registered).
-RECEIPT_MODEL = os.environ.get("RECEIPT_MODEL", "gemini-2.5-flash")
+# Fallback model alias when no per-family override is stored in Redis.
+# settings.RECEIPT_MODEL is the env-configured default (gemini-2.5-flash).
+# Alternatives: "qwen-vl", "claude-haiku", "claude-sonnet", "gpt-4o".
+RECEIPT_MODEL = settings.RECEIPT_MODEL
 
 RECEIPT_UPLOADS_DIR = "/app/uploads/receipt-drafts"
 
@@ -196,7 +193,23 @@ Rules:
 - If you cannot read the receipt at all, set confidence to 0 and all values to null"""
 
 
-async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
+async def _get_family_model(family_id: UUID) -> str:
+    """Return per-family model override from Redis, or the global default."""
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        try:
+            val = await r.get(f"family_settings:{family_id}:receipt_model")
+        finally:
+            await r.aclose()
+        return val or RECEIPT_MODEL
+    except Exception:
+        return RECEIPT_MODEL
+
+
+async def scan_receipt(
+    image_bytes: bytes, media_type: str, model: Optional[str] = None
+) -> ScannedReceipt:
     """Extract transaction data from a receipt image via LiteLLM proxy.
 
     Uses the OpenAI-compatible Chat Completions endpoint exposed by
@@ -245,15 +258,22 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
     # forwarding to claude-haiku / claude-sonnet / claude-opus.
     data_uri = f"data:{media_type};base64,{image_b64}"
 
-    # max_tokens is sized for the *output* JSON only; Gemini 2.5 Flash also
-    # burns "reasoning_tokens" before emitting text, so a 1024 cap can cut the
-    # JSON mid-array on a long receipt. 4096 fits ~80 items easily.
-    # response_format json_object forces LiteLLM/Gemini to skip the prose
-    # wrapper ("I see a HEB receipt. Here is the JSON:...") and emit a single
-    # JSON value — eliminates the regex-extraction failure mode.
+    active_model = model or RECEIPT_MODEL
+
+    # thinking_config disables Gemini 2.5 Flash's default reasoning mode,
+    # which otherwise burns the 4096-token budget before emitting JSON.
+    # Only send it for Gemini models — vLLM backends (qwen-vl, etc.) don't
+    # understand the parameter and will 422 if it reaches them.
+    extra: dict = {}
+    if "gemini" in active_model.lower():
+        extra = {"thinking_config": {"thinking_budget": 0}}
+
+    # max_tokens sized for JSON output only; 4096 fits ~80 line items.
+    # response_format json_object forces a single JSON value, eliminating
+    # the "Here is the JSON:" prose-wrapper failure mode.
     try:
         completion = client.chat.completions.create(
-            model=RECEIPT_MODEL,
+            model=active_model,
             max_tokens=4096,
             response_format={"type": "json_object"},
             messages=[
@@ -265,14 +285,7 @@ async def scan_receipt(image_bytes: bytes, media_type: str) -> ScannedReceipt:
                     ],
                 }
             ],
-            # Gemini 2.5 Flash defaults to "thinking" mode which spends
-            # hundreds of reasoning tokens BEFORE emitting any text. On a
-            # 4096-token budget that frequently leaves zero tokens for the
-            # actual JSON response → empty content → ValidationError. Disable
-            # thinking entirely; structured JSON extraction does not benefit
-            # from chain-of-thought. (LiteLLM forwards thinking_config via
-            # extra_body to the Gemini-vertex backend.)
-            extra_body={"thinking_config": {"thinking_budget": 0}},
+            extra_body=extra if extra else None,
         )
     except Exception as exc:
         # Surface all proxy-side failures (budget exceeded, rate limits,
@@ -454,8 +467,11 @@ async def scan_and_create_transaction(
     from app.services.budget.a2a_webhook_service import A2AWebhookService
     from app.services.fx_service import FXService
 
+    # (0) Resolve per-family model preference --------------------------------
+    family_model = await _get_family_model(family_id)
+
     # (1) Vision extract -----------------------------------------------------
-    receipt = await scan_receipt(image_bytes, media_type)
+    receipt = await scan_receipt(image_bytes, media_type, model=family_model)
 
     scanned_dict = {
         "date": receipt.date.isoformat() if receipt.date else None,

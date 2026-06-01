@@ -29,7 +29,7 @@ const pendingDraftsCount = draftsCount?.count ?? 0;
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 // Parallel fetch all settings data
-const [accountsRes, payeesRes, rulesRes, recurringRes, goalsRes, tagsRes, groupsRes] = await Promise.all([
+const [accountsRes, payeesRes, rulesRes, recurringRes, goalsRes, tagsRes, groupsRes, aiModelsRes, aiUsageRes] = await Promise.all([
     apiFetch<any[]>("/api/budget/accounts/", { token }),
     apiFetch<any[]>("/api/budget/payees/", { token }),
     apiFetch<any[]>("/api/budget/categorization-rules/", { token }),
@@ -37,6 +37,8 @@ const [accountsRes, payeesRes, rulesRes, recurringRes, goalsRes, tagsRes, groups
     apiFetch<any[]>("/api/budget/goals/", { token }),
     apiFetch<any[]>("/api/budget/tags/", { token }),
     apiFetch<any[]>("/api/budget/categories/groups", { token }),
+    apiFetch<any>("/api/budget/ai-settings/models", { token }),
+    apiFetch<any>("/api/budget/ai-settings/usage", { token }),
 ]);
 
 const accounts = accountsRes.data || [];
@@ -46,6 +48,8 @@ const recurring = recurringRes.data || [];
 const goals = goalsRes.data || [];
 const tags = tagsRes.data || [];
 const groups = groupsRes.data || [];
+const aiModels = aiModelsRes.data || { current_model: "gemini-2.5-flash", models: [] };
+const aiUsage = aiUsageRes.data || null;
 
 const allCategories = groups.flatMap((g: any) =>
     (g.categories || []).map((c: any) => ({ id: c.id, name: c.name, group_name: g.name }))
@@ -331,6 +335,84 @@ const frequencyLabel = (freq: string) => {
             )}
         </SettingsAccordion>
 
+        <!-- AI & SCANNER -->
+        <SettingsAccordion id="ai-scanner" title={es ? "IA y escáner" : "AI & Scanner"} icon="🤖">
+            <!-- Model selector -->
+            <div class="mb-5">
+                <label class="block text-sm font-semibold text-brand-ink mb-1.5">
+                    {es ? "Modelo de visión para recibos" : "Vision model for receipts"}
+                </label>
+                <p class="text-xs text-brand-ink-soft mb-2">
+                    {es ? "Modelo usado al escanear recibos. Se aplica a toda la familia." : "Model used when scanning receipts. Applies to the whole family."}
+                </p>
+                <div class="flex gap-2">
+                    <select id="ai-model-select" class="flex-1 py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
+                        {aiModels.models?.map((m: any) => (
+                            <option value={m.id} selected={m.id === aiModels.current_model}>{m.label}</option>
+                        ))}
+                    </select>
+                    <button id="ai-model-save-btn" class="px-4 py-2 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                        {es ? "Guardar" : "Save"}
+                    </button>
+                </div>
+                <p id="ai-model-current" class="text-xs text-brand-ink-soft mt-1.5">
+                    {es ? "Activo:" : "Active:"} <span class="font-mono font-semibold text-brand-ink">{aiModels.current_model}</span>
+                </p>
+            </div>
+
+            <!-- Token consumption -->
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <p class="text-sm font-semibold text-brand-ink">{es ? "Consumo de tokens (LiteLLM)" : "Token consumption (LiteLLM)"}</p>
+                    <button id="ai-usage-refresh-btn" class="text-xs text-brand-sky-deep hover:text-brand-ink font-semibold transition">
+                        {es ? "Actualizar" : "Refresh"}
+                    </button>
+                </div>
+                <div id="ai-usage-panel" class="bg-brand-cream-deep rounded-xl p-3 text-sm">
+                    {aiUsage ? (
+                        <div class="space-y-1.5">
+                            {aiUsage.key_alias && (
+                                <div class="flex justify-between">
+                                    <span class="text-brand-ink-soft">{es ? "Clave" : "Key"}</span>
+                                    <span class="font-mono text-xs text-brand-ink">{aiUsage.key_alias}</span>
+                                </div>
+                            )}
+                            <div class="flex justify-between">
+                                <span class="text-brand-ink-soft">{es ? "Gasto" : "Spend"}</span>
+                                <span class="font-semibold text-brand-ink">${Number(aiUsage.spend ?? 0).toFixed(4)}</span>
+                            </div>
+                            {aiUsage.max_budget != null && (
+                                <div>
+                                    <div class="flex justify-between mb-1">
+                                        <span class="text-brand-ink-soft">{es ? "Presupuesto" : "Budget"}</span>
+                                        <span class="text-brand-ink">${Number(aiUsage.max_budget).toFixed(2)} / {aiUsage.budget_duration ?? "?"}</span>
+                                    </div>
+                                    <div class="w-full bg-brand-ink/10 rounded-full h-1.5">
+                                        <div class="bg-brand-sky-deep rounded-full h-1.5 transition-all"
+                                            style={`width:${Math.min(100, (Number(aiUsage.spend ?? 0) / Number(aiUsage.max_budget)) * 100).toFixed(1)}%`}></div>
+                                    </div>
+                                </div>
+                            )}
+                            {aiUsage.budget_reset_at && (
+                                <div class="flex justify-between">
+                                    <span class="text-brand-ink-soft">{es ? "Reseteo" : "Resets"}</span>
+                                    <span class="text-brand-ink text-xs">{new Date(aiUsage.budget_reset_at).toLocaleDateString()}</span>
+                                </div>
+                            )}
+                            {aiUsage.models?.length > 0 && (
+                                <div class="pt-1 border-t border-brand-ink/10">
+                                    <span class="text-xs text-brand-ink-soft">{es ? "Modelos permitidos:" : "Allowed models:"} </span>
+                                    <span class="text-xs font-mono text-brand-ink">{aiUsage.models.join(", ")}</span>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <p class="text-brand-ink-soft text-xs text-center py-2">{es ? "No disponible — verifica LITELLM_API_KEY" : "Not available — check LITELLM_API_KEY"}</p>
+                    )}
+                </div>
+            </div>
+        </SettingsAccordion>
+
         <!-- BACKUPS & TOOLS -->
         <SettingsAccordion id="backups" title={es ? "Respaldos y herramientas" : "Backups & Tools"} icon="💾">
             <p class="text-sm text-brand-ink-soft mb-4">
@@ -404,7 +486,7 @@ const frequencyLabel = (freq: string) => {
 <div id="settings-toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-[var(--shadow-pop)] transition-all"></div>
 </Layout>
 
-<script define:vars={{ token, accountsData: accounts, allCategoriesData: allCategories, es }}>
+<script define:vars={{ token, accountsData: accounts, allCategoriesData: allCategories, es, aiModelsData: aiModels }}>
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function showToast(msg, type = "success") {
@@ -973,5 +1055,63 @@ document.getElementById("settings-modal-overlay")?.addEventListener("click", (e)
 });
 document.getElementById("confirm-overlay")?.addEventListener("click", (e) => {
     if (e.target === document.getElementById("confirm-overlay")) closeConfirm();
+});
+
+// ─── AI & SCANNER ─────────────────────────────────────────────────────────────
+
+document.getElementById("ai-model-save-btn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("ai-model-save-btn");
+    const model = document.getElementById("ai-model-select")?.value;
+    if (!model) return;
+    btn.disabled = true;
+    btn.textContent = "…";
+    try {
+        await apiCall("/api/budget/ai-settings/models", "PUT", { model });
+        const label = aiModelsData.models?.find(m => m.id === model)?.label || model;
+        const current = document.getElementById("ai-model-current");
+        if (current) current.querySelector("span").textContent = model;
+        showToast(es ? `Modelo actualizado: ${label}` : `Model updated: ${label}`);
+    } catch(e) {
+        showToast(e.message, "error");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = es ? "Guardar" : "Save";
+    }
+});
+
+document.getElementById("ai-usage-refresh-btn")?.addEventListener("click", async () => {
+    const panel = document.getElementById("ai-usage-panel");
+    if (!panel) return;
+    panel.innerHTML = `<p class="text-brand-ink-soft text-xs text-center py-2">${es ? "Cargando…" : "Loading…"}</p>`;
+    try {
+        const res = await fetch("/api/budget/ai-settings/usage", {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        const d = await res.json();
+        const pct = d.max_budget ? Math.min(100, (Number(d.spend ?? 0) / Number(d.max_budget)) * 100).toFixed(1) : null;
+        panel.innerHTML = `
+            <div class="space-y-1.5">
+                ${d.key_alias ? `<div class="flex justify-between"><span class="text-brand-ink-soft">${es ? "Clave" : "Key"}</span><span class="font-mono text-xs text-brand-ink">${d.key_alias}</span></div>` : ""}
+                <div class="flex justify-between">
+                    <span class="text-brand-ink-soft">${es ? "Gasto" : "Spend"}</span>
+                    <span class="font-semibold text-brand-ink">$${Number(d.spend ?? 0).toFixed(4)}</span>
+                </div>
+                ${d.max_budget != null ? `
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-brand-ink-soft">${es ? "Presupuesto" : "Budget"}</span>
+                        <span class="text-brand-ink">$${Number(d.max_budget).toFixed(2)} / ${d.budget_duration ?? "?"}</span>
+                    </div>
+                    <div class="w-full bg-brand-ink/10 rounded-full h-1.5">
+                        <div class="bg-brand-sky-deep rounded-full h-1.5" style="width:${pct}%"></div>
+                    </div>
+                </div>` : ""}
+                ${d.budget_reset_at ? `<div class="flex justify-between"><span class="text-brand-ink-soft">${es ? "Reseteo" : "Resets"}</span><span class="text-brand-ink text-xs">${new Date(d.budget_reset_at).toLocaleDateString()}</span></div>` : ""}
+                ${d.models?.length ? `<div class="pt-1 border-t border-brand-ink/10"><span class="text-xs text-brand-ink-soft">${es ? "Modelos:" : "Models:"} </span><span class="text-xs font-mono text-brand-ink">${d.models.join(", ")}</span></div>` : ""}
+            </div>`;
+    } catch(e) {
+        panel.innerHTML = `<p class="text-red-600 text-xs text-center py-2">${e.message}</p>`;
+    }
 });
 </script>
