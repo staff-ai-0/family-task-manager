@@ -160,6 +160,22 @@ async def deduplicate_transactions(
     return result
 
 
+@router.post("/auto-categorize")
+async def auto_categorize_transactions(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Categorize all uncategorized transactions for the family.
+
+    Per transaction: learned payee default category first, then an AI
+    suggestion against the family's category list. Assignments also teach the
+    payee a default category for future transactions. Parent only.
+    """
+    from app.services.budget.category_ai_service import CategoryAIService
+    family_id = to_uuid_required(current_user.family_id)
+    return await CategoryAIService.backfill(db, family_id)
+
+
 @router.get("/{transaction_id}/receipt")
 async def get_receipt_image(
     transaction_id: UUID,

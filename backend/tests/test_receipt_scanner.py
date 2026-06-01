@@ -89,9 +89,11 @@ class TestScanReceipt:
                 assert call_kwargs["base_url"] == "http://10.1.0.99:4000/v1"
                 assert call_kwargs["api_key"] == "sk-fake-virtual-key"
 
-                # Correct model alias passed through
+                # Correct model alias passed through (env-driven RECEIPT_MODEL,
+                # defaults to gemini-2.5-flash since the Gemini switch).
+                from app.services.budget.receipt_scanner_service import RECEIPT_MODEL
                 call_args = mock_client.chat.completions.create.call_args
-                assert call_args.kwargs["model"] == "claude-haiku"
+                assert call_args.kwargs["model"] == RECEIPT_MODEL
                 # Vision payload contains the image as a data URI
                 content = call_args.kwargs["messages"][0]["content"]
                 image_part = next(c for c in content if c["type"] == "image_url")

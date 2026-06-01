@@ -204,6 +204,7 @@ class PayeeUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     notes: Optional[str] = None
     is_favorite: Optional[bool] = None
+    default_category_id: Optional[UUID] = Field(None, description="Learned default category for this payee")
 
 
 class PayeeMergeRequest(BaseModel):
@@ -216,6 +217,7 @@ class PayeeResponse(PayeeBase):
     """Payee response with metadata"""
     id: UUID
     family_id: UUID
+    default_category_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 
