@@ -409,6 +409,15 @@ async def import_file_transactions(
                 description=txn.notes or None,
             )
 
+            # Transfer detection (rules win if one matched first).
+            if not category_id:
+                from app.services.budget.transfer_detector import (
+                    resolve_transfer_category_id,
+                )
+                category_id = await resolve_transfer_category_id(
+                    db, family_id, txn.payee_name, txn.notes,
+                )
+
             transaction_data = TransactionCreate(
                 account_id=account_id,
                 date=txn.date,

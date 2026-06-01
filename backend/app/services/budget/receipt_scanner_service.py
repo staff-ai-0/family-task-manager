@@ -716,8 +716,17 @@ async def scan_and_create_transaction(
         payee=receipt.payee_name,
         description=_header_notes_for_match,
     )
-    # Precedence: explicit rule > learned payee default > AI suggestion.
+    # Precedence: explicit rule > transfer detection > learned payee default
+    # > AI suggestion. Transfer detection (e.g. "Transferencia a BBVA", card
+    # payment, ATM withdrawal) keeps non-spending rows out of the AI path.
     payee_row = await db.get(BudgetPayee, payee_id) if payee_id else None
+    if not header_cat:
+        from app.services.budget.transfer_detector import resolve_transfer_category_id
+        transfer_cat = await resolve_transfer_category_id(
+            db, family_id, receipt.payee_name, txn.notes,
+        )
+        if transfer_cat is not None:
+            header_cat = transfer_cat
     if not header_cat and payee_row is not None and payee_row.default_category_id:
         header_cat = payee_row.default_category_id
     if not header_cat:

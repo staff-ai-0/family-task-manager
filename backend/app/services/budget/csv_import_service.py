@@ -423,7 +423,18 @@ class CSVImportService:
                     payee=description,  # Description is used as payee
                     description=None,  # We don't have a separate description field from CSV
                 )
-            
+
+            # Transfer detection: bank statements carry transfers / card
+            # payments / ATM withdrawals — bucket them so they don't pollute
+            # spending. Runs after rules (rules win if one exists).
+            if not category_id:
+                from app.services.budget.transfer_detector import (
+                    resolve_transfer_category_id,
+                )
+                category_id = await resolve_transfer_category_id(
+                    db, family_id, description,
+                )
+
             # Get notes if specified
             notes = None
             if notes_col and row_data.get(notes_col):

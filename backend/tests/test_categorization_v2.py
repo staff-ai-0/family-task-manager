@@ -17,7 +17,13 @@ from app.models.budget import (
 from app.services.budget.category_ai_service import CategoryAIService
 from app.services.budget.default_categories import (
     DEFAULT_CATEGORY_TREE,
+    ensure_transfer_group,
     seed_default_categories,
+)
+from app.services.budget.report_service import ReportService
+from app.services.budget.transfer_detector import (
+    detect_transfer_category_name,
+    resolve_transfer_category_id,
 )
 
 
@@ -187,3 +193,139 @@ async def test_backfill_learns_payee_default_from_ai(db_session, test_family):
     await db_session.refresh(payee)
     assert txn.category_id == cat.id
     assert payee.default_category_id == cat.id  # learned for next time
+
+
+# ── transfer detection ──────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Transferencia a BBVA MEXICO (cuenta 3235)", "Entre Cuentas"),
+    ("Traspaso entre cuentas", "Entre Cuentas"),
+    ("SPEI enviado a NU", "Entre Cuentas"),
+    ("Pago de Tarjeta de Credito", "Pago de Tarjeta"),
+    ("PAGO TDC BANAMEX", "Pago de Tarjeta"),
+    ("Cajero Automático X95536", "Retiro de Efectivo"),
+    ("Retiro de efectivo ATM", "Retiro de Efectivo"),
+    ("HEB Bosque de las Lomas", None),
+    ("CARNES FINAS SAN JUAN", None),
+    ("", None),
+])
+def test_detect_transfer_category_name(text, expected):
+    assert detect_transfer_category_name(text) == expected
+
+
+@pytest.mark.asyncio
+async def test_resolve_transfer_category_id_maps_to_group(db_session, test_family):
+    await seed_default_categories(db_session, test_family.id)
+    cat_id = await resolve_transfer_category_id(
+        db_session, test_family.id, "Transferencia a BBVA MEXICO",
+    )
+    assert cat_id is not None
+    cat = await db_session.get(BudgetCategory, cat_id)
+    group = await db_session.get(BudgetCategoryGroup, cat.group_id)
+    assert group.is_transfer is True
+    assert cat.name == "Entre Cuentas"
+
+
+@pytest.mark.asyncio
+async def test_resolve_transfer_returns_none_for_spending(db_session, test_family):
+    await seed_default_categories(db_session, test_family.id)
+    cat_id = await resolve_transfer_category_id(
+        db_session, test_family.id, "HEB Bosque de las Lomas",
+    )
+    assert cat_id is None
+
+
+@pytest.mark.asyncio
+async def test_ensure_transfer_group_idempotent_topup(db_session, test_family):
+    # Seed WITHOUT transfer group by faking a pre-transfer tree: seed normally
+    # (which now includes the group), then deleting it to simulate old data.
+    await seed_default_categories(db_session, test_family.id)
+    grp = (await db_session.execute(
+        select(BudgetCategoryGroup).where(
+            BudgetCategoryGroup.family_id == test_family.id,
+            BudgetCategoryGroup.is_transfer.is_(True),
+        )
+    )).scalar_one()
+    # Hard-delete to simulate a family seeded before transfer support.
+    for c in (await db_session.execute(
+        select(BudgetCategory).where(BudgetCategory.group_id == grp.id)
+    )).scalars().all():
+        await db_session.delete(c)
+    await db_session.delete(grp)
+    await db_session.commit()
+
+    added = await ensure_transfer_group(db_session, test_family.id)
+    assert added == 3
+    # Second call is a no-op.
+    assert await ensure_transfer_group(db_session, test_family.id) == 0
+
+
+@pytest.mark.asyncio
+async def test_backfill_detects_transfer_before_ai(db_session, test_family):
+    await seed_default_categories(db_session, test_family.id)
+    acct = BudgetAccount(family_id=test_family.id, name="Card", type="checking")
+    db_session.add(acct)
+    await db_session.flush()
+    payee = BudgetPayee(family_id=test_family.id, name="Transferencia a BBVA MEXICO (cuenta 3235)")
+    db_session.add(payee)
+    await db_session.flush()
+    txn = BudgetTransaction(
+        family_id=test_family.id, account_id=acct.id, payee_id=payee.id,
+        date=date(2026, 4, 21), amount=-2100000,
+    )
+    db_session.add(txn)
+    await db_session.commit()
+
+    # AI must NOT be called — transfer detection short-circuits.
+    with patch.object(CategoryAIService, "suggest") as mock_suggest:
+        result = await CategoryAIService.backfill(db_session, test_family.id)
+        mock_suggest.assert_not_called()
+
+    assert result["applied"] == 1
+    await db_session.refresh(txn)
+    cat = await db_session.get(BudgetCategory, txn.category_id)
+    group = await db_session.get(BudgetCategoryGroup, cat.group_id)
+    assert group.is_transfer is True
+
+
+@pytest.mark.asyncio
+async def test_spending_report_excludes_transfers(db_session, test_family):
+    await seed_default_categories(db_session, test_family.id)
+    acct = BudgetAccount(family_id=test_family.id, name="Card", type="checking")
+    db_session.add(acct)
+    await db_session.flush()
+
+    # one real expense (Mandado), one transfer
+    expense_cat = (await db_session.execute(
+        select(BudgetCategory).join(BudgetCategoryGroup,
+            BudgetCategory.group_id == BudgetCategoryGroup.id)
+        .where(BudgetCategoryGroup.family_id == test_family.id,
+               BudgetCategoryGroup.is_transfer.is_(False),
+               BudgetCategoryGroup.is_income.is_(False)).limit(1)
+    )).scalar_one()
+    transfer_cat = (await db_session.execute(
+        select(BudgetCategory).join(BudgetCategoryGroup,
+            BudgetCategory.group_id == BudgetCategoryGroup.id)
+        .where(BudgetCategoryGroup.family_id == test_family.id,
+               BudgetCategoryGroup.is_transfer.is_(True)).limit(1)
+    )).scalar_one()
+
+    db_session.add(BudgetTransaction(
+        family_id=test_family.id, account_id=acct.id, category_id=expense_cat.id,
+        date=date(2026, 5, 10), amount=-50000,
+    ))
+    db_session.add(BudgetTransaction(
+        family_id=test_family.id, account_id=acct.id, category_id=transfer_cat.id,
+        date=date(2026, 5, 11), amount=-2100000,
+    ))
+    await db_session.commit()
+
+    rep = await ReportService.get_spending_report(
+        db_session, test_family.id, date(2026, 5, 1), date(2026, 5, 31),
+        group_by="category",
+    )
+    names = {c["category_name"] for c in rep["categories"]}
+    assert expense_cat.name in names
+    assert transfer_cat.name not in names  # transfer excluded
+    assert rep["total"] == -50000  # only the real expense

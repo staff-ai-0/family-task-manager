@@ -21,6 +21,7 @@ class CategoryGroupBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="Group name (e.g., 'Mandado', 'Servicios')")
     sort_order: int = Field(0, ge=0, description="Display order")
     is_income: bool = Field(False, description="Is this an income category group?")
+    is_transfer: bool = Field(False, description="Transfer bucket — excluded from spending & income reports")
     hidden: bool = Field(False, description="Hide from budget view")
 
 

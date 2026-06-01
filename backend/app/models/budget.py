@@ -31,6 +31,7 @@ class BudgetCategoryGroup(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_income: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_transfer: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="Transfer bucket (between accounts / card payments / ATM) — excluded from spending & income reports")
     hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True, comment="Soft delete timestamp")
     deleted_by_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, comment="User who deleted this group")
