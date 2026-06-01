@@ -285,8 +285,8 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
         </main>
 
         <!-- Edit Transaction Bottom Sheet -->
-        <div id="edit-backdrop" class="fixed inset-0 bg-black/50 z-40 hidden opacity-0 transition-opacity duration-300"></div>
-        <div id="edit-modal" class="fixed bottom-0 left-0 right-0 z-50 translate-y-full transition-transform duration-300 ease-out">
+        <div id="edit-backdrop" class="fixed inset-0 bg-black/50 z-[60] hidden opacity-0 transition-opacity duration-300"></div>
+        <div id="edit-modal" class="fixed bottom-0 left-0 right-0 z-[70] translate-y-full transition-transform duration-300 ease-out">
             <div class="max-w-md mx-auto bg-brand-cream rounded-t-[var(--radius-card)] shadow-[var(--shadow-stamp)] max-h-[90vh] overflow-y-auto overscroll-contain">
                 <div class="flex justify-center pt-3 pb-1">
                     <div class="w-10 h-1 bg-brand-cream-deep rounded-full"></div>
@@ -395,7 +395,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                         </div>
                     </section>
 
-                    <div class="flex gap-3">
+                    <div class="flex gap-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
                         <button id="edit-cancel-btn" class="flex-1 py-3 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold rounded-xl transition">
                             {es ? "Cancelar" : "Cancel"}
                         </button>
@@ -408,7 +408,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
         </div>
 
         <!-- Delete confirm dialog -->
-        <div id="delete-confirm-overlay" class="fixed inset-0 bg-black/60 z-[60] hidden flex items-center justify-center px-4">
+        <div id="delete-confirm-overlay" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center px-4">
             <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] p-6 max-w-sm w-full">
                 <h3 class="text-lg font-bold text-brand-ink mb-2">{es ? "¿Eliminar transacción?" : "Delete transaction?"}</h3>
                 <p class="text-sm text-brand-ink-soft mb-6">{es ? "Esta acción no se puede deshacer." : "This action cannot be undone."}</p>
