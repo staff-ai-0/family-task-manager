@@ -104,6 +104,19 @@ class CategoryGroupService(BaseFamilyService[BudgetCategoryGroup]):
         """
         from sqlalchemy.orm import selectinload
 
+        # Lazy bootstrap: a family with no category tree gets the default
+        # MX-oriented groups/categories on its first budget visit. Idempotent
+        # (no-ops when groups already exist), so this is the single guaranteed
+        # seed point regardless of how the family was created.
+        from app.services.budget.default_categories import seed_default_categories
+        try:
+            await seed_default_categories(db, family_id)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "default category seed failed for family %s", family_id
+            )
+
         query = (
             select(BudgetCategoryGroup)
             .where(

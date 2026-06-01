@@ -716,8 +716,26 @@ async def scan_and_create_transaction(
         payee=receipt.payee_name,
         description=_header_notes_for_match,
     )
+    # Precedence: explicit rule > learned payee default > AI suggestion.
+    payee_row = await db.get(BudgetPayee, payee_id) if payee_id else None
+    if not header_cat and payee_row is not None and payee_row.default_category_id:
+        header_cat = payee_row.default_category_id
+    if not header_cat:
+        from app.services.budget.category_ai_service import CategoryAIService
+        try:
+            header_cat = await CategoryAIService.suggest(
+                db, family_id, receipt.payee_name,
+                [i.get("name") for i in (receipt.items or []) if isinstance(i, dict)],
+                is_income=final_amount > 0,
+            )
+        except Exception:
+            logger.exception("AI categorization failed for txn %s", txn.id)
     if header_cat:
         txn.category_id = header_cat
+        # Learning: remember this category for the payee so future scans and
+        # imports inherit it without an AI call (Actual-style payee default).
+        if payee_row is not None and not payee_row.default_category_id:
+            payee_row.default_category_id = header_cat
     for it in items_persisted:
         it.category_id = CategorizationRuleService.match_with_cached_rules(
             cached_rules,

@@ -191,6 +191,13 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                     {es ? "Dedup" : "Dedup"}
                 </button>
             )}
+            {user.role === "parent" && (
+                <button id="autocat-btn" title={es ? "Categorizar con IA" : "AI categorize"}
+                    class="text-xs px-2 py-1.5 rounded-lg border border-brand-ink/10 bg-brand-cream-deep text-brand-ink-soft hover:bg-violet-100 hover:text-violet-700 hover:border-violet-300 transition flex items-center gap-1 whitespace-nowrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                    {es ? "Auto-categorizar" : "Auto-categorize"}
+                </button>
+            )}
         </div>
 
         <!-- Transactions List -->
@@ -843,5 +850,34 @@ document.addEventListener("astro:after-swap", initFilters);
     }
     attachDedup();
     document.addEventListener("astro:page-load", attachDedup);
+
+    // Auto-categorize button
+    function attachAutoCat() {
+        const btn = document.getElementById("autocat-btn");
+        if (!btn) return;
+        btn.addEventListener("click", async () => {
+            const es = document.documentElement.lang === "es";
+            if (!confirm(es
+                ? "Categorizar con IA todas las transacciones sin categoría. ¿Continuar?"
+                : "AI-categorize all uncategorized transactions. Continue?")) return;
+            btn.disabled = true;
+            const label = btn.querySelector("svg")?.nextSibling;
+            btn.textContent = es ? "Categorizando..." : "Categorizing...";
+            try {
+                const res = await fetch("/api/budget/transactions/auto-categorize", { method: "POST" });
+                const r = await res.json();
+                alert(es
+                    ? `${r.applied} de ${r.scanned} categorizadas. Recargando...`
+                    : `${r.applied} of ${r.scanned} categorized. Reloading...`);
+                window.location.reload();
+            } catch (e) {
+                alert(es ? "Error al categorizar." : "Categorization error.");
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    }
+    attachAutoCat();
+    document.addEventListener("astro:page-load", attachAutoCat);
 })();
 </script>

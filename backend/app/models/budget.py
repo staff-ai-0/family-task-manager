@@ -143,11 +143,18 @@ class BudgetPayee(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    default_category_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("budget_categories.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Learned category — transactions for this payee inherit it (Actual-style payee learning)",
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
     family: Mapped["Family"] = relationship("Family", back_populates="budget_payees")
+    default_category: Mapped[Optional["BudgetCategory"]] = relationship("BudgetCategory", foreign_keys=[default_category_id])
     transactions: Mapped[list["BudgetTransaction"]] = relationship("BudgetTransaction", back_populates="payee")
     recurring_transactions: Mapped[list["BudgetRecurringTransaction"]] = relationship("BudgetRecurringTransaction", back_populates="payee")
 

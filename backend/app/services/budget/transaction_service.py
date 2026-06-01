@@ -162,6 +162,18 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             from app.services.budget.account_service import AccountService
             await AccountService.get_by_id(db, update_data["transfer_account_id"], family_id)
 
+        # Category learning (Actual-style, on by default): when a category is
+        # assigned to a transaction that has a payee, remember it as that
+        # payee's default so future scans/imports inherit it. Last write wins
+        # — the user's most recent correction is the best signal.
+        new_cat = update_data.get("category_id")
+        eff_payee_id = update_data.get("payee_id", existing_txn.payee_id)
+        if new_cat and eff_payee_id:
+            from app.models.budget import BudgetPayee
+            payee = await db.get(BudgetPayee, eff_payee_id)
+            if payee is not None and payee.family_id == family_id:
+                payee.default_category_id = new_cat
+
         return await cls.update_by_id(db, transaction_id, family_id, update_data)
 
     @classmethod
