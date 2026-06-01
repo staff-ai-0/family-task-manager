@@ -5,7 +5,7 @@ API endpoints for budget management.
 """
 
 from fastapi import APIRouter
-from app.api.routes.budget import categories, accounts, transactions, allocations, payees, month, transfers, reports, categorization_rules, goals, recurring_transactions, months, recycle_bin, saved_filters, tags, export, custom_reports, receipt_drafts, items, a2a_webhook as _a2a, price_comparison as _price_comparison
+from app.api.routes.budget import categories, accounts, transactions, allocations, payees, month, transfers, reports, categorization_rules, goals, recurring_transactions, months, recycle_bin, saved_filters, tags, export, custom_reports, receipt_drafts, items, a2a_webhook as _a2a, price_comparison as _price_comparison, bank_sync as _bank_sync
 
 router = APIRouter()
 
@@ -35,5 +35,6 @@ router.include_router(
     prefix="/price-comparison",
     tags=["budget-price-comparison"],
 )
+router.include_router(_bank_sync.router, prefix="/bank-sync", tags=["budget-bank-sync"])
 
 __all__ = ["router"]
