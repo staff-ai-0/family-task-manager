@@ -308,3 +308,63 @@ async def test_points_equal_gig_value(
 
     await db_session.refresh(test_child_user)
     assert test_child_user.points == initial_points + points_value
+
+
+async def _claim_complete_approve(client, parent_headers, child_headers, title, points, approve=True):
+    create = await client.post(
+        "/api/gigs/offerings", json={"title": title, "points": points}, headers=parent_headers
+    )
+    gig_id = create.json()["id"]
+    claim = await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers)
+    claim_id = claim.json()["id"]
+    await client.post(f"/api/gigs/claims/{claim_id}/complete", json={"proof_text": "x"}, headers=child_headers)
+    return await client.post(
+        f"/api/gigs/claims/{claim_id}/approve", json={"approved": approve}, headers=parent_headers
+    )
+
+
+@pytest.mark.asyncio
+async def test_streak_increments_on_approve_and_resets_on_reject(
+    client: AsyncClient, parent_headers, child_headers, test_child_user, db_session: AsyncSession
+):
+    assert test_child_user.gig_trust_streak == 0
+    await _claim_complete_approve(client, parent_headers, child_headers, "G1", 10)
+    await db_session.refresh(test_child_user)
+    assert test_child_user.gig_trust_streak == 1
+
+    await _claim_complete_approve(client, parent_headers, child_headers, "G2", 10)
+    await db_session.refresh(test_child_user)
+    assert test_child_user.gig_trust_streak == 2
+
+    # Rejection breaks the streak.
+    await _claim_complete_approve(client, parent_headers, child_headers, "G3", 10, approve=False)
+    await db_session.refresh(test_child_user)
+    assert test_child_user.gig_trust_streak == 0
+
+
+@pytest.mark.asyncio
+async def test_auto_approve_when_streak_at_threshold(
+    client: AsyncClient, parent_headers, child_headers, test_child_user, db_session: AsyncSession
+):
+    # Pre-seed streak at the threshold (GIG_AUTO_APPROVE_STREAK default 3).
+    test_child_user.gig_trust_streak = 3
+    db_session.add(test_child_user)
+    await db_session.commit()
+
+    create = await client.post(
+        "/api/gigs/offerings", json={"title": "Trusted gig", "points": 40}, headers=parent_headers
+    )
+    gig_id = create.json()["id"]
+    claim = await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers)
+    claim_id = claim.json()["id"]
+
+    # Completing alone should auto-approve (no parent action) for a trusted kid.
+    complete = await client.post(
+        f"/api/gigs/claims/{claim_id}/complete", json={"proof_text": "trusted"}, headers=child_headers
+    )
+    assert complete.status_code == 200
+    assert complete.json()["status"] == "approved"
+    assert complete.json()["points_awarded"] == 40
+
+    await db_session.refresh(test_child_user)
+    assert test_child_user.gig_trust_streak == 4  # incremented on auto-approve

@@ -62,13 +62,18 @@ if (token) {
 let maxPoints = 0;
 let maxAmount = 0;
 let completionPct = 0;
-const conversionRate = 0.10; // MXN per point
+// Derive the rate from the backend response so the preview can never drift
+// from the actual payout. Falls back to 1.0 (1 pt = $1 MXN) when not eligible.
+let conversionRate = 1.0; // MXN per point
 const isEligible = eligibility && eligibility.eligible;
 
 if (isEligible) {
     maxPoints = eligibility.max_convertible_points;
     maxAmount = eligibility.max_convertible_amount;
     completionPct = eligibility.completion_percentage;
+    if (maxPoints > 0) {
+        conversionRate = maxAmount / maxPoints;
+    }
 }
 ---
 

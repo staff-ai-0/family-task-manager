@@ -82,7 +82,10 @@ class GigClaimService:
         proof_text: Optional[str] = None,
         proof_image_url: Optional[str] = None,
     ) -> GigClaim:
-        """Submit proof and move claim to COMPLETED."""
+        """Submit proof. Auto-approves for trusted kids; otherwise moves to
+        COMPLETED and notifies parents that a gig awaits review."""
+        from app.core.config import settings
+
         result = await db.execute(
             select(GigClaim).where(
                 and_(GigClaim.id == claim_id, GigClaim.claimed_by == user_id)
@@ -96,11 +99,93 @@ class GigClaimService:
 
         claim.proof_text = proof_text
         claim.proof_image_url = proof_image_url
-        claim.status = GigClaimStatus.COMPLETED
         claim.completed_at = datetime.now(timezone.utc)
+
+        claimer = await _get_user(db, claim.claimed_by)
+        offering = await db.get(GigOffering, claim.gig_id)
+
+        threshold = max(1, settings.GIG_AUTO_APPROVE_STREAK)
+        if claimer.gig_trust_streak >= threshold:
+            # Trusted kid — auto-approve on submission, award points immediately.
+            points = offering.points if offering else 0
+            txn = PointTransaction.create_gig_claim_approval(
+                user_id=claim.claimed_by,
+                gig_claim_id=claim.id,
+                points=points,
+                balance_before=claimer.points,
+            )
+            claimer.points += points
+            claimer.gig_trust_streak += 1
+            claim.points_awarded = points
+            claim.status = GigClaimStatus.APPROVED
+            claim.approved_at = datetime.now(timezone.utc)
+            db.add(txn)
+            await db.commit()
+            await db.refresh(claim)
+            await GigClaimService._notify_claimer_approved(
+                db, claim, offering, points, auto=True
+            )
+            return claim
+
+        # Normal path — awaits parent review.
+        claim.status = GigClaimStatus.COMPLETED
         await db.commit()
         await db.refresh(claim)
+        await GigClaimService._notify_parents_pending(db, claim, offering, claimer)
         return claim
+
+    @staticmethod
+    async def _notify_parents_pending(db, claim, offering, claimer) -> None:
+        """In-app + push to every parent that a gig awaits review."""
+        try:
+            from app.services.notification_service import NotificationService
+            from app.models.notification import NotificationType as NT
+            from app.models.user import User, UserRole
+
+            parents = (
+                await db.scalars(
+                    select(User).where(
+                        and_(
+                            User.family_id == claim.family_id,
+                            User.role == UserRole.PARENT,
+                            User.is_active.is_(True),
+                        )
+                    )
+                )
+            ).all()
+            title = offering.title if offering else "Gig"
+            for parent in parents:
+                await NotificationService.create(
+                    db,
+                    family_id=claim.family_id,
+                    user_id=parent.id,
+                    type=NT.GIG_PENDING_REVIEW,
+                    title="📋 Gig por revisar",
+                    body=f"{claimer.name} completó '{title}' — revisa y aprueba.",
+                    link="/parent/gigs?tab=pending",
+                )
+        except Exception:
+            pass
+
+    @staticmethod
+    async def _notify_claimer_approved(db, claim, offering, points, auto=False) -> None:
+        try:
+            from app.services.notification_service import NotificationService
+            from app.models.notification import NotificationType as NT
+
+            title = offering.title if offering else "Gig"
+            prefix = "⚡ Auto-aprobada" if auto else "✅"
+            await NotificationService.create(
+                db,
+                family_id=claim.family_id,
+                user_id=claim.claimed_by,
+                type=NT.GIG_APPROVED,
+                title=f"{prefix} +{points} pts / ${points} MXN",
+                body=f"'{title}' " + ("aprobada al instante (¡buena racha!)." if auto else "aprobada."),
+                link="/gigs/my-gigs",
+            )
+        except Exception:
+            pass
 
     @staticmethod
     async def unclaim(
@@ -233,12 +318,11 @@ class GigClaimService:
         claim.approved_at = datetime.now(timezone.utc)
         claim.approval_notes = notes
 
-        if approved:
-            # Load offering for points value
-            offering = await db.get(GigOffering, claim.gig_id)
-            points = offering.points
+        offering = await db.get(GigOffering, claim.gig_id)
+        claimer = await _get_user(db, claim.claimed_by)
 
-            claimer = await _get_user(db, claim.claimed_by)
+        if approved:
+            points = offering.points if offering else 0
             txn = PointTransaction.create_gig_claim_approval(
                 user_id=claim.claimed_by,
                 gig_claim_id=claim.id,
@@ -246,29 +330,35 @@ class GigClaimService:
                 balance_before=claimer.points,
             )
             claimer.points += points
+            # Build trust toward auto-approval on future gigs.
+            claimer.gig_trust_streak += 1
             claim.points_awarded = points
             claim.status = GigClaimStatus.APPROVED
             db.add(txn)
-
-            # Push notification
+            await db.commit()
+            await db.refresh(claim)
+            await GigClaimService._notify_claimer_approved(
+                db, claim, offering, points, auto=False
+            )
+            return claim
+        else:
+            # Rejection breaks the trust streak.
+            claimer.gig_trust_streak = 0
+            claim.status = GigClaimStatus.REJECTED
+            await db.commit()
+            await db.refresh(claim)
             try:
                 from app.services.notification_service import NotificationService
                 from app.models.notification import NotificationType as NT
-                await db.commit()
                 await NotificationService.create(
                     db,
                     family_id=family_id,
                     user_id=claim.claimed_by,
-                    type=NT.GIG_APPROVED,
-                    title=f"✅ +{points} pts / ${points} MXN",
-                    body=f"'{offering.title}' aprobada por tu padre/madre.",
+                    type=NT.GIG_REJECTED,
+                    title="↩️ Gig necesita otro intento",
+                    body=(notes or (offering.title if offering else "Tu gig")),
                     link="/gigs/my-gigs",
                 )
             except Exception:
                 pass
-        else:
-            claim.status = GigClaimStatus.REJECTED
-
-        await db.commit()
-        await db.refresh(claim)
-        return claim
+            return claim

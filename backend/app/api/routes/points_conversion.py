@@ -36,7 +36,9 @@ router = APIRouter()
 
 # Configuration
 FINANCE_API_URL = os.getenv("FINANCE_API_URL", "http://finance-api:5007")
-POINTS_TO_MONEY_RATE = float(os.getenv("POINTS_TO_MONEY_RATE", "0.10"))
+# 1 point = 1 MXN. Matches the gig board's 1:1 points↔pesos display so a
+# gig labeled "$50" cashes out to exactly $50. Override via env if needed.
+POINTS_TO_MONEY_RATE = float(os.getenv("POINTS_TO_MONEY_RATE", "1.0"))
 CURRENCY = os.getenv("POINTS_TO_MONEY_CURRENCY", "MXN")
 
 
