@@ -20,9 +20,9 @@ const [offeringsRes, pendingRes] = await Promise.all([
     apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token }),
 ]);
 const offerings: any[] = offeringsRes.data ?? [];
-const pendingClaims: any[] = pendingRes.data ?? [];
-
-const activeTab = (Astro.url.searchParams.get("tab") ?? "offerings") as "offerings" | "pending";
+// Claim approvals now live in the unified /parent/approvals queue — keep only the
+// pending count here for the "review" link so there is a single approval surface.
+const pendingCount = Array.isArray(pendingRes.data) ? pendingRes.data.length : 0;
 
 const flash = Astro.cookies.get("flash")?.value;
 if (flash) Astro.cookies.delete("flash", { path: "/" });
@@ -37,7 +37,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 <div>
                     <h1 class="text-2xl font-bold">{lang === "es" ? "Gigs" : "Gigs"}</h1>
                     <p class="text-violet-200 text-sm mt-0.5">
-                        {lang === "es" ? "Publica tareas extras con recompensa en efectivo" : "Post extra tasks with cash rewards"}
+                        {lang === "es" ? "Publica tareas extras con recompensa" : "Post extra tasks with rewards"}
                     </p>
                 </div>
                 <button
@@ -47,25 +47,16 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     + {lang === "es" ? "Nueva Gig" : "New Gig"}
                 </button>
             </div>
-            <!-- Tabs -->
-            <div class="flex gap-2">
-                <a
-                    href="?tab=offerings"
-                    class={`flex-1 text-center py-2 text-sm font-semibold rounded-xl transition-colors ${activeTab === "offerings" ? "bg-white text-violet-700" : "text-violet-200 hover:text-white"}`}
-                >
-                    {lang === "es" ? "Ofertas" : "Offerings"}
-                    <span class="ml-1 text-xs">({offerings.length})</span>
-                </a>
-                <a
-                    href="?tab=pending"
-                    class={`flex-1 text-center py-2 text-sm font-semibold rounded-xl transition-colors ${activeTab === "pending" ? "bg-white text-violet-700" : "text-violet-200 hover:text-white"} ${pendingClaims.length > 0 ? "relative" : ""}`}
-                >
-                    {lang === "es" ? "Pendientes" : "Pending"}
-                    {pendingClaims.length > 0 && (
-                        <span class="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{pendingClaims.length}</span>
-                    )}
-                </a>
-            </div>
+            <!-- Claim approvals live in the unified /parent/approvals queue. -->
+            <a
+                href="/parent/approvals"
+                class="flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-xl bg-white/15 text-white hover:bg-white/25 transition-colors"
+            >
+                {lang === "es" ? "Revisar trabajo enviado" : "Review submitted work"}
+                {pendingCount > 0 && (
+                    <span class="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{pendingCount}</span>
+                )}
+            </a>
         </header>
 
         <main class="flex-1 px-4 py-6">
@@ -80,116 +71,55 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 </div>
             )}
 
-            <!-- Offerings tab -->
-            {activeTab === "offerings" && (
-                <div class="space-y-3">
-                    {offerings.length === 0 && (
-                        <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
-                            <p class="text-brand-ink-soft text-sm">
-                                {lang === "es" ? "No has publicado ninguna gig aún. ¡Crea la primera!" : "No gigs posted yet. Create the first one!"}
-                            </p>
-                        </div>
-                    )}
-                    {offerings.map((item: any) => {
-                        const o = item.offering ?? item;
-                        return (
-                            <div class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
-                                <div class="flex justify-between items-start">
-                                    <div class="flex-1 pr-4">
-                                        <h3 class="font-bold text-brand-ink">{o.title}</h3>
-                                        {o.description && <p class="text-brand-ink-soft text-sm mt-0.5 line-clamp-2">{o.description}</p>}
-                                        <div class="flex items-center gap-2 mt-2 flex-wrap">
-                                            <DifficultyChip level={o.difficulty ?? 1} lang={lang} />
-                                        </div>
-                                    </div>
-                                    <div class="text-right flex-shrink-0">
-                                        <p class="text-xl font-extrabold text-violet-600">{o.points} pts</p>
-                                        <p class="text-xs text-brand-ink-soft">${o.points} MXN</p>
+            <!-- Gig offerings -->
+            <div class="space-y-3">
+                {offerings.length === 0 && (
+                    <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                        <p class="text-brand-ink-soft text-sm">
+                            {lang === "es" ? "No has publicado ninguna gig aún. ¡Crea la primera!" : "No gigs posted yet. Create the first one!"}
+                        </p>
+                    </div>
+                )}
+                {offerings.map((item: any) => {
+                    const o = item.offering ?? item;
+                    return (
+                        <div class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1 pr-4">
+                                    <h3 class="font-bold text-brand-ink">{o.title}</h3>
+                                    {o.description && <p class="text-brand-ink-soft text-sm mt-0.5 line-clamp-2">{o.description}</p>}
+                                    <div class="flex items-center gap-2 mt-2 flex-wrap">
+                                        <DifficultyChip level={o.difficulty ?? 1} lang={lang} />
                                     </div>
                                 </div>
-                                <div class="flex gap-2 mt-4">
-                                    <button
-                                        class="edit-gig-btn flex-1 py-2 text-sm font-semibold text-violet-700 bg-violet-100 rounded-xl hover:bg-violet-200 transition-colors"
-                                        data-id={o.id}
-                                        data-title={o.title}
-                                        data-description={o.description ?? ""}
-                                        data-points={o.points}
-                                        data-difficulty={o.difficulty ?? 1}
-                                        data-category={o.category ?? "other"}
-                                    >
-                                        {lang === "es" ? "Editar" : "Edit"}
-                                    </button>
-                                    <button
-                                        class="archive-gig-btn flex-1 py-2 text-sm font-semibold text-brand-ink-soft bg-brand-cream-deep rounded-xl hover:bg-red-100 hover:text-red-700 transition-colors"
-                                        data-id={o.id}
-                                    >
-                                        {lang === "es" ? "Archivar" : "Archive"}
-                                    </button>
+                                <div class="text-right flex-shrink-0">
+                                    <p class="text-xl font-extrabold text-violet-600">{o.points} pts</p>
+                                    <p class="text-xs text-brand-ink-soft">${o.points} MXN</p>
                                 </div>
                             </div>
-                        );
-                    })}
-                </div>
-            )}
-
-            <!-- Pending approvals tab -->
-            {activeTab === "pending" && (
-                <div class="space-y-4">
-                    {pendingClaims.length === 0 && (
-                        <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
-                            <p class="text-brand-ink-soft text-sm">
-                                {lang === "es" ? "No hay gigs pendientes de aprobación." : "No gigs pending approval."}
-                            </p>
-                        </div>
-                    )}
-                    {pendingClaims.map((claim: any) => (
-                        <div class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-amber-200">
-                            <div class="flex justify-between items-start mb-3">
-                                <div class="flex-1">
-                                    <h3 class="font-bold text-brand-ink text-base leading-tight">{claim.gig_title ?? "—"}</h3>
-                                    <p class="text-sm text-brand-ink-soft mt-0.5">
-                                        <strong class="text-brand-ink">{claim.claimer_name ?? claim.claimed_by}</strong>
-                                        {" · "}
-                                        {claim.completed_at ? new Date(claim.completed_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US") : "—"}
-                                    </p>
-                                </div>
-                                {claim.gig_points && (
-                                    <div class="text-right flex-shrink-0 ml-3">
-                                        <p class="text-xl font-extrabold text-violet-600">{claim.gig_points}</p>
-                                        <p class="text-xs text-brand-ink-soft">pts / ${claim.gig_points} MXN</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            {claim.proof_text && (
-                                <div class="mb-3 p-3 bg-sky-50 rounded-xl text-sm text-sky-700">
-                                    <strong>{lang === "es" ? "Evidencia:" : "Proof:"}</strong> {claim.proof_text}
-                                </div>
-                            )}
-                            {claim.proof_image_url && (
-                                <div class="mb-3">
-                                    <img src={claim.proof_image_url} alt="Proof" class="rounded-xl max-h-48 object-cover w-full" />
-                                </div>
-                            )}
-
-                            <div class="flex gap-3">
+                            <div class="flex gap-2 mt-4">
                                 <button
-                                    class="approve-btn flex-1 py-2.5 bg-emerald-500 text-white font-semibold rounded-xl hover:bg-emerald-600 active:scale-[.98] transition-all text-sm"
-                                    data-claim-id={claim.id}
+                                    class="edit-gig-btn flex-1 py-2 text-sm font-semibold text-violet-700 bg-violet-100 rounded-xl hover:bg-violet-200 transition-colors"
+                                    data-id={o.id}
+                                    data-title={o.title}
+                                    data-description={o.description ?? ""}
+                                    data-points={o.points}
+                                    data-difficulty={o.difficulty ?? 1}
+                                    data-category={o.category ?? "other"}
                                 >
-                                    ✅ {lang === "es" ? "Aprobar" : "Approve"}
+                                    {lang === "es" ? "Editar" : "Edit"}
                                 </button>
                                 <button
-                                    class="reject-btn flex-1 py-2.5 bg-red-100 text-red-700 font-semibold rounded-xl hover:bg-red-200 active:scale-[.98] transition-all text-sm"
-                                    data-claim-id={claim.id}
+                                    class="archive-gig-btn flex-1 py-2 text-sm font-semibold text-brand-ink-soft bg-brand-cream-deep rounded-xl hover:bg-red-100 hover:text-red-700 transition-colors"
+                                    data-id={o.id}
                                 >
-                                    ✗ {lang === "es" ? "Rechazar" : "Reject"}
+                                    {lang === "es" ? "Archivar" : "Archive"}
                                 </button>
                             </div>
                         </div>
-                    ))}
-                </div>
-            )}
+                    );
+                })}
+            </div>
         </main>
 
         <BottomNav active="gigs" role="parent" lang={lang} />
@@ -326,33 +256,6 @@ document.querySelectorAll(".archive-gig-btn").forEach(btn => {
         const b = btn as HTMLElement;
         const res = await fetch(`/api/gigs/offerings/${b.dataset.id}`, { method: "DELETE" });
         if (res.ok) window.location.reload();
-    });
-});
-
-document.querySelectorAll(".approve-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-        const b = btn as HTMLElement;
-        const res = await fetch(`/api/gigs/claims/${b.dataset.claimId}/approve`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ approved: true }),
-        });
-        if (res.ok) window.location.reload();
-        else alert("Error approving");
-    });
-});
-
-document.querySelectorAll(".reject-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-        const notes = prompt(lang === "es" ? "Motivo del rechazo (opcional):" : "Rejection reason (optional):") ?? "";
-        const b = btn as HTMLElement;
-        const res = await fetch(`/api/gigs/claims/${b.dataset.claimId}/approve`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ approved: false, notes: notes || null }),
-        });
-        if (res.ok) window.location.reload();
-        else alert("Error rejecting");
     });
 });
 </script>
