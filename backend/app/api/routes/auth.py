@@ -33,6 +33,7 @@ from app.schemas.user import (
 from app.models import User
 from app.models.family import Family, generate_join_code
 from app.core.security import get_password_hash, create_access_token
+from app.core.rate_limiter import limiter, AUTH_LIMIT
 
 router = APIRouter()
 
@@ -66,7 +67,9 @@ async def register(
     response_model=RegisterFamilyResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(AUTH_LIMIT)
 async def register_family(
+    request: Request,
     data: RegisterFamilyRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -161,7 +164,9 @@ async def register_family(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit(AUTH_LIMIT)
 async def login(
+    request: Request,
     login_data: UserLogin,
     db: AsyncSession = Depends(get_db),
 ):
@@ -184,7 +189,9 @@ class CheckMethodsResponse(BaseModel):
 
 
 @router.post("/check-methods", response_model=CheckMethodsResponse)
+@limiter.limit(AUTH_LIMIT)
 async def check_auth_methods(
+    request: Request,
     body: CheckMethodsRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -314,7 +321,9 @@ async def resend_verification(
 # ---------------------------------------------------------------------------
 
 @router.post("/forgot-password")
+@limiter.limit(AUTH_LIMIT)
 async def forgot_password(
+    request: Request,
     body: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -330,7 +339,9 @@ async def forgot_password(
 
 
 @router.post("/reset-password")
+@limiter.limit(AUTH_LIMIT)
 async def reset_password(
+    request: Request,
     body: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):

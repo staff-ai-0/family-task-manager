@@ -27,29 +27,42 @@ logger = logging.getLogger(__name__)
 EVENT_TTL_SECONDS = 7 * 24 * 3600
 
 
-async def _dedupe_event(event_id: str) -> bool:
-    """
-    Return True if this event_id was NOT seen before (i.e. proceed),
-    False if it's a duplicate. On any Redis failure, return True so the
-    event proceeds — better to risk an idempotent reapply than to drop.
+async def _already_processed(event_id: str) -> bool:
+    """True if this event was already fully processed (skip it).
+
+    Read-only — the 'processed' mark is written only AFTER a successful state
+    change (see _mark_processed). On Redis failure, return False so the event
+    proceeds; the state transitions are idempotent.
     """
     try:
         import redis.asyncio as aioredis
 
         client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         try:
-            result = await client.set(
-                f"paypal:event:{event_id}",
-                "1",
-                ex=EVENT_TTL_SECONDS,
-                nx=True,
-            )
-            return bool(result)
+            return (await client.get(f"paypal:event:{event_id}")) is not None
         finally:
-            await client.close()
+            await client.aclose()
     except Exception as e:
-        logger.warning("Redis dedupe failed (proceeding): %s", e)
-        return True
+        logger.warning("Redis dedupe check failed (proceeding): %s", e)
+        return False
+
+
+async def _mark_processed(event_id: str) -> None:
+    """Record that this event was successfully handled (so retries are deduped).
+
+    Called ONLY after the state change committed — never before — so a transient
+    failure leaves the event un-marked and PayPal's retry can reprocess it.
+    """
+    try:
+        import redis.asyncio as aioredis
+
+        client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        try:
+            await client.set(f"paypal:event:{event_id}", "1", ex=EVENT_TTL_SECONDS)
+        finally:
+            await client.aclose()
+    except Exception as e:
+        logger.warning("Redis mark-processed failed: %s", e)
 
 
 @router.post("/webhook", status_code=200)
@@ -97,12 +110,11 @@ async def receive_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             detail="invalid signature",
         )
 
-    # Dedupe via Redis
-    if event_id:
-        proceed = await _dedupe_event(event_id)
-        if not proceed:
-            logger.info("Duplicate webhook event %s, skipping", event_id)
-            return {"received": True, "duplicate": True}
+    # Skip events we already fully processed (the mark is written only after a
+    # successful state change below).
+    if event_id and await _already_processed(event_id):
+        logger.info("Duplicate webhook event %s, skipping", event_id)
+        return {"received": True, "duplicate": True}
 
     if not subscription_id:
         logger.warning("Webhook event %s has no resource.id", event_id)
@@ -132,6 +144,16 @@ async def receive_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         else:
             logger.info("Ignoring webhook event_type %s", event_type)
     except Exception as e:
+        # Do NOT mark processed and DO return 5xx so PayPal retries — a transient
+        # DB failure must not silently drop a subscription state change.
         logger.exception("Webhook dispatch failed for %s: %s", event_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="processing failed; will retry",
+        )
+
+    # Mark processed only after a successful (or intentionally-ignored) dispatch.
+    if event_id:
+        await _mark_processed(event_id)
 
     return {"received": True}

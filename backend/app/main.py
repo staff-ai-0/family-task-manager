@@ -161,6 +161,14 @@ app.add_middleware(
     max_age=1800,  # 30 minutes
 )
 
+# Rate limiting (slowapi) — protects auth + AI endpoints from abuse.
+from slowapi import _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+from app.core.rate_limiter import limiter  # noqa: E402
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Register exception handlers
 register_exception_handlers(app)
 
