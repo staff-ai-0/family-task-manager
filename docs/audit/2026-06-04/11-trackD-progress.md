@@ -30,11 +30,15 @@ that needs browser verification — not something to restructure blind at the ta
 Three directions proposed to the user (see 06-plan.md Track D + the AskUserQuestion in the
 session). Implementation deferred until a direction is chosen.
 
-### Option A — Clarify & de-collide (lighter, recommended first)
-Keep both systems; remove the collision. "Gig" = ONLY the optional paid gig board. Strip
-gig-mode jargon from mandatory-task create/edit. Merge the parent's two approval screens into
-ONE queue + fix the badge to count both. Fix the non-bonus-points-zeroed trap. Drop/clarify the
-"$1 MXN" framing. Lower risk, kills most of the confusion.
+### Option A — Clarify & de-collide (CHOSEN by user) — IN PROGRESS
+- [x] **Part 1 — chore-create de-collide** (commit 88c45fb, astro build passes):
+  - Gig-mode dropdown now hidden unless "Bonus task" is toggled (no gig jargon in plain chores).
+  - Non-bonus points no longer silently 0 — visible Points input (default 10) used in the payload.
+- [ ] **Part 2 — unify parent approval** (remaining): merge the two approval screens
+  (`parent/assignments` task approvals + gig-claim approvals) into ONE queue, and fix the
+  dashboard badge to count BOTH. Bigger, multi-page; needs the dev server + a browser pass
+  (npm install + `npm run build` now work locally; backend container is up for e2e).
+- [ ] Optional: drop/clarify the "1 pt = $1 MXN" framing where no cash payout exists.
 
 ### Option B — Full unification (heavier)
 One "Work" model with a type (chore vs gig), one create flow, one kid list, one approval queue.
