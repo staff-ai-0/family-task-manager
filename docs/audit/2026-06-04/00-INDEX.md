@@ -7,10 +7,17 @@ Master log. Survives context reset. Read this first to resume.
 2. Find gaps → production ready
 3. Simplify UX workflows for **budget**, **task**, **gigs**
 
-## Shipped (PRs)
-- PR #31 — rename Frankie→Jarvis → base `main` (branch `rename/frankie-to-jarvis`, commit 3f4195f)
-- PR #32 — security A1-A4 → base `rename/frankie-to-jarvis` (STACKED; retarget to main after #31; commit b3c03b4)
-- Not merged/deployed. Deploy: prod .env FRANKIE_→JARVIS_ first; run full suite in CI.
+## Shipped (stacked PR chain — merge in order, retargeting each to main)
+- PR #31 — rename Frankie→Jarvis → `main`
+- PR #32 — security A1-A4 → #31
+- PR #33 — Track B prod-ops (B1-B4,B6) → #32
+- PR #34 — Track C cleanup (C4 N+1, C5 cruft, C6 docs) → #33
+- PR #35 — Track D UX (budget quick-wins + unification proposal) → #34
+- Not merged/deployed. Deploy: prod .env FRANKIE_→JARVIS_ first; rebuild image (slowapi dep);
+  run full suite in CI; for multi-worker set RATE_LIMIT_STORAGE_URI to Redis.
+
+## Open decision: task↔gig unification (Track D big lever) — see 11-trackD-progress.md
+## Deferred with findings: B5,B7 (08-specs); C1,C2,C3,C7 (10-progress); budget nav/account-create (11)
 
 ## Status
 - [x] Repo scout (see below)
