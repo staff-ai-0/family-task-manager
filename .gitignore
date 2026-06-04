@@ -172,3 +172,6 @@ actual/
 # Legacy Actual Budget sync service (Phase 10 decommissioned, see docker-compose.yml).
 # Still bind-mounted into backend at runtime on prod, but nothing to track.
 services/actual-budget/
+# Tech-debt cleanup 2026-06-04
+*.zip
+.playwright-mcp/
