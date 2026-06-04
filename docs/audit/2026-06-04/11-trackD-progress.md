@@ -42,10 +42,9 @@ session). Implementation deferred until a direction is chosen.
     (was the "badge misses half" finding).
   - Interactive approve/reject reuses the proven `/parent/gigs` fetch pattern; **browser
     click-through still recommended** before merge (build verifies compile, not runtime clicks).
-- [ ] **Optional polish (low priority):** the `/parent/gigs` page still has a redundant
-  "pending" tab that duplicates the unified `/parent/approvals` queue. Point it at `/approvals`
-  (remove the tab's list + approve JS) for full single-queue cleanliness. Left undone to avoid a
-  blind restructure of the tabbed 358-line page.
+- [x] **Single approval surface** (commit 276b1d5): removed the redundant `/parent/gigs`
+  "pending" tab (duplicate claim-approval UI + JS). `/parent/gigs` is now pure offering
+  management with a "Review submitted work" link to `/parent/approvals`. astro build passes.
 - [ ] Optional: drop/clarify the "1 pt = $1 MXN" framing where no cash payout exists.
 
 **Option A is functionally complete** — the chore/gig UI collision (jargon, silent points,
