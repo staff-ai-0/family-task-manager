@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
 
     # Elect a single scheduler leader so cron jobs + the overdue sweep run on
     # exactly one worker (prod runs multiple uvicorn workers).
-    is_leader, leader_client = await try_acquire_scheduler_leadership(settings.REDIS_URL)
+    is_leader, leader_client, leader_token = await try_acquire_scheduler_leadership(settings.REDIS_URL)
 
     overdue_task = None
     scheduler = None
@@ -112,7 +112,7 @@ async def lifespan(app: FastAPI):
             async def _renew_leadership_loop():
                 while True:
                     await asyncio.sleep(60)
-                    await renew_scheduler_leadership(leader_client)
+                    await renew_scheduler_leadership(leader_client, leader_token)
 
             renew_task = asyncio.create_task(_renew_leadership_loop())
 
@@ -129,7 +129,7 @@ async def lifespan(app: FastAPI):
                 await _task
             except asyncio.CancelledError:
                 pass
-    await release_scheduler_leadership(leader_client)
+    await release_scheduler_leadership(leader_client, leader_token)
     await engine.dispose()
 
 

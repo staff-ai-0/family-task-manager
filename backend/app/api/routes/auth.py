@@ -33,7 +33,7 @@ from app.schemas.user import (
 from app.models import User
 from app.models.family import Family, generate_join_code
 from app.core.security import get_password_hash, create_access_token
-from app.core.rate_limiter import limiter, AUTH_LIMIT
+from app.core.rate_limiter import limiter, AUTH_LIMIT, EMAIL_LIMIT
 
 router = APIRouter()
 
@@ -288,7 +288,9 @@ async def update_password(
 # ---------------------------------------------------------------------------
 
 @router.post("/verify-email")
+@limiter.limit(EMAIL_LIMIT)
 async def verify_email(
+    request: Request,
     body: VerifyEmailRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -303,7 +305,9 @@ async def verify_email(
 
 
 @router.post("/resend-verification")
+@limiter.limit(EMAIL_LIMIT)
 async def resend_verification(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

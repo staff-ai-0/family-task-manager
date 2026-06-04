@@ -149,7 +149,13 @@ class Settings(BaseSettings):
 
     # Redis (Optional)
     REDIS_URL: str = "redis://redis:6379/0"
-    
+
+    # Storage backend for the slowapi rate limiter. Empty -> in-memory (per
+    # worker). Set to a redis:// URL in multi-worker / multi-instance deploys so
+    # the limit window is shared across workers. (Pydantic extra='ignore' means an
+    # env var must have a matching field here to take effect — hence this field.)
+    RATE_LIMIT_STORAGE_URI: str = ""
+
     # LiteLLM Proxy (for auto-translation via mistral-nemo)
     LITELLM_API_BASE: str = "http://10.1.0.99:4000"
     LITELLM_API_KEY: str = ""
