@@ -19,12 +19,15 @@ if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
-// Pending gig approvals count for the badge on the Approvals tile.
-const { data: pending } = await apiFetch<any[]>(
-    "/api/task-assignments/pending-approvals",
-    { token }
-);
-const pendingApprovals = Array.isArray(pending) ? pending.length : 0;
+// Pending approvals count for the badge — BOTH sources (task/chore proofs AND
+// gig-board claim proofs), so the badge no longer misses half of them.
+const [taskPendingRes, gigPendingRes] = await Promise.all([
+    apiFetch<any[]>("/api/task-assignments/pending-approvals", { token }),
+    apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token }),
+]);
+const taskPending = Array.isArray(taskPendingRes.data) ? taskPendingRes.data.length : 0;
+const gigPending = Array.isArray(gigPendingRes.data) ? gigPendingRes.data.length : 0;
+const pendingApprovals = taskPending + gigPending;
 ---
 
 <Layout title={`${t(lang, "parent_dashboard")} - Family Task Manager`}>

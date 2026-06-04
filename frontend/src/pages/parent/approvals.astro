@@ -15,14 +15,22 @@ if (!user) {
 }
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
-const { data: rows } = await apiFetch<any[]>(
-    "/api/task-assignments/pending-approvals",
-    { token }
-);
-const items: any[] = rows ?? [];
+// One queue, BOTH sources: chore/bonus task proofs AND gig-board claim proofs.
+const [taskRes, gigRes] = await Promise.all([
+    apiFetch<any[]>("/api/task-assignments/pending-approvals", { token }),
+    apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token }),
+]);
+const taskItems: any[] = taskRes.data ?? [];
+const gigItems: any[] = gigRes.data ?? [];
+const total = taskItems.length + gigItems.length;
 
 const flash = Astro.cookies.get("flash")?.value;
 if (flash) Astro.cookies.delete("flash", { path: "/" });
+
+const fmtDate = (d: string) =>
+    new Date(d).toLocaleString(lang === "es" ? "es-MX" : "en-US", {
+        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+    });
 ---
 
 <Layout title={`${lang === "es" ? "Aprobaciones" : "Approvals"} - Family Task Manager`}>
@@ -37,17 +45,17 @@ if (flash) Astro.cookies.delete("flash", { path: "/" });
                 <span class="text-amber-100 text-sm">{t(lang, "back_parent")}</span>
             </div>
             <h1 class="text-2xl font-bold">
-                {lang === "es" ? "Aprobaciones de gigs" : "Gig approvals"}
+                {lang === "es" ? "Aprobaciones" : "Approvals"}
             </h1>
             <p class="text-amber-100 text-sm mt-1">
                 {lang === "es"
-                    ? "Revisa el trabajo enviado y aprueba o rechaza."
-                    : "Review submitted work and approve or reject."}
+                    ? "Todo el trabajo enviado, en un solo lugar."
+                    : "All submitted work, in one place."}
             </p>
         </header>
 
-        <main class="flex-1 px-4 py-6">
-            {items.length === 0 ? (
+        <main class="flex-1 px-4 py-6 space-y-6">
+            {total === 0 && (
                 <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
                     <div class="w-16 h-16 bg-brand-mint/20 rounded-full flex items-center justify-center mx-auto mb-4">
                         <svg class="w-8 h-8 text-brand-mint-deep" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -58,88 +66,128 @@ if (flash) Astro.cookies.delete("flash", { path: "/" });
                         {lang === "es" ? "Nada por aprobar." : "Nothing waiting for approval."}
                     </p>
                 </div>
-            ) : (
-                <ul class="space-y-3" id="approvals-list">
-                    {items.map((row: any) => (
-                        <li
-                            class="bg-brand-cream rounded-2xl p-5 border border-brand-ink/10 shadow-[var(--shadow-card)]"
-                            data-id={row.assignment_id}
-                        >
-                            <div class="flex justify-between items-start mb-3 gap-3">
-                                <div class="min-w-0">
-                                    <h3 class="font-bold text-brand-ink truncate">
-                                        {row.template_title}
-                                    </h3>
-                                    <p class="text-sm text-brand-ink-soft mt-0.5">
-                                        {row.assigned_to_name}
-                                        <span class="mx-1">·</span>
-                                        <span class="text-brand-sun-deep font-semibold">+{row.points} pts</span>
-                                    </p>
-                                </div>
-                                <span class="text-xs text-brand-ink-soft whitespace-nowrap">
-                                    {new Date(row.completed_at).toLocaleString(lang === "es" ? "es-MX" : "en-US", {
-                                        month: "short",
-                                        day: "numeric",
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                    })}
-                                </span>
-                            </div>
-                            <p class="text-sm bg-brand-cream-deep rounded-lg p-3 mb-3 whitespace-pre-wrap text-brand-ink">
-                                {row.proof_text || (lang === "es" ? "(sin texto)" : "(no proof text)")}
-                            </p>
-                            {row.proof_image_url && (
-                                <a href={row.proof_image_url} target="_blank" rel="noopener noreferrer" class="block mb-3">
-                                    <img
-                                        src={row.proof_image_url}
-                                        alt={lang === "es" ? "Foto de prueba" : "Proof image"}
-                                        class="max-w-full max-h-48 rounded-lg border border-brand-ink/20 object-cover"
-                                    />
-                                </a>
-                            )}
-                            {row.ai_validation_score != null && (
-                                <div class={`mb-3 p-2 rounded-lg border text-xs ${
-                                    row.ai_validation_score >= 0.7
-                                        ? "bg-brand-mint/15 border-brand-mint-deep/30 text-brand-mint-deep"
-                                        : row.ai_validation_score >= 0.4
-                                            ? "bg-brand-sun/15 border-brand-sun-deep/30 text-brand-sun-deep"
-                                            : "bg-red-50 border-red-200 text-red-700"
-                                }`}>
-                                    <p class="font-semibold">
-                                        🤖 {lang === "es" ? "AI:" : "AI:"} {Math.round(row.ai_validation_score * 100)}%
-                                        {row.ai_validation_score >= 0.7 && " ✓"}
-                                        {row.ai_validation_score < 0.4 && " ⚠️"}
-                                    </p>
-                                    {row.ai_validation_notes && (
-                                        <p class="mt-1 italic">{row.ai_validation_notes}</p>
+            )}
+
+            {taskItems.length > 0 && (
+                <section>
+                    <h2 class="text-sm font-bold text-brand-ink-soft uppercase tracking-wide mb-3 px-1">
+                        {lang === "es" ? "Tareas y bonus" : "Chores & bonus"} ({taskItems.length})
+                    </h2>
+                    <ul class="space-y-3 approvals-list">
+                        {taskItems.map((row: any) => (
+                            <li
+                                class="bg-brand-cream rounded-2xl p-5 border border-brand-ink/10 shadow-[var(--shadow-card)]"
+                                data-kind="task"
+                                data-id={row.assignment_id}
+                            >
+                                <div class="flex justify-between items-start mb-3 gap-3">
+                                    <div class="min-w-0">
+                                        <h3 class="font-bold text-brand-ink truncate">{row.template_title}</h3>
+                                        <p class="text-sm text-brand-ink-soft mt-0.5">
+                                            {row.assigned_to_name}
+                                            <span class="mx-1">·</span>
+                                            <span class="text-brand-sun-deep font-semibold">+{row.points} pts</span>
+                                        </p>
+                                    </div>
+                                    {row.completed_at && (
+                                        <span class="text-xs text-brand-ink-soft whitespace-nowrap">{fmtDate(row.completed_at)}</span>
                                     )}
                                 </div>
-                            )}
-                            <textarea
-                                data-notes
-                                rows="2"
-                                class="w-full border border-brand-ink/20 rounded-lg p-2 mb-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-brand-cream"
-                                placeholder={lang === "es" ? "Notas (opcional)" : "Notes (optional)"}
-                            ></textarea>
-                            <div class="flex justify-end gap-2">
-                                <button
-                                    type="button"
-                                    data-action="reject"
-                                    class="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold text-sm hover:bg-red-50 transition-colors"
-                                >
-                                    {lang === "es" ? "Rechazar" : "Reject"}
-                                </button>
-                                <button
-                                    type="button"
-                                    data-action="approve"
-                                    class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity"
-                                >
-                                    {lang === "es" ? "Aprobar" : "Approve"}
-                                </button>
-                            </div>
-                        </li>
-                    ))}
-                </ul>
+                                <p class="text-sm bg-brand-cream-deep rounded-lg p-3 mb-3 whitespace-pre-wrap text-brand-ink">
+                                    {row.proof_text || (lang === "es" ? "(sin texto)" : "(no proof text)")}
+                                </p>
+                                {row.proof_image_url && (
+                                    <a href={row.proof_image_url} target="_blank" rel="noopener noreferrer" class="block mb-3">
+                                        <img src={row.proof_image_url} alt={lang === "es" ? "Foto de prueba" : "Proof image"}
+                                            class="max-w-full max-h-48 rounded-lg border border-brand-ink/20 object-cover" />
+                                    </a>
+                                )}
+                                {row.ai_validation_score != null && (
+                                    <div class={`mb-3 p-2 rounded-lg border text-xs ${
+                                        row.ai_validation_score >= 0.7
+                                            ? "bg-brand-mint/15 border-brand-mint-deep/30 text-brand-mint-deep"
+                                            : row.ai_validation_score >= 0.4
+                                                ? "bg-brand-sun/15 border-brand-sun-deep/30 text-brand-sun-deep"
+                                                : "bg-red-50 border-red-200 text-red-700"
+                                    }`}>
+                                        <p class="font-semibold">🤖 AI: {Math.round(row.ai_validation_score * 100)}%
+                                            {row.ai_validation_score >= 0.7 && " ✓"}
+                                            {row.ai_validation_score < 0.4 && " ⚠️"}
+                                        </p>
+                                        {row.ai_validation_notes && (<p class="mt-1 italic">{row.ai_validation_notes}</p>)}
+                                    </div>
+                                )}
+                                <textarea data-notes rows="2"
+                                    class="w-full border border-brand-ink/20 rounded-lg p-2 mb-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-brand-cream"
+                                    placeholder={lang === "es" ? "Notas (opcional)" : "Notes (optional)"}></textarea>
+                                <div class="flex justify-end gap-2">
+                                    <button type="button" data-action="reject"
+                                        class="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold text-sm hover:bg-red-50 transition-colors">
+                                        {lang === "es" ? "Rechazar" : "Reject"}
+                                    </button>
+                                    <button type="button" data-action="approve"
+                                        class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity">
+                                        {lang === "es" ? "Aprobar" : "Approve"}
+                                    </button>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
+            {gigItems.length > 0 && (
+                <section>
+                    <h2 class="text-sm font-bold text-brand-ink-soft uppercase tracking-wide mb-3 px-1">
+                        {lang === "es" ? "Tablero de gigs" : "Gig board"} ({gigItems.length})
+                    </h2>
+                    <ul class="space-y-3 approvals-list">
+                        {gigItems.map((claim: any) => (
+                            <li
+                                class="bg-brand-cream rounded-2xl p-5 border border-brand-ink/10 shadow-[var(--shadow-card)]"
+                                data-kind="gig"
+                                data-id={claim.id}
+                            >
+                                <div class="flex justify-between items-start mb-3 gap-3">
+                                    <div class="min-w-0">
+                                        <h3 class="font-bold text-brand-ink truncate">{claim.gig_title ?? "—"}</h3>
+                                        <p class="text-sm text-brand-ink-soft mt-0.5">
+                                            {claim.claimer_name ?? claim.claimed_by}
+                                            {claim.gig_points != null && (
+                                                <>
+                                                    <span class="mx-1">·</span>
+                                                    <span class="text-brand-sun-deep font-semibold">+{claim.gig_points} pts</span>
+                                                </>
+                                            )}
+                                        </p>
+                                    </div>
+                                </div>
+                                <p class="text-sm bg-brand-cream-deep rounded-lg p-3 mb-3 whitespace-pre-wrap text-brand-ink">
+                                    {claim.proof_text || (lang === "es" ? "(sin texto)" : "(no proof text)")}
+                                </p>
+                                {claim.proof_image_url && (
+                                    <a href={claim.proof_image_url} target="_blank" rel="noopener noreferrer" class="block mb-3">
+                                        <img src={claim.proof_image_url} alt={lang === "es" ? "Foto de prueba" : "Proof image"}
+                                            class="max-w-full max-h-48 rounded-lg border border-brand-ink/20 object-cover" />
+                                    </a>
+                                )}
+                                <textarea data-notes rows="2"
+                                    class="w-full border border-brand-ink/20 rounded-lg p-2 mb-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-brand-cream"
+                                    placeholder={lang === "es" ? "Notas (opcional)" : "Notes (optional)"}></textarea>
+                                <div class="flex justify-end gap-2">
+                                    <button type="button" data-action="reject"
+                                        class="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold text-sm hover:bg-red-50 transition-colors">
+                                        {lang === "es" ? "Rechazar" : "Reject"}
+                                    </button>
+                                    <button type="button" data-action="approve"
+                                        class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity">
+                                        {lang === "es" ? "Aprobar" : "Approve"}
+                                    </button>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
             )}
         </main>
 
@@ -148,40 +196,49 @@ if (flash) Astro.cookies.delete("flash", { path: "/" });
 
     <script>
         document.addEventListener("astro:page-load", () => {
-            const list = document.getElementById("approvals-list");
-            if (!list) return;
-            list.querySelectorAll<HTMLLIElement>("li[data-id]").forEach((li) => {
-                const id = li.dataset.id!;
-                const notes = li.querySelector<HTMLTextAreaElement>("[data-notes]");
-                li.querySelectorAll<HTMLButtonElement>("button[data-action]").forEach((btn) => {
-                    btn.addEventListener("click", async () => {
-                        const approve = btn.dataset.action === "approve";
-                        btn.disabled = true;
-                        try {
-                            const r = await fetch("/api/assignments/approve", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    assignment_id: id,
-                                    approve,
-                                    notes: notes?.value.trim() || null,
-                                }),
-                            });
-                            if (r.ok) {
-                                li.remove();
-                                // If list is now empty, reload to show the empty state.
-                                if (list.children.length === 0) {
-                                    window.location.reload();
+            const lists = document.querySelectorAll(".approvals-list");
+            if (!lists.length) return;
+
+            const remaining = () =>
+                document.querySelectorAll(".approvals-list li[data-id]").length;
+
+            lists.forEach((list) => {
+                list.querySelectorAll<HTMLLIElement>("li[data-id]").forEach((li) => {
+                    const id = li.dataset.id!;
+                    const kind = li.dataset.kind;
+                    const notes = li.querySelector<HTMLTextAreaElement>("[data-notes]");
+                    li.querySelectorAll<HTMLButtonElement>("button[data-action]").forEach((btn) => {
+                        btn.addEventListener("click", async () => {
+                            const approve = btn.dataset.action === "approve";
+                            const noteVal = notes?.value.trim() || null;
+                            btn.disabled = true;
+                            try {
+                                const req =
+                                    kind === "gig"
+                                        ? fetch(`/api/gigs/claims/${id}/approve`, {
+                                              method: "POST",
+                                              headers: { "Content-Type": "application/json" },
+                                              body: JSON.stringify({ approved: approve, notes: noteVal }),
+                                          })
+                                        : fetch("/api/assignments/approve", {
+                                              method: "POST",
+                                              headers: { "Content-Type": "application/json" },
+                                              body: JSON.stringify({ assignment_id: id, approve, notes: noteVal }),
+                                          });
+                                const r = await req;
+                                if (r.ok) {
+                                    li.remove();
+                                    if (remaining() === 0) window.location.reload();
+                                } else {
+                                    const err = await r.text();
+                                    alert(`Error: ${err}`);
+                                    btn.disabled = false;
                                 }
-                            } else {
-                                const err = await r.text();
-                                alert(`Error: ${err}`);
+                            } catch (e) {
+                                alert(`Error: ${(e as Error).message}`);
                                 btn.disabled = false;
                             }
-                        } catch (e) {
-                            alert(`Error: ${(e as Error).message}`);
-                            btn.disabled = false;
-                        }
+                        });
                     });
                 });
             });
