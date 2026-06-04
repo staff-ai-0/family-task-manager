@@ -220,6 +220,24 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                     </div>
                 </div>
 
+                <!-- Points (explicit at create time, not silently zeroed) -->
+                <div class="flex items-center gap-3 py-1">
+                    <label for="tcm-points" class="text-sm font-medium text-brand-ink whitespace-nowrap">
+                        ⭐ {lang === "es" ? "Puntos" : "Points"}
+                    </label>
+                    <input
+                        id="tcm-points"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value="10"
+                        class="w-24 px-3 py-2 text-sm border border-brand-ink/20 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none bg-brand-cream"
+                    />
+                    <span class="text-xs text-brand-ink-soft">
+                        {lang === "es" ? "que gana al completarla" : "earned on completion"}
+                    </span>
+                </div>
+
                 <!-- Advanced collapse -->
                 <details class="bg-brand-cream-deep/50 rounded-xl border border-brand-ink/10">
                     <summary class="px-4 py-3 text-sm font-medium text-brand-ink cursor-pointer select-none">
@@ -260,8 +278,8 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                             </div>
                         </div>
 
-                        <!-- Gig mode -->
-                        <div>
+                        <!-- Gig mode — only meaningful for bonus tasks; hidden for mandatory chores -->
+                        <div id="tcm-gig-wrap" class="hidden">
                             <label for="tcm-gig" class="block text-xs font-medium text-brand-ink-soft mb-1">
                                 {lang === "es" ? "Modo de gig" : "Gig mode"}
                             </label>
@@ -332,6 +350,13 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
     const bonusChk = document.getElementById("tcm-bonus");
     const blocksChk = document.getElementById("tcm-blocks-rewards");
     const gigSelect = document.getElementById("tcm-gig");
+    const gigWrap = document.getElementById("tcm-gig-wrap");
+    const pointsInput = document.getElementById("tcm-points");
+
+    // Gig mode is only relevant to bonus tasks — keep its jargon out of plain chores.
+    bonusChk?.addEventListener("change", () => {
+        gigWrap?.classList.toggle("hidden", !bonusChk.checked);
+    });
     const descTA = document.getElementById("tcm-desc");
     const membersDiv = document.getElementById("tcm-members");
     const errorDiv = document.getElementById("tcm-error");
@@ -414,6 +439,8 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         if (bonusChk) bonusChk.checked = false;
         if (blocksChk) blocksChk.checked = false;
         if (gigSelect) gigSelect.value = "claim";
+        if (gigWrap) gigWrap.classList.add("hidden");
+        if (pointsInput) pointsInput.value = "10";
         if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
         if (membersDiv) membersDiv.classList.add("hidden");
         modal.querySelectorAll(".tcm-member-cb").forEach((cb) => { cb.checked = false; });
@@ -503,7 +530,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             description,
             title_es: null,
             description_es: null,
-            points: isBonus ? 10 : 0, // non-bonus tasks always earn 0 pts; editable via edit page
+            points: Math.max(0, parseInt(pointsInput?.value, 10) || 0), // explicit at create time
             effort_level: parseInt(chipState.effort, 10),
             interval_days: parseInt(chipState.interval, 10),
             is_bonus: isBonus,
