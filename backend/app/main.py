@@ -139,12 +139,13 @@ app.add_middleware(
 # Register exception handlers
 register_exception_handlers(app)
 
-# Static files (gig proof images, etc.). The container mounts the volume at
-# /app/uploads; subdirectories like /app/uploads/gig-proofs/ are created on demand.
+# Uploaded proof images are served through an authenticated, family-scoped route
+# (app.api.routes.uploads), NOT a public StaticFiles mount — the old mount exposed
+# every gig-proof / receipt image to anyone over the public tunnel.
 import os
-from fastapi.staticfiles import StaticFiles
 os.makedirs("/app/uploads/gig-proofs", exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="/app/uploads"), name="uploads")
+from app.api.routes import uploads as uploads_routes  # noqa: E402
+app.include_router(uploads_routes.router, tags=["Uploads"])
 
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])

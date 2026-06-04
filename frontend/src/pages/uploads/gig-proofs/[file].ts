@@ -7,9 +7,9 @@ import type { APIRoute } from "astro";
  * /uploads/gig-proofs/<file>) so it's reachable through the public
  * Cloudflare tunnel without exposing the backend hostname.
  *
- * Auth gate: requires a valid access_token cookie. We do not need the
- * backend itself to verify the bearer for static images (StaticFiles
- * does not enforce auth), so this proxy is the effective auth boundary.
+ * Auth gate: requires a valid access_token cookie AND forwards it as a bearer
+ * token. The backend route is itself authenticated and family-scoped, so the
+ * image is never served without both the cookie here and ownership there.
  */
 export const GET: APIRoute = async ({ params, cookies }) => {
     const token = cookies.get("access_token")?.value;
@@ -26,7 +26,9 @@ export const GET: APIRoute = async ({ params, cookies }) => {
         process.env.PUBLIC_API_BASE_URL ||
         "http://backend:8000";
 
-    const r = await fetch(`${apiUrl}/uploads/gig-proofs/${file}`);
+    const r = await fetch(`${apiUrl}/uploads/gig-proofs/${file}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
     if (!r.ok) {
         return new Response("Not found", { status: r.status });
     }

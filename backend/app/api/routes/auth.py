@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_parent_role
 from app.core.config import settings
 from app.core.security import hash_password
 from app.core.type_utils import to_uuid_required
@@ -44,8 +44,16 @@ async def register(
     user_data: UserCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_parent_role),
 ):
-    """Register a new user and send a verification email."""
+    """Add a new member to the authenticated parent's family.
+
+    Parent-only. The new member is always created in the caller's own family —
+    the body's ``family_id`` is ignored. Previously this endpoint was
+    unauthenticated and trusted a client-supplied ``family_id`` + ``role``,
+    which let anyone mint a PARENT in any family (cross-tenant takeover).
+    """
+    user_data.family_id = current_user.family_id  # never trust the body
     user = await AuthService.register_user(db, user_data)
     # Send verification email (non-blocking — failure doesn't break registration)
     base_url = settings.BASE_URL

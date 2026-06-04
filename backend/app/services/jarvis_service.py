@@ -207,6 +207,7 @@ class JarvisService:
             client = OpenAI(
                 base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
                 api_key=settings.LITELLM_API_KEY,
+                timeout=60.0,  # never block the event loop indefinitely
             )
 
             actions_taken: list[str] = []
@@ -344,6 +345,7 @@ class JarvisService:
         client = OpenAI(
             base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
             api_key=settings.LITELLM_API_KEY,
+            timeout=60.0,  # never block the event loop indefinitely
         )
 
         actions_taken: list[str] = []

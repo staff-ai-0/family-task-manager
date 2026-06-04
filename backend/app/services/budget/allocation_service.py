@@ -337,7 +337,121 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
             "available": available,
             "rollover_enabled": category.rollover_enabled,
         }
-    
+
+    @classmethod
+    async def get_categories_available_amounts(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        month: date,
+        categories: list,
+    ) -> dict:
+        """Batched form of get_category_available_amount for many categories.
+
+        Replaces the per-category N+1 (each category ran ~5 queries) with four
+        grouped aggregate queries for the whole set. Returns
+        ``{str(category_id): summary_dict}`` with the same shape and values as
+        get_category_available_amount. Read-only: unlike the single-category path
+        it does NOT auto-create allocation rows. Aggregates are cast to int so a
+        Decimal sum never serializes as a JSON string to strict mobile clients.
+        """
+        from datetime import timedelta
+
+        if month.day != 1:
+            raise ValueError("month must be the first day of the month")
+        if month.month == 12:
+            end_of_month = date(month.year + 1, 1, 1) - timedelta(days=1)
+        else:
+            end_of_month = date(month.year, month.month + 1, 1) - timedelta(days=1)
+
+        cat_ids = [c.id for c in categories]
+        if not cat_ids:
+            return {}
+
+        async def _grouped(stmt) -> dict:
+            return {r[0]: int(r[1] or 0) for r in (await db.execute(stmt)).all()}
+
+        # 1. Budgeted this month, per category.
+        budgeted_by_cat = await _grouped(
+            select(
+                BudgetAllocation.category_id,
+                func.coalesce(func.sum(BudgetAllocation.budgeted_amount), 0),
+            )
+            .where(
+                BudgetAllocation.family_id == family_id,
+                BudgetAllocation.category_id.in_(cat_ids),
+                BudgetAllocation.month == month,
+            )
+            .group_by(BudgetAllocation.category_id)
+        )
+
+        # 2. Activity this month, per category (matches get_category_activity:
+        #    date in [month, end_of_month], not deleted).
+        activity_by_cat = await _grouped(
+            select(
+                BudgetTransaction.category_id,
+                func.coalesce(func.sum(BudgetTransaction.amount), 0),
+            )
+            .where(
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.category_id.in_(cat_ids),
+                BudgetTransaction.date >= month,
+                BudgetTransaction.date <= end_of_month,
+                BudgetTransaction.deleted_at.is_(None),
+            )
+            .group_by(BudgetTransaction.category_id)
+        )
+
+        # 3. Prior budgeted (all months before this one), per category.
+        prior_budgeted_by_cat = await _grouped(
+            select(
+                BudgetAllocation.category_id,
+                func.coalesce(func.sum(BudgetAllocation.budgeted_amount), 0),
+            )
+            .where(
+                BudgetAllocation.family_id == family_id,
+                BudgetAllocation.category_id.in_(cat_ids),
+                BudgetAllocation.month < month,
+            )
+            .group_by(BudgetAllocation.category_id)
+        )
+
+        # 4. Prior activity (all transactions before this month), per category.
+        prior_activity_by_cat = await _grouped(
+            select(
+                BudgetTransaction.category_id,
+                func.coalesce(func.sum(BudgetTransaction.amount), 0),
+            )
+            .where(
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.category_id.in_(cat_ids),
+                BudgetTransaction.date < month,
+                BudgetTransaction.deleted_at.is_(None),
+            )
+            .group_by(BudgetTransaction.category_id)
+        )
+
+        result: dict = {}
+        for cat in categories:
+            budgeted = budgeted_by_cat.get(cat.id, 0)
+            activity = activity_by_cat.get(cat.id, 0)
+            previous_balance = 0
+            if cat.rollover_enabled:
+                previous_balance = (
+                    prior_budgeted_by_cat.get(cat.id, 0)
+                    + prior_activity_by_cat.get(cat.id, 0)
+                )
+            result[str(cat.id)] = {
+                "category_id": str(cat.id),
+                "month": month.isoformat(),
+                "budgeted": budgeted,
+                "activity": activity,
+                "previous_balance": previous_balance,
+                "available": previous_balance + budgeted + activity,
+                "rollover_enabled": cat.rollover_enabled,
+            }
+        return result
+
     @classmethod
     async def get_month_summary(
         cls,
