@@ -7,6 +7,11 @@ Master log. Survives context reset. Read this first to resume.
 2. Find gaps → production ready
 3. Simplify UX workflows for **budget**, **task**, **gigs**
 
+## Shipped (PRs)
+- PR #31 — rename Frankie→Jarvis → base `main` (branch `rename/frankie-to-jarvis`, commit 3f4195f)
+- PR #32 — security A1-A4 → base `rename/frankie-to-jarvis` (STACKED; retarget to main after #31; commit b3c03b4)
+- Not merged/deployed. Deploy: prod .env FRANKIE_→JARVIS_ first; run full suite in CI.
+
 ## Status
 - [x] Repo scout (see below)
 - [x] Phase 1: Map codebase (8 cluster explorers) → 01-map.md
