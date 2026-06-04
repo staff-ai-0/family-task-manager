@@ -34,11 +34,22 @@ session). Implementation deferred until a direction is chosen.
 - [x] **Part 1 — chore-create de-collide** (commit 88c45fb, astro build passes):
   - Gig-mode dropdown now hidden unless "Bonus task" is toggled (no gig jargon in plain chores).
   - Non-bonus points no longer silently 0 — visible Points input (default 10) used in the payload.
-- [ ] **Part 2 — unify parent approval** (remaining): merge the two approval screens
-  (`parent/assignments` task approvals + gig-claim approvals) into ONE queue, and fix the
-  dashboard badge to count BOTH. Bigger, multi-page; needs the dev server + a browser pass
-  (npm install + `npm run build` now work locally; backend container is up for e2e).
+- [x] **Part 2 — unify parent approval** (commits 1881272, astro build passes):
+  - `/parent/approvals` now shows BOTH sources in one queue — chore/bonus task proofs
+    (`/api/task-assignments/pending-approvals`) + gig-board claim proofs
+    (`/api/gigs/claims/pending-approvals`), each section with the correct approve/reject call.
+  - Dashboard badge (`parent/index.astro`) summed only task approvals → now sums both sources
+    (was the "badge misses half" finding).
+  - Interactive approve/reject reuses the proven `/parent/gigs` fetch pattern; **browser
+    click-through still recommended** before merge (build verifies compile, not runtime clicks).
+- [ ] **Optional polish (low priority):** the `/parent/gigs` page still has a redundant
+  "pending" tab that duplicates the unified `/parent/approvals` queue. Point it at `/approvals`
+  (remove the tab's list + approve JS) for full single-queue cleanliness. Left undone to avoid a
+  blind restructure of the tabbed 358-line page.
 - [ ] Optional: drop/clarify the "1 pt = $1 MXN" framing where no cash payout exists.
+
+**Option A is functionally complete** — the chore/gig UI collision (jargon, silent points,
+split approvals, wrong badge) is resolved. Remaining items are polish.
 
 ### Option B — Full unification (heavier)
 One "Work" model with a type (chore vs gig), one create flow, one kid list, one approval queue.
