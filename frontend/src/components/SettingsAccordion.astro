@@ -14,7 +14,7 @@ interface Props {
 const { id, title, icon, defaultOpen = false } = Astro.props;
 ---
 
-<div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden mb-3">
+<div id={id} class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden mb-3 scroll-mt-20">
     <button
         class="accordion-toggle w-full flex items-center justify-between p-4 hover:bg-brand-cream-deep transition-colors"
         data-target={`accordion-content-${id}`}
