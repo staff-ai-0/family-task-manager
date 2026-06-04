@@ -1,4 +1,4 @@
-"""Frankie copilot service (W6.1 + W6.8).
+"""Jarvis copilot service (W6.1 + W6.8).
 
 Conversational parental coach. Reuses the LiteLLM proxy (same model alias
 as the receipt scanner) for centralized spend tracking. Each call:
@@ -6,7 +6,7 @@ as the receipt scanner) for centralized spend tracking. Each call:
 1. Pulls fresh family context (PUP score + today's task summary + pet states).
 2. Loads last N chat turns for the family.
 3. Builds an OpenAI-format messages array with a load-bearing system prompt.
-4. Calls LiteLLM with tool definitions from ``frankie_tools.REGISTRY``.
+4. Calls LiteLLM with tool definitions from ``jarvis_tools.REGISTRY``.
 5. Multi-hop tool execution (max ``MAX_TOOL_HOPS``).
 6. Persists both the user's message and the reply.
 """
@@ -22,18 +22,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
-from app.models.frankie_message import FrankieMessage
+from app.models.jarvis_message import JarvisMessage
 from app.models.kid_pet import KidPet
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.user import User
 from app.services.analytics_service import AnalyticsService
 from app.services.budget.receipt_scanner_service import RECEIPT_MODEL
-from app.services.frankie_tools import REGISTRY, dispatch, tool_definitions
+from app.services.jarvis_tools import REGISTRY, dispatch, tool_definitions
 
 
-# Frankie model alias — defaults to receipt scanner's claude-haiku for
-# shared LiteLLM budget. Override via FRANKIE_MODEL env var.
-CHAT_MODEL = settings.FRANKIE_MODEL or RECEIPT_MODEL
+# Jarvis model alias — defaults to receipt scanner's claude-haiku for
+# shared LiteLLM budget. Override via JARVIS_MODEL env var.
+CHAT_MODEL = settings.JARVIS_MODEL or RECEIPT_MODEL
 
 SYSTEM_BASE = (
     "You are Jarvis, a calm, practical family-routines copilot. You help "
@@ -48,11 +48,11 @@ MAX_TOOL_HOPS = 4
 
 
 # Module-level alias kept for tests that import TOOL_DEFINITIONS directly.
-# Source of truth is ``frankie_tools.REGISTRY``.
+# Source of truth is ``jarvis_tools.REGISTRY``.
 TOOL_DEFINITIONS: list[dict] = tool_definitions()
 
 
-class FrankieService:
+class JarvisService:
     @staticmethod
     async def _build_context(db: AsyncSession, family_id: UUID) -> str:
         """Fetch live family state and render it as a system-prompt block."""
@@ -113,11 +113,11 @@ class FrankieService:
     @staticmethod
     async def _load_history(
         db: AsyncSession, family_id: UUID, limit: int
-    ) -> List[FrankieMessage]:
+    ) -> List[JarvisMessage]:
         q = (
-            select(FrankieMessage)
-            .where(FrankieMessage.family_id == family_id)
-            .order_by(FrankieMessage.created_at.desc())
+            select(JarvisMessage)
+            .where(JarvisMessage.family_id == family_id)
+            .order_by(JarvisMessage.created_at.desc())
             .limit(limit)
         )
         rows = list((await db.execute(q)).scalars().all())
@@ -145,12 +145,12 @@ class FrankieService:
         )
         q = (
             select(func.count())
-            .select_from(FrankieMessage)
+            .select_from(JarvisMessage)
             .where(
                 and_(
-                    FrankieMessage.family_id == family_id,
-                    FrankieMessage.role == "user",
-                    FrankieMessage.created_at >= cutoff,
+                    JarvisMessage.family_id == family_id,
+                    JarvisMessage.role == "user",
+                    JarvisMessage.created_at >= cutoff,
                 )
             )
         )
@@ -183,19 +183,19 @@ class FrankieService:
             msg = (message or "").strip()
             if not msg:
                 raise ValidationError("Message is empty.")
-            cap = int(settings.FRANKIE_DAILY_MESSAGE_CAP or 0)
+            cap = int(settings.JARVIS_DAILY_MESSAGE_CAP or 0)
             if cap > 0:
-                if await FrankieService._today_message_count(db, family_id) >= cap:
+                if await JarvisService._today_message_count(db, family_id) >= cap:
                     raise ValidationError(
                         f"Daily Jarvis cap reached ({cap}). Try again tomorrow."
                     )
 
             yield "event: thinking\ndata: {}\n\n"
 
-            history = await FrankieService._load_history(
+            history = await JarvisService._load_history(
                 db, family_id, limit=MAX_HISTORY_TURNS
             )
-            context_block = await FrankieService._build_context(db, family_id)
+            context_block = await JarvisService._build_context(db, family_id)
             msgs: list[dict[str, Any]] = [
                 {"role": "system", "content": SYSTEM_BASE + "\n\n" + context_block}
             ]
@@ -270,10 +270,10 @@ class FrankieService:
             if not reply:
                 reply = "I had nothing useful to say. Try rephrasing?"
 
-            user_row = FrankieMessage(
+            user_row = JarvisMessage(
                 family_id=family_id, user_id=user_id, role="user", content=msg
             )
-            bot_row = FrankieMessage(
+            bot_row = JarvisMessage(
                 family_id=family_id,
                 user_id=None,
                 role="assistant",
@@ -320,18 +320,18 @@ class FrankieService:
         if not message:
             raise ValidationError("Message is empty.")
 
-        cap = int(settings.FRANKIE_DAILY_MESSAGE_CAP or 0)
+        cap = int(settings.JARVIS_DAILY_MESSAGE_CAP or 0)
         if cap > 0:
-            sent_today = await FrankieService._today_message_count(db, family_id)
+            sent_today = await JarvisService._today_message_count(db, family_id)
             if sent_today >= cap:
                 raise ValidationError(
                     f"Daily Jarvis cap reached ({cap}). Try again tomorrow."
                 )
 
-        history = await FrankieService._load_history(
+        history = await JarvisService._load_history(
             db, family_id, limit=MAX_HISTORY_TURNS
         )
-        context_block = await FrankieService._build_context(db, family_id)
+        context_block = await JarvisService._build_context(db, family_id)
 
         msgs: list[dict[str, Any]] = [
             {"role": "system", "content": SYSTEM_BASE + "\n\n" + context_block}
@@ -405,10 +405,10 @@ class FrankieService:
         if not reply:
             reply = "I had nothing useful to say. Try rephrasing?"
 
-        user_msg = FrankieMessage(
+        user_msg = JarvisMessage(
             family_id=family_id, user_id=user_id, role="user", content=message
         )
-        bot_msg = FrankieMessage(
+        bot_msg = JarvisMessage(
             family_id=family_id,
             user_id=None,
             role="assistant",
@@ -428,14 +428,14 @@ class FrankieService:
     @staticmethod
     async def list_history(
         db: AsyncSession, family_id: UUID, limit: int = HISTORY_RETURN_LIMIT
-    ) -> List[FrankieMessage]:
-        return await FrankieService._load_history(db, family_id, limit=limit)
+    ) -> List[JarvisMessage]:
+        return await JarvisService._load_history(db, family_id, limit=limit)
 
     @staticmethod
     async def clear_history(db: AsyncSession, family_id: UUID) -> int:
         from sqlalchemy import delete as sql_delete
         result = await db.execute(
-            sql_delete(FrankieMessage).where(FrankieMessage.family_id == family_id)
+            sql_delete(JarvisMessage).where(JarvisMessage.family_id == family_id)
         )
         await db.commit()
         return result.rowcount or 0

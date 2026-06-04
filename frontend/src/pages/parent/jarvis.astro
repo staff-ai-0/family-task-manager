@@ -18,12 +18,12 @@ if (Astro.request.method === "POST") {
     const data = await Astro.request.formData();
     const action = data.get("action");
     if (action === "clear") {
-        await apiFetch("/api/frankie/history", { method: "DELETE", token });
+        await apiFetch("/api/jarvis/history", { method: "DELETE", token });
     }
-    return Astro.redirect("/parent/frankie");
+    return Astro.redirect("/parent/jarvis");
 }
 
-const { data: historyRaw } = await apiFetch<any[]>("/api/frankie/history", {
+const { data: historyRaw } = await apiFetch<any[]>("/api/jarvis/history", {
     token,
 });
 const history: any[] = Array.isArray(historyRaw) ? historyRaw : [];
@@ -55,7 +55,7 @@ const labels = {
                     <p class="text-violet-100 text-xs mt-1">{labels.subtitle}</p>
                 </div>
                 <div class="flex gap-2 items-center">
-                    <a href="/parent/frankie-schedules" class="text-xs underline text-violet-200 hover:text-white">
+                    <a href="/parent/jarvis-schedules" class="text-xs underline text-violet-200 hover:text-white">
                         ⏰ {lang === "es" ? "Programaciones" : "Schedules"}
                     </a>
                     {history.length > 0 && (
@@ -177,7 +177,7 @@ const labels = {
 
             const liveActions: string[] = [];
             try {
-                const resp = await fetch("/api/frankie/chat-stream", {
+                const resp = await fetch("/api/jarvis/chat-stream", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ message, model: selectedModel }),

@@ -12,14 +12,14 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
-from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, frankie, meals, family_chat, frankie_schedules, dm
+from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
 from app.jobs.subscription_sweep import run_sweep
 from app.services.task_assignment_service import TaskAssignmentService
 from app.services.pet_service import PetService
 from app.services.analytics_service import AnalyticsService
-from app.services.frankie_schedule_service import FrankieScheduleService
+from app.services.jarvis_schedule_service import JarvisScheduleService
 
 # Configure logging
 logging.basicConfig(
@@ -83,15 +83,15 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(_pet_decay_sweep, "cron", hour=8, minute=0, id="pet_decay_sweep")
     scheduler.add_job(_pup_snapshot_sweep, "cron", hour=23, minute=30, id="pup_snapshot_sweep")
 
-    async def _frankie_schedule_sweep():
+    async def _jarvis_schedule_sweep():
         async with AsyncSessionLocal() as session:
             try:
-                n = await FrankieScheduleService.sweep_due(session)
+                n = await JarvisScheduleService.sweep_due(session)
                 if n:
                     logger.info("Jarvis schedule sweep fired %d", n)
             except Exception:
                 logger.exception("Jarvis schedule sweep failed")
-    scheduler.add_job(_frankie_schedule_sweep, "cron", minute="*/5", id="frankie_sched_sweep")
+    scheduler.add_job(_jarvis_schedule_sweep, "cron", minute="*/5", id="jarvis_sched_sweep")
 
     scheduler.start()
 
@@ -177,10 +177,10 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["Not
 app.include_router(kiosk.router, prefix="/api/kiosk", tags=["Kiosk"])
 app.include_router(pet.router, prefix="/api/pet", tags=["Pet"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
-app.include_router(frankie.router, prefix="/api/frankie", tags=["Frankie"])
+app.include_router(jarvis.router, prefix="/api/jarvis", tags=["Jarvis"])
 app.include_router(meals.router, prefix="/api/meals", tags=["Meals"])
 app.include_router(family_chat.router, prefix="/api/chat", tags=["Chat"])
-app.include_router(frankie_schedules.router, prefix="/api/frankie/schedules", tags=["Frankie Schedules"])
+app.include_router(jarvis_schedules.router, prefix="/api/jarvis/schedules", tags=["Jarvis Schedules"])
 app.include_router(dm.router, prefix="/api/dm", tags=["DM"])
 from app.api.routes.internal import a2a_retry as _internal_a2a  # noqa: E402
 app.include_router(_internal_a2a.router, prefix="/api/internal", tags=["internal"])

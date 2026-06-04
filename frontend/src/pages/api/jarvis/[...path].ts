@@ -5,7 +5,7 @@ const BACKEND_URL = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL 
 async function proxy({ request, params }: { request: Request; params: Record<string, string | undefined> }): Promise<Response> {
     const path = params.path ?? "";
     const url = new URL(request.url);
-    const backendUrl = `${BACKEND_URL}/api/frankie/${path}${url.search}`;
+    const backendUrl = `${BACKEND_URL}/api/jarvis/${path}${url.search}`;
 
     const forwardHeaders = new Headers();
     for (const [key, value] of request.headers.entries()) {

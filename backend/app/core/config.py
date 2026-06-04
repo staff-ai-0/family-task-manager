@@ -44,10 +44,10 @@ class Settings(BaseSettings):
     # Jarvis copilot daily message cap per family. Each user → assistant
     # exchange counts as one message. Prevents accidental spend overruns
     # on the LiteLLM proxy. 0 = unlimited.
-    FRANKIE_DAILY_MESSAGE_CAP: int = 100
+    JARVIS_DAILY_MESSAGE_CAP: int = 100
     # LiteLLM model alias for Jarvis chat. Defaults to receipt scanner's
-    # claude-haiku for shared budget. Override via FRANKIE_MODEL env.
-    FRANKIE_MODEL: str = "claude-haiku"
+    # claude-haiku for shared budget. Override via JARVIS_MODEL env.
+    JARVIS_MODEL: str = "claude-haiku"
 
     # Stripe settings removed 2026-05-24. PayPal is the canonical
     # billing path. See feedback_no_stripe memory entry.

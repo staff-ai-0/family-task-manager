@@ -26,7 +26,7 @@ if (Astro.request.method === "POST") {
             cron_expr: data.get("cron_expr"),
             channel: data.get("channel") || "notification",
         };
-        const { ok, error } = await apiFetch("/api/frankie/schedules/", {
+        const { ok, error } = await apiFetch("/api/jarvis/schedules/", {
             method: "POST",
             token,
             body: JSON.stringify(payload),
@@ -35,7 +35,7 @@ if (Astro.request.method === "POST") {
     } else if (action === "toggle") {
         const id = data.get("schedule_id");
         if (id) {
-            await apiFetch(`/api/frankie/schedules/${id}/toggle`, {
+            await apiFetch(`/api/jarvis/schedules/${id}/toggle`, {
                 method: "POST",
                 token,
             });
@@ -43,16 +43,16 @@ if (Astro.request.method === "POST") {
     } else if (action === "delete") {
         const id = data.get("schedule_id");
         if (id) {
-            await apiFetch(`/api/frankie/schedules/${id}`, {
+            await apiFetch(`/api/jarvis/schedules/${id}`, {
                 method: "DELETE",
                 token,
             });
         }
     }
-    return Astro.redirect("/parent/frankie-schedules");
+    return Astro.redirect("/parent/jarvis-schedules");
 }
 
-const { data: schedulesRaw } = await apiFetch<any[]>("/api/frankie/schedules/", {
+const { data: schedulesRaw } = await apiFetch<any[]>("/api/jarvis/schedules/", {
     token,
 });
 const schedules: any[] = Array.isArray(schedulesRaw) ? schedulesRaw : [];
@@ -101,7 +101,7 @@ const labels = {
 <Layout title={`${labels.title} - Family Task Manager`}>
     <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col">
         <header class="bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <a href="/parent/frankie" class="text-xs text-violet-200 underline">{labels.back}</a>
+            <a href="/parent/jarvis" class="text-xs text-violet-200 underline">{labels.back}</a>
             <h1 class="text-2xl font-bold mt-1">⏰ {labels.title}</h1>
             <p class="text-violet-200 text-xs">{labels.subtitle}</p>
         </header>

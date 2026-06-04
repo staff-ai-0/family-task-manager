@@ -1,4 +1,4 @@
-"""Frankie tool registry (W6.8).
+"""Jarvis tool registry (W6.8).
 
 Each tool is a small async handler bundled with its OpenAI-format function
 schema. A flat REGISTRY maps tool name → (definition, handler). The chat
@@ -219,10 +219,10 @@ async def _list_recent_notifications(db, family_id, user_id, args):
     }
 
 
-async def _schedule_frankie_prompt(db, family_id, user_id, args):
-    from app.services.frankie_schedule_service import FrankieScheduleService
+async def _schedule_jarvis_prompt(db, family_id, user_id, args):
+    from app.services.jarvis_schedule_service import JarvisScheduleService
 
-    s = await FrankieScheduleService.create(
+    s = await JarvisScheduleService.create(
         db,
         family_id=family_id,
         created_by=user_id,
@@ -496,10 +496,10 @@ _DEF_SCHEDULE_MEAL = {
 }
 
 
-_DEF_SCHEDULE_FRANKIE = {
+_DEF_SCHEDULE_JARVIS = {
     "type": "function",
     "function": {
-        "name": "schedule_frankie_prompt",
+        "name": "schedule_jarvis_prompt",
         "description": (
             "Set up a recurring Jarvis prompt that runs on a cron schedule "
             "(e.g. 'weekly Sunday summary at 6pm'). Output goes to the "
@@ -540,7 +540,7 @@ REGISTRY: Dict[str, Tuple[dict, Handler]] = {
     "add_shopping_item":         (_DEF_ADD_SHOPPING,   _add_shopping_item),
     "add_recipe":                (_DEF_ADD_RECIPE,     _add_recipe),
     "schedule_meal":             (_DEF_SCHEDULE_MEAL,  _schedule_meal),
-    "schedule_frankie_prompt":   (_DEF_SCHEDULE_FRANKIE, _schedule_frankie_prompt),
+    "schedule_jarvis_prompt":   (_DEF_SCHEDULE_JARVIS, _schedule_jarvis_prompt),
 }
 
 

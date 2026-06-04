@@ -1,4 +1,4 @@
-"""Frankie schedule routes (W9.1)."""
+"""Jarvis schedule routes (W9.1)."""
 
 from datetime import datetime
 from typing import List, Optional
@@ -13,7 +13,7 @@ from app.core.dependencies import require_parent_role
 from app.core.exceptions import NotFoundException, ValidationException
 from app.core.type_utils import to_uuid_required
 from app.models import User
-from app.services.frankie_schedule_service import FrankieScheduleService
+from app.services.jarvis_schedule_service import JarvisScheduleService
 
 
 router = APIRouter()
@@ -45,7 +45,7 @@ async def list_schedules(
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    rows = await FrankieScheduleService.list(
+    rows = await JarvisScheduleService.list(
         db, to_uuid_required(current_user.family_id)
     )
     return [ScheduleOut.model_validate(r) for r in rows]
@@ -62,7 +62,7 @@ async def create_schedule(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        s = await FrankieScheduleService.create(
+        s = await JarvisScheduleService.create(
             db,
             family_id=to_uuid_required(current_user.family_id),
             created_by=to_uuid_required(current_user.id),
@@ -83,7 +83,7 @@ async def toggle(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        s = await FrankieScheduleService.toggle(
+        s = await JarvisScheduleService.toggle(
             db, schedule_id, to_uuid_required(current_user.family_id)
         )
     except NotFoundException as exc:
@@ -98,7 +98,7 @@ async def delete_schedule(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        await FrankieScheduleService.delete(
+        await JarvisScheduleService.delete(
             db, schedule_id, to_uuid_required(current_user.family_id)
         )
     except NotFoundException as exc:

@@ -12,18 +12,18 @@ async function login(page) {
   await page.waitForURL('**/dashboard', { timeout: 10000 });
 }
 
-test.describe('Frankie copilot', () => {
+test.describe('Jarvis copilot', () => {
   test('parent can open chat page and see input', async ({ page }) => {
     await login(page);
-    await page.goto(`${BASE_URL}/parent/frankie`);
-    await expect(page.locator('h1')).toContainText('Frankie');
+    await page.goto(`${BASE_URL}/parent/jarvis`);
+    await expect(page.locator('h1')).toContainText('Jarvis');
     await expect(page.locator('#message-input')).toBeVisible();
   });
 
   test('sends a message and gets a response or graceful error', async ({ page }) => {
     test.skip(!process.env.E2E_FULL, 'requires LITELLM_API_KEY in backend');
     await login(page);
-    await page.goto(`${BASE_URL}/parent/frankie`);
+    await page.goto(`${BASE_URL}/parent/jarvis`);
     await page.fill('#message-input', 'What needs my attention today?');
     await page.locator('#chat-form button[type="submit"]').click();
     // Bot reply bubble appears within 30s, or alert pops with error

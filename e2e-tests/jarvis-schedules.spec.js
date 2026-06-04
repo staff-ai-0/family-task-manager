@@ -12,18 +12,18 @@ async function login(page) {
   await page.waitForURL('**/dashboard', { timeout: 15000 });
 }
 
-test.describe('Frankie schedules', () => {
+test.describe('Jarvis schedules', () => {
   test('page loads + create form opens', async ({ page }) => {
     await login(page);
-    await page.goto(`${BASE_URL}/parent/frankie-schedules`);
-    await expect(page.locator('h1')).toContainText(/Programaciones|Frankie schedules/i);
+    await page.goto(`${BASE_URL}/parent/jarvis-schedules`);
+    await expect(page.locator('h1')).toContainText(/Programaciones|Jarvis schedules/i);
     await page.getByText(/Nueva programación|New schedule/i).first().click();
     await expect(page.locator('input[name="cron_expr"]')).toBeVisible();
   });
 
   test('preset button fills cron input', async ({ page }) => {
     await login(page);
-    await page.goto(`${BASE_URL}/parent/frankie-schedules`);
+    await page.goto(`${BASE_URL}/parent/jarvis-schedules`);
     await page.getByText(/Nueva programación|New schedule/i).first().click();
     await page.locator('.preset-btn').first().click();
     const cronValue = await page.locator('input[name="cron_expr"]').inputValue();
@@ -32,7 +32,7 @@ test.describe('Frankie schedules', () => {
 
   test('create + delete schedule', async ({ page }) => {
     await login(page);
-    await page.goto(`${BASE_URL}/parent/frankie-schedules`);
+    await page.goto(`${BASE_URL}/parent/jarvis-schedules`);
     await page.getByText(/Nueva programación|New schedule/i).first().click();
     const name = `E2E sched ${Date.now()}`;
     await page.fill('input[name="name"]', name);

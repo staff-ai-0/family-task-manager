@@ -1,4 +1,4 @@
-"""Frankie SSE streaming test (W7.10).
+"""Jarvis SSE streaming test (W7.10).
 
 Mocks the LLM to return a tool-call hop followed by a final reply, then
 walks the async generator and asserts the event sequence + persistence.
@@ -8,7 +8,7 @@ import json
 import pytest
 from unittest.mock import MagicMock
 
-from app.services.frankie_service import FrankieService
+from app.services.jarvis_service import JarvisService
 
 
 def _mk_message(content="", tool_calls=None):
@@ -39,7 +39,7 @@ def _stub_settings(monkeypatch):
     monkeypatch.setattr(
         config.settings, "LITELLM_API_BASE", "https://litellm.test"
     )
-    monkeypatch.setattr(config.settings, "FRANKIE_DAILY_MESSAGE_CAP", 0)
+    monkeypatch.setattr(config.settings, "JARVIS_DAILY_MESSAGE_CAP", 0)
 
 
 async def _collect_events(gen):
@@ -71,11 +71,11 @@ class TestSSEStream:
         client = MagicMock()
         client.chat.completions.create.return_value = completion
         monkeypatch.setattr(
-            "app.services.frankie_service.OpenAI", lambda *a, **kw: client
+            "app.services.jarvis_service.OpenAI", lambda *a, **kw: client
         )
 
         events = await _collect_events(
-            FrankieService.chat_stream(
+            JarvisService.chat_stream(
                 db_session, test_family.id, test_parent_user.id, "what now?"
             )
         )
@@ -100,11 +100,11 @@ class TestSSEStream:
         client = MagicMock()
         client.chat.completions.create.side_effect = [first, second]
         monkeypatch.setattr(
-            "app.services.frankie_service.OpenAI", lambda *a, **kw: client
+            "app.services.jarvis_service.OpenAI", lambda *a, **kw: client
         )
 
         events = await _collect_events(
-            FrankieService.chat_stream(
+            JarvisService.chat_stream(
                 db_session, test_family.id, test_parent_user.id, "status?"
             )
         )
@@ -121,7 +121,7 @@ class TestSSEStream:
         self, db_session, test_family, test_parent_user
     ):
         events = await _collect_events(
-            FrankieService.chat_stream(
+            JarvisService.chat_stream(
                 db_session, test_family.id, test_parent_user.id, "   "
             )
         )
@@ -136,16 +136,16 @@ class TestSSEStream:
         client = MagicMock()
         client.chat.completions.create.return_value = completion
         monkeypatch.setattr(
-            "app.services.frankie_service.OpenAI", lambda *a, **kw: client
+            "app.services.jarvis_service.OpenAI", lambda *a, **kw: client
         )
 
         await _collect_events(
-            FrankieService.chat_stream(
+            JarvisService.chat_stream(
                 db_session, test_family.id, test_parent_user.id, "ping"
             )
         )
 
-        history = await FrankieService.list_history(db_session, test_family.id)
+        history = await JarvisService.list_history(db_session, test_family.id)
         roles = [h.role for h in history]
         assert "user" in roles
         assert "assistant" in roles

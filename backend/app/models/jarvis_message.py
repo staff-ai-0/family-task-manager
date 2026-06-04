@@ -1,6 +1,6 @@
-"""Frankie chat history model (W6.1).
+"""Jarvis chat history model (W6.1).
 
-Persisted conversation between a parent and the Frankie copilot, scoped
+Persisted conversation between a parent and the Jarvis copilot, scoped
 per family. Kept so the assistant remembers prior turns within a session
 and so we can audit suggestions later.
 """
@@ -14,12 +14,12 @@ from sqlalchemy.dialects.postgresql import UUID
 from app.core.database import Base
 
 
-class FrankieMessage(Base):
-    __tablename__ = "frankie_messages"
+class JarvisMessage(Base):
+    __tablename__ = "jarvis_messages"
     __table_args__ = (
         CheckConstraint(
             "role IN ('user', 'assistant', 'system')",
-            name="chk_frankie_role",
+            name="chk_jarvis_role",
         ),
     )
 

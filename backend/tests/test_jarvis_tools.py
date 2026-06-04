@@ -1,4 +1,4 @@
-"""Frankie tool execution (W6.4) — verify each tool runs end-to-end against
+"""Jarvis tool execution (W6.4) — verify each tool runs end-to-end against
 real DB fixtures without invoking the LLM."""
 
 import pytest
@@ -7,14 +7,14 @@ from sqlalchemy import select
 
 from app.models.calendar_event import CalendarEvent
 from app.models.task_template import TaskTemplate
-from app.services.frankie_service import FrankieService
+from app.services.jarvis_service import JarvisService
 
 
 class TestExecuteTool:
     async def test_create_task_template_gig(
         self, db_session, test_family, test_parent_user
     ):
-        result = await FrankieService._execute_tool(
+        result = await JarvisService._execute_tool(
             db_session,
             test_family.id,
             test_parent_user.id,
@@ -45,7 +45,7 @@ class TestExecuteTool:
         self, db_session, test_family, test_parent_user
     ):
         # Mandatory + points=20 must be clamped to 0 by the tool wrapper.
-        result = await FrankieService._execute_tool(
+        result = await JarvisService._execute_tool(
             db_session,
             test_family.id,
             test_parent_user.id,
@@ -59,7 +59,7 @@ class TestExecuteTool:
         self, db_session, test_family, test_parent_user
     ):
         start = datetime.now(timezone.utc) + timedelta(days=1)
-        result = await FrankieService._execute_tool(
+        result = await JarvisService._execute_tool(
             db_session,
             test_family.id,
             test_parent_user.id,
@@ -87,7 +87,7 @@ class TestExecuteTool:
         self, db_session, test_family, test_parent_user
     ):
         # Tool must accept naive ISO and treat as UTC.
-        result = await FrankieService._execute_tool(
+        result = await JarvisService._execute_tool(
             db_session,
             test_family.id,
             test_parent_user.id,
@@ -99,7 +99,7 @@ class TestExecuteTool:
     async def test_list_today_progress_empty(
         self, db_session, test_family, test_parent_user
     ):
-        result = await FrankieService._execute_tool(
+        result = await JarvisService._execute_tool(
             db_session,
             test_family.id,
             test_parent_user.id,
@@ -112,7 +112,7 @@ class TestExecuteTool:
     async def test_unknown_tool_returns_error(
         self, db_session, test_family, test_parent_user
     ):
-        result = await FrankieService._execute_tool(
+        result = await JarvisService._execute_tool(
             db_session,
             test_family.id,
             test_parent_user.id,
@@ -125,7 +125,7 @@ class TestExecuteTool:
     async def test_create_event_with_bad_iso_returns_error(
         self, db_session, test_family, test_parent_user
     ):
-        result = await FrankieService._execute_tool(
+        result = await JarvisService._execute_tool(
             db_session,
             test_family.id,
             test_parent_user.id,
@@ -137,7 +137,7 @@ class TestExecuteTool:
 
 class TestToolDefinitions:
     def test_all_tools_have_function_schema(self):
-        from app.services.frankie_service import TOOL_DEFINITIONS
+        from app.services.jarvis_service import TOOL_DEFINITIONS
         assert len(TOOL_DEFINITIONS) >= 8
         for t in TOOL_DEFINITIONS:
             assert t["type"] == "function"
@@ -152,7 +152,7 @@ class TestReadOnlyTools:
     async def test_list_pending_approvals_empty(
         self, db_session, test_family, test_parent_user
     ):
-        result = await FrankieService._execute_tool(
+        result = await JarvisService._execute_tool(
             db_session, test_family.id, test_parent_user.id,
             "list_pending_approvals", {},
         )
@@ -163,7 +163,7 @@ class TestReadOnlyTools:
     async def test_list_overdue_tasks_empty(
         self, db_session, test_family, test_parent_user
     ):
-        result = await FrankieService._execute_tool(
+        result = await JarvisService._execute_tool(
             db_session, test_family.id, test_parent_user.id,
             "list_overdue_tasks", {},
         )
@@ -173,7 +173,7 @@ class TestReadOnlyTools:
     async def test_list_recent_notifications_empty(
         self, db_session, test_family, test_parent_user
     ):
-        result = await FrankieService._execute_tool(
+        result = await JarvisService._execute_tool(
             db_session, test_family.id, test_parent_user.id,
             "list_recent_notifications", {},
         )
@@ -185,7 +185,7 @@ class TestAddShoppingItem:
     async def test_creates_default_list_when_none(
         self, db_session, test_family, test_parent_user
     ):
-        result = await FrankieService._execute_tool(
+        result = await JarvisService._execute_tool(
             db_session, test_family.id, test_parent_user.id,
             "add_shopping_item", {"name": "Bread", "qty": "1 loaf"},
         )
@@ -202,7 +202,7 @@ class TestAddShoppingItem:
             db_session, ShoppingListCreate(name="Costco"),
             test_family.id, test_parent_user.id,
         )
-        result = await FrankieService._execute_tool(
+        result = await JarvisService._execute_tool(
             db_session, test_family.id, test_parent_user.id,
             "add_shopping_item", {"name": "Milk"},
         )

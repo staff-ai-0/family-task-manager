@@ -1,4 +1,4 @@
-"""Frankie copilot routes (W6.1)."""
+"""Jarvis copilot routes (W6.1)."""
 
 from datetime import datetime
 from typing import List, Optional
@@ -14,7 +14,7 @@ from app.core.dependencies import require_parent_role
 from app.core.exceptions import ValidationError
 from app.core.type_utils import to_uuid_required
 from app.models import User
-from app.services.frankie_service import FrankieService
+from app.services.jarvis_service import JarvisService
 
 
 router = APIRouter()
@@ -51,7 +51,7 @@ async def chat(
 ):
     model = data.model if data.model in ALLOWED_MODELS else None
     try:
-        return await FrankieService.chat(
+        return await JarvisService.chat(
             db,
             family_id=to_uuid_required(current_user.family_id),
             user_id=to_uuid_required(current_user.id),
@@ -70,7 +70,7 @@ async def chat_stream(
 ):
     """SSE stream of chat progress. Client consumes via fetch + ReadableStream."""
     model = data.model if data.model in ALLOWED_MODELS else None
-    gen = FrankieService.chat_stream(
+    gen = JarvisService.chat_stream(
         db,
         family_id=to_uuid_required(current_user.family_id),
         user_id=to_uuid_required(current_user.id),
@@ -92,7 +92,7 @@ async def history(
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    rows = await FrankieService.list_history(
+    rows = await JarvisService.list_history(
         db, to_uuid_required(current_user.family_id)
     )
     return [HistoryItem.model_validate(r) for r in rows]
@@ -103,7 +103,7 @@ async def clear_history(
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    await FrankieService.clear_history(
+    await JarvisService.clear_history(
         db, to_uuid_required(current_user.family_id)
     )
     return None

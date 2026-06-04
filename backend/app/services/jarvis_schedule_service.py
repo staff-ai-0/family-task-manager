@@ -1,4 +1,4 @@
-"""Frankie schedule service (W9.1).
+"""Jarvis schedule service (W9.1).
 
 Stores recurring prompts + handles cron tick that fires due ones. Uses
 APScheduler's CronTrigger to compute next_run_at from the stored
@@ -15,7 +15,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException, ValidationException
-from app.models.frankie_schedule import FrankieSchedule, VALID_CHANNELS
+from app.models.jarvis_schedule import JarvisSchedule, VALID_CHANNELS
 
 
 def _translate_dow_linux_to_apscheduler(field: str) -> str:
@@ -81,7 +81,7 @@ def _next_fire(trigger: CronTrigger, after: datetime) -> datetime:
     return nxt
 
 
-class FrankieScheduleService:
+class JarvisScheduleService:
     @staticmethod
     async def create(
         db: AsyncSession,
@@ -92,7 +92,7 @@ class FrankieScheduleService:
         prompt: str,
         cron_expr: str,
         channel: str = "notification",
-    ) -> FrankieSchedule:
+    ) -> JarvisSchedule:
         if channel not in VALID_CHANNELS:
             raise ValidationException(f"channel must be one of {sorted(VALID_CHANNELS)}")
         if not name.strip() or not prompt.strip():
@@ -100,7 +100,7 @@ class FrankieScheduleService:
         trigger = _parse_cron(cron_expr)
         now = datetime.now(timezone.utc)
         nxt = _next_fire(trigger, now)
-        s = FrankieSchedule(
+        s = JarvisSchedule(
             family_id=family_id,
             created_by=created_by,
             name=name.strip()[:120],
@@ -118,11 +118,11 @@ class FrankieScheduleService:
     @staticmethod
     async def list(
         db: AsyncSession, family_id: UUID
-    ) -> List[FrankieSchedule]:
+    ) -> List[JarvisSchedule]:
         q = (
-            select(FrankieSchedule)
-            .where(FrankieSchedule.family_id == family_id)
-            .order_by(FrankieSchedule.created_at.desc())
+            select(JarvisSchedule)
+            .where(JarvisSchedule.family_id == family_id)
+            .order_by(JarvisSchedule.created_at.desc())
         )
         return list((await db.execute(q)).scalars().all())
 
@@ -130,10 +130,10 @@ class FrankieScheduleService:
     async def delete(
         db: AsyncSession, schedule_id: UUID, family_id: UUID
     ) -> None:
-        q = select(FrankieSchedule).where(
+        q = select(JarvisSchedule).where(
             and_(
-                FrankieSchedule.id == schedule_id,
-                FrankieSchedule.family_id == family_id,
+                JarvisSchedule.id == schedule_id,
+                JarvisSchedule.family_id == family_id,
             )
         )
         s = (await db.execute(q)).scalar_one_or_none()
@@ -145,11 +145,11 @@ class FrankieScheduleService:
     @staticmethod
     async def toggle(
         db: AsyncSession, schedule_id: UUID, family_id: UUID
-    ) -> FrankieSchedule:
-        q = select(FrankieSchedule).where(
+    ) -> JarvisSchedule:
+        q = select(JarvisSchedule).where(
             and_(
-                FrankieSchedule.id == schedule_id,
-                FrankieSchedule.family_id == family_id,
+                JarvisSchedule.id == schedule_id,
+                JarvisSchedule.family_id == family_id,
             )
         )
         s = (await db.execute(q)).scalar_one_or_none()
@@ -168,11 +168,11 @@ class FrankieScheduleService:
     async def sweep_due(db: AsyncSession) -> int:
         """Fire every schedule whose next_run_at <= now. Returns count fired.
 
-        Each fire calls FrankieService.chat with the stored prompt as the
+        Each fire calls JarvisService.chat with the stored prompt as the
         creator's message, then delivers the reply to the chosen channel.
         Failures are logged and don't stop other schedules in the same sweep.
         """
-        from app.services.frankie_service import FrankieService
+        from app.services.jarvis_service import JarvisService
         from app.services.notification_service import NotificationService
         from app.services.family_chat_service import FamilyChatService
         from app.models.notification import NotificationType
@@ -180,12 +180,12 @@ class FrankieScheduleService:
 
         now = datetime.now(timezone.utc)
         q = (
-            select(FrankieSchedule)
+            select(JarvisSchedule)
             .where(
                 and_(
-                    FrankieSchedule.is_active.is_(True),
-                    FrankieSchedule.next_run_at.isnot(None),
-                    FrankieSchedule.next_run_at <= now,
+                    JarvisSchedule.is_active.is_(True),
+                    JarvisSchedule.next_run_at.isnot(None),
+                    JarvisSchedule.next_run_at <= now,
                 )
             )
             .limit(50)
@@ -194,7 +194,7 @@ class FrankieScheduleService:
         fired = 0
         for s in due:
             try:
-                result = await FrankieService.chat(
+                result = await JarvisService.chat(
                     db,
                     family_id=s.family_id,
                     user_id=s.created_by or s.family_id,  # fallback
@@ -214,7 +214,7 @@ class FrankieScheduleService:
                         type=NotificationType.SHOPPING_ITEM_ADDED,
                         title=f"🤖 {s.name}",
                         body=reply[:200],
-                        link="/parent/frankie",
+                        link="/parent/jarvis",
                     )
                 fired += 1
             except ValidationError:

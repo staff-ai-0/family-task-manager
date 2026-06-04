@@ -1,6 +1,6 @@
-"""FrankieSchedule (W9.1) — recurring prompts auto-run on cron.
+"""JarvisSchedule (W9.1) — recurring prompts auto-run on cron.
 
-Each schedule fires the stored prompt through FrankieService.chat with a
+Each schedule fires the stored prompt through JarvisService.chat with a
 synthetic user (the creator) when next_run_at <= now. Output is delivered
 to the chosen channel:
   - notification: family-wide in-app notification + push
@@ -27,11 +27,11 @@ from app.core.database import Base
 VALID_CHANNELS = {"notification", "chat"}
 
 
-class FrankieSchedule(Base):
-    __tablename__ = "frankie_schedules"
+class JarvisSchedule(Base):
+    __tablename__ = "jarvis_schedules"
     __table_args__ = (
         CheckConstraint(
-            "channel IN ('notification', 'chat')", name="chk_frankie_channel"
+            "channel IN ('notification', 'chat')", name="chk_jarvis_channel"
         ),
     )
 
