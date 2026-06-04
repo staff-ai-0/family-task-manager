@@ -48,63 +48,88 @@ async def _overdue_sweep_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
+    from app.core.scheduler_lock import (
+        try_acquire_scheduler_leadership,
+        renew_scheduler_leadership,
+        release_scheduler_leadership,
+    )
+
     # Startup
     logger.info("Starting Family Task Manager API...")
     logger.info(
         f"Database URL: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'Not configured'}"
     )
 
-    # Create database tables (in production, use Alembic migrations)
-    # async with engine.begin() as conn:
-    #     await conn.run_sync(Base.metadata.create_all)
+    # Elect a single scheduler leader so cron jobs + the overdue sweep run on
+    # exactly one worker (prod runs multiple uvicorn workers).
+    is_leader, leader_client = await try_acquire_scheduler_leadership(settings.REDIS_URL)
 
-    overdue_task = asyncio.create_task(_overdue_sweep_loop())
+    overdue_task = None
+    scheduler = None
+    renew_task = None
 
-    async def _pet_decay_sweep():
-        async with AsyncSessionLocal() as session:
-            try:
-                n = await PetService.sweep_decay_all(session)
-                if n:
-                    logger.info("Pet decay sweep notified %d owner(s)", n)
-            except Exception:
-                logger.exception("Pet decay sweep failed")
+    if not is_leader:
+        logger.info("Not the scheduler leader — skipping cron + overdue sweep in this worker.")
+    else:
+        logger.info("Scheduler leader — starting cron jobs + overdue sweep.")
+        overdue_task = asyncio.create_task(_overdue_sweep_loop())
 
-    async def _pup_snapshot_sweep():
-        async with AsyncSessionLocal() as session:
-            try:
-                n = await AnalyticsService.write_all_snapshots(session)
-                if n:
-                    logger.info("PUP snapshot wrote %d family rows", n)
-            except Exception:
-                logger.exception("PUP snapshot sweep failed")
+        async def _pet_decay_sweep():
+            async with AsyncSessionLocal() as session:
+                try:
+                    n = await PetService.sweep_decay_all(session)
+                    if n:
+                        logger.info("Pet decay sweep notified %d owner(s)", n)
+                except Exception:
+                    logger.exception("Pet decay sweep failed")
 
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(run_sweep, "cron", hour=3, minute=0, id="subscription_sweep")
-    scheduler.add_job(_pet_decay_sweep, "cron", hour=8, minute=0, id="pet_decay_sweep")
-    scheduler.add_job(_pup_snapshot_sweep, "cron", hour=23, minute=30, id="pup_snapshot_sweep")
+        async def _pup_snapshot_sweep():
+            async with AsyncSessionLocal() as session:
+                try:
+                    n = await AnalyticsService.write_all_snapshots(session)
+                    if n:
+                        logger.info("PUP snapshot wrote %d family rows", n)
+                except Exception:
+                    logger.exception("PUP snapshot sweep failed")
 
-    async def _jarvis_schedule_sweep():
-        async with AsyncSessionLocal() as session:
-            try:
-                n = await JarvisScheduleService.sweep_due(session)
-                if n:
-                    logger.info("Jarvis schedule sweep fired %d", n)
-            except Exception:
-                logger.exception("Jarvis schedule sweep failed")
-    scheduler.add_job(_jarvis_schedule_sweep, "cron", minute="*/5", id="jarvis_sched_sweep")
+        async def _jarvis_schedule_sweep():
+            async with AsyncSessionLocal() as session:
+                try:
+                    n = await JarvisScheduleService.sweep_due(session)
+                    if n:
+                        logger.info("Jarvis schedule sweep fired %d", n)
+                except Exception:
+                    logger.exception("Jarvis schedule sweep failed")
 
-    scheduler.start()
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(run_sweep, "cron", hour=3, minute=0, id="subscription_sweep")
+        scheduler.add_job(_pet_decay_sweep, "cron", hour=8, minute=0, id="pet_decay_sweep")
+        scheduler.add_job(_pup_snapshot_sweep, "cron", hour=23, minute=30, id="pup_snapshot_sweep")
+        scheduler.add_job(_jarvis_schedule_sweep, "cron", minute="*/5", id="jarvis_sched_sweep")
+        scheduler.start()
+
+        if leader_client is not None:
+            async def _renew_leadership_loop():
+                while True:
+                    await asyncio.sleep(60)
+                    await renew_scheduler_leadership(leader_client)
+
+            renew_task = asyncio.create_task(_renew_leadership_loop())
 
     yield
 
     # Shutdown
     logger.info("Shutting down API...")
-    scheduler.shutdown(wait=True)
-    overdue_task.cancel()
-    try:
-        await overdue_task
-    except asyncio.CancelledError:
-        pass
+    if scheduler is not None:
+        scheduler.shutdown(wait=True)
+    for _task in (overdue_task, renew_task):
+        if _task is not None:
+            _task.cancel()
+            try:
+                await _task
+            except asyncio.CancelledError:
+                pass
+    await release_scheduler_leadership(leader_client)
     await engine.dispose()
 
 
@@ -201,8 +226,49 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "database": "connected", "version": "1.0.0"}
+    """Liveness probe: the process is up. Cheap; does NOT touch dependencies."""
+    return {"status": "healthy", "version": settings.VERSION}
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Readiness probe: can we actually serve — DB and Redis reachable?
+
+    Returns 503 (degraded) if any dependency check fails, so orchestrators and
+    uptime monitors see the truth instead of a static 'connected'.
+    """
+    from fastapi.responses import JSONResponse
+    from sqlalchemy import text
+
+    checks = {"database": "error", "redis": "error"}
+    healthy = True
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        checks["database"] = "connected"
+    except Exception:
+        logger.exception("Readiness: database check failed")
+        healthy = False
+
+    try:
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.REDIS_URL)
+        try:
+            await r.ping()
+            checks["redis"] = "connected"
+        finally:
+            await r.aclose()
+    except Exception:
+        logger.exception("Readiness: redis check failed")
+        healthy = False
+
+    return JSONResponse(
+        status_code=200 if healthy else 503,
+        content={"status": "ready" if healthy else "degraded", **checks,
+                 "version": settings.VERSION},
+    )
 
 
 if __name__ == "__main__":

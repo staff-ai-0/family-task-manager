@@ -1,7 +1,10 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from typing import List, Union
 import os
+
+# SECRET_KEY values that must never be used in production (forgeable JWTs/cookies).
+_INSECURE_SECRET_KEYS = {"", "your-secret-key-change-this-in-production"}
 
 # Fold Vault KV secrets into os.environ before Settings() is instantiated.
 # This is a no-op if VAULT_ADDR/VAULT_TOKEN aren't set or if Vault is
@@ -188,7 +191,20 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [i.strip() for i in v.split(',') if i.strip()]
         return v
-    
+
+    @model_validator(mode='after')
+    def _enforce_production_secrets(self):
+        """Fail fast in production (DEBUG=false) if SECRET_KEY is unset or still
+        the shipped placeholder — that would mean forgeable JWTs and session
+        cookies. Local/dev (DEBUG=true) is allowed to keep the default."""
+        if not self.DEBUG and self.SECRET_KEY in _INSECURE_SECRET_KEYS:
+            raise ValueError(
+                "SECRET_KEY is unset or still the insecure default while DEBUG is "
+                "false. Set a strong SECRET_KEY in the environment before running "
+                "in production."
+            )
+        return self
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
