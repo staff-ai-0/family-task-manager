@@ -50,6 +50,7 @@ class RewardGoalService:
         await db.execute(
             delete(UserRewardGoal).where(
                 UserRewardGoal.user_id == user_id,
+                UserRewardGoal.family_id == family_id,
                 UserRewardGoal.achieved_at.is_(None),
             )
         )

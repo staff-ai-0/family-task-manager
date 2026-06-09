@@ -4,7 +4,7 @@ User Reward Goal model
 Represents goals that users set to earn rewards through the economy loop.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -34,7 +34,7 @@ class UserRewardGoal(Base):
         ForeignKey("rewards.id", ondelete="CASCADE"),
         nullable=False,
     )
-    set_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    set_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     achieved_at = Column(DateTime(timezone=True), nullable=True)
     nudge_sent_at = Column(DateTime(timezone=True), nullable=True)
 
