@@ -23,6 +23,7 @@ class NotificationType:
     CALENDAR_EVENT_ADDED = "calendar_event_added"
     SHOPPING_ITEM_ADDED = "shopping_item_added"
     PET_NEEDS_ATTENTION = "pet_needs_attention"
+    GOAL_REACHED = "goal_reached"
 
 
 class Notification(Base):
