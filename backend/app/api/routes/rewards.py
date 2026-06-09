@@ -11,7 +11,9 @@ from uuid import UUID
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
+from app.core.exceptions import ForbiddenException
 from app.core.type_utils import to_uuid_required
+from app.models.user import UserRole
 from app.services import RewardService
 from app.schemas.reward import (
     RewardCreate,
@@ -19,6 +21,8 @@ from app.schemas.reward import (
     RewardResponse,
 )
 from app.schemas.points import PointTransactionResponse
+from app.schemas.reward_goal import GoalSet, GoalProgress
+from app.services.reward_goal_service import RewardGoalService
 from app.models import User
 from app.models.reward import RewardCategory
 
@@ -53,6 +57,59 @@ async def create_reward(
         db, reward_data, family_id=to_uuid_required(current_user.family_id)
     )
     return reward
+
+
+@router.get("/goal", response_model=Optional[GoalProgress])
+async def get_reward_goal(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Current kid/teen's active goal with live progress. Returns null for parents."""
+    if current_user.role == UserRole.PARENT:
+        return None
+    return await RewardGoalService.get_active_goal(
+        user_id=to_uuid_required(current_user.id),
+        family_id=to_uuid_required(current_user.family_id),
+        db=db,
+    )
+
+
+@router.put("/goal", response_model=GoalProgress)
+async def set_reward_goal(
+    data: GoalSet,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set active reward goal. CHILD/TEEN only."""
+    if current_user.role == UserRole.PARENT:
+        raise ForbiddenException("Parents cannot set a reward goal")
+    await RewardGoalService.set_goal(
+        user_id=to_uuid_required(current_user.id),
+        family_id=to_uuid_required(current_user.family_id),
+        reward_id=data.reward_id,
+        db=db,
+    )
+    return await RewardGoalService.get_active_goal(
+        user_id=to_uuid_required(current_user.id),
+        family_id=to_uuid_required(current_user.family_id),
+        db=db,
+    )
+
+
+@router.delete("/goal", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_reward_goal(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Clear active reward goal."""
+    if current_user.role == UserRole.PARENT:
+        raise ForbiddenException("Parents cannot clear a reward goal")
+    await RewardGoalService.clear_goal(
+        user_id=to_uuid_required(current_user.id),
+        family_id=to_uuid_required(current_user.family_id),
+        db=db,
+    )
+    return None
 
 
 @router.get("/{reward_id}", response_model=RewardResponse)

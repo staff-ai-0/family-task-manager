@@ -14,6 +14,7 @@ from app.services.task_assignment_service import TaskAssignmentService
 from app.services.reward_service import RewardService
 from app.services.points_service import PointsService
 from app.services.consequence_service import ConsequenceService
+from app.services.reward_goal_service import RewardGoalService
 
 __all__ = [
     "AuthService",
@@ -26,5 +27,6 @@ __all__ = [
     "RewardService",
     "PointsService",
     "ConsequenceService",
+    "RewardGoalService",
 ]
 

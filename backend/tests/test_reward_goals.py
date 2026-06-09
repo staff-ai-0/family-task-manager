@@ -239,3 +239,71 @@ async def test_new_goal_settable_after_achieved(db_session, test_family, test_ch
     progress = await RewardGoalService.get_active_goal(test_child_user.id, test_family.id, db_session)
     assert progress is not None
     assert progress.reward_id == reward2.id
+
+
+# ── HTTP route tests ─────────────────────────────────────────────────────────
+
+@pytest_asyncio.fixture
+async def child_headers(client: AsyncClient, test_child_user) -> dict:
+    res = await client.post(
+        "/api/auth/login",
+        json={"email": "child@test.com", "password": "password123"},
+    )
+    return {"Authorization": f"Bearer {res.json()['access_token']}"}
+
+
+@pytest_asyncio.fixture
+async def parent_headers(client: AsyncClient, test_parent_user) -> dict:
+    res = await client.post(
+        "/api/auth/login",
+        json={"email": "parent@test.com", "password": "password123"},
+    )
+    return {"Authorization": f"Bearer {res.json()['access_token']}"}
+
+
+@pytest.mark.asyncio
+async def test_get_goal_returns_null_when_none(client, child_headers, test_child_user, test_family):
+    res = await client.get("/api/rewards/goal", headers=child_headers)
+    assert res.status_code == 200
+    assert res.json() is None
+
+
+@pytest.mark.asyncio
+async def test_put_goal_sets_and_returns_progress(client, child_headers, test_child_user, test_family, test_reward):
+    res = await client.put(
+        "/api/rewards/goal",
+        json={"reward_id": str(test_reward.id)},
+        headers=child_headers,
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["reward_id"] == str(test_reward.id)
+    assert "progress_pct" in data
+    assert "pts_to_go" in data
+    assert "affordable" in data
+
+
+@pytest.mark.asyncio
+async def test_delete_goal_clears(client, child_headers, test_child_user, test_family, test_reward, db_session):
+    await RewardGoalService.set_goal(test_child_user.id, test_family.id, test_reward.id, db_session)
+    res = await client.delete("/api/rewards/goal", headers=child_headers)
+    assert res.status_code == 204
+    check = await client.get("/api/rewards/goal", headers=child_headers)
+    assert check.json() is None
+
+
+@pytest.mark.asyncio
+async def test_parent_put_goal_forbidden(client, parent_headers, test_family, test_reward):
+    res = await client.put(
+        "/api/rewards/goal",
+        json={"reward_id": str(test_reward.id)},
+        headers=parent_headers,
+    )
+    assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_parent_get_goal_returns_null(client, parent_headers, test_family):
+    res = await client.get("/api/rewards/goal", headers=parent_headers)
+    assert res.status_code == 200
+    assert res.json() is None
