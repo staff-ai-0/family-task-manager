@@ -50,6 +50,7 @@ from app.models.family_chat_reaction import FamilyChatReaction
 from app.models.frankie_schedule import FrankieSchedule
 from app.models.dm import DMThread, DMMessage
 from app.models.gig import GigOffering, GigClaim, GigCategory, GigClaimStatus
+from app.models.reward_goal import UserRewardGoal
 
 __all__ = [
     "Base",
@@ -113,6 +114,8 @@ __all__ = [
     "GigClaim",
     "GigCategory",
     "GigClaimStatus",
+    # Reward goals
+    "UserRewardGoal",
     # Enums
     "UserRole",
     "TaskStatus",
