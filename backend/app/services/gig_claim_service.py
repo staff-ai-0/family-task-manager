@@ -125,6 +125,19 @@ class GigClaimService:
             await GigClaimService._notify_claimer_approved(
                 db, claim, offering, points, auto=True
             )
+            try:
+                from app.services.reward_goal_service import RewardGoalService
+                await RewardGoalService.check_nudge(
+                    user_id=claim.claimed_by,
+                    family_id=claim.family_id,
+                    new_balance=claimer.points,
+                    db=db,
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "check_nudge after gig auto-approve failed", exc_info=True
+                )
             return claim
 
         # Normal path — awaits parent review.
@@ -340,6 +353,19 @@ class GigClaimService:
             await GigClaimService._notify_claimer_approved(
                 db, claim, offering, points, auto=False
             )
+            try:
+                from app.services.reward_goal_service import RewardGoalService
+                await RewardGoalService.check_nudge(
+                    user_id=claim.claimed_by,
+                    family_id=family_id,
+                    new_balance=claimer.points,
+                    db=db,
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "check_nudge after gig approve failed", exc_info=True
+                )
             return claim
         else:
             # Rejection breaks the trust streak.

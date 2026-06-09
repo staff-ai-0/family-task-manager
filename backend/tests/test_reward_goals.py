@@ -307,3 +307,58 @@ async def test_parent_get_goal_returns_null(client, parent_headers, test_family)
     res = await client.get("/api/rewards/goal", headers=parent_headers)
     assert res.status_code == 200
     assert res.json() is None
+
+
+# ── Integration: gig approve triggers nudge ───────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_gig_approve_triggers_nudge(db_session, test_family, test_child_user, test_parent_user, test_reward):
+    """Approving a gig that pushes balance to goal threshold fires GOAL_REACHED."""
+    from app.models.gig import GigOffering, GigClaim, GigClaimStatus, GigCategory
+    from app.services.gig_claim_service import GigClaimService
+
+    test_child_user.points = 50  # 50 pts below test_reward.points_cost=100
+    await db_session.commit()
+
+    offering = GigOffering(
+        family_id=test_family.id,
+        created_by=test_parent_user.id,
+        title="Wash car",
+        points=50,
+        difficulty=1,
+        category=GigCategory.CHORES,
+    )
+    db_session.add(offering)
+    await db_session.commit()
+    await db_session.refresh(offering)
+
+    claim = GigClaim(
+        gig_id=offering.id,
+        family_id=test_family.id,
+        claimed_by=test_child_user.id,
+        status=GigClaimStatus.COMPLETED,
+    )
+    db_session.add(claim)
+    await db_session.commit()
+    await db_session.refresh(claim)
+
+    await RewardGoalService.set_goal(test_child_user.id, test_family.id, test_reward.id, db_session)
+    await GigClaimService.approve(
+        db=db_session,
+        claim_id=claim.id,
+        family_id=test_family.id,
+        approver_id=test_parent_user.id,
+        approved=True,
+        notes=None,
+    )
+
+    from app.models.notification import Notification as Notif
+    notif = (
+        await db_session.execute(
+            select(Notif).where(
+                Notif.user_id == test_child_user.id,
+                Notif.type == "goal_reached",
+            )
+        )
+    ).scalar_one_or_none()
+    assert notif is not None
