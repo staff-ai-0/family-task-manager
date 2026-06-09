@@ -712,6 +712,22 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         await db.commit()
         await db.refresh(assignment)
 
+        if auto_approved:
+            try:
+                from app.services.reward_goal_service import RewardGoalService
+                refreshed = await get_user_by_id(db, user_id)
+                await RewardGoalService.check_nudge(
+                    user_id=user_id,
+                    family_id=family_id,
+                    new_balance=refreshed.points,
+                    db=db,
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "check_nudge after task auto-approve failed", exc_info=True
+                )
+
         # Fire-and-forget notifications on gig submission. Failures are
         # swallowed so the API response is never blocked by an upstream
         # issue. Skip for auto-approved gigs — parents don't need a

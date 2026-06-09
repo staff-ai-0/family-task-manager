@@ -362,3 +362,69 @@ async def test_gig_approve_triggers_nudge(db_session, test_family, test_child_us
         )
     ).scalar_one_or_none()
     assert notif is not None
+
+
+# ── Integration: task auto-approve triggers nudge ─────────────────────────────
+
+@pytest.mark.asyncio
+async def test_task_auto_approve_triggers_nudge(
+    db_session, test_family, test_child_user, test_parent_user, test_reward
+):
+    """Auto-approved bonus task crossing goal threshold fires GOAL_REACHED."""
+    from datetime import date, timedelta
+    from app.models.task_template import TaskTemplate
+    from app.models.task_assignment import TaskAssignment, AssignmentStatus, ApprovalStatus
+    from app.services.task_assignment_service import TaskAssignmentService
+
+    test_child_user.points = 0
+    test_child_user.gig_trust_streak = 10  # above default threshold → auto-approve
+    await db_session.commit()
+
+    template = TaskTemplate(
+        family_id=test_family.id,
+        created_by=test_parent_user.id,
+        title="Extra chore",
+        is_bonus=True,
+        points=100,
+        blocks_rewards=False,
+    )
+    db_session.add(template)
+    await db_session.commit()
+    await db_session.refresh(template)
+
+    today = date.today()
+    week_monday = today - timedelta(days=today.weekday())
+    assignment = TaskAssignment(
+        family_id=test_family.id,
+        template_id=template.id,
+        assigned_to=test_child_user.id,
+        status=AssignmentStatus.PENDING,
+        approval_status=ApprovalStatus.NONE,
+        assigned_date=today,
+        week_of=week_monday,
+    )
+    db_session.add(assignment)
+    await db_session.commit()
+    await db_session.refresh(assignment)
+
+    await RewardGoalService.set_goal(test_child_user.id, test_family.id, test_reward.id, db_session)
+
+    await TaskAssignmentService.complete_assignment(
+        db=db_session,
+        assignment_id=assignment.id,
+        user_id=test_child_user.id,
+        family_id=test_family.id,
+        proof_text="Done!",
+        proof_image_url=None,
+    )
+
+    from app.models.notification import Notification as Notif
+    notif = (
+        await db_session.execute(
+            select(Notif).where(
+                Notif.user_id == test_child_user.id,
+                Notif.type == "goal_reached",
+            )
+        )
+    ).scalar_one_or_none()
+    assert notif is not None
