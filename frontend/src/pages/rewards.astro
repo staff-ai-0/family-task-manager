@@ -10,8 +10,18 @@ const lang = Astro.cookies.get("lang")?.value ?? "en";
 
 if (Astro.request.method === "POST") {
     const data = await Astro.request.formData();
-    const rewardId = data.get("reward_id");
-    if (rewardId) {
+    const action = data.get("action") as string | null;
+    const rewardId = data.get("reward_id") as string | null;
+
+    if (action === "set_goal" && rewardId) {
+        await apiFetch("/api/rewards/goal", {
+            method: "PUT",
+            token,
+            body: JSON.stringify({ reward_id: rewardId }),
+        });
+    } else if (action === "clear_goal") {
+        await apiFetch("/api/rewards/goal", { method: "DELETE", token });
+    } else if (rewardId) {
         const { ok, error } = await apiFetch(
             `/api/rewards/${rewardId}/redeem`,
             { method: "POST", token },
@@ -31,10 +41,11 @@ if (Astro.request.method === "POST") {
     return Astro.redirect("/rewards");
 }
 
-const [{ data: user }, { data: rewardsRaw }, { data: blockingRaw }] = await Promise.all([
+const [{ data: user }, { data: rewardsRaw }, { data: blockingRaw }, { data: activeGoalRaw }] = await Promise.all([
     apiFetch<any>("/api/auth/me", { token }),
     apiFetch<any[]>("/api/rewards", { token }),
     apiFetch<any[]>("/api/task-assignments/blocking-rewards", { token }),
+    apiFetch<any>("/api/rewards/goal", { token }),
 ]);
 if (!user) {
     Astro.cookies.delete("access_token", { path: "/" });
@@ -43,6 +54,8 @@ if (!user) {
 const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
 const blockingTitles: string[] = Array.isArray(blockingRaw) ? blockingRaw : [];
 const isLocked = blockingTitles.length > 0;
+const activeGoal: any = activeGoalRaw ?? null;
+const isKid = user?.role === "CHILD" || user?.role === "TEEN";
 
 const flash = Astro.cookies.get("flash")?.value;
 const flashError = Astro.cookies.get("flash_error")?.value;
@@ -156,25 +169,29 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 ) : (
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {rewards.map((reward: any) => {
+                            const isGoal = isKid && activeGoal?.reward_id === reward.id;
                             const canAfford = user.points >= reward.points_cost;
                             const canRedeem = canAfford && !isLocked;
-                            const pct = reward.points_cost > 0
-                                ? Math.min(100, Math.round((user.points / reward.points_cost) * 100))
-                                : 100;
-                            const remaining = Math.max(0, reward.points_cost - user.points);
+                            const pct = isGoal
+                                ? activeGoal.progress_pct
+                                : (reward.points_cost > 0
+                                    ? Math.min(100, Math.round((user.points / reward.points_cost) * 100))
+                                    : 100);
+                            const remaining = isGoal
+                                ? activeGoal.pts_to_go
+                                : Math.max(0, reward.points_cost - user.points);
                             return (
-                                <div
-                                    class={`bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border transition-all ${canRedeem ? "border-brand-ink/10 hover:shadow-[var(--shadow-card)]" : "border-brand-ink/10 opacity-60"}`}
-                                >
+                                <div class={`bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border transition-all ${isGoal ? "border-brand-sky-deep ring-2 ring-brand-sky-deep/30" : "border-brand-ink/10"} ${(!canAfford && !isGoal) ? "opacity-60" : ""}`}>
                                     <div class="flex justify-between items-start mb-3">
                                         <div class="flex-1 pr-3">
-                                            <h3 class="font-bold text-brand-ink text-lg mb-1">
-                                                {reward.title}
-                                            </h3>
+                                            {isGoal && (
+                                                <span class="inline-block mb-1 px-2 py-0.5 text-xs rounded-full bg-brand-sky-deep text-white font-semibold">
+                                                    {lang === "es" ? "🎯 Tu Meta" : "🎯 Your Goal"}
+                                                </span>
+                                            )}
+                                            <h3 class="font-bold text-brand-ink text-lg mb-1">{reward.title}</h3>
                                             {reward.description && (
-                                                <p class="text-brand-ink-soft text-sm line-clamp-2">
-                                                    {reward.description}
-                                                </p>
+                                                <p class="text-brand-ink-soft text-sm line-clamp-2">{reward.description}</p>
                                             )}
                                             {reward.category && (
                                                 <span class="inline-block mt-2 px-2 py-0.5 text-xs rounded-full bg-brand-cream-deep text-brand-ink-soft font-medium">
@@ -183,21 +200,15 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                             )}
                                         </div>
                                         <div class="flex flex-col items-center bg-brand-sun/20 rounded-xl px-3 py-2 flex-shrink-0">
-                                            <span class="text-brand-sun-deep text-xs font-semibold">
-                                                {t(lang, "rewards_cost")}
-                                            </span>
-                                            <span class="text-brand-sun-deep text-xl font-extrabold">
-                                                {reward.points_cost}
-                                            </span>
-                                            <span class="text-brand-sun-deep text-xs">
-                                                {t(lang, "rewards_pts")}
-                                            </span>
+                                            <span class="text-brand-sun-deep text-xs font-semibold">{t(lang, "rewards_cost")}</span>
+                                            <span class="text-brand-sun-deep text-xl font-extrabold">{reward.points_cost}</span>
+                                            <span class="text-brand-sun-deep text-xs">{t(lang, "rewards_pts")}</span>
                                         </div>
                                     </div>
                                     <div class="mb-3">
                                         <div class="w-full bg-brand-cream-deep rounded-full h-2 overflow-hidden">
                                             <div
-                                                class={`h-2 rounded-full transition-all duration-500 ${canAfford ? "bg-brand-mint" : "bg-brand-sun-deep"}`}
+                                                class={`h-2 rounded-full transition-all duration-500 ${canAfford ? "bg-brand-mint" : (isGoal ? "bg-brand-sky-deep" : "bg-brand-sun-deep")}`}
                                                 style={`width: ${pct}%`}
                                             ></div>
                                         </div>
@@ -207,24 +218,43 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                                 : (lang === "es" ? `Te faltan ${remaining} puntos` : `${remaining} points to go`)}
                                         </p>
                                     </div>
-                                    <form method="POST">
-                                        <input
-                                            type="hidden"
-                                            name="reward_id"
-                                            value={reward.id}
-                                        />
-                                        <button
-                                            type="submit"
-                                            disabled={!canRedeem}
-                                            class={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${canRedeem ? "bg-brand-sun-deep hover:bg-brand-ink text-brand-ink shadow-[var(--shadow-card)] active:scale-95" : "bg-brand-cream-deep text-brand-ink-soft cursor-not-allowed"}`}
-                                        >
-                                            {isLocked
-                                                ? (lang === "es" ? "🔒 Bloqueado" : "🔒 Locked")
-                                                : canAfford
-                                                ? t(lang, "rewards_redeem")
-                                                : t(lang, "rewards_not_enough")}
-                                        </button>
-                                    </form>
+                                    <div class="flex gap-2">
+                                        <form method="POST" class="flex-1">
+                                            <input type="hidden" name="reward_id" value={reward.id} />
+                                            <button
+                                                type="submit"
+                                                disabled={!canRedeem}
+                                                class={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${canRedeem ? "bg-brand-sun-deep hover:bg-brand-ink text-brand-ink shadow-[var(--shadow-card)] active:scale-95" : "bg-brand-cream-deep text-brand-ink-soft cursor-not-allowed"}`}
+                                            >
+                                                {lang === "es" ? "Canjear" : "Redeem"}
+                                            </button>
+                                        </form>
+                                        {isKid && !isGoal && (
+                                            <form method="POST">
+                                                <input type="hidden" name="action" value="set_goal" />
+                                                <input type="hidden" name="reward_id" value={reward.id} />
+                                                <button
+                                                    type="submit"
+                                                    class="px-3 py-2.5 rounded-xl text-sm font-semibold bg-brand-cream-deep text-brand-sky-deep border border-brand-sky-deep/30 hover:bg-brand-sky-deep/10 active:scale-95 transition-colors"
+                                                    title={lang === "es" ? "Establecer como meta" : "Set as goal"}
+                                                >
+                                                    {lang === "es" ? "🎯 Meta" : "🎯 Goal"}
+                                                </button>
+                                            </form>
+                                        )}
+                                        {isKid && isGoal && (
+                                            <form method="POST">
+                                                <input type="hidden" name="action" value="clear_goal" />
+                                                <button
+                                                    type="submit"
+                                                    class="px-3 py-2.5 rounded-xl text-sm font-medium text-brand-ink-soft hover:text-brand-ink active:scale-95 transition-colors"
+                                                    title={lang === "es" ? "Quitar meta" : "Remove goal"}
+                                                >
+                                                    ✕
+                                                </button>
+                                            </form>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })}
