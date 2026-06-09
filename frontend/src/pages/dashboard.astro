@@ -55,6 +55,12 @@ const isKid = user.role === "TEEN" || user.role === "CHILD";
 const trustStreak = user.gig_trust_streak ?? 0;
 const toAutoApprove = Math.max(0, TRUST_THRESHOLD - trustStreak);
 
+let activeGoal: any = null;
+if (isKid) {
+    const { data: goalData } = await apiFetch<any>("/api/rewards/goal", { token });
+    activeGoal = goalData ?? null;
+}
+
 const flash = Astro.cookies.get("flash")?.value;
 if (flash) Astro.cookies.delete("flash", { path: "/" });
 const flashError = Astro.cookies.get("flash_error")?.value;
@@ -103,6 +109,61 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     : "Your gigs auto-approve instantly!")}
                         </p>
                     </div>
+                </div>
+            )}
+            {isKid && (
+                <div class="mt-3">
+                    {activeGoal && !activeGoal.affordable && (
+                        <a
+                            href="/rewards"
+                            class="flex items-center gap-3 bg-white/15 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-white/20 hover:bg-white/25 transition-colors"
+                        >
+                            <span class="text-xl">{activeGoal.reward_icon ?? "🎯"}</span>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-xs text-brand-cream font-semibold uppercase tracking-wider mb-0.5">
+                                    {lang === "es" ? "Tu Meta" : "Your Goal"}
+                                </p>
+                                <p class="text-sm font-bold text-white truncate">{activeGoal.reward_title}</p>
+                                <div class="w-full bg-white/20 rounded-full h-1.5 mt-1 overflow-hidden">
+                                    <div
+                                        class="h-1.5 bg-brand-sun rounded-full transition-all duration-500"
+                                        style={`width: ${activeGoal.progress_pct}%`}
+                                    ></div>
+                                </div>
+                                <p class="text-xs text-brand-cream mt-0.5">
+                                    {lang === "es"
+                                        ? `${activeGoal.pts_to_go} pts para lograrlo`
+                                        : `${activeGoal.pts_to_go} pts to go`}
+                                </p>
+                            </div>
+                        </a>
+                    )}
+                    {activeGoal && activeGoal.affordable && (
+                        <a
+                            href="/rewards"
+                            class="flex items-center gap-3 bg-brand-sun/30 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-brand-sun/50 hover:bg-brand-sun/40 transition-colors"
+                        >
+                            <span class="text-2xl">🎉</span>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-bold text-white">
+                                    {lang === "es" ? "¡Meta alcanzada!" : "Goal reached!"}
+                                </p>
+                                <p class="text-xs text-brand-cream truncate">
+                                    {lang === "es"
+                                        ? `Puedes canjear ${activeGoal.reward_title} →`
+                                        : `Redeem ${activeGoal.reward_title} →`}
+                                </p>
+                            </div>
+                        </a>
+                    )}
+                    {!activeGoal && (
+                        <a
+                            href="/rewards"
+                            class="block text-center text-xs text-brand-cream/70 hover:text-brand-cream py-1 transition-colors"
+                        >
+                            {lang === "es" ? "Elige una meta →" : "Set a goal →"}
+                        </a>
+                    )}
                 </div>
             )}
         </header>
