@@ -155,6 +155,16 @@ class RewardService(BaseFamilyService[Reward]):
             points_cost=reward.points_cost,
         )
 
+        try:
+            from app.services.reward_goal_service import RewardGoalService
+            await RewardGoalService.mark_achieved(
+                user_id=user_id, reward_id=reward.id, db=db
+            )
+            await db.commit()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("mark_achieved failed", exc_info=True)
+
         return transaction
 
     @staticmethod

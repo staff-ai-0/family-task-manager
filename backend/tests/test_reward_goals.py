@@ -428,3 +428,28 @@ async def test_task_auto_approve_triggers_nudge(
         )
     ).scalar_one_or_none()
     assert notif is not None
+
+
+# ── Integration: redeem marks goal achieved ───────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_redeem_marks_goal_achieved(db_session, test_family, test_child_user, test_reward):
+    """Redeeming the active goal reward sets achieved_at on the goal row."""
+    await RewardGoalService.set_goal(test_child_user.id, test_family.id, test_reward.id, db_session)
+    from app.services.reward_service import RewardService
+    await RewardService.redeem_reward(
+        db=db_session,
+        reward_id=test_reward.id,
+        user_id=test_child_user.id,
+        family_id=test_family.id,
+    )
+    goal = (
+        await db_session.execute(
+            select(UserRewardGoal).where(
+                UserRewardGoal.user_id == test_child_user.id,
+                UserRewardGoal.reward_id == test_reward.id,
+            )
+        )
+    ).scalar_one_or_none()
+    assert goal is not None
+    assert goal.achieved_at is not None
