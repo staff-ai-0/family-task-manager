@@ -135,6 +135,18 @@ async def register_family(
     await db.commit()
     await db.refresh(user)
 
+    # Onboarding hook: advance child_invited when joining an existing family
+    if data.family_code:
+        try:
+            from app.services.onboarding_service import OnboardingService
+            await OnboardingService.advance(family.id, "child_invited", db)
+            await db.commit()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "onboarding advance child_invited failed", exc_info=True
+            )
+
     # Send verification email (non-blocking)
     try:
         await EmailService.send_verification_email(db, user, base_url=settings.email_link_base)

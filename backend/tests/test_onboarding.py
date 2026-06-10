@@ -139,3 +139,34 @@ async def test_advance_reward_created_via_hook(
     await RewardService.create_reward(db_session, data, test_family.id)
     state = await OnboardingService.get_state(test_family.id, db_session)
     assert state.reward_created is True
+
+
+@pytest.mark.asyncio
+async def test_advance_child_invited_via_join(client, test_family, db_session):
+    """Registering with a family_code advances child_invited on the family."""
+    from app.models.family import Family, generate_join_code
+    from sqlalchemy import select
+
+    # Ensure the test family has a join_code (fixture creates without one)
+    fam = (await db_session.execute(
+        select(Family).where(Family.id == test_family.id)
+    )).scalar_one()
+    if not fam.join_code:
+        fam.join_code = generate_join_code()
+        await db_session.commit()
+        await db_session.refresh(fam)
+    join_code = fam.join_code
+
+    r = await client.post("/api/auth/register-family", json={
+        "email": "newchild@test.com",
+        "name": "New Child",
+        "password": "password123",
+        "family_code": join_code,
+    })
+    assert r.status_code in (200, 201)
+
+    # Use expunge + db.get to force a fresh DB read
+    family_id = test_family.id
+    db_session.expunge_all()
+    state = await OnboardingService.get_state(family_id, db_session)
+    assert state.child_invited is True
