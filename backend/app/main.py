@@ -17,6 +17,7 @@ from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
 from app.jobs.subscription_sweep import run_sweep
 from app.services.task_assignment_service import TaskAssignmentService
+from app.services.consequence_service import ConsequenceService
 from app.services.pet_service import PetService
 from app.services.analytics_service import AnalyticsService
 from app.services.frankie_schedule_service import FrankieScheduleService
@@ -38,6 +39,9 @@ async def _overdue_sweep_loop() -> None:
                 flipped = await TaskAssignmentService.mark_overdue_all(session)
                 if flipped:
                     logger.info("Overdue sweep flipped %d assignment(s)", flipped)
+                resolved = await ConsequenceService.check_expired_all(session)
+                if resolved:
+                    logger.info("Consequence sweep auto-resolved %d", resolved)
         except asyncio.CancelledError:
             raise
         except Exception:

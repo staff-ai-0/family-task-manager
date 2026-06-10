@@ -5,7 +5,7 @@ Business logic for consequence management and enforcement.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, update
 from typing import List, Optional
 from datetime import datetime, timezone
 from uuid import UUID
@@ -160,6 +160,23 @@ class ConsequenceService(BaseFamilyService[Consequence]):
             await db.commit()
 
         return list(consequences)
+
+    @staticmethod
+    async def check_expired_all(db: AsyncSession) -> int:
+        """Global sweep: auto-resolve every expired, still-active consequence
+        across ALL families. Called from the hourly background loop."""
+        now = datetime.now(timezone.utc)
+        result = await db.execute(
+            update(Consequence)
+            .where(
+                Consequence.active == True,
+                Consequence.resolved == False,
+                Consequence.end_date < now,
+            )
+            .values(active=False, resolved=True, resolved_at=now)
+        )
+        await db.commit()
+        return int(result.rowcount or 0)
 
     @staticmethod
     async def has_active_restriction(

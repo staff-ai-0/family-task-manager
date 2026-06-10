@@ -49,3 +49,53 @@ async def test_consequence_create_new_payload_shape(
     assert data["applied_to_user"] == str(test_child_user.id)
     assert data["restriction_type"] == "screen_time"
     assert data["end_date"] is not None
+
+
+# ── A4: expired consequence sweep ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_check_expired_all_resolves_only_expired(
+    db_session: AsyncSession, test_family, test_child_user
+):
+    from datetime import datetime, timedelta, timezone
+    from app.models.consequence import Consequence, ConsequenceSeverity, RestrictionType
+    from app.services.consequence_service import ConsequenceService
+
+    now = datetime.now(timezone.utc)
+    expired = Consequence(
+        title="Expired one",
+        severity=ConsequenceSeverity.LOW,
+        restriction_type=RestrictionType.SCREEN_TIME,
+        duration_days=1,
+        applied_to_user=test_child_user.id,
+        family_id=test_family.id,
+        start_date=now - timedelta(days=3),
+        end_date=now - timedelta(days=2),
+        active=True,
+        resolved=False,
+    )
+    current = Consequence(
+        title="Still active",
+        severity=ConsequenceSeverity.LOW,
+        restriction_type=RestrictionType.REWARDS,
+        duration_days=5,
+        applied_to_user=test_child_user.id,
+        family_id=test_family.id,
+        start_date=now,
+        end_date=now + timedelta(days=5),
+        active=True,
+        resolved=False,
+    )
+    db_session.add_all([expired, current])
+    await db_session.commit()
+
+    n = await ConsequenceService.check_expired_all(db_session)
+    assert n == 1
+
+    await db_session.refresh(expired)
+    await db_session.refresh(current)
+    assert expired.active is False
+    assert expired.resolved is True
+    assert expired.resolved_at is not None
+    assert current.active is True
+    assert current.resolved is False
