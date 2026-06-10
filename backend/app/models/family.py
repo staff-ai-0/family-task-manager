@@ -26,7 +26,14 @@ class Family(Base):
     created_by = Column(UUID(as_uuid=True), nullable=True)  # Nullable during creation, set after user created
     join_code = Column(String(10), unique=True, nullable=True, index=True)  # Short code for family invites
     is_active = Column(Boolean, default=True, nullable=False)
-    
+
+    # Onboarding checklist — tracked per family, all False on creation.
+    onboarding_child_invited = Column(Boolean, nullable=False, default=False, server_default="false")
+    onboarding_task_created = Column(Boolean, nullable=False, default=False, server_default="false")
+    onboarding_reward_created = Column(Boolean, nullable=False, default=False, server_default="false")
+    onboarding_points_awarded = Column(Boolean, nullable=False, default=False, server_default="false")
+    onboarding_dismissed = Column(Boolean, nullable=False, default=False, server_default="false")
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
