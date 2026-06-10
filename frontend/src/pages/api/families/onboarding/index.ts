@@ -26,26 +26,8 @@ export const GET: APIRoute = async ({ cookies }) => {
     } catch (e) {
         console.error("families/onboarding GET error:", e);
         return new Response(JSON.stringify({ detail: "Upstream error" }), {
-            status: 502, headers: { "Content-Type": "application/json" },
-        });
-    }
-};
-
-export const POST: APIRoute = async ({ request, cookies }) => {
-    const token = cookies.get("access_token")?.value;
-    if (!token) return unauthorized();
-    const url = new URL(request.url);
-    const backendPath = url.pathname.replace("/api", "");
-    try {
-        const r = await fetch(`${API()}${backendPath}`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        return new Response(null, { status: r.status });
-    } catch (e) {
-        console.error("families/onboarding POST error:", e);
-        return new Response(JSON.stringify({ detail: "Upstream error" }), {
-            status: 502, headers: { "Content-Type": "application/json" },
+            status: 502,
+            headers: { "Content-Type": "application/json" },
         });
     }
 };
