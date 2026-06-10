@@ -22,12 +22,12 @@ async def test_flags_same_payee_same_amount_within_60s(
 
 
 @pytest.mark.asyncio
-async def test_does_not_flag_after_60s(
+async def test_does_not_flag_outside_window(
     db, family, payee, transaction_factory_with_payee,
 ):
     await transaction_factory_with_payee(
         family.id, payee.id, amount=-72040,
-        created_at=datetime.now(timezone.utc) - timedelta(seconds=90),
+        created_at=datetime.now(timezone.utc) - timedelta(days=8),
     )
     dup = await DuplicateGuardService.check(
         db, family.id, payee_id=payee.id, amount_cents=-72040,

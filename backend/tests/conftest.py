@@ -538,13 +538,14 @@ async def transaction_factory_with_payee(db: AsyncSession, family):
     await db.refresh(acct)
 
     async def _make(family_id, payee_id, *, amount: int = -10000,
-                    created_at=None):
+                    created_at=None, date=None, receipt_image_path=None):
         tx = BudgetTransaction(
             family_id=family_id,
             account_id=acct.id,
-            date=date_type.today(),
+            date=date if date is not None else date_type.today(),
             amount=amount,
             payee_id=payee_id,
+            receipt_image_path=receipt_image_path,
         )
         db.add(tx)
         await db.flush()          # assigns PK + server_default created_at

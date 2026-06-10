@@ -626,6 +626,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             )
 
         template = assignment.template
+        auto_approved = False
 
         if template.is_bonus:
             # Gig path

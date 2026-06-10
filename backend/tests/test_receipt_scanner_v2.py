@@ -140,9 +140,12 @@ async def test_pipeline_returns_dup_warning_without_committing(
     await account_factory(
         family.id, name="MC MXN", card_last4="9222", currency="MXN",
     )
-    # Seed a recent matching transaction
+    # Seed a matching transaction on the same date as the fake receipt.
+    # Give it a receipt_image_path so the dup guard takes the warning path
+    # (not the upgrade-existing path which would return success=True).
     await transaction_factory_with_payee(
-        family.id, payee.id, amount=-72040,
+        family.id, payee.id, amount=-72040, date=date(2026, 5, 28),
+        receipt_image_path="gs://existing/receipt.jpg",
     )
 
     fake_receipt = _fake_receipt(
