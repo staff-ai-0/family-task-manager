@@ -23,6 +23,22 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 const { data: oversight } = await apiFetch<any>("/api/oversight/summary", { token });
 const pendingApprovals = oversight?.pending_counts?.total ?? 0;
 const kidCards: any[] = oversight?.members ?? [];
+
+interface OnboardingState {
+    child_invited: boolean;
+    task_created: boolean;
+    reward_created: boolean;
+    points_awarded: boolean;
+    dismissed: boolean;
+    all_done: boolean;
+}
+let onboarding: OnboardingState | null = null;
+try {
+    const { data: onboardingData } = await apiFetch<OnboardingState>("/api/families/onboarding", { token });
+    onboarding = onboardingData ?? null;
+} catch {
+    onboarding = null;
+}
 ---
 
 <Layout title={`${t(lang, "parent_dashboard")} - Family Task Manager`}>
@@ -46,6 +62,57 @@ const kidCards: any[] = oversight?.members ?? [];
         </div>
 
         <main class="flex-1 px-4 py-6">
+            {!onboarding?.dismissed && (
+                <div id="onboarding-widget" class="mb-6 bg-brand-coral/10 border border-brand-coral/20 rounded-2xl p-5 shadow-[var(--shadow-card)]">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="font-bold text-brand-ink text-base">
+                            {lang === "es" ? "¡Empecemos! 🚀" : "Getting Started 🚀"}
+                        </h2>
+                        {onboarding?.all_done && (
+                            <button
+                                id="dismiss-onboarding"
+                                class="text-brand-ink-soft hover:text-brand-ink transition-colors text-xl leading-none"
+                                aria-label="Dismiss"
+                            >×</button>
+                        )}
+                    </div>
+                    <ol class="space-y-2 text-sm">
+                        <li class="flex items-center gap-3">
+                            <span class={onboarding?.task_created ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.task_created ? "✅" : "◻"}</span>
+                            <span class={onboarding?.task_created ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
+                                {lang === "es" ? "Crea tu primera tarea" : "Create your first task"}
+                            </span>
+                            {!onboarding?.task_created && <a href="/parent/tasks" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <span class={onboarding?.reward_created ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.reward_created ? "✅" : "◻"}</span>
+                            <span class={onboarding?.reward_created ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
+                                {lang === "es" ? "Crea una recompensa" : "Create a reward"}
+                            </span>
+                            {!onboarding?.reward_created && <a href="/rewards" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <span class={onboarding?.child_invited ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.child_invited ? "✅" : "◻"}</span>
+                            <span class={onboarding?.child_invited ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
+                                {lang === "es" ? "Invita a un hijo/a" : "Invite a child"}
+                            </span>
+                            {!onboarding?.child_invited && <a href="/parent/invite" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <span class={onboarding?.points_awarded ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.points_awarded ? "✅" : "◻"}</span>
+                            <span class={onboarding?.points_awarded ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
+                                {lang === "es" ? "Aprueba la primera tarea" : "Approve first task"}
+                            </span>
+                            {!onboarding?.points_awarded && onboarding?.child_invited && <a href="/parent/approvals" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
+                        </li>
+                    </ol>
+                    {onboarding?.all_done && (
+                        <p class="mt-3 text-sm text-green-700 font-semibold">
+                            {lang === "es" ? "🎉 ¡Todo listo! Tu familia está en marcha." : "🎉 All set! Your family is up and running."}
+                        </p>
+                    )}
+                </div>
+            )}
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 <a
                     href="/parent/tasks"
@@ -412,3 +479,13 @@ const kidCards: any[] = oversight?.members ?? [];
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
 </Layout>
+
+<script>
+    document.getElementById("dismiss-onboarding")?.addEventListener("click", async () => {
+        try {
+            await fetch("/api/families/onboarding/dismiss", { method: "POST" });
+        } finally {
+            document.getElementById("onboarding-widget")?.remove();
+        }
+    });
+</script>
