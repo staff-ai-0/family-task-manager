@@ -715,6 +715,15 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         if auto_approved:
             try:
+                from app.services.onboarding_service import OnboardingService
+                await OnboardingService.advance(family_id, "points_awarded", db)
+                await db.commit()
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "onboarding advance points_awarded failed", exc_info=True
+                )
+            try:
                 from app.services.reward_goal_service import RewardGoalService
                 refreshed = await get_user_by_id(db, user_id)
                 await RewardGoalService.check_nudge(
@@ -929,6 +938,15 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 db, assignment.assigned_to, is_bonus=True
             )
             await db.commit()
+            try:
+                from app.services.onboarding_service import OnboardingService
+                await OnboardingService.advance(family_id, "points_awarded", db)
+                await db.commit()
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "onboarding advance points_awarded failed", exc_info=True
+                )
             # NotificationService.create commits + fans out push.
             await NotificationService.create(
                 db,

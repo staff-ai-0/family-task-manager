@@ -122,6 +122,15 @@ class GigClaimService:
             db.add(txn)
             await db.commit()
             await db.refresh(claim)
+            try:
+                from app.services.onboarding_service import OnboardingService
+                await OnboardingService.advance(claim.family_id, "points_awarded", db)
+                await db.commit()
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "onboarding advance points_awarded failed", exc_info=True
+                )
             await GigClaimService._notify_claimer_approved(
                 db, claim, offering, points, auto=True
             )
@@ -350,6 +359,15 @@ class GigClaimService:
             db.add(txn)
             await db.commit()
             await db.refresh(claim)
+            try:
+                from app.services.onboarding_service import OnboardingService
+                await OnboardingService.advance(claim.family_id, "points_awarded", db)
+                await db.commit()
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "onboarding advance points_awarded failed", exc_info=True
+                )
             await GigClaimService._notify_claimer_approved(
                 db, claim, offering, points, auto=False
             )
