@@ -165,6 +165,46 @@ class RewardGoalService:
         await db.commit()
 
     @staticmethod
+    async def get_family_goals(
+        family_id: UUID,
+        db: AsyncSession,
+    ) -> dict[UUID, GoalProgress]:
+        """All active goals in the family, keyed by user_id. One JOIN query —
+        balance comes from the joined User row (no per-row lookups)."""
+        rows = (
+            await db.execute(
+                select(UserRewardGoal, Reward, User)
+                .join(Reward, UserRewardGoal.reward_id == Reward.id)
+                .join(User, UserRewardGoal.user_id == User.id)
+                .where(
+                    UserRewardGoal.family_id == family_id,
+                    UserRewardGoal.achieved_at.is_(None),
+                )
+            )
+        ).all()
+        out: dict[UUID, GoalProgress] = {}
+        for goal, reward, user in rows:
+            balance = int(user.points or 0)
+            pts_to_go = max(0, reward.points_cost - balance)
+            progress_pct = (
+                min(100, round(balance / reward.points_cost * 100))
+                if reward.points_cost > 0
+                else 100
+            )
+            out[goal.user_id] = GoalProgress(
+                reward_id=reward.id,
+                reward_title=reward.title,
+                reward_icon=reward.icon,
+                points_cost=reward.points_cost,
+                balance=balance,
+                progress_pct=progress_pct,
+                pts_to_go=pts_to_go,
+                affordable=balance >= reward.points_cost,
+                set_at=goal.set_at,
+            )
+        return out
+
+    @staticmethod
     async def mark_achieved(
         user_id: UUID,
         reward_id: UUID,

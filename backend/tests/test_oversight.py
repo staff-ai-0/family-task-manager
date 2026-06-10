@@ -140,3 +140,59 @@ async def test_analytics_gigs_completed_includes_gig_board(
     )
     kid_row = next(r for r in rows if r["user_id"] == str(test_child_user.id))
     assert kid_row["gigs_completed"] >= 1
+
+
+# ── B1: get_family_goals ──────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_family_goals_returns_active_goals_keyed_by_user(
+    db_session: AsyncSession, test_family, test_child_user, test_teen_user, test_reward
+):
+    from app.services.reward_goal_service import RewardGoalService
+
+    await RewardGoalService.set_goal(
+        test_child_user.id, test_family.id, test_reward.id, db_session
+    )
+    goals = await RewardGoalService.get_family_goals(test_family.id, db_session)
+
+    assert test_child_user.id in goals
+    assert test_teen_user.id not in goals
+    gp = goals[test_child_user.id]
+    assert gp.reward_title == test_reward.title
+    assert gp.balance == 100
+    assert gp.affordable is True
+
+
+@pytest.mark.asyncio
+async def test_get_family_goals_excludes_achieved(
+    db_session: AsyncSession, test_family, test_child_user, test_reward
+):
+    from app.services.reward_goal_service import RewardGoalService
+
+    await RewardGoalService.set_goal(
+        test_child_user.id, test_family.id, test_reward.id, db_session
+    )
+    await RewardGoalService.mark_achieved(test_child_user.id, test_reward.id, db_session)
+    await db_session.commit()
+
+    goals = await RewardGoalService.get_family_goals(test_family.id, db_session)
+    assert test_child_user.id not in goals
+
+
+@pytest.mark.asyncio
+async def test_get_family_goals_cross_family_isolated(
+    db_session: AsyncSession, test_family, test_child_user, test_reward
+):
+    from app.models.family import Family
+    from app.services.reward_goal_service import RewardGoalService
+
+    other = Family(name="Other Family")
+    db_session.add(other)
+    await db_session.commit()
+    await db_session.refresh(other)
+
+    await RewardGoalService.set_goal(
+        test_child_user.id, test_family.id, test_reward.id, db_session
+    )
+    goals = await RewardGoalService.get_family_goals(other.id, db_session)
+    assert goals == {}
