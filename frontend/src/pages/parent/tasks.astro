@@ -177,7 +177,21 @@ function freqLabel(interval: number): string {
                 <h2 class="font-bold text-brand-ink mb-3 px-1">{t(lang, "pt_all_templates")}</h2>
                 <div id="template-list-container" class="space-y-3">
                     {templateList.length === 0 ? (
-                        <p class="text-brand-ink-soft text-sm text-center py-6">{t(lang, "pt_none")}</p>
+                        <div class="text-center py-10">
+                            <p class="text-4xl mb-3">📋</p>
+                            <p class="font-semibold text-brand-ink mb-1">
+                                {lang === "es" ? "Ninguna tarea todavía" : "No tasks yet"}
+                            </p>
+                            <p class="text-sm text-brand-ink-soft mb-4">
+                                {lang === "es" ? "Crea la primera para empezar" : "Create the first one to get started"}
+                            </p>
+                            <button
+                                id="open-create-template"
+                                class="bg-brand-sky text-white font-semibold px-5 py-2 rounded-xl hover:bg-brand-sky-deep transition-colors"
+                            >
+                                {lang === "es" ? "+ Crear tarea" : "+ Create task"}
+                            </button>
+                        </div>
                     ) : (
                         templateList.map((tmpl: any) => (
                             <div class={`bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border ${tmpl.is_active ? "border-brand-ink/10" : "border-brand-ink/10 opacity-60"}`}>
@@ -312,6 +326,10 @@ function freqLabel(interval: number): string {
 
     <script>
         document.addEventListener('astro:page-load', () => {
+        document.getElementById("open-create-template")?.addEventListener("click", () => {
+            document.getElementById("tcm-trigger")?.click();
+        });
+
         (window as any).toggleUserSelection = function(assignmentType: string) {
             const container = document.getElementById('user_selection_container');
             if (container) {

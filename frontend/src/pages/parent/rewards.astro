@@ -163,6 +163,7 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
                         </div>
                     </div>
                     <button
+                        id="btn-add-reward"
                         type="submit"
                         class="w-full py-2.5 bg-brand-sun-deep hover:bg-brand-ink text-brand-ink font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]"
                     >
@@ -178,9 +179,21 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
                 <div class="space-y-3">
                     {
                         rewards.length === 0 ? (
-                            <p class="text-brand-ink-soft text-sm text-center py-6">
-                                {t(lang, "pr_none")}
-                            </p>
+                            <div class="text-center py-10">
+                                <p class="text-4xl mb-3">🏆</p>
+                                <p class="font-semibold text-brand-ink mb-1">
+                                    {lang === "es" ? "Ninguna recompensa todavía" : "No rewards yet"}
+                                </p>
+                                <p class="text-sm text-brand-ink-soft mb-4">
+                                    {lang === "es" ? "Crea la primera para motivar a tus hijos" : "Create the first one to motivate your kids"}
+                                </p>
+                                <button
+                                    id="open-create-reward"
+                                    class="bg-brand-coral text-white font-semibold px-5 py-2 rounded-xl hover:opacity-90 transition-opacity"
+                                >
+                                    {lang === "es" ? "+ Crear recompensa" : "+ Create reward"}
+                                </button>
+                            </div>
                         ) : (
                             rewards.map((reward: any) => (
                                 <div class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10 flex items-center gap-3">
@@ -257,4 +270,15 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
         </main>
         <BottomNav active="parent" role={user.role} lang={lang} />
     </div>
+    <script>
+        document.addEventListener('astro:page-load', () => {
+            document.getElementById("open-create-reward")?.addEventListener("click", () => {
+                const btn = document.getElementById("btn-add-reward");
+                if (btn) {
+                    btn.scrollIntoView({ behavior: "smooth", block: "center" });
+                    btn.focus();
+                }
+            });
+        });
+    </script>
 </Layout>
