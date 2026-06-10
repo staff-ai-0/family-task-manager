@@ -396,3 +396,29 @@ async def test_pending_approvals_ai_score_only_on_tasks(
 
     assert task_item.ai_score == 0.85
     assert claim_item.ai_score is None
+
+
+# ── B2: HTTP routes ───────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_oversight_summary_route_parent_ok(
+    client, parent_headers, test_family, test_child_user
+):
+    res = await client.get("/api/oversight/summary", headers=parent_headers)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert "members" in data
+    assert "pending_counts" in data
+    assert data["pending_counts"]["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_oversight_summary_route_kid_403(client, child_headers, test_family):
+    res = await client.get("/api/oversight/summary", headers=child_headers)
+    assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_oversight_pending_route_kid_403(client, child_headers, test_family):
+    res = await client.get("/api/oversight/pending-approvals", headers=child_headers)
+    assert res.status_code == 403

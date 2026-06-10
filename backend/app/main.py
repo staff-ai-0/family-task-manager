@@ -15,6 +15,7 @@ from app.core.exception_handlers import register_exception_handlers
 from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, frankie, meals, family_chat, frankie_schedules, dm
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
+from app.api.routes import oversight
 from app.jobs.subscription_sweep import run_sweep
 from app.services.task_assignment_service import TaskAssignmentService
 from app.services.consequence_service import ConsequenceService
@@ -165,6 +166,7 @@ app.include_router(
 app.include_router(invitations.router, prefix="/api/invitations", tags=["Invitations"])
 app.include_router(budget_router, prefix="/api/budget", tags=["Budget"])
 app.include_router(gigs_router, prefix="/api/gigs", tags=["Gigs"])
+app.include_router(oversight.router, prefix="/api/oversight", tags=["Oversight"])
 app.include_router(points_conversion.router, prefix="/api/points-conversion", tags=["Points Conversion"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions"])
 from app.api.routes import subscriptions_webhook  # noqa: E402
