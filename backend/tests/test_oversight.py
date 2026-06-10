@@ -196,3 +196,153 @@ async def test_get_family_goals_cross_family_isolated(
     )
     goals = await RewardGoalService.get_family_goals(other.id, db_session)
     assert goals == {}
+
+
+# ── B2: OversightService.get_summary ──────────────────────────────────────────
+
+async def _make_pending_task(db, family, parent, kid, title="Chore", points=20):
+    """TaskAssignment awaiting parent approval (legacy gig path)."""
+    from datetime import date, timedelta, datetime, timezone
+    from app.models.task_template import TaskTemplate
+    from app.models.task_assignment import TaskAssignment, AssignmentStatus, ApprovalStatus
+
+    template = TaskTemplate(
+        family_id=family.id,
+        created_by=parent.id,
+        title=title,
+        is_bonus=True,
+        points=points,
+        blocks_rewards=False,
+    )
+    db.add(template)
+    await db.commit()
+    await db.refresh(template)
+
+    today = date.today()
+    week_monday = today - timedelta(days=today.weekday())
+    assignment = TaskAssignment(
+        family_id=family.id,
+        template_id=template.id,
+        assigned_to=kid.id,
+        status=AssignmentStatus.COMPLETED,
+        approval_status=ApprovalStatus.PENDING,
+        assigned_date=today,
+        week_of=week_monday,
+        completed_at=datetime.now(timezone.utc),
+        proof_text="done",
+    )
+    db.add(assignment)
+    await db.commit()
+    await db.refresh(assignment)
+    return assignment
+
+
+async def _make_pending_claim(db, family, parent, kid, title="Gig", points=15):
+    """GigClaim awaiting parent approval (new gig board)."""
+    from datetime import datetime, timezone
+    from app.models.gig import GigOffering, GigClaim, GigClaimStatus, GigCategory
+
+    offering = GigOffering(
+        family_id=family.id,
+        created_by=parent.id,
+        title=title,
+        points=points,
+        difficulty=1,
+        category=GigCategory.CHORES,
+    )
+    db.add(offering)
+    await db.commit()
+    await db.refresh(offering)
+
+    claim = GigClaim(
+        gig_id=offering.id,
+        family_id=family.id,
+        claimed_by=kid.id,
+        status=GigClaimStatus.COMPLETED,
+        completed_at=datetime.now(timezone.utc),
+        proof_text="did it",
+    )
+    db.add(claim)
+    await db.commit()
+    await db.refresh(claim)
+    return claim
+
+
+@pytest.mark.asyncio
+async def test_summary_pending_counts_across_both_queues(
+    db_session, test_family, test_parent_user, test_child_user, test_teen_user
+):
+    from app.services.oversight_service import OversightService
+
+    await _make_pending_task(db_session, test_family, test_parent_user, test_child_user)
+    await _make_pending_claim(db_session, test_family, test_parent_user, test_child_user)
+    await _make_pending_claim(db_session, test_family, test_parent_user, test_teen_user)
+
+    summary = await OversightService.get_summary(db_session, test_family.id)
+
+    assert summary.pending_counts.tasks == 1
+    assert summary.pending_counts.gig_claims == 2
+    assert summary.pending_counts.total == 3
+
+    child_card = next(m for m in summary.members if m.user_id == test_child_user.id)
+    teen_card = next(m for m in summary.members if m.user_id == test_teen_user.id)
+    assert child_card.pending_approvals == 2  # 1 task + 1 claim
+    assert teen_card.pending_approvals == 1
+
+
+@pytest.mark.asyncio
+async def test_summary_consequences_and_goal(
+    db_session, test_family, test_parent_user, test_child_user, test_reward
+):
+    from datetime import datetime, timedelta, timezone
+    from app.models.consequence import Consequence, ConsequenceSeverity, RestrictionType
+    from app.services.oversight_service import OversightService
+    from app.services.reward_goal_service import RewardGoalService
+
+    now = datetime.now(timezone.utc)
+    db_session.add(
+        Consequence(
+            title="Grounded",
+            severity=ConsequenceSeverity.MEDIUM,
+            restriction_type=RestrictionType.ACTIVITIES,
+            duration_days=2,
+            applied_to_user=test_child_user.id,
+            family_id=test_family.id,
+            start_date=now,
+            end_date=now + timedelta(days=2),
+            active=True,
+            resolved=False,
+        )
+    )
+    await db_session.commit()
+    await RewardGoalService.set_goal(
+        test_child_user.id, test_family.id, test_reward.id, db_session
+    )
+
+    summary = await OversightService.get_summary(db_session, test_family.id)
+    card = next(m for m in summary.members if m.user_id == test_child_user.id)
+
+    assert card.active_consequences == 1
+    assert card.goal is not None
+    assert card.goal.reward_title == test_reward.title
+    assert card.goal.affordable is True
+
+
+@pytest.mark.asyncio
+async def test_summary_auto_approve_flag_and_member_filter(
+    db_session, test_family, test_parent_user, test_child_user, test_teen_user
+):
+    from app.services.oversight_service import OversightService
+
+    test_child_user.gig_trust_streak = 5  # >= threshold (3)
+    test_teen_user.is_active = False
+    await db_session.commit()
+
+    summary = await OversightService.get_summary(db_session, test_family.id)
+    ids = [m.user_id for m in summary.members]
+
+    assert test_parent_user.id not in ids       # parents excluded
+    assert test_teen_user.id not in ids          # inactive excluded
+    child_card = next(m for m in summary.members if m.user_id == test_child_user.id)
+    assert child_card.auto_approve_active is True
+    assert child_card.points == 100
