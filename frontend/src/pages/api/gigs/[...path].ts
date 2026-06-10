@@ -1,0 +1,90 @@
+import type { APIRoute } from "astro";
+
+const BACKEND_URL = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
+
+/**
+ * Wildcard proxy for all /api/gigs/* requests.
+ *
+ * Browser-side JS cannot reach the backend directly (different port / internal
+ * Docker hostname). This endpoint forwards every method (GET, POST, PUT,
+ * DELETE, PATCH) transparently, preserving headers, body, and status codes.
+ *
+ * Route: /api/gigs/[...path]  →  <BACKEND>/api/gigs/<path>
+ *
+ * Redirect handling: FastAPI redirects e.g. POST /offerings → /offerings/
+ * We follow 3xx redirects manually so the body is re-sent correctly on POST.
+ */
+async function proxy({ request, params }: { request: Request; params: Record<string, string | undefined> }): Promise<Response> {
+    const path = params.path ?? "";
+    const url = new URL(request.url);
+    const backendUrl = `${BACKEND_URL}/api/gigs/${path}${url.search}`;
+
+    // Forward all headers except Host (which must point to the backend)
+    const forwardHeaders = new Headers();
+    for (const [key, value] of request.headers.entries()) {
+        if (key.toLowerCase() === "host") continue;
+        forwardHeaders.set(key, value);
+    }
+
+    // The access_token cookie is httpOnly so browser JS cannot read it.
+    // Extract it server-side and inject as Authorization header if not already set.
+    if (!forwardHeaders.has("Authorization")) {
+        const cookieHeader = request.headers.get("cookie") ?? "";
+        const match = cookieHeader.match(/(?:^|;\s*)access_token=([^;]+)/);
+        if (match) {
+            const token = decodeURIComponent(match[1]);
+            forwardHeaders.set("Authorization", `Bearer ${token}`);
+        }
+    }
+
+    const hasBody = !["GET", "HEAD"].includes(request.method.toUpperCase());
+    const body = hasBody ? await request.arrayBuffer() : undefined;
+
+    async function doFetch(targetUrl: string): Promise<Response> {
+        const backendRes = await fetch(targetUrl, {
+            method: request.method,
+            headers: forwardHeaders,
+            body: body,
+            redirect: "manual", // handle redirects ourselves so POST body is preserved
+        });
+
+        // Follow 3xx redirects manually (preserves method + body)
+        if (backendRes.status >= 300 && backendRes.status < 400) {
+            const location = backendRes.headers.get("location");
+            if (location) {
+                const redirectUrl = location.startsWith("http")
+                    ? location
+                    : `${BACKEND_URL}${location}`;
+                return doFetch(redirectUrl);
+            }
+        }
+
+        const responseHeaders = new Headers();
+        for (const [key, value] of backendRes.headers.entries()) {
+            if (key.toLowerCase() === "transfer-encoding") continue;
+            responseHeaders.set(key, value);
+        }
+
+        return new Response(backendRes.body, {
+            status: backendRes.status,
+            statusText: backendRes.statusText,
+            headers: responseHeaders,
+        });
+    }
+
+    try {
+        return await doFetch(backendUrl);
+    } catch (e: any) {
+        console.error(`[api/gigs proxy] Error forwarding to ${backendUrl}:`, e?.message ?? e);
+        return new Response(
+            JSON.stringify({ error: "proxy_error", message: "Could not reach backend" }),
+            { status: 502, headers: { "Content-Type": "application/json" } }
+        );
+    }
+}
+
+export const GET: APIRoute = proxy;
+export const POST: APIRoute = proxy;
+export const PUT: APIRoute = proxy;
+export const DELETE: APIRoute = proxy;
+export const PATCH: APIRoute = proxy;
