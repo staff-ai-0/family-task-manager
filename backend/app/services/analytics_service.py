@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.consequence import Consequence
 from app.models.family import Family
+from app.models.gig import GigClaim, GigClaimStatus
 from app.models.pup_snapshot import PupScoreSnapshot
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.task_template import TaskTemplate
@@ -38,6 +39,9 @@ class AnalyticsService:
         """Per-member mandatory completion rate over the lookback window."""
         today = date.today()
         start = today - timedelta(weeks=lookback_weeks)
+        start_dt = datetime.combine(start, datetime.min.time()).replace(
+            tzinfo=timezone.utc
+        )
 
         members_q = select(User).where(
             and_(User.family_id == family_id, User.is_active.is_(True))
@@ -90,6 +94,21 @@ class AnalyticsService:
                 )
             )
             gigs_done = int((await db.execute(gig_q)).scalar() or 0)
+
+            # New gig board (gig_claims) — invisible to the legacy is_bonus path.
+            board_q = (
+                select(func.count())
+                .select_from(GigClaim)
+                .where(
+                    and_(
+                        GigClaim.family_id == family_id,
+                        GigClaim.claimed_by == m.id,
+                        GigClaim.status == GigClaimStatus.APPROVED,
+                        GigClaim.approved_at >= start_dt,
+                    )
+                )
+            )
+            gigs_done += int((await db.execute(board_q)).scalar() or 0)
 
             out.append({
                 "user_id": str(m.id),

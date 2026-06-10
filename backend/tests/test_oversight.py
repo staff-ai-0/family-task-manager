@@ -99,3 +99,44 @@ async def test_check_expired_all_resolves_only_expired(
     assert expired.resolved_at is not None
     assert current.active is True
     assert current.resolved is False
+
+
+# ── A6: analytics includes gig-board claims ───────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_analytics_gigs_completed_includes_gig_board(
+    db_session: AsyncSession, test_family, test_parent_user, test_child_user
+):
+    from datetime import datetime, timezone
+    from app.models.gig import GigOffering, GigClaim, GigClaimStatus, GigCategory
+    from app.services.analytics_service import AnalyticsService
+
+    offering = GigOffering(
+        family_id=test_family.id,
+        created_by=test_parent_user.id,
+        title="Wash car",
+        points=30,
+        difficulty=1,
+        category=GigCategory.CHORES,
+    )
+    db_session.add(offering)
+    await db_session.commit()
+    await db_session.refresh(offering)
+
+    claim = GigClaim(
+        gig_id=offering.id,
+        family_id=test_family.id,
+        claimed_by=test_child_user.id,
+        status=GigClaimStatus.APPROVED,
+        points_awarded=30,
+        approved_at=datetime.now(timezone.utc),
+        completed_at=datetime.now(timezone.utc),
+    )
+    db_session.add(claim)
+    await db_session.commit()
+
+    rows = await AnalyticsService.per_member_completion_rate(
+        db_session, test_family.id
+    )
+    kid_row = next(r for r in rows if r["user_id"] == str(test_child_user.id))
+    assert kid_row["gigs_completed"] >= 1
