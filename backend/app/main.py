@@ -15,7 +15,7 @@ from app.core.exception_handlers import register_exception_handlers
 from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, frankie, meals, family_chat, frankie_schedules, dm
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
-from app.api.routes import oversight
+from app.api.routes import oversight, onboarding
 from app.jobs.subscription_sweep import run_sweep
 from app.services.task_assignment_service import TaskAssignmentService
 from app.services.consequence_service import ConsequenceService
@@ -156,6 +156,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(oauth.router, prefix="/api/oauth", tags=["OAuth"])
 app.include_router(payment.router, prefix="/api/payment", tags=["Payment"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
+app.include_router(onboarding.router, prefix="/api/families/onboarding", tags=["Onboarding"])
 app.include_router(families.router, prefix="/api/families", tags=["Families"])
 app.include_router(task_templates.router, prefix="/api/task-templates", tags=["Task Templates"])
 app.include_router(task_assignments.router, prefix="/api/task-assignments", tags=["Task Assignments"])

@@ -47,3 +47,52 @@ async def test_dismiss(db_session, test_family):
     await OnboardingService.dismiss(test_family.id, db_session)
     state = await OnboardingService.get_state(test_family.id, db_session)
     assert state.dismissed is True
+
+
+# ── Route tests ──────────────────────────────────────────────────────────────
+
+import pytest_asyncio
+from httpx import AsyncClient
+
+
+@pytest_asyncio.fixture
+async def parent_client(client, test_parent_user):
+    """Authenticated client for test_parent_user (Bearer token injected)."""
+    r = await client.post("/api/auth/login", json={
+        "email": "parent@test.com", "password": "password123",
+    })
+    assert r.status_code == 200
+    token = r.json()["access_token"]
+    client.headers.update({"Authorization": f"Bearer {token}"})
+    return client
+
+
+@pytest.mark.asyncio
+async def test_get_onboarding_state(parent_client, test_family):
+    r = await parent_client.get("/api/families/onboarding")
+    assert r.status_code == 200
+    data = r.json()
+    assert "task_created" in data
+    assert data["all_done"] is False
+
+
+@pytest.mark.asyncio
+async def test_dismiss_onboarding(parent_client, test_family):
+    r = await parent_client.post("/api/families/onboarding/dismiss")
+    assert r.status_code == 204
+    r2 = await parent_client.get("/api/families/onboarding")
+    assert r2.json()["dismissed"] is True
+
+
+@pytest.mark.asyncio
+async def test_onboarding_requires_parent(client, test_child_user):
+    r = await client.post("/api/auth/login", json={
+        "email": "child@test.com", "password": "password123",
+    })
+    assert r.status_code == 200
+    token = r.json()["access_token"]
+    r2 = await client.get(
+        "/api/families/onboarding",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r2.status_code == 403
