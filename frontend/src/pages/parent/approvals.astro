@@ -16,7 +16,7 @@ if (!user) {
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 const { data: rows } = await apiFetch<any[]>(
-    "/api/task-assignments/pending-approvals",
+    "/api/oversight/pending-approvals",
     { token }
 );
 const items: any[] = rows ?? [];
@@ -63,15 +63,23 @@ if (flash) Astro.cookies.delete("flash", { path: "/" });
                     {items.map((row: any) => (
                         <li
                             class="bg-brand-cream rounded-2xl p-5 border border-brand-ink/10 shadow-[var(--shadow-card)]"
-                            data-id={row.assignment_id}
+                            data-id={row.id}
+                            data-kind={row.kind}
                         >
                             <div class="flex justify-between items-start mb-3 gap-3">
                                 <div class="min-w-0">
-                                    <h3 class="font-bold text-brand-ink truncate">
-                                        {row.template_title}
-                                    </h3>
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="font-bold text-brand-ink truncate">
+                                            {row.title}
+                                        </h3>
+                                        {row.kind === "gig_claim" && (
+                                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand-sky-deep/10 text-brand-sky-deep uppercase tracking-wide flex-shrink-0">
+                                                Gig
+                                            </span>
+                                        )}
+                                    </div>
                                     <p class="text-sm text-brand-ink-soft mt-0.5">
-                                        {row.assigned_to_name}
+                                        {row.kid_name}
                                         <span class="mx-1">·</span>
                                         <span class="text-brand-sun-deep font-semibold">+{row.points} pts</span>
                                     </p>
@@ -97,22 +105,19 @@ if (flash) Astro.cookies.delete("flash", { path: "/" });
                                     />
                                 </a>
                             )}
-                            {row.ai_validation_score != null && (
+                            {row.ai_score != null && (
                                 <div class={`mb-3 p-2 rounded-lg border text-xs ${
-                                    row.ai_validation_score >= 0.7
+                                    row.ai_score >= 0.7
                                         ? "bg-brand-mint/15 border-brand-mint-deep/30 text-brand-mint-deep"
-                                        : row.ai_validation_score >= 0.4
+                                        : row.ai_score >= 0.4
                                             ? "bg-brand-sun/15 border-brand-sun-deep/30 text-brand-sun-deep"
                                             : "bg-red-50 border-red-200 text-red-700"
                                 }`}>
                                     <p class="font-semibold">
-                                        🤖 {lang === "es" ? "AI:" : "AI:"} {Math.round(row.ai_validation_score * 100)}%
-                                        {row.ai_validation_score >= 0.7 && " ✓"}
-                                        {row.ai_validation_score < 0.4 && " ⚠️"}
+                                        🤖 {lang === "es" ? "AI:" : "AI:"} {Math.round(row.ai_score * 100)}%
+                                        {row.ai_score >= 0.7 && " ✓"}
+                                        {row.ai_score < 0.4 && " ⚠️"}
                                     </p>
-                                    {row.ai_validation_notes && (
-                                        <p class="mt-1 italic">{row.ai_validation_notes}</p>
-                                    )}
                                 </div>
                             )}
                             <textarea
@@ -158,15 +163,28 @@ if (flash) Astro.cookies.delete("flash", { path: "/" });
                         const approve = btn.dataset.action === "approve";
                         btn.disabled = true;
                         try {
-                            const r = await fetch("/api/assignments/approve", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    assignment_id: id,
-                                    approve,
-                                    notes: notes?.value.trim() || null,
-                                }),
-                            });
+                            const kind = li.dataset.kind;
+                            let r: Response;
+                            if (kind === "gig_claim") {
+                                r = await fetch(`/api/gigs/claims/${id}/approve`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                        approved: approve,
+                                        notes: notes?.value.trim() || null,
+                                    }),
+                                });
+                            } else {
+                                r = await fetch("/api/assignments/approve", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                        assignment_id: id,
+                                        approve,
+                                        notes: notes?.value.trim() || null,
+                                    }),
+                                });
+                            }
                             if (r.ok) {
                                 li.remove();
                                 // If list is now empty, reload to show the empty state.
