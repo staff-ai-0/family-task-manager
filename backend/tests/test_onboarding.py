@@ -96,3 +96,46 @@ async def test_onboarding_requires_parent(client, test_child_user):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r2.status_code == 403
+
+
+# ── Hook integration tests ───────────────────────────────────────────────────
+from app.services.task_template_service import TaskTemplateService
+from app.schemas.task_template import TaskTemplateCreate
+
+
+@pytest.mark.asyncio
+async def test_advance_task_created_via_hook(
+    db_session, test_family, test_parent_user,
+):
+    data = TaskTemplateCreate(
+        title="Clean room",
+        points=0,
+        effort_level=1,
+        interval_days=7,
+        assignment_type="auto",
+        is_bonus=False,
+    )
+    await TaskTemplateService.create_template(
+        db_session, data, test_family.id, test_parent_user.id,
+    )
+    state = await OnboardingService.get_state(test_family.id, db_session)
+    assert state.task_created is True
+
+
+@pytest.mark.asyncio
+async def test_advance_reward_created_via_hook(
+    db_session, test_family, test_parent_user,
+):
+    from app.services.reward_service import RewardService
+    from app.schemas.reward import RewardCreate
+    from app.models.reward import RewardCategory
+
+    data = RewardCreate(
+        title="Extra screen time",
+        points_cost=50,
+        category=RewardCategory.SCREEN_TIME,
+        icon="🎮",
+    )
+    await RewardService.create_reward(db_session, data, test_family.id)
+    state = await OnboardingService.get_state(test_family.id, db_session)
+    assert state.reward_created is True

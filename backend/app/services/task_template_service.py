@@ -94,6 +94,12 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
         db.add(template)
         await db.commit()
         await db.refresh(template)
+        try:
+            from app.services.onboarding_service import OnboardingService
+            await OnboardingService.advance(family_id, "task_created", db)
+            await db.commit()
+        except Exception:
+            logger.warning("onboarding advance task_created failed", exc_info=True)
         return template
 
     @staticmethod

@@ -50,6 +50,15 @@ class RewardService(BaseFamilyService[Reward]):
         db.add(reward)
         await db.commit()
         await db.refresh(reward)
+        try:
+            import logging
+            from app.services.onboarding_service import OnboardingService
+            await OnboardingService.advance(family_id, "reward_created", db)
+            await db.commit()
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "onboarding advance reward_created failed", exc_info=True
+            )
         return reward
 
     @staticmethod
