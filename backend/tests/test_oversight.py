@@ -422,3 +422,42 @@ async def test_oversight_summary_route_kid_403(client, child_headers, test_famil
 async def test_oversight_pending_route_kid_403(client, child_headers, test_family):
     res = await client.get("/api/oversight/pending-approvals", headers=child_headers)
     assert res.status_code == 403
+
+
+# ── B3: goal-reached parent fan-out ───────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_check_nudge_notifies_parents_too(
+    db_session, test_family, test_parent_user, test_child_user, test_reward
+):
+    from app.models.notification import Notification as Notif
+    from app.services.reward_goal_service import RewardGoalService
+
+    await RewardGoalService.set_goal(
+        test_child_user.id, test_family.id, test_reward.id, db_session
+    )
+    await RewardGoalService.check_nudge(
+        test_child_user.id, test_family.id, 100, db_session
+    )
+
+    parent_notif = (
+        await db_session.execute(
+            select(Notif).where(
+                Notif.user_id == test_parent_user.id,
+                Notif.type == "goal_reached",
+            )
+        )
+    ).scalar_one_or_none()
+    assert parent_notif is not None
+    assert parent_notif.link == "/parent"
+    assert "Test Child" in parent_notif.title
+
+    kid_notif = (
+        await db_session.execute(
+            select(Notif).where(
+                Notif.user_id == test_child_user.id,
+                Notif.type == "goal_reached",
+            )
+        )
+    ).scalar_one_or_none()
+    assert kid_notif is not None  # kid nudge unaffected

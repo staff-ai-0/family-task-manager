@@ -161,6 +161,35 @@ class RewardGoalService:
         except Exception:
             log.warning("check_nudge: notification failed", exc_info=True)
             return
+        # Parent fan-out — oversight signal. Failure must never block the kid
+        # nudge nor nudge_sent_at (separate guard).
+        try:
+            from app.models.user import UserRole
+
+            kid = await db.get(User, user_id)
+            kid_name = kid.name if kid else "Kid"
+            parents = (
+                await db.scalars(
+                    select(User).where(
+                        User.family_id == family_id,
+                        User.role == UserRole.PARENT,
+                        User.is_active.is_(True),
+                    )
+                )
+            ).all()
+            for parent in parents:
+                await NotificationService.create(
+                    db,
+                    family_id=family_id,
+                    user_id=parent.id,
+                    type=NT.GOAL_REACHED,
+                    title=f"🎯 {kid_name} alcanzó su meta / reached their goal",
+                    body=f"{reward.title} — {reward.points_cost} pts",
+                    link="/parent",
+                    push=True,
+                )
+        except Exception:
+            log.warning("check_nudge: parent fan-out failed", exc_info=True)
         goal.nudge_sent_at = datetime.now(timezone.utc)
         await db.commit()
 
