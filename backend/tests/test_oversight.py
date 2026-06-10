@@ -346,3 +346,53 @@ async def test_summary_auto_approve_flag_and_member_filter(
     child_card = next(m for m in summary.members if m.user_id == test_child_user.id)
     assert child_card.auto_approve_active is True
     assert child_card.points == 100
+
+
+# ── B2: unified pending-approvals queue ───────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_pending_approvals_union_both_kinds_sorted(
+    db_session, test_family, test_parent_user, test_child_user
+):
+    from app.services.oversight_service import OversightService
+
+    await _make_pending_task(
+        db_session, test_family, test_parent_user, test_child_user, title="Task A", points=20
+    )
+    await _make_pending_claim(
+        db_session, test_family, test_parent_user, test_child_user, title="Gig B", points=15
+    )
+
+    items = await OversightService.get_pending_approvals(db_session, test_family.id)
+
+    assert len(items) == 2
+    kinds = {i.kind for i in items}
+    assert kinds == {"task", "gig_claim"}
+    # sorted by completed_at asc
+    assert items[0].completed_at <= items[1].completed_at
+    for i in items:
+        assert i.kid_name == "Test Child"
+        assert i.points > 0
+
+
+@pytest.mark.asyncio
+async def test_pending_approvals_ai_score_only_on_tasks(
+    db_session, test_family, test_parent_user, test_child_user
+):
+    from app.services.oversight_service import OversightService
+
+    a = await _make_pending_task(
+        db_session, test_family, test_parent_user, test_child_user
+    )
+    a.ai_validation_score = 0.85
+    await db_session.commit()
+    await _make_pending_claim(
+        db_session, test_family, test_parent_user, test_child_user
+    )
+
+    items = await OversightService.get_pending_approvals(db_session, test_family.id)
+    task_item = next(i for i in items if i.kind == "task")
+    claim_item = next(i for i in items if i.kind == "gig_claim")
+
+    assert task_item.ai_score == 0.85
+    assert claim_item.ai_score is None

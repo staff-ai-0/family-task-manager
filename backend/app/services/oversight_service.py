@@ -147,3 +147,56 @@ class OversightService:
                 total=total_tasks + total_claims,
             ),
         )
+
+    @staticmethod
+    async def get_pending_approvals(
+        db: AsyncSession, family_id: UUID
+    ) -> list[PendingApprovalItem]:
+        """Normalized union of both review queues, sorted by completed_at asc."""
+        from app.services.gig_claim_service import GigClaimService
+
+        rows = await TaskAssignmentService.list_pending_approvals(db, family_id)
+        user_ids = list({r.assigned_to for r in rows})
+        user_names: dict = {}
+        if user_ids:
+            q = select(User.id, User.name).where(User.id.in_(user_ids))
+            user_names = {uid: name for uid, name in (await db.execute(q)).all()}
+
+        items = [
+            PendingApprovalItem(
+                kind="task",
+                id=r.id,
+                title=r.template.title if r.template else "",
+                kid_id=r.assigned_to,
+                kid_name=user_names.get(r.assigned_to, ""),
+                points=int(
+                    r.template.award_points_per_completer if r.template else 0
+                ),
+                completed_at=r.completed_at,
+                proof_text=r.proof_text,
+                proof_image_url=r.proof_image_url,
+                ai_score=r.ai_validation_score,
+            )
+            for r in rows
+        ]
+
+        claims = await GigClaimService.get_pending_approvals(db, family_id)
+        for item in claims:
+            c = item["claim"]
+            items.append(
+                PendingApprovalItem(
+                    kind="gig_claim",
+                    id=c.id,
+                    title=item["gig_title"],
+                    kid_id=c.claimed_by,
+                    kid_name=item["claimer_name"],
+                    points=int(item["gig_points"] or 0),
+                    completed_at=c.completed_at,
+                    proof_text=c.proof_text,
+                    proof_image_url=c.proof_image_url,
+                    ai_score=None,
+                )
+            )
+
+        items.sort(key=lambda i: (i.completed_at is None, i.completed_at or _EPOCH))
+        return items
