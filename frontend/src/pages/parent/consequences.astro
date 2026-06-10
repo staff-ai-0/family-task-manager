@@ -26,10 +26,11 @@ if (Astro.request.method === "POST") {
         const payload: any = {
             title: data.get("title"),
             description: data.get("description") || null,
-            user_id: data.get("user_id"),
+            applied_to_user: data.get("applied_to_user"),
+            restriction_type: data.get("restriction_type"),
+            severity: data.get("severity") || "low",
+            duration_days: parseInt(data.get("duration_days") as string, 10) || 3,
         };
-        const dueDate = data.get("due_date");
-        if (dueDate) payload.due_date = dueDate;
         const { ok, error } = await apiFetch("/api/consequences/", {
             method: "POST",
             token,
@@ -150,7 +151,7 @@ const members: any[] = family?.members ?? [];
                                         {t(lang, "pc_assign_to")}
                                     </label>
                                     <select
-                                        name="user_id"
+                                        name="applied_to_user"
                                         required
                                         class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-rose-500 outline-none bg-brand-cream"
                                     >
@@ -173,13 +174,47 @@ const members: any[] = family?.members ?? [];
                             )
                         }
                         <div>
-                            <label
-                                class="text-xs font-medium text-brand-ink-soft mb-1 block"
-                                >{t(lang, "pt_due_date")}</label
+                            <label class="text-xs font-medium text-brand-ink-soft mb-1 block">
+                                {lang === "es" ? "Restricción" : "Restriction"}
+                            </label>
+                            <select
+                                name="restriction_type"
+                                required
+                                class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-rose-500 outline-none bg-brand-cream"
                             >
+                                <option value="screen_time">{lang === "es" ? "Tiempo de pantalla" : "Screen time"}</option>
+                                <option value="rewards">{lang === "es" ? "Recompensas" : "Rewards"}</option>
+                                <option value="extra_tasks">{lang === "es" ? "Tareas extra" : "Extra tasks"}</option>
+                                <option value="allowance">{lang === "es" ? "Mesada" : "Allowance"}</option>
+                                <option value="activities">{lang === "es" ? "Actividades" : "Activities"}</option>
+                                <option value="custom">{lang === "es" ? "Otra" : "Custom"}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-medium text-brand-ink-soft mb-1 block">
+                                {lang === "es" ? "Severidad" : "Severity"}
+                            </label>
+                            <select
+                                name="severity"
+                                class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-rose-500 outline-none bg-brand-cream"
+                            >
+                                <option value="low">{lang === "es" ? "Baja" : "Low"}</option>
+                                <option value="medium">{lang === "es" ? "Media" : "Medium"}</option>
+                                <option value="high">{lang === "es" ? "Alta" : "High"}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-brand-ink-soft mb-1 block">
+                                {lang === "es" ? "Duración (días)" : "Duration (days)"}
+                            </label>
                             <input
-                                type="date"
-                                name="due_date"
+                                type="number"
+                                name="duration_days"
+                                min="1"
+                                max="30"
+                                value="3"
                                 class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-rose-500 outline-none"
                             />
                         </div>
@@ -229,11 +264,16 @@ const members: any[] = family?.members ?? [];
                                                     {c.description}
                                                 </p>
                                             )}
-                                            {c.due_date && (
+                                            <p class="text-xs text-brand-ink-soft mt-0.5">
+                                                {c.restriction_type}
+                                                <span class="mx-1">·</span>
+                                                {c.severity}
+                                            </p>
+                                            {c.end_date && (
                                                 <p class="text-xs text-brand-ink-soft mt-1">
                                                     {t(lang, "pc_until")}{" "}
                                                     {new Date(
-                                                        c.due_date,
+                                                        c.end_date,
                                                     ).toLocaleDateString()}
                                                 </p>
                                             )}

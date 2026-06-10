@@ -151,11 +151,11 @@ const consequences: any[] = Array.isArray(consequencesRaw)
                                             </p>
                                         )}
                                     </div>
-                                    {c.due_date && (
+                                    {c.end_date && (
                                         <span class="text-xs text-rose-600 font-medium flex-shrink-0">
                                             {t(lang, "profile_until")}{" "}
                                             {new Date(
-                                                c.due_date,
+                                                c.end_date,
                                             ).toLocaleDateString()}
                                         </span>
                                     )}
