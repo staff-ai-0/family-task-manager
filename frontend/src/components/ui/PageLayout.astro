@@ -8,6 +8,9 @@ import BottomNav from "../BottomNav.astro";
  * Reduces the ~25-line boilerplate on every page to a single component.
  * @prop title          Page title (also sets <title> tag as "{title} - Family Task Manager")
  * @prop tone           Header background color (default "sky")
+ * @prop headerClass    Custom header bg classes (e.g. gradient) — replaces tone bg + ink border (see PageHeader)
+ * @prop dark           White-text header mode for dark/gradient backgrounds
+ * @prop backClass      Exact back-link color classes (overrides dark/light default)
  * @prop backHref       Optional back link in header
  * @prop backLabel      Back link text (default "Back" / "Volver"; pass t(lang,"back_parent") for context-specific label)
  * @prop description    Meta description for the page
@@ -24,6 +27,9 @@ import BottomNav from "../BottomNav.astro";
 interface Props {
   title: string;
   tone?: "sky" | "coral" | "mint" | "sun" | "cream";
+  headerClass?: string;
+  dark?: boolean;
+  backClass?: string;
   backHref?: string;
   backLabel?: string;
   description?: string;
@@ -37,6 +43,9 @@ interface Props {
 const {
   title,
   tone = "sky",
+  headerClass,
+  dark = false,
+  backClass,
   backHref,
   backLabel,
   description,
@@ -50,7 +59,7 @@ const {
 
 <Layout title={`${title} - Family Task Manager`} lang={lang} description={description}>
   <div class={`flex flex-col min-h-dvh ${containerClass}`}>
-    <PageHeader title={title} tone={tone} backHref={backHref} backLabel={backLabel} lang={lang}>
+    <PageHeader title={title} tone={tone} headerClass={headerClass} dark={dark} backClass={backClass} backHref={backHref} backLabel={backLabel} lang={lang}>
       <slot name="actions" slot="actions" />
       <slot name="header-extra" slot="sub" />
     </PageHeader>

@@ -1,12 +1,17 @@
 ---
 /**
  * PageHeader — tone-colored page header with optional back link, title + actions row, and content slot.
- * @prop title     Page title rendered as h1
- * @prop tone      Background color: "sky" | "coral" | "mint" | "sun" | "cream" (default "sky")
- * @prop backHref   Optional URL for back link (hidden when omitted)
- * @prop backLabel  Back link text (default "Back"/"Volver" by lang; pass t(lang,"back_parent") for page-specific label)
- * @prop lang       "en" | "es" — determines default back link text (default "en")
- * @prop class      Extra Tailwind classes on the outer <header>
+ * @prop title       Page title rendered as h1
+ * @prop tone        Background color: "sky" | "coral" | "mint" | "sun" | "cream" (default "sky")
+ * @prop headerClass Custom background classes (e.g. "bg-gradient-to-br from-amber-700 to-amber-600").
+ *                   When set, REPLACES the tone bg AND the ink bottom border (gradient headers don't use it).
+ * @prop dark        White-text mode for dark/gradient backgrounds: h1 + back link render white (default false)
+ * @prop backClass   Exact back-link color classes (overrides the dark/light default,
+ *                   e.g. "text-amber-100 hover:text-white")
+ * @prop backHref    Optional URL for back link (hidden when omitted)
+ * @prop backLabel   Back link text (default "Back"/"Volver" by lang; pass t(lang,"back_parent") for page-specific label)
+ * @prop lang        "en" | "es" — determines default back link text (default "en")
+ * @prop class       Extra Tailwind classes on the outer <header>
  * Slots:
  *   actions — right of title row (buttons, icon-links)
  *   sub     — below title row (subtitle line, stat, breadcrumb)
@@ -14,6 +19,9 @@
 interface Props {
   title: string;
   tone?: "sky" | "coral" | "mint" | "sun" | "cream";
+  headerClass?: string;
+  dark?: boolean;
+  backClass?: string;
   backHref?: string;
   backLabel?: string;
   lang?: "en" | "es";
@@ -22,6 +30,9 @@ interface Props {
 const {
   title,
   tone = "sky",
+  headerClass,
+  dark = false,
+  backClass,
   backHref,
   backLabel,
   lang = "en",
@@ -35,13 +46,18 @@ const bg = ({
   sun:   "bg-brand-sun",
   cream: "bg-brand-cream",
 } as Record<string, string>)[tone] ?? "bg-brand-sky";
+
+// headerClass replaces both the tone fill and the ink border (gradient headers have no border).
+const shell = headerClass ?? `${bg} border-b-4 border-brand-ink`;
+const titleText = dark ? "text-white" : "text-brand-ink";
+const backText = backClass ?? (dark ? "text-white/80 hover:text-white" : "text-brand-ink-soft hover:text-brand-ink");
 ---
 
-<header class={`${bg} text-brand-ink border-b-4 border-brand-ink pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] ${className}`}>
+<header class={`${shell} ${titleText} pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] ${className}`}>
   {backHref && (
     <a
       href={backHref}
-      class="text-brand-ink-soft hover:text-brand-ink text-sm font-bold flex items-center gap-1 mb-3"
+      class={`${backText} text-sm font-bold flex items-center gap-1 mb-3 transition-colors`}
     >
       <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -50,7 +66,7 @@ const bg = ({
     </a>
   )}
   <div class="flex items-center justify-between gap-3">
-    <h1 class="font-display text-2xl font-extrabold text-brand-ink">{title}</h1>
+    <h1 class={`font-display text-2xl font-extrabold ${titleText}`}>{title}</h1>
     <slot name="actions" />
   </div>
   <slot name="sub" />
