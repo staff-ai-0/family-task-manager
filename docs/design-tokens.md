@@ -25,6 +25,21 @@ or in raw CSS with `var(--shadow-card)`.
 
 ---
 
+## Illustration palette
+
+Used for illustration components (avatars, character graphics) only. Do not use in general UI.
+
+| Token | Value |
+|-------|-------|
+| `--color-brand-skin-1` | `#FBD3B2` |
+| `--color-brand-skin-2` | `#E8B690` |
+| `--color-brand-skin-3` | `#C68A60` |
+| `--color-brand-skin-4` | `#8E5B3D` |
+| `--color-brand-hair-1` | `#1F1A17` |
+| `--color-brand-hair-2` | `#4E3A2A` |
+
+---
+
 ## Shadows (hard ink-drop, no blur)
 
 | Token | Value | Usage |
@@ -43,7 +58,9 @@ In Tailwind: `shadow-[var(--shadow-card)]`
 |-------|-------|----------|
 | `--radius-card` | `22px` | `rounded-[var(--radius-card)]` |
 | `--radius-tile` | `28px` | `rounded-[var(--radius-tile)]` or `rounded-b-[var(--radius-tile)]` |
-| `--radius-pill` | `999px` | `rounded-full` |
+| `--radius-pill` | `999px` | `rounded-full` (or use `rounded-[var(--radius-pill)]` if you need to override) |
+
+**Note on `--radius-pill`**: Native Tailwind `rounded-full` is equivalent. Use `rounded-[var(--radius-pill)]` only if you need to override the radius value.
 
 ---
 
@@ -65,9 +82,32 @@ Use with `color: var(--fg)` in raw CSS; prefer Tailwind brand-* tokens in compon
 
 ## Typography
 
+### Fonts
+
 | Variable | Value |
 |----------|-------|
 | `--font-display` | Plus Jakarta Sans (headings, `.font-display`) |
 | `--font-sans` | Nunito (body, default) |
+| `--font-mono` | ui-monospace, SFMono-Regular, Menlo, monospace |
 
-Use `font-display` for h1/h2/h3 and brand labels. Use `font-sans` (default) for body text.
+Use `font-display` for h1/h2/h3 and brand labels. Use `font-sans` (default) for body text. Use `font-mono` for code snippets and numeric displays.
+
+### Type scale
+
+| Token | Size | Line height | Letter spacing |
+|-------|------|-------------|----------------|
+| `--text-display-1` | 84px | 0.95 | -0.03em |
+| `--text-display-2` | 56px | 1.02 | -0.02em |
+| `--text-title` | 40px | 1.05 | -0.02em |
+
+Apply these via CSS: `font-size: var(--text-display-1); line-height: var(--text-display-1--line-height); letter-spacing: var(--text-display-1--letter-spacing);` (or use the individual variables `--text-display-1--line-height` and `--text-display-1--letter-spacing`).
+
+---
+
+## Layout
+
+### Breakpoints
+
+| Token | Value |
+|-------|-------|
+| `--breakpoint-3xl` | `1920px` |
