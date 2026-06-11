@@ -1,12 +1,11 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import BottomNav from "../../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 const { data: user } = await apiFetch<any>("/api/auth/me", { token });
 if (!user) {
@@ -62,36 +61,21 @@ const { data: rewardsRaw } = await apiFetch<any[]>(
 const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
 ---
 
-<Layout title={`${t(lang, "pr_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
-        <header
-            class="bg-gradient-to-br from-amber-600 to-orange-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
-        >
-            <a
-                href="/parent"
-                class="text-amber-200 text-sm flex items-center gap-1 mb-3"
-            >
-                <svg
-                    class="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M15 19l-7-7 7-7"></path>
-                </svg>
-                {t(lang, "back_parent")}
-            </a>
-            <h1 class="text-2xl font-bold">{t(lang, "pr_title")}</h1>
-            <p class="text-amber-100 text-sm mt-1">
-                {t(lang, "pr_active_rewards")(rewards.length)}
-            </p>
-        </header>
-
-        <main class="flex-1 px-4 py-6 space-y-6">
+<PageLayout
+    title={t(lang, "pr_title") as string}
+    headerClass="bg-gradient-to-br from-amber-600 to-orange-500"
+    dark
+    backClass="text-amber-200 hover:text-white"
+    backHref="/parent"
+    backLabel={t(lang, "back_parent") as string}
+    role={user.role}
+    active="parent"
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-6"
+>
+    <p slot="header-extra" class="text-amber-100 text-sm mt-1">
+        {t(lang, "pr_active_rewards")(rewards.length)}
+    </p>
             {
                 successMsg && (
                     <div class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
@@ -267,9 +251,6 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
                     }
                 </div>
             </section>
-        </main>
-        <BottomNav active="parent" role={user.role} lang={lang} />
-    </div>
     <script>
         document.addEventListener('astro:page-load', () => {
             document.getElementById("open-create-reward")?.addEventListener("click", () => {
@@ -281,4 +262,4 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
             });
         });
     </script>
-</Layout>
+</PageLayout>
