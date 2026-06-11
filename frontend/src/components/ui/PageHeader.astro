@@ -1,0 +1,43 @@
+---
+interface Props {
+  title: string;
+  tone?: "sky" | "coral" | "mint" | "sun" | "cream";
+  backHref?: string;
+  lang?: string;
+  class?: string;
+}
+const {
+  title,
+  tone = "sky",
+  backHref,
+  lang = "en",
+  class: className = "",
+} = Astro.props;
+
+const bg = ({
+  sky:   "bg-brand-sky",
+  coral: "bg-brand-coral",
+  mint:  "bg-brand-mint",
+  sun:   "bg-brand-sun",
+  cream: "bg-brand-cream",
+} as Record<string, string>)[tone] ?? "bg-brand-sky";
+---
+
+<header class={`${bg} text-brand-ink border-b-4 border-brand-ink pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] ${className}`}>
+  {backHref && (
+    <a
+      href={backHref}
+      class="text-brand-ink-soft hover:text-brand-ink text-sm font-bold flex items-center gap-1 mb-3"
+    >
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      {lang === "es" ? "Volver" : "Back"}
+    </a>
+  )}
+  <div class="flex items-center justify-between gap-3">
+    <h1 class="font-display text-2xl font-extrabold text-brand-ink">{title}</h1>
+    <slot name="actions" />
+  </div>
+  <slot />
+</header>
