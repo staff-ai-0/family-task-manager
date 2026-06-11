@@ -16,9 +16,10 @@ const PRECACHE_ASSETS = [
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_ASSETS))
+        caches.open(CACHE_NAME)
+            .then((cache) => cache.addAll(PRECACHE_ASSETS))
+            .then(() => self.skipWaiting())
     );
-    self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -49,8 +50,10 @@ self.addEventListener('fetch', (event) => {
             caches.match(request).then((cached) => {
                 if (cached) return cached;
                 return fetch(request).then((resp) => {
-                    const clone = resp.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+                    if (resp.ok) {
+                        const clone = resp.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+                    }
                     return resp;
                 });
             })
