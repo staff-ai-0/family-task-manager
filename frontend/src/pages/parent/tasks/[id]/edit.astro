@@ -1,6 +1,5 @@
 ---
-import Layout from "../../../../layouts/Layout.astro";
-import BottomNav from "../../../../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../../lib/api";
 import { t } from "../../../../lib/i18n";
 
@@ -65,23 +64,15 @@ if (!tmpl) return Astro.redirect("/parent/tasks");
 const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
 ---
 
-<Layout title={`${t(lang, "pt_edit_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
-        <header
-            class="bg-brand-sky text-brand-ink border-b-4 border-brand-ink pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
-        >
-            <a
-                href="/parent/tasks"
-                class="text-brand-ink-soft hover:text-brand-ink text-sm font-bold flex items-center gap-1 mb-3"
-            >
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                </svg>
-                {t(lang, "back_all_tasks")}
-            </a>
-            <h1 class="font-display text-2xl font-extrabold text-brand-ink">{t(lang, "pt_edit_title")}</h1>
-        </header>
-        <main class="flex-1 px-4 py-6">
+<PageLayout
+    title={t(lang, "pt_edit_title") as string}
+    tone="sky"
+    backHref="/parent/tasks"
+    backLabel={t(lang, "back_all_tasks") as string}
+    role={user.role}
+    active="parent"
+    lang={lang as "en" | "es"}
+>
             {errorMsg && (
                 <div class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                     {errorMsg}
@@ -380,10 +371,7 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                     {t(lang, "pt_save")}
                 </button>
             </form>
-        </main>
-        <BottomNav active="parent" role={user.role} lang={lang} />
-    </div>
-</Layout>
+</PageLayout>
 
 <script>
     document.addEventListener('astro:page-load', () => {

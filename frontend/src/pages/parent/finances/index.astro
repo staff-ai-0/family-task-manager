@@ -4,8 +4,7 @@
  * Central dashboard for all budget, account, and transaction management
  */
 
-import Layout from "@layouts/Layout.astro";
-import BottomNav from "@components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "@lib/api";
 import { getMonthBudget, formatCurrency, getMonthName } from "@lib/api/budget";
 import { t } from "@lib/i18n";
@@ -14,7 +13,7 @@ import { t } from "@lib/i18n";
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 // Get user info
 const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
@@ -45,7 +44,7 @@ let totalSpent = 0;
 if (budgetOk && budget) {
     const incomeGroups = budget.category_groups.filter((g: any) => g.is_income) || [];
     const expenseGroups = budget.category_groups.filter((g: any) => !g.is_income) || [];
-    
+
     totalIncome = incomeGroups.reduce((sum: number, g: any) => sum + g.total_activity, 0);
     totalBudgeted = expenseGroups.reduce((sum: number, g: any) => sum + g.total_budgeted, 0);
     totalSpent = Math.abs(expenseGroups.reduce((sum: number, g: any) => sum + g.total_activity, 0));
@@ -55,47 +54,41 @@ if (budgetOk && budget) {
 const { data: family } = await apiFetch<any>("/api/families/me", { token });
 ---
 
-<Layout title={`${t(lang, "parent_finances_label")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
-        <!-- Header -->
-        <header class="bg-brand-mint text-brand-ink border-b-4 border-brand-ink pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <div class="flex items-center justify-between mb-6">
-                <a href="/parent" class="text-white hover:text-brand-mint-deep transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </a>
-                <h1 class="text-2xl font-bold">{t(lang, 'parent_finances_label')}</h1>
-                <div class="w-6"></div>
-            </div>
-            
-            <p class="text-brand-mint-deep text-sm mb-4">{monthName} {currentYear}</p>
+<PageLayout
+    title={t(lang, 'parent_finances_label') as string}
+    tone="mint"
+    backHref="/parent"
+    backLabel=""
+    role={user.role}
+    active="budget"
+    lang={lang}
+>
+    <div slot="header-extra">
+        <p class="text-brand-mint-deep text-sm mt-6 mb-4">{monthName} {currentYear}</p>
 
-            <!-- Quick Stats -->
-            <div class="grid grid-cols-2 gap-3">
-                <div class="bg-brand-cream/20 backdrop-blur-md rounded-xl p-3 border border-white/30">
-                    <p class="text-brand-mint-deep text-xs font-semibold uppercase tracking-wider mb-0.5">
-                        {t(lang, 'fin_ready_to_assign')}
-                    </p>
-                    <p class={`text-2xl font-extrabold ${readyToAssign < 0 ? 'text-red-300' : 'text-white'}`}>
-                        {formatCurrency(readyToAssign)}
-                    </p>
-                </div>
-                <div class="bg-brand-cream/20 backdrop-blur-md rounded-xl p-3 border border-white/30">
-                    <p class="text-brand-mint-deep text-xs font-semibold uppercase tracking-wider mb-0.5">
-                        {t(lang, 'fin_spent')}
-                    </p>
-                    <p class="text-2xl font-extrabold text-white">
-                        {formatCurrency(totalSpent)}
-                    </p>
-                </div>
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-2 gap-3">
+            <div class="bg-brand-cream/20 backdrop-blur-md rounded-xl p-3 border border-white/30">
+                <p class="text-brand-mint-deep text-xs font-semibold uppercase tracking-wider mb-0.5">
+                    {t(lang, 'fin_ready_to_assign')}
+                </p>
+                <p class={`text-2xl font-extrabold ${readyToAssign < 0 ? 'text-red-300' : 'text-white'}`}>
+                    {formatCurrency(readyToAssign)}
+                </p>
             </div>
-        </header>
+            <div class="bg-brand-cream/20 backdrop-blur-md rounded-xl p-3 border border-white/30">
+                <p class="text-brand-mint-deep text-xs font-semibold uppercase tracking-wider mb-0.5">
+                    {t(lang, 'fin_spent')}
+                </p>
+                <p class="text-2xl font-extrabold text-white">
+                    {formatCurrency(totalSpent)}
+                </p>
+            </div>
+        </div>
+    </div>
 
-        <!-- Main Content -->
-        <main class="flex-1 px-4 py-6">
-            <!-- Navigation Cards -->
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+    <!-- Navigation Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                 <!-- Monthly Budget -->
                 <a
                     href="/budget/"
@@ -215,10 +208,10 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                         </p>
                     </div>
                 </a>
-            </div>
+    </div>
 
-            <!-- Quick Info -->
-            {budgetOk && budget && (
+    <!-- Quick Info -->
+    {budgetOk && budget && (
                 <div class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
                     <h2 class="font-bold text-brand-ink mb-3 text-sm">
                         {lang === "es" ? "Este Mes" : "This Month"}
@@ -250,9 +243,5 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
                         </div>
                     </div>
                 </div>
-            )}
-        </main>
-
-        <BottomNav active="budget" role={user.role} lang={lang} />
-    </div>
-</Layout>
+    )}
+</PageLayout>
