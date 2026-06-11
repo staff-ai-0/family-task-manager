@@ -6,14 +6,19 @@ import BottomNav from "../BottomNav.astro";
 /**
  * PageLayout — full-page shell: Layout + PageHeader + <main> + BottomNav.
  * Reduces the ~25-line boilerplate on every page to a single component.
- * @prop title       Page title (also sets <title> tag as "{title} - Family Task Manager")
- * @prop tone        Header background color (default "sky")
- * @prop backHref    Optional back link in header
- * @prop description Meta description for the page
- * @prop role        Passed to BottomNav for role-based tab visibility
- * @prop active      Active nav tab key
- * @prop lang        "en" | "es" (default "en")
- * @prop mainClass   CSS classes for <main> (default "flex-1 px-4 py-6")
+ * @prop title          Page title (also sets <title> tag as "{title} - Family Task Manager")
+ * @prop tone           Header background color (default "sky")
+ * @prop backHref       Optional back link in header
+ * @prop description    Meta description for the page
+ * @prop role           Passed to BottomNav for role-based tab visibility
+ * @prop active         Active nav tab key
+ * @prop lang           "en" | "es" (default "en")
+ * @prop mainClass      CSS classes for <main> (default "flex-1 px-4 py-6")
+ * @prop containerClass CSS classes for the content wrapper div (default "w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto")
+ * Slots:
+ *   actions      — forwarded to PageHeader's "actions" slot (right of title row)
+ *   header-extra — forwarded to PageHeader's default slot (below title row; use for subtitle/stat line)
+ *   default      — page body rendered inside <main>
  */
 interface Props {
   title: string;
@@ -24,6 +29,7 @@ interface Props {
   active?: "tasks" | "rewards" | "profile" | "parent" | "budget" | "notifications" | "pet" | "chat" | "gigs";
   lang?: "en" | "es";
   mainClass?: string;
+  containerClass?: string;
 }
 
 const {
@@ -35,11 +41,12 @@ const {
   active,
   lang = "en",
   mainClass = "flex-1 px-4 py-6",
+  containerClass = "w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto",
 } = Astro.props;
 ---
 
 <Layout title={`${title} - Family Task Manager`} lang={lang} description={description}>
-  <div class="flex flex-col min-h-dvh">
+  <div class={`flex flex-col min-h-dvh ${containerClass}`}>
     <PageHeader title={title} tone={tone} backHref={backHref} lang={lang}>
       <slot name="actions" slot="actions" />
       <slot name="header-extra" />

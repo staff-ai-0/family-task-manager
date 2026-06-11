@@ -44,10 +44,10 @@ const ctaClass = `press inline-flex items-center px-5 py-2.5 ${ctaBg} text-brand
   <p class="font-display font-extrabold text-brand-ink mb-1">{title}</p>
   {subtitle && <p class="text-sm text-brand-ink-soft mb-4">{subtitle}</p>}
   {ctaLabel && ctaId && (
-    <button id={`${ctaId}-empty-cta`} class={ctaClass}>{ctaLabel}</button>
+    <button id={`${ctaId}-empty-cta`} class={`${ctaClass} mt-4`}>{ctaLabel}</button>
   )}
   {ctaLabel && !ctaId && ctaHref && (
-    <a href={ctaHref} class={ctaClass}>{ctaLabel}</a>
+    <a href={ctaHref} class={`${ctaClass} mt-4`}>{ctaLabel}</a>
   )}
 </div>
 
