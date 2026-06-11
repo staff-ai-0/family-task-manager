@@ -947,6 +947,19 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 logging.getLogger(__name__).warning(
                     "onboarding advance points_awarded failed", exc_info=True
                 )
+            try:
+                from app.services.push_service import PushService as _PushService
+                await _PushService.send_to_user(db, assignment.assigned_to, {
+                    "title": "¡Tarea aprobada! / Task approved! 🎉",
+                    "body": f"{assignment.template.title} — {assignment.template.award_points_per_completer} pts",
+                    "url": "/dashboard",
+                    "tag": "task-approved",
+                })
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "push task-approved failed", exc_info=True
+                )
             # NotificationService.create commits + fans out push.
             await NotificationService.create(
                 db,

@@ -165,3 +165,106 @@ async def test_fan_out_calls_webpush_per_parent(
 
     settings.VAPID_PRIVATE_KEY = ""
     settings.VAPID_PUBLIC_KEY = ""
+
+
+# ── Child push: task approved ────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_push_sent_on_gig_approval(
+    db_session: AsyncSession,
+    test_parent_user,
+    test_child_user,
+    test_family,
+    gig_template_factory,
+):
+    """approve_gig fires send_to_user with tag='task-approved' for the claimer."""
+    from unittest.mock import patch, AsyncMock
+    from app.models.task_assignment import TaskAssignment, AssignmentStatus, ApprovalStatus
+
+    gig = await gig_template_factory(family=test_family, points=30)
+
+    assignment = TaskAssignment(
+        id=uuid4(),
+        template_id=gig.id,
+        assigned_to=test_child_user.id,
+        family_id=test_family.id,
+        assigned_date=date.today(),
+        week_of=date.today() - timedelta(days=date.today().weekday()),
+        status=AssignmentStatus.COMPLETED,
+        approval_status=ApprovalStatus.PENDING,
+    )
+    db_session.add(assignment)
+    await db_session.commit()
+    await db_session.refresh(assignment)
+
+    with patch(
+        "app.services.push_service.PushService.send_to_user",
+        new_callable=AsyncMock,
+        return_value=1,
+    ) as mock_send:
+        await TaskAssignmentService.approve_gig(
+            db=db_session,
+            assignment_id=assignment.id,
+            family_id=test_child_user.family_id,
+            parent_id=test_parent_user.id,
+            approve=True,
+        )
+
+    tags = [c.args[2].get("tag") for c in mock_send.call_args_list if len(c.args) >= 3]
+    assert "task-approved" in tags, f"Expected 'task-approved' tag in push calls, got: {tags}"
+    child_calls = [c for c in mock_send.call_args_list
+                   if len(c.args) >= 2 and c.args[1] == test_child_user.id
+                   and len(c.args) >= 3 and c.args[2].get("tag") == "task-approved"]
+    assert len(child_calls) == 1
+
+
+# ── Child push: reward redeemed ──────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_push_sent_on_reward_redemption(
+    db_session: AsyncSession,
+    test_child_user,
+    test_family,
+):
+    """redeem_reward fires send_to_user with tag='reward-redeemed' for the redeemer."""
+    from unittest.mock import patch, AsyncMock
+    from app.services.reward_service import RewardService
+    from app.models.reward import Reward, RewardCategory
+    from app.models.user import User
+    from sqlalchemy import select
+
+    child = (await db_session.execute(
+        select(User).where(User.id == test_child_user.id)
+    )).scalar_one()
+    child.points = 1000
+    await db_session.commit()
+
+    reward = Reward(
+        family_id=test_family.id,
+        title="Extra Screen Time",
+        points_cost=50,
+        category=RewardCategory.SCREEN_TIME,
+        is_active=True,
+    )
+    db_session.add(reward)
+    await db_session.commit()
+    await db_session.refresh(reward)
+
+    with patch(
+        "app.services.push_service.PushService.send_to_user",
+        new_callable=AsyncMock,
+        return_value=1,
+    ) as mock_send:
+        await RewardService.redeem_reward(
+            db=db_session,
+            reward_id=reward.id,
+            user_id=test_child_user.id,
+            family_id=test_family.id,
+        )
+
+    tags = [c.args[2].get("tag") for c in mock_send.call_args_list if len(c.args) >= 3]
+    assert "reward-redeemed" in tags, f"Expected 'reward-redeemed' tag, got: {tags}"
+    child_calls = [c for c in mock_send.call_args_list
+                   if len(c.args) >= 2 and c.args[1] == test_child_user.id
+                   and len(c.args) >= 3 and c.args[2].get("tag") == "reward-redeemed"]
+    assert len(child_calls) == 1

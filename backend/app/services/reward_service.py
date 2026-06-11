@@ -174,6 +174,20 @@ class RewardService(BaseFamilyService[Reward]):
             import logging
             logging.getLogger(__name__).warning("mark_achieved failed", exc_info=True)
 
+        try:
+            from app.services.push_service import PushService as _PushService
+            await _PushService.send_to_user(db, user_id, {
+                "title": "¡Recompensa canjeada! 🎁",
+                "body": reward.title,
+                "url": "/rewards",
+                "tag": "reward-redeemed",
+            })
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "push reward-redeemed failed", exc_info=True
+            )
+
         return transaction
 
     @staticmethod
