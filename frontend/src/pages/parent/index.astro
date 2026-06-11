@@ -19,10 +19,18 @@ if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
-// Oversight summary: per-kid cards + unified pending counts (both queues).
+// Oversight summary for per-kid cards.
 const { data: oversight } = await apiFetch<any>("/api/oversight/summary", { token });
-const pendingApprovals = oversight?.pending_counts?.total ?? 0;
 const kidCards: any[] = oversight?.members ?? [];
+
+// Pending approvals badge — BOTH sources (task/chore proofs AND gig-board claim proofs).
+const [taskPendingRes, gigPendingRes] = await Promise.all([
+    apiFetch<any[]>("/api/task-assignments/pending-approvals", { token }),
+    apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token }),
+]);
+const taskPending = Array.isArray(taskPendingRes.data) ? taskPendingRes.data.length : 0;
+const gigPending = Array.isArray(gigPendingRes.data) ? gigPendingRes.data.length : 0;
+const pendingApprovals = taskPending + gigPending;
 
 interface OnboardingState {
     child_invited: boolean;
@@ -324,7 +332,7 @@ try {
                     </div>
                 </a>
                 <a
-                    href="/parent/frankie"
+                    href="/parent/jarvis"
                     class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-violet-400 transition-all flex flex-col items-center text-center gap-3"
                 >
                     <div class="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center">

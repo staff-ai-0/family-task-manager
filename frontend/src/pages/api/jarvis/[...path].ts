@@ -1,0 +1,42 @@
+import type { APIRoute } from "astro";
+
+const BACKEND_URL = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
+
+async function proxy({ request, params }: { request: Request; params: Record<string, string | undefined> }): Promise<Response> {
+    const path = params.path ?? "";
+    const url = new URL(request.url);
+    const backendUrl = `${BACKEND_URL}/api/jarvis/${path}${url.search}`;
+
+    const forwardHeaders = new Headers();
+    for (const [key, value] of request.headers.entries()) {
+        if (key.toLowerCase() === "host") continue;
+        forwardHeaders.set(key, value);
+    }
+    if (!forwardHeaders.has("Authorization")) {
+        const cookieHeader = request.headers.get("cookie") ?? "";
+        const match = cookieHeader.match(/(?:^|;\s*)access_token=([^;]+)/);
+        if (match) {
+            forwardHeaders.set("Authorization", `Bearer ${decodeURIComponent(match[1])}`);
+        }
+    }
+    const hasBody = !["GET", "HEAD"].includes(request.method.toUpperCase());
+    const body = hasBody ? await request.arrayBuffer() : undefined;
+    try {
+        const res = await fetch(backendUrl, {
+            method: request.method, headers: forwardHeaders, body, redirect: "manual",
+        });
+        const out = new Headers();
+        for (const [k, v] of res.headers.entries()) {
+            if (k.toLowerCase() === "transfer-encoding") continue;
+            out.set(k, v);
+        }
+        return new Response(res.body, { status: res.status, statusText: res.statusText, headers: out });
+    } catch (e: any) {
+        return new Response(JSON.stringify({ error: "proxy_error", message: String(e?.message ?? e) }),
+            { status: 502, headers: { "Content-Type": "application/json" } });
+    }
+}
+
+export const GET: APIRoute = proxy;
+export const POST: APIRoute = proxy;
+export const DELETE: APIRoute = proxy;

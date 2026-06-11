@@ -4,7 +4,7 @@ Transaction routes
 CRUD endpoints for budget transactions.
 """
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Response, status, Query, File, UploadFile, Form
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status, Query, File, UploadFile, Form
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
@@ -15,6 +15,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.core.premium import require_feature
+from app.core.rate_limiter import limiter, AI_LIMIT
 from app.services.budget.transaction_service import TransactionService
 from app.services.usage_service import UsageService
 from app.services.budget.csv_import_service import CSVImportService
@@ -511,7 +512,9 @@ async def import_file_transactions_endpoint(
 
 
 @router.post("/scan-receipt", status_code=status.HTTP_200_OK)
+@limiter.limit(AI_LIMIT)
 async def scan_receipt_endpoint(
+    request: Request,
     file: UploadFile = File(..., description="Receipt photo or scanned PDF (JPEG, PNG, WebP, GIF, PDF)"),
     account_id: Optional[UUID] = Form(None, description="Target account; omit for auto-detect"),
     force: bool = Query(False, description="Bypass duplicate guard and commit the transaction"),

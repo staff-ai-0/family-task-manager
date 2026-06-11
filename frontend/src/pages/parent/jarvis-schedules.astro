@@ -1,0 +1,212 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BottomNav from "../../components/BottomNav.astro";
+import { apiFetch } from "../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+let errorMsg = "";
+
+if (Astro.request.method === "POST") {
+    const data = await Astro.request.formData();
+    const action = data.get("action");
+    if (action === "create") {
+        const payload = {
+            name: data.get("name"),
+            prompt: data.get("prompt"),
+            cron_expr: data.get("cron_expr"),
+            channel: data.get("channel") || "notification",
+        };
+        const { ok, error } = await apiFetch("/api/jarvis/schedules/", {
+            method: "POST",
+            token,
+            body: JSON.stringify(payload),
+        });
+        if (!ok) errorMsg = error || "Error";
+    } else if (action === "toggle") {
+        const id = data.get("schedule_id");
+        if (id) {
+            await apiFetch(`/api/jarvis/schedules/${id}/toggle`, {
+                method: "POST",
+                token,
+            });
+        }
+    } else if (action === "delete") {
+        const id = data.get("schedule_id");
+        if (id) {
+            await apiFetch(`/api/jarvis/schedules/${id}`, {
+                method: "DELETE",
+                token,
+            });
+        }
+    }
+    return Astro.redirect("/parent/jarvis-schedules");
+}
+
+const { data: schedulesRaw } = await apiFetch<any[]>("/api/jarvis/schedules/", {
+    token,
+});
+const schedules: any[] = Array.isArray(schedulesRaw) ? schedulesRaw : [];
+
+function fmt(iso: string | null): string {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleString(lang === "es" ? "es-MX" : "en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+    });
+}
+
+const presets = [
+    { label: lang === "es" ? "Diario 8am" : "Daily 8am", cron: "0 8 * * *" },
+    { label: lang === "es" ? "Lunes 9am" : "Monday 9am", cron: "0 9 * * 1" },
+    { label: lang === "es" ? "Domingo 6pm" : "Sunday 6pm", cron: "0 18 * * 0" },
+    { label: lang === "es" ? "Cada hora" : "Hourly", cron: "0 * * * *" },
+];
+
+const labels = {
+    title: lang === "es" ? "Programaciones de Jarvis" : "Jarvis schedules",
+    subtitle: lang === "es"
+        ? "Prompts automáticos en cron"
+        : "Automatic prompts on cron",
+    back: lang === "es" ? "← Jarvis chat" : "← Jarvis chat",
+    new: lang === "es" ? "Nueva programación" : "New schedule",
+    name_ph: lang === "es" ? "Nombre (ej. Resumen semanal)" : "Name (e.g. Weekly summary)",
+    prompt_ph: lang === "es" ? "Prompt que Jarvis responderá" : "Prompt Jarvis will answer",
+    cron_ph: lang === "es" ? "Cron (5 campos)" : "Cron (5 fields)",
+    channel: lang === "es" ? "Canal" : "Channel",
+    notif: lang === "es" ? "Notificación" : "Notification",
+    chat: "Chat",
+    save: lang === "es" ? "Guardar" : "Save",
+    empty: lang === "es" ? "Sin programaciones." : "No schedules yet.",
+    next: lang === "es" ? "Próximo" : "Next",
+    last: lang === "es" ? "Último" : "Last",
+    on: lang === "es" ? "Activo" : "Active",
+    off: lang === "es" ? "Pausado" : "Paused",
+    confirm: lang === "es" ? "¿Eliminar?" : "Delete?",
+    presets: lang === "es" ? "Atajos:" : "Presets:",
+};
+---
+
+<Layout title={`${labels.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col">
+        <header class="bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+            <a href="/parent/jarvis" class="text-xs text-violet-200 underline">{labels.back}</a>
+            <h1 class="text-2xl font-bold mt-1">⏰ {labels.title}</h1>
+            <p class="text-violet-200 text-xs">{labels.subtitle}</p>
+        </header>
+
+        <main class="flex-1 px-4 py-6 space-y-4">
+            {errorMsg && (
+                <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
+                    {errorMsg}
+                </div>
+            )}
+
+            <details class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                <summary class="p-3 font-bold text-brand-ink cursor-pointer text-sm">
+                    ➕ {labels.new}
+                </summary>
+                <form method="POST" class="p-3 space-y-2">
+                    <input type="hidden" name="action" value="create" />
+                    <input type="text" name="name" required maxlength="120" placeholder={labels.name_ph}
+                           class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm" />
+                    <textarea name="prompt" required rows="3" maxlength="2000" placeholder={labels.prompt_ph}
+                              class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm"></textarea>
+                    <div class="space-y-1">
+                        <p class="text-[10px] text-brand-ink-soft">{labels.presets}</p>
+                        <div class="flex flex-wrap gap-1">
+                            {presets.map((p) => (
+                                <button type="button" data-cron={p.cron}
+                                    class="preset-btn text-[10px] px-2 py-1 rounded bg-brand-cream-deep hover:bg-violet-100 text-brand-ink-soft">
+                                    {p.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <input type="text" name="cron_expr" id="cron_input" required maxlength="64" placeholder={labels.cron_ph}
+                           class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm font-mono" />
+                    <p class="text-[10px] text-brand-ink-soft">
+                        min hour day month dow · 0=Sun 1=Mon
+                    </p>
+                    <select name="channel" class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm bg-brand-cream">
+                        <option value="notification">{labels.notif}</option>
+                        <option value="chat">{labels.chat}</option>
+                    </select>
+                    <button type="submit" class="w-full py-2 rounded-lg bg-violet-600 text-white text-sm font-bold hover:bg-violet-700">
+                        {labels.save}
+                    </button>
+                </form>
+            </details>
+
+            {schedules.length === 0 ? (
+                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                    <p class="text-brand-ink-soft text-sm">{labels.empty}</p>
+                </div>
+            ) : (
+                <ul class="space-y-2">
+                    {schedules.map((s: any) => (
+                        <li class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                            <div class="flex items-baseline justify-between gap-2">
+                                <p class="font-bold text-brand-ink text-sm">
+                                    {s.is_active ? "⏰" : "⏸"} {s.name}
+                                </p>
+                                <span class={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    s.is_active ? "bg-brand-mint text-brand-ink" : "bg-brand-cream-deep text-brand-ink-soft"
+                                }`}>
+                                    {s.is_active ? labels.on : labels.off}
+                                </span>
+                            </div>
+                            <p class="text-xs text-brand-ink-soft mt-1 font-mono">{s.cron_expr}</p>
+                            <p class="text-xs text-brand-ink mt-1 line-clamp-2">{s.prompt}</p>
+                            <p class="text-[10px] text-brand-ink-soft mt-2">
+                                {labels.next}: <span class="font-mono">{fmt(s.next_run_at)}</span>
+                                {" · "}{labels.last}: <span class="font-mono">{fmt(s.last_run_at)}</span>
+                                {" · "}{s.channel}
+                            </p>
+                            <div class="flex gap-2 mt-2">
+                                <form method="POST" class="inline">
+                                    <input type="hidden" name="action" value="toggle" />
+                                    <input type="hidden" name="schedule_id" value={s.id} />
+                                    <button type="submit" class="text-[10px] px-2 py-1 rounded bg-brand-cream-deep text-brand-ink hover:bg-brand-ink/10">
+                                        {s.is_active ? "⏸" : "▶"}
+                                    </button>
+                                </form>
+                                <form method="POST" class="inline" onsubmit={`return confirm('${labels.confirm}')`}>
+                                    <input type="hidden" name="action" value="delete" />
+                                    <input type="hidden" name="schedule_id" value={s.id} />
+                                    <button type="submit" class="text-[10px] px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200">
+                                        🗑
+                                    </button>
+                                </form>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </main>
+
+        <BottomNav active="parent" role={user.role} lang={lang} />
+    </div>
+</Layout>
+
+<script>
+    document.addEventListener("astro:page-load", () => {
+        document.querySelectorAll(".preset-btn").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const input = document.getElementById("cron_input") as HTMLInputElement | null;
+                if (input) input.value = btn.getAttribute("data-cron") || "";
+            });
+        });
+    });
+</script>

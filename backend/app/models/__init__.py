@@ -42,12 +42,12 @@ from app.models.calendar_event import CalendarEvent
 from app.models.notification import Notification, NotificationType
 from app.models.kiosk_device import KioskDevice
 from app.models.kid_pet import KidPet
-from app.models.frankie_message import FrankieMessage
+from app.models.jarvis_message import JarvisMessage
 from app.models.pup_snapshot import PupScoreSnapshot
 from app.models.meal import Recipe, MealPlanEntry
 from app.models.family_chat import FamilyChatMessage
 from app.models.family_chat_reaction import FamilyChatReaction
-from app.models.frankie_schedule import FrankieSchedule
+from app.models.jarvis_schedule import JarvisSchedule
 from app.models.dm import DMThread, DMMessage
 from app.models.gig import GigOffering, GigClaim, GigCategory, GigClaimStatus
 from app.models.reward_goal import UserRewardGoal
@@ -94,8 +94,8 @@ __all__ = [
     "KioskDevice",
     # Virtual pet
     "KidPet",
-    # Frankie copilot
-    "FrankieMessage",
+    # Jarvis copilot
+    "JarvisMessage",
     # Analytics snapshots
     "PupScoreSnapshot",
     # Meals
@@ -104,8 +104,8 @@ __all__ = [
     # Family chat
     "FamilyChatMessage",
     "FamilyChatReaction",
-    # Frankie schedules
-    "FrankieSchedule",
+    # Jarvis schedules
+    "JarvisSchedule",
     # DM
     "DMThread",
     "DMMessage",

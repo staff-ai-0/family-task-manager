@@ -292,6 +292,26 @@ Low-confidence scans (<30% or no detectable total) create a `BudgetReceiptDraft`
 - Frontend: `/budget/receipt-drafts` — review queue with pre-filled editable form per draft
 - Nav badge: red dot on clipboard icon in `BudgetNavNew` shows pending count on all budget pages
 
+### Additional domains (beyond budget/task/gig)
+
+The app has grown well past the budget/task/gig core. These domains are fully wired
+(routes + services + models + frontend) and multi-tenant by `family_id`:
+
+| Domain | Routes | Notes |
+|--------|--------|-------|
+| **Jarvis** (AI copilot) | `/api/jarvis`, `/api/jarvis/schedules` | Parent-facing LLM assistant via LiteLLM (tool-calling + SSE streaming) + cron-driven scheduled prompts. Formerly "Frankie". |
+| **Pet** | `/api/pet` | Gamified virtual pet per kid (`kid_pet`, `pup_snapshot`); decays over time, fed by completing work. |
+| **Meals** | `/api/meals` | Meal planning + recipe import; syncs to shopping lists. |
+| **Shopping** | `/api/shopping` | Family shopping lists; receipt-scan + meal-plan integration. |
+| **Calendar** | `/api/calendar` | Family events + AI calendar-image scanner (`calendar_scanner_service`). |
+| **Chat / DM** | `/api/chat`, `/api/dm` | Family group chat (reactions, read state) + direct messages. |
+| **Kiosk** | `/api/kiosk` | Shared-device kiosk mode (`kiosk_device`). |
+| **Analytics** | `/api/analytics` | Family "PUP" snapshots / progress analytics. |
+| **Consequences / Rewards / Points** | `/api/consequences`, `/api/rewards`, `/api/points-conversion` | Discipline + reward economy on top of the points system. |
+
+A 2026-06-04 production-readiness audit lives in `docs/audit/2026-06-04/` (findings,
+remediation plan, and what's been fixed across Tracks A–D).
+
 ### Frontend (Astro 5)
 
 Pages live in `frontend/src/pages/`. Routing is file-based. All server-side API calls go to `http://backend:8000` (internal Docker network). Auth state managed via cookies + Astro middleware (`frontend/src/middleware.ts`).

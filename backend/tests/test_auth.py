@@ -8,23 +8,39 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class TestUserRegistration:
-    """Test user registration functionality"""
+    """Parent-only member registration.
+
+    /api/auth/register adds a member to the authenticated PARENT's family.
+    The body family_id is ignored (cross-tenant escalation fixed 2026-06-04);
+    public self-signup goes through /api/auth/register-family instead.
+    """
+
+    @staticmethod
+    async def _parent_token(client: AsyncClient) -> str:
+        r = await client.post(
+            "/api/auth/login",
+            json={"email": "parent@test.com", "password": "password123"},
+        )
+        assert r.status_code == 200, r.text
+        return r.json()["access_token"]
 
     @pytest.mark.asyncio
-    async def test_register_new_user(self, client: AsyncClient, test_family):
-        """Test registering a new user"""
+    async def test_register_new_user(self, client: AsyncClient, test_parent_user):
+        """A parent adds a new member to their family."""
+        token = await self._parent_token(client)
         response = await client.post(
             "/api/auth/register",
+            headers={"Authorization": f"Bearer {token}"},
             json={
                 "email": "newuser@test.com",
                 "password": "SecurePass123!",
                 "name": "New User",
-                "family_id": str(test_family.id),
+                "family_id": str(test_parent_user.family_id),
                 "role": "child",
             },
         )
 
-        assert response.status_code == 201
+        assert response.status_code == 201, response.text
         data = response.json()
         assert data["email"] == "newuser@test.com"
         assert data["name"] == "New User"
@@ -33,16 +49,18 @@ class TestUserRegistration:
 
     @pytest.mark.asyncio
     async def test_register_duplicate_email(
-        self, client: AsyncClient, test_parent_user, test_family
+        self, client: AsyncClient, test_parent_user
     ):
-        """Test registering with an email that already exists"""
+        """Registering an already-used email is rejected."""
+        token = await self._parent_token(client)
         response = await client.post(
             "/api/auth/register",
+            headers={"Authorization": f"Bearer {token}"},
             json={
                 "email": test_parent_user.email,
                 "password": "SecurePass123!",
                 "name": "Duplicate User",
-                "family_id": str(test_family.id),
+                "family_id": str(test_parent_user.family_id),
                 "role": "child",
             },
         )
@@ -51,15 +69,20 @@ class TestUserRegistration:
         assert "already registered" in response.json()["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_register_invalid_email(self, client: AsyncClient):
-        """Test registering with invalid email format"""
+    async def test_register_invalid_email(
+        self, client: AsyncClient, test_parent_user
+    ):
+        """Invalid email format is rejected with 422."""
+        token = await self._parent_token(client)
         response = await client.post(
             "/api/auth/register",
+            headers={"Authorization": f"Bearer {token}"},
             json={
                 "email": "not-an-email",
                 "password": "SecurePass123!",
                 "name": "Invalid User",
-                "family_name": "Test Family",
+                "family_id": str(test_parent_user.family_id),
+                "role": "child",
             },
         )
 

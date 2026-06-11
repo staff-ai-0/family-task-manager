@@ -31,9 +31,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from openai import OpenAI
+from fastapi.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
+
+# Hard ceiling for any single LiteLLM/vision request. A hung or slow provider
+# must never block the event loop indefinitely.
+LLM_REQUEST_TIMEOUT_SECONDS = 60.0
 from app.core.premium import FEATURE_MIN_PLAN, PLAN_ORDER, get_family_plan
 from app.models.budget import (
     BudgetAccount,
@@ -250,6 +255,7 @@ async def scan_receipt(
     client = OpenAI(
         base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
         api_key=settings.LITELLM_API_KEY,
+        timeout=LLM_REQUEST_TIMEOUT_SECONDS,
     )
 
     image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
@@ -272,20 +278,25 @@ async def scan_receipt(
     # response_format json_object forces a single JSON value, eliminating
     # the "Here is the JSON:" prose-wrapper failure mode.
     try:
-        completion = client.chat.completions.create(
-            model=active_model,
-            max_tokens=4096,
-            response_format={"type": "json_object"},
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": data_uri}},
-                        {"type": "text", "text": RECEIPT_PROMPT},
-                    ],
-                }
-            ],
-            extra_body=extra if extra else None,
+        # The OpenAI client is synchronous (blocking I/O). Offload to a worker
+        # thread so a slow provider can't stall the async event loop; the
+        # client-level timeout above bounds the wait.
+        completion = await run_in_threadpool(
+            lambda: client.chat.completions.create(
+                model=active_model,
+                max_tokens=4096,
+                response_format={"type": "json_object"},
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": data_uri}},
+                            {"type": "text", "text": RECEIPT_PROMPT},
+                        ],
+                    }
+                ],
+                extra_body=extra if extra else None,
+            )
         )
     except Exception as exc:
         # Surface all proxy-side failures (budget exceeded, rate limits,

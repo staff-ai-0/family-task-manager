@@ -398,6 +398,49 @@ class AccountService(BaseFamilyService[BudgetAccount]):
         return result.scalar() or 0
 
     @classmethod
+    async def get_balances_for_accounts(
+        cls,
+        db: AsyncSession,
+        account_ids: list,
+        family_id: UUID,
+        as_of_date: Optional[date] = None,
+    ) -> Dict[UUID, Dict[str, int]]:
+        """Batched balances for the given accounts in TWO grouped queries
+        (replaces the per-account N+1). Same shape and values as get_balance;
+        sums cast to int so a Decimal never serializes as a JSON string."""
+        if not account_ids:
+            return {}
+
+        def _sum_query(cleared_only: bool):
+            conds = [
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.account_id.in_(account_ids),
+                BudgetTransaction.deleted_at.is_(None),
+            ]
+            if cleared_only:
+                conds.append(BudgetTransaction.cleared == True)  # noqa: E712
+            if as_of_date:
+                conds.append(BudgetTransaction.date <= as_of_date)
+            return (
+                select(
+                    BudgetTransaction.account_id,
+                    func.coalesce(func.sum(BudgetTransaction.amount), 0),
+                )
+                .where(and_(*conds))
+                .group_by(BudgetTransaction.account_id)
+            )
+
+        total = {r[0]: int(r[1] or 0) for r in (await db.execute(_sum_query(False))).all()}
+        cleared = {r[0]: int(r[1] or 0) for r in (await db.execute(_sum_query(True))).all()}
+
+        out: Dict[UUID, Dict[str, int]] = {}
+        for aid in account_ids:
+            b = total.get(aid, 0)
+            c = cleared.get(aid, 0)
+            out[aid] = {"balance": b, "cleared_balance": c, "uncleared_balance": b - c}
+        return out
+
+    @classmethod
     async def get_balances_for_all_accounts(
         cls,
         db: AsyncSession,
@@ -405,24 +448,10 @@ class AccountService(BaseFamilyService[BudgetAccount]):
         as_of_date: Optional[date] = None,
         include_closed: bool = False,
     ) -> Dict[UUID, Dict[str, int]]:
-        """
-        Get balances for all accounts in the family.
-        
-        Args:
-            db: Database session
-            family_id: Family ID
-            as_of_date: Calculate balances as of this date
-            include_closed: Whether to include closed accounts
-        
-        Returns:
-            Dict mapping account_id to balance info
-        """
+        """Batched balances for all of the family's accounts (no N+1)."""
         accounts = await cls.list_budget_accounts(db, family_id, include_closed=include_closed)
-
-        balances = {}
-        for account in accounts:
-            balances[account.id] = await cls.get_balance(
-                db, account.id, family_id, as_of_date
-            )
+        balances = await cls.get_balances_for_accounts(
+            db, [account.id for account in accounts], family_id, as_of_date
+        )
         
         return balances

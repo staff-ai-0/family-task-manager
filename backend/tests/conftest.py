@@ -290,6 +290,19 @@ async def auth_headers(client: AsyncClient, test_parent_user) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+@pytest.fixture(autouse=True)
+def _disable_rate_limiter():
+    """Disable the global rate limiter by default so its in-memory counters don't
+    bleed across tests. The dedicated rate-limit test re-enables it explicitly."""
+    try:
+        from app.core.rate_limiter import limiter
+        limiter.reset()
+        limiter.enabled = False
+    except Exception:
+        pass
+    yield
+
+
 @pytest_asyncio.fixture
 async def db(db_session: AsyncSession) -> AsyncSession:
     """Alias for db_session, used in budget tests."""

@@ -60,7 +60,7 @@ Punto central de administración. Desde aquí accedes a todas las herramientas d
 | **Consecuencias** | Registrar consecuencias para miembros |
 | **Aprobaciones** | Revisar gigs enviados para aprobación |
 | **Analytics** | Puntuación PUP y progreso familiar |
-| **Frankie** | Asistente IA para la gestión familiar |
+| **Jarvis** | Asistente IA para la gestión familiar |
 | **Kiosk** | Pantalla de visualización para TV/muro |
 | **Presupuesto** | Finanzas personales y familiares |
 | **Configuración** | Datos de familia y suscripción |
@@ -220,9 +220,9 @@ Módulo de finanzas personales y familiares. Completamente nativo en la aplicaci
 
 ---
 
-### 2.9 Frankie — Asistente IA (`/parent/frankie`)
+### 2.9 Jarvis — Asistente IA (`/parent/jarvis`)
 
-Frankie es un copiloto de inteligencia artificial para la gestión familiar. Puedes hacerle preguntas en lenguaje natural:
+Jarvis es un copiloto de inteligencia artificial para la gestión familiar. Puedes hacerle preguntas en lenguaje natural:
 
 - "¿Qué tareas están pendientes esta semana?"
 - "¿Quién ha ganado más puntos este mes?"
@@ -231,13 +231,13 @@ Frankie es un copiloto de inteligencia artificial para la gestión familiar. Pue
 
 El historial de conversación se guarda y puedes borrarlo con el botón **Limpiar historial**.
 
-#### Programar a Frankie (`/parent/frankie-schedules`)
+#### Programar a Jarvis (`/parent/jarvis-schedules`)
 
-Crea recordatorios automáticos para que Frankie te informe sin que tengas que preguntarle:
+Crea recordatorios automáticos para que Jarvis te informe sin que tengas que preguntarle:
 
-1. Escribe una **tarea o pregunta** para Frankie.
+1. Escribe una **tarea o pregunta** para Jarvis.
 2. Define la **expresión cron** (o usa los presets: diario, lunes, cada hora, etc.).
-3. Guarda. Frankie ejecutará la consulta automáticamente según el horario.
+3. Guarda. Jarvis ejecutará la consulta automáticamente según el horario.
 
 ---
 
@@ -429,11 +429,11 @@ La sección `/help` (o `/ayuda`) contiene preguntas frecuentes y guías rápidas
 | **Gig** | Tarea bonus que requiere foto de evidencia y aprobación del Parent. |
 | **Modo gig** | Regla de resolución cuando varios miembros pueden hacer el mismo gig: Reclamar (primero), Competencia, Rotación, Colaboración. |
 | **PUP Score** | Puntuación compuesta de Participación, Uso y Progreso de la familia en los últimos 30 días. |
-| **Frankie** | Asistente IA integrado para consultas y gestión familiar en lenguaje natural. |
+| **Jarvis** | Asistente IA integrado para consultas y gestión familiar en lenguaje natural. |
 | **Kiosk** | URL pública sin login para mostrar las tareas del día en una pantalla compartida. |
 | **Puntos** | Moneda interna del juego. Se ganan al completar tareas y se gastan al canjear recompensas. |
 | **Consecuencia** | Registro formal de una falta o incumplimiento, creado por el Parent. |
-| **Cron** | Expresión de tiempo para programar tareas automáticas de Frankie (ej. `0 8 * * 1` = cada lunes a las 8 am). |
+| **Cron** | Expresión de tiempo para programar tareas automáticas de Jarvis (ej. `0 8 * * 1` = cada lunes a las 8 am). |
 
 ---
 

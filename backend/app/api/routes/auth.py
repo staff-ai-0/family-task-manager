@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_parent_role
 from app.core.config import settings
 from app.core.security import hash_password
 from app.core.type_utils import to_uuid_required
@@ -33,6 +33,7 @@ from app.schemas.user import (
 from app.models import User
 from app.models.family import Family, generate_join_code
 from app.core.security import get_password_hash, create_access_token
+from app.core.rate_limiter import limiter, AUTH_LIMIT, EMAIL_LIMIT
 
 router = APIRouter()
 
@@ -44,8 +45,16 @@ async def register(
     user_data: UserCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_parent_role),
 ):
-    """Register a new user and send a verification email."""
+    """Add a new member to the authenticated parent's family.
+
+    Parent-only. The new member is always created in the caller's own family —
+    the body's ``family_id`` is ignored. Previously this endpoint was
+    unauthenticated and trusted a client-supplied ``family_id`` + ``role``,
+    which let anyone mint a PARENT in any family (cross-tenant takeover).
+    """
+    user_data.family_id = current_user.family_id  # never trust the body
     user = await AuthService.register_user(db, user_data)
     # Send verification email (non-blocking — failure doesn't break registration)
     base_url = settings.BASE_URL
@@ -58,7 +67,9 @@ async def register(
     response_model=RegisterFamilyResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(AUTH_LIMIT)
 async def register_family(
+    request: Request,
     data: RegisterFamilyRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -165,7 +176,9 @@ async def register_family(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit(AUTH_LIMIT)
 async def login(
+    request: Request,
     login_data: UserLogin,
     db: AsyncSession = Depends(get_db),
 ):
@@ -188,7 +201,9 @@ class CheckMethodsResponse(BaseModel):
 
 
 @router.post("/check-methods", response_model=CheckMethodsResponse)
+@limiter.limit(AUTH_LIMIT)
 async def check_auth_methods(
+    request: Request,
     body: CheckMethodsRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -285,7 +300,9 @@ async def update_password(
 # ---------------------------------------------------------------------------
 
 @router.post("/verify-email")
+@limiter.limit(EMAIL_LIMIT)
 async def verify_email(
+    request: Request,
     body: VerifyEmailRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -300,7 +317,9 @@ async def verify_email(
 
 
 @router.post("/resend-verification")
+@limiter.limit(EMAIL_LIMIT)
 async def resend_verification(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -318,7 +337,9 @@ async def resend_verification(
 # ---------------------------------------------------------------------------
 
 @router.post("/forgot-password")
+@limiter.limit(AUTH_LIMIT)
 async def forgot_password(
+    request: Request,
     body: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -334,7 +355,9 @@ async def forgot_password(
 
 
 @router.post("/reset-password")
+@limiter.limit(AUTH_LIMIT)
 async def reset_password(
+    request: Request,
     body: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):

@@ -15,7 +15,7 @@ push_subs_v1
  → kiosk_v1           W3.3  kiosk devices
  → gig_mode_v1        W4.1  gig modes (claim/rotation/competition/collaboration)
  → pet_v1             W4.3  virtual pet (status: UNCERTAIN per user — do not expand)
- → frankie_v1         W6.1  Frankie copilot chat history
+ → jarvis_v1         W6.1  Jarvis copilot chat history
  → pup_hist_v1        W6.3  PUP score snapshot history
  → meals_v1           W7.2  recipes + meal plan entries
  → fchat_v1           W8.1  family chat messages
@@ -35,8 +35,8 @@ Apply with: `docker compose exec backend alembic upgrade head`
 - `notification_service` — in-app feed + push fan-out + rate limit (10/hr/user)
 - `pet_service` — KidPet CRUD + decay + task hooks + treats catalog
 - `analytics_service` — PUP score + snapshot history
-- `frankie_service` — LiteLLM chat + tool calling + SSE streaming + daily cap
-- `frankie_tools` — flat REGISTRY of 10 tools (definition + handler)
+- `jarvis_service` — LiteLLM chat + tool calling + SSE streaming + daily cap
+- `jarvis_tools` — flat REGISTRY of 10 tools (definition + handler)
 - `meal_service` — recipes + plan entries + auto-shop sync + qty parser
 - `recipe_importer` — LLM URL scraper for recipes
 - `family_chat_service` — messages, SSE poll-stream, reactions, read receipts
@@ -48,7 +48,7 @@ Apply with: `docker compose exec backend alembic upgrade head`
 - `pet_decay_sweep` — 08:00 daily; pet stat decay + sad/starving notifs
 - `pup_snapshot_sweep` — 23:30 daily; PUP score snapshot per family
 
-### Frankie tools (10)
+### Jarvis tools (10)
 | Tool | Domain | Write/Read |
 |---|---|---|
 | create_task_template | Tasks | W |
@@ -65,7 +65,7 @@ Apply with: `docker compose exec backend alembic upgrade head`
 ### Notable settings
 - `GIG_AUTO_APPROVE_STREAK` (default 3)
 - `GIG_AI_AUTO_APPROVE_THRESHOLD` (default 0.8)
-- `FRANKIE_DAILY_MESSAGE_CAP` (default 100 per family)
+- `JARVIS_DAILY_MESSAGE_CAP` (default 100 per family)
 
 ## Frontend pages new
 - `/shopping` — multi-list grocery with check/uncheck
@@ -76,7 +76,7 @@ Apply with: `docker compose exec backend alembic upgrade head`
 - `/kiosk` — fullscreen wall display (token-gated, no auth)
 - `/parent/kiosk` — device token management
 - `/parent/analytics` — PUP score + 30-day sparkline + per-member completion
-- `/parent/frankie` — copilot chat with SSE streaming + live tool badges
+- `/parent/jarvis` — copilot chat with SSE streaming + live tool badges
 - `/meals` — week grid + recipe form + URL importer
 - `/pet` — pet view + treats shop (UNCERTAIN feature)
 - `/chat` — family chat with realtime SSE + emoji reactions + read receipts
@@ -86,9 +86,9 @@ Apply with: `docker compose exec backend alembic upgrade head`
   shopping_list, calendar_service, calendar_scanner, notifications, kiosk,
   gig_modes, gig_modes_award, gig_rotation_shuffle, kid_pet, pet_treats,
   analytics_pup, receipt_shopping_match, meal_service, meal_shopping_sync,
-  recipe_importer, integration_gig_lifecycle, frankie_tools, frankie_sse,
+  recipe_importer, integration_gig_lifecycle, jarvis_tools, jarvis_sse,
   family_chat, chat_read_react
-- 5 new E2E specs: shopping, calendar-events, notifications, frankie,
+- 5 new E2E specs: shopping, calendar-events, notifications, jarvis,
   kiosk-admin, chat
 
 ## Memory entries (private)
@@ -106,5 +106,5 @@ Apply with: `docker compose exec backend alembic upgrade head`
 - Realtime broker (Redis) — replace SSE poll for sub-second latency
 - Meal: drag-drop reorder week
 - Calendar: drag-create on month grid
-- Frankie: streaming token output (currently events only, not chunked reply)
-- Frankie: scheduled prompts (e.g. weekly summary email)
+- Jarvis: streaming token output (currently events only, not chunked reply)
+- Jarvis: scheduled prompts (e.g. weekly summary email)

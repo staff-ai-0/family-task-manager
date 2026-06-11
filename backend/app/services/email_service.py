@@ -465,14 +465,16 @@ class EmailService:
             f"color:#444;margin:12px 0;'>"
             f"{(proof_text or '').replace(chr(10), '<br>')}</blockquote>"
         )
-        image_html = ""
-        if proof_image_url:
-            full_img = proof_image_url if proof_image_url.startswith("http") else f"{base_url}{proof_image_url}"
-            image_html = (
-                f"<p><a href='{full_img}'><img src='{full_img}' "
-                f"style='max-width:320px;border-radius:8px;border:1px solid #ddd;' "
-                f"alt='proof image'/></a></p>"
-            )
+        # Proof images are private (auth + family-scoped) and cannot be hot-linked
+        # into an email — an email client has no session, so an <img> embed would
+        # just 401 and render broken. Note that a photo exists; the parent views it
+        # in-app via the Review button below.
+        image_html = (
+            "<p style='color:#666;font-size:14px;'>📷 A photo was attached — "
+            "open the app to view it.</p>"
+            if proof_image_url
+            else ""
+        )
 
         html = (
             f"<div style='font-family:system-ui,sans-serif;color:#222;'>"

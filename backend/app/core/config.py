@@ -1,7 +1,10 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from typing import List, Union
 import os
+
+# SECRET_KEY values that must never be used in production (forgeable JWTs/cookies).
+_INSECURE_SECRET_KEYS = {"", "your-secret-key-change-this-in-production"}
 
 # Fold Vault KV secrets into os.environ before Settings() is instantiated.
 # This is a no-op if VAULT_ADDR/VAULT_TOKEN aren't set or if Vault is
@@ -44,10 +47,10 @@ class Settings(BaseSettings):
     # Jarvis copilot daily message cap per family. Each user → assistant
     # exchange counts as one message. Prevents accidental spend overruns
     # on the LiteLLM proxy. 0 = unlimited.
-    FRANKIE_DAILY_MESSAGE_CAP: int = 100
+    JARVIS_DAILY_MESSAGE_CAP: int = 100
     # LiteLLM model alias for Jarvis chat. Defaults to receipt scanner's
-    # claude-haiku for shared budget. Override via FRANKIE_MODEL env.
-    FRANKIE_MODEL: str = "claude-haiku"
+    # claude-haiku for shared budget. Override via JARVIS_MODEL env.
+    JARVIS_MODEL: str = "claude-haiku"
 
     # Stripe settings removed 2026-05-24. PayPal is the canonical
     # billing path. See feedback_no_stripe memory entry.
@@ -146,7 +149,13 @@ class Settings(BaseSettings):
 
     # Redis (Optional)
     REDIS_URL: str = "redis://redis:6379/0"
-    
+
+    # Storage backend for the slowapi rate limiter. Empty -> in-memory (per
+    # worker). Set to a redis:// URL in multi-worker / multi-instance deploys so
+    # the limit window is shared across workers. (Pydantic extra='ignore' means an
+    # env var must have a matching field here to take effect — hence this field.)
+    RATE_LIMIT_STORAGE_URI: str = ""
+
     # LiteLLM Proxy (for auto-translation via mistral-nemo)
     LITELLM_API_BASE: str = "http://10.1.0.99:4000"
     LITELLM_API_KEY: str = ""
@@ -188,7 +197,20 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [i.strip() for i in v.split(',') if i.strip()]
         return v
-    
+
+    @model_validator(mode='after')
+    def _enforce_production_secrets(self):
+        """Fail fast in production (DEBUG=false) if SECRET_KEY is unset or still
+        the shipped placeholder — that would mean forgeable JWTs and session
+        cookies. Local/dev (DEBUG=true) is allowed to keep the default."""
+        if not self.DEBUG and self.SECRET_KEY in _INSECURE_SECRET_KEYS:
+            raise ValueError(
+                "SECRET_KEY is unset or still the insecure default while DEBUG is "
+                "false. Set a strong SECRET_KEY in the environment before running "
+                "in production."
+            )
+        return self
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,

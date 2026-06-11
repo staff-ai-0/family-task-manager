@@ -6,8 +6,11 @@ const BACKEND_URL = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL 
  * Wildcard proxy for all /api/gigs/* requests.
  *
  * Browser-side JS cannot reach the backend directly (different port / internal
- * Docker hostname). This endpoint forwards every method (GET, POST, PUT,
- * DELETE, PATCH) transparently, preserving headers, body, and status codes.
+ * Docker hostname) and only holds the httpOnly access_token cookie, while the
+ * backend requires a Bearer header. This route forwards every method
+ * transparently and injects the cookie as Authorization — without it the gig
+ * board's browser actions (claim, complete, offering CRUD, claim approval) 404
+ * / 401. Mirrors api/budget/[...path].ts.
  *
  * Route: /api/gigs/[...path]  →  <BACKEND>/api/gigs/<path>
  *
@@ -59,6 +62,7 @@ async function proxy({ request, params }: { request: Request; params: Record<str
             }
         }
 
+        // Stream the response back as-is
         const responseHeaders = new Headers();
         for (const [key, value] of backendRes.headers.entries()) {
             if (key.toLowerCase() === "transfer-encoding") continue;

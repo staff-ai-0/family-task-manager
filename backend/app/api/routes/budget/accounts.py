@@ -49,13 +49,17 @@ async def list_accounts(
     # Enrich each account with computed balance so the UI doesn't have to
     # round-trip per account. AccountResponse declares balance_cents +
     # cleared_balance_cents as optional fields populated only here.
+    # One batched call (2 grouped queries) instead of ~3 queries per account.
+    balances = await AccountService.get_balances_for_accounts(
+        db, [acc.id for acc in accounts], family_id
+    )
     responses: List[AccountResponse] = []
     for acc in accounts:
-        bal = await AccountService.get_balance(db, acc.id, family_id)
+        bal = balances.get(acc.id) or {"balance": 0, "cleared_balance": 0}
         resp = AccountResponse.model_validate(acc)
-        # SQLAlchemy func.sum() over BigInteger may return Decimal/float on
-        # some drivers (asyncpg). Force int so JSON serializes a number, not
-        # a quoted string — strict mobile clients (Swift Codable) reject str.
+        # func.sum() over BigInteger may return Decimal on asyncpg. Force int so
+        # JSON serializes a number, not a quoted string — strict mobile clients
+        # (Swift Codable) reject str.
         resp.balance_cents = int(bal["balance"])
         resp.cleared_balance_cents = int(bal["cleared_balance"])
         responses.append(resp)

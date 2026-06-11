@@ -86,3 +86,6 @@ fastapi-cors==0.0.6
 # has roles/storage.objectAdmin on the bucket; no JSON key files needed
 # (ADC via metadata server). See gcs_receipt_service.py.
 google-cloud-storage>=2.18
+
+# Rate limiting (B1) — auth + AI endpoint abuse protection
+slowapi==0.1.9

@@ -1,0 +1,265 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BottomNav from "../../components/BottomNav.astro";
+import { apiFetch } from "../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "en";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+if (Astro.request.method === "POST") {
+    const data = await Astro.request.formData();
+    const action = data.get("action");
+    if (action === "clear") {
+        await apiFetch("/api/jarvis/history", { method: "DELETE", token });
+    }
+    return Astro.redirect("/parent/jarvis");
+}
+
+const { data: historyRaw } = await apiFetch<any[]>("/api/jarvis/history", {
+    token,
+});
+const history: any[] = Array.isArray(historyRaw) ? historyRaw : [];
+
+const labels = {
+    title: lang === "es" ? "Jarvis" : "Jarvis",
+    subtitle:
+        lang === "es"
+            ? "Copiloto familiar — pregunta lo que sea"
+            : "Family copilot — ask anything",
+    placeholder: lang === "es"
+        ? "¿Cómo balanceo la semana? ¿Qué le digo a Emma?"
+        : "How do I balance this week? What do I say to Emma?",
+    send: lang === "es" ? "Enviar" : "Send",
+    clear: lang === "es" ? "Limpiar historial" : "Clear history",
+    empty: lang === "es"
+        ? "Sin mensajes aún. Pregúntale algo a Jarvis."
+        : "No messages yet. Ask Jarvis something.",
+    thinking: lang === "es" ? "Pensando…" : "Thinking…",
+};
+---
+
+<Layout title={`${labels.title} - Family Task Manager`}>
+    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col h-screen">
+        <header class="bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white pt-12 pb-4 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] flex-shrink-0">
+            <div class="flex items-baseline justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold">🤖 {labels.title}</h1>
+                    <p class="text-violet-100 text-xs mt-1">{labels.subtitle}</p>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <a href="/parent/jarvis-schedules" class="text-xs underline text-violet-200 hover:text-white">
+                        ⏰ {lang === "es" ? "Programaciones" : "Schedules"}
+                    </a>
+                    {history.length > 0 && (
+                        <form method="POST">
+                            <input type="hidden" name="action" value="clear" />
+                            <button
+                                type="submit"
+                                class="text-xs underline text-violet-200 hover:text-white"
+                            >
+                                {labels.clear}
+                            </button>
+                        </form>
+                    )}
+                </div>
+            </div>
+            <div class="mt-3">
+                <select
+                    id="model-select"
+                    class="w-full bg-white/15 text-white text-xs font-semibold rounded-xl px-3 py-2 border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50 appearance-none cursor-pointer"
+                >
+                    <option value="claude-haiku">⚡ Claude Haiku — fast &amp; cheap (default)</option>
+                    <option value="claude-sonnet">🧠 Claude Sonnet — smarter, slower</option>
+                    <option value="gpt-4o">🟢 GPT-4o</option>
+                    <option value="gemini-2.5-flash">💎 Gemini 2.5 Flash</option>
+                    <option value="qwen3">🖥️ Qwen 2.5 3B — local GPU, free</option>
+                </select>
+            </div>
+        </header>
+
+        <main id="chat-scroll" class="flex-1 px-4 py-4 space-y-3 overflow-y-auto">
+            {history.length === 0 ? (
+                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10">
+                    <p class="text-4xl mb-2">🤖</p>
+                    <p class="text-brand-ink-soft text-sm">{labels.empty}</p>
+                </div>
+            ) : (
+                history.map((m: any) => (
+                    <div class={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                        <div class={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
+                            m.role === "user"
+                                ? "bg-brand-ink text-brand-cream"
+                                : "bg-brand-cream border border-brand-ink/10 text-brand-ink"
+                        }`}>
+                            <p class="whitespace-pre-wrap">{m.content}</p>
+                        </div>
+                    </div>
+                ))
+            )}
+            <div id="pending" class="hidden flex justify-start">
+                <div class="bg-brand-cream border border-brand-ink/10 text-brand-ink-soft rounded-2xl px-4 py-2.5 text-sm italic">
+                    {labels.thinking}
+                </div>
+            </div>
+        </main>
+
+        <form id="chat-form" class="p-3 border-t border-brand-ink/10 bg-brand-cream flex-shrink-0 flex gap-2">
+            <input
+                type="text"
+                id="message-input"
+                required
+                maxlength="2000"
+                placeholder={labels.placeholder}
+                class="flex-1 px-3 py-2.5 rounded-xl border border-brand-ink/20 text-sm focus:ring-2 focus:ring-violet-500 outline-none"
+            />
+            <button
+                type="submit"
+                class="px-4 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-bold hover:bg-violet-700 active:scale-95"
+            >
+                {labels.send}
+            </button>
+        </form>
+
+        <BottomNav active="parent" role={user.role} lang={lang} />
+    </div>
+</Layout>
+
+<script>
+    document.addEventListener("astro:page-load", () => {
+        const form = document.getElementById("chat-form") as HTMLFormElement | null;
+        const input = document.getElementById("message-input") as HTMLInputElement | null;
+        const modelSelect = document.getElementById("model-select") as HTMLSelectElement | null;
+        const pending = document.getElementById("pending");
+        const scroll = document.getElementById("chat-scroll");
+        if (!form || !input) return;
+
+        // Restore persisted model choice (migrate deprecated qwen-coder → mistral-nemo)
+        let savedModel = localStorage.getItem("jarvis-model") || "claude-haiku";
+        if (["qwen-coder", "mistral-nemo", "gemma3"].includes(savedModel)) {
+            savedModel = "qwen3";
+            localStorage.setItem("jarvis-model", savedModel);
+        }
+        if (modelSelect) {
+            modelSelect.value = savedModel;
+            modelSelect.addEventListener("change", () => {
+                localStorage.setItem("jarvis-model", modelSelect.value);
+            });
+        }
+
+        scroll?.scrollTo({ top: scroll.scrollHeight });
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const message = input.value.trim();
+            if (!message) return;
+            input.value = "";
+            input.disabled = true;
+            const selectedModel = modelSelect?.value || "claude-haiku";
+
+            // Optimistic user bubble
+            if (scroll) {
+                const userBubble = document.createElement("div");
+                userBubble.className = "flex justify-end";
+                userBubble.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-brand-ink text-brand-cream"><p class="whitespace-pre-wrap"></p></div>`;
+                (userBubble.querySelector("p") as HTMLElement).textContent = message;
+                scroll.insertBefore(userBubble, pending);
+            }
+            pending?.classList.remove("hidden");
+            scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+
+            const liveActions: string[] = [];
+            try {
+                const resp = await fetch("/api/jarvis/chat-stream", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message, model: selectedModel }),
+                });
+                if (!resp.ok || !resp.body) {
+                    pending?.classList.add("hidden");
+                    let txt = "Error";
+                    try { txt = (await resp.json()).detail || txt; } catch {}
+                    alert(txt);
+                    return;
+                }
+
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buf = "";
+                let event = "message";
+                let dataStr = "";
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buf += decoder.decode(value, { stream: true });
+
+                    let idx;
+                    while ((idx = buf.indexOf("\n\n")) >= 0) {
+                        const chunk = buf.slice(0, idx);
+                        buf = buf.slice(idx + 2);
+                        event = "message";
+                        dataStr = "";
+                        for (const line of chunk.split("\n")) {
+                            if (line.startsWith("event: ")) event = line.slice(7).trim();
+                            else if (line.startsWith("data: ")) dataStr += line.slice(6);
+                        }
+                        let payload: any = {};
+                        try { payload = dataStr ? JSON.parse(dataStr) : {}; } catch {}
+
+                        if (event === "tool") {
+                            liveActions.push(`${payload.name}(${payload.ok ? "ok" : "err"})`);
+                            if (pending) {
+                                pending.querySelector("div")!.textContent =
+                                    `⚡ ${payload.name} · ${liveActions.length} action(s) so far…`;
+                            }
+                        } else if (event === "reply") {
+                            pending?.classList.add("hidden");
+                            if (scroll) {
+                                const MODEL_META: Record<string, {label: string; icon: string; color: string}> = {
+                                    "claude-haiku":     { label: "Claude Haiku",       icon: "⚡", color: "bg-orange-100 text-orange-700" },
+                                    "claude-sonnet":    { label: "Claude Sonnet",      icon: "🧠", color: "bg-violet-100 text-violet-700" },
+                                    "gpt-4o":           { label: "GPT-4o",             icon: "🟢", color: "bg-green-100 text-green-700" },
+                                    "gemini-2.5-flash": { label: "Gemini 2.5 Flash",   icon: "💎", color: "bg-sky-100 text-sky-700" },
+                                    "qwen3":            { label: "Qwen 2.5 3B · GPU",  icon: "🖥️", color: "bg-gray-100 text-gray-600" },
+                                };
+                                const bot = document.createElement("div");
+                                bot.className = "flex justify-start flex-col gap-1";
+                                const actions: string[] = Array.isArray(payload.actions) ? payload.actions : liveActions;
+                                const actionBadges = actions.length
+                                    ? `<div class="mt-2 flex flex-wrap gap-1">${actions.map(() => `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700"></span>`).join("")}</div>`
+                                    : "";
+                                const modelKey = payload.model ?? selectedModel;
+                                const meta = MODEL_META[modelKey] ?? { label: modelKey, icon: "🤖", color: "bg-gray-100 text-gray-600" };
+                                const modelCard = `<div class="flex items-center gap-1 pl-1"><span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${meta.color}">${meta.icon} ${meta.label}</span></div>`;
+                                bot.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-brand-cream border border-brand-ink/10 text-brand-ink"><p class="whitespace-pre-wrap"></p>${actionBadges}</div>${modelCard}`;
+                                (bot.querySelector("p") as HTMLElement).textContent = payload.reply ?? "";
+                                bot.querySelectorAll("span.bg-violet-100").forEach((el, i) => {
+                                    (el as HTMLElement).textContent = "⚡ " + actions[i];
+                                });
+                                scroll.insertBefore(bot, pending);
+                                scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+                            }
+                        } else if (event === "error") {
+                            pending?.classList.add("hidden");
+                            alert(payload.detail || "Error");
+                        }
+                    }
+                }
+            } catch (err) {
+                pending?.classList.add("hidden");
+                alert(String(err));
+            } finally {
+                input.disabled = false;
+                input.focus();
+            }
+        });
+    });
+</script>

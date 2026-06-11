@@ -118,6 +118,13 @@ async def get_month_budget(
     income_result = await db.execute(income_query)
     result["totals"]["income"] = income_result.scalar() or 0
 
+    # Compute every category's budgeted/activity/available in a fixed number of
+    # grouped queries instead of ~5 per category (was an N+1 over the whole month).
+    all_categories = [category for group in groups for category in group.categories]
+    summaries = await AllocationService.get_categories_available_amounts(
+        db, family_id, month_date, all_categories
+    )
+
     for group in groups:
         group_data = {
             "id": str(group.id),
@@ -130,9 +137,13 @@ async def get_month_budget(
         }
         
         for category in group.categories:
-            summary = await AllocationService.get_category_available_amount(
-                db, family_id, category.id, month_date
-            )
+            summary = summaries.get(str(category.id)) or {
+                "budgeted": 0,
+                "activity": 0,
+                "previous_balance": 0,
+                "available": 0,
+                "rollover_enabled": category.rollover_enabled,
+            }
 
             category_data = {
                 "id": str(category.id),

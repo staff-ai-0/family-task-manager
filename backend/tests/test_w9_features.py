@@ -11,22 +11,22 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.models.calendar_event import CalendarEvent
-from app.models.frankie_schedule import FrankieSchedule
+from app.models.jarvis_schedule import JarvisSchedule
 from app.models.dm import DMThread, DMMessage
 from app.schemas.calendar_event import CalendarEventCreate
 from app.services.calendar_service import CalendarService, _expand_recurrence
 from app.services.dm_service import DMService
-from app.services.frankie_schedule_service import (
-    FrankieScheduleService,
+from app.services.jarvis_schedule_service import (
+    JarvisScheduleService,
     _parse_cron,
     _next_fire,
 )
 
 
-# ─── W9.1 Frankie schedules ────────────────────────────────────────────
+# ─── W9.1 Jarvis schedules ────────────────────────────────────────────
 
 
-class TestFrankieSchedule:
+class TestJarvisSchedule:
     def test_parse_valid_cron(self):
         t = _parse_cron("0 9 * * 1")
         nxt = _next_fire(t, datetime(2026, 1, 1, tzinfo=timezone.utc))
@@ -41,7 +41,7 @@ class TestFrankieSchedule:
     async def test_create_schedule_sets_next_run(
         self, db_session, test_family, test_parent_user
     ):
-        s = await FrankieScheduleService.create(
+        s = await JarvisScheduleService.create(
             db_session,
             family_id=test_family.id,
             created_by=test_parent_user.id,
@@ -57,7 +57,7 @@ class TestFrankieSchedule:
         self, db_session, test_family, test_parent_user
     ):
         with pytest.raises(ValidationException):
-            await FrankieScheduleService.create(
+            await JarvisScheduleService.create(
                 db_session,
                 family_id=test_family.id,
                 created_by=test_parent_user.id,
@@ -70,17 +70,17 @@ class TestFrankieSchedule:
     async def test_toggle_flips_active(
         self, db_session, test_family, test_parent_user
     ):
-        s = await FrankieScheduleService.create(
+        s = await JarvisScheduleService.create(
             db_session,
             family_id=test_family.id,
             created_by=test_parent_user.id,
             name="x", prompt="x", cron_expr="0 9 * * 1",
         )
-        toggled = await FrankieScheduleService.toggle(
+        toggled = await JarvisScheduleService.toggle(
             db_session, s.id, test_family.id
         )
         assert toggled.is_active is False
-        toggled = await FrankieScheduleService.toggle(
+        toggled = await JarvisScheduleService.toggle(
             db_session, s.id, test_family.id
         )
         assert toggled.is_active is True
