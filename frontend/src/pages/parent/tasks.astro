@@ -280,7 +280,7 @@ function freqLabel(interval: number): string {
                     <p id="preview-week" class="text-lg font-bold text-brand-ink"></p>
                     <p class="text-xs text-brand-ink-soft mt-0.5">{t(lang, "shuffle_preview_hint")}</p>
                 </div>
-                <button type="button" id="preview-close" class="text-brand-ink-soft hover:text-brand-ink-soft">
+                <button type="button" id="preview-close" class="text-brand-ink-soft hover:text-brand-ink">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
@@ -290,12 +290,12 @@ function freqLabel(interval: number): string {
                 <div id="preview-plan" class="space-y-2"></div>
             </div>
             <div class="p-4 border-t border-brand-ink/10 flex items-center gap-2">
-                <button type="button" id="preview-cancel" class="flex-1 py-2.5 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold text-sm rounded-lg transition-colors">
+                <button type="button" id="preview-cancel" class="flex-1 py-2.5 bg-brand-cream-deep hover:bg-brand-cream text-brand-ink font-semibold text-sm rounded-lg transition-colors">
                     {t(lang, "shuffle_preview_close")}
                 </button>
                 <form method="POST" class="flex-1">
                     <input type="hidden" name="action" value="shuffle" />
-                    <button type="submit" class="w-full py-2.5 bg-brand-sun-deep hover:bg-brand-ink text-brand-ink font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]">
+                    <button type="submit" class="w-full py-2.5 bg-brand-sun-deep hover:bg-brand-ink hover:text-brand-cream text-brand-ink font-semibold text-sm rounded-lg transition-colors shadow-[var(--shadow-card)]">
                         {t(lang, "shuffle_preview_apply")}
                     </button>
                 </form>
