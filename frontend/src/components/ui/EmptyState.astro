@@ -1,0 +1,66 @@
+---
+/**
+ * EmptyState — centered empty-state block with icon, title, optional subtitle, and optional CTA.
+ * When ctaId is provided, the CTA button clicks the element with that id (delegation via inline script).
+ * When ctaHref is provided (and no ctaId), the CTA renders as an <a> tag.
+ * @prop icon      Emoji displayed large above title
+ * @prop title     Primary message
+ * @prop subtitle  Secondary message (optional)
+ * @prop ctaLabel  CTA button text (renders button/link only when set)
+ * @prop ctaId     If set, CTA click delegates to element with this id
+ * @prop ctaHref   If set and ctaId absent, CTA renders as <a href>
+ * @prop ctaTone   Button background tone: "sky" | "coral" | "mint" (default "sky")
+ */
+interface Props {
+  icon: string;
+  title: string;
+  subtitle?: string;
+  ctaLabel?: string;
+  ctaId?: string;
+  ctaHref?: string;
+  ctaTone?: "sky" | "coral" | "mint";
+}
+const {
+  icon,
+  title,
+  subtitle,
+  ctaLabel,
+  ctaId,
+  ctaHref,
+  ctaTone = "sky",
+} = Astro.props;
+
+const ctaBg = ({
+  sky:   "bg-brand-sky hover:bg-brand-sky-deep",
+  coral: "bg-brand-coral hover:bg-brand-coral-deep",
+  mint:  "bg-brand-mint hover:bg-brand-mint-deep",
+} as Record<string, string>)[ctaTone] ?? "bg-brand-sky hover:bg-brand-sky-deep";
+
+const ctaClass = `press inline-flex items-center px-5 py-2.5 ${ctaBg} text-brand-ink font-extrabold text-sm rounded-full border-2 border-brand-ink shadow-[var(--shadow-card)] transition-colors cursor-pointer`;
+---
+
+<div class="flex flex-col items-center justify-center py-10 text-center">
+  <p class="text-4xl mb-3" aria-hidden="true">{icon}</p>
+  <p class="font-display font-extrabold text-brand-ink mb-1">{title}</p>
+  {subtitle && <p class="text-sm text-brand-ink-soft mb-4">{subtitle}</p>}
+  {ctaLabel && ctaId && (
+    <button id={`${ctaId}-empty-cta`} class={ctaClass}>{ctaLabel}</button>
+  )}
+  {ctaLabel && !ctaId && ctaHref && (
+    <a href={ctaHref} class={ctaClass}>{ctaLabel}</a>
+  )}
+</div>
+
+{ctaId && (
+  <script define:vars={{ ctaId }}>
+  (function () {
+    document.addEventListener("astro:page-load", function () {
+      var emptyCta = document.getElementById(ctaId + "-empty-cta");
+      var target = document.getElementById(ctaId);
+      if (emptyCta && target) {
+        emptyCta.addEventListener("click", function () { target.click(); });
+      }
+    }, { once: true });
+  })();
+  </script>
+)}

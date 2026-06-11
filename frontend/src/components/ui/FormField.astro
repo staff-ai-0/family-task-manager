@@ -1,0 +1,47 @@
+---
+/**
+ * FormField — label + input with optional error message. Spreads extra attrs to <input>.
+ * @prop label      Visible label text
+ * @prop name       id and name attribute for input + label[for]
+ * @prop type       Input type (default "text")
+ * @prop error      Inline error message (renders red <p> when set)
+ * @prop required   If true, shows * on label and sets required attribute
+ * @prop class      Extra classes on the wrapper div
+ * @prop inputClass Extra classes on the <input>
+ */
+interface Props {
+  label: string;
+  name: string;
+  type?: string;
+  error?: string;
+  required?: boolean;
+  class?: string;
+  inputClass?: string;
+  [key: string]: any;
+}
+const {
+  label,
+  name,
+  type = "text",
+  error,
+  required = false,
+  class: className = "",
+  inputClass = "",
+  ...rest
+} = Astro.props;
+---
+
+<div class={`flex flex-col gap-1 ${className}`}>
+  <label for={name} class="text-sm font-semibold text-brand-ink">
+    {label}{required && <span class="text-brand-coral ml-0.5" aria-hidden="true">*</span>}
+  </label>
+  <input
+    id={name}
+    name={name}
+    type={type}
+    required={required || undefined}
+    class={`w-full border-2 border-brand-ink rounded-xl px-4 py-2.5 bg-brand-cream focus:outline-none focus:ring-2 focus:ring-brand-sky font-sans ${inputClass}`}
+    {...rest}
+  />
+  {error && <p class="text-xs text-red-600 font-medium" role="alert">{error}</p>}
+</div>

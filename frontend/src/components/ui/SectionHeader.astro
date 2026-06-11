@@ -1,0 +1,23 @@
+---
+/**
+ * SectionHeader — h2 section label with optional "See all" link.
+ * @prop title  Section heading
+ * @prop href   Optional URL; renders "See all →" / "Ver todo →" link
+ * @prop lang   "en" | "es" (default "en")
+ */
+interface Props {
+  title: string;
+  href?: string;
+  lang?: "en" | "es";
+}
+const { title, href, lang = "en" } = Astro.props;
+---
+
+<div class="flex items-center justify-between mb-3">
+  <h2 class="font-display text-lg font-extrabold text-brand-ink">{title}</h2>
+  {href && (
+    <a href={href} class="text-sm text-brand-sky-deep font-semibold hover:underline">
+      {lang === "es" ? "Ver todo" : "See all"} →
+    </a>
+  )}
+</div>
