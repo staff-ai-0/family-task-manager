@@ -1,11 +1,10 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import BottomNav from "../../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
 if (!userOk) {
@@ -31,20 +30,17 @@ const statusLabel: Record<string, Record<string, string>> = {
 const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
 ---
 
-<Layout title={`${lang === "es" ? "Mis Gigs" : "My Gigs"} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen">
-        <header class="bg-gradient-to-br from-violet-700 to-violet-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <div class="flex justify-between items-center">
-                <div>
-                    <a href="/gigs" class="text-violet-200 text-sm hover:text-white transition-colors">
-                        ← {lang === "es" ? "Tablero de Gigs" : "Gig Board"}
-                    </a>
-                    <h1 class="text-2xl font-bold mt-1">{lang === "es" ? "Mis Gigs" : "My Gigs"}</h1>
-                </div>
-            </div>
-        </header>
-
-        <main class="flex-1 px-4 py-6">
+<PageLayout
+    title={lang === "es" ? "Mis Gigs" : "My Gigs"}
+    headerClass="bg-gradient-to-br from-violet-700 to-violet-500"
+    dark
+    backClass="text-violet-200 hover:text-white"
+    backHref="/gigs"
+    backLabel={lang === "es" ? "Tablero de Gigs" : "Gig Board"}
+    role={user.role?.toLowerCase()}
+    active="gigs"
+    lang={lang}
+>
             {flash && (
                 <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
                     {flash}
@@ -154,11 +150,7 @@ const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
                     ))}
                 </div>
             )}
-        </main>
-
-        <BottomNav active="gigs" role={user.role?.toLowerCase()} lang={lang} />
-    </div>
-</Layout>
+</PageLayout>
 
 <script>
 const lang = document.cookie.split(";").find(c => c.trim().startsWith("lang="))?.split("=")[1] ?? "en";

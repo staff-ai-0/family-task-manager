@@ -1,6 +1,5 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import BottomNav from "../../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 
@@ -78,36 +77,21 @@ const consequences: any[] = Array.isArray(consequencesRaw)
 const members: any[] = family?.members ?? [];
 ---
 
-<Layout title={`${t(lang, "pc_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
-        <header
-            class="bg-gradient-to-br from-rose-700 to-red-600 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
-        >
-            <a
-                href="/parent"
-                class="text-rose-200 text-sm flex items-center gap-1 mb-3"
-            >
-                <svg
-                    class="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M15 19l-7-7 7-7"></path>
-                </svg>
-                {t(lang, "back_parent")}
-            </a>
-            <h1 class="text-2xl font-bold">{t(lang, "pc_title")}</h1>
-            <p class="text-rose-200 text-sm mt-1">
-                {(t(lang, "pc_total_count") as Function)(consequences.length)}
-            </p>
-        </header>
-
-        <main class="flex-1 px-4 py-6 space-y-6">
+<PageLayout
+    title={t(lang, "pc_title") as string}
+    headerClass="bg-gradient-to-br from-rose-700 to-red-600"
+    dark
+    backClass="text-rose-200"
+    backHref="/parent"
+    backLabel={t(lang, "back_parent") as string}
+    role={user.role}
+    active="parent"
+    lang={lang as "en" | "es"}
+    mainClass="flex-1 px-4 py-6 space-y-6"
+>
+    <p slot="header-extra" class="text-rose-200 text-sm mt-1">
+        {(t(lang, "pc_total_count") as Function)(consequences.length)}
+    </p>
             {
                 successMsg && (
                     <div class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
@@ -341,8 +325,4 @@ const members: any[] = family?.members ?? [];
                     }
                 </div>
             </section>
-        </main>
-
-        <BottomNav active="parent" role={user.role} lang={lang} />
-    </div>
-</Layout>
+</PageLayout>

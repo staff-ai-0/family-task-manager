@@ -1,11 +1,10 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import BottomNav from "../../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 const { data: user } = await apiFetch<any>("/api/auth/me", { token });
 if (!user) {
@@ -60,96 +59,96 @@ const scoreColor =
             : "from-amber-400 to-orange-500";
 ---
 
-<Layout title={`${labels.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col">
-        <header class={`bg-gradient-to-br ${scoreColor} text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]`}>
-            <h1 class="text-2xl font-bold mb-1">📊 {labels.title}</h1>
-            <div class="mt-4 flex items-center gap-4">
-                <div class="bg-white/15 backdrop-blur-md rounded-2xl p-4 flex-1">
-                    <p class="text-xs font-semibold uppercase tracking-wide opacity-80">
-                        {labels.pup}
-                    </p>
-                    <p class="text-5xl font-extrabold mt-1">{score}<span class="text-2xl opacity-70">/100</span></p>
-                    <p class="text-xs mt-1 opacity-90 capitalize">{label}</p>
-                </div>
-                <div class="text-xs opacity-90">
-                    <p>{labels.pup_sub}</p>
-                    <p class="mt-2 opacity-80">
-                        {latePenalties} {labels.penalties}
-                    </p>
-                </div>
-            </div>
-        </header>
-
-        <main class="flex-1 px-4 py-6 space-y-4">
-            {sparklinePath && (
-                <section class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)]">
-                    <h2 class="text-sm font-bold text-brand-ink mb-2">
-                        📈 {lang === "es" ? "Tendencia 30 días" : "30-day trend"}
-                    </h2>
-                    <svg viewBox="0 0 300 50" class="w-full h-12" preserveAspectRatio="none">
-                        <path d={sparklinePath} fill="none" stroke="currentColor" stroke-width="2" class="text-brand-sky-deep" />
-                    </svg>
-                    <div class="flex justify-between text-xs text-brand-ink-soft mt-1">
-                        <span>{history[0]?.date}</span>
-                        <span>{history[history.length - 1]?.date}</span>
-                    </div>
-                </section>
-            )}
-
-            {notes.length > 0 && (
-                <section class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)]">
-                    <h2 class="text-sm font-bold text-brand-ink mb-2">
-                        🔎 {labels.insights}
-                    </h2>
-                    <ul class="space-y-1 text-sm text-brand-ink-soft">
-                        {notes.map((n: string) => (
-                            <li class="flex items-start gap-2">
-                                <span>•</span><span>{n}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </section>
-            )}
-
-            <section class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)]">
-                <h2 class="text-sm font-bold text-brand-ink mb-3">
-                    👨‍👩‍👧 {labels.members}
-                </h2>
-                <ul class="space-y-3">
-                    {members.map((m: any) => {
-                        const rate = m.completion_rate ?? 0;
-                        const barColor = rate >= 80
-                            ? "bg-brand-mint-deep"
-                            : rate >= 50
-                                ? "bg-brand-sun-deep"
-                                : "bg-brand-coral-deep";
-                        return (
-                            <li>
-                                <div class="flex items-baseline justify-between mb-1">
-                                    <span class="font-semibold text-brand-ink text-sm">
-                                        {m.name}
-                                        <span class="ml-2 text-xs text-brand-ink-soft capitalize">
-                                            {m.role}
-                                        </span>
-                                    </span>
-                                    <span class="text-xs text-brand-ink-soft">
-                                        {m.mandatory_done}/{m.mandatory_total} · {rate}%
-                                    </span>
-                                </div>
-                                <div class="h-2 bg-brand-cream-deep rounded-full overflow-hidden">
-                                    <div class={`h-full ${barColor} transition-all`} style={`width: ${rate}%`}></div>
-                                </div>
-                                <p class="mt-1 text-xs text-brand-ink-soft">
-                                    {m.gigs_completed} {labels.gigs_done} · {m.mandatory_late} {labels.late}
-                                </p>
-                            </li>
-                        );
-                    })}
-                </ul>
-            </section>
-        </main>
-
-        <BottomNav active="parent" role={user.role} lang={lang} />
+<PageLayout
+    title={`📊 ${labels.title}`}
+    headerClass={`bg-gradient-to-br ${scoreColor}`}
+    dark
+    role={user.role}
+    active="parent"
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-4"
+    containerClass="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep"
+>
+    <div slot="header-extra" class="mt-4 flex items-center gap-4">
+        <div class="bg-white/15 backdrop-blur-md rounded-2xl p-4 flex-1">
+            <p class="text-xs font-semibold uppercase tracking-wide opacity-80">
+                {labels.pup}
+            </p>
+            <p class="text-5xl font-extrabold mt-1">{score}<span class="text-2xl opacity-70">/100</span></p>
+            <p class="text-xs mt-1 opacity-90 capitalize">{label}</p>
+        </div>
+        <div class="text-xs opacity-90">
+            <p>{labels.pup_sub}</p>
+            <p class="mt-2 opacity-80">
+                {latePenalties} {labels.penalties}
+            </p>
+        </div>
     </div>
-</Layout>
+
+    {sparklinePath && (
+        <section class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)]">
+            <h2 class="text-sm font-bold text-brand-ink mb-2">
+                📈 {lang === "es" ? "Tendencia 30 días" : "30-day trend"}
+            </h2>
+            <svg viewBox="0 0 300 50" class="w-full h-12" preserveAspectRatio="none">
+                <path d={sparklinePath} fill="none" stroke="currentColor" stroke-width="2" class="text-brand-sky-deep" />
+            </svg>
+            <div class="flex justify-between text-xs text-brand-ink-soft mt-1">
+                <span>{history[0]?.date}</span>
+                <span>{history[history.length - 1]?.date}</span>
+            </div>
+        </section>
+    )}
+
+    {notes.length > 0 && (
+        <section class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)]">
+            <h2 class="text-sm font-bold text-brand-ink mb-2">
+                🔎 {labels.insights}
+            </h2>
+            <ul class="space-y-1 text-sm text-brand-ink-soft">
+                {notes.map((n: string) => (
+                    <li class="flex items-start gap-2">
+                        <span>•</span><span>{n}</span>
+                    </li>
+                ))}
+            </ul>
+        </section>
+    )}
+
+    <section class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)]">
+        <h2 class="text-sm font-bold text-brand-ink mb-3">
+            👨‍👩‍👧 {labels.members}
+        </h2>
+        <ul class="space-y-3">
+            {members.map((m: any) => {
+                const rate = m.completion_rate ?? 0;
+                const barColor = rate >= 80
+                    ? "bg-brand-mint-deep"
+                    : rate >= 50
+                        ? "bg-brand-sun-deep"
+                        : "bg-brand-coral-deep";
+                return (
+                    <li>
+                        <div class="flex items-baseline justify-between mb-1">
+                            <span class="font-semibold text-brand-ink text-sm">
+                                {m.name}
+                                <span class="ml-2 text-xs text-brand-ink-soft capitalize">
+                                    {m.role}
+                                </span>
+                            </span>
+                            <span class="text-xs text-brand-ink-soft">
+                                {m.mandatory_done}/{m.mandatory_total} · {rate}%
+                            </span>
+                        </div>
+                        <div class="h-2 bg-brand-cream-deep rounded-full overflow-hidden">
+                            <div class={`h-full ${barColor} transition-all`} style={`width: ${rate}%`}></div>
+                        </div>
+                        <p class="mt-1 text-xs text-brand-ink-soft">
+                            {m.gigs_completed} {labels.gigs_done} · {m.mandatory_late} {labels.late}
+                        </p>
+                    </li>
+                );
+            })}
+        </ul>
+    </section>
+</PageLayout>

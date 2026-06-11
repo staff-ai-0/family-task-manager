@@ -1,12 +1,11 @@
 ---
-import Layout from "../layouts/Layout.astro";
-import BottomNav from "../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
 import { t } from "../lib/i18n";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 let errorMsg = "";
 
@@ -160,163 +159,159 @@ const sourceIcon = (src: string): string => {
 };
 ---
 
-<Layout title={`${labels.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col">
-        <header class="bg-gradient-to-br from-sky-500 to-indigo-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <div class="flex items-baseline justify-between gap-2">
+<PageLayout
+    title={`📅 ${labels.title}`}
+    headerClass="bg-gradient-to-br from-sky-500 to-indigo-500"
+    dark
+    role={user.role}
+    active="tasks"
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-4"
+>
+    <a
+        slot="actions"
+        href="/calendar/month"
+        class="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs font-semibold whitespace-nowrap"
+    >
+        {lang === "es" ? "Vista mes" : "Month view"}
+    </a>
+    <p slot="header-extra" class="text-sky-100 text-sm">{labels.subtitle}</p>
+
+    {errorMsg && (
+        <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
+            {errorMsg}
+        </div>
+    )}
+
+    {user.role === "parent" && (
+        <a
+            href="/calendar/scan"
+            class="block bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl p-4 shadow-[var(--shadow-card)] active:scale-[0.98] transition-transform"
+        >
+            <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-bold mb-1">📅 {labels.title}</h1>
-                    <p class="text-sky-100 text-sm">{labels.subtitle}</p>
+                    <p class="font-bold text-sm">
+                        📄 {lang === "es" ? "Escanear volante escolar" : "Scan school flyer"}
+                    </p>
+                    <p class="text-xs text-purple-100 mt-0.5">
+                        {lang === "es"
+                            ? "Foto → eventos automáticos"
+                            : "Photo → automatic events"}
+                    </p>
                 </div>
-                <a
-                    href="/calendar/month"
-                    class="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs font-semibold whitespace-nowrap"
-                >
-                    {lang === "es" ? "Vista mes" : "Month view"}
-                </a>
+                <span class="text-2xl">→</span>
             </div>
-        </header>
+        </a>
+    )}
 
-        <main class="flex-1 px-4 py-6 space-y-4">
-            {errorMsg && (
-                <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
-                    {errorMsg}
-                </div>
-            )}
+    <details class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)]">
+        <summary class="p-4 font-bold text-brand-ink cursor-pointer">
+            ➕ {labels.add_title}
+        </summary>
+        <form method="POST" class="px-4 pb-4 space-y-2">
+            <input type="hidden" name="action" value="create_event" />
+            <input
+                type="text"
+                name="title"
+                required
+                maxlength="200"
+                placeholder={labels.title_ph}
+                class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
+            />
+            <div class="grid grid-cols-2 gap-2">
+                <input
+                    type="date"
+                    name="date"
+                    required
+                    class="px-3 py-2 rounded-lg border border-brand-ink/20 text-sm bg-brand-cream"
+                />
+                <input
+                    type="time"
+                    name="time"
+                    class="px-3 py-2 rounded-lg border border-brand-ink/20 text-sm bg-brand-cream"
+                />
+            </div>
+            <input
+                type="text"
+                name="location"
+                maxlength="200"
+                placeholder={labels.location_ph}
+                class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
+            />
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="all_day" class="w-4 h-4 rounded" />
+                <span class="text-sm text-brand-ink">{labels.all_day}</span>
+            </label>
+            <select name="recurrence" class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm bg-brand-cream">
+                <option value="">{lang === "es" ? "Sin repetición" : "Does not repeat"}</option>
+                <option value="daily">{lang === "es" ? "Diario" : "Daily"}</option>
+                <option value="weekdays">{lang === "es" ? "Lun-Vie" : "Weekdays"}</option>
+                <option value="weekly">{lang === "es" ? "Semanal" : "Weekly"}</option>
+                <option value="monthly">{lang === "es" ? "Mensual" : "Monthly"}</option>
+                <option value="custom">{lang === "es" ? "Personalizado (RRULE)" : "Custom (RRULE)"}</option>
+            </select>
+            <input
+                type="text"
+                name="recurrence_custom"
+                placeholder="FREQ=WEEKLY;BYDAY=MO,WE,FR"
+                class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-xs font-mono bg-brand-cream/60"
+            />
+            <button
+                type="submit"
+                class="w-full py-2 rounded-lg bg-brand-ink text-brand-cream text-sm font-semibold hover:bg-brand-ink-soft"
+            >
+                {labels.add}
+            </button>
+        </form>
+    </details>
 
-            {user.role === "parent" && (
-                <a
-                    href="/calendar/scan"
-                    class="block bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl p-4 shadow-[var(--shadow-card)] active:scale-[0.98] transition-transform"
-                >
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="font-bold text-sm">
-                                📄 {lang === "es" ? "Escanear volante escolar" : "Scan school flyer"}
-                            </p>
-                            <p class="text-xs text-purple-100 mt-0.5">
-                                {lang === "es"
-                                    ? "Foto → eventos automáticos"
-                                    : "Photo → automatic events"}
-                            </p>
-                        </div>
-                        <span class="text-2xl">→</span>
+    {sortedDays.length === 0 ? (
+        <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
+            <p class="text-brand-ink-soft text-sm">{labels.empty}</p>
+            <p class="text-brand-ink-soft text-xs mt-2">{labels.scan_hint}</p>
+        </div>
+    ) : (
+        <div class="space-y-3">
+            {sortedDays.map(([day, items]) => (
+                <section class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
+                    <div class="bg-brand-cream-deep/60 px-4 py-2 font-semibold text-sm text-brand-ink capitalize">
+                        {formatDay(day)}
                     </div>
-                </a>
-            )}
-
-            <details class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)]">
-                <summary class="p-4 font-bold text-brand-ink cursor-pointer">
-                    ➕ {labels.add_title}
-                </summary>
-                <form method="POST" class="px-4 pb-4 space-y-2">
-                    <input type="hidden" name="action" value="create_event" />
-                    <input
-                        type="text"
-                        name="title"
-                        required
-                        maxlength="200"
-                        placeholder={labels.title_ph}
-                        class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
-                    />
-                    <div class="grid grid-cols-2 gap-2">
-                        <input
-                            type="date"
-                            name="date"
-                            required
-                            class="px-3 py-2 rounded-lg border border-brand-ink/20 text-sm bg-brand-cream"
-                        />
-                        <input
-                            type="time"
-                            name="time"
-                            class="px-3 py-2 rounded-lg border border-brand-ink/20 text-sm bg-brand-cream"
-                        />
-                    </div>
-                    <input
-                        type="text"
-                        name="location"
-                        maxlength="200"
-                        placeholder={labels.location_ph}
-                        class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
-                    />
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" name="all_day" class="w-4 h-4 rounded" />
-                        <span class="text-sm text-brand-ink">{labels.all_day}</span>
-                    </label>
-                    <select name="recurrence" class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm bg-brand-cream">
-                        <option value="">{lang === "es" ? "Sin repetición" : "Does not repeat"}</option>
-                        <option value="daily">{lang === "es" ? "Diario" : "Daily"}</option>
-                        <option value="weekdays">{lang === "es" ? "Lun-Vie" : "Weekdays"}</option>
-                        <option value="weekly">{lang === "es" ? "Semanal" : "Weekly"}</option>
-                        <option value="monthly">{lang === "es" ? "Mensual" : "Monthly"}</option>
-                        <option value="custom">{lang === "es" ? "Personalizado (RRULE)" : "Custom (RRULE)"}</option>
-                    </select>
-                    <input
-                        type="text"
-                        name="recurrence_custom"
-                        placeholder="FREQ=WEEKLY;BYDAY=MO,WE,FR"
-                        class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-xs font-mono bg-brand-cream/60"
-                    />
-                    <button
-                        type="submit"
-                        class="w-full py-2 rounded-lg bg-brand-ink text-brand-cream text-sm font-semibold hover:bg-brand-ink-soft"
-                    >
-                        {labels.add}
-                    </button>
-                </form>
-            </details>
-
-            {sortedDays.length === 0 ? (
-                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
-                    <p class="text-brand-ink-soft text-sm">{labels.empty}</p>
-                    <p class="text-brand-ink-soft text-xs mt-2">{labels.scan_hint}</p>
-                </div>
-            ) : (
-                <div class="space-y-3">
-                    {sortedDays.map(([day, items]) => (
-                        <section class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
-                            <div class="bg-brand-cream-deep/60 px-4 py-2 font-semibold text-sm text-brand-ink capitalize">
-                                {formatDay(day)}
-                            </div>
-                            <ul class="divide-y divide-brand-ink/10">
-                                {items.map((evt: any) => (
-                                    <li class="flex items-start gap-3 p-4">
-                                        <span class="text-lg flex-shrink-0">
-                                            {sourceIcon(evt.source)}
-                                        </span>
-                                        <div class="flex-1 min-w-0">
-                                            <p class="font-semibold text-brand-ink text-sm">
-                                                {evt.title}
-                                            </p>
-                                            <p class="text-xs text-brand-ink-soft">
-                                                {formatTime(evt.start_ts, evt.all_day)}
-                                                {evt.location && (
-                                                    <span> · {evt.location}</span>
-                                                )}
-                                            </p>
-                                        </div>
-                                        {user.role === "parent" && (
-                                            <form method="POST">
-                                                <input type="hidden" name="action" value="delete_event" />
-                                                <input type="hidden" name="event_id" value={evt.id} />
-                                                <button
-                                                    type="submit"
-                                                    class="text-brand-ink-soft hover:text-red-600 text-lg leading-none px-1"
-                                                    aria-label="Delete"
-                                                >
-                                                    ×
-                                                </button>
-                                            </form>
+                    <ul class="divide-y divide-brand-ink/10">
+                        {items.map((evt: any) => (
+                            <li class="flex items-start gap-3 p-4">
+                                <span class="text-lg flex-shrink-0">
+                                    {sourceIcon(evt.source)}
+                                </span>
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-semibold text-brand-ink text-sm">
+                                        {evt.title}
+                                    </p>
+                                    <p class="text-xs text-brand-ink-soft">
+                                        {formatTime(evt.start_ts, evt.all_day)}
+                                        {evt.location && (
+                                            <span> · {evt.location}</span>
                                         )}
-                                    </li>
-                                ))}
-                            </ul>
-                        </section>
-                    ))}
-                </div>
-            )}
-        </main>
-
-        <BottomNav active="tasks" role={user.role} lang={lang} />
-    </div>
-</Layout>
+                                    </p>
+                                </div>
+                                {user.role === "parent" && (
+                                    <form method="POST">
+                                        <input type="hidden" name="action" value="delete_event" />
+                                        <input type="hidden" name="event_id" value={evt.id} />
+                                        <button
+                                            type="submit"
+                                            class="text-brand-ink-soft hover:text-red-600 text-lg leading-none px-1"
+                                            aria-label="Delete"
+                                        >
+                                            ×
+                                        </button>
+                                    </form>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ))}
+        </div>
+    )}
+</PageLayout>

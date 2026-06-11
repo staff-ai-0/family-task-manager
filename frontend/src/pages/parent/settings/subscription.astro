@@ -1,6 +1,5 @@
 ---
-import Layout from "../../../layouts/Layout.astro";
-import BottomNav from "../../../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -173,21 +172,18 @@ function cellClass(value: any): string {
 }
 ---
 
-<Layout title={`${l.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen">
-        <header class="bg-gradient-to-br from-amber-600 to-orange-600 text-white pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <div class="flex items-center gap-3 mb-2">
-                <a href="/parent/settings" class="text-amber-200 hover:text-white transition-colors">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </a>
-                <p class="text-amber-200 text-sm">{l.back}</p>
-            </div>
-            <h1 class="text-2xl font-bold">{l.title}</h1>
-        </header>
-
-        <main class="flex-1 px-4 py-6 space-y-6">
+<PageLayout
+    title={l.title}
+    headerClass="bg-gradient-to-br from-amber-600 to-orange-600"
+    dark
+    backClass="text-amber-200 hover:text-white"
+    backHref="/parent/settings"
+    backLabel={l.back}
+    role={user.role}
+    active="parent"
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-6"
+>
             <!-- Current Plan -->
             <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
                 <div class="flex items-center justify-between">
@@ -333,11 +329,7 @@ function cellClass(value: any): string {
                     )}
                 </div>
             </section>
-        </main>
-
-        <BottomNav active="parent" role={user.role} lang={lang} />
-    </div>
-</Layout>
+</PageLayout>
 
 <script define:vars={{ cancelConfirm: l.cancel_confirm }}>
     document.addEventListener('astro:page-load', () => {

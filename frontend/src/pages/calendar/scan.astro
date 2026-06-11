@@ -1,11 +1,10 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import BottomNav from "../../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 const { data: user } = await apiFetch<any>("/api/auth/me", { token });
 if (!user) {
@@ -25,56 +24,56 @@ const labels = {
     pick: lang === "es" ? "Elegir foto o PDF" : "Choose photo or PDF",
     scanning: lang === "es" ? "Escaneando…" : "Scanning…",
     cancel: lang === "es" ? "Cancelar" : "Cancel",
-    back: lang === "es" ? "← Volver al calendario" : "← Back to calendar",
+    back: lang === "es" ? "Volver al calendario" : "Back to calendar",
 };
 ---
 
-<Layout title={`${labels.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col">
-        <header class="bg-gradient-to-br from-purple-500 to-pink-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <a href="/calendar" class="text-sm text-purple-100 hover:text-white inline-block mb-2">
-                {labels.back}
-            </a>
-            <h1 class="text-2xl font-bold mb-1">📄 {labels.title}</h1>
-            <p class="text-purple-100 text-sm">{labels.subtitle}</p>
-        </header>
+<PageLayout
+    title={`📄 ${labels.title}`}
+    headerClass="bg-gradient-to-br from-purple-500 to-pink-500"
+    dark
+    backClass="text-purple-100 hover:text-white"
+    backHref="/calendar"
+    backLabel={labels.back}
+    role={user.role}
+    active="tasks"
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-4"
+    containerClass="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep"
+>
+    <p slot="header-extra" class="text-purple-100 text-sm">{labels.subtitle}</p>
 
-        <main class="flex-1 px-4 py-6 space-y-4">
-            <div id="error-box" class="hidden p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl"></div>
+    <div id="error-box" class="hidden p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl"></div>
 
-            <label class="block bg-brand-cream rounded-2xl border-2 border-dashed border-brand-ink/30 p-12 text-center cursor-pointer hover:border-brand-ink transition-colors">
-                <input
-                    type="file"
-                    id="scan-file"
-                    accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
-                    class="hidden"
-                />
-                <span class="text-5xl">📷</span>
-                <p class="mt-3 text-sm font-semibold text-brand-ink">{labels.pick}</p>
-                <p class="text-xs text-brand-ink-soft mt-1">JPG · PNG · WebP · PDF</p>
-            </label>
+    <label class="block bg-brand-cream rounded-2xl border-2 border-dashed border-brand-ink/30 p-12 text-center cursor-pointer hover:border-brand-ink transition-colors">
+        <input
+            type="file"
+            id="scan-file"
+            accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+            class="hidden"
+        />
+        <span class="text-5xl">📷</span>
+        <p class="mt-3 text-sm font-semibold text-brand-ink">{labels.pick}</p>
+        <p class="text-xs text-brand-ink-soft mt-1">JPG · PNG · WebP · PDF</p>
+    </label>
 
-            <div id="scanning" class="hidden bg-brand-cream rounded-2xl p-6 text-center border border-brand-ink/10">
-                <div class="inline-block animate-spin h-8 w-8 border-4 border-brand-ink/20 border-t-brand-ink rounded-full"></div>
-                <p class="mt-3 text-sm text-brand-ink-soft">{labels.scanning}</p>
-            </div>
-
-            <form id="results-form" method="POST" action="/calendar" class="hidden space-y-3">
-                <input type="hidden" name="action" value="import_scanned" />
-                <input type="hidden" name="scanned_count" id="scanned_count" value="0" />
-                <div id="results"></div>
-                <button
-                    type="submit"
-                    class="w-full py-3 rounded-xl bg-brand-ink text-brand-cream font-bold hover:bg-brand-ink-soft"
-                >
-                    {lang === "es" ? "Importar eventos marcados" : "Import checked events"}
-                </button>
-            </form>
-        </main>
-
-        <BottomNav active="tasks" role={user.role} lang={lang} />
+    <div id="scanning" class="hidden bg-brand-cream rounded-2xl p-6 text-center border border-brand-ink/10">
+        <div class="inline-block animate-spin h-8 w-8 border-4 border-brand-ink/20 border-t-brand-ink rounded-full"></div>
+        <p class="mt-3 text-sm text-brand-ink-soft">{labels.scanning}</p>
     </div>
-</Layout>
+
+    <form id="results-form" method="POST" action="/calendar" class="hidden space-y-3">
+        <input type="hidden" name="action" value="import_scanned" />
+        <input type="hidden" name="scanned_count" id="scanned_count" value="0" />
+        <div id="results"></div>
+        <button
+            type="submit"
+            class="w-full py-3 rounded-xl bg-brand-ink text-brand-cream font-bold hover:bg-brand-ink-soft"
+        >
+            {lang === "es" ? "Importar eventos marcados" : "Import checked events"}
+        </button>
+    </form>
+</PageLayout>
 
 <script define:vars={{ lang }}>
     document.addEventListener("astro:page-load", () => {

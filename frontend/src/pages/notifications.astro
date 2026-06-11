@@ -1,11 +1,10 @@
 ---
-import Layout from "../layouts/Layout.astro";
-import BottomNav from "../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 if (Astro.request.method === "POST") {
     const data = await Astro.request.formData();
@@ -69,16 +68,19 @@ const iconFor = (type: string): string => {
 };
 ---
 
-<Layout title={`${labels.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col">
-        <header class="bg-gradient-to-br from-fuchsia-500 to-rose-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <h1 class="text-2xl font-bold mb-1">🔔 {labels.title}</h1>
-            <p class="text-rose-100 text-sm">
-                {feed.unread} {labels.unread}
-            </p>
-        </header>
-
-        <main class="flex-1 px-4 py-6 space-y-3">
+<PageLayout
+    title={`🔔 ${labels.title}`}
+    headerClass="bg-gradient-to-br from-fuchsia-500 to-rose-500"
+    dark
+    role={user.role}
+    active="notifications"
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-3"
+    containerClass="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep"
+>
+    <p slot="header-extra" class="text-rose-100 text-sm mt-1">
+        {feed.unread} {labels.unread}
+    </p>
             {feed.unread > 0 && (
                 <form method="POST" class="flex justify-end">
                     <input type="hidden" name="action" value="read_all" />
@@ -141,8 +143,4 @@ const iconFor = (type: string): string => {
                     ))}
                 </ul>
             )}
-        </main>
-
-        <BottomNav active="notifications" role={user.role} lang={lang} />
-    </div>
-</Layout>
+</PageLayout>

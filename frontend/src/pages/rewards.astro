@@ -1,6 +1,5 @@
 ---
-import Layout from "../layouts/Layout.astro";
-import BottomNav from "../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
 import { t } from "../lib/i18n";
 
@@ -63,21 +62,92 @@ if (flash) Astro.cookies.delete("flash", { path: "/" });
 if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 ---
 
-<Layout title={`${t(lang, "rewards_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
-        <header
-            class="bg-gradient-to-br from-amber-500 to-orange-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
+<PageLayout
+    title={t(lang, "rewards_title") as string}
+    headerClass="bg-gradient-to-br from-amber-500 to-orange-500"
+    dark
+    role={user.role}
+    active="rewards"
+    lang={lang as "en" | "es"}
+>
+    <div slot="header-extra">
+        <p class="text-amber-100 text-sm mt-1 mb-5">
+            {t(lang, "rewards_subtitle")}
+        </p>
+        <div
+            class="bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 flex items-center gap-4 border border-white/30"
         >
-            <h1 class="text-2xl font-bold mb-1">{t(lang, "rewards_title")}</h1>
-            <p class="text-amber-100 text-sm mb-5">
-                {t(lang, "rewards_subtitle")}
-            </p>
-            <div
-                class="bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 flex items-center gap-4 border border-white/30"
-            >
-                <div class="bg-brand-sun p-3 rounded-xl">
+            <div class="bg-brand-sun p-3 rounded-xl">
+                <svg
+                    class="h-7 w-7 text-brand-ink"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                    ></path>
+                </svg>
+            </div>
+            <div>
+                <p
+                    class="text-amber-100 text-xs font-semibold uppercase tracking-wider"
+                >
+                    {t(lang, "rewards_available_points")}
+                </p>
+                <p class="text-3xl font-extrabold">{user.points}</p>
+            </div>
+        </div>
+    </div>
+
+    {
+        flash && (
+            <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
+                {flash}
+            </div>
+        )
+    }
+    {
+        isLocked && (
+            <div class="mb-4 p-4 bg-brand-coral/15 border-2 border-brand-coral text-brand-coral-deep rounded-xl">
+                <div class="flex items-start gap-2">
+                    <span class="text-2xl leading-none">🔒</span>
+                    <div class="flex-1">
+                        <p class="font-bold text-sm">
+                            {lang === "es" ? "Recompensas bloqueadas" : "Rewards locked"}
+                        </p>
+                        <p class="text-xs mt-1">
+                            {lang === "es"
+                                ? "Termina estas tareas para poder canjear:"
+                                : "Finish these tasks before redeeming:"}
+                        </p>
+                        <ul class="mt-2 text-xs space-y-0.5 list-disc list-inside">
+                            {blockingTitles.map((title: string) => (
+                                <li>{title}</li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+    {
+        flashError && (
+            <div class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
+                {flashError}
+            </div>
+        )
+    }
+
+    {
+        rewards.length === 0 ? (
+            <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)] mt-4">
+                <div class="w-16 h-16 bg-brand-sun/20 rounded-full flex items-center justify-center mx-auto mb-4">
                     <svg
-                        class="h-7 w-7 text-brand-ink"
+                        class="w-8 h-8 text-amber-400"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -86,183 +156,110 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                             stroke-linecap="round"
                             stroke-linejoin="round"
                             stroke-width="2"
-                            d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-                        ></path>
+                            d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"
+                        />
                     </svg>
                 </div>
-                <div>
-                    <p
-                        class="text-amber-100 text-xs font-semibold uppercase tracking-wider"
-                    >
-                        {t(lang, "rewards_available_points")}
-                    </p>
-                    <p class="text-3xl font-extrabold">{user.points}</p>
-                </div>
+                <h3 class="text-lg font-bold text-brand-ink">
+                    {t(lang, "rewards_empty_title")}
+                </h3>
+                <p class="text-brand-ink-soft mt-1 text-sm">
+                    {t(lang, "rewards_empty_subtitle")}
+                </p>
             </div>
-        </header>
-
-        <main class="flex-1 px-4 py-6">
-            {
-                flash && (
-                    <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
-                        {flash}
-                    </div>
-                )
-            }
-            {
-                isLocked && (
-                    <div class="mb-4 p-4 bg-brand-coral/15 border-2 border-brand-coral text-brand-coral-deep rounded-xl">
-                        <div class="flex items-start gap-2">
-                            <span class="text-2xl leading-none">🔒</span>
-                            <div class="flex-1">
-                                <p class="font-bold text-sm">
-                                    {lang === "es" ? "Recompensas bloqueadas" : "Rewards locked"}
+        ) : (
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {rewards.map((reward: any) => {
+                    const isGoal = isKid && activeGoal?.reward_id === reward.id;
+                    const canAfford = user.points >= reward.points_cost;
+                    const canRedeem = canAfford && !isLocked;
+                    const pct = isGoal
+                        ? activeGoal.progress_pct
+                        : (reward.points_cost > 0
+                            ? Math.min(100, Math.round((user.points / reward.points_cost) * 100))
+                            : 100);
+                    const remaining = isGoal
+                        ? activeGoal.pts_to_go
+                        : Math.max(0, reward.points_cost - user.points);
+                    return (
+                        <div class={`bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border transition-all ${isGoal ? "border-brand-sky-deep ring-2 ring-brand-sky-deep/30" : "border-brand-ink/10"} ${(!canAfford && !isGoal) ? "opacity-60" : ""}`}>
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="flex-1 pr-3">
+                                    {isGoal && (
+                                        <span class="inline-block mb-1 px-2 py-0.5 text-xs rounded-full bg-brand-sky-deep text-white font-semibold">
+                                            {lang === "es" ? "🎯 Tu Meta" : "🎯 Your Goal"}
+                                        </span>
+                                    )}
+                                    <h3 class="font-bold text-brand-ink text-lg mb-1">{reward.title}</h3>
+                                    {reward.description && (
+                                        <p class="text-brand-ink-soft text-sm line-clamp-2">{reward.description}</p>
+                                    )}
+                                    {reward.category && (
+                                        <span class="inline-block mt-2 px-2 py-0.5 text-xs rounded-full bg-brand-cream-deep text-brand-ink-soft font-medium">
+                                            {reward.category}
+                                        </span>
+                                    )}
+                                </div>
+                                <div class="flex flex-col items-center bg-brand-sun/20 rounded-xl px-3 py-2 flex-shrink-0">
+                                    <span class="text-brand-sun-deep text-xs font-semibold">{t(lang, "rewards_cost")}</span>
+                                    <span class="text-brand-sun-deep text-xl font-extrabold">{reward.points_cost}</span>
+                                    <span class="text-brand-sun-deep text-xs">{t(lang, "rewards_pts")}</span>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="w-full bg-brand-cream-deep rounded-full h-2 overflow-hidden">
+                                    <div
+                                        class={`h-2 rounded-full transition-all duration-500 ${canAfford ? "bg-brand-mint" : (isGoal ? "bg-brand-sky-deep" : "bg-brand-sun-deep")}`}
+                                        style={`width: ${pct}%`}
+                                    ></div>
+                                </div>
+                                <p class="text-xs mt-1 font-medium text-brand-ink-soft">
+                                    {canAfford
+                                        ? (lang === "es" ? "✓ Listo para canjear" : "✓ Ready to redeem")
+                                        : (lang === "es" ? `Te faltan ${remaining} puntos` : `${remaining} points to go`)}
                                 </p>
-                                <p class="text-xs mt-1">
-                                    {lang === "es"
-                                        ? "Termina estas tareas para poder canjear:"
-                                        : "Finish these tasks before redeeming:"}
-                                </p>
-                                <ul class="mt-2 text-xs space-y-0.5 list-disc list-inside">
-                                    {blockingTitles.map((title: string) => (
-                                        <li>{title}</li>
-                                    ))}
-                                </ul>
+                            </div>
+                            <div class="flex gap-2">
+                                <form method="POST" class="flex-1">
+                                    <input type="hidden" name="reward_id" value={reward.id} />
+                                    <button
+                                        type="submit"
+                                        disabled={!canRedeem}
+                                        class={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${canRedeem ? "bg-brand-sun-deep hover:bg-brand-ink text-brand-ink shadow-[var(--shadow-card)] active:scale-95" : "bg-brand-cream-deep text-brand-ink-soft cursor-not-allowed"}`}
+                                    >
+                                        {lang === "es" ? "Canjear" : "Redeem"}
+                                    </button>
+                                </form>
+                                {isKid && !isGoal && (
+                                    <form method="POST">
+                                        <input type="hidden" name="action" value="set_goal" />
+                                        <input type="hidden" name="reward_id" value={reward.id} />
+                                        <button
+                                            type="submit"
+                                            class="px-3 py-2.5 rounded-xl text-sm font-semibold bg-brand-cream-deep text-brand-sky-deep border border-brand-sky-deep/30 hover:bg-brand-sky-deep/10 active:scale-95 transition-colors"
+                                            title={lang === "es" ? "Establecer como meta" : "Set as goal"}
+                                        >
+                                            {lang === "es" ? "🎯 Meta" : "🎯 Goal"}
+                                        </button>
+                                    </form>
+                                )}
+                                {isKid && isGoal && (
+                                    <form method="POST">
+                                        <input type="hidden" name="action" value="clear_goal" />
+                                        <button
+                                            type="submit"
+                                            class="px-3 py-2.5 rounded-xl text-sm font-medium text-brand-ink-soft hover:text-brand-ink active:scale-95 transition-colors"
+                                            title={lang === "es" ? "Quitar meta" : "Remove goal"}
+                                        >
+                                            ✕
+                                        </button>
+                                    </form>
+                                )}
                             </div>
                         </div>
-                    </div>
-                )
-            }
-            {
-                flashError && (
-                    <div class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
-                        {flashError}
-                    </div>
-                )
-            }
-
-            {
-                rewards.length === 0 ? (
-                    <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)] mt-4">
-                        <div class="w-16 h-16 bg-brand-sun/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg
-                                class="w-8 h-8 text-amber-400"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"
-                                />
-                            </svg>
-                        </div>
-                        <h3 class="text-lg font-bold text-brand-ink">
-                            {t(lang, "rewards_empty_title")}
-                        </h3>
-                        <p class="text-brand-ink-soft mt-1 text-sm">
-                            {t(lang, "rewards_empty_subtitle")}
-                        </p>
-                    </div>
-                ) : (
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {rewards.map((reward: any) => {
-                            const isGoal = isKid && activeGoal?.reward_id === reward.id;
-                            const canAfford = user.points >= reward.points_cost;
-                            const canRedeem = canAfford && !isLocked;
-                            const pct = isGoal
-                                ? activeGoal.progress_pct
-                                : (reward.points_cost > 0
-                                    ? Math.min(100, Math.round((user.points / reward.points_cost) * 100))
-                                    : 100);
-                            const remaining = isGoal
-                                ? activeGoal.pts_to_go
-                                : Math.max(0, reward.points_cost - user.points);
-                            return (
-                                <div class={`bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border transition-all ${isGoal ? "border-brand-sky-deep ring-2 ring-brand-sky-deep/30" : "border-brand-ink/10"} ${(!canAfford && !isGoal) ? "opacity-60" : ""}`}>
-                                    <div class="flex justify-between items-start mb-3">
-                                        <div class="flex-1 pr-3">
-                                            {isGoal && (
-                                                <span class="inline-block mb-1 px-2 py-0.5 text-xs rounded-full bg-brand-sky-deep text-white font-semibold">
-                                                    {lang === "es" ? "🎯 Tu Meta" : "🎯 Your Goal"}
-                                                </span>
-                                            )}
-                                            <h3 class="font-bold text-brand-ink text-lg mb-1">{reward.title}</h3>
-                                            {reward.description && (
-                                                <p class="text-brand-ink-soft text-sm line-clamp-2">{reward.description}</p>
-                                            )}
-                                            {reward.category && (
-                                                <span class="inline-block mt-2 px-2 py-0.5 text-xs rounded-full bg-brand-cream-deep text-brand-ink-soft font-medium">
-                                                    {reward.category}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div class="flex flex-col items-center bg-brand-sun/20 rounded-xl px-3 py-2 flex-shrink-0">
-                                            <span class="text-brand-sun-deep text-xs font-semibold">{t(lang, "rewards_cost")}</span>
-                                            <span class="text-brand-sun-deep text-xl font-extrabold">{reward.points_cost}</span>
-                                            <span class="text-brand-sun-deep text-xs">{t(lang, "rewards_pts")}</span>
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <div class="w-full bg-brand-cream-deep rounded-full h-2 overflow-hidden">
-                                            <div
-                                                class={`h-2 rounded-full transition-all duration-500 ${canAfford ? "bg-brand-mint" : (isGoal ? "bg-brand-sky-deep" : "bg-brand-sun-deep")}`}
-                                                style={`width: ${pct}%`}
-                                            ></div>
-                                        </div>
-                                        <p class="text-xs mt-1 font-medium text-brand-ink-soft">
-                                            {canAfford
-                                                ? (lang === "es" ? "✓ Listo para canjear" : "✓ Ready to redeem")
-                                                : (lang === "es" ? `Te faltan ${remaining} puntos` : `${remaining} points to go`)}
-                                        </p>
-                                    </div>
-                                    <div class="flex gap-2">
-                                        <form method="POST" class="flex-1">
-                                            <input type="hidden" name="reward_id" value={reward.id} />
-                                            <button
-                                                type="submit"
-                                                disabled={!canRedeem}
-                                                class={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${canRedeem ? "bg-brand-sun-deep hover:bg-brand-ink text-brand-ink shadow-[var(--shadow-card)] active:scale-95" : "bg-brand-cream-deep text-brand-ink-soft cursor-not-allowed"}`}
-                                            >
-                                                {lang === "es" ? "Canjear" : "Redeem"}
-                                            </button>
-                                        </form>
-                                        {isKid && !isGoal && (
-                                            <form method="POST">
-                                                <input type="hidden" name="action" value="set_goal" />
-                                                <input type="hidden" name="reward_id" value={reward.id} />
-                                                <button
-                                                    type="submit"
-                                                    class="px-3 py-2.5 rounded-xl text-sm font-semibold bg-brand-cream-deep text-brand-sky-deep border border-brand-sky-deep/30 hover:bg-brand-sky-deep/10 active:scale-95 transition-colors"
-                                                    title={lang === "es" ? "Establecer como meta" : "Set as goal"}
-                                                >
-                                                    {lang === "es" ? "🎯 Meta" : "🎯 Goal"}
-                                                </button>
-                                            </form>
-                                        )}
-                                        {isKid && isGoal && (
-                                            <form method="POST">
-                                                <input type="hidden" name="action" value="clear_goal" />
-                                                <button
-                                                    type="submit"
-                                                    class="px-3 py-2.5 rounded-xl text-sm font-medium text-brand-ink-soft hover:text-brand-ink active:scale-95 transition-colors"
-                                                    title={lang === "es" ? "Quitar meta" : "Remove goal"}
-                                                >
-                                                    ✕
-                                                </button>
-                                            </form>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )
-            }
-        </main>
-
-        <BottomNav active="rewards" role={user.role} lang={lang} />
-    </div>
-</Layout>
+                    );
+                })}
+            </div>
+        )
+    }
+</PageLayout>

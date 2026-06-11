@@ -1,6 +1,5 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import BottomNav from "../../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 
@@ -33,28 +32,23 @@ const fmtDate = (d: string) =>
     });
 ---
 
-<Layout title={`${lang === "es" ? "Aprobaciones" : "Approvals"} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col">
-        <header class="bg-gradient-to-br from-amber-700 to-amber-600 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <div class="flex items-center gap-3 mb-4">
-                <a href="/parent" class="text-amber-100 hover:text-white transition-colors">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </a>
-                <span class="text-amber-100 text-sm">{t(lang, "back_parent")}</span>
-            </div>
-            <h1 class="text-2xl font-bold">
-                {lang === "es" ? "Aprobaciones" : "Approvals"}
-            </h1>
-            <p class="text-amber-100 text-sm mt-1">
-                {lang === "es"
-                    ? "Todo el trabajo enviado, en un solo lugar."
-                    : "All submitted work, in one place."}
-            </p>
-        </header>
-
-        <main class="flex-1 px-4 py-6 space-y-6">
+<PageLayout
+    title={lang === "es" ? "Aprobaciones" : "Approvals"}
+    headerClass="bg-gradient-to-br from-amber-700 to-amber-600"
+    dark
+    backClass="text-amber-100 hover:text-white"
+    backHref="/parent"
+    backLabel={t(lang, "back_parent") as string}
+    role={user.role}
+    active="parent"
+    lang={lang as "en" | "es"}
+    mainClass="flex-1 px-4 py-6 space-y-6"
+>
+    <p slot="header-extra" class="text-amber-100 text-sm mt-1">
+        {lang === "es"
+            ? "Todo el trabajo enviado, en un solo lugar."
+            : "All submitted work, in one place."}
+    </p>
             {total === 0 && (
                 <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
                     <div class="w-16 h-16 bg-brand-mint/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -189,11 +183,6 @@ const fmtDate = (d: string) =>
                     </ul>
                 </section>
             )}
-        </main>
-
-        <BottomNav active="parent" role={user.role} lang={lang} />
-    </div>
-
     <script>
         document.addEventListener("astro:page-load", () => {
             const lists = document.querySelectorAll(".approvals-list");
@@ -244,4 +233,4 @@ const fmtDate = (d: string) =>
             });
         });
     </script>
-</Layout>
+</PageLayout>

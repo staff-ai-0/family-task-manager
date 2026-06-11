@@ -1,11 +1,10 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import BottomNav from "../../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 const { data: user } = await apiFetch<any>("/api/auth/me", { token });
 if (!user) {
@@ -79,7 +78,7 @@ const labels = {
     subtitle: lang === "es"
         ? "Prompts automáticos en cron"
         : "Automatic prompts on cron",
-    back: lang === "es" ? "← Jarvis chat" : "← Jarvis chat",
+    back: "Jarvis chat",
     new: lang === "es" ? "Nueva programación" : "New schedule",
     name_ph: lang === "es" ? "Nombre (ej. Resumen semanal)" : "Name (e.g. Weekly summary)",
     prompt_ph: lang === "es" ? "Prompt que Jarvis responderá" : "Prompt Jarvis will answer",
@@ -98,15 +97,20 @@ const labels = {
 };
 ---
 
-<Layout title={`${labels.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col">
-        <header class="bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <a href="/parent/jarvis" class="text-xs text-violet-200 underline">{labels.back}</a>
-            <h1 class="text-2xl font-bold mt-1">⏰ {labels.title}</h1>
-            <p class="text-violet-200 text-xs">{labels.subtitle}</p>
-        </header>
-
-        <main class="flex-1 px-4 py-6 space-y-4">
+<PageLayout
+    title={`⏰ ${labels.title}`}
+    headerClass="bg-gradient-to-br from-violet-600 to-fuchsia-500"
+    dark
+    backClass="text-violet-200"
+    backHref="/parent/jarvis"
+    backLabel={labels.back}
+    role={user.role}
+    active="parent"
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-4"
+    containerClass="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep"
+>
+    <p slot="header-extra" class="text-violet-200 text-xs">{labels.subtitle}</p>
             {errorMsg && (
                 <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                     {errorMsg}
@@ -194,11 +198,7 @@ const labels = {
                     ))}
                 </ul>
             )}
-        </main>
-
-        <BottomNav active="parent" role={user.role} lang={lang} />
-    </div>
-</Layout>
+</PageLayout>
 
 <script>
     document.addEventListener("astro:page-load", () => {

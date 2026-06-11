@@ -1,11 +1,10 @@
 ---
-import Layout from "../../../layouts/Layout.astro";
-import BottomNav from "../../../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 const { data: user } = await apiFetch<any>("/api/auth/me", { token });
 if (!user) {
@@ -74,52 +73,44 @@ const L = labels ?? {
 };
 ---
 
-<Layout title={`${L.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen">
-        <header class="bg-gradient-to-br from-slate-800 to-slate-700 text-white pt-12 pb-8 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <div class="flex items-center gap-3 mb-2">
-                <a href="/parent/settings" class="text-brand-ink-soft hover:text-white transition-colors">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </a>
-                <p class="text-brand-ink-soft text-sm">{L.back}</p>
-            </div>
-            <h1 class="text-2xl font-bold">{L.title}</h1>
-        </header>
+<PageLayout
+    title={L.title}
+    headerClass="bg-gradient-to-br from-slate-800 to-slate-700"
+    dark
+    backClass="text-brand-ink-soft hover:text-white"
+    backHref="/parent/settings"
+    backLabel={L.back}
+    role={user.role}
+    active="parent"
+    lang={lang}
+>
+    <form id="family-form" class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-4">
+        <div>
+            <label for="timezone" class="block text-sm font-semibold text-brand-ink mb-1">{L.tz_label}</label>
+            <select
+                id="timezone"
+                name="timezone"
+                class="w-full rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky"
+            >
+                {tzOptions.map((tz) => (
+                    <option value={tz} selected={tz === currentTz}>{tz}</option>
+                ))}
+            </select>
+            <p class="text-xs text-brand-ink-soft mt-1">{L.tz_hint}</p>
+        </div>
 
-        <main class="flex-1 px-4 py-6">
-            <form id="family-form" class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-4">
-                <div>
-                    <label for="timezone" class="block text-sm font-semibold text-brand-ink mb-1">{L.tz_label}</label>
-                    <select
-                        id="timezone"
-                        name="timezone"
-                        class="w-full rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-sky"
-                    >
-                        {tzOptions.map((tz) => (
-                            <option value={tz} selected={tz === currentTz}>{tz}</option>
-                        ))}
-                    </select>
-                    <p class="text-xs text-brand-ink-soft mt-1">{L.tz_hint}</p>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <button
-                        type="submit"
-                        id="save-btn"
-                        class="px-4 py-2 bg-brand-sky-deep text-white rounded-lg text-sm font-medium hover:bg-brand-sky transition-colors disabled:opacity-60"
-                    >
-                        {L.save}
-                    </button>
-                    <span id="status-msg" class="text-sm" aria-live="polite"></span>
-                </div>
-            </form>
-        </main>
-
-        <BottomNav active="parent" role={user.role} lang={lang} />
-    </div>
-</Layout>
+        <div class="flex items-center gap-3">
+            <button
+                type="submit"
+                id="save-btn"
+                class="px-4 py-2 bg-brand-sky-deep text-white rounded-lg text-sm font-medium hover:bg-brand-sky transition-colors disabled:opacity-60"
+            >
+                {L.save}
+            </button>
+            <span id="status-msg" class="text-sm" aria-live="polite"></span>
+        </div>
+    </form>
+</PageLayout>
 
 <script define:vars={{ savedLabel: L.saved, errorLabel: L.error }}>
     const form = document.getElementById("family-form");

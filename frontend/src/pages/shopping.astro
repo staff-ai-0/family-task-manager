@@ -1,12 +1,10 @@
 ---
-import Layout from "../layouts/Layout.astro";
-import BottomNav from "../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
-import { t } from "../lib/i18n";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 let errorMsg = "";
 
@@ -123,14 +121,16 @@ const labels = {
 };
 ---
 
-<Layout title={`${labels.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col">
-        <header class="bg-gradient-to-br from-emerald-500 to-teal-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <h1 class="text-2xl font-bold mb-1">🛒 {labels.title}</h1>
-            <p class="text-emerald-100 text-sm">{labels.subtitle}</p>
-        </header>
-
-        <main class="flex-1 px-4 py-6 space-y-4">
+<PageLayout
+    title={`🛒 ${labels.title}`}
+    headerClass="bg-gradient-to-br from-emerald-500 to-teal-500"
+    dark
+    role={user.role}
+    active="tasks"
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-4"
+>
+    <p slot="header-extra" class="text-emerald-100 text-sm mt-1">{labels.subtitle}</p>
             {errorMsg && (
                 <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                     {errorMsg}
@@ -291,8 +291,4 @@ const labels = {
                     )}
                 </section>
             )}
-        </main>
-
-        <BottomNav active="tasks" role={user.role} lang={lang} />
-    </div>
-</Layout>
+</PageLayout>
