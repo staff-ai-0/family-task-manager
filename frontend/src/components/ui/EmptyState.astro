@@ -30,6 +30,10 @@ const {
   ctaTone = "sky",
 } = Astro.props;
 
+if (import.meta.env.DEV && ctaId && ctaHref) {
+  console.warn(`EmptyState: both ctaId="${ctaId}" and ctaHref="${ctaHref}" provided — ctaHref is ignored when ctaId is set.`);
+}
+
 const ctaBg = ({
   sky:   "bg-brand-sky hover:bg-brand-sky-deep",
   coral: "bg-brand-coral hover:bg-brand-coral-deep",

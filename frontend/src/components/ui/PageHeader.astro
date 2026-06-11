@@ -3,14 +3,16 @@
  * PageHeader — tone-colored page header with optional back link, title + actions row, and content slot.
  * @prop title     Page title rendered as h1
  * @prop tone      Background color: "sky" | "coral" | "mint" | "sun" | "cream" (default "sky")
- * @prop backHref  Optional URL for back link (hidden when omitted)
- * @prop lang      "en" | "es" — determines back link text ("Back" / "Volver") (default "en")
- * @prop class     Extra Tailwind classes on the outer <header>
+ * @prop backHref   Optional URL for back link (hidden when omitted)
+ * @prop backLabel  Back link text (default "Back"/"Volver" by lang; pass t(lang,"back_parent") for page-specific label)
+ * @prop lang       "en" | "es" — determines default back link text (default "en")
+ * @prop class      Extra Tailwind classes on the outer <header>
  */
 interface Props {
   title: string;
   tone?: "sky" | "coral" | "mint" | "sun" | "cream";
   backHref?: string;
+  backLabel?: string;
   lang?: "en" | "es";
   class?: string;
 }
@@ -18,6 +20,7 @@ const {
   title,
   tone = "sky",
   backHref,
+  backLabel,
   lang = "en",
   class: className = "",
 } = Astro.props;
@@ -40,7 +43,7 @@ const bg = ({
       <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
       </svg>
-      {lang === "es" ? "Volver" : "Back"}
+      {backLabel ?? (lang === "es" ? "Volver" : "Back")}
     </a>
   )}
   <div class="flex items-center justify-between gap-3">

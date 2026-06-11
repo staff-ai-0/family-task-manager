@@ -9,12 +9,13 @@ import BottomNav from "../BottomNav.astro";
  * @prop title          Page title (also sets <title> tag as "{title} - Family Task Manager")
  * @prop tone           Header background color (default "sky")
  * @prop backHref       Optional back link in header
+ * @prop backLabel      Back link text (default "Back" / "Volver"; pass t(lang,"back_parent") for context-specific label)
  * @prop description    Meta description for the page
- * @prop role           Passed to BottomNav for role-based tab visibility
+ * @prop role           User role — passed to BottomNav for tab visibility (default "child"; always pass user.role on role-aware pages)
  * @prop active         Active nav tab key
  * @prop lang           "en" | "es" (default "en")
  * @prop mainClass      CSS classes for <main> (default "flex-1 px-4 py-6")
- * @prop containerClass CSS classes for the content wrapper div (default "w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto")
+ * @prop containerClass CSS classes for the content wrapper div (default includes bg-brand-cream-deep + responsive max-width)
  * Slots:
  *   actions      — forwarded to PageHeader's "actions" slot (right of title row)
  *   header-extra — forwarded to PageHeader's default slot (below title row; use for subtitle/stat line)
@@ -24,6 +25,7 @@ interface Props {
   title: string;
   tone?: "sky" | "coral" | "mint" | "sun" | "cream";
   backHref?: string;
+  backLabel?: string;
   description?: string;
   role?: string;
   active?: "tasks" | "rewards" | "profile" | "parent" | "budget" | "notifications" | "pet" | "chat" | "gigs";
@@ -36,18 +38,19 @@ const {
   title,
   tone = "sky",
   backHref,
+  backLabel,
   description,
-  role,
+  role = "child",
   active,
   lang = "en",
   mainClass = "flex-1 px-4 py-6",
-  containerClass = "w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto",
+  containerClass = "w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep",
 } = Astro.props;
 ---
 
 <Layout title={`${title} - Family Task Manager`} lang={lang} description={description}>
   <div class={`flex flex-col min-h-dvh ${containerClass}`}>
-    <PageHeader title={title} tone={tone} backHref={backHref} lang={lang}>
+    <PageHeader title={title} tone={tone} backHref={backHref} backLabel={backLabel} lang={lang}>
       <slot name="actions" slot="actions" />
       <slot name="header-extra" />
     </PageHeader>

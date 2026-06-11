@@ -23,14 +23,14 @@ const { id, title, lang = "en" } = Astro.props;
   id={id}
   role="dialog"
   aria-modal="true"
-  aria-label={title}
+  aria-labelledby={`${id}-title`}
   class="fixed bottom-0 left-0 right-0 z-50 translate-y-full transition-transform duration-300 ease-out bg-brand-cream rounded-t-[var(--radius-tile)] border-t-2 border-x-2 border-brand-ink shadow-[var(--shadow-pop)] flex flex-col max-h-[90dvh]"
 >
   <div class="flex justify-center pt-3 pb-1 flex-shrink-0">
     <div class="w-10 h-1 rounded-full bg-brand-ink/20"></div>
   </div>
   <div class="flex items-center justify-between px-6 py-3 border-b border-brand-ink/10 flex-shrink-0">
-    <h2 class="font-display text-lg font-extrabold text-brand-ink">{title}</h2>
+    <h2 id={`${id}-title`} class="font-display text-lg font-extrabold text-brand-ink">{title}</h2>
     <button
       id={`${id}-close`}
       class="text-brand-ink-soft hover:text-brand-ink p-1 rounded-lg"
@@ -51,21 +51,38 @@ const { id, title, lang = "en" } = Astro.props;
   var panel = document.getElementById(id);
   var backdrop = document.getElementById(id + "-backdrop");
   var closeBtn = document.getElementById(id + "-close");
+  var lastFocus = null;
+  var isOpen = false;
 
   function open() {
+    if (isOpen) return;
+    isOpen = true;
+    window.__ftmSheets = (window.__ftmSheets || 0) + 1;
+    lastFocus = document.activeElement;
     backdrop.classList.remove("hidden");
     panel.classList.remove("translate-y-full");
     document.body.style.overflow = "hidden";
+    closeBtn.focus();
   }
+
   function close() {
+    if (!isOpen) return;
+    isOpen = false;
+    window.__ftmSheets = Math.max(0, (window.__ftmSheets || 1) - 1);
     panel.classList.add("translate-y-full");
     backdrop.classList.add("hidden");
-    document.body.style.overflow = "";
+    if (window.__ftmSheets === 0) {
+      document.body.style.overflow = "";
+    }
+    if (lastFocus) { lastFocus.focus(); lastFocus = null; }
   }
 
   document.addEventListener("open-" + id, open);
   document.addEventListener("close-" + id, close);
   backdrop.addEventListener("click", close);
   closeBtn.addEventListener("click", close);
+  document.addEventListener("keydown", function (e) {
+    if (isOpen && e.key === "Escape") { e.preventDefault(); close(); }
+  });
 })();
 </script>
