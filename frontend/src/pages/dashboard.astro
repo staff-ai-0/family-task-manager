@@ -4,6 +4,7 @@ import BottomNav from "../components/BottomNav.astro";
 import PointsConverter from "../components/PointsConverter.astro";
 import GigsIntroBanner from "../components/GigsIntroBanner.astro";
 import DifficultyChip from "../components/DifficultyChip.astro";
+import EnablePushButton from "../components/EnablePushButton.astro";
 import { apiFetch } from "../lib/api";
 import { t } from "../lib/i18n";
 
@@ -178,6 +179,12 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 userName={user.name}
                 lang={lang}
             />
+        )}
+
+        {isKid && (
+            <div class="px-4 pb-2">
+                <EnablePushButton lang={lang} />
+            </div>
         )}
 
         {flash && (
