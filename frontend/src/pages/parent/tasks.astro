@@ -1,6 +1,6 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import BottomNav from "../../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
+import EmptyState from "@components/ui/EmptyState.astro";
 import TaskCreateModal from "../../components/TaskCreateModal.astro";
 import DifficultyChip from "../../components/DifficultyChip.astro";
 import { apiFetch } from "../../lib/api";
@@ -89,34 +89,24 @@ function freqLabel(interval: number): string {
 }
 ---
 
-<Layout title={`${t(lang, "pt_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
-        <header
-            class="bg-brand-sky text-brand-ink border-b-4 border-brand-ink pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]"
-        >
-            <a
-                href="/parent"
-                class="text-brand-ink-soft hover:text-brand-ink text-sm font-bold flex items-center gap-1 mb-3"
-            >
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                </svg>
-                {t(lang, "back_parent")}
-            </a>
-            <div class="flex items-center justify-between gap-3">
-                <h1 class="font-display text-2xl font-extrabold text-brand-ink">{t(lang, "pt_title")}</h1>
-                <button
-                    id="tcm-trigger"
-                    class="press h-10 w-10 rounded-full bg-brand-sky-deep border-2 border-brand-ink shadow-[var(--shadow-card)] text-white flex items-center justify-center text-xl font-bold flex-shrink-0"
-                    aria-label={lang === "es" ? "Nueva tarea" : "New task"}
-                >+</button>
-            </div>
-            <p class="text-brand-ink-soft text-sm mt-1 font-sans">
-                {t(lang, "pt_templates_in_family")(templateList.length)}
-            </p>
-        </header>
-
-        <main class="flex-1 px-4 py-6 space-y-6">
+<PageLayout
+    title={t(lang, "pt_title") as string}
+    tone="sky"
+    backHref="/parent"
+    role={user.role}
+    active="parent"
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-6"
+>
+    <button
+        slot="actions"
+        id="tcm-trigger"
+        class="press h-10 w-10 rounded-full bg-brand-sky-deep border-2 border-brand-ink shadow-[var(--shadow-card)] text-white flex items-center justify-center text-xl font-bold flex-shrink-0"
+        aria-label={lang === "es" ? "Nueva tarea" : "New task"}
+    >+</button>
+    <p slot="header-extra" class="text-brand-ink-soft text-sm mt-1 font-sans">
+        {t(lang, "pt_templates_in_family")(templateList.length)}
+    </p>
             {successMsg && (
                 <div class="p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
                     {successMsg}
@@ -177,21 +167,13 @@ function freqLabel(interval: number): string {
                 <h2 class="font-bold text-brand-ink mb-3 px-1">{t(lang, "pt_all_templates")}</h2>
                 <div id="template-list-container" class="space-y-3">
                     {templateList.length === 0 ? (
-                        <div class="text-center py-10">
-                            <p class="text-4xl mb-3">📋</p>
-                            <p class="font-semibold text-brand-ink mb-1">
-                                {lang === "es" ? "Ninguna tarea todavía" : "No tasks yet"}
-                            </p>
-                            <p class="text-sm text-brand-ink-soft mb-4">
-                                {lang === "es" ? "Crea la primera para empezar" : "Create the first one to get started"}
-                            </p>
-                            <button
-                                id="open-create-template"
-                                class="bg-brand-sky text-white font-semibold px-5 py-2 rounded-xl hover:bg-brand-sky-deep transition-colors"
-                            >
-                                {lang === "es" ? "+ Crear tarea" : "+ Create task"}
-                            </button>
-                        </div>
+                        <EmptyState
+                            icon="📋"
+                            title={lang === "es" ? "Ninguna tarea todavía" : "No tasks yet"}
+                            subtitle={lang === "es" ? "Crea la primera para empezar" : "Create the first one to get started"}
+                            ctaLabel={lang === "es" ? "+ Crear tarea" : "+ Create task"}
+                            ctaId="tcm-trigger"
+                        />
                     ) : (
                         templateList.map((tmpl: any) => (
                             <div class={`bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border ${tmpl.is_active ? "border-brand-ink/10" : "border-brand-ink/10 opacity-60"}`}>
@@ -287,11 +269,7 @@ function freqLabel(interval: number): string {
                     )}
                 </div>
             </section>
-        </main>
 
-        <BottomNav active="parent" role={user.role} lang={lang} />
-    </div>
-    
     <!-- Shuffle preview modal -->
     <div id="preview-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
         <div class="bg-brand-cream w-full md:max-w-2xl max-h-[90vh] rounded-t-[var(--radius-card)] md:rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] border border-brand-ink/10 flex flex-col">
@@ -326,10 +304,6 @@ function freqLabel(interval: number): string {
 
     <script>
         document.addEventListener('astro:page-load', () => {
-        document.getElementById("open-create-template")?.addEventListener("click", () => {
-            document.getElementById("tcm-trigger")?.click();
-        });
-
         (window as any).toggleUserSelection = function(assignmentType: string) {
             const container = document.getElementById('user_selection_container');
             if (container) {
@@ -430,4 +404,4 @@ function freqLabel(interval: number): string {
         });
     </script>
     <TaskCreateModal lang={lang} token={token} memberList={memberList} />
-</Layout>
+</PageLayout>
