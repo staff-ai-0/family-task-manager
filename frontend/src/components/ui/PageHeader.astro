@@ -1,9 +1,17 @@
 ---
+/**
+ * PageHeader — tone-colored page header with optional back link, title + actions row, and content slot.
+ * @prop title     Page title rendered as h1
+ * @prop tone      Background color: "sky" | "coral" | "mint" | "sun" | "cream" (default "sky")
+ * @prop backHref  Optional URL for back link (hidden when omitted)
+ * @prop lang      "en" | "es" — determines back link text ("Back" / "Volver") (default "en")
+ * @prop class     Extra Tailwind classes on the outer <header>
+ */
 interface Props {
   title: string;
   tone?: "sky" | "coral" | "mint" | "sun" | "cream";
   backHref?: string;
-  lang?: string;
+  lang?: "en" | "es";
   class?: string;
 }
 const {
