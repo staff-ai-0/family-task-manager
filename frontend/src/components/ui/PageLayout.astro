@@ -18,7 +18,7 @@ import BottomNav from "../BottomNav.astro";
  * @prop containerClass CSS classes for the content wrapper div (default includes bg-brand-cream-deep + responsive max-width)
  * Slots:
  *   actions      — forwarded to PageHeader's "actions" slot (right of title row)
- *   header-extra — forwarded to PageHeader's default slot (below title row; use for subtitle/stat line)
+ *   header-extra — forwarded to PageHeader's "sub" slot (below title row; use for subtitle/stat line)
  *   default      — page body rendered inside <main>
  */
 interface Props {
@@ -52,7 +52,7 @@ const {
   <div class={`flex flex-col min-h-dvh ${containerClass}`}>
     <PageHeader title={title} tone={tone} backHref={backHref} backLabel={backLabel} lang={lang}>
       <slot name="actions" slot="actions" />
-      <slot name="header-extra" />
+      <slot name="header-extra" slot="sub" />
     </PageHeader>
     <main class={mainClass}>
       <slot />

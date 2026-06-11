@@ -7,6 +7,9 @@
  * @prop backLabel  Back link text (default "Back"/"Volver" by lang; pass t(lang,"back_parent") for page-specific label)
  * @prop lang       "en" | "es" — determines default back link text (default "en")
  * @prop class      Extra Tailwind classes on the outer <header>
+ * Slots:
+ *   actions — right of title row (buttons, icon-links)
+ *   sub     — below title row (subtitle line, stat, breadcrumb)
  */
 interface Props {
   title: string;
@@ -50,5 +53,5 @@ const bg = ({
     <h1 class="font-display text-2xl font-extrabold text-brand-ink">{title}</h1>
     <slot name="actions" />
   </div>
-  <slot />
+  <slot name="sub" />
 </header>

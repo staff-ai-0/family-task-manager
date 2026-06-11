@@ -1,15 +1,17 @@
 ---
+import Button from "./Button.astro";
+
 /**
  * EmptyState — centered empty-state block with icon, title, optional subtitle, and optional CTA.
  * When ctaId is provided, the CTA button clicks the element with that id (delegation via inline script).
- * When ctaHref is provided (and no ctaId), the CTA renders as an <a> tag.
+ * When ctaHref is provided (and no ctaId), the CTA renders as an <a href>.
  * @prop icon      Emoji displayed large above title
  * @prop title     Primary message
  * @prop subtitle  Secondary message (optional)
  * @prop ctaLabel  CTA button text (renders button/link only when set)
  * @prop ctaId     If set, CTA click delegates to element with this id
  * @prop ctaHref   If set and ctaId absent, CTA renders as <a href>
- * @prop ctaTone   Button background tone: "sky" | "coral" | "mint" (default "sky")
+ * @prop ctaTone   Button tone: "sky" | "coral" | "mint" (default "sky")
  */
 interface Props {
   icon: string;
@@ -34,13 +36,12 @@ if (import.meta.env.DEV && ctaId && ctaHref) {
   console.warn(`EmptyState: both ctaId="${ctaId}" and ctaHref="${ctaHref}" provided — ctaHref is ignored when ctaId is set.`);
 }
 
-const ctaBg = ({
-  sky:   "bg-brand-sky hover:bg-brand-sky-deep",
-  coral: "bg-brand-coral hover:bg-brand-coral-deep",
-  mint:  "bg-brand-mint hover:bg-brand-mint-deep",
-} as Record<string, string>)[ctaTone] ?? "bg-brand-sky hover:bg-brand-sky-deep";
-
-const ctaClass = `press inline-flex items-center px-5 py-2.5 ${ctaBg} text-brand-ink font-extrabold text-sm rounded-full border-2 border-brand-ink shadow-[var(--shadow-card)] transition-colors cursor-pointer`;
+const variantMap: Record<string, "primary" | "secondary" | "mint"> = {
+  sky:   "secondary",
+  coral: "primary",
+  mint:  "mint",
+};
+const ctaVariant = variantMap[ctaTone] ?? "secondary";
 ---
 
 <div class="flex flex-col items-center justify-center py-10 text-center">
@@ -48,10 +49,10 @@ const ctaClass = `press inline-flex items-center px-5 py-2.5 ${ctaBg} text-brand
   <p class="font-display font-extrabold text-brand-ink mb-1">{title}</p>
   {subtitle && <p class="text-sm text-brand-ink-soft mb-4">{subtitle}</p>}
   {ctaLabel && ctaId && (
-    <button id={`${ctaId}-empty-cta`} class={`${ctaClass} mt-4`}>{ctaLabel}</button>
+    <Button id={`${ctaId}-empty-cta`} variant={ctaVariant} size="sm" class="mt-4">{ctaLabel}</Button>
   )}
   {ctaLabel && !ctaId && ctaHref && (
-    <a href={ctaHref} class={`${ctaClass} mt-4`}>{ctaLabel}</a>
+    <Button href={ctaHref} variant={ctaVariant} size="sm" class="mt-4">{ctaLabel}</Button>
   )}
 </div>
 

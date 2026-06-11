@@ -21,6 +21,7 @@ const { id, title, lang = "en" } = Astro.props;
 
 <div
   id={id}
+  data-sheet-id={id}
   role="dialog"
   aria-modal="true"
   aria-labelledby={`${id}-title`}
@@ -46,43 +47,47 @@ const { id, title, lang = "en" } = Astro.props;
   </div>
 </div>
 
-<script define:vars={{ id }}>
-(function () {
-  var panel = document.getElementById(id);
-  var backdrop = document.getElementById(id + "-backdrop");
-  var closeBtn = document.getElementById(id + "-close");
-  var lastFocus = null;
-  var isOpen = false;
+<script>
+  function initSheet(panelEl: HTMLElement) {
+    const id = panelEl.dataset.sheetId!;
+    const backdrop = document.getElementById(id + "-backdrop")!;
+    const closeBtn = document.getElementById(id + "-close")!;
+    let lastFocus: Element | null = null;
+    let isOpen = false;
 
-  function open() {
-    if (isOpen) return;
-    isOpen = true;
-    window.__ftmSheets = (window.__ftmSheets || 0) + 1;
-    lastFocus = document.activeElement;
-    backdrop.classList.remove("hidden");
-    panel.classList.remove("translate-y-full");
-    document.body.style.overflow = "hidden";
-    closeBtn.focus();
-  }
-
-  function close() {
-    if (!isOpen) return;
-    isOpen = false;
-    window.__ftmSheets = Math.max(0, (window.__ftmSheets || 1) - 1);
-    panel.classList.add("translate-y-full");
-    backdrop.classList.add("hidden");
-    if (window.__ftmSheets === 0) {
-      document.body.style.overflow = "";
+    function open() {
+      if (isOpen) return;
+      isOpen = true;
+      (window as any).__ftmSheets = ((window as any).__ftmSheets || 0) + 1;
+      lastFocus = document.activeElement;
+      backdrop.classList.remove("hidden");
+      panelEl.classList.remove("translate-y-full");
+      document.body.style.overflow = "hidden";
+      closeBtn.focus();
     }
-    if (lastFocus) { lastFocus.focus(); lastFocus = null; }
+
+    function close() {
+      if (!isOpen) return;
+      isOpen = false;
+      (window as any).__ftmSheets = Math.max(0, ((window as any).__ftmSheets || 1) - 1);
+      panelEl.classList.add("translate-y-full");
+      backdrop.classList.add("hidden");
+      if ((window as any).__ftmSheets === 0) {
+        document.body.style.overflow = "";
+      }
+      if (lastFocus) { (lastFocus as HTMLElement).focus(); lastFocus = null; }
+    }
+
+    document.addEventListener("open-" + id, open);
+    document.addEventListener("close-" + id, close);
+    backdrop.addEventListener("click", close);
+    closeBtn.addEventListener("click", close);
+    document.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (isOpen && e.key === "Escape") { e.preventDefault(); close(); }
+    });
   }
 
-  document.addEventListener("open-" + id, open);
-  document.addEventListener("close-" + id, close);
-  backdrop.addEventListener("click", close);
-  closeBtn.addEventListener("click", close);
-  document.addEventListener("keydown", function (e) {
-    if (isOpen && e.key === "Escape") { e.preventDefault(); close(); }
-  });
-})();
+  document.addEventListener("astro:page-load", () => {
+    document.querySelectorAll<HTMLElement>("[data-sheet-id]").forEach(initSheet);
+  }, { once: true });
 </script>

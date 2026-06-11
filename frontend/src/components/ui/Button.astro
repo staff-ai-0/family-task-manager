@@ -2,15 +2,16 @@
 /**
  * Button — the press-down hard-shadow-[var(--shadow-card)] button.
  *
- * @prop variant  "primary" | "secondary" | "ghost"  default "primary"
- *                primary  = coral fill (kid/teen CTA — see brand guide)
+ * @prop variant  "primary" | "secondary" | "mint" | "ghost"  default "primary"
+ *                primary   = coral fill (kid/teen CTA — see brand guide)
  *                secondary = sky fill
- *                ghost    = transparent + ink outline
+ *                mint      = mint fill
+ *                ghost     = transparent + ink outline
  * @prop size     "sm" | "md" | "lg"  default "md"
  * @prop href     Render as <a> instead of <button>.
  */
 interface Props {
-  variant?: "primary" | "secondary" | "ghost";
+  variant?: "primary" | "secondary" | "mint" | "ghost";
   size?: "sm" | "md" | "lg";
   href?: string;
   type?: "button" | "submit" | "reset";
@@ -38,9 +39,10 @@ const sizes = {
 };
 
 const variants = {
-  primary:   "bg-brand-coral text-brand-ink hover:bg-brand-coral-deep",
-  secondary: "bg-brand-sky  text-brand-ink hover:bg-brand-sky-deep",
-  ghost:     "bg-transparent text-brand-ink hover:bg-brand-cream-deep",
+  primary:   "bg-brand-coral  text-brand-ink hover:bg-brand-coral-deep",
+  secondary: "bg-brand-sky    text-brand-ink hover:bg-brand-sky-deep",
+  mint:      "bg-brand-mint   text-brand-ink hover:bg-brand-mint-deep",
+  ghost:     "bg-transparent  text-brand-ink hover:bg-brand-cream-deep",
 };
 
 const cls = `${base} ${sizes[size]} ${variants[variant]} ${className}`;
