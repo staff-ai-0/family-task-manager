@@ -1,0 +1,57 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BottomNav from "../BottomNav.astro";
+
+/**
+ * ChatShell — h-screen chat page shell (chat, dm/[id], parent/jarvis).
+ * Viewport-locked column: only the feed <main> scrolls; header, composer,
+ * and BottomNav stay pinned. Owns the chrome those pages repeated verbatim.
+ *
+ * @prop title       <title> tag content (passed to Layout verbatim)
+ * @prop headerClass Gradient/bg classes for the header (e.g. "bg-gradient-to-br from-cyan-500 to-blue-600")
+ * @prop feedId      id for the scrolling <main> (scripts target it: chat-feed, dm-feed, chat-scroll)
+ * @prop feedClass   Feed classes (default "flex-1 px-4 py-4 space-y-2 overflow-y-auto")
+ * @prop active      BottomNav active tab
+ * @prop role        User role — forwarded to BottomNav (pass user.role)
+ * @prop lang        "en" | "es"
+ * Slots:
+ *   header   — content INSIDE the header element (title row, subtitle, page-specific controls)
+ *   default  — feed content inside <main>
+ *   composer — pinned input form between feed and BottomNav (page-owned, verbatim)
+ */
+interface Props {
+  title: string;
+  headerClass: string;
+  feedId: string;
+  feedClass?: string;
+  active?: "tasks" | "rewards" | "profile" | "parent" | "budget" | "notifications" | "pet" | "chat" | "gigs";
+  role?: string;
+  lang?: "en" | "es";
+}
+
+const {
+  title,
+  headerClass,
+  feedId,
+  feedClass = "flex-1 px-4 py-4 space-y-2 overflow-y-auto",
+  active,
+  role,
+  lang = "en",
+} = Astro.props;
+---
+
+<Layout title={title} lang={lang}>
+  <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col h-screen">
+    <header class={`${headerClass} text-white pt-12 pb-4 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] flex-shrink-0`}>
+      <slot name="header" />
+    </header>
+
+    <main id={feedId} class={feedClass}>
+      <slot />
+    </main>
+
+    <slot name="composer" />
+
+    <BottomNav active={active} role={role} lang={lang} />
+  </div>
+</Layout>

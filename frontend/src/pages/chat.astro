@@ -1,11 +1,10 @@
 ---
-import Layout from "../layouts/Layout.astro";
-import BottomNav from "../components/BottomNav.astro";
+import ChatShell from "@components/ui/ChatShell.astro";
 import { apiFetch } from "../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 let errorMsg = "";
 
@@ -63,14 +62,18 @@ const labels = {
 };
 ---
 
-<Layout title={`${labels.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col h-screen">
-        <header class="bg-gradient-to-br from-cyan-500 to-blue-600 text-white pt-12 pb-4 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] flex-shrink-0">
-            <h1 class="text-2xl font-bold">💬 {labels.title}</h1>
-            <p class="text-cyan-100 text-xs mt-1">{labels.subtitle}</p>
-        </header>
-
-        <main id="chat-feed" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+<ChatShell
+    title={`${labels.title} - Family Task Manager`}
+    headerClass="bg-gradient-to-br from-cyan-500 to-blue-600"
+    feedId="chat-feed"
+    active="chat"
+    role={user.role}
+    lang={lang}
+>
+    <Fragment slot="header">
+        <h1 class="text-2xl font-bold">💬 {labels.title}</h1>
+        <p class="text-cyan-100 text-xs mt-1">{labels.subtitle}</p>
+    </Fragment>
             {errorMsg && (
                 <div class="p-2 bg-red-100 border border-red-200 text-red-700 text-xs rounded-lg">
                     {errorMsg}
@@ -134,9 +137,7 @@ const labels = {
                     );
                 })
             )}
-        </main>
-
-        <form method="POST" class="p-3 border-t border-brand-ink/10 bg-brand-cream flex-shrink-0 flex gap-2">
+    <form slot="composer" method="POST" class="p-3 border-t border-brand-ink/10 bg-brand-cream flex-shrink-0 flex gap-2">
             <input
                 type="text"
                 name="body"
@@ -151,11 +152,8 @@ const labels = {
             >
                 {labels.send}
             </button>
-        </form>
-
-        <BottomNav active="chat" role={user.role} lang={lang} />
-    </div>
-</Layout>
+    </form>
+</ChatShell>
 
 <script define:vars={{ currentUserId: user.id, memberMap: Object.fromEntries(memberLookup), lang }}>
     document.addEventListener("astro:page-load", () => {

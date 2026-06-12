@@ -1,11 +1,10 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import BottomNav from "../../components/BottomNav.astro";
+import ChatShell from "@components/ui/ChatShell.astro";
 import { apiFetch } from "../../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 const { data: user } = await apiFetch<any>("/api/auth/me", { token });
 if (!user) {
@@ -46,9 +45,16 @@ const labels = {
 };
 ---
 
-<Layout title={`${labels.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col h-screen">
-        <header class="bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white pt-12 pb-4 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] flex-shrink-0">
+<ChatShell
+    title={`${labels.title} - Family Task Manager`}
+    headerClass="bg-gradient-to-br from-violet-600 to-fuchsia-500"
+    feedId="chat-scroll"
+    feedClass="flex-1 px-4 py-4 space-y-3 overflow-y-auto"
+    active="parent"
+    role={user.role}
+    lang={lang}
+>
+    <Fragment slot="header">
             <div class="flex items-baseline justify-between">
                 <div>
                     <h1 class="text-2xl font-bold">🤖 {labels.title}</h1>
@@ -83,9 +89,7 @@ const labels = {
                     <option value="qwen3">🖥️ Qwen 2.5 3B — local GPU, free</option>
                 </select>
             </div>
-        </header>
-
-        <main id="chat-scroll" class="flex-1 px-4 py-4 space-y-3 overflow-y-auto">
+    </Fragment>
             {history.length === 0 ? (
                 <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10">
                     <p class="text-4xl mb-2">🤖</p>
@@ -109,9 +113,7 @@ const labels = {
                     {labels.thinking}
                 </div>
             </div>
-        </main>
-
-        <form id="chat-form" class="p-3 border-t border-brand-ink/10 bg-brand-cream flex-shrink-0 flex gap-2">
+    <form slot="composer" id="chat-form" class="p-3 border-t border-brand-ink/10 bg-brand-cream flex-shrink-0 flex gap-2">
             <input
                 type="text"
                 id="message-input"
@@ -126,11 +128,8 @@ const labels = {
             >
                 {labels.send}
             </button>
-        </form>
-
-        <BottomNav active="parent" role={user.role} lang={lang} />
-    </div>
-</Layout>
+    </form>
+</ChatShell>
 
 <script>
     document.addEventListener("astro:page-load", () => {

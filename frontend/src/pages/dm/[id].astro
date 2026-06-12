@@ -1,11 +1,10 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import BottomNav from "../../components/BottomNav.astro";
+import ChatShell from "@components/ui/ChatShell.astro";
 import { apiFetch } from "../../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 const threadId = Astro.params.id;
 if (!threadId) return Astro.redirect("/dm");
 
@@ -59,14 +58,18 @@ const labels = {
 };
 ---
 
-<Layout title={`${labels.title} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep flex flex-col h-screen">
-        <header class="bg-gradient-to-br from-indigo-600 to-purple-600 text-white pt-12 pb-4 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] flex-shrink-0">
-            <a href="/dm" class="text-xs text-indigo-200 underline">{labels.back}</a>
-            <h1 class="text-xl font-bold mt-1">✉️ {labels.title}</h1>
-        </header>
-
-        <main id="dm-feed" class="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+<ChatShell
+    title={`${labels.title} - Family Task Manager`}
+    headerClass="bg-gradient-to-br from-indigo-600 to-purple-600"
+    feedId="dm-feed"
+    active="tasks"
+    role={user.role}
+    lang={lang}
+>
+    <Fragment slot="header">
+        <a href="/dm" class="text-xs text-indigo-200 underline">{labels.back}</a>
+        <h1 class="text-xl font-bold mt-1">✉️ {labels.title}</h1>
+    </Fragment>
             {errorMsg && (
                 <div class="p-2 bg-red-100 border border-red-200 text-red-700 text-xs rounded-lg">
                     {errorMsg}
@@ -98,9 +101,7 @@ const labels = {
                     );
                 })
             )}
-        </main>
-
-        <form method="POST" class="p-3 border-t border-brand-ink/10 bg-brand-cream flex-shrink-0 flex gap-2">
+    <form slot="composer" method="POST" class="p-3 border-t border-brand-ink/10 bg-brand-cream flex-shrink-0 flex gap-2">
             <input
                 type="text"
                 name="body"
@@ -115,11 +116,8 @@ const labels = {
             >
                 {labels.send}
             </button>
-        </form>
-
-        <BottomNav active="tasks" role={user.role} lang={lang} />
-    </div>
-</Layout>
+    </form>
+</ChatShell>
 
 <script define:vars={{ currentUserId: user.id, threadId, memberMap: Object.fromEntries(memberMap), lang }}>
     document.addEventListener("astro:page-load", () => {
