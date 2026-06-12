@@ -1,13 +1,12 @@
 ---
-import Layout from "../../layouts/Layout.astro";
-import BottomNav from "../../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import DifficultyChip from "../../components/DifficultyChip.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
 if (!userOk) {
@@ -35,9 +34,14 @@ const categoryLabels: Record<string, Record<string, string>> = {
 const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
 ---
 
-<Layout title={`Gigs - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen">
-        <header class="bg-gradient-to-br from-violet-700 to-violet-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+<PageLayout
+    title="Gigs"
+    role={user.role?.toLowerCase()}
+    active="gigs"
+    lang={lang}
+>
+    <!-- Eyebrow + glass-card header — page-owned via header slot -->
+    <header slot="header" class="bg-gradient-to-br from-violet-700 to-violet-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex justify-between items-center mb-4">
                 <div>
                     <p class="text-violet-200 text-sm font-medium">{lang === "es" ? "¡Gana dinero extra!" : "Earn extra money!"}</p>
@@ -53,8 +57,6 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                     : "Claim gigs, complete them with proof, and earn points worth real pesos."}
             </div>
         </header>
-
-        <main class="flex-1 px-4 py-6">
             {flash && (
                 <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
                     {flash}
@@ -134,11 +136,7 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                     })}
                 </div>
             )}
-        </main>
-
-        <BottomNav active="gigs" role={user.role?.toLowerCase()} lang={lang} />
-    </div>
-</Layout>
+</PageLayout>
 
 <script>
 document.querySelectorAll("form[action='/api/gigs/claim']").forEach(form => {
