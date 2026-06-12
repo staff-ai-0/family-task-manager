@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import EmptyState from "@components/ui/EmptyState.astro";
+import Button from "@components/ui/Button.astro";
 import TaskCreateModal from "../../components/TaskCreateModal.astro";
 import DifficultyChip from "../../components/DifficultyChip.astro";
 import { apiFetch } from "../../lib/api";
@@ -144,16 +145,18 @@ function freqLabel(interval: number): string {
                     </button>
                     <form method="POST" class="flex-1">
                         <input type="hidden" name="action" value="shuffle" />
-                        <button
+                        <Button
+                            variant="sun"
+                            size="sm"
                             type="submit"
+                            class="w-full"
                             onclick={`return confirm('${t(lang, "shuffle_confirm")}')`}
-                            class="press w-full py-2.5 bg-brand-sun border-2 border-brand-ink hover:bg-brand-sun-deep text-brand-ink font-extrabold text-sm rounded-full transition-colors shadow-[var(--shadow-card)] flex items-center justify-center gap-2"
                         >
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
                             {t(lang, "shuffle_btn")}
-                        </button>
+                        </Button>
                     </form>
                 </div>
                 {assignmentList.length > 0 && (

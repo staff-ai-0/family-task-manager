@@ -2,17 +2,19 @@
 /**
  * Button — the press-down hard-shadow-[var(--shadow-card)] button.
  *
- * @prop variant  "primary" | "secondary" | "mint" | "ghost"  default "primary"
+ * @prop variant  "primary" | "secondary" | "mint" | "sun" | "ghost"  default "primary"
  *                primary   = coral fill (kid/teen CTA — see brand guide)
  *                secondary = sky fill
  *                mint      = mint fill
+ *                sun       = sun fill
  *                ghost     = transparent + ink outline
- * @prop size     "sm" | "md" | "lg"  default "md"
+ * @prop size     "sm" | "md" | "lg" | "icon"  default "md"
+ *                icon = h-10 w-10 round icon-only button (pair with aria-label)
  * @prop href     Render as <a> instead of <button>.
  */
 interface Props {
-  variant?: "primary" | "secondary" | "mint" | "ghost";
-  size?: "sm" | "md" | "lg";
+  variant?: "primary" | "secondary" | "mint" | "sun" | "ghost";
+  size?: "sm" | "md" | "lg" | "icon";
   href?: string;
   type?: "button" | "submit" | "reset";
   class?: string;
@@ -33,15 +35,17 @@ const base =
   "tracking-tight whitespace-nowrap select-none cursor-pointer";
 
 const sizes = {
-  sm: "px-4 py-2 text-sm",
-  md: "px-5 py-3 text-base",
-  lg: "px-7 py-4 text-lg",
+  sm:   "px-4 py-2 text-sm",
+  md:   "px-5 py-3 text-base",
+  lg:   "px-7 py-4 text-lg",
+  icon: "h-10 w-10 p-0 text-xl",
 };
 
 const variants = {
   primary:   "bg-brand-coral  text-brand-ink hover:bg-brand-coral-deep",
   secondary: "bg-brand-sky    text-brand-ink hover:bg-brand-sky-deep",
   mint:      "bg-brand-mint   text-brand-ink hover:bg-brand-mint-deep",
+  sun:       "bg-brand-sun    text-brand-ink hover:bg-brand-sun-deep",
   ghost:     "bg-transparent  text-brand-ink hover:bg-brand-cream-deep",
 };
 
