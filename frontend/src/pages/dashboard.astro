@@ -1,6 +1,5 @@
 ---
-import Layout from "../layouts/Layout.astro";
-import BottomNav from "../components/BottomNav.astro";
+import PageLayout from "@components/ui/PageLayout.astro";
 import PointsConverter from "../components/PointsConverter.astro";
 import GigsIntroBanner from "../components/GigsIntroBanner.astro";
 import DifficultyChip from "../components/DifficultyChip.astro";
@@ -10,7 +9,7 @@ import { t } from "../lib/i18n";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
 const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
 if (!userOk) {
@@ -68,9 +67,13 @@ const flashError = Astro.cookies.get("flash_error")?.value;
 if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 ---
 
-<Layout title={`${t(lang, "dashboard_page_title")} - Family Task Manager`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto  bg-brand-cream-deep flex flex-col ">
-        <header class="bg-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+<PageLayout
+    title={t(lang, "dashboard_page_title") as string}
+    role={user.role}
+    active="tasks"
+    lang={lang}
+>
+    <header slot="header" class="bg-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex justify-between items-center mb-6">
                 <div>
                     <p class="text-brand-cream text-sm font-medium">{t(lang, "dashboard_hello")}</p>
@@ -169,6 +172,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
             )}
         </header>
 
+    <Fragment slot="banner">
         <GigsIntroBanner lang={lang} show={!user.acknowledged_gigs_intro} />
 
         <!-- Points Converter (only for TEEN/CHILD users) -->
@@ -197,8 +201,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 {flashError}
             </div>
         )}
-
-        <main class="flex-1 px-4 py-6">
+    </Fragment>
             <!-- Today header + Progress bar -->
             <div class="mb-6">
                 <div class="flex justify-between items-end mb-2 px-1">
@@ -488,10 +491,6 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     )}
                 </div>
             )}
-        </main>
-
-        <BottomNav active="tasks" role={user.role} lang={lang} />
-    </div>
 
     <!-- Gig proof-of-work modal (only triggered for bonus tasks) -->
     <dialog id="gig-proof-modal" class="rounded-2xl p-0 backdrop:bg-black/40 max-w-md w-full md:w-[28rem] border-2 border-brand-ink shadow-[var(--shadow-pop)] bg-brand-cream">
@@ -677,4 +676,4 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
             });
         });
     </script>
-</Layout>
+</PageLayout>

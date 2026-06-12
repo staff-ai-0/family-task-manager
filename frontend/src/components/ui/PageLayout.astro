@@ -20,8 +20,11 @@ import BottomNav from "../BottomNav.astro";
  * @prop mainClass      CSS classes for <main> (default "flex-1 px-4 py-6")
  * @prop containerClass CSS classes for the content wrapper div (default includes bg-brand-cream-deep + responsive max-width)
  * Slots:
+ *   header       — when provided, REPLACES PageHeader entirely (hero/composite headers
+ *                  keep their exact markup; title prop then only sets the <title> tag)
  *   actions      — forwarded to PageHeader's "actions" slot (right of title row)
  *   header-extra — forwarded to PageHeader's "sub" slot (below title row; use for subtitle/stat line)
+ *   banner       — rendered between header and <main> (intro banners, push prompts, flash strips)
  *   default      — page body rendered inside <main>
  */
 interface Props {
@@ -59,10 +62,15 @@ const {
 
 <Layout title={`${title} - Family Task Manager`} lang={lang} description={description}>
   <div class={`flex flex-col min-h-dvh ${containerClass}`}>
-    <PageHeader title={title} tone={tone} headerClass={headerClass} dark={dark} backClass={backClass} backHref={backHref} backLabel={backLabel} lang={lang}>
-      <slot name="actions" slot="actions" />
-      <slot name="header-extra" slot="sub" />
-    </PageHeader>
+    {Astro.slots.has("header") ? (
+      <slot name="header" />
+    ) : (
+      <PageHeader title={title} tone={tone} headerClass={headerClass} dark={dark} backClass={backClass} backHref={backHref} backLabel={backLabel} lang={lang}>
+        <slot name="actions" slot="actions" />
+        <slot name="header-extra" slot="sub" />
+      </PageHeader>
+    )}
+    <slot name="banner" />
     <main class={mainClass}>
       <slot />
     </main>
