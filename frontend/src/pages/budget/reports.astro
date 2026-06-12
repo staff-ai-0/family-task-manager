@@ -5,10 +5,7 @@
  * a single page with sub-tabs and a period selector.
  */
 
-import Layout from "@layouts/Layout.astro";
-import BottomNav from "@components/BottomNav.astro";
-import BudgetNavNew from "@components/BudgetNavNew.astro";
-import DrawerMenu from "@components/DrawerMenu.astro";
+import BudgetShell from "@components/ui/BudgetShell.astro";
 import ReportSubTabs from "@components/ReportSubTabs.astro";
 import PeriodSelector from "@components/PeriodSelector.astro";
 import FABButton from "@components/FABButton.astro";
@@ -80,16 +77,21 @@ const allCategories = allGroups
 
 ---
 
-<Layout title={es ? "Reportes - Presupuesto" : "Reports - Budget"}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen">
-        <BudgetNavNew active="reports" lang={lang} pendingDrafts={pendingDraftsCount} />
-        <DrawerMenu lang={lang} />
-        <ReportSubTabs active={tab} lang={lang} />
-        <PeriodSelector activePeriod={period} lang={lang} />
+<BudgetShell
+    title={es ? "Reportes - Presupuesto" : "Reports - Budget"}
+    budgetActive="reports"
+    pendingDrafts={pendingDraftsCount}
+    role={user.role}
+    lang={lang}
+    mainClass=""
+    containerClass="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen"
+>
+    <ReportSubTabs slot="after-nav" active={tab} lang={lang} />
+    <PeriodSelector slot="after-nav" activePeriod={period} lang={lang} />
 
         <!-- ==================== SPENDING ==================== -->
         <div id="report-spending" class={tab !== "spending" ? "hidden" : ""}>
-            <main class="px-4 pb-6">
+            <div class="px-4 pb-6">
                 {spendingItems.length === 0 ? (
                     <div class="bg-brand-cream-deep border border-brand-ink/10 rounded-xl p-8 text-center mt-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-brand-ink-soft mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -140,12 +142,12 @@ const allCategories = allGroups
                         </div>
                     </div>
                 )}
-            </main>
+            </div>
         </div>
 
         <!-- ==================== CASHFLOW ==================== -->
         <div id="report-cashflow" class={tab !== "cashflow" ? "hidden" : ""}>
-            <main class="px-4 pb-6">
+            <div class="px-4 pb-6">
                 {cashflowItems.length === 0 ? (
                     <div class="bg-brand-cream-deep border border-brand-ink/10 rounded-xl p-8 text-center mt-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-brand-ink-soft mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -202,12 +204,12 @@ const allCategories = allGroups
                         })}
                     </div>
                 )}
-            </main>
+            </div>
         </div>
 
         <!-- ==================== NET WORTH ==================== -->
         <div id="report-networth" class={tab !== "networth" ? "hidden" : ""}>
-            <main class="px-4 pb-6">
+            <div class="px-4 pb-6">
                 {nwAccounts.length === 0 ? (
                     <div class="bg-brand-cream-deep border border-brand-ink/10 rounded-xl p-8 text-center mt-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-brand-ink-soft mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -261,12 +263,12 @@ const allCategories = allGroups
                         </div>
                     </div>
                 )}
-            </main>
+            </div>
         </div>
 
         <!-- ==================== BUDGET vs ACTUAL ==================== -->
         <div id="report-analysis" class={tab !== "analysis" ? "hidden" : ""}>
-            <main class="px-4 pb-6">
+            <div class="px-4 pb-6">
                 <div class="bg-brand-cream-deep border border-brand-ink/10 rounded-xl p-8 text-center mt-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-brand-ink-soft mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -274,15 +276,14 @@ const allCategories = allGroups
                     <p class="text-brand-ink-soft font-medium">{es ? "Proximamente" : "Coming soon"}</p>
                     <p class="text-sm text-brand-ink-soft mt-1">{es ? "El analisis de presupuesto vs. real estara disponible pronto." : "Budget vs. actual analysis will be available soon."}</p>
                 </div>
-            </main>
+            </div>
         </div>
 
-        <BottomNav active="budget" role={user.role} lang={lang} />
-    </div>
-
-    <FABButton />
-    <FABModal lang={lang} token={token} accounts={accounts} categories={allCategories} />
-</Layout>
+    <Fragment slot="overlays">
+        <FABButton />
+        <FABModal lang={lang} token={token} accounts={accounts} categories={allCategories} />
+    </Fragment>
+</BudgetShell>
 
 <script>
 function initReportTabs() {

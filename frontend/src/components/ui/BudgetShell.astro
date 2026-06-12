@@ -1,0 +1,63 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BudgetNavNew from "../BudgetNavNew.astro";
+import DrawerMenu from "../DrawerMenu.astro";
+import BottomNav from "../BottomNav.astro";
+
+/**
+ * BudgetShell — page shell for /budget/* pages.
+ * Owns the chrome every budget page repeats: Layout + BudgetNavNew + DrawerMenu
+ * + <main> + BottomNav(active="budget"). Headers stay page-owned via slots so
+ * each page keeps its exact markup (or composes <PageHeader headerClass dark>).
+ *
+ * @prop title         <title> tag content (passed to Layout verbatim — no suffix added,
+ *                     budget pages have their own title patterns)
+ * @prop budgetActive  BudgetNavNew active tab: "month" | "transactions" | "reports" | "receipt-drafts" | "none"
+ * @prop pendingDrafts Pending receipt-draft count for the nav badge (default 0)
+ * @prop role          User role — forwarded to BottomNav (pass user.role; omit only when the page
+ *                     genuinely has no user context)
+ * @prop lang          "en" | "es"
+ * @prop mainClass     CSS classes for <main> (default "px-4 py-6 flex-grow")
+ * @prop containerClass CSS classes for the wrapper div
+ * Slots:
+ *   before-nav — rendered ABOVE BudgetNavNew (the common header position)
+ *   after-nav  — rendered BELOW DrawerMenu (budget/index puts its month-nav header here)
+ *   default    — page body inside <main>
+ *   overlays   — rendered AFTER BottomNav. Fixed-position modals/FABs/toasts go here:
+ *                when overlay and BottomNav share a z-index (e.g. both z-50), DOM order
+ *                decides paint order — after-nav placement lets sheets cover the nav.
+ */
+interface Props {
+  title: string;
+  budgetActive: "month" | "transactions" | "reports" | "receipt-drafts" | "none";
+  pendingDrafts?: number;
+  role?: string;
+  lang?: "en" | "es";
+  mainClass?: string;
+  containerClass?: string;
+}
+
+const {
+  title,
+  budgetActive,
+  pendingDrafts = 0,
+  role,
+  lang = "en",
+  mainClass = "px-4 py-6 flex-grow",
+  containerClass = "w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-dvh",
+} = Astro.props;
+---
+
+<Layout title={title} lang={lang}>
+  <div class={containerClass}>
+    <slot name="before-nav" />
+    <BudgetNavNew active={budgetActive} lang={lang} pendingDrafts={pendingDrafts} />
+    <DrawerMenu lang={lang} />
+    <slot name="after-nav" />
+    <main class={mainClass}>
+      <slot />
+    </main>
+    <BottomNav active="budget" role={role} lang={lang} />
+    <slot name="overlays" />
+  </div>
+</Layout>

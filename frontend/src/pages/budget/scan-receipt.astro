@@ -16,10 +16,7 @@
  * Premium feature (Plus/Pro plans), parent-only.
  */
 
-import Layout from "@layouts/Layout.astro";
-import BottomNav from "@components/BottomNav.astro";
-import BudgetNavNew from "@components/BudgetNavNew.astro";
-import DrawerMenu from "@components/DrawerMenu.astro";
+import BudgetShell from "@components/ui/BudgetShell.astro";
 import { apiFetch } from "@lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -46,10 +43,17 @@ const pendingDraftsCount = draftsCount?.count ?? 0;
 const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
 ---
 
-<Layout title={`${title} - Budget`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen">
+<BudgetShell
+    title={`${title} - Budget`}
+    budgetActive="none"
+    pendingDrafts={pendingDraftsCount}
+    role={user.role}
+    lang={lang}
+    mainClass="px-6 py-8 flex-grow max-w-lg mx-auto w-full"
+    containerClass="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen"
+>
         <!-- Header -->
-        <header class="bg-gradient-to-br from-brand-coral to-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+        <header slot="before-nav" class="bg-gradient-to-br from-brand-coral to-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex items-center justify-between mb-2">
                 <a href="/budget/transactions" class="text-white hover:text-brand-cream transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -66,11 +70,7 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
             </p>
         </header>
 
-        <BudgetNavNew active="none" lang={lang} pendingDrafts={pendingDraftsCount} />
-        <DrawerMenu lang={lang} />
-
         <!-- Main Content -->
-        <main class="px-6 py-8 flex-grow max-w-lg mx-auto w-full">
             <div id="scan-actions" class="flex flex-col gap-3">
                 <label class="cursor-pointer block w-full text-center bg-brand-coral-deep text-white px-6 py-4 rounded-2xl font-bold text-lg shadow-[var(--shadow-card)] press">
                     {lang === "es" ? "📷 Tomar foto" : "📷 Snap receipt"}
@@ -214,10 +214,10 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
                     </div>
                 </form>
             </template>
-        </main>
 
         <!-- Full-screen overlay (covers the page during scan) -->
         <div
+            slot="overlays"
             id="scan-overlay"
             class="hidden fixed inset-0 z-50 bg-brand-cream/95 flex flex-col items-center justify-center p-6"
         >
@@ -233,10 +233,7 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
                 <li data-stage="3" class="opacity-30">{lang === "es" ? "Buscando duplicados…" : "Checking duplicates…"}</li>
             </ul>
         </div>
-
-        <BottomNav active="budget" role={user.role} lang={lang} />
-    </div>
-</Layout>
+</BudgetShell>
 
 <script define:vars={{ lang, token }}>
     document.addEventListener("astro:page-load", () => {

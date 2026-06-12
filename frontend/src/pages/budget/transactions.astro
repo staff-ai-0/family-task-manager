@@ -4,10 +4,7 @@
  * Shows all budget transactions with filtering, edit, and delete.
  */
 
-import Layout from "@layouts/Layout.astro";
-import BottomNav from "@components/BottomNav.astro";
-import BudgetNavNew from "@components/BudgetNavNew.astro";
-import DrawerMenu from "@components/DrawerMenu.astro";
+import BudgetShell from "@components/ui/BudgetShell.astro";
 import FABButton from "@components/FABButton.astro";
 import FABModal from "@components/FABModal.astro";
 import { apiFetch } from "@lib/api";
@@ -116,10 +113,17 @@ const accountsJson = JSON.stringify(accounts || []);
 const categoriesJson = JSON.stringify(allCategoriesForEdit);
 ---
 
-<Layout title={`${es ? "Transacciones" : "Transactions"} - Presupuesto`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col">
+<BudgetShell
+    title={`${es ? "Transacciones" : "Transactions"} - Presupuesto`}
+    budgetActive="transactions"
+    pendingDrafts={pendingDraftsCount}
+    role={user.role}
+    lang={lang}
+    mainClass="px-4 py-4 flex-grow"
+    containerClass="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col"
+>
         <!-- Header -->
-        <header class="bg-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+        <header slot="before-nav" class="bg-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex items-center justify-between mb-6">
                 <a href="/budget" class="text-white hover:text-brand-cream transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -160,11 +164,8 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
             </div>
         </header>
 
-        <BudgetNavNew active="transactions" lang={lang} pendingDrafts={pendingDraftsCount} />
-        <DrawerMenu lang={lang} />
-
         <!-- Filter Bar -->
-        <div class="px-4 py-3 bg-brand-cream border-b border-brand-ink/10 flex flex-wrap gap-2">
+        <div slot="after-nav" class="px-4 py-3 bg-brand-cream border-b border-brand-ink/10 flex flex-wrap gap-2">
             <select id="filter-account" class="text-sm border border-brand-ink/10 rounded-lg px-2 py-1.5 bg-brand-cream-deep flex-1 min-w-[100px]">
                 <option value="">{es ? "Todas las cuentas" : "All accounts"}</option>
                 {(accounts || []).map((acc) => (
@@ -201,7 +202,6 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
         </div>
 
         <!-- Transactions List -->
-        <main class="px-4 py-4 flex-grow">
             {!transOk ? (
                 <div class="bg-red-100 border border-red-200 rounded-xl p-4 text-red-700">
                     <p class="font-semibold">{es ? "Error al cargar transacciones" : "Error loading transactions"}</p>
@@ -289,8 +289,8 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                     {es ? "Mostrando" : "Showing"} {formatDate(startOfMonth, lang)} — {formatDate(endDate, lang)}
                 </p>
             </div>
-        </main>
 
+    <Fragment slot="overlays">
         <!-- Edit Transaction Bottom Sheet -->
         <div id="edit-backdrop" class="fixed inset-0 bg-black/50 z-[60] hidden opacity-0 transition-opacity duration-300"></div>
         <div id="edit-modal" class="fixed bottom-0 left-0 right-0 z-[70] translate-y-full transition-transform duration-300 ease-out">
@@ -432,9 +432,8 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
 
         <FABButton />
         <FABModal lang={lang} token={token} accounts={accounts || []} categories={allCategories} />
-        <BottomNav active="budget" role={user.role} lang={lang} />
-    </div>
-</Layout>
+    </Fragment>
+</BudgetShell>
 
 <script>
 function initFilters() {

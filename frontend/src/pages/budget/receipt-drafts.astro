@@ -4,10 +4,7 @@
  * Parents review, correct, and approve/reject low-confidence receipt scans.
  */
 
-import Layout from "@layouts/Layout.astro";
-import BottomNav from "@components/BottomNav.astro";
-import BudgetNavNew from "@components/BudgetNavNew.astro";
-import DrawerMenu from "@components/DrawerMenu.astro";
+import BudgetShell from "@components/ui/BudgetShell.astro";
 import { apiFetch } from "@lib/api";
 
 export const prerender = false;
@@ -86,12 +83,15 @@ const l = {
 }[lang]!;
 ---
 
-<Layout title={l.title}>
-    <div class="min-h-screen bg-brand-cream-deep pb-24">
-        <DrawerMenu lang={lang} />
-        <BudgetNavNew active="receipt-drafts" lang={lang} pendingDrafts={pendingDrafts.length} />
-
-        <main class="max-w-2xl mx-auto px-4 py-6">
+<BudgetShell
+    title={l.title}
+    budgetActive="receipt-drafts"
+    pendingDrafts={pendingDrafts.length}
+    role={user.role}
+    lang={lang}
+    mainClass="max-w-2xl mx-auto px-4 py-6"
+    containerClass="min-h-screen bg-brand-cream-deep pb-24"
+>
             <!-- Header -->
             <div class="mb-6">
                 <h1 class="text-2xl font-bold text-brand-ink">{l.title}</h1>
@@ -266,11 +266,7 @@ const l = {
                     );
                 })}
             </div>
-        </main>
-
-        <BottomNav active="budget" role={user.role} lang={lang} />
-    </div>
-</Layout>
+</BudgetShell>
 
 <script is:inline>
     const TOKEN_COOKIE = document.cookie

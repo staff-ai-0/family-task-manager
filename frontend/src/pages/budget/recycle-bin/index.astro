@@ -3,10 +3,7 @@
  * Recycle Bin - View and restore/permanently delete soft-deleted budget items.
  */
 
-import Layout from "@layouts/Layout.astro";
-import BottomNav from "@components/BottomNav.astro";
-import BudgetNavNew from "@components/BudgetNavNew.astro";
-import DrawerMenu from "@components/DrawerMenu.astro";
+import BudgetShell from "@components/ui/BudgetShell.astro";
 import RecycleBinTable from "@components/RecycleBinTable.astro";
 import { apiFetch } from "@lib/api";
 
@@ -27,10 +24,15 @@ const { data: draftsCount } = await apiFetch<{count: number}>("/api/budget/recei
 const pendingDraftsCount = draftsCount?.count ?? 0;
 ---
 
-<Layout title={`${es ? "Papelera" : "Recycle Bin"} - Budget`}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep min-h-screen flex flex-col">
-
-        <header class="bg-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+<BudgetShell
+    title={`${es ? "Papelera" : "Recycle Bin"} - Budget`}
+    budgetActive="none"
+    pendingDrafts={pendingDraftsCount}
+    role={user.role}
+    lang={lang}
+    containerClass="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep min-h-screen flex flex-col"
+>
+    <header slot="before-nav" class="bg-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex items-center gap-4">
                 <a href="/budget/settings" class="text-white hover:text-brand-cream transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -44,15 +46,7 @@ const pendingDraftsCount = draftsCount?.count ?? 0;
                     </p>
                 </div>
             </div>
-        </header>
+    </header>
 
-        <BudgetNavNew active="none" lang={lang} pendingDrafts={pendingDraftsCount} />
-        <DrawerMenu lang={lang} />
-
-        <main class="px-4 py-6 flex-grow">
-            <RecycleBinTable session={{ token }} />
-        </main>
-
-        <BottomNav active="budget" role={user.role} lang={lang} />
-    </div>
-</Layout>
+    <RecycleBinTable session={{ token }} />
+</BudgetShell>

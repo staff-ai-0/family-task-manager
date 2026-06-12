@@ -5,10 +5,7 @@
  * summary bar, FAB for quick expense, and assign-funds modal.
  */
 
-import Layout from "@layouts/Layout.astro";
-import BottomNav from "@components/BottomNav.astro";
-import BudgetNavNew from "@components/BudgetNavNew.astro";
-import DrawerMenu from "@components/DrawerMenu.astro";
+import BudgetShell from "@components/ui/BudgetShell.astro";
 import BudgetMonthNav from "@components/BudgetMonthNav.astro";
 import MonthSummaryBar from "@components/MonthSummaryBar.astro";
 import BudgetCategoryGroup from "@components/BudgetCategoryGroup.astro";
@@ -85,14 +82,16 @@ const allCategories = (allGroups || [])
     .flatMap((g: any) => g.categories.map((c: any) => ({ id: c.id, name: c.name, group_name: g.name })));
 ---
 
-<Layout title={t(lang, 'fin_budget_home')}>
-    <div class="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep min-h-screen pb-20">
-        <!-- Top nav: 3 tabs -->
-        <BudgetNavNew active="month" lang={lang} pendingDrafts={pendingDraftsCount} />
-
-        <!-- Drawer menu (hidden, toggled by hamburger) -->
-        <DrawerMenu lang={lang} />
-
+<BudgetShell
+    title={t(lang, 'fin_budget_home')}
+    budgetActive="month"
+    pendingDrafts={pendingDraftsCount}
+    role={user.role}
+    lang={lang}
+    mainClass="px-4 py-4 space-y-3"
+    containerClass="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep min-h-screen pb-20"
+>
+    <div slot="after-nav">
         <!-- Header with month nav + ready to assign -->
         <header class="bg-brand-sky-deep text-white pt-3 pb-5 px-4 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <BudgetMonthNav
@@ -114,53 +113,53 @@ const allCategories = (allGroups || [])
             lang={lang}
             formatCurrency={formatCurrency}
         />
+    </div>
+    {/* Income groups */}
+    {incomeGroups.map((group: any) => (
+        <BudgetCategoryGroup
+            group={group}
+            isIncome={true}
+            lang={lang}
+            t={t}
+            formatCurrency={formatCurrency}
+            token={token}
+            allExpenseCategories={allExpenseCategories}
+            goalsByCategory={goalsByCategory}
+        />
+    ))}
 
-        <!-- Category groups -->
-        <main class="px-4 py-4 space-y-3">
-            {/* Income groups */}
-            {incomeGroups.map((group: any) => (
-                <BudgetCategoryGroup
-                    group={group}
-                    isIncome={true}
-                    lang={lang}
-                    t={t}
-                    formatCurrency={formatCurrency}
-                    token={token}
-                    allExpenseCategories={allExpenseCategories}
-                    goalsByCategory={goalsByCategory}
-                />
-            ))}
+    {/* Expense groups */}
+    {expenseGroups.map((group: any) => (
+        <BudgetCategoryGroup
+            group={group}
+            isIncome={false}
+            lang={lang}
+            t={t}
+            formatCurrency={formatCurrency}
+            token={token}
+            allExpenseCategories={allExpenseCategories}
+            goalsByCategory={goalsByCategory}
+        />
+    ))}
 
-            {/* Expense groups */}
-            {expenseGroups.map((group: any) => (
-                <BudgetCategoryGroup
-                    group={group}
-                    isIncome={false}
-                    lang={lang}
-                    t={t}
-                    formatCurrency={formatCurrency}
-                    token={token}
-                    allExpenseCategories={allExpenseCategories}
-                    goalsByCategory={goalsByCategory}
-                />
-            ))}
+    {/* Empty state */}
+    {incomeGroups.length === 0 && expenseGroups.length === 0 && (
+        <div class="text-center py-12">
+            <p class="text-brand-ink-soft text-sm">
+                {lang === "es" ? "No hay categorias configuradas para este mes." : "No categories set up for this month."}
+            </p>
+            <a href="/budget/settings#categories" class="text-brand-sky-deep font-semibold text-sm mt-2 inline-block">
+                {lang === "es" ? "Crear categorias" : "Create categories"}
+            </a>
+        </div>
+    )}
 
-            {/* Empty state */}
-            {incomeGroups.length === 0 && expenseGroups.length === 0 && (
-                <div class="text-center py-12">
-                    <p class="text-brand-ink-soft text-sm">
-                        {lang === "es" ? "No hay categorias configuradas para este mes." : "No categories set up for this month."}
-                    </p>
-                    <a href="/budget/settings#categories" class="text-brand-sky-deep font-semibold text-sm mt-2 inline-block">
-                        {lang === "es" ? "Crear categorias" : "Create categories"}
-                    </a>
-                </div>
-            )}
-        </main>
-
-        <!-- Bottom nav -->
-        <BottomNav active="budget" role={user.role} lang={lang} />
-
+    {/*
+        FAB + modals — fixed-position overlays. overlays slot renders AFTER
+        BottomNav (matches the pre-migration DOM: same-z-index sheets must
+        paint over the nav, and DOM order decides that).
+    */}
+    <Fragment slot="overlays">
         <!-- FAB + modal -->
         <FABButton />
         <FABModal lang={lang} token={token} accounts={accounts} categories={allCategories} />
@@ -173,5 +172,5 @@ const allCategories = (allGroups || [])
             t={t}
             formatCurrency={formatCurrency}
         />
-    </div>
-</Layout>
+    </Fragment>
+</BudgetShell>

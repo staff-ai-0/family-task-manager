@@ -1,8 +1,5 @@
 ---
-import Layout from "@layouts/Layout.astro";
-import BudgetNavNew from "@components/BudgetNavNew.astro";
-import BottomNav from "@components/BottomNav.astro";
-import DrawerMenu from "@components/DrawerMenu.astro";
+import BudgetShell from "@components/ui/BudgetShell.astro";
 import { apiFetch } from "@lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -20,10 +17,14 @@ const { data: trend } = await apiFetch<any>(
 );
 ---
 
-<Layout title={normalized_name} lang={lang}>
-  <DrawerMenu lang={lang} />
-  <BudgetNavNew lang={lang} active="transactions" pendingDrafts={0} />
-  <main class="px-4 pb-32 pt-6 max-w-md mx-auto">
+<BudgetShell
+  title={normalized_name ?? ""}
+  lang={lang}
+  budgetActive="transactions"
+  pendingDrafts={0}
+  mainClass="px-4 pb-32 pt-6 max-w-md mx-auto"
+  containerClass=""
+>
     <h1 class="text-2xl font-display capitalize">{normalized_name}</h1>
     {trend && (
       <div class="card p-3 my-3 text-sm">
@@ -45,6 +46,4 @@ const { data: trend } = await apiFetch<any>(
         </li>
       ))}
     </ul>
-  </main>
-  <BottomNav lang={lang} active="budget" />
-</Layout>
+</BudgetShell>
