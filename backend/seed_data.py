@@ -127,15 +127,21 @@ async def create_family_and_users(session: AsyncSession):
 
 
 async def create_task_templates(session: AsyncSession, family, parent):
-    """Create task templates — regular + bonus"""
+    """Create task templates — regular + bonus
+
+    DB constraint chk_mandatory_zero_points (migration 2026_05_22) enforces
+    `is_bonus = true OR points = 0`: mandatory/regular chores award no points,
+    only bonus chores earn them. The regular tuples below carry 0 points to
+    match; the loop re-enforces the invariant so a future edit can't violate it.
+    """
     print("\nCreating task templates...")
     templates_data = [
-        ("Make Your Bed", "Hacer la Cama", "Make your bed neatly", "Haz tu cama ordenadamente", 20, 1, False),
-        ("Complete Homework", "Terminar la Tarea", "Finish homework before dinner", "Termina la tarea antes de cenar", 50, 1, False),
-        ("Brush Teeth", "Cepillar Dientes", "Brush morning and night", "Cepíllate mañana y noche", 10, 1, False),
-        ("Feed the Pet", "Alimentar Mascota", "Give food and water to the pet", "Dale comida y agua a la mascota", 15, 1, False),
-        ("Take Out Trash", "Sacar la Basura", "Empty trash cans", "Vacía los botes de basura", 25, 3, False),
-        ("Clean Your Room", "Limpiar Cuarto", "Pick up toys and organize", "Recoge juguetes y organiza", 30, 7, False),
+        ("Make Your Bed", "Hacer la Cama", "Make your bed neatly", "Haz tu cama ordenadamente", 0, 1, False),
+        ("Complete Homework", "Terminar la Tarea", "Finish homework before dinner", "Termina la tarea antes de cenar", 0, 1, False),
+        ("Brush Teeth", "Cepillar Dientes", "Brush morning and night", "Cepíllate mañana y noche", 0, 1, False),
+        ("Feed the Pet", "Alimentar Mascota", "Give food and water to the pet", "Dale comida y agua a la mascota", 0, 1, False),
+        ("Take Out Trash", "Sacar la Basura", "Empty trash cans", "Vacía los botes de basura", 0, 3, False),
+        ("Clean Your Room", "Limpiar Cuarto", "Pick up toys and organize", "Recoge juguetes y organiza", 0, 7, False),
         ("Help With Dishes", "Ayudar con Platos", "Wash or dry dishes after dinner", "Lava o seca los platos", 40, 1, True),
         ("Vacuum Living Room", "Aspirar la Sala", "Vacuum living room and hallway", "Aspira sala y pasillo", 75, 7, True),
         ("Help With Laundry", "Ayudar con Ropa", "Fold and put away clothes", "Dobla y guarda la ropa", 60, 7, True),
@@ -145,7 +151,7 @@ async def create_task_templates(session: AsyncSession, family, parent):
         t = TaskTemplate(
             family_id=family.id, created_by=parent.id, is_active=True,
             title=title, title_es=title_es, description=desc,
-            description_es=desc_es, points=pts, interval_days=interval,
+            description_es=desc_es, points=(pts if bonus else 0), interval_days=interval,
             is_bonus=bonus,
         )
         templates.append(t)

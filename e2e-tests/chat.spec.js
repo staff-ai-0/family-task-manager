@@ -23,7 +23,9 @@ test.describe('Family chat', () => {
     // Press Enter triggers form submit reliably; click on button can race
     // with the inline reaction click delegation listener on the feed.
     await page.press('input[name="body"]', 'Enter');
-    await page.waitForLoadState('networkidle');
+    // NOTE: do not waitForLoadState('networkidle') here — the chat page holds
+    // an open /api/chat/stream long-poll, so networkidle never fires. The
+    // visibility assertion below is the real wait for the rendered bubble.
     await expect(page.getByText(body)).toBeVisible({ timeout: 10000 });
   });
 
