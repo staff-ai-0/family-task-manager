@@ -156,6 +156,12 @@ class Settings(BaseSettings):
     # env var must have a matching field here to take effect — hence this field.)
     RATE_LIMIT_STORAGE_URI: str = ""
 
+    # Rate-limit master switch. When unset (None) it follows DEBUG: off in local
+    # dev / E2E (DEBUG=true), on in prod (DEBUG=false). Set explicitly to
+    # decouple from DEBUG — e.g. an internet-facing staging box that runs
+    # DEBUG=true should still enforce limits: set RATE_LIMIT_ENABLED=true there.
+    RATE_LIMIT_ENABLED: Union[bool, None] = None
+
     # LiteLLM Proxy (for auto-translation via mistral-nemo)
     LITELLM_API_BASE: str = "http://10.1.0.99:4000"
     LITELLM_API_KEY: str = ""

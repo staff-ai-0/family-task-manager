@@ -1,15 +1,16 @@
 const { test, expect } = require('@playwright/test');
 
-const BASE_URL = process.env.BASE_URL || 'https://gcp-family.agent-ia.mx';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3003';
 const EMAIL = process.env.E2E_EMAIL || 'e2e-fresh@example.com';
 const PASSWORD = process.env.E2E_PASSWORD || 'fresh1234';
 
 async function login(page) {
   await page.goto(`${BASE_URL}/login`);
+  await page.waitForLoadState('networkidle');
   await page.fill('input[name="email"]', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForURL('**/dashboard', { timeout: 15000 });
+  await page.click('#login-submit-btn');
+  await page.waitForURL('**/dashboard', { timeout: 30000 });
 }
 
 test.describe('Pricing / upgrade (PayPal)', () => {

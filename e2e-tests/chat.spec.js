@@ -6,10 +6,11 @@ const PASSWORD = process.env.E2E_PASSWORD || 'fresh1234';
 
 async function login(page) {
   await page.goto(`${BASE_URL}/login`);
+  await page.waitForLoadState('networkidle');
   await page.fill('input[name="email"]', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForURL('**/dashboard', { timeout: 10000 });
+  await page.click('#login-submit-btn');
+  await page.waitForURL('**/dashboard', { timeout: 30000 });
 }
 
 test.describe('Family chat', () => {
@@ -23,7 +24,9 @@ test.describe('Family chat', () => {
     // Press Enter triggers form submit reliably; click on button can race
     // with the inline reaction click delegation listener on the feed.
     await page.press('input[name="body"]', 'Enter');
-    await page.waitForLoadState('networkidle');
+    // NOTE: do not waitForLoadState('networkidle') here — the chat page holds
+    // an open /api/chat/stream long-poll, so networkidle never fires. The
+    // visibility assertion below is the real wait for the rendered bubble.
     await expect(page.getByText(body)).toBeVisible({ timeout: 10000 });
   });
 

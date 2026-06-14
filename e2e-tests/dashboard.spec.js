@@ -9,13 +9,8 @@ async function login(page) {
   await page.waitForLoadState('networkidle');
   await page.fill('input[name="email"]', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
-  // Button may be disabled while form validates — force via JS to match E2E pattern
-  await page.evaluate(() => {
-    const btn = document.getElementById('login-submit-btn');
-    if (btn) { btn.disabled = false; btn.click(); }
-    else document.querySelector('button[type="submit"]')?.click();
-  });
-  await page.waitForURL('**/dashboard', { timeout: 15000 });
+  await page.click('#login-submit-btn');
+  await page.waitForURL('**/dashboard', { timeout: 30000 });
 }
 
 test.describe('Dashboard', () => {

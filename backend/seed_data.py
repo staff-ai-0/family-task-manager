@@ -126,16 +126,49 @@ async def create_family_and_users(session: AsyncSession):
     return family, mom, dad, emma, lucas
 
 
+async def create_e2e_account(session: AsyncSession):
+    """Provision the dedicated E2E parent account in its own family.
+
+    The Playwright suite logs in as e2e-fresh@example.com / fresh1234 (see
+    e2e-tests/helpers/auth.js + README). Seeding it here makes `re-seed then run
+    E2E` reproducible — otherwise every TRUNCATE wipes a manually-created account
+    and the whole suite fails at login. Email is pre-verified so no verification
+    banner / extra me-status polling slows the post-login dashboard render.
+    """
+    print("\nCreating E2E test account...")
+    e2e_family = Family(name="E2E Test Family")
+    session.add(e2e_family)
+    await session.flush()
+    e2e_parent = User(
+        email="e2e-fresh@example.com",
+        password_hash=get_password_hash("fresh1234"),
+        name="E2E Parent", role=UserRole.PARENT,
+        family_id=e2e_family.id, email_verified=True, points=0,
+    )
+    session.add(e2e_parent)
+    await session.commit()
+    print("  e2e-fresh@example.com / fresh1234 (PARENT, verified)")
+    return e2e_family, e2e_parent
+
+
 async def create_task_templates(session: AsyncSession, family, parent):
-    """Create task templates — regular + bonus"""
+    """Create task templates — regular + bonus
+
+    DB constraint chk_mandatory_zero_points (migration 2026_05_22) enforces
+    `is_bonus = true OR points = 0`: mandatory/regular chores award no points,
+    only bonus chores earn them. The tuples below are the single source of
+    truth — every regular (is_bonus=False) row therefore carries 0 points, and
+    only bonus rows carry a positive value. Keep it that way or the seed will
+    fail the constraint.
+    """
     print("\nCreating task templates...")
     templates_data = [
-        ("Make Your Bed", "Hacer la Cama", "Make your bed neatly", "Haz tu cama ordenadamente", 20, 1, False),
-        ("Complete Homework", "Terminar la Tarea", "Finish homework before dinner", "Termina la tarea antes de cenar", 50, 1, False),
-        ("Brush Teeth", "Cepillar Dientes", "Brush morning and night", "Cepíllate mañana y noche", 10, 1, False),
-        ("Feed the Pet", "Alimentar Mascota", "Give food and water to the pet", "Dale comida y agua a la mascota", 15, 1, False),
-        ("Take Out Trash", "Sacar la Basura", "Empty trash cans", "Vacía los botes de basura", 25, 3, False),
-        ("Clean Your Room", "Limpiar Cuarto", "Pick up toys and organize", "Recoge juguetes y organiza", 30, 7, False),
+        ("Make Your Bed", "Hacer la Cama", "Make your bed neatly", "Haz tu cama ordenadamente", 0, 1, False),
+        ("Complete Homework", "Terminar la Tarea", "Finish homework before dinner", "Termina la tarea antes de cenar", 0, 1, False),
+        ("Brush Teeth", "Cepillar Dientes", "Brush morning and night", "Cepíllate mañana y noche", 0, 1, False),
+        ("Feed the Pet", "Alimentar Mascota", "Give food and water to the pet", "Dale comida y agua a la mascota", 0, 1, False),
+        ("Take Out Trash", "Sacar la Basura", "Empty trash cans", "Vacía los botes de basura", 0, 3, False),
+        ("Clean Your Room", "Limpiar Cuarto", "Pick up toys and organize", "Recoge juguetes y organiza", 0, 7, False),
         ("Help With Dishes", "Ayudar con Platos", "Wash or dry dishes after dinner", "Lava o seca los platos", 40, 1, True),
         ("Vacuum Living Room", "Aspirar la Sala", "Vacuum living room and hallway", "Aspira sala y pasillo", 75, 7, True),
         ("Help With Laundry", "Ayudar con Ropa", "Fold and put away clothes", "Dobla y guarda la ropa", 60, 7, True),
@@ -209,6 +242,7 @@ async def create_rewards(session: AsyncSession, family, parent):
     """Create rewards across all categories"""
     print("\nCreating rewards...")
     rewards_data = [
+        ("15 Min Screen Time", "Extra 15 min for games/TV/tablet", 50, RewardCategory.SCREEN_TIME, "screen"),
         ("30 Min Screen Time", "Extra 30 min for games/TV/tablet", 100, RewardCategory.SCREEN_TIME, "screen"),
         ("Ice Cream Trip", "Trip to get your favorite ice cream", 150, RewardCategory.TREATS, "treat"),
         ("Movie Night Pick", "Choose the movie for movie night", 120, RewardCategory.PRIVILEGES, "movie"),
@@ -859,6 +893,10 @@ async def main():
         plans = await create_subscription_plans(session)
         await create_demo_subscription(session, family, plans)
 
+        # Dedicated E2E account (separate family) so the Playwright suite is
+        # reproducible after any re-seed.
+        await create_e2e_account(session)
+
     await engine.dispose()
 
     print("\n" + "=" * 60)
@@ -869,6 +907,7 @@ async def main():
     print("  dad@demo.com   / password123  (PARENT)")
     print("  emma@demo.com  / password123  (CHILD)")
     print("  lucas@demo.com / password123  (TEEN)")
+    print("  e2e-fresh@example.com / fresh1234 (PARENT — E2E suite)")
     print(f"\nFrontend: http://localhost:3003")
     print(f"API Docs: http://localhost:8002/docs\n")
 

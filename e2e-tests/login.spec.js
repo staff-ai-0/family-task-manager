@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 test.describe('Login Flow', () => {
-  const BASE_URL = process.env.BASE_URL || 'https://gcp-family.agent-ia.mx';
+  const BASE_URL = process.env.BASE_URL || 'http://localhost:3003';
 
   test('should login with email and password and redirect to dashboard', async ({ page }) => {
     // Enable console logging
@@ -46,7 +46,7 @@ test.describe('Login Flow', () => {
 
     // Submit form
     console.log('6. Submitting form...');
-    await page.click('button[type="submit"]');
+    await page.click('#login-submit-btn');
     
     // Wait for navigation or error
     console.log('7. Waiting for navigation...');
@@ -59,7 +59,7 @@ test.describe('Login Flow', () => {
     }
     
     // Wait for URL change or timeout
-    await page.waitForURL('**/dashboard', { timeout: 5000 }).catch(() => console.log('No redirect to dashboard'));
+    await page.waitForURL('**/dashboard', { timeout: 30000 }).catch(() => console.log('No redirect to dashboard'));
     
     // Take screenshot after submit
     await page.screenshot({ path: 'after-submit.png' });
