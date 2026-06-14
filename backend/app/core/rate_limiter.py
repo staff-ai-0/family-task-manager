@@ -19,16 +19,22 @@ _storage_uri = getattr(settings, "RATE_LIMIT_STORAGE_URI", "") or "memory://"
 # every route to declare a `response: Response` param. The 429 response from the
 # exceeded-handler still carries Retry-After, which is what clients actually need.
 #
-# enabled is gated on DEBUG: rate limiting is a production security control, and
-# in local dev / E2E it only throttles the test runner (every test logs in from
-# one IP, tripping AUTH_LIMIT and 429-ing the suite into flaky failures). Prod
-# runs with DEBUG=false (docker-compose.gcp.yml) so the limiter is active there.
+# enabled: rate limiting is a production security control. By default it follows
+# DEBUG (off in local dev / E2E where it would only throttle the test runner —
+# every test logs in from one IP, tripping AUTH_LIMIT and 429-ing the suite into
+# flaky failures; on in prod, DEBUG=false per docker-compose.gcp.yml). Set
+# RATE_LIMIT_ENABLED explicitly to decouple from DEBUG (e.g. a staging box that
+# runs DEBUG=true but must still enforce limits → RATE_LIMIT_ENABLED=true).
 # The pytest suite overrides `limiter.enabled` directly (conftest disables it;
 # test_rate_limiting re-enables it), so this initial value is transparent to it.
+_rate_limit_enabled = settings.RATE_LIMIT_ENABLED
+if _rate_limit_enabled is None:
+    _rate_limit_enabled = not settings.DEBUG
+
 limiter = Limiter(
     key_func=get_remote_address,
     storage_uri=_storage_uri,
-    enabled=not settings.DEBUG,
+    enabled=_rate_limit_enabled,
 )
 
 # Per-route limits (tweak here). Strings use the `limits` syntax.
