@@ -259,11 +259,11 @@ test.describe('Reward Management', () => {
       await page.waitForLoadState('networkidle');
       await page.fill('input[name="email"]', process.env.E2E_CHILD_EMAIL || 'emma@demo.com');
       await page.fill('input[name="password"]', process.env.E2E_CHILD_PASSWORD || 'password123');
-      await page.click('button[type="submit"]');
+      await page.click('#login-submit-btn');
 
       // Child may not belong to the same family as the e2e account — skip if login fails
       try {
-        await page.waitForURL('**/dashboard', { timeout: 8000 });
+        await page.waitForURL('**/dashboard', { timeout: 30000 });
       } catch {
         return;
       }
@@ -271,14 +271,24 @@ test.describe('Reward Management', () => {
       await page.goto(`${BASE_URL}/rewards`);
       await page.waitForLoadState('networkidle');
 
-      const redeemButton = page.locator('button:has-text("Redeem"), button:has-text("Request")').first();
-      if (await redeemButton.count() > 0) {
-        await redeemButton.click();
-        await page.waitForTimeout(500);
-
-        const successMessage = page.locator('text=success, text=requested, text=redeemed').first();
-        expect(await successMessage.count()).toBeGreaterThan(0);
+      // Only click an ENABLED redeem button — a disabled one (child can't afford it)
+      // would hang .click() until timeout. If none is affordable, skip gracefully.
+      const redeemButton = page.locator(
+        'button:has-text("Redeem"):not([disabled]), button:has-text("Request"):not([disabled])'
+      ).first();
+      if (await redeemButton.count() === 0) {
+        return;
       }
+
+      await redeemButton.click();
+
+      // Redeem is a server-side form POST that sets a flash banner
+      // ("Reward redeemed! Points deducted." / "¡Premio canjeado! Puntos
+      // descontados.") and redirects. Assert the success flash (either
+      // language); toBeVisible auto-waits for the navigation + SSR render.
+      await expect(
+        page.getByText(/redeemed|deducted|canjeado|descontados/i).first()
+      ).toBeVisible({ timeout: 10000 });
     });
   });
 

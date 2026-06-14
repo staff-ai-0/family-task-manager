@@ -63,11 +63,28 @@ test.describe('Task Management', () => {
       await page.goto(`${BASE_URL}/parent/tasks`);
       await page.waitForLoadState('networkidle');
 
-      const nameInput = page.locator('input[name="name"], input[placeholder*="task"]').first();
-      if (await nameInput.count() > 0) {
-        const isRequired = await nameInput.evaluate(el => el.required);
-        expect(isRequired).toBe(true);
-      }
+      // The create-task UI is a 2-step modal (TaskCreateModal.astro), not a
+      // top-level form. Open it via the "New task" trigger, then pick the
+      // "Custom" preset to reveal step 2's task-name field (#tcm-name).
+      await page.locator('#tcm-trigger').first().click();
+      await expect(page.locator('#tcm-modal')).toBeVisible();
+
+      // Custom card has the pencil-from-scratch copy; it jumps straight to step 2.
+      await page.getByRole('button', { name: /custom|personalizada/i }).click();
+
+      const nameInput = page.locator('#tcm-name');
+      await expect(nameInput).toBeVisible();
+
+      // The name is enforced via JS validation in handleCreate(), not the HTML
+      // `required` attribute. Submitting with an empty name must NOT create the
+      // task: the modal stays open and an inline validation error is shown.
+      await nameInput.fill('');
+      await page.locator('#tcm-submit').click();
+
+      // Modal remains open (no successful create / close on empty name)...
+      await expect(page.locator('#tcm-modal')).toBeVisible();
+      // ...and the inline error surfaces, proving the field is required.
+      await expect(page.locator('#tcm-error')).toBeVisible();
     });
   });
 
