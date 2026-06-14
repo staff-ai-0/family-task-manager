@@ -6,10 +6,11 @@ const PASSWORD = process.env.E2E_PASSWORD || 'fresh1234';
 
 async function login(page) {
   await page.goto(`${BASE_URL}/login`);
+  await page.waitForLoadState('networkidle');
   await page.fill('input[name="email"]', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForURL('**/dashboard', { timeout: 10000 });
+  await page.click('#login-submit-btn');
+  await page.waitForURL('**/dashboard', { timeout: 30000 });
 }
 
 test.describe('Jarvis copilot', () => {

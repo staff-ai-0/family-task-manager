@@ -131,8 +131,10 @@ async def create_task_templates(session: AsyncSession, family, parent):
 
     DB constraint chk_mandatory_zero_points (migration 2026_05_22) enforces
     `is_bonus = true OR points = 0`: mandatory/regular chores award no points,
-    only bonus chores earn them. The regular tuples below carry 0 points to
-    match; the loop re-enforces the invariant so a future edit can't violate it.
+    only bonus chores earn them. The tuples below are the single source of
+    truth — every regular (is_bonus=False) row therefore carries 0 points, and
+    only bonus rows carry a positive value. Keep it that way or the seed will
+    fail the constraint.
     """
     print("\nCreating task templates...")
     templates_data = [
@@ -151,7 +153,7 @@ async def create_task_templates(session: AsyncSession, family, parent):
         t = TaskTemplate(
             family_id=family.id, created_by=parent.id, is_active=True,
             title=title, title_es=title_es, description=desc,
-            description_es=desc_es, points=(pts if bonus else 0), interval_days=interval,
+            description_es=desc_es, points=pts, interval_days=interval,
             is_bonus=bonus,
         )
         templates.append(t)

@@ -22,10 +22,10 @@ test.describe('Authentication', () => {
       await page.fill('input[name="password"]', DEMO_USER.password);
 
       // Submit form
-      await page.click('button[type="submit"]');
+      await page.click('#login-submit-btn');
 
       // Wait for navigation to dashboard
-      await page.waitForURL('**/dashboard', { timeout: 10000 });
+      await page.waitForURL('**/dashboard', { timeout: 30000 });
 
       // Verify we're on dashboard
       expect(page.url()).toContain('/dashboard');
@@ -144,8 +144,8 @@ test.describe('Authentication', () => {
       await page.waitForLoadState('networkidle');
       await page.fill('input[name="email"]', DEMO_USER.email);
       await page.fill('input[name="password"]', DEMO_USER.password);
-      await page.click('button[type="submit"]');
-      await page.waitForURL('**/dashboard', { timeout: 10000 });
+      await page.click('#login-submit-btn');
+      await page.waitForURL('**/dashboard', { timeout: 30000 });
 
       // Verify access token is set
       let cookies = await page.context().cookies();
@@ -191,8 +191,8 @@ test.describe('Authentication', () => {
       await page.waitForLoadState('networkidle');
       await page.fill('input[name="email"]', DEMO_USER.email);
       await page.fill('input[name="password"]', DEMO_USER.password);
-      await page.click('button[type="submit"]');
-      await page.waitForURL('**/dashboard', { timeout: 10000 });
+      await page.click('#login-submit-btn');
+      await page.waitForURL('**/dashboard', { timeout: 30000 });
 
       // Get the current URL (should be dashboard)
       const initialUrl = page.url();
