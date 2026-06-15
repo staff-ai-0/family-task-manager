@@ -83,6 +83,7 @@ class TokenResponse(BaseModel):
     """Schema for authentication token response"""
 
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user: UserResponse
 
