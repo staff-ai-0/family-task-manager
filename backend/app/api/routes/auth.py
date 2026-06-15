@@ -170,12 +170,14 @@ async def register_family(
     except Exception:
         pass  # Don't block registration on email failure
 
-    # Issue access token
+    # Issue access + refresh tokens
     access_token = create_access_token(
         data={"sub": str(user.id), "family_id": str(user.family_id), "role": user.role.value}
     )
+    refresh_token = create_refresh_token(str(user.id), version=user.token_version)
     return RegisterFamilyResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         token_type="bearer",
         user=UserResponse.model_validate(user),
     )

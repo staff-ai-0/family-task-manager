@@ -121,5 +121,6 @@ class RegisterFamilyRequest(BaseModel):
 class RegisterFamilyResponse(BaseModel):
     """Response after creating a family + user"""
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user: UserResponse
