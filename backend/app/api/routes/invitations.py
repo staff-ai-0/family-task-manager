@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role, verify_family_id
 from app.core.config import settings
 from app.core.type_utils import to_uuid_required
-from app.core.security import create_access_token
+from app.core.security import create_access_token, create_refresh_token
 from app.core.premium import require_feature
 from app.services.invitation_service import InvitationService
 from app.services.email_service import EmailService
@@ -147,7 +147,7 @@ async def accept_invitation(
                 detail="Only parents or adults (18+) can accept family invitations. Please contact a family administrator."
             )
         
-        # Create access token
+        # Create access + refresh tokens
         access_token = create_access_token(
             data={
                 "sub": str(user.id),
@@ -155,7 +155,8 @@ async def accept_invitation(
                 "role": user.role.value,
             }
         )
-        
+        refresh_token = create_refresh_token(str(user.id), version=user.token_version)
+
         await db.commit()
         
         # Send welcome email via the idempotent helper — it resolves
@@ -176,6 +177,7 @@ async def accept_invitation(
         return AcceptInvitationResponse(
             success=True,
             access_token=access_token,
+            refresh_token=refresh_token,
             token_type="bearer",
             message=f"Welcome to the family!"
         )

@@ -46,6 +46,7 @@ class AcceptInvitationResponse(BaseModel):
     """Response after accepting invitation"""
     success: bool
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str
     message: str
 
