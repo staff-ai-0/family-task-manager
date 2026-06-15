@@ -1,0 +1,16 @@
+# Development and test dependencies — NOT installed in the production image.
+# Install with: pip install -r requirements-dev.txt
+# (which installs requirements.txt first via the -r directive)
+-r requirements.txt
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+factory-boy==3.3.0
+
+# Code Quality
+black==24.1.1
+flake8==7.0.0
+mypy==1.8.0
+isort==5.13.2

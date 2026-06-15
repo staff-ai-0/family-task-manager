@@ -24,8 +24,6 @@ resend==2.4.0
 
 # Redis (Optional - for caching)
 redis==5.0.1
-aioredis==2.0.1
-
 # HTTP Client
 httpx==0.26.0
 
@@ -33,18 +31,6 @@ httpx==0.26.0
 google-auth==2.27.0
 google-auth-oauthlib==1.2.0
 paypalrestsdk==1.13.1
-
-# Testing
-pytest==7.4.4
-pytest-asyncio==0.23.3
-pytest-cov==4.1.0
-factory-boy==3.3.0
-
-# Code Quality
-black==24.1.1
-flake8==7.0.0
-mypy==1.8.0
-isort==5.13.2
 
 # AI / Vision
 # Anthropic SDK kept as a transitive fallback and for any code path that

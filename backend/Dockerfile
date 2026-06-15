@@ -15,12 +15,19 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
+# INSTALL_DEV=true → also installs test/lint tools (local dev only)
+ARG INSTALL_DEV=false
+
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY requirements.txt requirements-dev.txt ./
 
 # Install Python dependencies
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    if [ "$INSTALL_DEV" = "true" ]; then \
+        pip install -r requirements-dev.txt; \
+    else \
+        pip install -r requirements.txt; \
+    fi
 
 # Copy project
 COPY . .

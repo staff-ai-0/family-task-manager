@@ -23,9 +23,10 @@ from app.services.pet_service import PetService
 from app.services.analytics_service import AnalyticsService
 from app.services.jarvis_schedule_service import JarvisScheduleService
 
-# Configure logging
+# Configure logging — level driven by LOG_LEVEL env var (default "INFO")
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
