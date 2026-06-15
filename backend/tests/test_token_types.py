@@ -41,3 +41,12 @@ def test_decode_token_treats_missing_type_as_access():
     legacy = jwt.encode({"sub": "u1"}, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     payload = decode_token(legacy, expected_type="access")
     assert payload["sub"] == "u1"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_rejects_refresh_token(db_session, test_parent_user):
+    from app.core.dependencies import get_current_user
+    refresh = create_refresh_token(str(test_parent_user.id), version=0)
+    with pytest.raises(HTTPException) as exc:
+        await get_current_user(token=refresh, db=db_session)
+    assert exc.value.status_code == 401
