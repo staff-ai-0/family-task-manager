@@ -64,3 +64,30 @@ async def test_returns_none_on_http_failure(monkeypatch):
     with patch("app.services.fx_service.httpx.AsyncClient", return_value=fake_client):
         rate = await FXService.get_rate("USD", "MXN", date(2026, 5, 28))
         assert rate is None
+
+
+@pytest.mark.asyncio
+async def test_logs_warning_on_http_failure(monkeypatch, caplog):
+    """A swallowed FX-provider failure must leave a log trail (audit M6)."""
+    import logging
+
+    fake_redis = MagicMock()
+    fake_redis.get = AsyncMock(return_value=None)
+    fake_redis.set = AsyncMock()
+    monkeypatch.setattr("app.services.fx_service._get_redis", lambda: fake_redis)
+
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(side_effect=RuntimeError("boom"))
+    fake_client.__aenter__.return_value = fake_client
+    fake_client.__aexit__.return_value = False
+
+    with patch("app.services.fx_service.httpx.AsyncClient", return_value=fake_client):
+        with caplog.at_level(logging.WARNING, logger="app.services.fx_service"):
+            rate = await FXService.get_rate("USD", "MXN", date(2026, 5, 28))
+
+    assert rate is None
+    assert any(
+        r.levelno >= logging.WARNING and "USD" in r.getMessage() and "MXN" in r.getMessage()
+        for r in caplog.records
+    ), f"expected an FX-failure warning, got {[r.getMessage() for r in caplog.records]}"
+

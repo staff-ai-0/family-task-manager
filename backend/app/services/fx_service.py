@@ -8,6 +8,7 @@ for 24h since historical rates are immutable.
 """
 
 import asyncio
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -17,6 +18,7 @@ import redis.asyncio as aioredis
 
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
 
 _REDIS_TTL_SECONDS = 24 * 3600
 
@@ -83,12 +85,24 @@ class FXService:
                 resp.raise_for_status()
                 data = resp.json()
         except Exception:
+            logger.warning(
+                "FX rate fetch failed for %s->%s on %s; returning None",
+                from_ccy, to_ccy, on_date, exc_info=True,
+            )
             return None
 
         if not data.get("success", True):  # exchangerate.host omits 'success' on OK
+            logger.warning(
+                "FX provider reported failure for %s->%s on %s; returning None",
+                from_ccy, to_ccy, on_date,
+            )
             return None
         rate_val = data.get("rates", {}).get(to_ccy)
         if rate_val is None:
+            logger.warning(
+                "FX provider returned no %s rate for %s on %s; returning None",
+                to_ccy, from_ccy, on_date,
+            )
             return None
 
         rate = Decimal(str(rate_val))
