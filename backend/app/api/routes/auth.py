@@ -268,11 +268,14 @@ async def check_auth_methods(
 
 
 @router.post("/logout")
-async def logout(current_user: User = Depends(get_current_user)):
-    """Logout (invalidate token)"""
-    return {
-        "message": "Logged out successfully. Please delete the token on client side."
-    }
+async def logout(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Log out everywhere: bump token_version so all refresh tokens die."""
+    current_user.token_version += 1
+    await db.commit()
+    return {"message": "Logged out successfully."}
 
 
 @router.get("/me", response_model=UserResponse)
@@ -411,5 +414,7 @@ async def reset_password(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not reset password.",
         )
+    user.token_version += 1
+    await db.commit()
     return {"message": "Password reset successfully. You can now log in."}
 
