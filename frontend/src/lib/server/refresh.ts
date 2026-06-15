@@ -30,3 +30,18 @@ export function readCookie(cookieHeader: string, name: string): string | undefin
     const m = cookieHeader.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
     return m ? decodeURIComponent(m[1]) : undefined;
 }
+
+/** If a backend response is 401 and a refresh token is present, refresh once
+ *  and let the caller retry with the new access token. Returns the new token
+ *  + Set-Cookie list, or null if refresh isn't possible. */
+export async function tryRefreshFor401(
+    status: number,
+    cookieHeader: string
+): Promise<{ accessToken: string; setCookies: string[] } | null> {
+    if (status !== 401) return null;
+    const refreshToken = readCookie(cookieHeader, "refresh_token");
+    if (!refreshToken) return null;
+    const r = await refreshAccessToken(refreshToken);
+    if (!r.ok) return null;
+    return { accessToken: r.accessToken!, setCookies: r.setCookies! };
+}

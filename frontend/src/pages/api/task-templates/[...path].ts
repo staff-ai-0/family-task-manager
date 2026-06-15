@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { tryRefreshFor401 } from "../../../lib/server/refresh";
 
 const BACKEND_URL = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -76,7 +77,17 @@ async function proxy({ request, params }: { request: Request; params: Record<str
     }
 
     try {
-        return await doFetch(backendUrl);
+        let res = await doFetch(backendUrl);
+        // Transparently refresh once if the access token expired mid-request.
+        if (res.status === 401) {
+            const refreshed = await tryRefreshFor401(res.status, request.headers.get("cookie") ?? "");
+            if (refreshed) {
+                forwardHeaders.set("Authorization", `Bearer ${refreshed.accessToken}`);
+                res = await doFetch(backendUrl);
+                for (const c of refreshed.setCookies) res.headers.append("Set-Cookie", c);
+            }
+        }
+        return res;
     } catch (e: any) {
         console.error(`[api/task-templates proxy] Error forwarding to ${backendUrl}:`, e?.message ?? e);
         return new Response(
