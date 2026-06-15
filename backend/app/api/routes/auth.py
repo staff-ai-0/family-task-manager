@@ -32,7 +32,13 @@ from app.schemas.user import (
 )
 from app.models import User
 from app.models.family import Family, generate_join_code
-from app.core.security import get_password_hash, create_access_token
+from app.core.security import (
+    get_password_hash,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    oauth2_scheme,
+)
 from app.core.rate_limiter import limiter, AUTH_LIMIT, EMAIL_LIMIT
 
 router = APIRouter()
@@ -184,6 +190,35 @@ async def login(
 ):
     """Login and get access token"""
     user, access_token, refresh_token = await AuthService.authenticate_user(db, login_data)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        user=UserResponse.model_validate(user),
+    )
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_tokens(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    """Exchange a valid refresh token for a fresh access + refresh pair."""
+    payload = decode_token(token, expected_type="refresh")
+    user_id = payload.get("sub")
+    ver = payload.get("ver")
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None or ver != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token is no longer valid",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_access_token(
+        {"sub": str(user.id), "role": user.role.value, "family_id": str(user.family_id)}
+    )
+    refresh_token = create_refresh_token(str(user.id), version=user.token_version)
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
