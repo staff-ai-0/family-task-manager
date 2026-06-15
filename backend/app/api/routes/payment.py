@@ -4,6 +4,7 @@ PayPal Payment routes
 Handles PayPal payment creation, execution, and webhooks.
 """
 
+import asyncio
 from fastapi import APIRouter, Depends, status, Body, Request, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
@@ -47,7 +48,8 @@ async def create_payment(
     """
     paypal_service = PayPalService()
     
-    payment_info = paypal_service.create_payment(
+    payment_info = await asyncio.to_thread(
+        paypal_service.create_payment,
         amount=request.amount,
         currency=request.currency,
         description=request.description,
@@ -74,7 +76,8 @@ async def execute_payment(
     """
     paypal_service = PayPalService()
     
-    result = paypal_service.execute_payment(
+    result = await asyncio.to_thread(
+        paypal_service.execute_payment,
         payment_id=request.payment_id,
         payer_id=request.payer_id,
     )
@@ -101,7 +104,9 @@ async def get_payment_details(
     """
     paypal_service = PayPalService()
     
-    payment_details = paypal_service.get_payment_details(payment_id)
+    payment_details = await asyncio.to_thread(
+        paypal_service.get_payment_details, payment_id
+    )
     
     return payment_details
 
