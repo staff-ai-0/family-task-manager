@@ -86,10 +86,12 @@ class GigClaimService:
         COMPLETED and notifies parents that a gig awaits review."""
         from app.core.config import settings
 
+        # Lock the row: two concurrent proof submissions on the same claim must
+        # not both reach the auto-approve branch and double-award points.
         result = await db.execute(
-            select(GigClaim).where(
-                and_(GigClaim.id == claim_id, GigClaim.claimed_by == user_id)
-            )
+            select(GigClaim)
+            .where(and_(GigClaim.id == claim_id, GigClaim.claimed_by == user_id))
+            .with_for_update()
         )
         claim = result.scalar_one_or_none()
         if not claim:
@@ -323,10 +325,12 @@ class GigClaimService:
         if approver.family_id != family_id or approver.role != UserRole.PARENT:
             raise ForbiddenException("Solo padres pueden aprobar gigs")
 
+        # Lock the row: two concurrent approvals of the same claim must not
+        # both pass the status check and double-award points.
         result = await db.execute(
-            select(GigClaim).where(
-                and_(GigClaim.id == claim_id, GigClaim.family_id == family_id)
-            )
+            select(GigClaim)
+            .where(and_(GigClaim.id == claim_id, GigClaim.family_id == family_id))
+            .with_for_update()
         )
         claim = result.scalar_one_or_none()
         if not claim:

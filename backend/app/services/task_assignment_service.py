@@ -472,9 +472,16 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
     @staticmethod
     async def get_assignment(
-        db: AsyncSession, assignment_id: UUID, family_id: UUID
+        db: AsyncSession, assignment_id: UUID, family_id: UUID,
+        for_update: bool = False,
     ) -> TaskAssignment:
-        """Get an assignment by ID with template eagerly loaded"""
+        """Get an assignment by ID with template eagerly loaded.
+
+        Pass for_update=True to take a row lock (SELECT ... FOR UPDATE) so
+        concurrent state transitions (approve / claim) serialize and cannot
+        both pass a check-then-write guard. selectinload issues separate
+        queries, so the lock applies only to the task_assignments row.
+        """
         query = (
             select(TaskAssignment)
             .options(
@@ -488,6 +495,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 )
             )
         )
+        if for_update:
+            query = query.with_for_update(of=TaskAssignment)
         result = await db.execute(query)
         assignment = result.scalar_one_or_none()
         if not assignment:
@@ -814,6 +823,42 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         if assignment.assigned_to != user_id:
             raise ForbiddenException("Only the assigned user can claim this gig")
 
+        tmpl = assignment.template
+
+        # Competition mode is "first claim wins". Serialize every claim for
+        # this template+week by locking the whole sibling set in one
+        # deterministic (id-ordered) SELECT ... FOR UPDATE — a single ordered
+        # lock acquisition, so concurrent claimers queue instead of
+        # deadlocking. populate_existing refreshes our own already-loaded row
+        # from the locked read, so a claimer that lost the race sees its row
+        # cancelled (and/or a sibling already CLAIMED) and is rejected,
+        # guaranteeing exactly one winner.
+        if tmpl.is_bonus and tmpl.gig_mode == "competition":
+            siblings = (
+                await db.execute(
+                    select(TaskAssignment)
+                    .where(
+                        and_(
+                            TaskAssignment.family_id == family_id,
+                            TaskAssignment.template_id == tmpl.id,
+                            TaskAssignment.week_of == assignment.week_of,
+                        )
+                    )
+                    .order_by(TaskAssignment.id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+            ).scalars().all()
+            assignment = next(
+                (s for s in siblings if s.id == assignment.id), assignment
+            )
+            if any(
+                s.id != assignment.id
+                and s.status in (AssignmentStatus.CLAIMED, AssignmentStatus.COMPLETED)
+                for s in siblings
+            ):
+                raise ValidationException("Esta gig ya fue reclamada por alguien más")
+
         if not assignment.can_claim:
             raise ValidationException(
                 f"Gig cannot be claimed in status {assignment.status.value}"
@@ -829,10 +874,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         assignment.status = AssignmentStatus.CLAIMED
         assignment.claimed_at = datetime.now(timezone.utc)
 
-        # Competition mode: first claim wins, cancel sibling assignments for
-        # the same template+week so other kids see the gig disappear.
-        tmpl = assignment.template
-        if tmpl and tmpl.is_bonus and tmpl.gig_mode == "competition":
+        # Competition mode: cancel the sibling assignments (already locked
+        # above) for the same template+week so other kids see it disappear.
+        if tmpl.is_bonus and tmpl.gig_mode == "competition":
             from sqlalchemy import update as sql_update
             stmt = (
                 sql_update(TaskAssignment)
@@ -896,7 +940,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         if parent.family_id != family_id or parent.role != UserRole.PARENT:
             raise ForbiddenException("Only parents in this family can approve gigs")
 
-        assignment = await TaskAssignmentService.get_assignment(db, assignment_id, family_id)
+        assignment = await TaskAssignmentService.get_assignment(
+            db, assignment_id, family_id, for_update=True
+        )
 
         if assignment.approval_status != ApprovalStatus.PENDING:
             raise ValidationException(
