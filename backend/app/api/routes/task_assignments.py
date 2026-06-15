@@ -194,16 +194,22 @@ async def upload_gig_proof(
     import uuid as _uuid
     import os as _os
 
+    from app.core.upload_validation import (
+        read_upload_capped,
+        assert_allowed_type,
+        MAX_PROOF_BYTES,
+    )
+
     allowed = {"image/jpeg", "image/png", "image/webp"}
     content_type = (file.content_type or "").lower()
     if content_type not in allowed:
         raise HTTPException(status_code=415, detail=f"Unsupported type {content_type}")
 
-    body = await file.read()
-    if len(body) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large (max 5MB)")
+    body = await read_upload_capped(file, MAX_PROOF_BYTES)
+    # Authoritative check: sniff the real bytes, not the client-declared type.
+    real_type = assert_allowed_type(body, allowed)
 
-    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[content_type]
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[real_type]
     fname = f"{_uuid.uuid4().hex}.{ext}"
     dest_dir = "/app/uploads/gig-proofs"
     _os.makedirs(dest_dir, exist_ok=True)
