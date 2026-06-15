@@ -1,20 +1,6 @@
 import type { APIRoute } from "astro";
-
-function buildCookie(name: string, value: string, options: {
-    path?: string;
-    httpOnly?: boolean;
-    sameSite?: string;
-    maxAge?: number;
-    secure?: boolean;
-}): string {
-    let cookie = `${name}=${encodeURIComponent(value)}`;
-    if (options.path) cookie += `; Path=${options.path}`;
-    if (options.httpOnly) cookie += "; HttpOnly";
-    if (options.secure) cookie += "; Secure";
-    if (options.sameSite) cookie += `; SameSite=${options.sameSite}`;
-    if (options.maxAge !== undefined) cookie += `; Max-Age=${options.maxAge}`;
-    return cookie;
-}
+import type { LoginResponse } from "../../../types/api";
+import { authCookies } from "../../../lib/auth-cookies";
 
 /**
  * POST /api/auth/register
@@ -59,15 +45,10 @@ export const POST: APIRoute = async ({ request }) => {
         const data = await response.json();
 
         if (response.ok) {
-            const tokenCookie = buildCookie("access_token", data.access_token, {
-                path: "/",
-                httpOnly: true,
-                sameSite: "Lax",
-                maxAge: 60 * 60 * 24 * 7, // 7 days
-                secure: !import.meta.env.DEV, // Only secure in production
-            });
+            const result = data as LoginResponse;
+            const cookies = authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV);
             const headers = new Headers({ "Content-Type": "application/json" });
-            headers.append("Set-Cookie", tokenCookie);
+            for (const c of cookies) headers.append("Set-Cookie", c);
             return new Response(
                 JSON.stringify({ success: true, redirect: "/dashboard" }),
                 { status: 200, headers }
