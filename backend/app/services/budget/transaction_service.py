@@ -238,6 +238,8 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         family_id: UUID,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[BudgetTransaction]:
         """
         List transactions for a category.
@@ -272,6 +274,10 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             query = query.where(BudgetTransaction.date >= start_date)
         if end_date:
             query = query.where(BudgetTransaction.date <= end_date)
+        if limit:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
 
         result = await db.execute(query)
         return list(result.scalars().all())

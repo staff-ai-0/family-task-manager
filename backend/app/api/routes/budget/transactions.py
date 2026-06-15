@@ -67,7 +67,7 @@ async def list_transactions(
         )
     elif category_id:
         transactions = await TransactionService.list_by_category(
-            db, category_id, family_id, start_date, end_date
+            db, category_id, family_id, start_date, end_date, limit, offset
         )
     else:
         transactions = await TransactionService.list_by_family(
