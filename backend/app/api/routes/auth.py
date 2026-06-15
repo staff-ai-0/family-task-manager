@@ -183,9 +183,10 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     """Login and get access token"""
-    user, access_token = await AuthService.authenticate_user(db, login_data)
+    user, access_token, refresh_token = await AuthService.authenticate_user(db, login_data)
     return TokenResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         token_type="bearer",
         user=UserResponse.model_validate(user),
     )
