@@ -5,6 +5,7 @@ Public (unauthenticated) — PayPal posts here. Signature verified using the
 shared webhook_id, events deduplicated via Redis, dispatched to
 subscription_state transitions.
 """
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -94,7 +95,8 @@ async def receive_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         )
 
     headers = request.headers
-    verified = PayPalService.verify_webhook_signature(
+    verified = await asyncio.to_thread(
+        PayPalService.verify_webhook_signature,
         transmission_id=headers.get("paypal-transmission-id", ""),
         transmission_time=headers.get("paypal-transmission-time", ""),
         cert_url=headers.get("paypal-cert-url", ""),

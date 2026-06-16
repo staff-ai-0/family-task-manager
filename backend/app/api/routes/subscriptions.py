@@ -5,6 +5,7 @@ Provides plan listing, current subscription info, usage tracking,
 checkout initiation, and cancellation.
 """
 
+import asyncio
 from datetime import datetime, timezone
 from typing import List
 
@@ -155,7 +156,8 @@ async def create_checkout(
 
     try:
         paypal_service = PayPalService()
-        result = paypal_service.create_subscription(
+        result = await asyncio.to_thread(
+            paypal_service.create_subscription,
             plan_id=paypal_plan_id,
             return_url=return_url,
             cancel_url=cancel_url,
@@ -250,7 +252,8 @@ async def activate_subscription(
 
     try:
         paypal_service = PayPalService()
-        paypal_service.execute_subscription(
+        await asyncio.to_thread(
+            paypal_service.execute_subscription,
             billing_agreement_id=request.paypal_subscription_id,
             token=request.paypal_subscription_id,
         )
@@ -312,7 +315,8 @@ async def cancel_subscription(
 
     if subscription.paypal_subscription_id:
         try:
-            PayPalService.cancel_subscription(
+            await asyncio.to_thread(
+                PayPalService.cancel_subscription,
                 subscription.paypal_subscription_id,
                 reason="User requested via app",
             )

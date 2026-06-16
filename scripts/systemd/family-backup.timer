@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Family Task Manager DB backup daily
+
+[Timer]
+# 03:30 VM-local time, with catch-up if the VM was off at the scheduled time.
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

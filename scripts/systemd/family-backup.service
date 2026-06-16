@@ -1,0 +1,11 @@
+[Unit]
+Description=Family Task Manager — daily PostgreSQL backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# Runs as root so `sudo docker compose` needs no interactive password and the
+# dump can be written under /home/jc/family-task-manager/backups/.
+WorkingDirectory=/home/jc/family-task-manager
+ExecStart=/home/jc/family-task-manager/scripts/backup-db.sh
