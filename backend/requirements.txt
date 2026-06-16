@@ -89,3 +89,6 @@ google-cloud-storage>=2.18
 
 # Rate limiting (B1) — auth + AI endpoint abuse protection
 slowapi==0.1.9
+
+# Error monitoring — disabled unless SENTRY_DSN is set in .env
+sentry-sdk[fastapi]==2.8.0

@@ -23,11 +23,25 @@ from app.services.pet_service import PetService
 from app.services.analytics_service import AnalyticsService
 from app.services.jarvis_schedule_service import JarvisScheduleService
 
-# Configure logging
+# Configure logging — level driven by LOG_LEVEL env var (default "INFO")
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Error monitoring — activates only when SENTRY_DSN is set in .env
+if settings.SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        integrations=[FastApiIntegration(), SqlalchemyIntegration()],
+        environment="production" if not settings.DEBUG else "development",
+    )
 
 
 async def _overdue_sweep_loop() -> None:

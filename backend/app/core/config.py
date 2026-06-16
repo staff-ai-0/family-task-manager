@@ -187,6 +187,10 @@ class Settings(BaseSettings):
     
     # Logging
     LOG_LEVEL: str = "INFO"
+
+    # Error monitoring — set SENTRY_DSN to activate; empty string = disabled
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
     
     @field_validator('ALLOWED_ORIGINS', mode='before')
     @classmethod
