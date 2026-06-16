@@ -6,7 +6,8 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Text,
-    UniqueConstraint,
+    Index,
+    text,
     Enum as SQLEnum,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -81,13 +82,17 @@ class GigClaim(Base):
 
     __tablename__ = "gig_claims"
     __table_args__ = (
-        UniqueConstraint(
+        # Partial unique: one ACTIVE (non-rejected) claim per user per gig.
+        # A rejected claim must not block re-claiming, so the index excludes
+        # status='rejected'. Mirrors the raw SQL in migration
+        # 2026_06_01_gig_tables.py exactly so create_all (test DB) and the
+        # deployed schema enforce the same rule.
+        Index(
+            "uq_gig_claim_active",
             "gig_id",
             "claimed_by",
-            name="uq_gig_claim_active",
-            # Partial unique enforced via CHECK + application logic:
-            # only one non-REJECTED claim per user per gig.
-            # Full partial unique index added in migration.
+            unique=True,
+            postgresql_where=text("status != 'rejected'"),
         ),
     )
 

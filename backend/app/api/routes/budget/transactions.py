@@ -16,6 +16,12 @@ from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.core.premium import require_feature
 from app.core.rate_limiter import limiter, AI_LIMIT
+from app.core.upload_validation import (
+    read_upload_capped,
+    sniff_mime,
+    MAX_IMPORT_BYTES,
+    MAX_RECEIPT_BYTES,
+)
 from app.services.budget.transaction_service import TransactionService
 from app.services.usage_service import UsageService
 from app.services.budget.csv_import_service import CSVImportService
@@ -416,8 +422,8 @@ async def import_csv_transactions(
     Returns import statistics and detailed error information.
     """
     try:
-        # Read CSV file content
-        csv_content = await file.read()
+        # Read CSV file content (capped so a large upload can't exhaust memory)
+        csv_content = await read_upload_capped(file, MAX_IMPORT_BYTES)
         csv_text = csv_content.decode('utf-8')
         
         # Parse column mapping if provided
@@ -497,7 +503,7 @@ async def import_file_transactions_endpoint(
             db, account_id, to_uuid_required(current_user.family_id)
         )
 
-        file_bytes = await file.read()
+        file_bytes = await read_upload_capped(file, MAX_IMPORT_BYTES)
         result = await import_file_transactions(
             db=db,
             family_id=to_uuid_required(current_user.family_id),
@@ -577,16 +583,32 @@ async def scan_receipt_endpoint(
             "transaction_id": None,
         }
 
-    file_bytes = await file.read()
-
-    # Max 10MB (applies to the raw upload; rasterized PNG will be smaller)
-    if len(file_bytes) > 10 * 1024 * 1024:
+    # Read with a hard cap so a large upload can't exhaust the worker
+    # (rasterized PNG will be smaller than the raw upload).
+    try:
+        file_bytes = await read_upload_capped(file, MAX_RECEIPT_BYTES)
+    except HTTPException:
         return {
             "success": False,
-            "message": "File too large. Maximum size is 10MB.",
+            "message": f"File too large. Maximum size is {MAX_RECEIPT_BYTES // (1024 * 1024)}MB.",
             "scanned_data": None,
             "transaction_id": None,
         }
+
+    # Authoritative type check: sniff the real bytes. The client-declared
+    # Content-Type is not trusted for what we feed to the vision pipeline.
+    sniffed = sniff_mime(file_bytes)
+    if sniffed not in allowed_types:
+        return {
+            "success": False,
+            "message": (
+                "Unsupported or unrecognized file content. "
+                "Use JPEG, PNG, WebP, GIF, or PDF."
+            ),
+            "scanned_data": None,
+            "transaction_id": None,
+        }
+    content_type = sniffed
 
     result = await scan_and_create_transaction(
         db=db,
