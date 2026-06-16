@@ -130,7 +130,7 @@ class TestUserAuthentication:
             password="password123",
         )
 
-        user, access_token = await AuthService.authenticate_user(db_session, login_data)
+        user, access_token, refresh_token = await AuthService.authenticate_user(db_session, login_data)
 
         assert user is not None
         assert user.id == test_parent_user.id
@@ -138,6 +138,9 @@ class TestUserAuthentication:
         assert access_token is not None
         assert isinstance(access_token, str)
         assert len(access_token) > 0
+        assert refresh_token is not None
+        assert isinstance(refresh_token, str)
+        assert len(refresh_token) > 0
 
 
 @pytest.mark.asyncio
@@ -207,10 +210,11 @@ class TestPasswordUpdate:
             password=new_password,
         )
         
-        user, token = await AuthService.authenticate_user(db_session, login_data)
-        
+        user, token, refresh_token = await AuthService.authenticate_user(db_session, login_data)
+
         assert user is not None
         assert token is not None
+        assert refresh_token is not None
 
 
 @pytest.mark.asyncio
@@ -280,3 +284,19 @@ class TestGetUserById:
             await AuthService.get_user_by_id(db_session, uuid4())
 
         assert "user not found" in str(exc_info.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_authenticate_user_returns_access_and_refresh(db_session, test_parent_user):
+    from app.services.auth_service import AuthService
+    from app.schemas.user import UserLogin
+    from app.core.security import decode_token
+
+    user, access, refresh = await AuthService.authenticate_user(
+        db_session, UserLogin(email="parent@test.com", password="password123")
+    )
+    assert user.id == test_parent_user.id
+    assert decode_token(access).get("type") == "access"
+    refresh_claims = decode_token(refresh)
+    assert refresh_claims.get("type") == "refresh"
+    assert refresh_claims.get("ver") == test_parent_user.token_version

@@ -2,6 +2,24 @@ import { defineMiddleware } from "astro:middleware";
 import type { User } from "./types/api";
 
 /**
+ * Decode a JWT locally and decide whether it is expired (or unusable).
+ * Refreshes 30s early to avoid edge races near the boundary.
+ */
+function isExpired(jwt: string | undefined): boolean {
+    if (!jwt) return true;
+    const parts = jwt.split(".");
+    if (parts.length !== 3) return true;
+    try {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+        if (!payload.exp) return true;
+        // Refresh 30s early to avoid edge races.
+        return Date.now() / 1000 >= payload.exp - 30;
+    } catch {
+        return true;
+    }
+}
+
+/**
  * Middleware for authentication checks and request logging
  */
 export const onRequest = defineMiddleware(async (context, next) => {
@@ -73,6 +91,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/help",   // English user guide — linked from welcome email
         "/ayuda",  // Spanish user guide — linked from welcome email
         "/api/auth/login",
+        "/api/auth/refresh",  // BFF refresh route — callable even when the access token is dead
         "/api/auth/register",  // Frontend API route for registration (calls backend /api/auth/register-family)
         "/api/auth/register-family",  // Backend API route (for direct calls)
         "/api/auth/verify-email",
@@ -112,9 +131,31 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
 
     // Check authentication for protected routes
-    const token = cookies.get("access_token")?.value;
-    
-    if (!token) {
+    let accessToken = cookies.get("access_token")?.value;
+    const refreshToken = cookies.get("refresh_token")?.value;
+    let refreshedSetCookies: string[] | undefined;
+
+    // Transparently refresh the access token when it's missing/expired but a
+    // refresh cookie is present. Runs BEFORE the missing-token guard so a dead
+    // access token does not bounce the user to /login if the refresh succeeds.
+    if (isExpired(accessToken) && refreshToken) {
+        const { refreshAccessToken } = await import("./lib/server/refresh");
+        const r = await refreshAccessToken(refreshToken);
+        if (r.ok) {
+            accessToken = r.accessToken;
+            refreshedSetCookies = r.setCookies;
+            // Make the fresh token visible to this same request's downstream logic.
+            cookies.set("access_token", r.accessToken!, {
+                path: "/",
+                httpOnly: true,
+                sameSite: "lax",
+                secure: !import.meta.env.DEV,
+                maxAge: 3600,
+            });
+        }
+    }
+
+    if (!accessToken) {
         // Plain log works for both dev and prod. The previous prod branch
         // tried to enumerate cookies via `[...cookies]`, but AstroCookies
         // isn't iterable in the Astro 5 prod SSR build and the spread
@@ -122,14 +163,20 @@ export const onRequest = defineMiddleware(async (context, next) => {
         // unauthenticated request to a protected route into a 500 instead
         // of the intended 302 redirect to /login.
         console.log(`No access_token for protected route: ${path}`);
+        // The refresh cookie (if any) is stale/unusable — clear both cookies.
+        const { clearAuthCookies } = await import("./lib/auth-cookies");
         // Redirect to login for HTML pages
         if (!path.startsWith("/api/")) {
-            return redirect("/login", 302);
+            const response = redirect("/login", 302);
+            for (const c of clearAuthCookies()) response.headers.append("Set-Cookie", c);
+            return response;
         }
         // Return 401 for API routes
+        const headers = new Headers({ "Content-Type": "application/json" });
+        for (const c of clearAuthCookies()) headers.append("Set-Cookie", c);
         return new Response(
             JSON.stringify({ detail: "Unauthorized" }),
-            { status: 401, headers: { "Content-Type": "application/json" } }
+            { status: 401, headers }
         );
     }
 
@@ -140,7 +187,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
             const apiUrl = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
             const response = await fetch(`${apiUrl}/api/auth/me`, {
                 headers: {
-                    "Authorization": `Bearer ${token}`,
+                    "Authorization": `Bearer ${accessToken}`,
                 },
             });
 
@@ -151,10 +198,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 // user's token may be perfectly valid. Surface a 503 without
                 // wiping the cookie so the user can retry.
                 if (response.status === 401 || response.status === 403) {
-                    cookies.delete("access_token", { path: "/" });
+                    // The (possibly just-refreshed) access token is still
+                    // rejected — clear both cookies so the client re-auths.
+                    const { clearAuthCookies } = await import("./lib/auth-cookies");
+                    const headers = new Headers({ "Content-Type": "application/json" });
+                    for (const c of clearAuthCookies()) headers.append("Set-Cookie", c);
                     return new Response(
                         JSON.stringify({ detail: "Invalid or expired token" }),
-                        { status: 401, headers: { "Content-Type": "application/json" } }
+                        { status: 401, headers }
                     );
                 }
                 return new Response(
@@ -170,12 +221,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
             
             // Attach user to context for use in endpoints
             context.locals.user = user;
-            context.locals.token = token;
+            context.locals.token = accessToken;
 
             // Fetch family plan for premium gating
             try {
                 const planResponse = await fetch(`${apiUrl}/api/subscriptions/current`, {
-                    headers: { "Authorization": `Bearer ${token}` },
+                    headers: { "Authorization": `Bearer ${accessToken}` },
                 });
                 if (planResponse.ok) {
                     context.locals.plan = await planResponse.json();
@@ -199,5 +250,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
         }
     }
 
-    return next();
+    const response = await next();
+    // Persist the rotated access+refresh cookies (if we refreshed above) so the
+    // browser stores the new pair for subsequent requests.
+    if (refreshedSetCookies) {
+        for (const c of refreshedSetCookies) response.headers.append("Set-Cookie", c);
+    }
+    return response;
 });

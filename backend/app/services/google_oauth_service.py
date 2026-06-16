@@ -13,7 +13,7 @@ from uuid import uuid4
 from app.models import User, Family
 from app.models.user import UserRole
 from app.core.config import settings
-from app.core.security import create_access_token
+from app.core.security import create_access_token, create_refresh_token
 from app.core.exceptions import (
     ValidationException,
     UnauthorizedException,
@@ -91,18 +91,18 @@ class GoogleOAuthService:
         google_user_info: Dict[str, Any],
         family_id: Optional[str] = None,
         join_code: Optional[str] = None,
-    ) -> tuple[User, str, bool]:
+    ) -> tuple[User, str, str, bool]:
         """
         Authenticate existing user or create new user from Google OAuth
-        
+
         Args:
             db: Database session
             google_user_info: User info from Google
             family_id: Optional family ID for new user registration
             join_code: Optional family join code to join an existing family
-            
+
         Returns:
-            Tuple of (User, access_token, is_new_user)
+            Tuple of (User, access_token, refresh_token, is_new_user)
         """
         google_id = google_user_info['google_id']
         email = google_user_info['email']
@@ -139,7 +139,8 @@ class GoogleOAuthService:
                     "role": user.role.value
                 }
             )
-            return user, access_token, False
+            refresh_token = create_refresh_token(str(user.id), version=user.token_version)
+            return user, access_token, refresh_token, False
         
         # New user - determine which family to join
         target_family_id = None
@@ -198,7 +199,7 @@ class GoogleOAuthService:
         await db.commit()
         await db.refresh(user)
 
-        # Create access token
+        # Create access + refresh tokens
         access_token = create_access_token(
             data={
                 "sub": str(user.id),
@@ -206,6 +207,7 @@ class GoogleOAuthService:
                 "role": user.role.value
             }
         )
+        refresh_token = create_refresh_token(str(user.id), version=user.token_version)
 
         # Fire welcome email for this brand-new Google user. Google has
         # already vouched for email ownership (email_verified=true in
@@ -225,4 +227,4 @@ class GoogleOAuthService:
                 exc_info=True,
             )
 
-        return user, access_token, True
+        return user, access_token, refresh_token, True

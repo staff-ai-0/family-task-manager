@@ -30,7 +30,12 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "your-secret-key-change-this-in-production"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hour (was 10080 / 7 days)
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Separate signing key for Starlette SessionMiddleware cookies so it does
+    # not share the JWT signing key. Defaults to SECRET_KEY when unset so dev
+    # and existing envs keep working; production .env sets a distinct value.
+    SESSION_SECRET_KEY: str = ""
 
     # Trust-score auto-approval: once a user has this many consecutive
     # approved gigs, subsequent gig completions auto-approve and credit

@@ -12,7 +12,7 @@ from uuid import UUID
 from app.models import User, Family
 from app.models.user import UserRole
 from app.schemas.user import UserCreate, UserLogin
-from app.core.security import verify_password, get_password_hash, create_access_token
+from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
 from app.core.config import settings
 from app.core.exceptions import (
     NotFoundException,
@@ -66,30 +66,31 @@ class AuthService:
     async def authenticate_user(
         db: AsyncSession,
         login_data: UserLogin,
-    ) -> tuple[User, str]:
-        """Authenticate user and return user + access token"""
+    ) -> tuple[User, str, str]:
+        """Authenticate user and return (user, access_token, refresh_token)."""
         # Find user by email
         user = (await db.execute(
             select(User).where(User.email == login_data.email)
         )).scalar_one_or_none()
-        
+
         if not user:
             raise UnauthorizedException("Invalid email or password")
-        
+
         # Verify password
         if not verify_password(login_data.password, user.password_hash):
             raise UnauthorizedException("Invalid email or password")
-        
+
         # Check if user is active
         if not user.is_active:
             raise UnauthorizedException("Account is deactivated")
-        
-        # Create access token
+
+        # Create access + refresh tokens
         access_token = create_access_token(
             data={"sub": str(user.id), "family_id": str(user.family_id), "role": user.role.value}
         )
-        
-        return user, access_token
+        refresh_token = create_refresh_token(str(user.id), version=user.token_version)
+
+        return user, access_token, refresh_token
 
     @staticmethod
     async def get_user_by_id(db: AsyncSession, user_id: UUID) -> User:

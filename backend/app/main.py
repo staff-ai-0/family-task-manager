@@ -176,7 +176,7 @@ app.add_middleware(
 # Session Middleware (required for OAuth)
 app.add_middleware(
     SessionMiddleware,
-    secret_key=settings.SECRET_KEY,
+    secret_key=settings.SESSION_SECRET_KEY or settings.SECRET_KEY,
     max_age=1800,  # 30 minutes
 )
 

@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 from app.models.invitation import FamilyInvitation, InvitationStatus
 from app.models.user import User, UserRole
-from app.core.security import get_password_hash, create_access_token
+from app.core.security import get_password_hash
 from app.core.exceptions import ValidationException, NotFoundException
 from app.services.email_service import EmailService
 

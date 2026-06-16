@@ -45,14 +45,15 @@ async def google_oauth_login(
     logger.info(f"Google OAuth login attempt: email={google_user_info.get('email')}, join_code={request.join_code}")
     
     # Authenticate or create user
-    user, access_token, is_new_user = await GoogleOAuthService.authenticate_or_create_user(
+    user, access_token, refresh_token, is_new_user = await GoogleOAuthService.authenticate_or_create_user(
         db, google_user_info, request.family_id, request.join_code
     )
-    
+
     logger.info(f"Google OAuth successful: user_id={user.id}, email={user.email}, family_id={user.family_id}, is_new={is_new_user}")
-    
+
     return TokenResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         token_type="bearer",
         user=UserResponse.model_validate(user),
     )

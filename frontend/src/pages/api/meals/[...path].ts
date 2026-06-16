@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { tryRefreshFor401 } from "../../../lib/server/refresh";
 
 const BACKEND_URL = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
 
@@ -22,14 +23,27 @@ async function proxy({ request, params }: { request: Request; params: Record<str
     const hasBody = !["GET", "HEAD"].includes(request.method.toUpperCase());
     const body = hasBody ? await request.arrayBuffer() : undefined;
     try {
-        const res = await fetch(backendUrl, {
+        let res = await fetch(backendUrl, {
             method: request.method, headers: forwardHeaders, body, redirect: "manual",
         });
+        // Transparently refresh once if the access token expired mid-request.
+        let refreshedSetCookies: string[] | undefined;
+        if (res.status === 401) {
+            const refreshed = await tryRefreshFor401(res.status, request.headers.get("cookie") ?? "");
+            if (refreshed) {
+                forwardHeaders.set("Authorization", `Bearer ${refreshed.accessToken}`);
+                res = await fetch(backendUrl, {
+                    method: request.method, headers: forwardHeaders, body, redirect: "manual",
+                });
+                refreshedSetCookies = refreshed.setCookies;
+            }
+        }
         const out = new Headers();
         for (const [k, v] of res.headers.entries()) {
             if (k.toLowerCase() === "transfer-encoding") continue;
             out.set(k, v);
         }
+        if (refreshedSetCookies) for (const c of refreshedSetCookies) out.append("Set-Cookie", c);
         return new Response(res.body, { status: res.status, statusText: res.statusText, headers: out });
     } catch (e: any) {
         return new Response(JSON.stringify({ error: "proxy_error", message: String(e?.message ?? e) }),

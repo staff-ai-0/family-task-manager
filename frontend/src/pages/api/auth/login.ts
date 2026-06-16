@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import type { LoginResponse, ApiError } from "../../../types/api";
+import { authCookies } from "../../../lib/auth-cookies";
 
 /**
  * Helper to build a Set-Cookie header string.
@@ -71,13 +72,7 @@ export const POST: APIRoute = async ({ request }) => {
         if (response.ok) {
             const result: LoginResponse = await response.json();
 
-            const tokenCookie = buildCookie("access_token", result.access_token, {
-                path: "/",
-                httpOnly: true,
-                sameSite: "Lax",
-                maxAge: 60 * 60 * 24 * 7, // 7 days
-                secure: !import.meta.env.DEV, // Only secure in production
-            });
+            const cookies = authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV);
 
             // Stash role for UI theming (W4.2). Non-httpOnly so the
             // Astro server-side Layout can read it on subsequent renders.
@@ -105,7 +100,7 @@ export const POST: APIRoute = async ({ request }) => {
             if (isJsonRequest) {
                 // For fetch-based login: return JSON + Set-Cookie header
                 const headers = new Headers({ "Content-Type": "application/json" });
-                headers.append("Set-Cookie", tokenCookie);
+                for (const c of cookies) headers.append("Set-Cookie", c);
                 if (uiRoleCookie) headers.append("Set-Cookie", uiRoleCookie);
                 return new Response(
                     JSON.stringify({ success: true, redirect: "/dashboard" }),
@@ -115,7 +110,7 @@ export const POST: APIRoute = async ({ request }) => {
 
             // For native form POST: manually construct redirect with cookie
             const headers = new Headers({ Location: "/dashboard" });
-            headers.append("Set-Cookie", tokenCookie);
+            for (const c of cookies) headers.append("Set-Cookie", c);
             if (uiRoleCookie) headers.append("Set-Cookie", uiRoleCookie);
             return new Response(null, { status: 302, headers });
         } else {

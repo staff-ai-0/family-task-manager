@@ -26,6 +26,7 @@ class User(Base):
     role = Column(SQLEnum(UserRole), nullable=False, default=UserRole.CHILD)
     family_id = Column(UUID(as_uuid=True), ForeignKey("families.id"), nullable=False, index=True)
     points = Column(Integer, default=0, nullable=False)
+    token_version = Column(Integer, nullable=False, default=0, server_default="0")
     is_active = Column(Boolean, default=True, nullable=False)
     preferred_lang = Column(String(5), default="en", nullable=False, server_default="en")
     
