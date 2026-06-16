@@ -498,6 +498,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             try {
                 const preset = JSON.parse(card.dataset.preset || "{}");
                 if (nameInput) nameInput.value = preset.title || "";
+                if (pointsInput) pointsInput.value = String(preset.points ?? 10);
                 activateChip("effort", String(preset.effort_level || "1"));
                 activateChip("interval", String(preset.interval_days || "1"));
                 showStep(2);
@@ -525,12 +526,21 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         const assignedUserIds = Array.from(modal.querySelectorAll(".tcm-member-cb:checked")).map((cb) => cb.value);
         const allowedRoles = Array.from(modal.querySelectorAll(".tcm-role-cb:checked")).map((cb) => cb.value);
 
+        const points = parseInt(pointsInput?.value, 10);
+        if (isNaN(points) || points < 1) {
+            showError(document.documentElement.lang === "es"
+                ? "Los puntos deben ser al menos 1"
+                : "Points must be at least 1");
+            pointsInput?.focus();
+            return;
+        }
+
         const payload = {
             title,
             description,
             title_es: null,
             description_es: null,
-            points: Math.max(0, parseInt(pointsInput?.value, 10) || 0), // explicit at create time
+            points,
             effort_level: parseInt(chipState.effort, 10),
             interval_days: parseInt(chipState.interval, 10),
             is_bonus: isBonus,
