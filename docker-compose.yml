@@ -70,6 +70,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        INSTALL_DEV: "true"
     container_name: family_app_backend
     # Load secrets that aren't in the explicit `environment:` block from
     # the host .env file. Order of precedence inside the container:
