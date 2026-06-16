@@ -12,7 +12,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
-from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, sync, oauth, payment, points_conversion, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm
+from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, payment, points_conversion, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
 from app.api.routes import oversight, onboarding
@@ -224,7 +224,6 @@ app.include_router(
     prefix="/api/subscriptions",
     tags=["Subscriptions"],
 )
-app.include_router(sync.router, tags=["Sync"])
 app.include_router(push.router, prefix="/api/push", tags=["Push"])
 app.include_router(shopping.router, prefix="/api/shopping", tags=["Shopping"])
 app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])
