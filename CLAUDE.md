@@ -371,7 +371,7 @@ Key env vars (set in `.env` or compose file). In production, secrets come from V
 
 ## Testing
 
-- **477 tests collected**, 416 passing (51 failures are pre-existing stubs for unimplemented advanced features)
+- **968+ tests collected**, 0 failures (suite fully greened in PR #36)
 - Use the separate **test database** (port 5435) — `conftest.py` creates/drops schema per run
 - All new features need tests before merging
 - Test files follow pattern: `tests/test_<feature>.py`
