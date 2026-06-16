@@ -30,6 +30,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Error monitoring — activates only when SENTRY_DSN is set in .env
+if settings.SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        integrations=[FastApiIntegration(), SqlalchemyIntegration()],
+        environment="production" if not settings.DEBUG else "development",
+    )
+
 
 async def _overdue_sweep_loop() -> None:
     """Background loop: every 60 minutes, mark stale PENDING assignments OVERDUE."""
