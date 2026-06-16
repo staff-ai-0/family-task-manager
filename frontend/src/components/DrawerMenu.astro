@@ -13,18 +13,10 @@ const es = lang === "es";
 
 const sections = [
     {
-        title: es ? "Principal" : "Main",
-        links: [
-            { emoji: "📅", label: es ? "Vista del mes" : "Month view", href: "/budget/" },
-            { emoji: "📋", label: es ? "Movimientos" : "Transactions", href: "/budget/transactions" },
-            { emoji: "📊", label: es ? "Reportes" : "Reports", href: "/budget/reports" },
-        ],
-    },
-    {
         title: es ? "Gestión" : "Management",
         links: [
             { emoji: "🏦", label: es ? "Cuentas" : "Accounts", href: "/budget/settings#accounts" },
-            { emoji: "🏷️", label: es ? "Categorías" : "Categories", href: "/budget/" },
+            { emoji: "🏷️", label: es ? "Categorías" : "Categories", href: "/budget/settings" },
             { emoji: "👤", label: es ? "Beneficiarios" : "Payees", href: "/budget/settings#payees" },
         ],
     },
