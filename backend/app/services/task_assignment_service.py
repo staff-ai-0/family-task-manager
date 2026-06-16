@@ -1246,28 +1246,50 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         to OVERDUE, where "today" is each family's local date. Intended for the
         background scheduler.
 
+        Batches families by their local "today" date so the number of DB queries
+        is O(unique timezones) instead of O(families).
+
         When a flipped assignment's template has ``auto_late_penalty`` set, a
         Consequence row is instantiated for the assigned user (idempotent
         because status only transitions PENDING → OVERDUE once).
         """
+        from zoneinfo import ZoneInfo
+        from collections import defaultdict
         from app.models.family import Family
         from app.models.consequence import (
             Consequence,
             ConsequenceSeverity,
             RestrictionType,
         )
+        from app.services.notification_service import NotificationService
+        from app.models.notification import NotificationType as NT
 
-        family_rows = (await db.execute(select(Family.id))).scalars().all()
+        # Single query: all family IDs + timezones (no per-family round-trip)
+        family_rows = (
+            await db.execute(select(Family.id, Family.timezone))
+        ).all()
+
         now_utc = datetime.now(timezone.utc)
+
+        # Group family IDs by their local "today" — computed in Python, no DB
+        date_to_families: dict = defaultdict(list)
+        for fid, tz_name in family_rows:
+            try:
+                tz = ZoneInfo(tz_name or "UTC")
+            except Exception:
+                tz = ZoneInfo("UTC")
+            today = datetime.now(tz).date()
+            date_to_families[today].append(fid)
+
         total = 0
-        for family_id in family_rows:
-            today = await TaskAssignmentService._family_local_today(db, family_id)
+        for today, family_ids in date_to_families.items():
+            # One query per unique date bucket instead of per family
             stale_q = (
                 select(TaskAssignment)
                 .options(selectinload(TaskAssignment.template))
                 .where(
                     and_(
-                        TaskAssignment.family_id == family_id,
+                        TaskAssignment.family_id.in_(family_ids),
                         TaskAssignment.status == AssignmentStatus.PENDING,
                         TaskAssignment.assigned_date < today,
                     )
@@ -1307,16 +1329,14 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     resolved=False,
                     triggered_by_assignment_id=a.id,
                     applied_to_user=a.assigned_to,
-                    family_id=family_id,
+                    family_id=a.family_id,
                     start_date=now_utc,
                     end_date=end_dt,
                 )
                 db.add(penalty)
-                from app.services.notification_service import NotificationService
-                from app.models.notification import NotificationType as NT
                 await NotificationService.create_no_commit(
                     db,
-                    family_id=family_id,
+                    family_id=a.family_id,
                     user_id=a.assigned_to,
                     type=NT.LATE_PENALTY_APPLIED,
                     title=f"⏰ Late: {tmpl.title}",
