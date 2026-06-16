@@ -20,6 +20,8 @@ interface Props {
     t: (lang: string, key: string) => string;
     formatCurrency: (amount: number) => string;
     baseRoute?: string;
+    year: number;
+    month: number;
 }
 
 const {
@@ -28,7 +30,9 @@ const {
     lang,
     t,
     formatCurrency,
-    baseRoute = 'assign-funds'
+    baseRoute = 'assign-funds',
+    year,
+    month,
 } = Astro.props;
 ---
 
@@ -139,7 +143,7 @@ const {
     </div>
 </div>
 
-<script define:vars={{ readyToAssign, baseRoute, lang }}>
+<script define:vars={{ readyToAssign, baseRoute, lang, year, month }}>
     document.addEventListener('astro:page-load', () => {
     // Quick amount button handlers
     document.querySelectorAll(`.${baseRoute}-quick-amount`).forEach(btn => {
@@ -187,12 +191,8 @@ const {
 
         confirmBtn.disabled = true;
         try {
-            // Get current month from page URL: /budget/month/YYYY/MM
-            const parts = window.location.pathname.split('/');
-            const yearIdx = parts.indexOf('month') + 1;
-            const monthStr = yearIdx > 0
-                ? `${parts[yearIdx]}-${String(parts[yearIdx + 1]).padStart(2, '0')}-01`
-                : new Date().toISOString().slice(0, 7) + '-01';
+            // Use server-rendered year/month (query params, not pathname)
+            const monthStr = `${year}-${String(month).padStart(2, '0')}-01`;
 
             const res = await fetch('/api/budget/allocations/set', {
                 method: 'POST',
