@@ -111,15 +111,50 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                                 {!hasClaim && (
                                     <form method="POST" action="/api/gigs/claim">
                                         <input type="hidden" name="gig_id" value={o.id} />
-                                        <button type="submit" class="w-full py-2.5 px-4 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 active:scale-[.98] transition-all text-sm">
+                                        <button
+                                            type="submit"
+                                            data-label={lang === "es" ? "Reclamar" : "Claim"}
+                                            class="w-full py-2.5 px-4 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 active:scale-[.98] transition-all text-sm"
+                                        >
                                             {lang === "es" ? "Reclamar" : "Claim"}
                                         </button>
                                     </form>
                                 )}
                                 {isClaimed && (
-                                    <a href="/gigs/my-gigs" class="block w-full py-2.5 px-4 bg-amber-100 text-amber-700 font-semibold rounded-xl text-center text-sm hover:bg-amber-200 transition-colors">
-                                        {lang === "es" ? "Reclamada — Enviar evidencia →" : "Claimed — Submit proof →"}
-                                    </a>
+                                    <form class="space-y-3 mt-1" data-complete-form data-claim-id={claim.id}>
+                                        <p class="text-xs font-semibold text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
+                                            {lang === "es" ? "Reclamada — envía tu evidencia abajo" : "Claimed — submit your proof below"}
+                                        </p>
+                                        <div>
+                                            <label class="block text-sm font-medium text-brand-ink mb-1">
+                                                {lang === "es" ? "¿Qué hiciste? (opcional)" : "What did you do? (optional)"}
+                                            </label>
+                                            <textarea
+                                                name="proof_text"
+                                                rows={3}
+                                                class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink placeholder-brand-ink-soft focus:outline-none focus:ring-2 focus:ring-violet-400"
+                                                placeholder={lang === "es" ? "Describe lo que hiciste..." : "Describe what you did..."}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-brand-ink mb-1">
+                                                {lang === "es" ? "Foto de evidencia (opcional)" : "Photo evidence (optional)"}
+                                            </label>
+                                            <input
+                                                type="file"
+                                                accept="image/jpeg,image/png,image/webp"
+                                                capture="environment"
+                                                name="proof_image"
+                                                class="w-full text-sm text-brand-ink-soft file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-violet-100 file:text-violet-700 hover:file:bg-violet-200"
+                                            />
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            class="w-full py-2.5 px-4 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 active:scale-[.98] transition-all text-sm"
+                                        >
+                                            {lang === "es" ? "Enviar para aprobación" : "Submit for approval"}
+                                        </button>
+                                    </form>
                                 )}
                                 {isCompleted && (
                                     <div class="w-full py-2.5 px-4 bg-sky-100 text-sky-700 font-semibold rounded-xl text-center text-sm">
@@ -139,6 +174,8 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
 </PageLayout>
 
 <script>
+const _lang = document.cookie.split(";").find(c => c.trim().startsWith("lang="))?.split("=")[1] ?? "en";
+
 document.querySelectorAll("form[action='/api/gigs/claim']").forEach(form => {
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -149,11 +186,53 @@ document.querySelectorAll("form[action='/api/gigs/claim']").forEach(form => {
         btn.textContent = "...";
         const res = await fetch(`/api/gigs/offerings/${gigId}/claim`, { method: "POST" });
         if (res.ok) {
-            window.location.href = "/gigs/my-gigs";
+            window.location.reload();
         } else {
             const err = await res.json().catch(() => ({ detail: "Error" }));
             btn.disabled = false;
-            btn.textContent = btn.getAttribute("data-label") ?? "Claim";
+            btn.textContent = btn.getAttribute("data-label") ?? (_lang === "es" ? "Reclamar" : "Claim");
+            alert(err.detail ?? "Error");
+        }
+    });
+});
+
+document.querySelectorAll("[data-complete-form]").forEach(form => {
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const formEl = e.target as HTMLFormElement;
+        const claimId = (formEl as HTMLElement).dataset.claimId;
+        const btn = formEl.querySelector("button[type=submit]") as HTMLButtonElement;
+        btn.disabled = true;
+        btn.textContent = "...";
+
+        const proofText = (formEl.querySelector("[name=proof_text]") as HTMLTextAreaElement)?.value || null;
+        const fileInput = formEl.querySelector("[name=proof_image]") as HTMLInputElement;
+        let proofImageUrl: string | null = null;
+
+        if (fileInput?.files?.length) {
+            const uploadForm = new FormData();
+            uploadForm.append("file", fileInput.files[0]);
+            const uploadRes = await fetch("/api/task-assignments/proof-upload", {
+                method: "POST",
+                body: uploadForm,
+            });
+            if (uploadRes.ok) {
+                proofImageUrl = (await uploadRes.json()).url;
+            }
+        }
+
+        const res = await fetch(`/api/gigs/claims/${claimId}/complete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ proof_text: proofText, proof_image_url: proofImageUrl }),
+        });
+
+        if (res.ok) {
+            window.location.reload();
+        } else {
+            const err = await res.json().catch(() => ({ detail: "Error" }));
+            btn.disabled = false;
+            btn.textContent = _lang === "es" ? "Enviar para aprobación" : "Submit for approval";
             alert(err.detail ?? "Error");
         }
     });
