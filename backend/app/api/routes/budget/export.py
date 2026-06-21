@@ -12,6 +12,7 @@ import io
 from app.core.database import get_db
 from app.core.dependencies import require_parent_role
 from app.core.type_utils import to_uuid_required
+from app.core.upload_validation import read_upload_capped, MAX_BACKUP_BYTES
 from app.services.budget.export_service import ExportService
 from app.models import User
 
@@ -50,6 +51,6 @@ async def import_budget_backup(
     Returns import statistics with counts per entity type.
     """
     family_id = to_uuid_required(current_user.family_id)
-    zip_bytes = await file.read()
+    zip_bytes = await read_upload_capped(file, MAX_BACKUP_BYTES)
     stats = await ExportService.import_budget(db, family_id, zip_bytes)
     return {"success": True, "stats": stats}
