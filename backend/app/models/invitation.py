@@ -7,7 +7,7 @@ Represents an invitation sent to a user to join a family.
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4, UUID
 from sqlalchemy import String, DateTime, Boolean, ForeignKey, Enum as SQLEnum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 import enum
 
 from app.core.database import Base
@@ -39,7 +39,10 @@ class FamilyInvitation(Base):
     accepted_by_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Relationships
-    family = relationship("Family", backref="invitations")
+    family = relationship(
+        "Family",
+        backref=backref("invitations", cascade="all, delete-orphan"),
+    )
     invited_by = relationship("User", foreign_keys=[invited_by_user_id], backref="invitations_sent")
     accepted_by = relationship("User", foreign_keys=[accepted_by_user_id], backref="invitations_accepted")
 
