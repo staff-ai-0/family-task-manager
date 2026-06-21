@@ -49,53 +49,92 @@ const { id, title, icon, defaultOpen = false } = Astro.props;
 </div>
 
 <script>
+    const LS_KEY = "settingsAccordionOpen";
+
+    function loadOpen(): Set<string> {
+        try {
+            return new Set(JSON.parse(localStorage.getItem(LS_KEY) || "[]"));
+        } catch {
+            return new Set();
+        }
+    }
+    function saveOpen(set: Set<string>) {
+        try {
+            localStorage.setItem(LS_KEY, JSON.stringify([...set]));
+        } catch {
+            /* storage unavailable (private mode) — non-fatal */
+        }
+    }
+    function setOpenState(content: HTMLElement, btn: HTMLButtonElement, open: boolean) {
+        content.classList.toggle("hidden", !open);
+        btn.querySelector(".accordion-chevron")?.classList.toggle("rotate-180", open);
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
     function initAccordions() {
-        document.querySelectorAll<HTMLButtonElement>(".accordion-toggle").forEach((btn) => {
+        const toggles = document.querySelectorAll<HTMLButtonElement>(".accordion-toggle");
+
+        toggles.forEach((btn) => {
+            // Guard against double-binding: initAccordions runs on both initial
+            // load and astro:after-swap.
+            if (btn.dataset.accordionBound) return;
+            btn.dataset.accordionBound = "1";
+
             btn.addEventListener("click", () => {
                 const targetId = btn.dataset.target;
                 if (!targetId) return;
                 const content = document.getElementById(targetId);
                 if (!content) return;
 
-                const chevron = btn.querySelector(".accordion-chevron");
-                const isHidden = content.classList.contains("hidden");
+                const willOpen = content.classList.contains("hidden");
+                setOpenState(content, btn, willOpen);
 
-                if (isHidden) {
-                    content.classList.remove("hidden");
-                    chevron?.classList.add("rotate-180");
-                    btn.setAttribute("aria-expanded", "true");
-                } else {
-                    content.classList.add("hidden");
-                    chevron?.classList.remove("rotate-180");
-                    btn.setAttribute("aria-expanded", "false");
-                }
+                // Persist so the section stays open across the page's many
+                // post-mutation reloads (and on the next visit).
+                const id = targetId.replace("accordion-content-", "");
+                const open = loadOpen();
+                if (willOpen) open.add(id);
+                else open.delete(id);
+                saveOpen(open);
             });
         });
 
-        // Auto-open section from URL hash
+        // URL hash wins: auto-open + scroll to that section.
         const hash = window.location.hash?.replace("#", "");
         if (hash) {
             const content = document.getElementById(`accordion-content-${hash}`);
-            if (content) {
-                content.classList.remove("hidden");
-                const btn = document.querySelector<HTMLButtonElement>(
-                    `[data-target="accordion-content-${hash}"]`
-                );
-                if (btn) {
-                    btn.querySelector(".accordion-chevron")?.classList.add("rotate-180");
-                    btn.setAttribute("aria-expanded", "true");
-                }
-                // Scroll to it after a short delay to allow layout
+            const btn = document.querySelector<HTMLButtonElement>(
+                `[data-target="accordion-content-${hash}"]`
+            );
+            if (content && btn) {
+                setOpenState(content, btn, true);
                 setTimeout(() => {
                     content.scrollIntoView({ behavior: "smooth", block: "start" });
                 }, 100);
             }
+            return;
         }
+
+        // No hash: restore the sections the user last had open. On a first
+        // visit (nothing persisted) open the first section so the page doesn't
+        // greet the user with a wall of collapsed empty rows.
+        const open = loadOpen();
+        if (open.size === 0 && toggles.length > 0) {
+            const first = toggles[0];
+            const targetId = first.dataset.target;
+            const content = targetId ? document.getElementById(targetId) : null;
+            if (content) setOpenState(content, first, true);
+            return;
+        }
+        open.forEach((id) => {
+            const content = document.getElementById(`accordion-content-${id}`);
+            const btn = document.querySelector<HTMLButtonElement>(
+                `[data-target="accordion-content-${id}"]`
+            );
+            if (content && btn) setOpenState(content, btn, true);
+        });
     }
 
-    // Init on first load
     initAccordions();
-
-    // Re-init on Astro view transitions
     document.addEventListener("astro:after-swap", initAccordions);
 </script>
