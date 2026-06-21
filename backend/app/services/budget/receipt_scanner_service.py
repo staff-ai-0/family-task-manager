@@ -805,12 +805,18 @@ async def scan_and_create_transaction(
         txn.receipt_image_path = gcs_path
         await db.commit()
     except Exception:
-        # Best-effort: the scan was already committed above, so we deliberately
-        # do NOT roll back here — a rollback would expire the committed ORM
-        # objects and the downstream best-effort steps would then hit
-        # MissingGreenlet on lazy attribute access. A swallowed commit/upload
-        # failure does not poison the session in this SQLAlchemy/asyncpg stack
-        # (verified), so leaving it untouched is correct.
+        # Best-effort image persistence: the scan itself was already committed
+        # above, so we deliberately do NOT roll back here. The common failure —
+        # GCSReceiptStorage.upload() raising before the image-path commit —
+        # leaves the session clean (verified: a rollback there instead *expires*
+        # the committed ORM objects and the downstream best-effort steps then
+        # hit MissingGreenlet on lazy attribute access).
+        # Caveat: if the image-path commit on line 806 itself fails at the DB
+        # layer, the session could be left needing a rollback and the unguarded
+        # post-commit reads (trends, account lookup) would 500. That path is not
+        # reproduced/tested; it's an accepted low-risk edge for a best-effort,
+        # cosmetic image-path write. Revisit by splitting the upload from the
+        # path commit if it ever bites.
         logger.exception("GCS upload skipped for txn %s", txn.id)
 
     # (7a) Shopping auto-check ----------------------------------------------
