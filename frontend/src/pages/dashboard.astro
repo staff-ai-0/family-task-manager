@@ -360,23 +360,6 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                                 <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-sun/20 text-brand-sun-deep">
                                                     {t(lang, "dashboard_bonus_badge")}
                                                 </span>
-                                                {a.template_gig_mode === "competition" && (
-                                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-                                                        🏆 {lang === "es" ? "Competencia" : "First wins"}
-                                                    </span>
-                                                )}
-                                                {a.template_gig_mode === "rotation" && (
-                                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-sky/20 text-brand-sky-deep">
-                                                        🔄 {lang === "es" ? "Tu turno" : "Your turn"}
-                                                    </span>
-                                                )}
-                                                {a.template_gig_mode === "collaboration" && (
-                                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-mint/20 text-brand-mint-deep">
-                                                        🤝 {lang === "es"
-                                                            ? `Colab (÷${a.template_collaboration_min_count})`
-                                                            : `Collab (÷${a.template_collaboration_min_count})`}
-                                                    </span>
-                                                )}
                                             </div>
                                             <p class="text-brand-ink-soft text-sm line-clamp-2">
                                                 {(lang === "es" && a.template_description_es ? a.template_description_es : a.template_description) || "--"}

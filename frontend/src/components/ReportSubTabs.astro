@@ -16,7 +16,8 @@ const tabs = [
     { id: "spending" as const, label: es ? "Gastos" : "Spending" },
     { id: "cashflow" as const, label: es ? "Flujo" : "Cashflow" },
     { id: "networth" as const, label: es ? "Patrimonio" : "Net Worth" },
-    { id: "analysis" as const, label: es ? "vs Presupuesto" : "vs Budget" },
+    // "analysis" (Budget vs Actual) is hidden until built — it was a permanent
+    // "Coming soon" dead-end. Re-add here when the report is implemented.
 ];
 ---
 
