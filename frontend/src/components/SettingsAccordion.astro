@@ -115,24 +115,28 @@ const { id, title, icon, defaultOpen = false } = Astro.props;
             return;
         }
 
-        // No hash: restore the sections the user last had open. On a first
-        // visit (nothing persisted) open the first section so the page doesn't
-        // greet the user with a wall of collapsed empty rows.
+        // No hash: restore the sections the user last had open.
         const open = loadOpen();
-        if (open.size === 0 && toggles.length > 0) {
-            const first = toggles[0];
-            const targetId = first.dataset.target;
-            const content = targetId ? document.getElementById(targetId) : null;
-            if (content) setOpenState(content, first, true);
-            return;
-        }
+        let openedAny = false;
         open.forEach((id) => {
             const content = document.getElementById(`accordion-content-${id}`);
             const btn = document.querySelector<HTMLButtonElement>(
                 `[data-target="accordion-content-${id}"]`
             );
-            if (content && btn) setOpenState(content, btn, true);
+            if (content && btn) {
+                setOpenState(content, btn, true);
+                openedAny = true;
+            }
         });
+        // First visit (nothing persisted) OR every persisted id is stale
+        // (renamed/removed section): open the first section so the page doesn't
+        // greet the user with a wall of collapsed empty rows.
+        if (!openedAny && toggles.length > 0) {
+            const first = toggles[0];
+            const targetId = first.dataset.target;
+            const content = targetId ? document.getElementById(targetId) : null;
+            if (content) setOpenState(content, first, true);
+        }
     }
 
     initAccordions();
