@@ -181,12 +181,34 @@ class TaskTemplate(Base):
 
     @property
     def award_points_per_completer(self) -> int:
-        """Points credited to a single completer.
+        """Base (minimum) points credited to a single completer — the floor
+        share for collaboration-mode gigs, full effective_points otherwise.
 
-        For collaboration-mode gigs the pot is split N ways. For all other
-        modes each completer earns the full effective_points.
+        This is the display value. The exact award per completer (which spreads
+        the leftover so the shares sum to the pot) is `collaboration_share`.
         """
         if (self.gig_mode or "claim") == "collaboration":
             split = max(1, int(self.collaboration_min_count or 1))
             return self.effective_points // split
         return self.effective_points
+
+    @staticmethod
+    def distribute_points(pot: int, n: int) -> list[int]:
+        """Split `pot` among `n` completers so the shares always sum to `pot`.
+
+        Floor-divide, then hand the remainder to the first completers one point
+        each — no points are silently lost (e.g. 10 over 3 -> [4, 3, 3]).
+        """
+        n = max(1, n)
+        base, rem = divmod(max(0, pot), n)
+        return [base + (1 if i < rem else 0) for i in range(n)]
+
+    def collaboration_share(self, completer_index: int) -> int:
+        """Exact points for the completer at 0-based approval order
+        `completer_index`. For non-collaboration modes every completer earns
+        the full effective_points."""
+        if (self.gig_mode or "claim") != "collaboration":
+            return self.effective_points
+        split = max(1, int(self.collaboration_min_count or 1))
+        base, rem = divmod(self.effective_points, split)
+        return base + (1 if completer_index < rem else 0)

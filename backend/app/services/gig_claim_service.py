@@ -207,7 +207,7 @@ class GigClaimService:
                 family_id=claim.family_id,
                 user_id=claim.claimed_by,
                 type=NT.GIG_APPROVED,
-                title=f"{prefix} +{points} pts / ${points} MXN",
+                title=f"{prefix} +{points} pts",
                 body=f"'{title}' " + ("aprobada al instante (¡buena racha!)." if auto else "aprobada."),
                 link="/gigs/my-gigs",
             )

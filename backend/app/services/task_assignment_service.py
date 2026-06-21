@@ -693,8 +693,11 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 assignment.approval_status = ApprovalStatus.APPROVED
                 assignment.approved_at = datetime.now(timezone.utc)
                 assignment.approval_notes = approval_reason
+                pts = await TaskAssignmentService._award_for(
+                    db, assignment, template
+                )
                 await PointsService.award_gig_points(
-                    db, user_id, assignment.id, template.award_points_per_completer
+                    db, user_id, assignment.id, pts
                 )
                 child.gig_trust_streak += 1
                 from app.services.notification_service import NotificationService
@@ -705,7 +708,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     family_id=family_id,
                     user_id=user_id,
                     type=NT.GIG_APPROVED,
-                    title=f"✅ +{template.award_points_per_completer} pts",
+                    title=f"✅ +{pts} pts",
                     body=f"'{template.title}' approved automatically. {approval_reason}",
                 )
                 await PetService.on_task_completed(db, user_id, is_bonus=True)
@@ -796,6 +799,35 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 logging.getLogger(__name__).exception("fan_out_pending_gig push failed")
 
         return assignment
+
+    @staticmethod
+    async def _award_for(db: AsyncSession, assignment, template) -> int:
+        """Exact points to credit this completer.
+
+        Non-collaboration gigs award the full effective_points. Collaboration
+        gigs split the pot across completers and spread the remainder by
+        approval order (M11), so the per-completer shares sum to the pot — the
+        floor share dropped points. This assignment is already marked APPROVED
+        by the caller, so the count of *other* approved siblings is this
+        completer's 0-based ordinal.
+        """
+        if (template.gig_mode or "claim") != "collaboration":
+            return template.award_points_per_completer
+        prior = (
+            await db.execute(
+                select(func.count())
+                .select_from(TaskAssignment)
+                .where(
+                    and_(
+                        TaskAssignment.template_id == template.id,
+                        TaskAssignment.week_of == assignment.week_of,
+                        TaskAssignment.approval_status == ApprovalStatus.APPROVED,
+                        TaskAssignment.id != assignment.id,
+                    )
+                )
+            )
+        ).scalar() or 0
+        return template.collaboration_share(int(prior))
 
     # ─── Gig claim (reserve before doing) ────────────────────────────
 
@@ -967,11 +999,14 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     "Upgrade to raise the cap."
                 )
             assignment.approval_status = ApprovalStatus.APPROVED
+            pts = await TaskAssignmentService._award_for(
+                db, assignment, assignment.template
+            )
             await PointsService.award_gig_points(
                 db,
                 assignment.assigned_to,
                 assignment.id,
-                assignment.template.award_points_per_completer,
+                pts,
             )
             # Increment trust streak so the child graduates to
             # auto-approval after enough consecutive approvals.
@@ -997,7 +1032,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 from app.services.push_service import PushService as _PushService
                 await _PushService.send_to_user(db, assignment.assigned_to, {
                     "title": "¡Tarea aprobada! / Task approved! 🎉",
-                    "body": f"{assignment.template.title} — {assignment.template.award_points_per_completer} pts",
+                    "body": f"{assignment.template.title} — {pts} pts",
                     "url": "/dashboard",
                     "tag": "task-approved",
                 })
@@ -1012,7 +1047,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 family_id=family_id,
                 user_id=assignment.assigned_to,
                 type=NT.GIG_APPROVED,
-                title=f"✅ +{assignment.template.award_points_per_completer} pts",
+                title=f"✅ +{pts} pts",
                 body=f"'{assignment.template.title}' approved by parent.",
                 link="/dashboard",
             )
