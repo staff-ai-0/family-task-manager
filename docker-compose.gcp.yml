@@ -150,7 +150,10 @@ services:
   # After cutover, swap to family.agent-ia.mx + api.family.agent-ia.mx.
 
   tunnel:
-    image: cloudflare/cloudflared:latest
+    # Pinned by digest (was :latest) so a surprise upstream release can't break
+    # the connector on a routine redeploy. Resolved from cloudflared:latest on
+    # 2026-06-21; bump deliberately when a newer connector is wanted.
+    image: cloudflare/cloudflared@sha256:6d91c121b803126f7a5344005d17a9324788fc09d305b6e2560ec6040a7ae283
     container_name: gcp_family_tunnel
     restart: unless-stopped
     command: tunnel --no-autoupdate run
