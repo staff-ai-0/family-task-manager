@@ -189,7 +189,10 @@ class GigClaimService:
                     link="/parent/gigs?tab=pending",
                 )
         except Exception:
-            pass
+            import logging
+            logging.getLogger(__name__).warning(
+                "notify parents of pending gig failed", exc_info=True
+            )
 
     @staticmethod
     async def _notify_claimer_approved(db, claim, offering, points, auto=False) -> None:
@@ -209,7 +212,10 @@ class GigClaimService:
                 link="/gigs/my-gigs",
             )
         except Exception:
-            pass
+            import logging
+            logging.getLogger(__name__).warning(
+                "notify claimer of gig approval failed", exc_info=True
+            )
 
     @staticmethod
     async def unclaim(
@@ -408,5 +414,8 @@ class GigClaimService:
                     link="/gigs/my-gigs",
                 )
             except Exception:
-                pass
+                import logging
+                logging.getLogger(__name__).warning(
+                    "notify claimer of gig rejection failed", exc_info=True
+                )
             return claim
