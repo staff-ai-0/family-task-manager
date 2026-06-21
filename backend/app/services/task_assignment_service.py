@@ -805,14 +805,42 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         """Exact points to credit this completer.
 
         Non-collaboration gigs award the full effective_points. Collaboration
-        gigs split the pot across completers and spread the remainder by
-        approval order (M11), so the per-completer shares sum to the pot — the
-        floor share dropped points. This assignment is already marked APPROVED
-        by the caller, so the count of *other* approved siblings is this
-        completer's 0-based ordinal.
+        gigs split the pot across the completers of THIS instance and spread
+        the remainder by approval order (M11), so the per-completer shares sum
+        to the pot — the floor share dropped points. This assignment is already
+        marked APPROVED by the caller, so the count of *other* approved siblings
+        is this completer's 0-based ordinal.
+
+        The instance is scoped by (template_id, assigned_date): a daily
+        collaboration gig has one row per member per date, all sharing one
+        week_of, so scoping by week_of would conflate every day's completers
+        into a single ordinal sequence and drop a point on later days. Note:
+        conservation holds for up to collaboration_min_count completers per
+        instance; the >min_count case (more members complete than the split)
+        is an open product question — see collaboration_share.
         """
         if (template.gig_mode or "claim") != "collaboration":
             return template.award_points_per_completer
+
+        # Serialize concurrent sibling approvals for this instance: lock the
+        # whole sibling set in deterministic id order (no deadlock) before
+        # counting. Without this, two approvals racing under READ COMMITTED both
+        # read ordinal 0 and double the top share — the per-row lock taken by
+        # get_assignment can't serialize a count over sibling rows. Held until
+        # the caller commits. (The manual-approve path is also incidentally
+        # serialized by the usage-cap UPSERT; the auto-approve path is not.)
+        await db.execute(
+            select(TaskAssignment.id)
+            .where(
+                and_(
+                    TaskAssignment.template_id == template.id,
+                    TaskAssignment.assigned_date == assignment.assigned_date,
+                )
+            )
+            .order_by(TaskAssignment.id)
+            .with_for_update()
+        )
+
         prior = (
             await db.execute(
                 select(func.count())
@@ -820,7 +848,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 .where(
                     and_(
                         TaskAssignment.template_id == template.id,
-                        TaskAssignment.week_of == assignment.week_of,
+                        TaskAssignment.assigned_date == assignment.assigned_date,
                         TaskAssignment.approval_status == ApprovalStatus.APPROVED,
                         TaskAssignment.id != assignment.id,
                     )
