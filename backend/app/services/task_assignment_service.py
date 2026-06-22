@@ -693,11 +693,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 assignment.approval_status = ApprovalStatus.APPROVED
                 assignment.approved_at = datetime.now(timezone.utc)
                 assignment.approval_notes = approval_reason
-                pts = await TaskAssignmentService._award_for(
-                    db, assignment, template
-                )
-                await PointsService.award_gig_points(
-                    db, user_id, assignment.id, pts
+                pts = await TaskAssignmentService._award_assignment(
+                    db, assignment, template, user_id
                 )
                 child.gig_trust_streak += 1
                 from app.services.notification_service import NotificationService
@@ -801,34 +798,45 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         return assignment
 
     @staticmethod
-    async def _award_for(db: AsyncSession, assignment, template) -> int:
-        """Exact points to credit this completer.
+    async def _award_assignment(db: AsyncSession, assignment, template, user_id) -> int:
+        """Credit a gig completer and return the points credited to THEM.
 
         Non-collaboration gigs award the full effective_points. Collaboration
-        gigs split the pot across the completers of THIS instance and spread
-        the remainder by approval order (M11), so the per-completer shares sum
-        to the pot — the floor share dropped points. This assignment is already
-        marked APPROVED by the caller, so the count of *other* approved siblings
-        is this completer's 0-based ordinal.
-
-        The instance is scoped by (template_id, assigned_date): a daily
-        collaboration gig has one row per member per date, all sharing one
-        week_of, so scoping by week_of would conflate every day's completers
-        into a single ordinal sequence and drop a point on later days. Note:
-        conservation holds for up to collaboration_min_count completers per
-        instance; the >min_count case (more members complete than the split)
-        is an open product question — see collaboration_share.
+        gigs re-split the instance pot among ALL currently-approved completers
+        (see _settle_collaboration), so the total awarded always equals the pot
+        divided by however many actually complete. The caller must NOT also
+        award separately — this method performs the credit.
         """
-        if (template.gig_mode or "claim") != "collaboration":
-            return template.award_points_per_completer
+        from app.services.points_service import PointsService
 
-        # Serialize concurrent sibling approvals for this instance: lock the
-        # whole sibling set in deterministic id order (no deadlock) before
-        # counting. Without this, two approvals racing under READ COMMITTED both
-        # read ordinal 0 and double the top share — the per-row lock taken by
-        # get_assignment can't serialize a count over sibling rows. Held until
-        # the caller commits. (The manual-approve path is also incidentally
-        # serialized by the usage-cap UPSERT; the auto-approve path is not.)
+        if (template.gig_mode or "claim") != "collaboration":
+            pts = template.award_points_per_completer
+            await PointsService.award_gig_points(db, user_id, assignment.id, pts)
+            return pts
+        return await TaskAssignmentService._settle_collaboration(db, assignment, template)
+
+    @staticmethod
+    async def _settle_collaboration(db: AsyncSession, assignment, template) -> int:
+        """Re-split the collaboration pot among all currently-approved
+        completers of THIS instance and reconcile each completer's net award.
+
+        The pot (effective_points) is divided by the ACTUAL number of approved
+        completers — not collaboration_min_count — so the total awarded always
+        equals the pot no matter how many complete. As each new completer is
+        approved the split tightens, so earlier completers' shares shrink; the
+        difference is reconciled with a correcting (possibly negative)
+        transaction. Conserves the pot exactly for any number of completers,
+        and is scoped by (template_id, assigned_date) so a daily collaboration
+        gig settles each date independently.
+
+        The caller has already marked this assignment APPROVED, so it is part
+        of the settled set. Returns the points THIS completer ends up with.
+        """
+        from app.services.points_service import PointsService
+
+        # Lock the whole instance sibling set (all statuses, deterministic id
+        # order — no deadlock) so concurrent approvals settle one at a time and
+        # never split by a stale count. Held until the caller commits.
         await db.execute(
             select(TaskAssignment.id)
             .where(
@@ -841,21 +849,56 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             .with_for_update()
         )
 
-        prior = (
+        completers = (
             await db.execute(
-                select(func.count())
-                .select_from(TaskAssignment)
+                select(TaskAssignment)
                 .where(
                     and_(
                         TaskAssignment.template_id == template.id,
                         TaskAssignment.assigned_date == assignment.assigned_date,
                         TaskAssignment.approval_status == ApprovalStatus.APPROVED,
-                        TaskAssignment.id != assignment.id,
                     )
                 )
+                .order_by(
+                    TaskAssignment.approved_at.asc().nullslast(),
+                    TaskAssignment.id.asc(),
+                )
             )
-        ).scalar() or 0
-        return template.collaboration_share(int(prior))
+        ).scalars().all()
+
+        shares = TaskTemplate.distribute_points(
+            template.effective_points, len(completers) or 1
+        )
+
+        this_share = 0
+        for share, completer in zip(shares, completers):
+            # Net points already credited to this completer for this instance.
+            current = (
+                await db.execute(
+                    select(func.coalesce(func.sum(PointTransaction.points), 0))
+                    .where(
+                        and_(
+                            PointTransaction.assignment_id == completer.id,
+                            PointTransaction.type == TransactionType.GIG_APPROVED,
+                        )
+                    )
+                )
+            ).scalar() or 0
+            delta = int(share) - int(current)
+            if delta != 0:
+                await PointsService.award_gig_points(
+                    db,
+                    completer.assigned_to,
+                    completer.id,
+                    delta,
+                    description=(
+                        f"Collaboration gig split among {len(completers)} "
+                        f"— your share: {share} pts"
+                    ),
+                )
+            if completer.id == assignment.id:
+                this_share = int(share)
+        return this_share
 
     # ─── Gig claim (reserve before doing) ────────────────────────────
 
@@ -1027,14 +1070,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     "Upgrade to raise the cap."
                 )
             assignment.approval_status = ApprovalStatus.APPROVED
-            pts = await TaskAssignmentService._award_for(
-                db, assignment, assignment.template
-            )
-            await PointsService.award_gig_points(
-                db,
-                assignment.assigned_to,
-                assignment.id,
-                pts,
+            pts = await TaskAssignmentService._award_assignment(
+                db, assignment, assignment.template, assignment.assigned_to
             )
             # Increment trust streak so the child graduates to
             # auto-approval after enough consecutive approvals.

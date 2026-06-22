@@ -91,7 +91,7 @@ class PointTransaction(Base):
         )
 
     @classmethod
-    def create_gig_approval(cls, user_id, assignment_id, points: int, balance_before: int):
+    def create_gig_approval(cls, user_id, assignment_id, points: int, balance_before: int, description: str | None = None):
         return cls(
             type=TransactionType.GIG_APPROVED,
             user_id=user_id,
@@ -99,7 +99,7 @@ class PointTransaction(Base):
             points=points,
             balance_before=balance_before,
             balance_after=balance_before + points,
-            description=f"Gig approved — earned {points} points",
+            description=description or f"Gig approved — earned {points} points",
         )
 
     @classmethod

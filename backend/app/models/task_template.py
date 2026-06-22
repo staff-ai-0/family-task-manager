@@ -181,11 +181,15 @@ class TaskTemplate(Base):
 
     @property
     def award_points_per_completer(self) -> int:
-        """Base (minimum) points credited to a single completer — the floor
-        share for collaboration-mode gigs, full effective_points otherwise.
+        """Display-only estimate of a single completer's points — the floor
+        share (pot / min_count) for collaboration gigs, full effective_points
+        otherwise.
 
-        This is the display value. The exact award per completer (which spreads
-        the leftover so the shares sum to the pot) is `collaboration_share`.
+        This is what the UI shows before completion. The ACTUAL award is
+        settled at approval time by TaskAssignmentService._settle_collaboration,
+        which re-splits the pot among however many members actually complete
+        (so the total always equals the pot); a completer's real share may be
+        higher (fewer completers) or lower (more) than this estimate.
         """
         if (self.gig_mode or "claim") == "collaboration":
             split = max(1, int(self.collaboration_min_count or 1))
@@ -202,22 +206,3 @@ class TaskTemplate(Base):
         n = max(1, n)
         base, rem = divmod(max(0, pot), n)
         return [base + (1 if i < rem else 0) for i in range(n)]
-
-    def collaboration_share(self, completer_index: int) -> int:
-        """Exact points for the completer at 0-based approval order
-        `completer_index`. For non-collaboration modes every completer earns
-        the full effective_points.
-
-        The pot (effective_points) is split among collaboration_min_count
-        completers, so the shares sum to the pot only when exactly that many
-        complete. min_count is a *minimum* — if MORE members complete the same
-        instance, each extra completer also earns `base`, so the total exceeds
-        the pot (this predates M11; M11 only added the remainder). Whether
-        extra collaborators should earn `base`, 0, or trigger a re-split is an
-        open product decision — left as-is until decided.
-        """
-        if (self.gig_mode or "claim") != "collaboration":
-            return self.effective_points
-        split = max(1, int(self.collaboration_min_count or 1))
-        base, rem = divmod(self.effective_points, split)
-        return base + (1 if completer_index < rem else 0)

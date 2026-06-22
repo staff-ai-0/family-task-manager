@@ -50,19 +50,3 @@ class TestCollaborationDistribution:
                 shares = TaskTemplate.distribute_points(pot, n)
                 assert sum(shares) == pot
                 assert max(shares) - min(shares) <= 1
-
-    def test_collaboration_share_distributes_remainder(self):
-        t = TaskTemplate(
-            points=10, effort_level=1, gig_mode="collaboration",
-            collaboration_min_count=3,
-        )
-        shares = [t.collaboration_share(i) for i in range(3)]
-        assert shares == [4, 3, 3]
-        assert sum(shares) == 10  # no points lost (old floor split gave 9)
-
-    def test_non_collaboration_share_is_full_effective(self):
-        t = TaskTemplate(
-            points=10, effort_level=1, gig_mode="competition",
-            collaboration_min_count=3,
-        )
-        assert t.collaboration_share(0) == 10
