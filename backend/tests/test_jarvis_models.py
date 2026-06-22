@@ -1,31 +1,28 @@
 """Jarvis must only offer / default to models the family-task-manager LiteLLM
-virtual key is actually granted — otherwise the proxy returns
-401 key_model_access_denied (see jctux/platform#86, which tracks adding qwen3).
+key reaches END-TO-END. Being *granted* isn't enough — verified on prod
+(2026-06-22) that the granted Anthropic (haiku/claude-sonnet) + OpenAI (gpt-4o)
+routes 401 upstream and qwen2.5/mistral aliases 400 as invalid; only
+gemini-2.5-flash actually returns a completion. Tracked in jctux/platform#86;
+re-expand this set as upstreams are fixed.
 """
 from app.api.routes.jarvis import ALLOWED_MODELS
 from app.core.config import settings
 
-# Models the FTM virtual key is granted on the LiteLLM proxy, verbatim from the
-# proxy's key_model_access list. Update this (and the issue) if platform grants
-# more (e.g. re-adds qwen3).
-KEY_GRANTED_MODELS = {
-    "agent-custom", "gpt-4o", "claude-sonnet", "gemini-2.5-flash", "haiku",
-    "mistral-small", "qwen2.5", "qwen2.5vl-frigate", "qwen2.5vl-frigate:latest",
-    "qwen-vl",
-}
+# Models that work end-to-end with the FTM key (prod-probe verified).
+WORKING_MODELS = {"gemini-2.5-flash"}
 
 
-def test_all_offered_models_are_key_granted():
-    ungranted = ALLOWED_MODELS - KEY_GRANTED_MODELS
-    assert not ungranted, f"Jarvis offers models the key can't access: {ungranted}"
+def test_all_offered_models_work_end_to_end():
+    broken = ALLOWED_MODELS - WORKING_MODELS
+    assert not broken, f"Jarvis offers models that don't work with the key: {broken}"
 
 
-def test_default_jarvis_model_is_key_granted():
-    assert settings.JARVIS_MODEL in KEY_GRANTED_MODELS, (
-        f"default JARVIS_MODEL={settings.JARVIS_MODEL!r} not in the key's grants"
+def test_default_jarvis_model_works_end_to_end():
+    assert settings.JARVIS_MODEL in WORKING_MODELS, (
+        f"default JARVIS_MODEL={settings.JARVIS_MODEL!r} is not a working model"
     )
 
 
 def test_qwen3_not_offered_until_platform_grants_it():
-    # The exact model that triggered the 401; keep it out until platform#86 lands.
+    # The model that triggered the original 401; keep it out until platform#86.
     assert "qwen3" not in ALLOWED_MODELS
