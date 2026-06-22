@@ -32,3 +32,21 @@ class TestAwardPointsPerCompleter:
         t = TaskTemplate(points=30, effort_level=2, gig_mode="collaboration", collaboration_min_count=3)
         assert t.effective_points == 45
         assert t.award_points_per_completer == 15
+
+
+class TestCollaborationDistribution:
+    """L15/M11: collaboration splits must conserve the pot — the remainder is
+    distributed to the first completers, not floored away."""
+
+    def test_distribute_points_conserves_pot(self):
+        assert TaskTemplate.distribute_points(10, 3) == [4, 3, 3]
+        assert sum(TaskTemplate.distribute_points(10, 3)) == 10
+        assert TaskTemplate.distribute_points(7, 3) == [3, 2, 2]
+        assert TaskTemplate.distribute_points(9, 3) == [3, 3, 3]
+        assert TaskTemplate.distribute_points(20, 2) == [10, 10]
+        # property is fully general
+        for pot in (0, 1, 5, 13, 100):
+            for n in (1, 2, 3, 4, 7):
+                shares = TaskTemplate.distribute_points(pot, n)
+                assert sum(shares) == pot
+                assert max(shares) - min(shares) <= 1

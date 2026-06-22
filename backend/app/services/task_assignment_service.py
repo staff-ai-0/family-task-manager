@@ -693,8 +693,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 assignment.approval_status = ApprovalStatus.APPROVED
                 assignment.approved_at = datetime.now(timezone.utc)
                 assignment.approval_notes = approval_reason
-                await PointsService.award_gig_points(
-                    db, user_id, assignment.id, template.award_points_per_completer
+                pts = await TaskAssignmentService._award_assignment(
+                    db, assignment, template, user_id
                 )
                 child.gig_trust_streak += 1
                 from app.services.notification_service import NotificationService
@@ -705,7 +705,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     family_id=family_id,
                     user_id=user_id,
                     type=NT.GIG_APPROVED,
-                    title=f"✅ +{template.award_points_per_completer} pts",
+                    title=f"✅ +{pts} pts",
                     body=f"'{template.title}' approved automatically. {approval_reason}",
                 )
                 await PetService.on_task_completed(db, user_id, is_bonus=True)
@@ -796,6 +796,109 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 logging.getLogger(__name__).exception("fan_out_pending_gig push failed")
 
         return assignment
+
+    @staticmethod
+    async def _award_assignment(db: AsyncSession, assignment, template, user_id) -> int:
+        """Credit a gig completer and return the points credited to THEM.
+
+        Non-collaboration gigs award the full effective_points. Collaboration
+        gigs re-split the instance pot among ALL currently-approved completers
+        (see _settle_collaboration), so the total awarded always equals the pot
+        divided by however many actually complete. The caller must NOT also
+        award separately — this method performs the credit.
+        """
+        from app.services.points_service import PointsService
+
+        if (template.gig_mode or "claim") != "collaboration":
+            pts = template.award_points_per_completer
+            await PointsService.award_gig_points(db, user_id, assignment.id, pts)
+            return pts
+        return await TaskAssignmentService._settle_collaboration(db, assignment, template)
+
+    @staticmethod
+    async def _settle_collaboration(db: AsyncSession, assignment, template) -> int:
+        """Re-split the collaboration pot among all currently-approved
+        completers of THIS instance and reconcile each completer's net award.
+
+        The pot (effective_points) is divided by the ACTUAL number of approved
+        completers — not collaboration_min_count — so the total awarded always
+        equals the pot no matter how many complete. As each new completer is
+        approved the split tightens, so earlier completers' shares shrink; the
+        difference is reconciled with a correcting (possibly negative)
+        transaction. Conserves the pot exactly for any number of completers,
+        and is scoped by (template_id, assigned_date) so a daily collaboration
+        gig settles each date independently.
+
+        The caller has already marked this assignment APPROVED, so it is part
+        of the settled set. Returns the points THIS completer ends up with.
+        """
+        from app.services.points_service import PointsService
+
+        # Lock the whole instance sibling set (all statuses, deterministic id
+        # order — no deadlock) so concurrent approvals settle one at a time and
+        # never split by a stale count. Held until the caller commits.
+        await db.execute(
+            select(TaskAssignment.id)
+            .where(
+                and_(
+                    TaskAssignment.template_id == template.id,
+                    TaskAssignment.assigned_date == assignment.assigned_date,
+                )
+            )
+            .order_by(TaskAssignment.id)
+            .with_for_update()
+        )
+
+        completers = (
+            await db.execute(
+                select(TaskAssignment)
+                .where(
+                    and_(
+                        TaskAssignment.template_id == template.id,
+                        TaskAssignment.assigned_date == assignment.assigned_date,
+                        TaskAssignment.approval_status == ApprovalStatus.APPROVED,
+                    )
+                )
+                .order_by(
+                    TaskAssignment.approved_at.asc().nullslast(),
+                    TaskAssignment.id.asc(),
+                )
+            )
+        ).scalars().all()
+
+        shares = TaskTemplate.distribute_points(
+            template.effective_points, len(completers) or 1
+        )
+
+        this_share = 0
+        for share, completer in zip(shares, completers):
+            # Net points already credited to this completer for this instance.
+            current = (
+                await db.execute(
+                    select(func.coalesce(func.sum(PointTransaction.points), 0))
+                    .where(
+                        and_(
+                            PointTransaction.assignment_id == completer.id,
+                            PointTransaction.type == TransactionType.GIG_APPROVED,
+                        )
+                    )
+                )
+            ).scalar() or 0
+            delta = int(share) - int(current)
+            if delta != 0:
+                await PointsService.award_gig_points(
+                    db,
+                    completer.assigned_to,
+                    completer.id,
+                    delta,
+                    description=(
+                        f"Collaboration gig split among {len(completers)} "
+                        f"— your share: {share} pts"
+                    ),
+                )
+            if completer.id == assignment.id:
+                this_share = int(share)
+        return this_share
 
     # ─── Gig claim (reserve before doing) ────────────────────────────
 
@@ -967,11 +1070,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     "Upgrade to raise the cap."
                 )
             assignment.approval_status = ApprovalStatus.APPROVED
-            await PointsService.award_gig_points(
-                db,
-                assignment.assigned_to,
-                assignment.id,
-                assignment.template.award_points_per_completer,
+            pts = await TaskAssignmentService._award_assignment(
+                db, assignment, assignment.template, assignment.assigned_to
             )
             # Increment trust streak so the child graduates to
             # auto-approval after enough consecutive approvals.
@@ -997,7 +1097,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 from app.services.push_service import PushService as _PushService
                 await _PushService.send_to_user(db, assignment.assigned_to, {
                     "title": "¡Tarea aprobada! / Task approved! 🎉",
-                    "body": f"{assignment.template.title} — {assignment.template.award_points_per_completer} pts",
+                    "body": f"{assignment.template.title} — {pts} pts",
                     "url": "/dashboard",
                     "tag": "task-approved",
                 })
@@ -1012,7 +1112,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 family_id=family_id,
                 user_id=assignment.assigned_to,
                 type=NT.GIG_APPROVED,
-                title=f"✅ +{assignment.template.award_points_per_completer} pts",
+                title=f"✅ +{pts} pts",
                 body=f"'{assignment.template.title}' approved by parent.",
                 link="/dashboard",
             )

@@ -75,14 +75,20 @@ class PointsService:
         user_id: UUID,
         assignment_id: UUID,
         points: int,
+        description: Optional[str] = None,
     ) -> PointTransaction:
-        """Credit gig points after parent approval. Caller commits."""
+        """Credit gig points after parent approval. Caller commits.
+
+        `points` may be negative — used to claw back over-awarded points when a
+        collaboration gig is re-split among more completers.
+        """
         user = await get_user_by_id(db, user_id)
         transaction = PointTransaction.create_gig_approval(
             user_id=user_id,
             assignment_id=assignment_id,
             points=points,
             balance_before=user.points,
+            description=description,
         )
         user.points += points
         db.add(transaction)

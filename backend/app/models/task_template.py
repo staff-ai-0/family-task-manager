@@ -181,12 +181,28 @@ class TaskTemplate(Base):
 
     @property
     def award_points_per_completer(self) -> int:
-        """Points credited to a single completer.
+        """Display-only estimate of a single completer's points — the floor
+        share (pot / min_count) for collaboration gigs, full effective_points
+        otherwise.
 
-        For collaboration-mode gigs the pot is split N ways. For all other
-        modes each completer earns the full effective_points.
+        This is what the UI shows before completion. The ACTUAL award is
+        settled at approval time by TaskAssignmentService._settle_collaboration,
+        which re-splits the pot among however many members actually complete
+        (so the total always equals the pot); a completer's real share may be
+        higher (fewer completers) or lower (more) than this estimate.
         """
         if (self.gig_mode or "claim") == "collaboration":
             split = max(1, int(self.collaboration_min_count or 1))
             return self.effective_points // split
         return self.effective_points
+
+    @staticmethod
+    def distribute_points(pot: int, n: int) -> list[int]:
+        """Split `pot` among `n` completers so the shares always sum to `pot`.
+
+        Floor-divide, then hand the remainder to the first completers one point
+        each — no points are silently lost (e.g. 10 over 3 -> [4, 3, 3]).
+        """
+        n = max(1, n)
+        base, rem = divmod(max(0, pot), n)
+        return [base + (1 if i < rem else 0) for i in range(n)]

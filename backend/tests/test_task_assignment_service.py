@@ -211,11 +211,16 @@ class TestAssignmentQueries:
             db_session, test_family.id, test_parent_user.id,
             title="Daily", interval_days=1
         )
-        await TaskAssignmentService.shuffle_tasks(db_session, test_family.id)
+        assignments = await TaskAssignmentService.shuffle_tasks(
+            db_session, test_family.id
+        )
 
-        today = date.today()
+        # Anchor to the week shuffle actually populated. It assigns to the
+        # upcoming week, which is next week's Monday when run on a Sunday — so
+        # date.today() would query the wrong (empty) week every Sunday.
+        in_week = assignments[0].week_of
         week_list = await TaskAssignmentService.list_assignments_for_week(
-            db_session, test_family.id, today
+            db_session, test_family.id, in_week
         )
         assert len(week_list) == 7  # Daily = 7 instances
 
@@ -226,11 +231,13 @@ class TestAssignmentQueries:
             db_session, test_family.id, test_parent_user.id,
             title="Daily", interval_days=1
         )
-        await TaskAssignmentService.shuffle_tasks(db_session, test_family.id)
+        assignments = await TaskAssignmentService.shuffle_tasks(
+            db_session, test_family.id
+        )
 
-        today = date.today()
+        in_week = assignments[0].week_of
         child_list = await TaskAssignmentService.list_assignments_for_week(
-            db_session, test_family.id, today, user_id=test_child_user.id
+            db_session, test_family.id, in_week, user_id=test_child_user.id
         )
         # Should have some assignments but not all 7
         assert 0 < len(child_list) <= 7
@@ -242,13 +249,17 @@ class TestAssignmentQueries:
             db_session, test_family.id, test_parent_user.id,
             title="Daily", interval_days=1
         )
-        await TaskAssignmentService.shuffle_tasks(db_session, test_family.id)
-
-        today = date.today()
-        today_list = await TaskAssignmentService.list_assignments_for_date(
-            db_session, test_family.id, today
+        assignments = await TaskAssignmentService.shuffle_tasks(
+            db_session, test_family.id
         )
-        # Daily task: exactly 1 instance for today (assigned to one member by round-robin)
+
+        # Query a date shuffle actually populated (not date.today(), which is
+        # outside the populated week when run on a Sunday).
+        a_date = assignments[0].assigned_date
+        today_list = await TaskAssignmentService.list_assignments_for_date(
+            db_session, test_family.id, a_date
+        )
+        # Daily task: exactly 1 instance per date (assigned to one member by round-robin)
         assert len(today_list) == 1
 
 
