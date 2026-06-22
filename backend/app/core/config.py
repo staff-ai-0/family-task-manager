@@ -53,10 +53,13 @@ class Settings(BaseSettings):
     # exchange counts as one message. Prevents accidental spend overruns
     # on the LiteLLM proxy. 0 = unlimited.
     JARVIS_DAILY_MESSAGE_CAP: int = 100
-    # LiteLLM model alias for Jarvis chat. Must be a model the FTM virtual key
-    # is granted (the proxy alias is "haiku", not "claude-haiku" — see
-    # jctux/platform#86). Override via JARVIS_MODEL env.
-    JARVIS_MODEL: str = "haiku"
+    # LiteLLM model alias for Jarvis chat. gemini-2.5-flash is the only model
+    # the FTM virtual key can actually reach end-to-end right now — the granted
+    # Anthropic (haiku/claude-sonnet) + OpenAI (gpt-4o) routes 401 upstream and
+    # qwen2.5/mistral aliases 400 as invalid (see jctux/platform#86). It's also
+    # the receipt scanner's model, so the proxy path is proven. Override via
+    # JARVIS_MODEL env once platform fixes the other upstreams.
+    JARVIS_MODEL: str = "gemini-2.5-flash"
 
     # Stripe settings removed 2026-05-24. PayPal is the canonical
     # billing path. See feedback_no_stripe memory entry.

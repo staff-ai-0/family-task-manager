@@ -20,11 +20,12 @@ from app.services.jarvis_service import JarvisService
 router = APIRouter()
 
 
-# Only models the FTM LiteLLM virtual key is granted (see jctux/platform#86).
-# qwen3 + claude-haiku were offered but the key grants qwen2.5 + haiku, so
-# selecting them returned 401 key_model_access_denied. Re-add qwen3 here once
-# platform grants the key access to it.
-ALLOWED_MODELS = {"haiku", "claude-sonnet", "gpt-4o", "gemini-2.5-flash"}
+# gemini-2.5-flash is the only model the FTM key reaches end-to-end today: the
+# granted Anthropic/OpenAI routes 401 upstream and qwen/mistral aliases are
+# invalid on the proxy (see jctux/platform#86). Any other selection falls back
+# to the default (also gemini) below. Re-expand this once platform fixes the
+# other upstreams.
+ALLOWED_MODELS = {"gemini-2.5-flash"}
 
 
 class ChatRequest(BaseModel):

@@ -82,11 +82,10 @@ const labels = {
                     id="model-select"
                     class="w-full bg-white/15 text-white text-xs font-semibold rounded-xl px-3 py-2 border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50 appearance-none cursor-pointer"
                 >
-                    <option value="claude-haiku">⚡ Claude Haiku — fast &amp; cheap (default)</option>
-                    <option value="claude-sonnet">🧠 Claude Sonnet — smarter, slower</option>
-                    <option value="gpt-4o">🟢 GPT-4o</option>
+                    <!-- gemini-2.5-flash is the only model the LiteLLM key
+                         currently reaches end-to-end (see jctux/platform#86);
+                         re-add others once their upstreams are fixed. -->
                     <option value="gemini-2.5-flash">💎 Gemini 2.5 Flash</option>
-                    <option value="qwen3">🖥️ Qwen 2.5 3B — local GPU, free</option>
                 </select>
             </div>
     </Fragment>
@@ -140,10 +139,12 @@ const labels = {
         const scroll = document.getElementById("chat-scroll");
         if (!form || !input) return;
 
-        // Restore persisted model choice (migrate deprecated qwen-coder → mistral-nemo)
-        let savedModel = localStorage.getItem("jarvis-model") || "claude-haiku";
-        if (["qwen-coder", "mistral-nemo", "gemma3"].includes(savedModel)) {
-            savedModel = "qwen3";
+        // gemini-2.5-flash is the only model the LiteLLM key reaches today, so
+        // pin to it and migrate any stale persisted choice (platform#86).
+        const WORKING_MODEL = "gemini-2.5-flash";
+        let savedModel = localStorage.getItem("jarvis-model");
+        if (savedModel !== WORKING_MODEL) {
+            savedModel = WORKING_MODEL;
             localStorage.setItem("jarvis-model", savedModel);
         }
         if (modelSelect) {
@@ -161,7 +162,7 @@ const labels = {
             if (!message) return;
             input.value = "";
             input.disabled = true;
-            const selectedModel = modelSelect?.value || "claude-haiku";
+            const selectedModel = modelSelect?.value || "gemini-2.5-flash";
 
             // Optimistic user bubble
             if (scroll) {
