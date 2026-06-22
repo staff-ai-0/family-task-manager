@@ -45,3 +45,16 @@ async def test_csv_import_rejects_oversized_file(client, auth_headers):
     assert body["success"] is False, body
     err = str(body.get("error", "")).lower()
     assert "mb" in err or "too large" in err, body
+
+
+@pytest.mark.asyncio
+async def test_import_backup_rejects_oversized_file(client, auth_headers):
+    """An over-cap backup ZIP must be refused before the body is buffered and
+    before any destructive import/clear runs."""
+    oversized = b"x" * (25 * 1024 * 1024 + 1)
+    files = {"file": ("big.zip", oversized, "application/zip")}
+    resp = await client.post(
+        "/api/budget/import-backup", files=files, headers=auth_headers
+    )
+    assert resp.status_code == 413, resp.text
+    assert "too large" in resp.json()["detail"].lower()

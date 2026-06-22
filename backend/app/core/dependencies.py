@@ -35,6 +35,11 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
 
+    # A still-valid access token must stop working once the account is
+    # deactivated. Login already gates is_active; mirror it on every request.
+    if not user.is_active:
+        raise credentials_exception
+
     return user
 
 

@@ -371,6 +371,58 @@ class TestScanAndCreateTransaction:
         assert payee is not None
 
 
+class TestGcsPersistFailureIsNonFatal:
+    """H4 (verified false-positive): persisting the receipt image to GCS is
+    best-effort and runs AFTER the scan is committed. A GCS failure must be
+    swallowed so the scan still succeeds, and the session must stay usable.
+
+    Note: the audit recommended adding ``db.rollback()`` in the GCS except, but
+    that regresses this path — a rollback expires the already-committed ORM
+    objects and the downstream best-effort steps then hit MissingGreenlet on
+    lazy attribute access. A swallowed failure does not poison the session in
+    this SQLAlchemy 2.0 / asyncpg stack, so the except correctly does nothing
+    but log. This test guards the non-fatal contract."""
+
+    @pytest.mark.asyncio
+    async def test_gcs_upload_failure_is_non_fatal(
+        self, db_session, test_family, budget_account
+    ):
+        from sqlalchemy import select
+
+        mock_receipt = ScannedReceipt(
+            date=date(2026, 3, 20),
+            total_amount=-8500,
+            payee_name="Coffee Shop",
+            items=[{"name": "Latte", "amount_cents": 8500}],
+            currency="MXN",
+            raw_text="",
+            confidence=0.85,
+        )
+
+        with patch(
+            "app.services.budget.receipt_scanner_service.scan_receipt",
+            return_value=mock_receipt,
+        ), patch(
+            "app.services.storage.gcs_receipt_service.GCSReceiptStorage.upload",
+            side_effect=RuntimeError("GCS unavailable"),
+        ):
+            result = await scan_and_create_transaction(
+                db=db_session,
+                family_id=test_family.id,
+                account_id=budget_account.id,
+                image_bytes=b"fake",
+                media_type="image/jpeg",
+            )
+
+        # The scan still succeeds — image persistence is best-effort.
+        assert result["success"] is True
+        assert result["transaction_id"] is not None
+        # Session is not stuck in a failed-transaction state afterwards.
+        await db_session.execute(
+            select(BudgetAccount).where(BudgetAccount.family_id == test_family.id)
+        )
+
+
 class TestScanReceiptAPI:
     """Test the API endpoint."""
 

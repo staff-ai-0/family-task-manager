@@ -62,12 +62,25 @@ class _PayPalV2HTTP:
         return cls._token
 
     @classmethod
+    def _invalidate_token(cls) -> None:
+        """Drop the cached token so the next _auth() fetches a fresh one."""
+        cls._token = None
+        cls._token_exp = 0.0
+
+    @classmethod
     def get(cls, path: str) -> Dict[str, Any]:
-        r = requests.get(
-            f"{cls._base()}{path}",
-            headers={"Authorization": f"Bearer {cls._auth()}"},
-            timeout=15,
-        )
+        for attempt in range(2):
+            r = requests.get(
+                f"{cls._base()}{path}",
+                headers={"Authorization": f"Bearer {cls._auth()}"},
+                timeout=15,
+            )
+            # A 401 likely means the cached token was revoked before its
+            # natural expiry — refresh once and retry rather than wedging.
+            if r.status_code == 401 and attempt == 0:
+                cls._invalidate_token()
+                continue
+            break
         if r.status_code == 404:
             raise NotFoundException(f"PayPal resource not found: {path}")
         r.raise_for_status()
@@ -77,15 +90,20 @@ class _PayPalV2HTTP:
     def post(
         cls, path: str, body: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        r = requests.post(
-            f"{cls._base()}{path}",
-            headers={
-                "Authorization": f"Bearer {cls._auth()}",
-                "Content-Type": "application/json",
-            },
-            json=body if body is not None else {},
-            timeout=15,
-        )
+        for attempt in range(2):
+            r = requests.post(
+                f"{cls._base()}{path}",
+                headers={
+                    "Authorization": f"Bearer {cls._auth()}",
+                    "Content-Type": "application/json",
+                },
+                json=body if body is not None else {},
+                timeout=15,
+            )
+            if r.status_code == 401 and attempt == 0:
+                cls._invalidate_token()
+                continue
+            break
         if r.status_code == 404:
             raise NotFoundException(f"PayPal resource not found: {path}")
         if r.status_code >= 400:

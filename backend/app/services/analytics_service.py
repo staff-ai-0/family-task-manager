@@ -200,7 +200,10 @@ class AnalyticsService:
                 else:
                     delta_text = "Roughly flat vs last week."
         except Exception:
-            pass
+            import logging
+            logging.getLogger(__name__).warning(
+                "pup-score week-over-week delta computation failed", exc_info=True
+            )
         if delta_text:
             notes.append(delta_text)
 

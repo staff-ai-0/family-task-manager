@@ -7,6 +7,14 @@
 
 set -e  # Exit on error
 
+# LEGACY GUARD — this script targets the DECOMMISSIONED on-prem host
+# (10.1.0.99, retired 2026-05-23). The canonical deploy is ./scripts/deploy-gcp.sh.
+# Refuse to run so nobody accidentally redeploys to the dead host.
+echo "deploy-prod.sh is LEGACY: it targets the decommissioned on-prem host (10.1.0.99)." >&2
+echo "Use ./scripts/deploy-gcp.sh (canonical GCP deploy). Aborting." >&2
+echo "If you truly need the old path, remove this guard intentionally." >&2
+exit 1
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'

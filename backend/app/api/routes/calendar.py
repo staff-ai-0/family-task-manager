@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.exceptions import ValidationError
 from app.core.type_utils import to_uuid_required
+from app.core.upload_validation import read_upload_capped
 from app.models import User
 from app.schemas.calendar_event import (
     CalendarEventCreate,
@@ -202,9 +203,9 @@ async def scan_document(
             status_code=415,
             detail=f"Unsupported file type: {file.content_type}",
         )
-    payload = await file.read()
-    if len(payload) > MAX_SCAN_BYTES:
-        raise HTTPException(status_code=413, detail="File too large")
+    # Stream with a hard cap so an oversized body is aborted mid-read rather
+    # than fully buffered into memory before the size check.
+    payload = await read_upload_capped(file, MAX_SCAN_BYTES)
     if not payload:
         raise HTTPException(status_code=400, detail="Empty file")
 

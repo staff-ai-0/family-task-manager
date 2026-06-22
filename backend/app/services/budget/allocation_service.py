@@ -6,6 +6,7 @@ Business logic for budget allocation operations.
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
+from sqlalchemy.exc import IntegrityError
 from typing import List
 from datetime import date
 from uuid import UUID
@@ -137,7 +138,9 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
         if allocation:
             return allocation
 
-        # Create new allocation with zero amount
+        # Create new allocation with zero amount. Two concurrent callers can
+        # both reach here; the loser hits uq_allocation_category_month, so on
+        # IntegrityError roll back and return the row the winner created.
         allocation = BudgetAllocation(
             family_id=family_id,
             category_id=category_id,
@@ -145,7 +148,12 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
             budgeted_amount=0,
         )
         db.add(allocation)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            existing = (await db.execute(query)).scalar_one()
+            return existing
         await db.refresh(allocation)
         return allocation
 

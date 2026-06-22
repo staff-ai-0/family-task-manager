@@ -38,7 +38,12 @@ class Family(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
     # Relationships
-    members = relationship("User", back_populates="family")
+    # delete-orphan so deleting a family cascades to its members (users have a
+    # NOT NULL family_id and cannot be orphaned); each user in turn cascades to
+    # its own owned rows (point_transactions, task_assignments, consequences…).
+    members = relationship(
+        "User", back_populates="family", cascade="all, delete-orphan"
+    )
     # Legacy task relationship (to be removed after migration)
     tasks = relationship("Task", back_populates="family", cascade="all, delete-orphan")
     # New template/assignment relationships

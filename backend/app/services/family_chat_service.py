@@ -126,8 +126,12 @@ class FamilyChatService:
             .where(FamilyChatMessage.family_id == family_id)
         )
         if before_id is not None:
+            # Scope the anchor lookup to this family — otherwise a foreign
+            # message id leaks its timestamp as a pagination cutoff (timing
+            # oracle).
             anchor_q = select(FamilyChatMessage.created_at).where(
-                FamilyChatMessage.id == before_id
+                FamilyChatMessage.id == before_id,
+                FamilyChatMessage.family_id == family_id,
             )
             anchor = (await db.execute(anchor_q)).scalar_one_or_none()
             if anchor is not None:
