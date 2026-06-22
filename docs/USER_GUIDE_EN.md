@@ -1,6 +1,6 @@
 # Family Task Manager — Complete User Guide
 
-**Version 2.0** | Last updated: April 2026
+**Version 3.0** | Last updated: June 2026
 
 Welcome to the official **Family Task Manager** guide, the app for organizing your family's chores, rewards, consequences, and finances in a fun and efficient way.
 
@@ -96,6 +96,16 @@ Welcome to the official **Family Task Manager** guide, the app for organizing yo
 16. [Chapter 16: Subscription and Profile](#chapter-16-subscription-and-profile)
     - [16.1 Available Plans](#161-available-plans)
     - [16.2 Subscription Page](#162-subscription-page)
+17. [Chapter 17: Gigs (Extra Earning)](#chapter-17-gigs-extra-earning)
+18. [Chapter 18: Virtual Pet](#chapter-18-virtual-pet)
+19. [Chapter 19: Meal Planning](#chapter-19-meal-planning)
+20. [Chapter 20: Shopping Lists](#chapter-20-shopping-lists)
+21. [Chapter 21: Family Calendar](#chapter-21-family-calendar)
+22. [Chapter 22: Family Chat & Messages](#chapter-22-family-chat--messages)
+23. [Chapter 23: Kiosk Mode (Shared Display)](#chapter-23-kiosk-mode-shared-display)
+24. [Chapter 24: Family Analytics](#chapter-24-family-analytics)
+25. [Chapter 25: Jarvis (AI Copilot)](#chapter-25-jarvis-ai-copilot)
+26. [Chapter 26: Subscription Plans — Quick Reference](#chapter-26-subscription-plans--quick-reference)
 - [Appendix A: Glossary](#appendix-a-glossary)
 - [Appendix B: Frequently Asked Questions](#appendix-b-frequently-asked-questions)
 - [Appendix C: Troubleshooting](#appendix-c-troubleshooting)
@@ -1962,6 +1972,731 @@ Click **"Upgrade Plan"** to upgrade to Plus or Pro. Payment is processed through
 
 ---
 
+# Chapter 17: Gigs (Extra Earning)
+
+**Who uses this:** Parents post and approve gigs. Children and Teens browse, claim, and complete them. Gigs are the "extra earning" layer on top of regular tasks — optional jobs that pay bonus points.
+
+Gigs are one-off paid jobs a parent posts to the family. Unlike weekly task templates (which are assigned and rotated), a gig sits on an open board that any eligible kid can grab on a first-come basis. The kid does the work, submits proof, and a parent approves it to release the points. Since **1 point = $1 MXN** in this app, gigs double as a simple allowance/odd-jobs system.
+
+## 17.1 The Gig Board (Kids)
+
+**Route:** `/gigs`
+
+The Gig Board is where children and teens find available gigs. It is reached from the **"Gigs"** button in the bottom navigation bar.
+
+### What you see on the board
+
+- A header that reads **"Earn bonus points!"** with a link to **"My Gigs"** in the top-right corner
+- A card for each available gig showing:
+  - **Title** and a short description
+  - **Points** — the large number in violet (how many points the gig pays)
+  - A **difficulty chip** — Easy, Medium, or Hard
+  - A **category tag** — Chores, Errands, Creative, Learning, Outdoor, or Other
+- A **"Claim"** button on each gig you have not claimed yet
+
+If there are no gigs, you will see **"No gigs available — Your parent will post gigs soon."**
+
+### Claiming a gig
+
+1. Go to **Gigs** (`/gigs`)
+2. Browse the cards and find a job you want to do
+3. Click **"Claim"** on that gig
+4. The card updates to show a proof form: **"Claimed — submit your proof below"**
+
+> **Note:** You can only have one active claim per gig at a time. If your role is not allowed on a particular gig (a parent can restrict a gig to Children only or Teens only), the claim will be rejected with a message telling you your role cannot claim it.
+
+### Submitting your proof
+
+Once you have claimed a gig and done the work, submit your evidence so a parent can approve it.
+
+1. On the claimed gig card (on `/gigs` or under **"My Gigs"**), fill in:
+   - **"What did you do? (optional)"** — a short description of the work
+   - **"Photo evidence (optional)"** — take a photo or upload an image (JPEG, PNG, or WebP). On a phone this opens the camera directly.
+2. Click **"Submit for approval"**
+3. The card now shows **"⏳ Awaiting approval"**
+
+> **Tip:** Both proof fields are optional, but adding a photo makes it much faster for a parent to approve — and helps build your trust streak (see 17.4).
+
+## 17.2 My Gigs (Kids)
+
+**Route:** `/gigs/my-gigs`
+
+The **"My Gigs"** page lists every gig you have claimed, with its current status. Open it from the **"My Gigs"** link at the top of the Gig Board.
+
+Each card shows the gig title, when you claimed it, and a colored status badge:
+
+| Status | Meaning |
+|--------|---------|
+| **In progress** | You claimed the gig but haven't submitted proof yet (you can still submit it here) |
+| **Awaiting approval** | You submitted your proof; a parent needs to review it |
+| **Approved** | A parent approved it — points were added to your balance (shown as a green **+N pts**) |
+| **Rejected** | A parent sent it back. The card shows the parent's note under **"Reason:"** |
+
+If a gig is rejected, read the reason, then claim it again from the board to retry.
+
+## 17.3 Posting and Managing Gigs (Parents)
+
+**Route:** `/parent/gigs`
+
+Parents manage the board from **Gigs** in the bottom navigation. (If a parent opens `/gigs`, they are redirected here automatically — parents cannot claim gigs.)
+
+### Creating a gig
+
+1. Go to **Gigs** (`/parent/gigs`)
+2. Click the **"+ New Gig"** button in the top-right
+3. In the popup, fill in:
+   - **"Title"** (required) — e.g., "Wash the car"
+   - **"Description"** (optional) — extra details
+   - **"Points"** (required) — how many points the gig pays (minimum 1; 1 point = $1 MXN)
+   - **"Difficulty"** — Easy, Medium, or Hard
+   - **"Category"** — Chores, Errands, Creative, Learning, Outdoor, or Other
+4. Click **"Save"**
+
+The new gig appears on the board for eligible kids immediately.
+
+### Editing and archiving
+
+- **Edit** — Click **"Edit"** on a gig card, change any field in the popup, and click **"Save"**.
+- **Archive** — Click **"Archive"** and confirm **"Archive this gig?"**. Archiving deactivates the gig so it no longer appears on the board, but it keeps any history attached to it. (This is a soft removal, not a hard delete.)
+
+### Reviewing submitted work
+
+Gig approvals share the family's single approval queue, so there is one place to review everything.
+
+1. On `/parent/gigs`, click **"Review submitted work"**. A red badge shows how many gigs are waiting.
+2. You land in the unified approvals queue (`/parent/approvals`), which lists each submitted gig with the kid's name, the gig title, the points, and any photo/text proof.
+3. For each submission choose:
+   - **Approve** — points are awarded to the kid instantly and their balance updates. You may optionally add a note.
+   - **Reject** — send it back with a note explaining what to fix. No points are awarded and the kid sees your note on their "My Gigs" page.
+
+> **Note:** Only gigs in the **Awaiting approval** state appear in the queue. The kid is notified automatically (in-app and by push) the moment you approve or reject.
+
+## 17.4 The Trust Streak (Auto-Approval)
+
+To reward reliable kids and cut down on repetitive approvals, gigs use a **trust streak**.
+
+- Every time a parent approves one of a kid's gigs, that kid's streak goes up by one.
+- Once a kid reaches **3 consecutive approved gigs** (the default threshold), their next gigs are **auto-approved** the moment they submit proof — points land immediately, with no parent review needed.
+- An auto-approved gig is flagged in the kid's notification as **"⚡ Auto-approved"**.
+- A **rejection resets the streak back to zero**, so the kid must earn parent approvals again before auto-approval kicks back in.
+
+| Situation | What happens to points | What happens to the streak |
+|-----------|------------------------|----------------------------|
+| Parent approves a gig | Awarded on approval | +1 |
+| Kid (with streak ≥ 3) submits proof | Awarded instantly on submit | +1 |
+| Parent rejects a gig | None | Reset to 0 |
+
+> **Tip for parents:** The trust streak is designed to fade you out of low-stakes approvals over time. If you want tighter control, reject anything that doesn't meet the bar — that resets the streak and brings the gig back under manual review.
+
+---
+
+# Chapter 18: Virtual Pet
+
+**Who uses this:** Children and Teens. Each kid has their own private pet; parents do not manage it. The pet is a gentle motivator — it grows when the kid does their work and gets hungry or sad when neglected.
+
+The Virtual Pet gives kids a fun reason to keep completing tasks and gigs. Every kid can adopt **one** pet. The pet has three stats that change over time and a level that climbs as the kid earns experience. There is nothing to set up as a parent — kids adopt and care for the pet entirely on their own.
+
+## 18.1 Adopting Your Pet
+
+**Route:** `/pet`
+
+Open the pet from the **"Pet"** button in the bottom navigation bar.
+
+1. Go to **Pet** (`/pet`)
+2. Type a **Name** for your pet (up to 40 characters)
+3. Pick a **species** from the six choices:
+
+| Species | |
+|---------|---|
+| Cat 🐱 | Dog 🐶 |
+| Dragon 🐲 | Fox 🦊 |
+| Owl 🦉 | Bunny 🐰 |
+
+4. Click **"Adopt"**
+
+Your new pet appears with a face, its name, species, and current level. You only ever have one pet, so choose a name you like.
+
+## 18.2 Your Pet's Stats
+
+Once adopted, the pet screen shows three progress bars:
+
+| Stat | What it means | How it moves |
+|------|---------------|--------------|
+| **Mood** 😊 | How happy the pet is (0–100) | **Drops** about 15 per day if ignored. Goes up when you feed, play, or give treats, and when you complete tasks |
+| **Hunger** 🍖 | How hungry the pet is (0–100, where 100 = starving) | **Rises** about 20 per day. Goes down when you feed it or give food treats |
+| **XP** ⭐ | Experience points toward the next level | Only goes up — earned by completing tasks and gigs, or from certain treats |
+
+The pet's face reflects its overall state:
+
+- **🤩 Happy** — high mood and low hunger
+- **🐱 OK** — its normal species face
+- **😞 Sad** — mood has dropped too low
+- **😫 Starving** — hunger has climbed too high
+
+> **Note:** The pet ages forward in 24-hour steps. If you don't open the app for a few days, you'll come back to a hungrier, less happy pet — so check in regularly.
+
+## 18.3 Caring for Your Pet
+
+There are three free or points-based actions, each with its own button.
+
+### Feed (free)
+
+1. Tap **"🍖 Feed"**
+2. Hunger drops and mood gets a small bump
+
+> **Tip:** You can only feed when the pet is actually hungry. If it's already full, you'll see "Pet is not hungry."
+
+### Play (free)
+
+1. Tap **"🎾 Play"**
+2. Mood jumps up, but playing makes the pet a little hungrier
+
+### Treats (cost points)
+
+The **"Treat shop"** lets you spend your own earned points to boost your pet. Your current point balance is shown next to the shop title. A treat button is disabled if you can't afford it.
+
+| Treat | Cost | Effect |
+|-------|------|--------|
+| **Snack** | 5 pts | Hunger −10, mood +2 |
+| **Toy** | 10 pts | Mood +20 |
+| **Vitamin** | 20 pts | Hunger −5, mood +5, XP +30 |
+| **Gourmet meal** | 30 pts | Hunger −50, mood +10, XP +15 |
+
+1. In the **"Treat shop"**, tap the treat you want
+2. The points are deducted from your balance and the pet's stats update right away
+
+## 18.4 Leveling Up
+
+Your pet earns **XP** automatically as you do your chores:
+
+- Completing a regular (mandatory) task feeds your pet a little and gives a small XP boost
+- Completing a bonus task or gig gives a much larger XP boost
+
+The XP bar shows your progress toward the next level. When the bar fills, your pet levels up. The page reminds you: **"Complete tasks to level up your pet."**
+
+> **Note:** Vitamins and gourmet meals also grant XP, so spending points on the right treats can speed up leveling — but doing your tasks is the main way to grow.
+
+## 18.5 Pet Reminders
+
+If you neglect your pet and it slips into a **sad** or **starving** state, the app sends you a reminder (in-app and as a push notification) telling you to feed or play with it. Tap the reminder to jump straight to the pet screen.
+
+---
+
+# Chapter 19: Meal Planning
+
+**Route:** `/meals` · **API:** `/api/meals/`
+
+> **Who can use it:** All family members can view and edit the family's meal plan and recipes. There is no separate plan requirement.
+
+The Meals module is a simple weekly meal planner. You lay out what the family will eat across the week, optionally linking each meal to a saved recipe — and you can build your cookbook by importing recipes from a web page with AI.
+
+## 19.1 The Weekly Plan
+
+**Route:** `/meals`
+
+The page is headed **🍽️ Meal plan** and shows the **current week** (Monday through Sunday). The subtitle shows the week's date range, e.g., "Current week · 2026-06-22 → 2026-06-28".
+
+The plan is a grid:
+
+- **Columns** — the seven days of the week (e.g., "Mon 22", "Tue 23", …).
+- **Rows** — the four meal slots:
+
+| Meal slot | Shown as |
+|-----------|----------|
+| Breakfast | Breakfast |
+| Lunch | Lunch |
+| Dinner | Dinner |
+| Snack | Snack |
+
+Each cell holds the meals planned for that day and slot. Empty cells are simply blank.
+
+> **Note:** The plan always shows the current week — there are no previous/next week buttons.
+
+## 19.2 Adding a Meal to the Plan
+
+1. Click **➕ Add meal** to open the form.
+2. Fill in:
+   - **Day** — pick one of the seven days of the current week.
+   - **Meal type** — Breakfast, Lunch, Dinner, or Snack.
+   - **Title or dish** — the name of the meal (required, e.g., "Chicken tacos").
+   - **Recipe (optional)** — link a saved recipe, or leave it as **"(No recipe)"**.
+3. Click **Save**. The meal appears in the matching cell.
+
+### Removing a meal
+
+Click the **×** button on a meal card to delete it from the plan.
+
+## 19.3 Recipes
+
+Recipes are reusable and shared across your family. Each recipe stores a **name**, an **ingredients** list (free text, one ingredient per line), and an optional **prep time** in minutes. Saved recipes appear in a list below the form, e.g., "**Chicken tacos** (45m)". If you have none, you'll see **"No saved recipes"**.
+
+### Creating a recipe manually
+
+In the **New recipe** section, fill in:
+
+- **Recipe name** (required)
+- **Ingredients** — one ingredient per line
+- **Prep min** — optional prep time (1–600 minutes)
+
+Then click **Save**.
+
+### Importing a recipe from a web page (AI)
+
+Instead of typing a recipe, let the AI read it from a recipe website:
+
+1. In the **🔗 Import from URL (AI)** box, paste the recipe page address (it must start with `http://` or `https://`).
+2. Click **Import**. You'll briefly see **"Importing…"**.
+3. The AI fetches the page and extracts the recipe. When it's done you'll see **"Loaded · confidence NN%"** and the form fills in automatically with the recipe **name**, **ingredients**, and **prep time**.
+4. Review the imported details, adjust anything that looks off, then click **Save** to add it to your cookbook.
+
+> **Tip:** The confidence percentage tells you how sure the AI is about what it read. Always glance over the imported ingredients before saving.
+
+## 19.4 Meals → Shopping List
+
+When a planned meal is linked to a recipe that has ingredients, those ingredients can flow into your shopping list automatically. The app parses the recipe's ingredients (one per line), then adds each one to your family's most recent active shopping list — creating a list named **"Meal prep"** if you don't have one yet. Quantities are preserved (for example, "200g flour" becomes an item "flour" with quantity "200g").
+
+> **Note:** This keeps your shopping list in sync with what you've planned to cook, so the ingredients are already waiting for you on your next store run. See the **Shopping Lists** chapter for how to work with the list itself.
+
+---
+
+# Chapter 20: Shopping Lists
+
+**Route:** `/shopping` · **API:** `/api/shopping/`
+
+> **Who can use it:** Everyone in the family. Shopping lists are shared — any member can add, check off, or remove items. There is no separate plan requirement.
+
+The Shopping module holds your family's shared shopping lists. You can keep several named lists (for example, one per store) and everyone in the family sees and edits the same lists.
+
+## 20.1 The Shopping Page
+
+**Route:** `/shopping`
+
+The page is headed **🛒 Shopping** with the subtitle "Shared family lists". Your lists appear as tabs along the top; the open list is highlighted. Each list header shows a quick count, e.g., "12 · 5 pending" (total items · still to buy).
+
+If you have no lists yet, you'll see **"No lists yet. Create one above."**
+
+## 20.2 Creating a List
+
+1. In the **"New list (e.g. Costco)"** box at the top, type a name for the list (e.g., "Costco", "Weekly groceries").
+2. Click **"Add"**.
+3. The new list appears as a tab and opens for you to add items.
+
+## 20.3 Adding and Checking Off Items
+
+### Adding an item
+
+1. Open the list you want.
+2. In the **"Add item"** box, type the item name.
+3. Optionally fill the **"Qty"** box with a quantity — free text like "2", "1 dozen", or "500g".
+4. Submit the form. The item is added to the list and shown as "name · qty".
+
+### Checking off items
+
+- Tap the round checkbox next to an item to mark it as bought. Checked items show with a strikethrough and a lighter color.
+- Tap it again to uncheck.
+- To remove an item entirely, click its **×** button.
+
+If a list is empty, it shows **"Empty list. Add something."**
+
+> **Note:** Items appear in the order they were added. There is no aisle/category grouping or manual reordering.
+
+## 20.4 Managing a List
+
+From the open list you can:
+
+- **Archive** — click **"Archive"** to set the list aside without deleting it.
+- **Delete** — click **"Delete"**; you'll be asked **"Delete list?"** to confirm. This removes the list and its items.
+
+## 20.5 How Lists Fill Up Automatically
+
+Your shopping lists connect to two other parts of the app:
+
+### From the meal plan
+
+When you plan a meal that's linked to a recipe, that recipe's ingredients can be added to your most recent active list automatically (a **"Meal prep"** list is created if you don't have one). See the **Meal Planning** chapter. Quantities carry over, so "2 cups flour" becomes an item "flour" with quantity "2 cups".
+
+### From receipt scanning
+
+When you scan a receipt in the Budget module, the app reads the purchased item names and **automatically checks off** any matching items that were still pending on your shopping lists. It uses fuzzy matching, so small spelling differences between the receipt and your list still get matched. After a scan, the receipt result tells you which shopping items were auto-checked.
+
+> **Tip:** Plan your meals first, let the ingredients flow into a shopping list, shop, then scan the receipt — the items you bought get ticked off for you.
+
+## 20.6 Sharing
+
+All shopping lists are shared across the whole family — everyone sees the same lists and items, and anyone can add or check things off. The app records who added and who checked each item behind the scenes. Changes made by other members appear when the page is reloaded.
+
+---
+
+# Chapter 21: Family Calendar
+
+The Family Calendar keeps everyone on the same page about practices, appointments, school events, and birthdays. Events live in one shared list that every family member can see, and parents can even snap a photo of a school flyer to add events automatically.
+
+## 21.1 Overview
+
+**Route:** `/calendar`
+
+The calendar shows your family's **upcoming events for the next 60 days**, grouped by day. Each event displays its time (or "All day"), an optional location, and a small icon showing where it came from:
+
+| Icon | Source | Meaning |
+|------|--------|---------|
+| 📅 | Manual | Added by hand in the app |
+| 📄 | Scanned flyer | Created from a scanned document |
+| 🏫 | School import | Imported from a school source |
+| 🔁 | Recurring | A repeating event |
+
+> **Note:** The calendar is visible to **everyone** in the family. Any member can view events, but only **parents** can create the AI-scanned events, edit, or delete them.
+
+### Two ways to view
+
+- **List view** (`/calendar`) — The default. Events grouped day by day, newest days first.
+- **Month view** (`/calendar/month`) — A traditional month grid. Use the **"Month view"** button in the top-right corner to switch. Tap any day to see that day's events, and use the arrows to move between months.
+
+## 21.2 Adding an Event Manually
+
+Any family member can add an event from the list view.
+
+1. Go to **Calendar** (`/calendar`)
+2. Tap the **"➕ New event"** section to expand the form
+3. Fill in the fields:
+   - **Title** — What the event is (e.g., "Soccer practice")
+   - **Date** — The day it happens (required)
+   - **Time** — The start time (leave blank for an all-day event)
+   - **Location (optional)** — Where it takes place
+   - **All day** — Check this for events with no specific time
+   - **Recurrence** — How often it repeats (see below)
+4. Click **"Add"**
+
+### Recurrence options
+
+| Option | Repeats |
+|--------|---------|
+| **Does not repeat** | One time only (default) |
+| **Daily** | Every day |
+| **Weekdays** | Monday through Friday |
+| **Weekly** | Once a week |
+| **Monthly** | Once a month |
+| **Custom (RRULE)** | An advanced rule you type yourself |
+
+> **Tip:** For full control, pick **Custom (RRULE)** and type a standard iCalendar rule, for example `FREQ=WEEKLY;BYDAY=MO,WE,FR` for every Monday, Wednesday, and Friday.
+
+## 21.3 Scanning a School Flyer (AI) — Parents
+
+**Route:** `/calendar/scan`
+
+Instead of typing events one by one, parents can take a photo of a printed flyer, sport schedule, party invitation, or permission slip and let the AI pull out the dates for you.
+
+> **Note:** Scanning is available only to users with the **Parent/Guardian** role. The button does not appear for Child or Teen accounts.
+
+1. On the Calendar, tap the purple **"📄 Scan school flyer"** card (parents only), or go directly to `/calendar/scan`
+2. Tap **"Choose photo or PDF"** and select an image or document
+   - Accepted formats: **JPG, PNG, WebP, and PDF**
+   - For PDFs, only the first page is read
+3. The app shows **"Scanning…"** while the AI reads the document
+4. When it finishes, you see the detected **document type**, a **confidence** percentage and the number of events found, and one editable card per event, each pre-checked
+5. Review each event. You can edit the **title**, **location**, and **notes** before saving
+6. Uncheck any event you do not want to keep
+7. Click **"Import checked events"** to add the selected events to your calendar
+
+> **Tip:** The AI reviews before it saves on purpose — a missed soccer practice is worse than a typo. Always glance over the dates and times before importing. If it reports "No events detected," try a clearer, better-lit photo.
+
+## 21.4 Subscribing from Another Calendar App
+
+The family calendar publishes a standard **iCal feed** so you can subscribe to it from Apple Calendar, Google Calendar, or Outlook.
+
+- The feed lives at `/api/calendar/feed.ics` and includes the next **6 months** of events.
+- Recurring events are sent as a single repeating entry, so your calendar app expands them automatically.
+
+---
+
+# Chapter 22: Family Chat & Messages
+
+Family Task Manager includes two ways to talk: a shared **Family Chat** that everyone in the household sees, and private **Direct Messages** between specific members. Both are available to **all roles** — parents, teens, and children.
+
+## 22.1 Family Chat
+
+**Route:** `/chat`
+
+Family Chat is a single group conversation for quick pings between everyone in the family — "dinner's ready," "I finished my chores," and so on.
+
+### Sending a message
+
+1. Go to **Chat** (`/chat`) — the chat icon is in the bottom navigation bar
+2. Type your message in the box at the bottom (**"Type a message…"**)
+3. Click **"Send"**
+4. Your message appears instantly, and other members see it appear live without refreshing
+
+> **Note:** Messages can be up to 2,000 characters. Your own messages appear on the right; everyone else's appear on the left with the sender's name above them.
+
+### Reactions
+
+1. Hover over (or tap) a message to reveal the reaction row
+2. Choose one of: 👍 ❤️ 😂 🎉 🙏 ✅
+3. The reaction appears as a small pill under the message with a count
+4. Tap a reaction pill again to remove your reaction
+
+### Read state
+
+When you open `/chat`, all messages are marked as read automatically. An unread badge can appear elsewhere in the app so you know when new messages are waiting.
+
+## 22.2 Direct Messages (DM)
+
+**Route:** `/dm`
+
+Direct Messages are private conversations between selected family members — useful for a one-on-one chat between two parents, or a parent and one child, without the rest of the family seeing it.
+
+### Starting a new conversation
+
+1. Go to **Direct messages** (`/dm`)
+2. Tap **"➕ New thread"** to expand the member list
+3. Check the box next to each family member you want to include (you are added automatically)
+4. Click **"Start"**
+5. You are taken straight into the new conversation
+
+### Sending a direct message
+
+1. From the **Direct messages** list, tap a conversation to open it
+2. Type your message in the box (**"Private message…"**)
+3. Click **"Send"**
+
+The conversation list shows who is in each thread and how long ago it was last active. Tap **"← Inbox"** to return to the list.
+
+> **Tip:** Use **Family Chat** for things everyone should see and **Direct Messages** when a conversation only concerns a couple of people.
+
+---
+
+# Chapter 23: Kiosk Mode (Shared Display)
+
+Kiosk Mode turns any spare screen — a kitchen tablet, an old iPad, an Echo Show, or a Fire TV — into an always-on family dashboard. It shows today's schedule, chores, and shopping lists at a glance, with **no login required** on the device itself.
+
+## 23.1 How It Works
+
+A parent creates a **device token** in the app. That token is baked into a special URL. Open the URL on the shared screen and it displays your family's live snapshot, refreshing on its own. Because the token is the key, the screen never needs anyone to sign in — but it also means you should treat the URL like a password.
+
+> **Note:** Only **parents** can create and revoke kiosk devices. The display itself is token-gated and shows read-only information.
+
+## 23.2 What the Kiosk Screen Shows
+
+**Route (on the device):** `/kiosk?token=...`
+
+| Section | Contents |
+|---------|----------|
+| **Header** | Your family name and a live clock |
+| **📅 Today** | Today's events with times and locations, plus a peek at tomorrow's first few events |
+| **✅ Tasks** | Today's chores for everyone, checked off as they're completed (⭐ marks bonus tasks), with the assigned person's name |
+| **Members** | Each member's progress for the day (e.g., "2/3 tasks") |
+| **🛒 Shopping** | Active shopping lists with their pending item counts |
+
+The page **refreshes automatically every 60 seconds**, so it always reflects the latest tasks, events, and shopping items without anyone touching it.
+
+## 23.3 Setting Up a Kiosk Device — Parents
+
+**Route:** `/parent/kiosk`
+
+1. Go to **Management** → **Wall displays** (`/parent/kiosk`)
+2. In the name box, type a label for the device (e.g., "Kitchen," "Living Room"), then click **"Create"**
+3. The app shows a one-time box with the device's full URL, for example `https://.../kiosk?token=...`
+   - **Important:** Copy and save this URL now. For security, the full token is **shown only once** and is not displayed again afterward.
+4. On the shared screen, open a browser and paste the URL
+5. The kiosk dashboard loads and starts refreshing on its own
+
+> **Tip:** Set the device's browser to full-screen (kiosk) mode and disable sleep so the display stays on as a permanent family board.
+
+### Managing devices
+
+- **Last seen** — When the kiosk last loaded a snapshot (e.g., "now," "5m," or "Never" if it hasn't been opened yet)
+- **Revoke** — Click **"Revoke"** to disable a device. You'll be asked to confirm ("Revoke this device?"). Once revoked, that URL stops working immediately and the screen shows an "Invalid token" error.
+
+> **Tip:** If a tablet is lost or you no longer want a screen showing your family's schedule, revoke its device right away and create a fresh one for any replacement.
+
+---
+
+# Chapter 24: Family Analytics
+
+**Who uses this:** Parents only. Analytics is a parent-facing dashboard that summarizes how the whole family is doing — task completion, late penalties, gigs completed, and an overall "PUP Score." Kids never see this page.
+
+The Analytics page turns weeks of task and gig activity into a single at-a-glance health check, so parents can spot an overloaded kid, an uneven workload, or a good rhythm worth keeping.
+
+## 24.1 Opening Analytics
+
+**Route:** `/parent/analytics`
+
+1. Go to **Management** (`/parent`)
+2. Open **Settings**
+3. Tap **"Analytics"** (described as "PUP Score + completion trends")
+
+The page is parent-only; teens and children are redirected away if they try to open it.
+
+## 24.2 The PUP Score
+
+At the top of the page sits the **PUP Score**, a single number from **0 to 100**. PUP stands for "Parenting Under Pressure," and the subtitle reads **"Parenting pressure — lower is better."**
+
+- A **lower** score means less friction — chores are getting done, the load is balanced, and there are few or no late penalties.
+- A **higher** score means more friction — someone is falling behind, the workload is uneven, or penalties are piling up.
+
+| Label | Range | Color | Reading |
+|-------|-------|-------|---------|
+| **Low** | 0–39 | Green | Things are running smoothly |
+| **Moderate** | 40–69 | Amber | Some friction — keep an eye on it |
+| **High** | 70–100 | Red | Worth a conversation or a re-balance this week |
+
+### What moves the score
+
+The PUP Score starts at a neutral 50 and adjusts based on the last 4 weeks of activity:
+
+- **Uneven completion across kids** raises the score (one kid doing far more or less than the others).
+- **A kid below 50% completion** raises the score and flags that kid by name.
+- **Everyone at 90%+ with zero late penalties** lowers the score — a clean, well-balanced week.
+- **More than 5 auto-penalties** in the window raises the score.
+
+## 24.3 30-Day Trend
+
+If the app has enough daily history, a **"30-day trend"** sparkline shows how your PUP Score has moved over the past month, with the start and end dates labeled. A daily snapshot is recorded automatically, so the trend builds up on its own over time.
+
+## 24.4 Insights
+
+The **"Insights"** section is a short bullet list of plain-language observations generated from your data, for example:
+
+- "Emma below 50% completion — talk to them this week."
+- "Everyone on track — nice rhythm."
+- "Zero late penalties this month."
+- "Down 6 pts vs last week — improving."
+
+## 24.5 Per-Member Breakdown
+
+The **"Per member (last 4 weeks)"** section lists every active family member with their own progress bar:
+
+| Field | Meaning |
+|-------|---------|
+| **Name / role** | Who they are (Child, Teen, or Parent) |
+| **Done / total** | Mandatory tasks completed vs. assigned |
+| **Completion %** | The completion bar — green ≥ 80%, amber ≥ 50%, red below |
+| **Gigs done** | How many gigs they completed |
+| **Late** | How many of their tasks went overdue |
+
+## 24.6 Exporting the Data
+
+The per-member numbers (completion, late tasks, and gigs for the last 4 weeks) can be exported to a **CSV** file via the analytics CSV export (`/api/analytics/export.csv`). The file is named `family-analytics.csv`.
+
+---
+
+# Chapter 25: Jarvis (AI Copilot)
+
+**Routes:** `/parent/jarvis` · `/parent/jarvis-schedules`
+
+> **Who can use it:** Parents/Guardians only. Children and teens are redirected to their dashboard.
+>
+> **Plan required:** Jarvis is part of the **AI features** included with the **Plus** tier. The Free plan does not include the AI copilot.
+
+Jarvis is your family's AI copilot — a chat assistant that can answer questions about how your family is doing and *take actions for you*, like creating a chore, adding a calendar event, or sending a notification to everyone. (Jarvis was previously called "Frankie".)
+
+## 25.1 Opening Jarvis
+
+1. Go to **Management** (`/parent`) and open **Jarvis** (`/parent/jarvis`).
+2. You will see the chat screen headed **🤖 Jarvis** with the subtitle "Family copilot — ask anything".
+3. If this is your first time, the screen shows **"No messages yet. Ask Jarvis something."**
+
+## 25.2 Chatting with Jarvis
+
+Your messages appear on the right; Jarvis's replies appear on the left.
+
+1. Type your question in the message box (examples like *"How do I balance this week? What do I say to Emma?"*)
+2. Click **"Send"** (messages can be up to 2000 characters).
+3. While Jarvis works, you will see **"Thinking…"**. Replies stream in live as they are generated.
+
+### When Jarvis takes action
+
+Jarvis can act on your family's data. As it works, small badges appear showing what it is doing, and a summary of the actions appears below its reply once it finishes.
+
+| Action | What it does |
+|--------|--------------|
+| **Create a chore or gig** | Adds a recurring task template — a mandatory chore or a points-earning bonus gig |
+| **Add a calendar event** | Creates a one-off event on the family calendar |
+| **Send a family notification** | Posts an in-app notification to the whole family |
+| **Add a shopping item** | Adds an item to your most recent active shopping list |
+| **Save a recipe** | Adds a recipe to the family cookbook |
+| **Schedule a meal** | Plans a meal for a date and meal type |
+| **Create a Jarvis schedule** | Sets up a recurring prompt (see 25.4) |
+| **Check today's progress** | Reports each child's task-completion for today |
+| **List pending approvals** | Shows gigs waiting for your review |
+| **List overdue tasks** | Shows tasks that were missed recently |
+
+> **Note:** Jarvis acts **autonomously** — it does not ask you to confirm each action first. You review what it did afterward (through notifications or by seeing the change in the app). Keep your requests clear, and Jarvis carries them out directly.
+
+## 25.3 Conversation History
+
+- Your chat history is **shared across the whole family's parents** and is saved automatically.
+- To start fresh, click **"Clear history"** (shown at the top once you have messages). This permanently clears the conversation.
+
+## 25.4 Scheduled Prompts (Jarvis Schedules)
+
+**Route:** `/parent/jarvis-schedules`
+
+A **schedule** is a recurring prompt that Jarvis runs automatically on a timer — for example, a Sunday-evening "weekly summary" of how the family's tasks went. The result is delivered to you as a notification or posted in the family chat.
+
+### Creating a schedule
+
+1. **Name** — A label for the schedule (e.g., "Weekly summary").
+2. **Prompt** — What you want Jarvis to answer each time it runs.
+3. **Cron** — When it should run, as five fields: `minute hour day month dow` (day-of-week: `0 = Sunday`). Quick-fill buttons are provided:
+
+   | Button | Runs |
+   |--------|------|
+   | **Daily 8am** | `0 8 * * *` |
+   | **Monday 9am** | `0 9 * * 1` |
+   | **Sunday 6pm** | `0 18 * * 0` |
+   | **Hourly** | `0 * * * *` |
+
+4. **Channel** — Where the result goes: **Notification** (in-app, default) or **Chat** (posted in family chat as a message from Jarvis).
+5. Save the schedule.
+
+### Managing schedules
+
+Each schedule card shows its name, cron expression, prompt preview, next/last run, and channel. Use the play/pause button (**▶** / **⏸**) to enable or pause it, and the trash button (**🗑**) to delete it.
+
+> **Tip:** A "Sunday 6pm" weekly-summary schedule is a great way to get a recap of the family's week without having to ask.
+
+---
+
+# Chapter 26: Subscription Plans — Quick Reference
+
+Family Task Manager offers three plans. **Tasks, rewards, consequences, the calendar, and family chat are always included on every plan** — the paid tiers raise the limits on the budget module, AI features, and family size. This chapter supplements Chapter 16 with the current per-plan limits.
+
+> **Note:** Only users with the **Parent/Guardian** role can view or manage the subscription, at `/parent/settings/subscription`.
+
+## 26.1 Plan Comparison
+
+| Feature | Free | Plus | Pro |
+|---------|:----:|:----:|:---:|
+| Tasks, Rewards & Consequences | Full | Full | Full |
+| Family Calendar & Chat | Full | Full | Full |
+| Family Members | 4 | 6 | Unlimited |
+| Budget Accounts | 2 | 10 | Unlimited |
+| Transactions / month | 30 | Unlimited | Unlimited |
+| Recurring Transactions | — | Unlimited | Unlimited |
+| Gigs / month | 3 | 30 | Unlimited |
+| AI Receipt Scans / month | — | 50 | Unlimited |
+| Reports | No | Yes | Yes |
+| Budget Goals | No | Yes | Yes |
+| CSV Import | No | Yes | Yes |
+| AI Features (Receipt scanner, Jarvis, Calendar scanner) | No | Yes | Yes |
+
+### What "Unlimited" and "—" mean
+
+- **Unlimited** — No cap. Use the feature as much as you like.
+- **—** (dash) — Not available on this plan.
+
+## 26.2 Which Plan to Choose
+
+- **Free** — Great for families who mainly want tasks, rewards, calendar, and chat. The starter budget (2 accounts, 30 transactions/month, 3 gigs/month) is plenty to try things out.
+- **Plus** — For families who actively use the budget: unlimited transactions and recurring entries, up to 10 accounts, CSV import, reports, goals, and **50 AI receipt scans a month**. Covers the needs of most families.
+- **Pro** — For larger families or those with many accounts who want everything unlimited — unlimited members, accounts, gigs, and AI receipt scans.
+
+## 26.3 Usage Meters
+
+On the subscription page, progress bars show how much of each limit you've used this billing period (family members, budget accounts, transactions, AI receipt scans, gigs, recurring transactions). When you reach a limit, the app prompts you to upgrade. Upgrades are processed securely through **PayPal**, with monthly or annual billing; new limits take effect immediately, and a cancellation keeps your plan active until the end of the current period.
+
+---
+
 # Appendix A: Glossary
 
 | Term in the App | Spanish | Description |
@@ -2099,7 +2834,7 @@ With rollover enabled (the default), unspent funds in a category carry over to t
 
 ---
 
-**Version:** 2.0
-**Last updated:** April 2026
+**Version:** 3.0
+**Last updated:** June 2026
 **Available at:** https://family.agent-ia.mx
 **Languages:** Spanish (Espanol) | English (this document)

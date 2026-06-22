@@ -1,0 +1,46 @@
+---
+/**
+ * Auto-starting welcome tour. Rendered by PageLayout ONLY on a role's home page
+ * (/parent or /dashboard) and ONLY when the user's backend
+ * `completed_welcome_tour` flag is false, so its mere presence means "start the
+ * tour unless this device already finished it". Persistence is dual: a
+ * localStorage guard (instant, per-device) + the backend flag set by ack-tour
+ * (cross-device). Skippable — driver.js shows a close button and any
+ * finish/skip/close acks the tour.
+ */
+import { buildTour } from "../lib/tourSteps";
+import type { TourRole } from "../lib/tourSteps";
+
+interface Props {
+    role: TourRole;
+    lang?: "en" | "es";
+}
+const { role, lang = "en" } = Astro.props;
+const data = buildTour(role, lang);
+const json = JSON.stringify(data).replace(/</g, "\\u003c");
+---
+
+<script type="application/json" id="ftm-tour-data" set:html={json}></script>
+
+<script>
+    import { runTour, tourGuardSet } from "../lib/tour";
+
+    function maybeStartTour() {
+        if ((window as any).__ftmTourStarted) return;
+        if (tourGuardSet()) return;
+        const el = document.getElementById("ftm-tour-data");
+        if (!el || !el.textContent) return;
+        let data: any;
+        try {
+            data = JSON.parse(el.textContent);
+        } catch {
+            return;
+        }
+        if (!data?.steps?.length) return;
+        (window as any).__ftmTourStarted = true;
+        // Let the bottom nav + header finish painting before highlighting targets.
+        setTimeout(() => runTour(data.steps, data.btn), 450);
+    }
+
+    document.addEventListener("astro:page-load", maybeStartTour);
+</script>

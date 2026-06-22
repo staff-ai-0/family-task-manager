@@ -1,6 +1,6 @@
 # Family Task Manager — Guia Completa de Usuario
 
-**Version 2.0** | Ultima actualizacion: Abril 2026
+**Version 3.0** | Ultima actualizacion: Junio 2026
 
 Bienvenido a la guia oficial de **Family Task Manager**, la aplicacion para organizar tareas, premios, consecuencias y finanzas de su familia de forma divertida y eficiente.
 
@@ -96,6 +96,16 @@ Bienvenido a la guia oficial de **Family Task Manager**, la aplicacion para orga
 16. [Capitulo 16: Suscripcion y Perfil](#capitulo-16-suscripcion-y-perfil)
     - [16.1 Planes Disponibles](#161-planes-disponibles)
     - [16.2 Pagina de Suscripcion](#162-pagina-de-suscripcion)
+17. [Capitulo 17: Gigs (Ganancias Extra)](#capitulo-17-gigs-ganancias-extra)
+18. [Capitulo 18: Mascota Virtual](#capitulo-18-mascota-virtual)
+19. [Capitulo 19: Plan de Comidas](#capitulo-19-plan-de-comidas)
+20. [Capitulo 20: Listas de Compras](#capitulo-20-listas-de-compras)
+21. [Capitulo 21: Calendario Familiar](#capitulo-21-calendario-familiar)
+22. [Capitulo 22: Chat Familiar y Mensajes](#capitulo-22-chat-familiar-y-mensajes)
+23. [Capitulo 23: Modo Kiosco (Pantalla Compartida)](#capitulo-23-modo-kiosco-pantalla-compartida)
+24. [Capitulo 24: Analitica Familiar](#capitulo-24-analitica-familiar)
+25. [Capitulo 25: Jarvis (Copiloto IA)](#capitulo-25-jarvis-copiloto-ia)
+26. [Capitulo 26: Planes de Suscripcion — Referencia Rapida](#capitulo-26-planes-de-suscripcion--referencia-rapida)
 - [Apendice A: Glosario](#apendice-a-glosario)
 - [Apendice B: Preguntas Frecuentes](#apendice-b-preguntas-frecuentes)
 - [Apendice C: Solucion de Problemas](#apendice-c-solucion-de-problemas)
@@ -1963,6 +1973,549 @@ Haga clic en **"Mejorar Plan"** para actualizar a Plus o Pro. El pago se procesa
 
 ---
 
+# Capitulo 17: Gigs (Ganancias Extra)
+
+**Quien lo usa:** Los padres publican y aprueban gigs. Los hijos y adolescentes los exploran, reclaman y completan. Los gigs son la capa de "ganancias extra" encima de las tareas regulares — trabajos opcionales que pagan puntos de bono.
+
+Los gigs son trabajos pagados de una sola vez que un padre publica para la familia. A diferencia de las plantillas de tareas semanales (que se asignan y rotan), un gig queda en un tablero abierto que cualquier hijo elegible puede tomar por orden de llegada. El hijo hace el trabajo, envia evidencia y un padre lo aprueba para liberar los puntos. Como **1 punto = $1 MXN** en esta app, los gigs funcionan tambien como un sistema sencillo de domingo/changarros.
+
+## 17.1 El Tablero de Gigs (Hijos)
+
+**Ruta:** `/gigs`
+
+El Tablero de Gigs es donde los hijos y adolescentes encuentran gigs disponibles. Se llega desde el boton **"Gigs"** en la barra de navegacion inferior.
+
+### Que ve en el tablero
+
+- Un encabezado que dice **"¡Gana puntos extra!"** con un enlace a **"Mis Gigs"** en la esquina superior derecha
+- Una tarjeta por cada gig disponible que muestra: **Titulo** y descripcion corta, **Puntos** (el numero grande en violeta), un **chip de dificultad** (Facil, Medio o Dificil) y una **etiqueta de categoria** (Quehaceres, Mandados, Creativo, Aprendizaje, Al Aire Libre u Otro)
+- Un boton **"Reclamar"** en cada gig que aun no haya reclamado
+
+Si no hay gigs, vera **"Sin gigs disponibles — Tu papa/mama publicara gigs pronto."**
+
+### Reclamar un gig
+
+1. Vaya a **Gigs** (`/gigs`)
+2. Explore las tarjetas y encuentre un trabajo que quiera hacer
+3. Haga clic en **"Reclamar"** en ese gig
+4. La tarjeta se actualiza y muestra un formulario de evidencia: **"Reclamada — envia tu evidencia abajo"**
+
+> **Nota:** Solo puede tener un reclamo activo por gig a la vez. Si su rol no esta permitido en un gig en particular (un padre puede restringir un gig solo a Hijos o solo a Adolescentes), el reclamo sera rechazado.
+
+### Enviar su evidencia
+
+1. En la tarjeta del gig reclamado (en `/gigs` o dentro de **"Mis Gigs"**), complete **"¿Que hiciste? (opcional)"** y **"Foto de evidencia (opcional)"** (JPEG, PNG o WebP; en el telefono abre la camara directamente)
+2. Haga clic en **"Enviar para aprobacion"**
+3. La tarjeta ahora muestra **"⏳ Pendiente de aprobacion"**
+
+> **Tip:** Ambos campos de evidencia son opcionales, pero agregar una foto hace mucho mas rapida la aprobacion — y ayuda a construir su racha de confianza (vea 17.4).
+
+## 17.2 Mis Gigs (Hijos)
+
+**Ruta:** `/gigs/my-gigs`
+
+La pagina **"Mis Gigs"** lista cada gig que ha reclamado, con su estado actual:
+
+| Estado | Significado |
+|--------|-------------|
+| **En progreso** | Reclamo el gig pero aun no ha enviado evidencia |
+| **Esperando aprobacion** | Envio su evidencia; un padre necesita revisarla |
+| **Aprobada** | Un padre la aprobo — los puntos se sumaron a su saldo (verde **+N pts**) |
+| **Rechazada** | Un padre la regreso. La tarjeta muestra la nota bajo **"Motivo:"** |
+
+Si un gig es rechazado, lea el motivo y luego reclamelo de nuevo desde el tablero para volver a intentarlo.
+
+## 17.3 Publicar y Gestionar Gigs (Padres)
+
+**Ruta:** `/parent/gigs`
+
+Los padres gestionan el tablero desde **Gigs** en la barra de navegacion. (Si un padre abre `/gigs`, es redirigido aqui — los padres no pueden reclamar gigs.)
+
+### Crear un gig
+
+1. Vaya a **Gigs** (`/parent/gigs`)
+2. Haga clic en **"+ Nueva Gig"** en la esquina superior derecha
+3. Complete **"Titulo"** (obligatorio), **"Descripcion"** (opcional), **"Puntos"** (minimo 1; 1 punto = $1 MXN), **"Dificultad"** y **"Categoria"**
+4. Haga clic en **"Guardar"**
+
+### Editar y archivar
+
+- **Editar** — Haga clic en **"Editar"**, cambie cualquier campo y guarde.
+- **Archivar** — Haga clic en **"Archivar"** y confirme **"¿Archivar esta gig?"**. Archivar desactiva el gig (eliminacion suave, conserva el historial).
+
+### Revisar el trabajo enviado
+
+1. En `/parent/gigs`, haga clic en **"Revisar trabajo enviado"** (una insignia roja muestra cuantos esperan)
+2. Llegara a la cola unificada de aprobaciones (`/parent/approvals`) con el nombre del hijo, el titulo, los puntos y la evidencia
+3. Elija **Aprobar** (otorga puntos al instante, con nota opcional) o **Rechazar** (regresa con una nota; sin puntos)
+
+> **Nota:** El hijo recibe una notificacion automatica (en la app y por push) al aprobar o rechazar.
+
+## 17.4 La Racha de Confianza (Auto-aprobacion)
+
+- Cada gig aprobado sube la racha del hijo en uno.
+- Al alcanzar **3 gigs aprobados consecutivos** (umbral predeterminado), sus siguientes gigs se **auto-aprueban** al enviar la evidencia — los puntos llegan de inmediato.
+- Un gig auto-aprobado se marca como **"⚡ Auto-aprobada"**.
+- Un **rechazo reinicia la racha a cero**.
+
+| Situacion | Puntos | Racha |
+|-----------|--------|-------|
+| El padre aprueba un gig | Se otorgan al aprobar | +1 |
+| El hijo (racha ≥ 3) envia evidencia | Se otorgan al instante | +1 |
+| El padre rechaza un gig | Ninguno | Se reinicia a 0 |
+
+> **Tip para padres:** La racha de confianza los saca poco a poco de las aprobaciones de bajo riesgo. Si desea control mas estricto, rechace lo que no cumpla — eso reinicia la racha.
+
+---
+
+# Capitulo 18: Mascota Virtual
+
+**Quien lo usa:** Hijos y adolescentes. Cada hijo tiene su propia mascota privada; los padres no la gestionan.
+
+La Mascota Virtual le da a los hijos una razon divertida para seguir completando tareas y gigs. Cada hijo puede adoptar **una** mascota con tres estadisticas que cambian con el tiempo y un nivel que sube con la experiencia.
+
+## 18.1 Adoptar Tu Mascota
+
+**Ruta:** `/pet`
+
+1. Vaya a **Mascota** (`/pet`)
+2. Escriba un **Nombre** (hasta 40 caracteres)
+3. Elija una **especie**:
+
+| Especie | |
+|---------|---|
+| Gato 🐱 | Perro 🐶 |
+| Dragon 🐲 | Zorro 🦊 |
+| Buho 🦉 | Conejo 🐰 |
+
+4. Haga clic en **"Adoptar"**
+
+Solo tendra una mascota, asi que elija un nombre que le guste.
+
+## 18.2 Las Estadisticas de Tu Mascota
+
+| Estadistica | Que significa | Como se mueve |
+|-------------|---------------|----------------|
+| **Animo** 😊 | Que tan feliz esta (0–100) | **Baja** ~15 al dia si se le ignora. Sube al alimentar, jugar, dar premios y completar tareas |
+| **Hambre** 🍖 | Que tan hambrienta esta (0–100, 100 = muerta de hambre) | **Sube** ~20 al dia. Baja al alimentar o dar premios de comida |
+| **XP** ⭐ | Experiencia hacia el siguiente nivel | Solo sube — completando tareas y gigs, o con ciertos premios |
+
+La cara refleja su estado: **🤩 Feliz**, **🐱 Bien**, **😞 Triste**, **😫 Muerta de hambre**.
+
+> **Nota:** La mascota envejece en pasos de 24 horas. Si no abre la app por unos dias, regresara mas hambrienta y menos feliz.
+
+## 18.3 Cuidar a Tu Mascota
+
+### Alimentar (gratis)
+
+Toque **"🍖 Alimentar"** — el hambre baja y el animo recibe un pequeno impulso. Solo puede alimentarla cuando tiene hambre.
+
+### Jugar (gratis)
+
+Toque **"🎾 Jugar"** — el animo sube, pero deja a la mascota un poco mas hambrienta.
+
+### Premios (cuestan puntos)
+
+La **"Tienda de premios"** le permite gastar sus puntos ganados. Un boton se desactiva si no le alcanza.
+
+| Premio | Costo | Efecto |
+|--------|-------|--------|
+| **Snack** | 5 pts | Hambre −10, animo +2 |
+| **Juguete** | 10 pts | Animo +20 |
+| **Vitamina** | 20 pts | Hambre −5, animo +5, XP +30 |
+| **Comida gourmet** | 30 pts | Hambre −50, animo +10, XP +15 |
+
+## 18.4 Subir de Nivel
+
+- Completar una tarea regular (obligatoria) alimenta un poco y da un pequeno impulso de XP.
+- Completar una tarea de bono o un gig da un impulso de XP mucho mayor.
+
+La pagina le recuerda: **"Completa tareas para subir el XP de tu mascota."** Las vitaminas y la comida gourmet tambien otorgan XP.
+
+## 18.5 Recordatorios de la Mascota
+
+Si la mascota cae en estado **triste** o **muerta de hambre**, la app envia un recordatorio (en la app y como push). Toquelo para ir directo a la pantalla de la mascota.
+
+---
+
+# Capitulo 19: Plan de Comidas
+
+**Ruta:** `/meals` · **API:** `/api/meals/`
+
+> **Quien puede usarlo:** Todos los miembros de la familia pueden ver y editar el plan de comidas y las recetas. No requiere un plan especifico.
+
+El modulo de Comidas es un planificador de comidas semanal sencillo, con recetas opcionales que puede importar desde una pagina web con IA.
+
+## 19.1 El Plan Semanal
+
+**Ruta:** `/meals`
+
+La pagina tiene el encabezado **🍽️ Plan de comidas** y muestra la **semana actual** (lunes a domingo). Es una cuadricula: columnas = los siete dias; filas = los cuatro momentos (Desayuno, Comida, Cena, Snack).
+
+> **Nota:** El plan siempre muestra la semana actual — no hay botones de semana anterior/siguiente.
+
+## 19.2 Agregar una Comida al Plan
+
+1. Haga clic en **➕ Agregar comida**
+2. Complete **Dia**, **Tipo de comida**, **Titulo o platillo** (obligatorio) y **Receta (opcional)**
+3. Haga clic en **Guardar**
+
+Para quitar una comida, haga clic en el boton **×** de su tarjeta.
+
+## 19.3 Recetas
+
+Cada receta guarda un **nombre**, una lista de **ingredientes** (uno por linea) y un **tiempo de preparacion** opcional. Las recetas guardadas aparecen debajo del formulario.
+
+### Crear una receta manualmente
+
+En **Nueva receta**, complete **Nombre receta** (obligatorio), **Ingredientes** (uno por linea) y **Minutos prep** (1–600), luego **Guardar**.
+
+### Importar una receta desde una pagina web (IA)
+
+1. En **🔗 Importar desde URL (IA)**, pegue la direccion (debe empezar con `http://` o `https://`)
+2. Haga clic en **Importar** (vera **"Importar…"**)
+3. Al terminar vera **"Loaded · confidence NN%"** y el formulario se llena con el **nombre**, los **ingredientes** y el **tiempo de preparacion**
+4. Revise, ajuste lo necesario y haga clic en **Guardar**
+
+> **Consejo:** El porcentaje de confianza indica que tan segura esta la IA. Siempre revise los ingredientes antes de guardar.
+
+## 19.4 Comidas → Lista de Compras
+
+Cuando una comida planeada esta vinculada a una receta con ingredientes, esos ingredientes pueden pasar a su lista de compras activa mas reciente automaticamente — creando una lista **"Meal prep"** si no tiene una. Las cantidades se conservan ("200g harina" → articulo "harina", cantidad "200g"). Vea el capitulo **Listas de Compras**.
+
+---
+
+# Capitulo 20: Listas de Compras
+
+**Ruta:** `/shopping` · **API:** `/api/shopping/`
+
+> **Quien puede usarlo:** Todos en la familia. Las listas son compartidas — cualquier miembro puede agregar, marcar o quitar articulos.
+
+## 20.1 La Pagina de Compras
+
+**Ruta:** `/shopping`
+
+Encabezado **🛒 Shopping** ("Shared family lists"). Las listas aparecen como pestanas; cada encabezado muestra un conteo rapido (ej: "12 · 5 pending"). Sin listas, vera **"No lists yet. Create one above."**
+
+## 20.2 Crear una Lista
+
+1. En **"New list (e.g. Costco)"**, escriba un nombre
+2. Haga clic en **"Add"** — la lista aparece como pestana y se abre
+
+## 20.3 Agregar y Marcar Articulos
+
+- **Agregar:** en **"Add item"** escriba el nombre, opcionalmente una cantidad en **"Qty"** (texto libre), y envie.
+- **Marcar:** toque la casilla redonda para marcar como comprado (se tacha); toquela de nuevo para desmarcar. Para quitar, use el boton **×**.
+
+Una lista vacia muestra **"Empty list. Add something."**
+
+> **Nota:** Los articulos aparecen en el orden en que se agregaron. No hay agrupacion por pasillo ni reordenamiento manual.
+
+## 20.4 Gestionar una Lista
+
+- **Archivar** — **"Archive"** aparta la lista sin eliminarla.
+- **Eliminar** — **"Delete"** (confirma **"Delete list?"**) elimina la lista y sus articulos.
+
+## 20.5 Como se Llenan las Listas Automaticamente
+
+- **Desde el plan de comidas:** los ingredientes de una receta vinculada se agregan a su lista activa mas reciente (crea **"Meal prep"** si no tiene una). Las cantidades se conservan.
+- **Desde el escaneo de recibos:** al escanear un recibo en Presupuesto, la app **marca automaticamente** los articulos pendientes que coinciden (con coincidencia aproximada). El resultado del recibo indica que articulos se marcaron.
+
+> **Consejo:** Planee comidas → deje fluir los ingredientes a una lista → compre → escanee el recibo y los articulos se marcan solos.
+
+## 20.6 Compartido
+
+Todas las listas se comparten en toda la familia — todos ven las mismas listas y articulos, y cualquiera puede agregar o marcar. Los cambios de otros miembros aparecen al recargar.
+
+---
+
+# Capitulo 21: Calendario Familiar
+
+El Calendario Familiar mantiene a todos al tanto de practicas, citas, eventos escolares y cumpleanos. Los eventos viven en una sola lista compartida, y los padres pueden tomar una foto de un volante escolar para agregar eventos automaticamente.
+
+## 21.1 Vision General
+
+**Ruta:** `/calendar`
+
+El calendario muestra los **eventos proximos de los siguientes 60 dias**, agrupados por dia. Cada evento muestra su hora (o "Todo el dia"), un lugar opcional y un icono de origen:
+
+| Icono | Origen |
+|-------|--------|
+| 📅 | Manual |
+| 📄 | Volante escaneado |
+| 🏫 | Importacion escolar |
+| 🔁 | Recurrente |
+
+> **Nota:** El calendario es visible para **todos**. Cualquier miembro puede ver los eventos, pero solo los **padres** pueden crear eventos escaneados con IA, editarlos o eliminarlos.
+
+### Dos formas de ver
+
+- **Vista de lista** (`/calendar`) — La predeterminada.
+- **Vista de mes** (`/calendar/month`) — Cuadricula mensual; use el boton **"Vista mes"**.
+
+## 21.2 Agregar un Evento Manualmente
+
+1. Vaya a **Calendario** (`/calendar`)
+2. Toque **"➕ Nuevo evento"** para desplegar el formulario
+3. Complete **Titulo**, **Fecha** (obligatorio), **Hora**, **Lugar (opcional)**, **Todo el dia** y **Repeticion**
+4. Haga clic en **"Agregar"**
+
+### Opciones de repeticion
+
+Sin repeticion, Diario, Lun-Vie, Semanal, Mensual o **Personalizado (RRULE)**.
+
+> **Tip:** Para control total, use **Personalizado (RRULE)**, por ejemplo `FREQ=WEEKLY;BYDAY=MO,WE,FR`.
+
+## 21.3 Escanear un Volante Escolar (IA) — Padres
+
+**Ruta:** `/calendar/scan`
+
+> **Nota:** Solo disponible para usuarios con el rol de **Padre/Tutor**.
+
+1. En el Calendario, toque la tarjeta morada **"📄 Escanear volante escolar"**, o vaya a `/calendar/scan`
+2. Toque **"Elegir foto o PDF"** (JPG, PNG, WebP o PDF; en PDFs solo se lee la primera pagina)
+3. Vera **"Escaneando…"** mientras la IA lee
+4. Al terminar vera el **tipo de documento**, un porcentaje de **confianza** y una tarjeta editable por evento (todas marcadas)
+5. Revise/edite **titulo**, **lugar** y **notas**; desmarque lo que no quiera
+6. Haga clic en **"Importar eventos marcados"**
+
+> **Tip:** Siempre revise fechas y horas antes de importar. Si reporta "No se detectaron eventos", use una foto mas clara.
+
+## 21.4 Suscribirse desde Otra App de Calendario
+
+El calendario publica un **feed iCal** en `/api/calendar/feed.ics` (proximos 6 meses) para Apple Calendar, Google Calendar u Outlook.
+
+---
+
+# Capitulo 22: Chat Familiar y Mensajes
+
+Hay dos formas de conversar: un **Chat familiar** compartido y **Mensajes Directos** privados. Ambos para **todos los roles**.
+
+## 22.1 Chat Familiar
+
+**Ruta:** `/chat`
+
+1. Vaya a **Chat** (`/chat`)
+2. Escriba en la caja (**"Escribe un mensaje…"**)
+3. Haga clic en **"Enviar"** — aparece al instante y los demas lo ven en vivo
+
+> **Nota:** Hasta 2,000 caracteres. Sus mensajes a la derecha; los demas a la izquierda con el nombre arriba.
+
+### Reacciones
+
+Pase el cursor (o toque) un mensaje y elija: 👍 ❤️ 😂 🎉 🙏 ✅. Toque de nuevo para quitar.
+
+### Estado de lectura
+
+Al abrir `/chat`, todos los mensajes se marcan como leidos. Puede aparecer una insignia de no leidos en otras partes.
+
+## 22.2 Mensajes Directos (DM)
+
+**Ruta:** `/dm`
+
+1. Vaya a **Mensajes directos** (`/dm`)
+2. Toque **"➕ Nueva conversacion"** y marque a los miembros (usted se agrega automaticamente)
+3. Haga clic en **"Iniciar"**
+4. Para enviar, abra una conversacion, escriba en **"Mensaje privado…"** y **"Enviar"**
+
+> **Tip:** Use el **Chat familiar** para todos y los **Mensajes Directos** cuando solo concierne a un par de personas.
+
+---
+
+# Capitulo 23: Modo Kiosco (Pantalla Compartida)
+
+El Modo Kiosco convierte cualquier pantalla libre en un tablero familiar siempre encendido, **sin necesidad de iniciar sesion**.
+
+## 23.1 Como Funciona
+
+Un padre crea un **token de dispositivo** incrustado en una URL especial. Abra la URL en la pantalla compartida y mostrara la instantanea en vivo, actualizandose sola.
+
+> **Nota:** Solo los **padres** pueden crear y revocar dispositivos. La pantalla es de solo lectura.
+
+## 23.2 Que Muestra la Pantalla del Kiosco
+
+**Ruta (en el dispositivo):** `/kiosk?token=...`
+
+| Seccion | Contenido |
+|---------|-----------|
+| **Encabezado** | Nombre de la familia y un reloj en vivo |
+| **📅 Hoy** | Eventos de hoy con horas/lugares y un adelanto de manana |
+| **✅ Tareas** | Tareas de hoy de todos (⭐ = bonus), con el nombre asignado |
+| **Miembros** | Progreso de cada miembro (ej: "2/3 tareas") |
+| **🛒 Compras** | Listas activas con su conteo de pendientes |
+
+La pagina **se actualiza cada 60 segundos**.
+
+## 23.3 Configurar un Dispositivo — Padres
+
+**Ruta:** `/parent/kiosk`
+
+1. Vaya a **Gestion** → **Pantallas de pared** (`/parent/kiosk`)
+2. Escriba una etiqueta (ej: "Cocina") y **"Crear"**
+3. Copie la URL de una sola vez (**Importante:** el token se muestra **solo una vez**)
+4. Abra la URL en la pantalla compartida
+
+> **Tip:** Use el navegador en pantalla completa y desactive el suspender.
+
+### Gestionar dispositivos
+
+- **Visto** — Cuando cargo por ultima vez (ej: "ahora", "5m", "Nunca")
+- **Revocar** — **"Revocar"** (confirma "¿Revocar este dispositivo?") deshabilita la URL de inmediato.
+
+---
+
+# Capitulo 24: Analitica Familiar
+
+**Quien lo usa:** Solo padres. Resume como va toda la familia — cumplimiento, penalizaciones por tarde, gigs y un "PUP Score". Los hijos no la ven.
+
+## 24.1 Abrir la Analitica
+
+**Ruta:** `/parent/analytics`
+
+1. Vaya a **Gestion** (`/parent`)
+2. Abra **Configuracion**
+3. Toque **"Analitica"**
+
+## 24.2 El PUP Score
+
+Un solo numero de **0 a 100** ("Parenting Under Pressure"; subtitulo **"Presion sobre los padres — bajo = todo en orden"**).
+
+| Etiqueta | Rango | Color | Lectura |
+|----------|-------|-------|---------|
+| **Bajo** | 0–39 | Verde | Todo marcha sin problemas |
+| **Moderado** | 40–69 | Ambar | Algo de friccion |
+| **Alto** | 70–100 | Rojo | Vale la pena un reequilibrio |
+
+### Que mueve el puntaje
+
+Arranca en 50 y se ajusta segun las ultimas 4 semanas: cumplimiento despareja **sube** el puntaje; un hijo por debajo del 50% lo **sube** y lo senala por nombre; todos en 90%+ sin penalizaciones lo **baja**; mas de 5 auto-penalizaciones lo **suben**.
+
+## 24.3 Tendencia de 30 Dias
+
+Una grafica **"Tendencia 30 dias"** muestra como se ha movido su PUP Score el ultimo mes (se registra una instantanea diaria automatica).
+
+## 24.4 Observaciones
+
+Una lista corta de observaciones en lenguaje sencillo (ej: "Emma below 50% completion", "Everyone on track", "Zero late penalties this month").
+
+## 24.5 Desglose por Miembro
+
+**"Por miembro (ultimas 4 semanas)"** lista a cada miembro con: Nombre/rol, Hechas/total, % de cumplimiento (verde ≥ 80%, ambar ≥ 50%, rojo por debajo), Gigs hechos y Tareas tarde.
+
+## 24.6 Exportar los Datos
+
+Los numeros por miembro se exportan a **CSV** via `/api/analytics/export.csv` (archivo `family-analytics.csv`).
+
+---
+
+# Capitulo 25: Jarvis (Copiloto IA)
+
+**Rutas:** `/parent/jarvis` · `/parent/jarvis-schedules`
+
+> **Quien puede usarlo:** Solo Padres/Tutores. Los hijos y adolescentes son redirigidos a su tablero.
+>
+> **Plan requerido:** Jarvis forma parte de las **funciones de IA** del plan **Plus**. El plan Gratuito no incluye el copiloto de IA.
+
+Jarvis es el copiloto de IA de su familia — un asistente de chat que responde preguntas y *realiza acciones por usted*. (Se llamaba antes "Frankie".)
+
+## 25.1 Abrir Jarvis
+
+1. Vaya a **Gestion** (`/parent`) y abra **Jarvis** (`/parent/jarvis`)
+2. Vera la pantalla **🤖 Jarvis** ("Copiloto familiar — pregunta lo que sea")
+3. La primera vez: **"Sin mensajes aun. Preguntale algo a Jarvis."**
+
+## 25.2 Conversar con Jarvis
+
+1. Escriba su pregunta (ej: *"¿Como balanceo la semana? ¿Que le digo a Emma?"*)
+2. Haga clic en **"Enviar"** (hasta 2000 caracteres)
+3. Mientras trabaja vera **"Pensando…"**; las respuestas se muestran en vivo
+
+### Cuando Jarvis realiza acciones
+
+Aparecen etiquetas mostrando lo que hace, y un resumen al terminar:
+
+| Accion | Que hace |
+|--------|----------|
+| **Crear tarea o gig** | Agrega una plantilla de tarea recurrente |
+| **Agregar evento al calendario** | Crea un evento puntual |
+| **Enviar notificacion familiar** | Notificacion en la app para toda la familia |
+| **Agregar articulo de compra** | A su lista activa mas reciente |
+| **Guardar receta** / **Programar comida** | Recetario / plan de comidas |
+| **Crear programacion de Jarvis** | Prompt recurrente (vea 25.4) |
+| **Ver progreso de hoy** / **Aprobaciones pendientes** / **Tareas vencidas** | Reportes rapidos |
+
+> **Nota:** Jarvis actua de forma **autonoma** — no pide confirmar cada accion. Usted revisa lo que hizo despues. Mantenga sus peticiones claras.
+
+## 25.3 Historial de la Conversacion
+
+El historial es **compartido entre los padres** y se guarda automaticamente. Para empezar de cero, **"Limpiar historial"**.
+
+## 25.4 Prompts Programados (Programaciones de Jarvis)
+
+**Ruta:** `/parent/jarvis-schedules`
+
+Una **programacion** es un prompt recurrente que Jarvis ejecuta automaticamente (ej: un "resumen semanal" el domingo). El resultado llega como notificacion o se publica en el chat familiar.
+
+### Crear una programacion
+
+1. **Nombre** (ej: "Resumen semanal")
+2. **Prompt** — lo que quiere que responda
+3. **Cron** — `minuto hora dia mes dow` (dow: `0 = Domingo`). Botones rapidos:
+
+   | Boton | Se ejecuta |
+   |-------|------------|
+   | **Diario 8am** | `0 8 * * *` |
+   | **Lunes 9am** | `0 9 * * 1` |
+   | **Domingo 6pm** | `0 18 * * 0` |
+   | **Cada hora** | `0 * * * *` |
+
+4. **Canal** — **Notificacion** (predeterminado) o **Chat**
+5. Guarde
+
+Use **▶** / **⏸** para activar/pausar y **🗑** para eliminar.
+
+> **Consejo:** Una programacion de resumen semanal "Domingo 6pm" es ideal para recibir un repaso sin tener que preguntar.
+
+---
+
+# Capitulo 26: Planes de Suscripcion — Referencia Rapida
+
+Family Task Manager ofrece tres planes. **Las tareas, premios, consecuencias, el calendario y el chat familiar siempre estan incluidos en todos los planes**; los niveles de pago aumentan los limites del presupuesto, las funciones de IA y el tamano de la familia. Este capitulo complementa el Capitulo 16 con los limites actuales por plan.
+
+> **Nota:** Solo el rol de **Padre/Tutor** puede ver o gestionar la suscripcion, en `/parent/settings/subscription`.
+
+## 26.1 Comparacion de Planes
+
+| Funcion | Gratis | Plus | Pro |
+|---------|:------:|:----:|:---:|
+| Tareas, Premios y Consecuencias | Completo | Completo | Completo |
+| Calendario y Chat Familiar | Completo | Completo | Completo |
+| Miembros de la Familia | 4 | 6 | Ilimitado |
+| Cuentas Bancarias | 2 | 10 | Ilimitado |
+| Transacciones / mes | 30 | Ilimitado | Ilimitado |
+| Transacciones Recurrentes | — | Ilimitado | Ilimitado |
+| Gigs / mes | 3 | 30 | Ilimitado |
+| Escaneos de Recibos con IA / mes | — | 50 | Ilimitado |
+| Reportes | No | Si | Si |
+| Metas de Presupuesto | No | Si | Si |
+| Importar CSV | No | Si | Si |
+| Funciones de IA (Escaner de recibos, Jarvis, Escaner de calendario) | No | Si | Si |
+
+- **Ilimitado** — Sin tope.
+- **—** (guion) — No disponible en este plan.
+
+## 26.2 Que Plan Elegir
+
+- **Gratis** — Para familias que principalmente quieren tareas, premios, calendario y chat.
+- **Plus** — Para quienes usan activamente el presupuesto: transacciones y recurrentes ilimitadas, hasta 10 cuentas, CSV, reportes, metas y **50 escaneos de recibos al mes**.
+- **Pro** — Para familias grandes que quieren todo ilimitado.
+
+## 26.3 Medidores de Uso
+
+En la pagina de suscripcion, las barras muestran cuanto de cada limite ha usado este periodo. Al alcanzar un limite, la app sugiere actualizar. Los pagos se procesan via **PayPal** (mensual o anual); los nuevos limites toman efecto de inmediato y una cancelacion mantiene el plan activo hasta el final del periodo.
+
+---
+
 # Apendice A: Glosario
 
 | Termino en la App | Ingles | Descripcion |
@@ -2100,7 +2653,7 @@ Con el rollover activado (por defecto), los fondos no gastados en una categoria 
 
 ---
 
-**Version:** 2.0
+**Version:** 3.0
 **Ultima actualizacion:** Abril 2026
 **Disponible en:** https://family.agent-ia.mx
 **Idiomas:** Espanol (este documento) | English (en la app)

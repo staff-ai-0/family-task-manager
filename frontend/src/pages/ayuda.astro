@@ -19,10 +19,67 @@ import { Content as GuideContent } from "../../docs/USER_GUIDE_ES.md";
             <a href="/" class="nav-link">← Volver al inicio</a>
             <a href="/help" class="lang-toggle">English</a>
         </nav>
+        <header class="guide-hero">
+            <h1 class="guide-hero-title">Centro de Ayuda</h1>
+            <p class="guide-hero-sub">Guías para cada parte de Family Task Manager</p>
+            <input
+                id="guide-search"
+                type="search"
+                class="guide-search"
+                placeholder="Buscar temas…"
+                autocomplete="off"
+                aria-label="Buscar en la guía del usuario"
+            />
+        </header>
+        <details class="guide-toc-wrap" open>
+            <summary>Contenido</summary>
+            <nav id="guide-toc" class="guide-toc" aria-label="Tabla de contenidos"></nav>
+            <p id="guide-toc-empty" class="guide-toc-empty" hidden>
+                Ningún tema coincide con tu búsqueda.
+            </p>
+        </details>
         <article class="guide">
             <GuideContent />
         </article>
     </main>
+
+    <script>
+        function initGuideToc() {
+            const article = document.querySelector(".guide");
+            const toc = document.getElementById("guide-toc");
+            const search = document.getElementById(
+                "guide-search",
+            ) as HTMLInputElement | null;
+            const empty = document.getElementById("guide-toc-empty");
+            if (!article || !toc || (toc as HTMLElement).dataset.built === "1")
+                return;
+            (toc as HTMLElement).dataset.built = "1";
+
+            article.querySelectorAll("h1, h2").forEach((h) => {
+                if (!h.id) return;
+                const a = document.createElement("a");
+                a.href = "#" + h.id;
+                a.textContent = h.textContent || "";
+                a.className = h.tagName === "H1" ? "toc-h1" : "toc-h2";
+                toc.appendChild(a);
+            });
+
+            search?.addEventListener("input", () => {
+                const q = search.value.trim().toLowerCase();
+                let shown = 0;
+                toc.querySelectorAll("a").forEach((a) => {
+                    const match = (a.textContent || "")
+                        .toLowerCase()
+                        .includes(q);
+                    (a as HTMLElement).hidden = q !== "" && !match;
+                    if (!(a as HTMLElement).hidden) shown++;
+                });
+                if (empty) empty.hidden = !(q !== "" && shown === 0);
+            });
+        }
+        document.addEventListener("astro:page-load", initGuideToc);
+        document.addEventListener("DOMContentLoaded", initGuideToc);
+    </script>
 </Layout>
 
 <style>
@@ -167,5 +224,76 @@ import { Content as GuideContent } from "../../docs/USER_GUIDE_ES.md";
         margin: 0 0 16px;
         color: #475569;
         font-style: italic;
+    }
+
+    /* Centro de ayuda: hero + búsqueda + tabla de contenidos generada */
+    .guide-hero {
+        margin-bottom: 18px;
+    }
+    .guide-hero-title {
+        font-size: 28px;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0 0 4px;
+    }
+    .guide-hero-sub {
+        color: #64748b;
+        font-size: 14px;
+        margin: 0 0 14px;
+    }
+    .guide-search {
+        width: 100%;
+        padding: 10px 14px;
+        font-size: 15px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        outline: none;
+        box-sizing: border-box;
+    }
+    .guide-search:focus {
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+    }
+    .guide-toc-wrap {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin-bottom: 28px;
+        background: #f8fafc;
+    }
+    .guide-toc-wrap > summary {
+        cursor: pointer;
+        font-weight: 700;
+        color: #334155;
+    }
+    .guide-toc {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin-top: 10px;
+        max-height: 340px;
+        overflow-y: auto;
+    }
+    .guide-toc a {
+        text-decoration: none;
+        color: #475569;
+        font-size: 14px;
+        padding: 3px 0;
+    }
+    .guide-toc a:hover {
+        color: #4f46e5;
+    }
+    .guide-toc a.toc-h1 {
+        font-weight: 700;
+        color: #0f172a;
+        margin-top: 8px;
+    }
+    .guide-toc a.toc-h2 {
+        padding-left: 14px;
+    }
+    .guide-toc-empty {
+        color: #94a3b8;
+        font-size: 14px;
+        margin: 8px 0 0;
     }
 </style>

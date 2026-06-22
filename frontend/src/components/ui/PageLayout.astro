@@ -2,6 +2,8 @@
 import Layout from "../../layouts/Layout.astro";
 import PageHeader from "./PageHeader.astro";
 import BottomNav from "../BottomNav.astro";
+import WelcomeTour from "../WelcomeTour.astro";
+import type { TourRole } from "../../lib/tourSteps";
 
 /**
  * PageLayout — full-page shell: Layout + PageHeader + <main> + BottomNav.
@@ -41,6 +43,12 @@ interface Props {
   lang?: "en" | "es";
   mainClass?: string;
   containerClass?: string;
+  /**
+   * Pass the user's `completed_welcome_tour` flag on the role HOME pages
+   * (/parent, /dashboard) to auto-start the welcome tour for first-time users.
+   * Defaults to true (= "already done") so other pages never trigger it.
+   */
+  completedTour?: boolean;
 }
 
 const {
@@ -57,7 +65,22 @@ const {
   lang = "en",
   mainClass = "flex-1 px-4 py-6",
   containerClass = "w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep",
+  completedTour = true,
 } = Astro.props;
+
+// Auto-start the welcome tour for first-time users on the home page that owns
+// the full tour for their role: the PARENT setup tour fires on /parent (where
+// the getting-started checklist it highlights actually lives), and the kid/teen
+// earn tour fires on /dashboard. A new parent lands on /dashboard first but gets
+// the tour when they open Manage (/parent) — this guarantees they see the whole
+// parent flow, checklist step included, rather than a truncated version.
+const _tourPath = Astro.url.pathname.replace(/\/+$/, "") || "/";
+const _isParent = String(role).toLowerCase() === "parent";
+const tourRole: TourRole = _isParent ? "parent" : "kid";
+const showWelcomeTour =
+  completedTour === false &&
+  ((_isParent && _tourPath === "/parent") ||
+    (!_isParent && _tourPath === "/dashboard"));
 ---
 
 <Layout title={`${title} - Family Task Manager`} lang={lang} description={description}>
@@ -71,6 +94,7 @@ const {
       </PageHeader>
     )}
     <slot name="banner" />
+    {showWelcomeTour && <WelcomeTour role={tourRole} lang={lang} />}
     <main class={mainClass}>
       <slot />
     </main>

@@ -2,6 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import GigsIntroBanner from "../../components/GigsIntroBanner.astro";
 import EnablePushButton from "../../components/EnablePushButton.astro";
+import TourReplayButton from "../../components/TourReplayButton.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 
@@ -46,6 +47,14 @@ try {
 } catch {
     onboarding = null;
 }
+
+// Checklist progress for the upgraded "Getting Started" widget.
+const onbSteps = onboarding
+    ? [onboarding.task_created, onboarding.reward_created, onboarding.child_invited, onboarding.points_awarded]
+    : [false, false, false, false];
+const onbDone = onbSteps.filter(Boolean).length;
+const onbTotal = onbSteps.length;
+const onbPct = Math.round((onbDone / onbTotal) * 100);
 ---
 
 <PageLayout
@@ -53,6 +62,7 @@ try {
     role={user.role}
     active="parent"
     lang={lang}
+    completedTour={user.completed_welcome_tour ?? true}
 >
     <header
         slot="header"
@@ -76,17 +86,30 @@ try {
     </Fragment>
             {!onboarding?.dismissed && (
                 <div id="onboarding-widget" class="mb-6 bg-brand-coral/10 border border-brand-coral/20 rounded-2xl p-5 shadow-[var(--shadow-card)]">
-                    <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center justify-between mb-2">
                         <h2 class="font-bold text-brand-ink text-base">
                             {lang === "es" ? "¡Empecemos! 🚀" : "Getting Started 🚀"}
                         </h2>
-                        {onboarding?.all_done && (
-                            <button
-                                id="dismiss-onboarding"
-                                class="text-brand-ink-soft hover:text-brand-ink transition-colors text-xl leading-none"
-                                aria-label="Dismiss"
-                            >×</button>
-                        )}
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-semibold text-brand-ink-soft">{onbDone}/{onbTotal}</span>
+                            {onboarding?.all_done && (
+                                <button
+                                    id="dismiss-onboarding"
+                                    class="text-brand-ink-soft hover:text-brand-ink transition-colors text-xl leading-none"
+                                    aria-label="Dismiss"
+                                >×</button>
+                            )}
+                        </div>
+                    </div>
+                    <div
+                        class="w-full bg-brand-cream-deep rounded-full h-2 mb-4"
+                        role="progressbar"
+                        aria-valuenow={onbDone}
+                        aria-valuemin={0}
+                        aria-valuemax={onbTotal}
+                        aria-label={t(lang, "onboarding_progress_label") as string}
+                    >
+                        <div class="bg-brand-coral h-2 rounded-full transition-all duration-500" style={`width: ${onbPct}%`}></div>
                     </div>
                     <ol class="space-y-2 text-sm">
                         <li class="flex items-center gap-3">
@@ -123,6 +146,20 @@ try {
                             {lang === "es" ? "🎉 ¡Todo listo! Tu familia está en marcha." : "🎉 All set! Your family is up and running."}
                         </p>
                     )}
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <TourReplayButton
+                            role="parent"
+                            lang={lang}
+                            label={`🧭 ${t(lang, "onboarding_take_tour")}`}
+                            class="px-3 py-2 rounded-lg bg-brand-sky-deep text-white text-xs font-semibold hover:bg-brand-ink transition-colors cursor-pointer"
+                        />
+                        <a
+                            href={lang === "es" ? "/ayuda" : "/help"}
+                            class="px-3 py-2 rounded-lg bg-brand-cream-deep text-brand-ink text-xs font-semibold hover:bg-brand-cream border border-brand-ink/15 transition-colors"
+                        >
+                            📖 {t(lang, "onboarding_open_help")}
+                        </a>
+                    </div>
                 </div>
             )}
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
