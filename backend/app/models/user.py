@@ -47,6 +47,14 @@ class User(Base):
         Boolean, default=False, nullable=False, server_default="false"
     )
 
+    # True once the user has finished or skipped the interactive welcome
+    # tour (driver.js). Set by POST /api/auth/ack-tour. Per-user so the
+    # tour is shown at most once per person across devices/browsers, and
+    # the frontend can gate auto-start on it (exposed via UserResponse).
+    completed_welcome_tour = Column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
+
     # Consecutive approved-gig count. Hits the GIG_AUTO_APPROVE_STREAK
     # threshold (default 3) and subsequent gigs auto-approve on completion.
     # A parent rejection resets to 0.

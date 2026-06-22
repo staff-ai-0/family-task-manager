@@ -2,6 +2,8 @@
 import Layout from "../../layouts/Layout.astro";
 import PageHeader from "./PageHeader.astro";
 import BottomNav from "../BottomNav.astro";
+import WelcomeTour from "../WelcomeTour.astro";
+import type { TourRole } from "../../lib/tourSteps";
 
 /**
  * PageLayout — full-page shell: Layout + PageHeader + <main> + BottomNav.
@@ -41,6 +43,12 @@ interface Props {
   lang?: "en" | "es";
   mainClass?: string;
   containerClass?: string;
+  /**
+   * Pass the user's `completed_welcome_tour` flag on the role HOME pages
+   * (/parent, /dashboard) to auto-start the welcome tour for first-time users.
+   * Defaults to true (= "already done") so other pages never trigger it.
+   */
+  completedTour?: boolean;
 }
 
 const {
@@ -57,7 +65,20 @@ const {
   lang = "en",
   mainClass = "flex-1 px-4 py-6",
   containerClass = "w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep",
+  completedTour = true,
 } = Astro.props;
+
+// Auto-start the welcome tour for first-time users on their landing page.
+// New parents land on /dashboard (per the register flow) and returning parents
+// on /parent, so we fire on either home path and pick the tour by the user's
+// ROLE (parent → setup tour, kid/teen → earn tour). Tour steps whose target
+// isn't on the current page are dropped client-side, so the parent tour works
+// on /dashboard too (the checklist step simply skips itself there).
+const _tourPath = Astro.url.pathname.replace(/\/+$/, "") || "/";
+const _onTourHome = _tourPath === "/parent" || _tourPath === "/dashboard";
+const tourRole: TourRole =
+  String(role).toLowerCase() === "parent" ? "parent" : "kid";
+const showWelcomeTour = _onTourHome && completedTour === false;
 ---
 
 <Layout title={`${title} - Family Task Manager`} lang={lang} description={description}>
@@ -71,6 +92,7 @@ const {
       </PageHeader>
     )}
     <slot name="banner" />
+    {showWelcomeTour && <WelcomeTour role={tourRole} lang={lang} />}
     <main class={mainClass}>
       <slot />
     </main>

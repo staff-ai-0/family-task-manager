@@ -320,6 +320,19 @@ async def ack_gigs_intro(
     return current_user
 
 
+@router.post("/ack-tour", response_model=UserResponse)
+async def ack_tour(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark the interactive welcome tour as completed/skipped for this user."""
+    if not current_user.completed_welcome_tour:
+        current_user.completed_welcome_tour = True
+        await db.commit()
+        await db.refresh(current_user)
+    return current_user
+
+
 @router.put("/password", response_model=UserResponse)
 async def update_password(
     password_data: UserPasswordUpdate,

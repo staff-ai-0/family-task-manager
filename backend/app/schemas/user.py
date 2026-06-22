@@ -59,6 +59,7 @@ class UserResponse(EntityResponse):
     preferred_lang: str = "en"
     email_verified: bool = False
     acknowledged_gigs_intro: bool = False
+    completed_welcome_tour: bool = False
     gig_trust_streak: int = 0
 
 

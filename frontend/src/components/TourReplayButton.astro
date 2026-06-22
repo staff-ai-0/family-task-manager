@@ -1,0 +1,64 @@
+---
+/**
+ * Reusable "replay the welcome tour" button. Drop it anywhere (profile,
+ * checklist, help center) with the user's tour role. Clears the local guard
+ * and runs the role-appropriate tour on click. The step JSON is built
+ * server-side and stored next to the button so multiple instances on a page
+ * each resolve their own data.
+ */
+import { buildTour } from "../lib/tourSteps";
+import type { TourRole } from "../lib/tourSteps";
+
+interface Props {
+    role: TourRole;
+    lang?: "en" | "es";
+    label: string;
+    class?: string;
+    /** Wrapper display class — pass "block" to let the button stretch full-width. */
+    wrapClass?: string;
+}
+const {
+    role,
+    lang = "en",
+    label,
+    class: cls = "",
+    wrapClass = "inline-block",
+} = Astro.props;
+const data = buildTour(role, lang);
+const json = JSON.stringify(data).replace(/</g, "\\u003c");
+---
+
+<span class:list={["ftm-tour-replay-wrap", wrapClass]}>
+    <button type="button" data-tour-replay class={cls}>{label}</button>
+    <script type="application/json" data-tour-replay-data set:html={json}></script>
+</span>
+
+<script>
+    import { replayTour } from "../lib/tour";
+
+    function bindReplay() {
+        document
+            .querySelectorAll<HTMLButtonElement>("[data-tour-replay]")
+            .forEach((btn) => {
+                if ((btn as any).__ftmBound) return;
+                (btn as any).__ftmBound = true;
+                btn.addEventListener("click", () => {
+                    const wrap = btn.closest(".ftm-tour-replay-wrap");
+                    const dataEl = wrap?.querySelector(
+                        "[data-tour-replay-data]",
+                    );
+                    if (!dataEl || !dataEl.textContent) return;
+                    let data: any;
+                    try {
+                        data = JSON.parse(dataEl.textContent);
+                    } catch {
+                        return;
+                    }
+                    if (!data?.steps?.length) return;
+                    replayTour(data.steps, data.btn);
+                });
+            });
+    }
+
+    document.addEventListener("astro:page-load", bindReplay);
+</script>

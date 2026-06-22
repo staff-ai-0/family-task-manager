@@ -1,0 +1,72 @@
+/* Brand overrides for driver.js popovers — match Family Task Manager tokens.
+   Loaded by tour.ts (client) so it only ships where a tour can run. */
+
+.driver-popover.ftm-popover,
+.driver-popover {
+    background: var(--color-brand-cream, #fff8ef);
+    color: var(--color-brand-ink, #1f2937);
+    border: 2px solid var(--color-brand-ink, #1f2937);
+    border-radius: 16px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+    max-width: min(90vw, 22rem);
+    padding: 18px;
+}
+
+.driver-popover .driver-popover-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1.25;
+    color: var(--color-brand-ink, #1f2937);
+}
+
+.driver-popover .driver-popover-description {
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--color-brand-ink, #374151);
+    opacity: 0.92;
+}
+
+.driver-popover .driver-popover-progress-text {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-brand-ink, #475569);
+    opacity: 0.7;
+}
+
+.driver-popover .driver-popover-footer button {
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 7px 14px;
+    text-shadow: none;
+}
+
+.driver-popover .driver-popover-next-btn {
+    background: var(--color-brand-sky-deep, #2563eb);
+    color: #fff;
+    border: none;
+}
+
+.driver-popover .driver-popover-prev-btn {
+    background: transparent;
+    color: var(--color-brand-ink, #475569);
+    border: 1px solid rgba(31, 41, 55, 0.25);
+}
+
+.driver-popover .driver-popover-close-btn {
+    color: var(--color-brand-ink, #475569);
+    font-size: 1.4rem;
+}
+
+/* Keep the highlighted target readable above the dimmed overlay. */
+.driver-popover-arrow {
+    border-color: var(--color-brand-cream, #fff8ef);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .driver-popover,
+    .driver-overlay {
+        transition: none !important;
+        animation: none !important;
+    }
+}

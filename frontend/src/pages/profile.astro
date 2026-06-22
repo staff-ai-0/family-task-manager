@@ -1,5 +1,6 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
+import TourReplayButton from "../components/TourReplayButton.astro";
 import { apiFetch } from "../lib/api";
 import { t } from "../lib/i18n";
 
@@ -53,6 +54,7 @@ if (!user) {
 const consequences: any[] = Array.isArray(consequencesRaw)
     ? consequencesRaw
     : [];
+const tourRole = user.role === "parent" ? "parent" : "kid";
 ---
 
 <PageLayout
@@ -190,6 +192,28 @@ const consequences: any[] = Array.isArray(consequencesRaw)
                         {t(lang, "pt_save")}
                     </button>
                 </form>
+            </section>
+
+            <!-- Help & onboarding -->
+            <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                <h2 class="text-lg font-bold text-brand-ink mb-4">
+                    {t(lang, "help_center_title")}
+                </h2>
+                <div class="space-y-3">
+                    <a
+                        href={lang === "es" ? "/ayuda" : "/help"}
+                        class="block text-center px-4 py-2.5 rounded-lg bg-brand-cream-deep text-brand-ink text-sm font-semibold hover:bg-brand-cream border border-brand-ink/15 transition-colors"
+                    >
+                        📖 {t(lang, "help_open_full_guide")}
+                    </a>
+                    <TourReplayButton
+                        role={tourRole}
+                        lang={lang}
+                        label={`🧭 ${t(lang, "onboarding_replay_tour")}`}
+                        wrapClass="block"
+                        class="w-full text-center px-4 py-2.5 rounded-lg bg-brand-sky-deep text-white text-sm font-semibold hover:bg-brand-ink transition-colors cursor-pointer"
+                    />
+                </div>
             </section>
 
             <section
