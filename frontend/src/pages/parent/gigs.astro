@@ -83,7 +83,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 {offerings.map((item: any) => {
                     const o = item.offering ?? item;
                     return (
-                        <div class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                        <div data-gig-card class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
                             <div class="flex justify-between items-start">
                                 <div class="flex-1 pr-4">
                                     <h3 class="font-bold text-brand-ink">{o.title}</h3>
@@ -250,7 +250,17 @@ document.querySelectorAll(".archive-gig-btn").forEach(btn => {
         if (!confirm(lang === "es" ? "¿Archivar esta gig?" : "Archive this gig?")) return;
         const b = btn as HTMLElement;
         const res = await fetch(`/api/gigs/offerings/${b.dataset.id}`, { method: "DELETE" });
-        if (res.ok) window.location.reload();
+        if (res.ok) {
+            // Drop the card in place. If it was the last one, reload so the
+            // server-rendered empty state shows cleanly.
+            b.closest("[data-gig-card]")?.remove();
+            if (document.querySelectorAll("[data-gig-card]").length === 0) {
+                window.location.reload();
+            }
+        } else {
+            const err = await res.json().catch(() => ({ detail: "Error" }));
+            alert(err.detail ?? "Error");
+        }
     });
 });
 </script>

@@ -249,7 +249,7 @@ if (!joinCodeOk && joinCodeError) {
       <!-- Pending Invitations Section -->
       {
         pendingInvitations.length > 0 && (
-          <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-sun">
+          <section data-pending-section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-sun">
             <div class="flex items-center gap-2 mb-4">
               <svg class="h-5 w-5 text-brand-sun-deep animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -257,14 +257,14 @@ if (!joinCodeOk && joinCodeError) {
               <h2 class="font-bold text-brand-ink">
                 {lang === "es" ? "Invitaciones Pendientes" : "Pending Invitations"}
               </h2>
-              <span class="ml-auto text-xs bg-brand-sun/20 text-brand-sun-deep px-2 py-1 rounded-full font-semibold">
+              <span data-inv-count class="ml-auto text-xs bg-brand-sun/20 text-brand-sun-deep px-2 py-1 rounded-full font-semibold">
                 {pendingInvitations.length}
               </span>
             </div>
             <div class="space-y-3">
               {
                 pendingInvitations.map((inv: any) => (
-                  <div class="flex items-center justify-between p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-brand-sun hover:border-brand-sun transition-colors">
+                  <div data-inv-row class="flex items-center justify-between p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-brand-sun hover:border-brand-sun transition-colors">
                     <div class="flex-1 min-w-0">
                       <p class="text-sm font-semibold text-brand-ink break-all">
                         {inv.invited_email}
@@ -293,7 +293,7 @@ if (!joinCodeOk && joinCodeError) {
                         {lang === "es" ? "Reenviar" : "Resend"}
                       </button>
                       <button
-                        onclick={`cancelInvitation('${inv.id}', '${user.family_id}', '${lang}')`}
+                        onclick={`cancelInvitation('${inv.id}', '${user.family_id}', '${lang}', this)`}
                         class="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
                         title={lang === "es" ? "Cancelar invitación" : "Cancel invitation"}
                       >
@@ -478,7 +478,7 @@ if (!joinCodeOk && joinCodeError) {
     // Cancel pending invitation. Auth rides the httpOnly cookie via
     // credentials:'include' — the proxy reads it server-side (locals.token),
     // so we must NOT try to read access_token from document.cookie here.
-    (window as any).cancelInvitation = async (invitationId: string, familyId: string, lang = 'en') => {
+    (window as any).cancelInvitation = async (invitationId: string, familyId: string, lang = 'en', btn?: HTMLButtonElement) => {
       if (!confirm(lang === "es" ? "¿Cancelar esta invitación?" : "Cancel this invitation?")) {
         return;
       }
@@ -488,7 +488,19 @@ if (!joinCodeOk && joinCodeError) {
           { method: "DELETE", headers: { "Content-Type": "application/json" }, credentials: 'include' }
         );
         if (response.ok || response.status === 204) {
-          window.location.reload();
+          // In-place: drop the row, decrement the count, and remove the whole
+          // section once the last pending invitation is gone.
+          const row = btn?.closest('[data-inv-row]');
+          const section = btn?.closest('[data-pending-section]') as HTMLElement | null;
+          row?.remove();
+          const remaining = section?.querySelectorAll('[data-inv-row]').length ?? 0;
+          if (section && remaining === 0) {
+            section.remove();
+          } else {
+            const countEl = section?.querySelector('[data-inv-count]');
+            if (countEl) countEl.textContent = String(remaining);
+          }
+          showToast(lang === "es" ? "Invitación cancelada" : "Invitation canceled", 'success');
         } else {
           const data = await response.json().catch(() => ({}));
           showToast(data.error || (lang === "es" ? "Error al cancelar la invitación" : "Error canceling invitation"), 'error');

@@ -1,3 +1,6 @@
 ---
-return Astro.redirect("/budget/reports?tab=analysis", 301);
+// The "analysis" (Budget vs Actual) sub-tab is hidden until the report is
+// built (was a permanent "Coming soon" dead-end), so send legacy/bookmarked
+// links to the default Reports view instead of an orphaned, unselectable tab.
+return Astro.redirect("/budget/reports", 301);
 ---
