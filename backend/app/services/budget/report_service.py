@@ -98,7 +98,7 @@ class ReportService:
         total_amount = 0
         
         for row in rows:
-            amount = row.total or 0
+            amount = int(row.total or 0)
             categories.append({
                 "category_id": str(row.id),
                 "category_name": row.name,
@@ -158,7 +158,7 @@ class ReportService:
         total_amount = 0
         
         for row in rows:
-            amount = row.total or 0
+            amount = int(row.total or 0)
             groups.append({
                 "group_id": str(row.id),
                 "group_name": row.name,
@@ -219,7 +219,7 @@ class ReportService:
         total_amount = 0
         
         for row in rows:
-            amount = row.total or 0
+            amount = int(row.total or 0)
             months.append({
                 "month": row.month.strftime("%Y-%m") if row.month else None,
                 "amount": amount,
@@ -283,7 +283,7 @@ class ReportService:
         total_amount = 0
         
         for row in rows:
-            amount = row.total or 0
+            amount = int(row.total or 0)
             payees.append({
                 "payee_id": str(row.id),
                 "payee_name": row.name,
@@ -369,9 +369,9 @@ class ReportService:
         total_expense = 0
         
         for row in rows:
-            income = row.income or 0
-            expense = row.expense or 0
-            net = row.net or 0
+            income = int(row.income or 0)
+            expense = int(row.expense or 0)
+            net = int(row.net or 0)
             
             periods.append({
                 "period": row.period.isoformat() if row.period else None,
@@ -438,8 +438,8 @@ class ReportService:
             balance_info = await AccountService.get_balance(
                 db, account.id, family_id, as_of_date
             )
-            balance = balance_info["balance"]
-            
+            balance = int(balance_info["balance"])
+
             # Determine if asset or liability based on account type and balance
             is_liability = account.type in ["credit_card", "loan"] or balance < 0
             
@@ -534,7 +534,7 @@ class ReportService:
             )
             .group_by(BudgetTransaction.account_id)
         )
-        prior_by_acct: dict = {row.account_id: row.amt for row in (await db.execute(prior_q)).all()}
+        prior_by_acct: dict = {row.account_id: int(row.amt or 0) for row in (await db.execute(prior_q)).all()}
 
         # Per-month activity per account, single query
         month_col = func.date_trunc("month", BudgetTransaction.date).label("month")
@@ -558,7 +558,7 @@ class ReportService:
         activity: dict = {}
         for row in (await db.execute(period_q)).all():
             month_key = row.month.date() if hasattr(row.month, "date") else row.month
-            activity[(row.account_id, date(month_key.year, month_key.month, 1))] = row.amt
+            activity[(row.account_id, date(month_key.year, month_key.month, 1))] = int(row.amt or 0)
 
         running = {
             acct_id: prior_by_acct.get(acct_id, 0)
@@ -662,7 +662,7 @@ class ReportService:
             )
             .group_by(BudgetTransaction.category_id)
         )
-        activity_by_cat = {row.category_id: row.amt for row in (await db.execute(act_q)).all()}
+        activity_by_cat = {row.category_id: int(row.amt or 0) for row in (await db.execute(act_q)).all()}
 
         result_groups: list = []
         current_group_id = None
