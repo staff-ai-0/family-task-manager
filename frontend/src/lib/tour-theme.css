@@ -1,7 +1,6 @@
 /* Brand overrides for driver.js popovers — match Family Task Manager tokens.
    Loaded by tour.ts (client) so it only ships where a tour can run. */
 
-.driver-popover.ftm-popover,
 .driver-popover {
     background: var(--color-brand-cream, #fff8ef);
     color: var(--color-brand-ink, #1f2937);

@@ -31,9 +31,12 @@ test.describe('Welcome tour', () => {
     await page.fill('input[name="password"]', NEW_USER.password);
     await page.fill('input[name="password_confirm"]', NEW_USER.password);
     await page.click('#register-submit-btn');
-
-    // Lands on a home page; the tour popover should appear shortly after.
     await page.waitForURL(/\/(dashboard|parent)/, { timeout: 30000 });
+
+    // The PARENT setup tour fires on /parent (where the checklist it highlights
+    // lives); a freshly-registered parent reaches it via Manage.
+    await page.goto(`${BASE_URL}/parent`);
+    await page.waitForLoadState('networkidle');
 
     const popover = page.locator('.driver-popover');
     await expect(popover).toBeVisible({ timeout: 10000 });

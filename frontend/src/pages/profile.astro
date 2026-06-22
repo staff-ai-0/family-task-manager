@@ -54,7 +54,7 @@ if (!user) {
 const consequences: any[] = Array.isArray(consequencesRaw)
     ? consequencesRaw
     : [];
-const tourRole = user.role === "parent" ? "parent" : "kid";
+const tourRole = String(user.role).toLowerCase() === "parent" ? "parent" : "kid";
 ---
 
 <PageLayout

@@ -24,6 +24,11 @@ def upgrade() -> None:
             server_default='false',
         ),
     )
+    # Existing accounts are already onboarded — mark them done so the welcome
+    # tour only auto-starts for NEW users created after this migration (whose
+    # rows default to false). Without this, every current family would be shown
+    # the tour once on their next visit after deploy.
+    op.execute("UPDATE users SET completed_welcome_tour = true")
 
 
 def downgrade() -> None:
