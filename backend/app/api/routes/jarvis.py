@@ -20,7 +20,11 @@ from app.services.jarvis_service import JarvisService
 router = APIRouter()
 
 
-ALLOWED_MODELS = {"claude-haiku", "claude-sonnet", "qwen3", "gpt-4o", "gemini-2.5-flash"}
+# Only models the FTM LiteLLM virtual key is granted (see jctux/platform#86).
+# qwen3 + claude-haiku were offered but the key grants qwen2.5 + haiku, so
+# selecting them returned 401 key_model_access_denied. Re-add qwen3 here once
+# platform grants the key access to it.
+ALLOWED_MODELS = {"haiku", "claude-sonnet", "gpt-4o", "gemini-2.5-flash"}
 
 
 class ChatRequest(BaseModel):

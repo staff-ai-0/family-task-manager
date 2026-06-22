@@ -53,9 +53,10 @@ class Settings(BaseSettings):
     # exchange counts as one message. Prevents accidental spend overruns
     # on the LiteLLM proxy. 0 = unlimited.
     JARVIS_DAILY_MESSAGE_CAP: int = 100
-    # LiteLLM model alias for Jarvis chat. Defaults to receipt scanner's
-    # claude-haiku for shared budget. Override via JARVIS_MODEL env.
-    JARVIS_MODEL: str = "claude-haiku"
+    # LiteLLM model alias for Jarvis chat. Must be a model the FTM virtual key
+    # is granted (the proxy alias is "haiku", not "claude-haiku" — see
+    # jctux/platform#86). Override via JARVIS_MODEL env.
+    JARVIS_MODEL: str = "haiku"
 
     # Stripe settings removed 2026-05-24. PayPal is the canonical
     # billing path. See feedback_no_stripe memory entry.
