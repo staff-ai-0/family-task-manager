@@ -455,3 +455,47 @@ class TestPostAllDue:
         assert len(result["transactions"]) == 2
         names = {t["recurring_name"] for t in result["transactions"]}
         assert names == {"Rent", "Internet"}
+
+
+class TestReportNumericTypes:
+    """L9/L14: cents fields must serialize as JSON integers (not Decimal/float)
+    for strict-Int mobile decoders; *_currency stays numeric dollars."""
+
+    @pytest.mark.asyncio
+    async def test_income_vs_expense_and_net_worth_cents_are_int(
+        self, db: AsyncSession, family_id
+    ):
+        from decimal import Decimal
+
+        acct = await AccountService.create(
+            db, family_id,
+            AccountCreate(name="Chk", type="checking", starting_balance=100_000),
+        )
+        today = date.today()
+        await TransactionService.create(
+            db, family_id,
+            TransactionCreate(account_id=acct.id, date=today, amount=50_000),
+        )
+        await TransactionService.create(
+            db, family_id,
+            TransactionCreate(account_id=acct.id, date=today, amount=-20_000),
+        )
+
+        ive = await ReportService.get_income_vs_expense(
+            db, family_id, date(today.year, 1, 1), date(today.year, 12, 31)
+        )
+        assert ive["periods"], "expected at least one period"
+        for p in ive["periods"]:
+            for k in ("income", "expense", "net"):
+                assert isinstance(p[k], int), f"{k} must be int, got {type(p[k])}"
+                assert not isinstance(p[k], Decimal)
+        for k in ("income", "expense", "net"):
+            assert isinstance(ive["totals"][k], int)
+
+        nw = await ReportService.get_net_worth(db, family_id)
+        for k in ("assets", "liabilities", "net_worth"):
+            assert isinstance(nw[k], int), f"{k} must be int, got {type(nw[k])}"
+        for a in nw["accounts"]:
+            assert isinstance(a["balance"], int)
+        # currency (dollars) must not leak a Decimal
+        assert not isinstance(nw["net_worth_currency"], Decimal)

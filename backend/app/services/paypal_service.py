@@ -40,6 +40,12 @@ class _PayPalV2HTTP:
     _token: Optional[str] = None
     _token_exp: float = 0.0
 
+    # Transient-failure retry policy. These calls run via asyncio.to_thread,
+    # so a blocking backoff sleep is fine. 401 → refresh token + retry;
+    # 429/5xx → bounded exponential backoff.
+    _RETRY_ATTEMPTS: int = 3
+    _BACKOFF_BASE: float = 0.5
+
     @classmethod
     def _base(cls) -> str:
         mode = settings.PAYPAL_MODE or "sandbox"
@@ -68,19 +74,33 @@ class _PayPalV2HTTP:
         cls._token_exp = 0.0
 
     @classmethod
+    def _retry(cls, do_request):
+        """Run do_request() (no-arg, returns a requests.Response), retrying:
+        a 401 (likely a revoked token) refreshes the token and retries; a 429
+        or 5xx (transient) retries after bounded exponential backoff. Returns
+        the final Response (the last one if attempts are exhausted)."""
+        r = None
+        for attempt in range(cls._RETRY_ATTEMPTS):
+            r = do_request()
+            last = attempt == cls._RETRY_ATTEMPTS - 1
+            if r.status_code == 401 and not last:
+                cls._invalidate_token()
+                continue
+            if (r.status_code == 429 or r.status_code >= 500) and not last:
+                time.sleep(cls._BACKOFF_BASE * (2 ** attempt))
+                continue
+            break
+        return r
+
+    @classmethod
     def get(cls, path: str) -> Dict[str, Any]:
-        for attempt in range(2):
-            r = requests.get(
+        r = cls._retry(
+            lambda: requests.get(
                 f"{cls._base()}{path}",
                 headers={"Authorization": f"Bearer {cls._auth()}"},
                 timeout=15,
             )
-            # A 401 likely means the cached token was revoked before its
-            # natural expiry — refresh once and retry rather than wedging.
-            if r.status_code == 401 and attempt == 0:
-                cls._invalidate_token()
-                continue
-            break
+        )
         if r.status_code == 404:
             raise NotFoundException(f"PayPal resource not found: {path}")
         r.raise_for_status()
@@ -90,8 +110,8 @@ class _PayPalV2HTTP:
     def post(
         cls, path: str, body: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        for attempt in range(2):
-            r = requests.post(
+        r = cls._retry(
+            lambda: requests.post(
                 f"{cls._base()}{path}",
                 headers={
                     "Authorization": f"Bearer {cls._auth()}",
@@ -100,10 +120,7 @@ class _PayPalV2HTTP:
                 json=body if body is not None else {},
                 timeout=15,
             )
-            if r.status_code == 401 and attempt == 0:
-                cls._invalidate_token()
-                continue
-            break
+        )
         if r.status_code == 404:
             raise NotFoundException(f"PayPal resource not found: {path}")
         if r.status_code >= 400:
