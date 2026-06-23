@@ -231,7 +231,23 @@ const {
                 lb.reset();
                 lb.stage.innerHTML = "";
                 const clone = svg.cloneNode(true) as SVGElement;
+                // Mermaid sizes its SVG via an inline `max-width` style and
+                // carries no width/height attrs; dropping the style in the
+                // flex stage would collapse it to ~0. Give the clone explicit
+                // intrinsic dimensions from its viewBox so CSS max-width/height
+                // can scale it to fit while preserving aspect ratio.
                 clone.removeAttribute("style");
+                const vb = (clone.getAttribute("viewBox") || "")
+                    .split(/[\s,]+/)
+                    .map(Number);
+                if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) {
+                    clone.setAttribute("width", String(vb[2]));
+                    clone.setAttribute("height", String(vb[3]));
+                } else {
+                    const r = svg.getBoundingClientRect();
+                    clone.setAttribute("width", String(Math.round(r.width)));
+                    clone.setAttribute("height", String(Math.round(r.height)));
+                }
                 clone.classList.add("dl-svg");
                 lb.stage.appendChild(clone);
                 lb.overlay.hidden = false;
