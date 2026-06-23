@@ -18,7 +18,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     
     try {
         const body = await request.json();
-        const apiUrl = import.meta.env.API_BASE_URL || import.meta.env.PUBLIC_API_BASE_URL || 'http://localhost:8002';
+        // Runtime env (process.env) — import.meta.env is inlined at build and
+        // the Dockerfile doesn't bake API_BASE_URL, so it would resolve to the
+        // wrong localhost fallback inside the container.
+        const apiUrl = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || 'http://backend:8000';
         
         const response = await fetch(`${apiUrl}/api/points-conversion/convert`, {
             method: 'POST',
