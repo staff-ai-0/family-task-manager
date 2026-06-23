@@ -63,6 +63,7 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
     active="parent"
     lang={lang}
     completedTour={user.completed_welcome_tour ?? true}
+    tourUserKey={user.id}
 >
     <header
         slot="header"
@@ -150,6 +151,7 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                         <TourReplayButton
                             role="parent"
                             lang={lang}
+                            userKey={user.id}
                             label={`🧭 ${t(lang, "onboarding_take_tour")}`}
                             class="px-3 py-2 rounded-lg bg-brand-sky-deep text-white text-xs font-semibold hover:bg-brand-ink transition-colors cursor-pointer"
                         />

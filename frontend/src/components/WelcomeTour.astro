@@ -14,9 +14,11 @@ import type { TourRole } from "../lib/tourSteps";
 interface Props {
     role: TourRole;
     lang?: "en" | "es";
+    /** User id — makes the localStorage guard per-user on shared devices. */
+    userKey?: string;
 }
-const { role, lang = "en" } = Astro.props;
-const data = buildTour(role, lang);
+const { role, lang = "en", userKey } = Astro.props;
+const data = buildTour(role, lang, userKey);
 const json = JSON.stringify(data).replace(/</g, "\\u003c");
 ---
 
@@ -27,7 +29,6 @@ const json = JSON.stringify(data).replace(/</g, "\\u003c");
 
     function maybeStartTour() {
         if ((window as any).__ftmTourStarted) return;
-        if (tourGuardSet()) return;
         const el = document.getElementById("ftm-tour-data");
         if (!el || !el.textContent) return;
         let data: any;
@@ -37,9 +38,13 @@ const json = JSON.stringify(data).replace(/</g, "\\u003c");
             return;
         }
         if (!data?.steps?.length) return;
+        if (tourGuardSet(data.guardKey)) return;
         (window as any).__ftmTourStarted = true;
         // Let the bottom nav + header finish painting before highlighting targets.
-        setTimeout(() => runTour(data.steps, data.btn), 450);
+        setTimeout(
+            () => runTour(data.steps, data.btn, "tour_started", data.guardKey),
+            450,
+        );
     }
 
     document.addEventListener("astro:page-load", maybeStartTour);
