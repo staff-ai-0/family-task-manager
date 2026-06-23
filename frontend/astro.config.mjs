@@ -2,9 +2,41 @@ import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import node from '@astrojs/node';
 
+// Remark plugin: rewrite ```mermaid fenced code blocks into a raw
+// <pre class="mermaid"> node BEFORE Shiki highlighting runs. The guide pages
+// (/help, /ayuda) then render them client-side via mermaid.js in GuideShell.
+// Without this, Astro/Shiki emits the diagram source as plain text.
+function escapeHtml(s) {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+function remarkMermaid() {
+  return (tree) => {
+    const walk = (node) => {
+      if (!node || !Array.isArray(node.children)) return;
+      node.children = node.children.map((child) => {
+        if (child.type === 'code' && child.lang === 'mermaid') {
+          return {
+            type: 'html',
+            value: `<pre class="mermaid">${escapeHtml(child.value)}</pre>`,
+          };
+        }
+        walk(child);
+        return child;
+      });
+    };
+    walk(tree);
+  };
+}
+
 // https://astro.build/config
 export default defineConfig({
   output: 'server',
+  markdown: {
+    remarkPlugins: [remarkMermaid],
+  },
   adapter: node({
     mode: 'standalone',
   }),

@@ -101,9 +101,35 @@ const {
                 if (empty) empty.hidden = !(q !== "" && shown === 0);
             });
         }
+        // Render mermaid diagrams emitted as <pre class="mermaid"> by the
+        // remarkMermaid plugin (see astro.config.mjs). Lazy-imported so mermaid
+        // only loads on the guide pages.
+        let mermaidLib: any = null;
+        async function initGuideMermaid() {
+            const blocks = document.querySelectorAll<HTMLElement>(
+                "pre.mermaid:not([data-processed])",
+            );
+            if (!blocks.length) return;
+            if (!mermaidLib) {
+                mermaidLib = (await import("mermaid")).default;
+                mermaidLib.initialize({
+                    startOnLoad: false,
+                    theme: "default",
+                    securityLevel: "loose",
+                });
+            }
+            try {
+                await mermaidLib.run({ nodes: Array.from(blocks) });
+            } catch (e) {
+                console.error("mermaid render failed", e);
+            }
+        }
+
         // Public page: cover both the view-transition router event and a plain load.
         document.addEventListener("astro:page-load", initGuideToc);
         document.addEventListener("DOMContentLoaded", initGuideToc);
+        document.addEventListener("astro:page-load", initGuideMermaid);
+        document.addEventListener("DOMContentLoaded", initGuideMermaid);
     </script>
 </Layout>
 
@@ -214,6 +240,27 @@ const {
         background: transparent;
         color: inherit;
         padding: 0;
+    }
+    /* Mermaid diagrams render as inline SVG inside <pre class="mermaid"> —
+       drop the dark code-block chrome and center the figure. */
+    .guide :global(pre.mermaid) {
+        background: #fff;
+        color: #1e293b;
+        padding: 8px 0;
+        text-align: center;
+        overflow-x: auto;
+        font-family: inherit;
+    }
+    .guide :global(pre.mermaid svg) {
+        max-width: 100%;
+        height: auto;
+    }
+    /* Pre-render: show the raw source faintly rather than dark-on-dark. */
+    .guide :global(pre.mermaid:not([data-processed])) {
+        color: #94a3b8;
+        font-family: "SF Mono", Menlo, Consolas, monospace;
+        font-size: 12px;
+        text-align: left;
     }
     .guide :global(a) {
         color: #4f46e5;
