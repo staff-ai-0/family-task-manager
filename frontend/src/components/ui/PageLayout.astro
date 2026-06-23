@@ -49,6 +49,8 @@ interface Props {
    * Defaults to true (= "already done") so other pages never trigger it.
    */
   completedTour?: boolean;
+  /** User id — makes the welcome-tour localStorage guard per-user (shared devices). */
+  tourUserKey?: string;
 }
 
 const {
@@ -66,6 +68,7 @@ const {
   mainClass = "flex-1 px-4 py-6",
   containerClass = "w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep",
   completedTour = true,
+  tourUserKey,
 } = Astro.props;
 
 // Auto-start the welcome tour for first-time users on the home page that owns
@@ -94,7 +97,7 @@ const showWelcomeTour =
       </PageHeader>
     )}
     <slot name="banner" />
-    {showWelcomeTour && <WelcomeTour role={tourRole} lang={lang} />}
+    {showWelcomeTour && <WelcomeTour role={tourRole} lang={lang} userKey={tourUserKey} />}
     <main class={mainClass}>
       <slot />
     </main>

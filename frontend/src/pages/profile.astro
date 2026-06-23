@@ -209,6 +209,7 @@ const tourRole = String(user.role).toLowerCase() === "parent" ? "parent" : "kid"
                     <TourReplayButton
                         role={tourRole}
                         lang={lang}
+                        userKey={user.id}
                         label={`🧭 ${t(lang, "onboarding_replay_tour")}`}
                         wrapClass="block"
                         class="w-full text-center px-4 py-2.5 rounded-lg bg-brand-sky-deep text-white text-sm font-semibold hover:bg-brand-ink transition-colors cursor-pointer"

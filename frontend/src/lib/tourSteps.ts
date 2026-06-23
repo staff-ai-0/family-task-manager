@@ -13,9 +13,16 @@ export interface TourData {
     role: TourRole;
     steps: TourStep[];
     btn: TourButtons;
+    /** localStorage guard key — per-user so a second member on a shared device
+     *  still gets their own tour. */
+    guardKey: string;
 }
 
-export function buildTour(role: TourRole, lang: string): TourData {
+export function buildTour(
+    role: TourRole,
+    lang: string,
+    userId?: string,
+): TourData {
     const btn: TourButtons = {
         next: t(lang, "tour_next"),
         prev: t(lang, "tour_prev"),
@@ -117,5 +124,6 @@ export function buildTour(role: TourRole, lang: string): TourData {
         role,
         steps: role === "parent" ? parentSteps : kidSteps,
         btn,
+        guardKey: userId ? `ftm_tour_done_${userId}` : "ftm_tour_done",
     };
 }

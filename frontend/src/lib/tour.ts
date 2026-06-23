@@ -37,9 +37,9 @@ const GUARD_KEY = "ftm_tour_done";
  * so the request survives the page navigation/unload that a fetch() would lose
  * (fetch falls back with keepalive when sendBeacon is unavailable).
  */
-function ackTour(): void {
+function ackTour(guardKey: string): void {
     try {
-        localStorage.setItem(GUARD_KEY, "1");
+        localStorage.setItem(guardKey, "1");
     } catch {
         /* private mode / storage disabled — backend flag still persists */
     }
@@ -90,6 +90,7 @@ export function runTour(
     steps: TourStep[],
     btn: TourButtons,
     startEvent = "tour_started",
+    guardKey: string = GUARD_KEY,
 ): void {
     // Keep element-less steps (centered modals); for targeted steps, require the
     // element to be present AND actually visible — a nav item collapsed at the
@@ -129,7 +130,7 @@ export function runTour(
             const idx = (d as any).getActiveIndex?.();
             const completed =
                 typeof idx === "number" && idx >= present.length - 1;
-            ackTour();
+            ackTour(guardKey);
             recordEvent(completed ? "tour_completed" : "tour_skipped", idx);
             d.destroy();
         },
@@ -138,19 +139,23 @@ export function runTour(
 }
 
 /** Clear the local guard so a replay starts fresh, then run. */
-export function replayTour(steps: TourStep[], btn: TourButtons): void {
+export function replayTour(
+    steps: TourStep[],
+    btn: TourButtons,
+    guardKey: string = GUARD_KEY,
+): void {
     try {
-        localStorage.removeItem(GUARD_KEY);
+        localStorage.removeItem(guardKey);
     } catch {
         /* ignore */
     }
-    runTour(steps, btn, "tour_replayed");
+    runTour(steps, btn, "tour_replayed", guardKey);
 }
 
 /** True if the tour was already finished/skipped on this device. */
-export function tourGuardSet(): boolean {
+export function tourGuardSet(guardKey: string = GUARD_KEY): boolean {
     try {
-        return localStorage.getItem(GUARD_KEY) === "1";
+        return localStorage.getItem(guardKey) === "1";
     } catch {
         return false;
     }
