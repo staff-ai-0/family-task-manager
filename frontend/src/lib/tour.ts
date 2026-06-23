@@ -54,6 +54,31 @@ function ackTour(): void {
     }
 }
 
+/** Fire-and-forget onboarding funnel event (survives navigation via beacon). */
+function recordEvent(eventType: string, stepIndex?: number): void {
+    try {
+        const body = JSON.stringify({
+            event_type: eventType,
+            step_index: stepIndex ?? null,
+        });
+        if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+            navigator.sendBeacon(
+                "/api/onboarding/events",
+                new Blob([body], { type: "application/json" }),
+            );
+        } else {
+            void fetch("/api/onboarding/events", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body,
+                keepalive: true,
+            });
+        }
+    } catch {
+        /* analytics is best-effort */
+    }
+}
+
 /**
  * Drive the tour. Steps whose element is not present in the DOM are dropped
  * (e.g. the checklist widget after it's dismissed) so the tour never points at
@@ -61,7 +86,11 @@ function ackTour(): void {
  * onDestroyStarted, which fires the moment teardown begins (before the exit
  * animation) so the guard lands even on an immediate reload.
  */
-export function runTour(steps: TourStep[], btn: TourButtons): void {
+export function runTour(
+    steps: TourStep[],
+    btn: TourButtons,
+    startEvent = "tour_started",
+): void {
     // Keep element-less steps (centered modals); for targeted steps, require the
     // element to be present AND actually visible — a nav item collapsed at the
     // current breakpoint (display:none / zero-size) would otherwise get an empty
@@ -74,6 +103,8 @@ export function runTour(steps: TourStep[], btn: TourButtons): void {
         return rect.width > 0 && rect.height > 0 && el.offsetParent !== null;
     });
     if (present.length === 0) return;
+
+    recordEvent(startEvent);
 
     const d = driver({
         showProgress: true,
@@ -95,7 +126,11 @@ export function runTour(steps: TourStep[], btn: TourButtons): void {
         // Fires on every exit path (X, done, ESC, overlay) the instant teardown
         // starts. Overriding it means we own the destroy() call.
         onDestroyStarted: () => {
+            const idx = (d as any).getActiveIndex?.();
+            const completed =
+                typeof idx === "number" && idx >= present.length - 1;
             ackTour();
+            recordEvent(completed ? "tour_completed" : "tour_skipped", idx);
             d.destroy();
         },
     });
@@ -109,7 +144,7 @@ export function replayTour(steps: TourStep[], btn: TourButtons): void {
     } catch {
         /* ignore */
     }
-    runTour(steps, btn);
+    runTour(steps, btn, "tour_replayed");
 }
 
 /** True if the tour was already finished/skipped on this device. */

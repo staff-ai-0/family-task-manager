@@ -2,11 +2,17 @@
 import logging
 from uuid import UUID
 
-from sqlalchemy import update
+from sqlalchemy import update, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.family import Family
-from app.schemas.onboarding import OnboardingState
+from app.models.user import User
+from app.models.onboarding_event import OnboardingEvent, ONBOARDING_EVENT_TYPES
+from app.schemas.onboarding import (
+    OnboardingState,
+    OnboardingAnalytics,
+    MemberOnboarding,
+)
 
 log = logging.getLogger(__name__)
 
@@ -55,3 +61,71 @@ class OnboardingService:
             .values(onboarding_dismissed=True)
         )
         await db.commit()
+
+    @staticmethod
+    async def record_event(
+        user: User, event_type: str, step_index, db: AsyncSession
+    ) -> bool:
+        """Record a welcome-tour funnel event. Returns False for unknown types."""
+        if event_type not in ONBOARDING_EVENT_TYPES:
+            log.warning("OnboardingService.record_event: unknown type %r", event_type)
+            return False
+        db.add(OnboardingEvent(
+            user_id=user.id,
+            family_id=user.family_id,
+            event_type=event_type,
+            step_index=step_index,
+        ))
+        await db.commit()
+        return True
+
+    @staticmethod
+    async def get_analytics(family_id: UUID, db: AsyncSession) -> OnboardingAnalytics:
+        """Funnel summary: per-member tour status + family checklist progress."""
+        members = (await db.execute(
+            select(User).where(
+                User.family_id == family_id, User.is_active.is_(True)
+            )
+        )).scalars().all()
+        event_rows = (await db.execute(
+            select(OnboardingEvent.user_id, OnboardingEvent.event_type)
+            .where(OnboardingEvent.family_id == family_id)
+        )).all()
+
+        by_user: dict = {}
+        for uid, etype in event_rows:
+            by_user.setdefault(uid, set()).add(etype)
+
+        def status_for(u: User) -> str:
+            types = by_user.get(u.id, set())
+            if "tour_completed" in types:
+                return "completed"
+            if "tour_skipped" in types:
+                return "skipped"
+            if "tour_started" in types:
+                return "started"
+            return "not_started"
+
+        rows = []
+        counts = {"completed": 0, "skipped": 0, "started": 0, "not_started": 0}
+        for u in members:
+            st = status_for(u)
+            counts[st] += 1
+            rows.append(MemberOnboarding(
+                user_id=str(u.id),
+                name=u.name,
+                role=u.role.value if hasattr(u.role, "value") else str(u.role),
+                completed_welcome_tour=bool(u.completed_welcome_tour),
+                tour_status=st,
+            ))
+
+        checklist = await OnboardingService.get_state(family_id, db)
+        return OnboardingAnalytics(
+            total_members=len(members),
+            tour_completed=counts["completed"],
+            tour_skipped=counts["skipped"],
+            tour_started=counts["started"],
+            tour_not_started=counts["not_started"],
+            checklist=checklist,
+            members=rows,
+        )
