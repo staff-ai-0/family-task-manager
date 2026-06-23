@@ -51,6 +51,7 @@ from app.models.jarvis_schedule import JarvisSchedule
 from app.models.dm import DMThread, DMMessage
 from app.models.gig import GigOffering, GigClaim, GigCategory, GigClaimStatus
 from app.models.reward_goal import UserRewardGoal
+from app.models.onboarding_event import OnboardingEvent, ONBOARDING_EVENT_TYPES
 
 __all__ = [
     "Base",
@@ -116,6 +117,9 @@ __all__ = [
     "GigClaimStatus",
     # Reward goals
     "UserRewardGoal",
+    # Onboarding analytics
+    "OnboardingEvent",
+    "ONBOARDING_EVENT_TYPES",
     # Enums
     "UserRole",
     "TaskStatus",

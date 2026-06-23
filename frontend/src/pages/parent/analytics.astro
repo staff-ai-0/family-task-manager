@@ -13,9 +13,10 @@ if (!user) {
 }
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
-const [{ data: pup }, { data: historyRaw }] = await Promise.all([
+const [{ data: pup }, { data: historyRaw }, { data: onb }] = await Promise.all([
     apiFetch<any>("/api/analytics/pup-score", { token }),
     apiFetch<any[]>("/api/analytics/pup-history?days=30", { token }),
+    apiFetch<any>("/api/families/onboarding/analytics", { token }),
 ]);
 const history: any[] = Array.isArray(historyRaw) ? historyRaw : [];
 
@@ -49,6 +50,17 @@ const labels = {
     gigs_done: lang === "es" ? "Gigs hechos" : "Gigs done",
     late: lang === "es" ? "Tareas tarde" : "Late",
     penalties: lang === "es" ? "Penalizaciones auto" : "Auto-penalties",
+    onb_title: lang === "es" ? "Bienvenida" : "Onboarding",
+    onb_completed: lang === "es" ? "Completaron" : "Completed",
+    onb_skipped: lang === "es" ? "Saltaron" : "Skipped",
+    onb_pending: lang === "es" ? "Pendientes" : "Pending",
+};
+
+const tourStatusLabel: Record<string, { e: string; c: string; en: string; es: string }> = {
+    completed: { e: "✅", c: "text-brand-mint-deep", en: "completed", es: "completó" },
+    skipped: { e: "⏭️", c: "text-brand-sun-deep", en: "skipped", es: "saltó" },
+    started: { e: "▶️", c: "text-brand-sky-deep", en: "started", es: "empezó" },
+    not_started: { e: "◻️", c: "text-brand-ink-soft", en: "not started", es: "sin empezar" },
 };
 
 const scoreColor =
@@ -84,6 +96,40 @@ const scoreColor =
             </p>
         </div>
     </div>
+
+    {onb && (
+        <section class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)]">
+            <h2 class="text-sm font-bold text-brand-ink mb-3">🚀 {labels.onb_title}</h2>
+            <div class="grid grid-cols-3 gap-2 text-center mb-3">
+                <div class="bg-brand-mint/20 rounded-xl p-2">
+                    <p class="text-2xl font-extrabold text-brand-mint-deep">{onb.tour_completed}</p>
+                    <p class="text-[11px] text-brand-mint-deep font-medium">{labels.onb_completed}</p>
+                </div>
+                <div class="bg-brand-sun/20 rounded-xl p-2">
+                    <p class="text-2xl font-extrabold text-brand-sun-deep">{onb.tour_skipped}</p>
+                    <p class="text-[11px] text-brand-sun-deep font-medium">{labels.onb_skipped}</p>
+                </div>
+                <div class="bg-brand-cream-deep rounded-xl p-2">
+                    <p class="text-2xl font-extrabold text-brand-ink-soft">{(onb.tour_started ?? 0) + (onb.tour_not_started ?? 0)}</p>
+                    <p class="text-[11px] text-brand-ink-soft font-medium">{labels.onb_pending}</p>
+                </div>
+            </div>
+            <ul class="space-y-1.5">
+                {(onb.members ?? []).map((m: any) => {
+                    const s = tourStatusLabel[m.tour_status] ?? tourStatusLabel.not_started;
+                    return (
+                        <li class="flex items-center justify-between text-sm">
+                            <span class="text-brand-ink">
+                                {m.name}
+                                <span class="ml-1 text-xs text-brand-ink-soft capitalize">{m.role}</span>
+                            </span>
+                            <span class={`text-xs font-medium ${s.c}`}>{s.e} {lang === "es" ? s.es : s.en}</span>
+                        </li>
+                    );
+                })}
+            </ul>
+        </section>
+    )}
 
     {sparklinePath && (
         <section class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)]">
