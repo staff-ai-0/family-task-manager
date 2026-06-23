@@ -6,7 +6,7 @@ export interface User {
     id: string;
     email: string;
     name: string;
-    role: "PARENT" | "CHILD" | "TEEN";
+    role: "parent" | "child" | "teen";
     points: number;
     family_id: string;
     is_active: boolean;

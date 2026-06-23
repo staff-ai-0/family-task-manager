@@ -51,7 +51,7 @@ const progressPercent = requiredTotal > 0 ? Math.round((requiredCompleted / requ
 // Gig trust streak — mirrors backend GIG_AUTO_APPROVE_STREAK default (3).
 // Once a kid hits the threshold, their submitted gigs auto-approve.
 const TRUST_THRESHOLD = 3;
-const isKid = user.role === "TEEN" || user.role === "CHILD";
+const isKid = user.role === "teen" || user.role === "child";
 const trustStreak = user.gig_trust_streak ?? 0;
 const toAutoApprove = Math.max(0, TRUST_THRESHOLD - trustStreak);
 
@@ -176,8 +176,8 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
     <Fragment slot="banner">
         <GigsIntroBanner lang={lang} show={!user.acknowledged_gigs_intro} />
 
-        <!-- Points Converter (only for TEEN/CHILD users) -->
-        {(user.role === "TEEN" || user.role === "CHILD") && (
+        <!-- Points Converter (only for teen/child users) -->
+        {(user.role === "teen" || user.role === "child") && (
             <PointsConverter
                 userId={user.id}
                 currentPoints={user.points}

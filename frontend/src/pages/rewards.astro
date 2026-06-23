@@ -54,7 +54,7 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
 const blockingTitles: string[] = Array.isArray(blockingRaw) ? blockingRaw : [];
 const isLocked = blockingTitles.length > 0;
 const activeGoal: any = activeGoalRaw ?? null;
-const isKid = user?.role === "CHILD" || user?.role === "TEEN";
+const isKid = user?.role === "child" || user?.role === "teen";
 
 const flash = Astro.cookies.get("flash")?.value;
 const flashError = Astro.cookies.get("flash_error")?.value;
