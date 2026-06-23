@@ -123,6 +123,120 @@ const {
             } catch (e) {
                 console.error("mermaid render failed", e);
             }
+            Array.from(blocks).forEach(makeDiagramZoomable);
+        }
+
+        // --- Click-to-zoom lightbox for rendered diagrams -------------------
+        let lightbox: any = null;
+        function buildLightbox() {
+            if (lightbox) return lightbox;
+            const overlay = document.createElement("div");
+            overlay.className = "diagram-lightbox";
+            overlay.hidden = true;
+            overlay.innerHTML = `
+                <div class="dl-controls">
+                    <button type="button" data-act="out" aria-label="Zoom out">−</button>
+                    <button type="button" data-act="reset" aria-label="Reset zoom">⤢</button>
+                    <button type="button" data-act="in" aria-label="Zoom in">+</button>
+                    <button type="button" data-act="close" aria-label="Close">✕</button>
+                </div>
+                <div class="dl-stage"></div>`;
+            document.body.appendChild(overlay);
+
+            const stage = overlay.querySelector(".dl-stage") as HTMLElement;
+            const state = { scale: 1, tx: 0, ty: 0 };
+            const pointers = new Map<number, { x: number; y: number }>();
+            let pinchDist = 0;
+
+            const apply = () => {
+                stage.style.transform = `translate(${state.tx}px, ${state.ty}px) scale(${state.scale})`;
+            };
+            const zoom = (factor: number) => {
+                state.scale = Math.min(8, Math.max(0.5, state.scale * factor));
+                apply();
+            };
+            const reset = () => {
+                state.scale = 1;
+                state.tx = 0;
+                state.ty = 0;
+                apply();
+            };
+            const close = () => {
+                overlay.hidden = true;
+                stage.innerHTML = "";
+                document.body.style.overflow = "";
+            };
+
+            overlay.addEventListener("click", (e) => {
+                const t = e.target as HTMLElement;
+                if (t === overlay) return close();
+                const act = t.getAttribute("data-act");
+                if (act === "in") zoom(1.25);
+                else if (act === "out") zoom(0.8);
+                else if (act === "reset") reset();
+                else if (act === "close") close();
+            });
+            overlay.addEventListener(
+                "wheel",
+                (e) => {
+                    e.preventDefault();
+                    zoom(e.deltaY < 0 ? 1.1 : 0.9);
+                },
+                { passive: false },
+            );
+            stage.addEventListener("pointerdown", (e) => {
+                stage.setPointerCapture(e.pointerId);
+                pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            });
+            stage.addEventListener("pointermove", (e) => {
+                if (!pointers.has(e.pointerId)) return;
+                const prev = pointers.get(e.pointerId)!;
+                pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (pointers.size === 1) {
+                    state.tx += e.clientX - prev.x;
+                    state.ty += e.clientY - prev.y;
+                    apply();
+                } else if (pointers.size === 2) {
+                    const pts = Array.from(pointers.values());
+                    const d = Math.hypot(
+                        pts[0].x - pts[1].x,
+                        pts[0].y - pts[1].y,
+                    );
+                    if (pinchDist) zoom(d / pinchDist);
+                    pinchDist = d;
+                }
+            });
+            const drop = (e: PointerEvent) => {
+                pointers.delete(e.pointerId);
+                if (pointers.size < 2) pinchDist = 0;
+            };
+            stage.addEventListener("pointerup", drop);
+            stage.addEventListener("pointercancel", drop);
+            document.addEventListener("keydown", (e) => {
+                if (!overlay.hidden && e.key === "Escape") close();
+            });
+
+            lightbox = { overlay, stage, reset };
+            return lightbox;
+        }
+
+        function makeDiagramZoomable(pre: HTMLElement) {
+            if (pre.dataset.zoomable === "1") return;
+            pre.dataset.zoomable = "1";
+            pre.style.cursor = "zoom-in";
+            pre.addEventListener("click", () => {
+                const svg = pre.querySelector("svg");
+                if (!svg) return;
+                const lb = buildLightbox();
+                lb.reset();
+                lb.stage.innerHTML = "";
+                const clone = svg.cloneNode(true) as SVGElement;
+                clone.removeAttribute("style");
+                clone.classList.add("dl-svg");
+                lb.stage.appendChild(clone);
+                lb.overlay.hidden = false;
+                document.body.style.overflow = "hidden";
+            });
         }
 
         // Public page: cover both the view-transition router event and a plain load.
@@ -261,6 +375,73 @@ const {
         font-family: "SF Mono", Menlo, Consolas, monospace;
         font-size: 12px;
         text-align: left;
+    }
+    .guide :global(pre.mermaid[data-zoomable="1"]:hover) {
+        outline: 2px solid #c7d2fe;
+        outline-offset: 4px;
+        border-radius: 8px;
+    }
+
+    /* Click-to-zoom lightbox (injected on document.body — global selectors). */
+    :global(.diagram-lightbox) {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background: rgba(15, 23, 42, 0.92);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        touch-action: none;
+    }
+    :global(.diagram-lightbox[hidden]) {
+        display: none;
+    }
+    :global(.diagram-lightbox .dl-stage) {
+        cursor: grab;
+        transform-origin: center center;
+        transition: transform 0.05s linear;
+        will-change: transform;
+    }
+    :global(.diagram-lightbox .dl-stage:active) {
+        cursor: grabbing;
+    }
+    :global(.diagram-lightbox .dl-svg) {
+        max-width: 92vw;
+        max-height: 86vh;
+        width: auto;
+        height: auto;
+        background: #fff;
+        padding: 16px;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        user-select: none;
+        -webkit-user-drag: none;
+    }
+    :global(.diagram-lightbox .dl-controls) {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        display: flex;
+        gap: 8px;
+        z-index: 1;
+    }
+    :global(.diagram-lightbox .dl-controls button) {
+        width: 40px;
+        height: 40px;
+        border: none;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.14);
+        color: #fff;
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    :global(.diagram-lightbox .dl-controls button:hover) {
+        background: rgba(255, 255, 255, 0.28);
     }
     .guide :global(a) {
         color: #4f46e5;
