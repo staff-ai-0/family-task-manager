@@ -188,8 +188,13 @@ async def create_task_templates(session: AsyncSession, family, parent):
     return templates
 
 
-async def create_assignments(session: AsyncSession, family, templates, members):
-    """Shuffle tasks into weekly assignments"""
+async def create_assignments(session: AsyncSession, family, templates, members, eligible_kid=None):
+    """Shuffle tasks into weekly assignments.
+
+    If eligible_kid is given, ALL of that kid's regular (non-bonus) current-week
+    assignments are marked completed so the demo — and the points-converter e2e —
+    reliably shows an eligible "Convert Points to Money" card for them.
+    """
     print("\nCreating weekly task assignments...")
     week_monday = TODAY - timedelta(days=TODAY.weekday())
     regular = [t for t in templates if not t.is_bonus]
@@ -229,6 +234,16 @@ async def create_assignments(session: AsyncSession, family, templates, members):
         if a.assigned_date < TODAY and random.random() < 0.7:
             a.status = AssignmentStatus.COMPLETED
             a.completed_at = datetime.combine(a.assigned_date, datetime.min.time()).replace(hour=15, minute=30)
+
+    # Deterministically complete one kid's regular current-week tasks (100%) so
+    # points conversion is reliably eligible for them in the demo + e2e.
+    if eligible_kid is not None:
+        regular_ids = {t.id for t in regular}
+        for a in assignments:
+            if a.assigned_to == eligible_kid.id and a.template_id in regular_ids:
+                a.status = AssignmentStatus.COMPLETED
+                if a.completed_at is None:
+                    a.completed_at = datetime.combine(a.assigned_date, datetime.min.time()).replace(hour=15, minute=30)
 
     session.add_all(assignments)
     await session.commit()
@@ -868,7 +883,7 @@ async def main():
 
         # Tasks
         templates = await create_task_templates(session, family, mom)
-        assignments = await create_assignments(session, family, templates, all_members)
+        assignments = await create_assignments(session, family, templates, all_members, eligible_kid=emma)
 
         # Rewards & consequences
         rewards = await create_rewards(session, family, mom)
