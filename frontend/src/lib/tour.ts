@@ -30,15 +30,25 @@ export interface TourButtons {
 
 const GUARD_KEY = "ftm_tour_done";
 
-/** Mark the tour finished: localStorage fast-path + backend per-user flag. */
-async function ackTour(): Promise<void> {
+/**
+ * Mark the tour finished. Runs SYNCHRONOUSLY (no await) so the localStorage
+ * fast-path guard is set the instant the tour is dismissed — even if the user
+ * reloads immediately after. The backend per-user flag is sent via sendBeacon
+ * so the request survives the page navigation/unload that a fetch() would lose
+ * (fetch falls back with keepalive when sendBeacon is unavailable).
+ */
+function ackTour(): void {
     try {
         localStorage.setItem(GUARD_KEY, "1");
     } catch {
         /* private mode / storage disabled — backend flag still persists */
     }
     try {
-        await fetch("/api/auth/ack-tour", { method: "POST" });
+        if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+            navigator.sendBeacon("/api/auth/ack-tour");
+        } else {
+            void fetch("/api/auth/ack-tour", { method: "POST", keepalive: true });
+        }
     } catch {
         /* offline — the localStorage guard prevents an immediate re-show */
     }
@@ -47,7 +57,9 @@ async function ackTour(): Promise<void> {
 /**
  * Drive the tour. Steps whose element is not present in the DOM are dropped
  * (e.g. the checklist widget after it's dismissed) so the tour never points at
- * nothing. Fires ackTour() on finish, skip, or close (driver's onDestroyed).
+ * nothing. Acks on finish, skip, close, ESC, or overlay click via
+ * onDestroyStarted, which fires the moment teardown begins (before the exit
+ * animation) so the guard lands even on an immediate reload.
  */
 export function runTour(steps: TourStep[], btn: TourButtons): void {
     const present = steps.filter(
@@ -72,8 +84,11 @@ export function runTour(steps: TourStep[], btn: TourButtons): void {
                 align: s.align ?? "center",
             },
         })),
-        onDestroyed: () => {
-            void ackTour();
+        // Fires on every exit path (X, done, ESC, overlay) the instant teardown
+        // starts. Overriding it means we own the destroy() call.
+        onDestroyStarted: () => {
+            ackTour();
+            d.destroy();
         },
     });
     d.drive();
