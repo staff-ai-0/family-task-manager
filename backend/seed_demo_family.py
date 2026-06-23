@@ -413,23 +413,38 @@ async def create_points(session: AsyncSession, family, parent, members, complete
             user_id=teen.id, reward_id=_r.id, points_cost=_r.points_cost, balance_before=bal,
         ))
 
-    # Parent bonus for the child, small penalty for the teen.
+    # Parent bonus for the child; a small penalty for the teen only when it
+    # won't drive the balance negative (keeps points == sum(transactions)).
     _earn(session, child, lambda bal: PointTransaction(
         type=TransactionType.BONUS, user_id=child.id, points=50,
         balance_before=bal, balance_after=bal + 50, created_by=parent.id,
         description="Bonus for helping a neighbor",
     ))
-    _earn(session, teen, lambda bal: PointTransaction(
-        type=TransactionType.PENALTY, user_id=teen.id, points=-20,
-        balance_before=bal, balance_after=bal - 20, created_by=parent.id,
-        description="Left room messy after a warning",
-    ))
+    if _balances.get(teen.id, 0) >= 20:
+        _earn(session, teen, lambda bal: PointTransaction(
+            type=TransactionType.PENALTY, user_id=teen.id, points=-20,
+            balance_before=bal, balance_after=bal - 20, created_by=parent.id,
+            description="Left room messy after a warning",
+        ))
 
-    # Reconcile authoritative balance column.
+    # Reconcile authoritative balance column to the running balance, which is
+    # kept non-negative above so it always equals sum(point_transactions).
     for kid in (teen, child):
-        kid.points = max(0, _balances.get(kid.id, 0))
+        kid.points = _balances.get(kid.id, 0)
     await session.commit()
-    print(f"  {teen.name}: {teen.points} pts · {child.name}: {child.points} pts")
+
+    # Self-check: User.points must match the sum of the kid's transactions.
+    for kid in (teen, child):
+        total = (await session.execute(
+            text("SELECT COALESCE(SUM(points), 0) FROM point_transactions WHERE user_id = :u"),
+            {"u": str(kid.id)},
+        )).scalar()
+        if total != kid.points:
+            raise SystemExit(
+                f"Points mismatch for {kid.name}: User.points={kid.points} "
+                f"but sum(point_transactions)={total}"
+            )
+    print(f"  {teen.name}: {teen.points} pts · {child.name}: {child.points} pts (reconciled)")
 
 
 async def create_consequences(session: AsyncSession, family, members, assignments):
@@ -882,9 +897,8 @@ async def main():
 
     async with session_maker() as session:
         family, parent = await resolve_family(session)
-        await clear_family(session, session_family := family)
+        await clear_family(session, family)
         members = await create_members(session, family)
-        all_people = [parent] + members
 
         templates, assignments, completed_bonus = await create_tasks(session, family, parent, members)
         await create_gigs(session, family, parent, members)
