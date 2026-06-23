@@ -62,9 +62,17 @@ function ackTour(): void {
  * animation) so the guard lands even on an immediate reload.
  */
 export function runTour(steps: TourStep[], btn: TourButtons): void {
-    const present = steps.filter(
-        (s) => !s.element || document.querySelector(s.element),
-    );
+    // Keep element-less steps (centered modals); for targeted steps, require the
+    // element to be present AND actually visible — a nav item collapsed at the
+    // current breakpoint (display:none / zero-size) would otherwise get an empty
+    // or mis-placed spotlight.
+    const present = steps.filter((s) => {
+        if (!s.element) return true;
+        const el = document.querySelector(s.element) as HTMLElement | null;
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && el.offsetParent !== null;
+    });
     if (present.length === 0) return;
 
     const d = driver({
