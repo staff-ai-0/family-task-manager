@@ -88,7 +88,7 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                 <div id="onboarding-widget" class="mb-6 bg-brand-coral/10 border border-brand-coral/20 rounded-2xl p-5 shadow-[var(--shadow-card)]">
                     <div class="flex items-center justify-between mb-2">
                         <h2 class="font-bold text-brand-ink text-base">
-                            {lang === "es" ? "¡Empecemos! 🚀" : "Getting Started 🚀"}
+                            {t(lang, "pd_onb_title")}
                         </h2>
                         <div class="flex items-center gap-2">
                             <span class="text-xs font-semibold text-brand-ink-soft">{onbDone}/{onbTotal}</span>
@@ -115,35 +115,35 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                         <li class="flex items-center gap-3">
                             <span class={onboarding?.task_created ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.task_created ? "✅" : "◻"}</span>
                             <span class={onboarding?.task_created ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
-                                {lang === "es" ? "Crea tu primera tarea" : "Create your first task"}
+                                {t(lang, "pd_onb_task")}
                             </span>
                             {!onboarding?.task_created && <a href="/parent/tasks" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
                         </li>
                         <li class="flex items-center gap-3">
                             <span class={onboarding?.reward_created ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.reward_created ? "✅" : "◻"}</span>
                             <span class={onboarding?.reward_created ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
-                                {lang === "es" ? "Crea una recompensa" : "Create a reward"}
+                                {t(lang, "pd_onb_reward")}
                             </span>
                             {!onboarding?.reward_created && <a href="/rewards" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
                         </li>
                         <li class="flex items-center gap-3">
                             <span class={onboarding?.child_invited ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.child_invited ? "✅" : "◻"}</span>
                             <span class={onboarding?.child_invited ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
-                                {lang === "es" ? "Invita a un hijo/a" : "Invite a child"}
+                                {t(lang, "pd_onb_invite")}
                             </span>
                             {!onboarding?.child_invited && <a href="/parent/invite" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
                         </li>
                         <li class="flex items-center gap-3">
                             <span class={onboarding?.points_awarded ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.points_awarded ? "✅" : "◻"}</span>
                             <span class={onboarding?.points_awarded ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
-                                {lang === "es" ? "Aprueba la primera tarea" : "Approve first task"}
+                                {t(lang, "pd_onb_approve")}
                             </span>
                             {!onboarding?.points_awarded && onboarding?.child_invited && <a href="/parent/approvals" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
                         </li>
                     </ol>
                     {onboarding?.all_done && (
                         <p class="mt-3 text-sm text-green-700 font-semibold">
-                            {lang === "es" ? "🎉 ¡Todo listo! Tu familia está en marcha." : "🎉 All set! Your family is up and running."}
+                            {t(lang, "pd_onb_done")}
                         </p>
                     )}
                     <div class="mt-4 flex flex-wrap gap-2">
@@ -299,10 +299,10 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                     </div>
                     <div>
                         <p class="font-bold text-brand-ink">
-                            {lang === "es" ? "Aprobaciones" : "Approvals"}
+                            {t(lang, "pd_approvals")}
                         </p>
                         <p class="text-xs text-brand-ink-soft">
-                            {lang === "es" ? "Revisar gigs pendientes" : "Review pending gigs"}
+                            {t(lang, "pd_approvals_sub")}
                         </p>
                     </div>
                 </a>
@@ -365,10 +365,10 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                     </div>
                     <div>
                         <p class="font-bold text-brand-ink">
-                            {lang === "es" ? "Configuraci\u00f3n" : "Settings"}
+                            {t(lang, "pd_settings")}
                         </p>
                         <p class="text-xs text-brand-ink-soft">
-                            {lang === "es" ? "Plan y suscripci\u00f3n" : "Plan & subscription"}
+                            {t(lang, "pd_settings_sub")}
                         </p>
                     </div>
                 </a>
@@ -382,7 +382,7 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                     <div>
                         <p class="font-bold text-brand-ink">Jarvis</p>
                         <p class="text-xs text-brand-ink-soft">
-                            {lang === "es" ? "Copiloto IA" : "AI copilot"}
+                            {t(lang, "pd_jarvis")}
                         </p>
                     </div>
                 </a>
@@ -396,9 +396,9 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                         </svg>
                     </div>
                     <div>
-                        <p class="font-bold text-brand-ink">{lang === "es" ? "Chat" : "Chat"}</p>
+                        <p class="font-bold text-brand-ink">{t(lang, "pd_chat")}</p>
                         <p class="text-xs text-brand-ink-soft">
-                            {lang === "es" ? "Mensajes familiares" : "Family messages"}
+                            {t(lang, "pd_chat_sub")}
                         </p>
                     </div>
                 </a>
@@ -474,7 +474,7 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                                                 </p>
                                                 <span class="text-xs text-brand-ink-soft whitespace-nowrap">
                                                     {m.goal.affordable
-                                                        ? (lang === "es" ? "¡Lista!" : "Ready!")
+                                                        ? t(lang, "pd_goal_ready")
                                                         : `${m.goal.pts_to_go} pts`}
                                                 </span>
                                             </div>
@@ -494,16 +494,12 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                                                 href="/parent/approvals"
                                                 class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800"
                                             >
-                                                {lang === "es"
-                                                    ? `${m.pending_approvals} por aprobar`
-                                                    : `${m.pending_approvals} to approve`}
+                                                {t(lang, "pd_member_to_approve")(m.pending_approvals)}
                                             </a>
                                         )}
                                         {m.open_today > 0 && (
                                             <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-brand-cream-deep text-brand-ink-soft">
-                                                {lang === "es"
-                                                    ? `${m.open_today} tareas hoy`
-                                                    : `${m.open_today} tasks today`}
+                                                {t(lang, "pd_member_tasks_today")(m.open_today)}
                                             </span>
                                         )}
                                         {m.active_consequences > 0 && (
@@ -511,9 +507,7 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                                                 href="/parent/consequences"
                                                 class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700"
                                             >
-                                                {lang === "es"
-                                                    ? `${m.active_consequences} consecuencia${m.active_consequences > 1 ? "s" : ""}`
-                                                    : `${m.active_consequences} consequence${m.active_consequences > 1 ? "s" : ""}`}
+                                                {t(lang, "pd_member_consequences")(m.active_consequences)}
                                             </a>
                                         )}
                                     </div>

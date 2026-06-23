@@ -490,6 +490,25 @@ export const translations = {
         help_open_full_guide: "Open the full user guide",
         help_no_results: "No topics match your search.",
         help_back_home: "Back to app",
+
+        // Parent dashboard (migrated from inline ES/EN ternaries)
+        pd_onb_title: "Getting Started 🚀",
+        pd_onb_task: "Create your first task",
+        pd_onb_reward: "Create a reward",
+        pd_onb_invite: "Invite a child",
+        pd_onb_approve: "Approve first task",
+        pd_onb_done: "🎉 All set! Your family is up and running.",
+        pd_approvals: "Approvals",
+        pd_approvals_sub: "Review pending gigs",
+        pd_settings: "Settings",
+        pd_settings_sub: "Plan & subscription",
+        pd_jarvis: "AI copilot",
+        pd_chat: "Chat",
+        pd_chat_sub: "Family messages",
+        pd_goal_ready: "Ready!",
+        pd_member_to_approve: (n: number) => `${n} to approve`,
+        pd_member_tasks_today: (n: number) => `${n} ${n === 1 ? "task" : "tasks"} today`,
+        pd_member_consequences: (n: number) => `${n} ${n === 1 ? "consequence" : "consequences"}`,
     },
     es: {
         // Common / Nav
@@ -976,6 +995,25 @@ export const translations = {
         help_open_full_guide: "Abrir la guía completa del usuario",
         help_no_results: "Ningún tema coincide con tu búsqueda.",
         help_back_home: "Volver a la app",
+
+        // Tablero de padres (migrado de ternarios ES/EN en línea)
+        pd_onb_title: "¡Empecemos! 🚀",
+        pd_onb_task: "Crea tu primera tarea",
+        pd_onb_reward: "Crea una recompensa",
+        pd_onb_invite: "Invita a un hijo/a",
+        pd_onb_approve: "Aprueba la primera tarea",
+        pd_onb_done: "🎉 ¡Todo listo! Tu familia está en marcha.",
+        pd_approvals: "Aprobaciones",
+        pd_approvals_sub: "Revisar gigs pendientes",
+        pd_settings: "Configuración",
+        pd_settings_sub: "Plan y suscripción",
+        pd_jarvis: "Copiloto IA",
+        pd_chat: "Chat",
+        pd_chat_sub: "Mensajes familiares",
+        pd_goal_ready: "¡Lista!",
+        pd_member_to_approve: (n: number) => `${n} por aprobar`,
+        pd_member_tasks_today: (n: number) => `${n} ${n === 1 ? "tarea" : "tareas"} hoy`,
+        pd_member_consequences: (n: number) => `${n} ${n === 1 ? "consecuencia" : "consecuencias"}`,
     },
 } as const;
 
