@@ -1010,7 +1010,7 @@ Each entity below is a **data-only** addition: a pydantic create/update schema +
 | rewards | reward | `reward_service.py` (locate) | LGCUD | delete |
 | rewards | redemption | `reward_service.py` | LC | create *(money)* |
 | tasks | template | `task_template_service.py` | LGCUD | delete |
-| tasks | assignment | `task_assignment_service.py` (locate) | LGCUD | delete |
+| tasks | assignment | `task_assignment_service.py` (locate) | LGUD | delete |
 | gigs | offering | gig service (locate, `gig_service.py`) | LGCUD | delete |
 | gigs | claim | gig service | LGUD | delete |
 | meals | recipe | `meal_service.py` | LGCUD | delete |
