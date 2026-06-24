@@ -14,8 +14,10 @@ live guard.
 What is tested unconditionally:
 - ``_quote_ident`` defensively escapes the role name (unit test, no DB).
 - When ``JARVIS_MCP_DB_ROLE`` is set, ``http.py`` executes ``SET ROLE`` on the
-  session (monkeypatched to capture the statement).
-- When ``JARVIS_MCP_DB_ROLE`` is unset, the warning log fires.
+  session (via a real HTTP call through ``mcp_asgi`` with the session factory
+  monkeypatched to capture statements).
+- When ``JARVIS_MCP_DB_ROLE`` is unset, the warning log fires (verified by the
+  same real HTTP call path).
 
 What is tested only when the role is live:
 - A session running as ``jarvis_mcp`` can SELECT from ``budget_accounts``.
@@ -24,10 +26,11 @@ What is tested only when the role is live:
 
 import logging
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -63,7 +66,7 @@ def test_quote_ident_escapes_embedded_quote():
 
 
 # ---------------------------------------------------------------------------
-# SET ROLE wiring — monkeypatched; always runs
+# SET ROLE wiring — calls the real mcp_asgi via HTTP; always runs
 # ---------------------------------------------------------------------------
 
 
@@ -72,78 +75,174 @@ def anyio_backend():
     return "asyncio"
 
 
+class _SpySession:
+    """Thin async context-manager wrapper around a real SQLAlchemy session.
+
+    Intercepts every ``execute`` call so tests can assert on the SQL strings
+    that ``mcp_asgi`` actually dispatches to the DB session.
+
+    ``SET ROLE`` and ``RESET ROLE`` are captured but *not* forwarded to the
+    real DB connection — the test DB does not have the ``jarvis_mcp`` role, so
+    forwarding would raise.  All other statements are delegated normally so the
+    rest of the MCP request flow (tool dispatch, etc.) continues.
+    """
+
+    _ROLE_STMTS = ("SET ROLE", "RESET ROLE")
+
+    def __init__(self, real: AsyncSession, log: list[str]) -> None:
+        self._real = real
+        self._log = log
+
+    async def execute(self, stmt, *args, **kwargs):
+        sql_str = str(stmt)
+        self._log.append(sql_str)
+        # Don't forward SET/RESET ROLE to the test DB — the role does not exist
+        # there.  Returning None mimics a successful DDL execution from
+        # mcp_asgi's perspective (the return value is not used).
+        if any(sql_str.strip().upper().startswith(tok) for tok in self._ROLE_STMTS):
+            return None
+        return await self._real.execute(stmt, *args, **kwargs)
+
+    def __getattr__(self, name: str):
+        # Delegate all other attribute access to the wrapped session
+        return getattr(self._real, name)
+
+    async def __aenter__(self):
+        await self._real.__aenter__()
+        return self
+
+    async def __aexit__(self, *exc_info):
+        return await self._real.__aexit__(*exc_info)
+
+
+def _make_spy_factory(base_maker: async_sessionmaker, spy_log: list[str]):
+    """Return a callable that behaves like ``async_sessionmaker``.
+
+    The *first* call (auth lookup session) yields a plain session so token
+    resolution succeeds.  The *second* call (request session) wraps the session
+    in ``_SpySession`` so ``SET ROLE`` / warning-branch executions are captured.
+    """
+    call_count = 0
+
+    class _SpyFactory:
+        def __call__(self):
+            nonlocal call_count
+            call_count += 1
+            real = base_maker()
+            if call_count >= 2:
+                # Request session — spy on execute()
+                return _SpySession(real, spy_log)
+            return real
+
+    return _SpyFactory()
+
+
 @pytest.mark.anyio
-async def test_set_role_called_when_role_configured(monkeypatch, caplog):
-    """When JARVIS_MCP_DB_ROLE is set, http.py executes SET ROLE on the session."""
+async def test_set_role_called_when_role_configured(
+    monkeypatch, test_engine, db_session, family, parent_user
+):
+    """mcp_asgi executes SET ROLE on the request session when JARVIS_MCP_DB_ROLE is set.
+
+    This test calls the *real* ``mcp_asgi`` ASGI app via an HTTP request.
+    ``AsyncSessionLocal`` in ``app.mcp.http`` is monkeypatched so sessions use
+    the test engine; a spy wrapper records every SQL statement executed on the
+    second (request) session.  If someone removes ``SET ROLE`` from ``http.py``
+    this test will fail because the spy log will contain no matching statement.
+    """
     import app.mcp.http as mcp_http
     from app.core.config import settings
+    from app.main import app
+    from app.services.jarvis_mcp_token_service import TokenService
+
+    # Mint a real token so the auth session resolves successfully.
+    _, secret = await TokenService.mint(db_session, family.id, parent_user.id, "role-test")
 
     executed_statements: list[str] = []
+    base_maker = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+    spy_factory = _make_spy_factory(base_maker, executed_statements)
 
-    class _FakeSession:
-        async def execute(self, stmt):
-            executed_statements.append(str(stmt))
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_):
-            pass
-
-    class _FakeSessionLocal:
-        def __call__(self):
-            return _FakeSession()
-
-        def __enter__(self):
-            return _FakeSession()
-
-        def __exit__(self, *_):
-            pass
-
-    # Patch settings to have a DB role
+    monkeypatch.setattr(mcp_http, "AsyncSessionLocal", spy_factory)
     monkeypatch.setattr(settings, "JARVIS_MCP_DB_ROLE", "jarvis_mcp")
 
-    # Verify the role execution logic by calling the SET ROLE branch directly
-    fake_session = _FakeSession()
-    from sqlalchemy import text as sa_text
-
-    if settings.JARVIS_MCP_DB_ROLE:
-        from app.mcp.http import _quote_ident
-        await fake_session.execute(
-            sa_text("SET ROLE " + _quote_ident(settings.JARVIS_MCP_DB_ROLE))
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://t") as c:
+        await c.post(
+            "/mcp",
+            headers={
+                "Authorization": f"Bearer {secret}",
+                "Accept": "application/json, text/event-stream",
+                "Content-Type": "application/json",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "test", "version": "1"},
+                },
+            },
         )
 
-    assert any("SET ROLE" in s and "jarvis_mcp" in s for s in executed_statements), (
-        f"Expected SET ROLE jarvis_mcp statement; got: {executed_statements}"
+    assert any(
+        "SET ROLE" in s and "jarvis_mcp" in s for s in executed_statements
+    ), (
+        f"Expected 'SET ROLE \"jarvis_mcp\"' in executed statements; got: {executed_statements}"
     )
 
 
 @pytest.mark.anyio
-async def test_warning_logged_when_role_unset(monkeypatch, caplog):
-    """When JARVIS_MCP_DB_ROLE is None, a warning is logged at /mcp request time."""
+async def test_warning_logged_when_role_unset(
+    monkeypatch, caplog, test_engine, db_session, family, parent_user
+):
+    """mcp_asgi emits a warning when JARVIS_MCP_DB_ROLE is None.
+
+    This test calls the *real* ``mcp_asgi`` ASGI app via an HTTP request.
+    ``AsyncSessionLocal`` in ``app.mcp.http`` is monkeypatched so sessions use
+    the test engine; ``JARVIS_MCP_DB_ROLE`` is cleared so the warning branch
+    executes.  Removing the warning from ``http.py`` will cause this test to
+    fail because no matching log record will appear.
+    """
     import app.mcp.http as mcp_http
     from app.core.config import settings
+    from app.main import app
+    from app.services.jarvis_mcp_token_service import TokenService
 
-    # Temporarily clear the DB role
-    original = settings.JARVIS_MCP_DB_ROLE
+    # Mint a real token so the auth session resolves successfully.
+    _, secret = await TokenService.mint(db_session, family.id, parent_user.id, "role-test-warn")
+
+    base_maker = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(mcp_http, "AsyncSessionLocal", base_maker)
     monkeypatch.setattr(settings, "JARVIS_MCP_DB_ROLE", None)
 
-    # Exercise the warning branch directly (the same branch in mcp_asgi)
+    transport = ASGITransport(app=app)
     with caplog.at_level(logging.WARNING, logger="app.mcp.http"):
-        if not settings.JARVIS_MCP_DB_ROLE:
-            import logging as _logging
-            _log = _logging.getLogger("app.mcp.http")
-            _log.warning(
-                "JARVIS_MCP_DB_ROLE unset — /mcp session runs with the full app DB role"
+        async with AsyncClient(transport=transport, base_url="http://t") as c:
+            await c.post(
+                "/mcp",
+                headers={
+                    "Authorization": f"Bearer {secret}",
+                    "Accept": "application/json, text/event-stream",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-06-18",
+                        "capabilities": {},
+                        "clientInfo": {"name": "test", "version": "1"},
+                    },
+                },
             )
 
     assert any(
         "JARVIS_MCP_DB_ROLE unset" in r.message
         for r in caplog.records
         if r.name == "app.mcp.http"
-    ), f"Expected warning not found; records={[r.message for r in caplog.records]}"
-
-    monkeypatch.setattr(settings, "JARVIS_MCP_DB_ROLE", original)
+    ), f"Expected 'JARVIS_MCP_DB_ROLE unset' warning; got records: {[r.message for r in caplog.records]}"
 
 
 # ---------------------------------------------------------------------------
