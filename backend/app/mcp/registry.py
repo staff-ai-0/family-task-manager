@@ -49,6 +49,7 @@ def register_builtin() -> None:
         ))
 
     _register_budget_rest()
+    _register_points_rewards()
     _register_legacy_tools()
 
 
@@ -200,6 +201,73 @@ def _register_budget_rest() -> None:
             destructive_ops=frozenset({"delete"}),
             adapter=ReceiptDraftAdapter(),
             summarize=lambda op, p: f"{op} receipt draft {p.get('id', '')}",
+        ))
+
+
+def _register_points_rewards() -> None:
+    """Register points + rewards entities (Phase 5 Task 13).
+
+    points:
+      - ledger  (list/get; read-only)
+      - adjust  (create only; money-moving → destructive)
+      - transfer (create only; money-moving → destructive)
+    rewards:
+      - reward      (LGCUD; delete is destructive)
+      - redemption  (list/create; create is money-moving → destructive)
+    """
+    from app.mcp.adapters_points import LedgerAdapter, AdjustAdapter, TransferAdapter
+    from app.mcp.adapters_rewards import RewardAdapter, RedemptionAdapter
+    from app.mcp.schemas.points import AdjustCreate, TransferCreate
+    from app.mcp.schemas.rewards import RewardCreate, RewardUpdate, RedemptionCreate
+
+    if not _has_spec("points", "ledger"):
+        REGISTRY.append(EntitySpec(
+            name="ledger", domain="points",
+            ops=frozenset({"list", "get"}),
+            create_schema=dict, update_schema=dict,
+            destructive_ops=frozenset(),
+            adapter=LedgerAdapter(),
+            summarize=lambda op, p: f"{op} points ledger {p.get('id', '')}",
+        ))
+
+    if not _has_spec("points", "adjust"):
+        REGISTRY.append(EntitySpec(
+            name="adjust", domain="points",
+            ops=frozenset({"create"}),
+            create_schema=AdjustCreate, update_schema=dict,
+            destructive_ops=frozenset({"create"}),
+            adapter=AdjustAdapter(),
+            summarize=lambda op, p: f"parent adjustment: {p.get('points', '?')} pts for user {p.get('user_id', '')} — {p.get('reason', '')}",
+        ))
+
+    if not _has_spec("points", "transfer"):
+        REGISTRY.append(EntitySpec(
+            name="transfer", domain="points",
+            ops=frozenset({"create"}),
+            create_schema=TransferCreate, update_schema=dict,
+            destructive_ops=frozenset({"create"}),
+            adapter=TransferAdapter(),
+            summarize=lambda op, p: f"transfer {p.get('points', '?')} pts from {p.get('from_user_id', '')} to {p.get('to_user_id', '')}",
+        ))
+
+    if not _has_spec("rewards", "reward"):
+        REGISTRY.append(EntitySpec(
+            name="reward", domain="rewards",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=RewardCreate, update_schema=RewardUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=RewardAdapter(),
+            summarize=lambda op, p: f"{op} reward {p.get('title') or p.get('id', '')}",
+        ))
+
+    if not _has_spec("rewards", "redemption"):
+        REGISTRY.append(EntitySpec(
+            name="redemption", domain="rewards",
+            ops=frozenset({"list", "create"}),
+            create_schema=RedemptionCreate, update_schema=dict,
+            destructive_ops=frozenset({"create"}),
+            adapter=RedemptionAdapter(),
+            summarize=lambda op, p: f"redeem reward {p.get('reward_id', '')} for user {p.get('user_id', '')}",
         ))
 
 
