@@ -29,7 +29,7 @@ class TokenService:
         label: str,
     ) -> tuple["JarvisMcpToken", str]:
         """Create a new token.  Returns (row, plaintext_secret)."""
-        secret = "mcp_" + secrets.token_hex(16)  # 4 + 32 chars = 36 total
+        secret = "mcp_" + secrets.token_hex(32)  # 4 + 64 chars = 68 total (256-bit entropy)
         token_hash = _hash(secret)
         token_prefix = secret[:8]
         row = JarvisMcpToken(

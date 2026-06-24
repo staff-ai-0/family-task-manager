@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     # per-family bearer auth. Disable to keep the in-app (in-memory) MCP client
     # path only. JARVIS_MCP_DB_ROLE, when set, is applied via SET ROLE on the
     # HTTP-path DB session (restricted role hardening — see Task 11).
-    JARVIS_MCP_HTTP_ENABLED: bool = True
+    JARVIS_MCP_HTTP_ENABLED: bool = False
     JARVIS_MCP_DB_ROLE: str | None = None
 
     # Stripe settings removed 2026-05-24. PayPal is the canonical

@@ -107,6 +107,10 @@ services:
       # without tripping the production SECRET_KEY validator. Prod uses
       # docker-compose.gcp.yml which sets DEBUG=false explicitly + a real key.
       DEBUG: ${DEBUG:-true}
+      # Explicitly enable the external /mcp HTTP transport for local dev and tests.
+      # Default is false (off) — prod enables it only after provisioning the
+      # jarvis_mcp DB role and setting JARVIS_MCP_DB_ROLE (see docs/JARVIS_MCP.md).
+      JARVIS_MCP_HTTP_ENABLED: "true"
     ports:
        # Host port is configurable so a deployment can avoid collisions with
        # other services on the same host. Defaults to 8003 to match local-dev

@@ -151,7 +151,7 @@ jarvis_mcp_token
 jarvis_pending_action
   id uuid pk
   family_id uuid  -> families(id) ON DELETE CASCADE
-  user_id uuid    -> users(id)    ON DELETE CASCADE   # initiator
+  user_id uuid    -> users(id)    ON DELETE SET NULL   # initiator (nullable; row survives user deletion)
   message_id uuid -> jarvis_messages(id) ON DELETE SET NULL  # chat turn that proposed it
   tool_name text
   params jsonb

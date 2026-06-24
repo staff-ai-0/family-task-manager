@@ -1,7 +1,10 @@
+import logging
 from uuid import UUID
 
 from app.mcp.registry import REGISTRY, tool_name
 from app.mcp.context import get_context
+
+logger = logging.getLogger(__name__)
 
 
 def _spec_for(name: str):
@@ -39,4 +42,5 @@ async def dispatch_tool(name: str, arguments: dict) -> dict:
             return {"ok": True, "data": await spec.adapter.call_custom(op, ctx, arguments)}
         return {"ok": False, "error": f"unsupported op {op}"}
     except Exception as e:  # surfaced to the LLM as a tool error, not a 500
+        logger.warning("dispatch_tool %r failed: %s", name, e, exc_info=True)
         return {"ok": False, "error": str(e)}

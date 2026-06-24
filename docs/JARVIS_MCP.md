@@ -61,3 +61,26 @@ role and the backend logs a warning at request time. Do **not** enable external
 
 To disable the external transport entirely, set `JARVIS_MCP_HTTP_ENABLED=false`
 (the in-app Jarvis client is unaffected).
+
+## Security model
+
+**The external HTTP `/mcp` path (bearer-token) is NOT subject to the in-chat
+HITL confirmation gate.** A token holder can invoke destructive and money-moving
+tools directly — the pending-action flow only applies when Jarvis (the LLM) is
+initiating the call through the in-app SSE path.
+
+However, every `/mcp` call is strictly family-scoped: the token is bound to a
+single family at mint time, and `family_id` is always derived from the token —
+never from the request body. Treat a token like a family-scoped automation
+credential and revoke it immediately if leaked (via **Parent Settings → MCP
+tokens** or `DELETE /api/jarvis/mcp-tokens/{id}`).
+
+**`/mcp` is off by default** (`JARVIS_MCP_HTTP_ENABLED=false`). Enable it in
+prod `.env` only **after**:
+1. Running the `mcp_restricted_role` migration to create the `jarvis_mcp` Postgres role.
+2. Granting it to the app role: `GRANT jarvis_mcp TO familyapp;`
+3. Setting `JARVIS_MCP_DB_ROLE=jarvis_mcp` in `.env`.
+
+If `JARVIS_MCP_DB_ROLE` is unset when `/mcp` is enabled, external sessions run
+under the full app DB role — this is logged as a warning at request time and
+should be treated as a misconfiguration.
