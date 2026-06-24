@@ -1,7 +1,10 @@
 # FastAPI and Web Framework
 # fastapi>=0.115 pulls starlette>=0.40 (fixes CVE-2024-47874 multipart DoS,
 # in-path here since we accept multipart uploads).
+# starlette is pinned to <0.42.0 because mcp==1.12.4 pulls sse-starlette 3.4.5
+# which would otherwise upgrade starlette to 1.x — incompatible with fastapi 0.115.
 fastapi==0.115.6
+starlette>=0.40.0,<0.42.0
 uvicorn[standard]==0.27.0
 # python-multipart>=0.0.7 fixes CVE-2024-24762 (ReDoS); 0.0.18 is current.
 python-multipart==0.0.18
@@ -76,3 +79,6 @@ slowapi==0.1.9
 
 # Error monitoring — disabled unless SENTRY_DSN is set in .env
 sentry-sdk[fastapi]==2.8.0
+
+# MCP server — Jarvis AI copilot tool registry
+mcp==1.12.4
