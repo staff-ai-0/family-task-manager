@@ -463,6 +463,40 @@ async def user(db: AsyncSession, family):
 
 
 @pytest_asyncio.fixture
+async def parent_user(db: AsyncSession, family):
+    """A PARENT user for the primary family (MCP / isolation tests)."""
+    from app.models.user import User, UserRole
+    u = User(
+        email="parent-mcp@example.com",
+        name="MCP Parent",
+        role=UserRole.PARENT,
+        family_id=family.id,
+        email_verified=True,
+    )
+    db.add(u)
+    await db.commit()
+    await db.refresh(u)
+    return u
+
+
+@pytest_asyncio.fixture
+async def other_parent(db: AsyncSession, other_family):
+    """A PARENT user for the secondary family (cross-family isolation tests)."""
+    from app.models.user import User, UserRole
+    u = User(
+        email="other-parent-mcp@example.com",
+        name="Other MCP Parent",
+        role=UserRole.PARENT,
+        family_id=other_family.id,
+        email_verified=True,
+    )
+    db.add(u)
+    await db.commit()
+    await db.refresh(u)
+    return u
+
+
+@pytest_asyncio.fixture
 async def account_factory(db: AsyncSession):
     """Factory that creates BudgetAccount rows with optional card_last4."""
     from app.models.budget import BudgetAccount
