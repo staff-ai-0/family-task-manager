@@ -48,7 +48,159 @@ def register_builtin() -> None:
             summarize=lambda op, p: f"{op} budget account {p.get('name') or p.get('id', '')}",
         ))
 
+    _register_budget_rest()
     _register_legacy_tools()
+
+
+def _register_budget_rest() -> None:
+    """Register the remaining 12 budget entities (Phase 5 Task 12)."""
+    from app.mcp.adapters_budget_rest import (
+        CategoryGroupAdapter,
+        CategoryAdapter,
+        PayeeAdapter,
+        TransactionAdapter,
+        AllocationAdapter,
+        GoalAdapter,
+        RuleAdapter,
+        RecurringAdapter,
+        TagAdapter,
+        SavedFilterAdapter,
+        CustomReportAdapter,
+        ReceiptDraftAdapter,
+    )
+    from app.mcp.schemas.budget import (
+        CategoryGroupCreate, CategoryGroupUpdate,
+        CategoryCreate, CategoryUpdate,
+        PayeeCreate, PayeeUpdate,
+        TransactionCreate, TransactionUpdate,
+        AllocationCreate, AllocationUpdate,
+        GoalCreate, GoalUpdate,
+        RuleCreate, RuleUpdate,
+        RecurringCreate, RecurringUpdate,
+        TagCreate, TagUpdate,
+        SavedFilterCreate, SavedFilterUpdate,
+        CustomReportCreate, CustomReportUpdate,
+    )
+
+    if not _has_spec("budget", "category_group"):
+        REGISTRY.append(EntitySpec(
+            name="category_group", domain="budget",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=CategoryGroupCreate, update_schema=CategoryGroupUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=CategoryGroupAdapter(),
+            summarize=lambda op, p: f"{op} budget category_group {p.get('name') or p.get('id', '')}",
+        ))
+
+    if not _has_spec("budget", "category"):
+        REGISTRY.append(EntitySpec(
+            name="category", domain="budget",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=CategoryCreate, update_schema=CategoryUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=CategoryAdapter(),
+            summarize=lambda op, p: f"{op} budget category {p.get('name') or p.get('id', '')}",
+        ))
+
+    if not _has_spec("budget", "payee"):
+        REGISTRY.append(EntitySpec(
+            name="payee", domain="budget",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=PayeeCreate, update_schema=PayeeUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=PayeeAdapter(),
+            summarize=lambda op, p: f"{op} budget payee {p.get('name') or p.get('id', '')}",
+        ))
+
+    if not _has_spec("budget", "transaction"):
+        REGISTRY.append(EntitySpec(
+            name="transaction", domain="budget",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=TransactionCreate, update_schema=TransactionUpdate,
+            destructive_ops=frozenset({"delete", "create", "update"}),
+            adapter=TransactionAdapter(),
+            summarize=lambda op, p: f"{op} budget transaction amount={p.get('amount')} on {p.get('date') or p.get('id', '')}",
+        ))
+
+    if not _has_spec("budget", "allocation"):
+        REGISTRY.append(EntitySpec(
+            name="allocation", domain="budget",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=AllocationCreate, update_schema=AllocationUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=AllocationAdapter(),
+            summarize=lambda op, p: f"{op} budget allocation {p.get('id', '')}",
+        ))
+
+    if not _has_spec("budget", "goal"):
+        REGISTRY.append(EntitySpec(
+            name="goal", domain="budget",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=GoalCreate, update_schema=GoalUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=GoalAdapter(),
+            summarize=lambda op, p: f"{op} budget goal {p.get('name') or p.get('id', '')}",
+        ))
+
+    if not _has_spec("budget", "rule"):
+        REGISTRY.append(EntitySpec(
+            name="rule", domain="budget",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=RuleCreate, update_schema=RuleUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=RuleAdapter(),
+            summarize=lambda op, p: f"{op} budget categorization rule {p.get('pattern') or p.get('id', '')}",
+        ))
+
+    if not _has_spec("budget", "recurring"):
+        REGISTRY.append(EntitySpec(
+            name="recurring", domain="budget",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=RecurringCreate, update_schema=RecurringUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=RecurringAdapter(),
+            summarize=lambda op, p: f"{op} recurring transaction {p.get('name') or p.get('id', '')}",
+        ))
+
+    if not _has_spec("budget", "tag"):
+        REGISTRY.append(EntitySpec(
+            name="tag", domain="budget",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=TagCreate, update_schema=TagUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=TagAdapter(),
+            summarize=lambda op, p: f"{op} budget tag {p.get('name') or p.get('id', '')}",
+        ))
+
+    if not _has_spec("budget", "saved_filter"):
+        REGISTRY.append(EntitySpec(
+            name="saved_filter", domain="budget",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=SavedFilterCreate, update_schema=SavedFilterUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=SavedFilterAdapter(),
+            summarize=lambda op, p: f"{op} saved filter {p.get('name') or p.get('id', '')}",
+        ))
+
+    if not _has_spec("budget", "custom_report"):
+        REGISTRY.append(EntitySpec(
+            name="custom_report", domain="budget",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=CustomReportCreate, update_schema=CustomReportUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=CustomReportAdapter(),
+            summarize=lambda op, p: f"{op} custom report {p.get('name') or p.get('id', '')}",
+        ))
+
+    if not _has_spec("budget", "receipt_draft"):
+        REGISTRY.append(EntitySpec(
+            name="receipt_draft", domain="budget",
+            ops=frozenset({"list", "get", "delete"}),
+            create_schema=dict, update_schema=dict,
+            destructive_ops=frozenset({"delete"}),
+            adapter=ReceiptDraftAdapter(),
+            summarize=lambda op, p: f"{op} receipt draft {p.get('id', '')}",
+        ))
 
 
 def _register_legacy_tools() -> None:
