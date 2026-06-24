@@ -15,6 +15,7 @@ from app.core.exceptions import ValidationError
 from app.core.type_utils import to_uuid_required
 from app.models import User
 from app.services.jarvis_service import JarvisService
+from app.services.jarvis_pending_action_service import PendingActionService
 
 
 router = APIRouter()
@@ -111,4 +112,64 @@ async def clear_history(
     await JarvisService.clear_history(
         db, to_uuid_required(current_user.family_id)
     )
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Pending actions (HITL gate for destructive MCP tool calls)
+# ---------------------------------------------------------------------------
+
+class PendingActionResponse(BaseModel):
+    id: UUID
+    tool_name: str
+    params: dict
+    summary: str
+    status: str
+    created_at: datetime
+    expires_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("/actions", response_model=List[PendingActionResponse])
+async def list_pending_actions(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return pending (non-resolved) HITL actions for the authenticated family."""
+    rows = await PendingActionService.list_pending(
+        db, to_uuid_required(current_user.family_id)
+    )
+    return [PendingActionResponse.model_validate(r) for r in rows]
+
+
+@router.post("/actions/{action_id}/approve")
+async def approve_action(
+    action_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Approve and execute a queued destructive tool call."""
+    try:
+        result = await PendingActionService.approve(db, action_id, current_user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    return result
+
+
+@router.post("/actions/{action_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+async def reject_action(
+    action_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reject (discard without executing) a queued tool call."""
+    try:
+        await PendingActionService.reject(db, action_id, current_user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     return None
