@@ -299,7 +299,7 @@ The app has grown well past the budget/task/gig core. These domains are fully wi
 
 | Domain | Routes | Notes |
 |--------|--------|-------|
-| **Jarvis** (AI copilot) | `/api/jarvis`, `/api/jarvis/schedules` | Parent-facing LLM assistant via LiteLLM (tool-calling + SSE streaming) + cron-driven scheduled prompts. Formerly "Frankie". |
+| **Jarvis** (AI copilot) | `/api/jarvis`, `/api/jarvis/schedules`, `/mcp` | Parent-facing LLM assistant via LiteLLM (tool-calling + SSE streaming) + cron-driven scheduled prompts. Formerly "Frankie". MCP server (`/mcp`) + in-app MCP client; full family-scoped CRUD over activity domains; destructive ops HITL-gated. See `docs/JARVIS_MCP.md`. |
 | **Pet** | `/api/pet` | Gamified virtual pet per kid (`kid_pet`, `pup_snapshot`); decays over time, fed by completing work. |
 | **Meals** | `/api/meals` | Meal planning + recipe import; syncs to shopping lists. |
 | **Shopping** | `/api/shopping` | Family shopping lists; receipt-scan + meal-plan integration. |
