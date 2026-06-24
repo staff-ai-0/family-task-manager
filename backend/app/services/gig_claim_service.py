@@ -238,6 +238,74 @@ class GigClaimService:
         await db.delete(claim)
         await db.commit()
 
+    # ------------------------------------------------------------------
+    # MCP / Jarvis helpers — family-scoped, suitable for parent oversight
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def list_all_claims(
+        db: AsyncSession,
+        family_id: UUID,
+        limit: int = 100,
+    ) -> List[GigClaim]:
+        """Return all claims for the family (newest first).  Used by ClaimAdapter."""
+        result = await db.execute(
+            select(GigClaim)
+            .where(GigClaim.family_id == family_id)
+            .order_by(GigClaim.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def get_claim(
+        db: AsyncSession,
+        claim_id: UUID,
+        family_id: UUID,
+    ) -> GigClaim:
+        """Fetch a single claim with family-scope guard.  Raises NotFoundException."""
+        result = await db.execute(
+            select(GigClaim).where(
+                and_(GigClaim.id == claim_id, GigClaim.family_id == family_id)
+            )
+        )
+        claim = result.scalar_one_or_none()
+        if not claim:
+            raise NotFoundException(f"Claim {claim_id} not found")
+        return claim
+
+    @staticmethod
+    async def patch_claim(
+        db: AsyncSession,
+        claim_id: UUID,
+        family_id: UUID,
+        proof_text: Optional[str] = None,
+        approval_notes: Optional[str] = None,
+    ) -> GigClaim:
+        """Patch proof_text / approval_notes on a claim (parent oversight).
+        Only the fields explicitly passed (not None) are written."""
+        claim = await GigClaimService.get_claim(db, claim_id, family_id)
+
+        if proof_text is not None:
+            claim.proof_text = proof_text
+        if approval_notes is not None:
+            claim.approval_notes = approval_notes
+
+        await db.commit()
+        await db.refresh(claim)
+        return claim
+
+    @staticmethod
+    async def hard_delete_claim(
+        db: AsyncSession,
+        claim_id: UUID,
+        family_id: UUID,
+    ) -> None:
+        """Hard-delete a claim (parent override).  Raises NotFoundException if absent."""
+        claim = await GigClaimService.get_claim(db, claim_id, family_id)
+        await db.delete(claim)
+        await db.commit()
+
     @staticmethod
     async def get_my_claims(
         db: AsyncSession,

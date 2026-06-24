@@ -52,6 +52,8 @@ from app.models.dm import DMThread, DMMessage
 from app.models.gig import GigOffering, GigClaim, GigCategory, GigClaimStatus
 from app.models.reward_goal import UserRewardGoal
 from app.models.onboarding_event import OnboardingEvent, ONBOARDING_EVENT_TYPES
+from app.models.jarvis_pending_action import JarvisPendingAction
+from app.models.jarvis_mcp_token import JarvisMcpToken
 
 __all__ = [
     "Base",
@@ -120,6 +122,10 @@ __all__ = [
     # Onboarding analytics
     "OnboardingEvent",
     "ONBOARDING_EVENT_TYPES",
+    # Jarvis HITL
+    "JarvisPendingAction",
+    # Jarvis MCP tokens
+    "JarvisMcpToken",
     # Enums
     "UserRole",
     "TaskStatus",

@@ -299,7 +299,7 @@ The app has grown well past the budget/task/gig core. These domains are fully wi
 
 | Domain | Routes | Notes |
 |--------|--------|-------|
-| **Jarvis** (AI copilot) | `/api/jarvis`, `/api/jarvis/schedules` | Parent-facing LLM assistant via LiteLLM (tool-calling + SSE streaming) + cron-driven scheduled prompts. Formerly "Frankie". |
+| **Jarvis** (AI copilot) | `/api/jarvis`, `/api/jarvis/schedules`, `/mcp` | Parent-facing LLM assistant via LiteLLM (tool-calling + SSE streaming) + cron-driven scheduled prompts. Formerly "Frankie". MCP server (`/mcp`) + in-app MCP client; full family-scoped CRUD over activity domains; destructive ops HITL-gated. See `docs/JARVIS_MCP.md`. |
 | **Pet** | `/api/pet` | Gamified virtual pet per kid (`kid_pet`, `pup_snapshot`); decays over time, fed by completing work. |
 | **Meals** | `/api/meals` | Meal planning + recipe import; syncs to shopping lists. |
 | **Shopping** | `/api/shopping` | Family shopping lists; receipt-scan + meal-plan integration. |
@@ -403,5 +403,5 @@ lucas@demo.com / password123  (TEEN)
 
 ## Reference data (prod)
 
-- Real user: `juan.mtz79@gmail.com` (PARENT, family_id `1998e48d-2ef0-48b6-a437-cbb730ae935c`)
-- ~60 budget transactions imported from bank statements + receipts (May 2026 batch); 17 accounts including duplicates of card variants (e.g. `Mastercard **9222` and `Mastercard **9222 (USD)` for mixed-currency holdings)
+- Real user: `juan.mtz79@gmail.com` (PARENT, family_id `1998e48d-2ef0-48b6-a437-cbb730ae935c`); second parent `mayra.escamilla79@gmail.com`. Family name "Juan Carlos Martinez's Family".
+- **Tasks / gigs / budget data was fully reset on 2026-06-23** (per user request) — all task templates, gig offerings, and the entire budget (accounts, transactions, categories, payees, allocations) deleted; points/`gig_trust_streak` zeroed. Pre-reset full DB dump retained on the VM at `/home/jc/family-task-manager/backups/prod-fulldb-pre-cleanup-juan-20260623-224237.sql`. The old "~60 transactions / 17 accounts incl. dup card variants" no longer exists; the family starts clean.

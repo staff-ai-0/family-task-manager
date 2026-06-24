@@ -239,6 +239,18 @@ app.include_router(dm.router, prefix="/api/dm", tags=["DM"])
 from app.api.routes.internal import a2a_retry as _internal_a2a  # noqa: E402
 app.include_router(_internal_a2a.router, prefix="/api/internal", tags=["internal"])
 
+# Family-scoped MCP server over streamable-HTTP at /mcp, behind per-family
+# bearer auth (see app.mcp.http). Each request authenticates its own token,
+# binds a family-scoped McpContext, and runs a stateless json_response
+# transport — no long-lived session manager task is needed in the lifespan.
+#
+# Bound at the exact path /mcp via ExactASGIRoute (no trailing-slash redirect):
+# MCP clients POST JSON-RPC to /mcp and do not follow a 307 to /mcp/.
+if settings.JARVIS_MCP_HTTP_ENABLED:
+    from app.mcp.http import ExactASGIRoute, mcp_asgi  # noqa: E402
+
+    app.router.routes.append(ExactASGIRoute("/mcp", mcp_asgi))
+
 
 @app.get("/")
 async def root():

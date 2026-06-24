@@ -94,7 +94,7 @@ class TestSSEStream:
         # First call: tool_call. Second call: final reply.
         first = _mk_message(
             content="",
-            tool_calls=[_mk_tool_call("c1", "list_today_progress", "{}")],
+            tool_calls=[_mk_tool_call("c1", "tasks_today_list", "{}")],
         )
         second = _mk_message(content="Three tasks open today.")
         client = MagicMock()
@@ -114,7 +114,7 @@ class TestSSEStream:
         assert names.count("reply") == 1
         assert names[-1] == "done"
         tool_payload = next(d for e, d in events if e == "tool")
-        assert tool_payload["name"] == "list_today_progress"
+        assert tool_payload["name"] == "tasks_today_list"
         assert tool_payload["ok"] is True
 
     async def test_error_on_missing_message(
@@ -149,3 +149,52 @@ class TestSSEStream:
         roles = [h.role for h in history]
         assert "user" in roles
         assert "assistant" in roles
+
+    async def test_destructive_tool_emits_confirm_not_executed(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        # Seed a template, then have the model "ask" to delete it. The
+        # destructive op must be queued (confirm event), NOT executed inline.
+        from app.schemas.task_template import TaskTemplateCreate
+        from app.models.task_template import TaskTemplate
+        from app.services.task_template_service import TaskTemplateService
+
+        tmpl = await TaskTemplateService.create_template(
+            db_session,
+            TaskTemplateCreate(title="Doomed", points=0, is_bonus=False),
+            test_family.id,
+            test_parent_user.id,
+        )
+
+        first = _mk_message(
+            content="",
+            tool_calls=[
+                _mk_tool_call(
+                    "c1",
+                    "tasks_template_delete",
+                    json.dumps({"id": str(tmpl.id)}),
+                )
+            ],
+        )
+        second = _mk_message(content="Want me to delete it? Confirm first.")
+        client = MagicMock()
+        client.chat.completions.create.side_effect = [first, second]
+        monkeypatch.setattr(
+            "app.services.jarvis_service.OpenAI", lambda *a, **kw: client
+        )
+
+        events = await _collect_events(
+            JarvisService.chat_stream(
+                db_session, test_family.id, test_parent_user.id, "delete Doomed"
+            )
+        )
+        names = [e for e, _ in events]
+        assert "confirm" in names
+        assert "tool" not in names  # destructive op never executed inline
+        confirm_payload = next(d for e, d in events if e == "confirm")
+        assert confirm_payload["tool"] == "tasks_template_delete"
+        assert "action_id" in confirm_payload
+
+        # The template must still exist — nothing was deleted.
+        still = await db_session.get(TaskTemplate, tmpl.id)
+        assert still is not None

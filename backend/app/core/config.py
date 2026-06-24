@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     # JARVIS_MODEL env once platform fixes the other upstreams.
     JARVIS_MODEL: str = "gemini-2.5-flash"
 
+    # MCP HTTP transport — mounts the family-scoped MCP server at /mcp behind
+    # per-family bearer auth. Disable to keep the in-app (in-memory) MCP client
+    # path only. JARVIS_MCP_DB_ROLE, when set, is applied via SET ROLE on the
+    # HTTP-path DB session (restricted role hardening — see Task 11).
+    JARVIS_MCP_HTTP_ENABLED: bool = False
+    JARVIS_MCP_DB_ROLE: str | None = None
+
     # Stripe settings removed 2026-05-24. PayPal is the canonical
     # billing path. See feedback_no_stripe memory entry.
 

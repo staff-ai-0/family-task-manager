@@ -1,5 +1,11 @@
-"""Jarvis tool execution (W6.4) — verify each tool runs end-to-end against
-real DB fixtures without invoking the LLM."""
+"""Jarvis tool execution — verify each migrated MCP tool runs end-to-end
+against real DB fixtures without invoking the LLM.
+
+Post-Task-8: Jarvis sources its tools from the in-memory MCP server. The
+legacy ``jarvis_tools`` handlers were migrated to registry adapters, so the
+tool names are now ``<domain>_<entity>_<op>`` and ``_execute_tool`` returns
+the MCP envelope ``{"ok": bool, "data"|"error": ...}``.
+"""
 
 import pytest
 from datetime import datetime, timedelta, timezone
@@ -18,7 +24,7 @@ class TestExecuteTool:
             db_session,
             test_family.id,
             test_parent_user.id,
-            "create_task_template",
+            "tasks_template_create",
             {
                 "title": "Vacuum living room",
                 "is_bonus": True,
@@ -28,9 +34,9 @@ class TestExecuteTool:
             },
         )
         assert result["ok"] is True
-        assert result["title"] == "Vacuum living room"
-        assert result["is_bonus"] is True
-        assert result["points"] == 25
+        assert result["data"]["title"] == "Vacuum living room"
+        assert result["data"]["is_bonus"] is True
+        assert result["data"]["points"] == 25
 
         # Verify it landed in the DB
         rows = (
@@ -44,16 +50,16 @@ class TestExecuteTool:
     async def test_create_task_template_mandatory_forces_zero_points(
         self, db_session, test_family, test_parent_user
     ):
-        # Mandatory + points=20 must be clamped to 0 by the tool wrapper.
+        # Mandatory + points=20 must be clamped to 0 by the adapter.
         result = await JarvisService._execute_tool(
             db_session,
             test_family.id,
             test_parent_user.id,
-            "create_task_template",
+            "tasks_template_create",
             {"title": "Make bed", "is_bonus": False, "points": 20},
         )
         assert result["ok"] is True
-        assert result["points"] == 0
+        assert result["data"]["points"] == 0
 
     async def test_create_calendar_event(
         self, db_session, test_family, test_parent_user
@@ -63,7 +69,7 @@ class TestExecuteTool:
             db_session,
             test_family.id,
             test_parent_user.id,
-            "create_calendar_event",
+            "calendar_event_create",
             {
                 "title": "Soccer practice",
                 "start_iso": start.isoformat(),
@@ -72,7 +78,7 @@ class TestExecuteTool:
             },
         )
         assert result["ok"] is True
-        assert result["title"] == "Soccer practice"
+        assert result["data"]["title"] == "Soccer practice"
 
         rows = (
             await db_session.execute(
@@ -91,7 +97,7 @@ class TestExecuteTool:
             db_session,
             test_family.id,
             test_parent_user.id,
-            "create_calendar_event",
+            "calendar_event_create",
             {"title": "Dentist", "start_iso": "2026-08-12T10:00:00"},
         )
         assert result["ok"] is True
@@ -103,11 +109,11 @@ class TestExecuteTool:
             db_session,
             test_family.id,
             test_parent_user.id,
-            "list_today_progress",
+            "tasks_today_list",
             {},
         )
         assert result["ok"] is True
-        assert "per_member" in result
+        assert result["data"] == []
 
     async def test_unknown_tool_returns_error(
         self, db_session, test_family, test_parent_user
@@ -120,7 +126,7 @@ class TestExecuteTool:
             {},
         )
         assert result["ok"] is False
-        assert "Unknown tool" in result["error"]
+        assert "unknown tool" in result["error"].lower()
 
     async def test_create_event_with_bad_iso_returns_error(
         self, db_session, test_family, test_parent_user
@@ -129,17 +135,19 @@ class TestExecuteTool:
             db_session,
             test_family.id,
             test_parent_user.id,
-            "create_calendar_event",
+            "calendar_event_create",
             {"title": "Bad", "start_iso": "not-a-date"},
         )
         assert result["ok"] is False
 
 
 class TestToolDefinitions:
-    def test_all_tools_have_function_schema(self):
-        from app.services.jarvis_service import TOOL_DEFINITIONS
-        assert len(TOOL_DEFINITIONS) >= 8
-        for t in TOOL_DEFINITIONS:
+    async def test_all_tools_have_function_schema(self):
+        from app.services.jarvis_service import _mcp_tool_definitions
+
+        defs = await _mcp_tool_definitions()
+        assert len(defs) >= 8
+        for t in defs:
             assert t["type"] == "function"
             fn = t["function"]
             assert "name" in fn and "description" in fn and "parameters" in fn
@@ -154,31 +162,30 @@ class TestReadOnlyTools:
     ):
         result = await JarvisService._execute_tool(
             db_session, test_family.id, test_parent_user.id,
-            "list_pending_approvals", {},
+            "tasks_pending_list", {},
         )
         assert result["ok"] is True
-        assert result["count"] == 0
-        assert result["items"] == []
+        assert result["data"] == []
 
     async def test_list_overdue_tasks_empty(
         self, db_session, test_family, test_parent_user
     ):
         result = await JarvisService._execute_tool(
             db_session, test_family.id, test_parent_user.id,
-            "list_overdue_tasks", {},
+            "tasks_overdue_list", {},
         )
         assert result["ok"] is True
-        assert result["count"] == 0
+        assert result["data"] == []
 
     async def test_list_recent_notifications_empty(
         self, db_session, test_family, test_parent_user
     ):
         result = await JarvisService._execute_tool(
             db_session, test_family.id, test_parent_user.id,
-            "list_recent_notifications", {},
+            "notifications_notification_list", {},
         )
         assert result["ok"] is True
-        assert result["count"] == 0
+        assert result["data"] == []
 
 
 class TestAddShoppingItem:
@@ -187,11 +194,11 @@ class TestAddShoppingItem:
     ):
         result = await JarvisService._execute_tool(
             db_session, test_family.id, test_parent_user.id,
-            "add_shopping_item", {"name": "Bread", "qty": "1 loaf"},
+            "shopping_item_create", {"name": "Bread", "qty": "1 loaf"},
         )
         assert result["ok"] is True
-        assert result["item_name"] == "Bread"
-        assert result["list_name"] == "Quick list"
+        assert result["data"]["name"] == "Bread"
+        assert result["data"]["list_name"] == "Quick list"
 
     async def test_appends_to_existing_active_list(
         self, db_session, test_family, test_parent_user
@@ -204,7 +211,7 @@ class TestAddShoppingItem:
         )
         result = await JarvisService._execute_tool(
             db_session, test_family.id, test_parent_user.id,
-            "add_shopping_item", {"name": "Milk"},
+            "shopping_item_create", {"name": "Milk"},
         )
         assert result["ok"] is True
-        assert result["list_name"] == "Costco"
+        assert result["data"]["list_name"] == "Costco"
