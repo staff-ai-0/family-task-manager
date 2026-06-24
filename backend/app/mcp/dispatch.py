@@ -34,6 +34,9 @@ async def dispatch_tool(name: str, arguments: dict) -> dict:
         if op == "delete":
             await spec.adapter.delete(ctx, UUID(arguments["id"]))
             return {"ok": True}
+        # Custom ops (e.g. pet feed/interact) — delegate to adapter.call_custom.
+        if hasattr(spec.adapter, "call_custom"):
+            return {"ok": True, "data": await spec.adapter.call_custom(op, ctx, arguments)}
         return {"ok": False, "error": f"unsupported op {op}"}
     except Exception as e:  # surfaced to the LLM as a tool error, not a 500
         return {"ok": False, "error": str(e)}

@@ -12,10 +12,19 @@ def _input_schema(spec, op) -> dict:
         return {"type": "object", "properties": {}, "additionalProperties": False}
     if op in ("get", "delete"):
         return {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}
-    schema = (spec.create_schema if op == "create" else spec.update_schema).model_json_schema()
-    if op == "update":
-        schema.setdefault("properties", {})["id"] = {"type": "string"}
-        schema["required"] = ["id"]
+    # Check for a custom op schema override (e.g. pet feed/interact).
+    custom_schemas = dict(spec.custom_op_schemas)
+    if op in custom_schemas:
+        return custom_schemas[op].model_json_schema()
+    # Standard CRUD schemas.
+    if op == "create":
+        schema = spec.create_schema.model_json_schema()
+    else:
+        # update or any other op falls back to update_schema
+        schema = spec.update_schema.model_json_schema()
+        if op == "update":
+            schema.setdefault("properties", {})["id"] = {"type": "string"}
+            schema["required"] = ["id"]
     return schema
 
 

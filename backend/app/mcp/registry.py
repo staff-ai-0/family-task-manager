@@ -20,6 +20,11 @@ class EntitySpec:
     # Stored as a tuple of (op, description) pairs so EntitySpec remains
     # hashable (frozen=True + dict would raise TypeError on hash()).
     op_descriptions: tuple[tuple[str, str], ...] = field(default=())
+    # Optional per-op Pydantic schema overrides for custom ops (e.g. feed/interact).
+    # Keyed by op name. Stored as a tuple of (op, schema_class) pairs.
+    # When present, _input_schema uses the given class's model_json_schema()
+    # instead of falling back to update_schema.
+    custom_op_schemas: tuple[tuple[str, type], ...] = field(default=())
 
 
 def tool_name(spec: "EntitySpec", op: str) -> str:
@@ -57,6 +62,7 @@ def register_builtin() -> None:
     _register_budget_rest()
     _register_points_rewards()
     _register_tasks_gigs()
+    _register_pet_consequences()
     _register_legacy_tools()
 
 
@@ -328,6 +334,44 @@ def _register_tasks_gigs() -> None:
             destructive_ops=frozenset({"delete"}),
             adapter=ClaimAdapter(),
             summarize=lambda op, p: f"{op} gig claim {p.get('id', '')}",
+        ))
+
+
+def _register_pet_consequences() -> None:
+    """Register pet + consequences entities (Phase 5 Task 17).
+
+    pet:
+      - pet  (list/get + custom ops feed/interact; no create/update/delete via MCP)
+    consequences:
+      - consequence  (LGCUD; delete is destructive)
+    """
+    from app.mcp.adapters_pet import PetAdapter
+    from app.mcp.adapters_consequences import ConsequenceAdapter
+    from app.mcp.schemas.pet import PetFeed, PetInteract
+    from app.mcp.schemas.consequences import ConsequenceCreate, ConsequenceUpdate
+
+    if not _has_spec("pet", "pet"):
+        REGISTRY.append(EntitySpec(
+            name="pet", domain="pet",
+            ops=frozenset({"list", "get", "feed", "interact"}),
+            create_schema=dict, update_schema=dict,
+            destructive_ops=frozenset(),
+            adapter=PetAdapter(),
+            summarize=lambda op, p: f"{op} virtual pet {p.get('name') or p.get('id', '')}",
+            custom_op_schemas=(
+                ("feed", PetFeed),
+                ("interact", PetInteract),
+            ),
+        ))
+
+    if not _has_spec("consequences", "consequence"):
+        REGISTRY.append(EntitySpec(
+            name="consequence", domain="consequences",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=ConsequenceCreate, update_schema=ConsequenceUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=ConsequenceAdapter(),
+            summarize=lambda op, p: f"{op} consequence {p.get('title') or p.get('id', '')}",
         ))
 
 
