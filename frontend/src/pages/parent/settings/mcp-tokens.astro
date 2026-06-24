@@ -1,0 +1,328 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import { apiFetch } from "../../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+const { data: tokensData } = await apiFetch<any[]>("/api/jarvis/mcp-tokens", { token });
+const tokens: any[] = tokensData ?? [];
+
+const labels = {
+    en: {
+        title: "MCP Tokens",
+        subtitle: "Bearer tokens for the external /mcp API endpoint",
+        back: "Settings",
+        no_tokens: "No tokens yet.",
+        label_col: "Label",
+        prefix_col: "Prefix",
+        last_used_col: "Last used",
+        status_col: "Status",
+        revoke: "Revoke",
+        never: "Never",
+        active: "Active",
+        revoked: "Revoked",
+        mint_title: "Mint new token",
+        label_placeholder: "e.g. laptop, n8n-prod",
+        mint_btn: "Mint token",
+        secret_notice: "Copy this secret now — it will not be shown again.",
+        copy: "Copy",
+        copied: "Copied!",
+        close: "Close",
+        confirm_revoke: "Revoke this token? External clients using it will lose access.",
+        endpoint: "MCP endpoint",
+    },
+    es: {
+        title: "Tokens MCP",
+        subtitle: "Tokens de portador para el endpoint externo /mcp",
+        back: "Configuración",
+        no_tokens: "Sin tokens.",
+        label_col: "Etiqueta",
+        prefix_col: "Prefijo",
+        last_used_col: "Último uso",
+        status_col: "Estado",
+        revoke: "Revocar",
+        never: "Nunca",
+        active: "Activo",
+        revoked: "Revocado",
+        mint_title: "Crear nuevo token",
+        label_placeholder: "ej. laptop, n8n-prod",
+        mint_btn: "Crear token",
+        secret_notice: "Copia el secreto ahora — no se mostrará de nuevo.",
+        copy: "Copiar",
+        copied: "¡Copiado!",
+        close: "Cerrar",
+        confirm_revoke: "¿Revocar este token? Los clientes externos que lo usan perderán acceso.",
+        endpoint: "Endpoint MCP",
+    },
+}[lang] ?? {
+    title: "MCP Tokens",
+    subtitle: "Bearer tokens for the external /mcp API endpoint",
+    back: "Settings",
+    no_tokens: "No tokens yet.",
+    label_col: "Label",
+    prefix_col: "Prefix",
+    last_used_col: "Last used",
+    status_col: "Status",
+    revoke: "Revoke",
+    never: "Never",
+    active: "Active",
+    revoked: "Revoked",
+    mint_title: "Mint new token",
+    label_placeholder: "e.g. laptop, n8n-prod",
+    mint_btn: "Mint token",
+    secret_notice: "Copy this secret now — it will not be shown again.",
+    copy: "Copy",
+    copied: "Copied!",
+    close: "Close",
+    confirm_revoke: "Revoke this token? External clients using it will lose access.",
+    endpoint: "MCP endpoint",
+};
+---
+
+<PageLayout
+    title={labels.title}
+    headerClass="bg-gradient-to-br from-violet-800 to-violet-700"
+    dark
+    backClass="text-violet-200 hover:text-white"
+    backHref="/parent/settings"
+    backLabel={labels.back}
+    role={user.role}
+    active="parent"
+    lang={lang}
+>
+    <p class="text-sm text-brand-ink-soft mb-4">{labels.subtitle}</p>
+
+    <!-- MCP endpoint info -->
+    <div class="mb-6 bg-violet-50 border border-violet-200 rounded-xl p-4">
+        <p class="text-xs font-semibold text-violet-700 uppercase tracking-wide mb-1">{labels.endpoint}</p>
+        <code class="text-sm text-violet-900 break-all">https://api-gcp-family.agent-ia.mx/mcp</code>
+    </div>
+
+    <!-- Token list -->
+    <div class="mb-6 bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 overflow-hidden">
+        {tokens.length === 0 ? (
+            <p class="text-center text-brand-ink-soft text-sm py-8">{labels.no_tokens}</p>
+        ) : (
+            <table class="w-full text-sm">
+                <thead class="bg-brand-ink/5 text-brand-ink-soft uppercase text-xs">
+                    <tr>
+                        <th class="px-4 py-3 text-left">{labels.label_col}</th>
+                        <th class="px-4 py-3 text-left">{labels.prefix_col}</th>
+                        <th class="px-4 py-3 text-left">{labels.last_used_col}</th>
+                        <th class="px-4 py-3 text-left">{labels.status_col}</th>
+                        <th class="px-4 py-3"></th>
+                    </tr>
+                </thead>
+                <tbody id="token-table-body">
+                    {tokens.map((tok: any) => (
+                        <tr class="border-t border-brand-ink/5 hover:bg-brand-ink/3 transition-colors" data-token-id={tok.id}>
+                            <td class="px-4 py-3 font-medium text-brand-ink">{tok.label}</td>
+                            <td class="px-4 py-3 font-mono text-brand-ink-soft">{tok.token_prefix}…</td>
+                            <td class="px-4 py-3 text-brand-ink-soft">
+                                {tok.last_used_at
+                                    ? new Date(tok.last_used_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US")
+                                    : labels.never}
+                            </td>
+                            <td class="px-4 py-3">
+                                {tok.revoked_at
+                                    ? <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{labels.revoked}</span>
+                                    : <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{labels.active}</span>}
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                {!tok.revoked_at && (
+                                    <button
+                                        class="revoke-btn text-xs text-red-600 hover:text-red-800 font-medium"
+                                        data-token-id={tok.id}
+                                        data-confirm={labels.confirm_revoke}
+                                    >
+                                        {labels.revoke}
+                                    </button>
+                                )}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        )}
+    </div>
+
+    <!-- Mint form -->
+    <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5">
+        <h2 class="font-bold text-brand-ink mb-4">{labels.mint_title}</h2>
+        <form id="mint-form" class="flex gap-3 items-end">
+            <div class="flex-1">
+                <label class="block text-xs text-brand-ink-soft mb-1" for="token-label">
+                    {labels.label_col}
+                </label>
+                <input
+                    id="token-label"
+                    type="text"
+                    maxlength="128"
+                    placeholder={labels.label_placeholder}
+                    class="w-full border border-brand-ink/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
+                    required
+                />
+            </div>
+            <button
+                type="submit"
+                class="bg-violet-600 hover:bg-violet-700 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+            >
+                {labels.mint_btn}
+            </button>
+        </form>
+    </div>
+
+    <!-- One-time secret modal -->
+    <div id="secret-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <p class="text-sm font-semibold text-amber-700 mb-3">{labels.secret_notice}</p>
+            <code id="secret-value" class="block bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm font-mono break-all mb-4"></code>
+            <div class="flex gap-3">
+                <button
+                    id="copy-btn"
+                    class="flex-1 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors"
+                >
+                    {labels.copy}
+                </button>
+                <button
+                    id="close-modal-btn"
+                    class="flex-1 border border-brand-ink/20 text-brand-ink text-sm font-semibold py-2 rounded-lg hover:bg-brand-ink/5 transition-colors"
+                >
+                    {labels.close}
+                </button>
+            </div>
+        </div>
+    </div>
+</PageLayout>
+
+<script define:vars={{ copiedLabel: labels.copied, copyLabel: labels.copy }}>
+    // Revoke buttons
+    document.querySelectorAll(".revoke-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+            const tokenId = btn.dataset.tokenId;
+            const confirmMsg = btn.dataset.confirm;
+            if (!confirm(confirmMsg)) return;
+            const res = await fetch(`/api/jarvis/mcp-tokens/${tokenId}`, { method: "DELETE" });
+            if (res.ok || res.status === 204) {
+                // Update UI: hide revoke button, swap status badge
+                const row = document.querySelector(`tr[data-token-id="${tokenId}"]`);
+                if (row) {
+                    const statusCell = row.querySelector("td:nth-child(4)");
+                    if (statusCell) {
+                        statusCell.innerHTML = '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Revoked</span>';
+                    }
+                    btn.remove();
+                }
+            }
+        });
+    });
+
+    // Mint form
+    const mintForm = document.getElementById("mint-form");
+    const secretModal = document.getElementById("secret-modal");
+    const secretValue = document.getElementById("secret-value");
+    const copyBtn = document.getElementById("copy-btn");
+    const closeModalBtn = document.getElementById("close-modal-btn");
+
+    mintForm?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const labelInput = document.getElementById("token-label");
+        const label = labelInput?.value?.trim();
+        if (!label) return;
+
+        const submitBtn = mintForm.querySelector("button[type=submit]");
+        if (submitBtn) submitBtn.disabled = true;
+
+        const res = await fetch("/api/jarvis/mcp-tokens", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ label }),
+        });
+
+        if (submitBtn) submitBtn.disabled = false;
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            alert(err?.detail ?? "Failed to mint token.");
+            return;
+        }
+
+        const { token: newTok, secret } = await res.json();
+
+        // Show one-time secret modal
+        if (secretValue) secretValue.textContent = secret;
+        secretModal?.classList.remove("hidden");
+
+        // Add new row to table
+        const tbody = document.getElementById("token-table-body");
+        if (tbody) {
+            const tr = document.createElement("tr");
+            tr.className = "border-t border-brand-ink/5 hover:bg-brand-ink/3 transition-colors";
+            tr.dataset.tokenId = newTok.id;
+            tr.innerHTML = `
+                <td class="px-4 py-3 font-medium text-brand-ink">${newTok.label}</td>
+                <td class="px-4 py-3 font-mono text-brand-ink-soft">${newTok.token_prefix}…</td>
+                <td class="px-4 py-3 text-brand-ink-soft">Never</td>
+                <td class="px-4 py-3"><span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Active</span></td>
+                <td class="px-4 py-3 text-right">
+                    <button class="revoke-btn text-xs text-red-600 hover:text-red-800 font-medium"
+                        data-token-id="${newTok.id}"
+                        data-confirm="Revoke this token? External clients using it will lose access.">
+                        Revoke
+                    </button>
+                </td>
+            `;
+            tbody.prepend(tr);
+
+            // Wire revoke on the new row
+            tr.querySelector(".revoke-btn")?.addEventListener("click", async (evt) => {
+                const btn = evt.currentTarget;
+                if (!confirm(btn.dataset.confirm)) return;
+                const res2 = await fetch(`/api/jarvis/mcp-tokens/${btn.dataset.tokenId}`, { method: "DELETE" });
+                if (res2.ok || res2.status === 204) {
+                    const statusCell = tr.querySelector("td:nth-child(4)");
+                    if (statusCell) statusCell.innerHTML = '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Revoked</span>';
+                    btn.remove();
+                }
+            });
+        }
+
+        // Clear form
+        if (labelInput) labelInput.value = "";
+    });
+
+    // Copy secret
+    copyBtn?.addEventListener("click", async () => {
+        const text = secretValue?.textContent ?? "";
+        try {
+            await navigator.clipboard.writeText(text);
+            copyBtn.textContent = copiedLabel;
+            setTimeout(() => { copyBtn.textContent = copyLabel; }, 2000);
+        } catch {
+            // fallback: select text
+        }
+    });
+
+    // Close modal
+    closeModalBtn?.addEventListener("click", () => {
+        secretModal?.classList.add("hidden");
+        if (secretValue) secretValue.textContent = "";
+    });
+
+    // Click outside to close
+    secretModal?.addEventListener("click", (e) => {
+        if (e.target === secretModal) {
+            secretModal.classList.add("hidden");
+            if (secretValue) secretValue.textContent = "";
+        }
+    });
+</script>

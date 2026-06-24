@@ -28,6 +28,8 @@ const labels = {
         kiosk_desc: "Echo Show, iPad, Fire TV",
         analytics: "Analytics",
         analytics_desc: "PUP Score + completion trends",
+        mcp_tokens: "MCP Tokens",
+        mcp_tokens_desc: "Bearer tokens for the external /mcp API",
         back: "Back",
     },
     es: {
@@ -40,6 +42,8 @@ const labels = {
         kiosk_desc: "Echo Show, iPad, Fire TV",
         analytics: "Anal\u00edtica",
         analytics_desc: "PUP Score + tendencias",
+        mcp_tokens: "Tokens MCP",
+        mcp_tokens_desc: "Tokens de acceso para el endpoint externo /mcp",
         back: "Volver",
     },
 }[lang] ?? {
@@ -52,6 +56,8 @@ const labels = {
     kiosk_desc: "Echo Show, iPad, Fire TV",
     analytics: "Analytics",
     analytics_desc: "PUP Score + completion trends",
+    mcp_tokens: "MCP Tokens",
+    mcp_tokens_desc: "Bearer tokens for the external /mcp API",
     back: "Back",
 };
 ---
@@ -175,6 +181,26 @@ const labels = {
             <div>
                 <p class="font-bold text-brand-ink">{labels.kiosk}</p>
                 <p class="text-xs text-brand-ink-soft">{labels.kiosk_desc}</p>
+            </div>
+            <svg class="w-5 h-5 text-brand-ink-soft ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+        </a>
+
+        <a
+            href="/parent/settings/mcp-tokens"
+            class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-violet-600 transition-all flex items-center gap-4"
+        >
+            <div class="w-12 h-12 rounded-xl bg-violet-600/15 flex items-center justify-center flex-shrink-0">
+                <svg class="h-6 w-6 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                    />
+                </svg>
+            </div>
+            <div>
+                <p class="font-bold text-brand-ink">{labels.mcp_tokens}</p>
+                <p class="text-xs text-brand-ink-soft">{labels.mcp_tokens_desc}</p>
             </div>
             <svg class="w-5 h-5 text-brand-ink-soft ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
