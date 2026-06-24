@@ -8,7 +8,7 @@ verified family context.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -49,7 +49,7 @@ class JarvisPendingAction(Base):
     summary = Column(Text, nullable=False)
     status = Column(String(16), nullable=False, default="pending")
     created_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)

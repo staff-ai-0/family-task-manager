@@ -75,7 +75,9 @@ class PendingActionService:
         if pa.status != "pending":
             raise ValueError(f"Action already resolved with status '{pa.status}'")
 
-        if datetime.now(timezone.utc) > pa.expires_at.replace(tzinfo=timezone.utc):
+        exp = pa.expires_at
+        exp = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > exp:
             pa.status = "expired"
             pa.resolved_at = datetime.now(timezone.utc)
             await db.commit()
@@ -95,6 +97,10 @@ class PendingActionService:
         )
         async with use_context(ctx):
             result = await dispatch_tool(pa.tool_name, dict(pa.params or {}))
+
+        if not result.get("ok"):
+            # Do NOT mark approved — leave the row pending so it can be retried.
+            raise ValueError(f"Tool execution failed: {result.get('error')}")
 
         pa.status = "approved"
         pa.resolved_at = datetime.now(timezone.utc)
@@ -139,6 +145,7 @@ class PendingActionService:
             .where(
                 JarvisPendingAction.family_id == family_id,
                 JarvisPendingAction.status == "pending",
+                JarvisPendingAction.expires_at > datetime.now(timezone.utc),
             )
             .order_by(JarvisPendingAction.created_at.desc())
         )
