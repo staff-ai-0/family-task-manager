@@ -36,7 +36,6 @@ httpx==0.26.0
 # OAuth & Payment Integration
 google-auth==2.27.0
 google-auth-oauthlib==1.2.0
-paypalrestsdk==1.13.1
 
 # AI / Vision
 # OpenAI SDK — used by receipt_scanner_service to call LiteLLM proxy's

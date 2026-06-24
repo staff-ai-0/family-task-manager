@@ -12,7 +12,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
-from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, payment, points_conversion, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm
+from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, points_conversion, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
 from app.api.routes import oversight, onboarding, sync
@@ -202,7 +202,6 @@ app.include_router(uploads_routes.router, tags=["Uploads"])
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(oauth.router, prefix="/api/oauth", tags=["OAuth"])
-app.include_router(payment.router, prefix="/api/payment", tags=["Payment"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(onboarding.router, prefix="/api/families/onboarding", tags=["Onboarding"])
 app.include_router(families.router, prefix="/api/families", tags=["Families"])
