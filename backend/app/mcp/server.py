@@ -30,7 +30,7 @@ def build_server() -> Server:
             for op in sorted(spec.ops):
                 tools.append(Tool(
                     name=tool_name(spec, op),
-                    description=f"{op} {spec.domain}.{spec.name}",
+                    description=spec.op_descriptions.get(op, f"{op} {spec.domain}.{spec.name}"),
                     inputSchema=_input_schema(spec, op),
                 ))
         return tools

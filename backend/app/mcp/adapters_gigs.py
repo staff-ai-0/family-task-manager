@@ -95,66 +95,36 @@ class OfferingAdapter(ServiceAdapter):
 
 
 class ClaimAdapter(ServiceAdapter):
-    """LGUD adapter for GigClaim (no create — claims go through GigClaimService.claim)."""
+    """LGUD adapter for GigClaim (no create — claims go through GigClaimService.claim).
+
+    All four ops delegate to GigClaimService so that family-isolation logic,
+    NotFoundException handling, and future business rules remain in one place.
+    """
 
     async def list(self, ctx: McpContext) -> list[dict]:
-        from sqlalchemy import and_, select
-        result = await ctx.db.execute(
-            select(GigClaim)
-            .where(GigClaim.family_id == ctx.family_id)
-            .order_by(GigClaim.created_at.desc())
-            .limit(100)
-        )
-        return [_ser_claim(c) for c in result.scalars().all()]
+        from app.services.gig_claim_service import GigClaimService
+        claims = await GigClaimService.list_all_claims(ctx.db, family_id=ctx.family_id)
+        return [_ser_claim(c) for c in claims]
 
     async def get(self, ctx: McpContext, entity_id: UUID) -> dict:
-        from sqlalchemy import and_, select
-        from app.core.exceptions import NotFoundException
-        result = await ctx.db.execute(
-            select(GigClaim).where(
-                and_(GigClaim.id == entity_id, GigClaim.family_id == ctx.family_id)
-            )
+        from app.services.gig_claim_service import GigClaimService
+        return _ser_claim(
+            await GigClaimService.get_claim(ctx.db, entity_id, ctx.family_id)
         )
-        claim = result.scalar_one_or_none()
-        if not claim:
-            raise NotFoundException(f"Claim {entity_id} not found")
-        return _ser_claim(claim)
 
     async def update(self, ctx: McpContext, entity_id: UUID, data: dict) -> dict:
         """Patch proof_text / approval_notes on a claim (parent oversight only)."""
-        from sqlalchemy import and_, select
-        from app.core.exceptions import NotFoundException
-        from datetime import datetime, timezone
-
-        result = await ctx.db.execute(
-            select(GigClaim).where(
-                and_(GigClaim.id == entity_id, GigClaim.family_id == ctx.family_id)
-            )
+        from app.services.gig_claim_service import GigClaimService
+        claim = await GigClaimService.patch_claim(
+            ctx.db,
+            claim_id=entity_id,
+            family_id=ctx.family_id,
+            proof_text=data.get("proof_text"),
+            approval_notes=data.get("approval_notes"),
         )
-        claim = result.scalar_one_or_none()
-        if not claim:
-            raise NotFoundException(f"Claim {entity_id} not found")
-
-        for field in ("proof_text", "approval_notes"):
-            if field in data and data[field] is not None:
-                setattr(claim, field, data[field])
-
-        await ctx.db.commit()
-        await ctx.db.refresh(claim)
         return _ser_claim(claim)
 
     async def delete(self, ctx: McpContext, entity_id: UUID) -> None:
         """Hard-delete a claim (parent override — use sparingly)."""
-        from sqlalchemy import and_, select
-        from app.core.exceptions import NotFoundException
-
-        result = await ctx.db.execute(
-            select(GigClaim).where(
-                and_(GigClaim.id == entity_id, GigClaim.family_id == ctx.family_id)
-            )
-        )
-        claim = result.scalar_one_or_none()
-        if not claim:
-            raise NotFoundException(f"Claim {entity_id} not found")
-        await ctx.db.delete(claim)
-        await ctx.db.commit()
+        from app.services.gig_claim_service import GigClaimService
+        await GigClaimService.hard_delete_claim(ctx.db, entity_id, ctx.family_id)

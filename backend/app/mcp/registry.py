@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 from pydantic import BaseModel
 from app.mcp.adapters import ServiceAdapter
@@ -14,6 +14,10 @@ class EntitySpec:
     destructive_ops: frozenset[str]
     adapter: ServiceAdapter
     summarize: Callable[[str, dict], str]
+    # Optional per-op description overrides (keyed by op name).  When an op's
+    # key is present the value is used as the MCP tool description instead of
+    # the default "{op} {domain}.{name}" string.
+    op_descriptions: dict[str, str] = field(default_factory=dict)
 
 
 def tool_name(spec: "EntitySpec", op: str) -> str:
@@ -304,6 +308,13 @@ def _register_tasks_gigs() -> None:
             destructive_ops=frozenset({"delete"}),
             adapter=OfferingAdapter(),
             summarize=lambda op, p: f"{op} gig offering {p.get('title') or p.get('id', '')}",
+            op_descriptions={
+                "delete": (
+                    "soft-delete gigs.offering — sets is_active=False to preserve "
+                    "existing claims; the row is retained and can be seen with "
+                    "gigs_offering_list (include_inactive=true)"
+                ),
+            },
         ))
 
     if not _has_spec("gigs", "claim"):

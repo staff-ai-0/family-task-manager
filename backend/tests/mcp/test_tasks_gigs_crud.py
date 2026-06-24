@@ -25,14 +25,16 @@ def anyio_backend():
 @pytest.mark.anyio
 async def test_assignment_create_list_get_update_delete(db_session, family, parent_user):
     """
-    Full CRUD cycle for a task assignment via MCP tools.
+    LGUD cycle for a task assignment via MCP tools.
 
-    The assignment is created via tasks_assignment_create which internally
-    calls patch_assignment / or creates a TaskAssignment directly via the
-    service.  We test list/get/update/delete around it.
+    Assignments are created by the shuffle algorithm, NOT directly by MCP
+    (tasks_assignment_create does not exist by design).  We seed one via the
+    ORM and then exercise list / get / update / delete through the MCP layer.
+    Post-delete we verify the row is actually gone via a direct DB query.
     """
     from app.models.task_template import TaskTemplate
     from app.models.task_assignment import TaskAssignment, AssignmentStatus
+    from sqlalchemy import select
     from datetime import date
 
     # Seed a template and assignment directly (assignment create via service
@@ -65,6 +67,7 @@ async def test_assignment_create_list_get_update_delete(db_session, family, pare
     await db_session.commit()
     await db_session.refresh(asgn)
     asgn_id = str(asgn.id)
+    asgn_uuid = asgn.id
 
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
@@ -77,6 +80,8 @@ async def test_assignment_create_list_get_update_delete(db_session, family, pare
             assert "tasks_assignment_get" in tool_names
             assert "tasks_assignment_update" in tool_names
             assert "tasks_assignment_delete" in tool_names
+            # Assignments have no MCP create tool; they come from the shuffle algo.
+            assert "tasks_assignment_create" not in tool_names
 
             # List — should include our seeded assignment
             listed = json.loads((await s.call_tool("tasks_assignment_list", {})).content[0].text)
@@ -105,6 +110,13 @@ async def test_assignment_create_list_get_update_delete(db_session, family, pare
             )).content[0].text)
             assert deleted["ok"] is True
 
+    # Post-delete: verify the row is actually gone from the DB.
+    db_session.expire_all()
+    gone = (await db_session.execute(
+        select(TaskAssignment).where(TaskAssignment.id == asgn_uuid)
+    )).scalar_one_or_none()
+    assert gone is None, "TaskAssignment row should have been hard-deleted"
+
 
 # ---------------------------------------------------------------------------
 # gigs — offering LGCUD
@@ -112,9 +124,19 @@ async def test_assignment_create_list_get_update_delete(db_session, family, pare
 
 @pytest.mark.anyio
 async def test_gig_offering_create_list_get_update_delete(db_session, family, parent_user):
-    """Full CRUD cycle for a gig offering via MCP tools."""
+    """Full CRUD cycle for a gig offering via MCP tools.
+
+    gigs_offering_delete is a soft-delete (sets is_active=False); the row is
+    retained so existing claims are not orphaned.  Post-delete we verify
+    is_active is False rather than the row being absent.
+    """
+    from app.models.gig import GigOffering
+    from sqlalchemy import select
+    import uuid as _uuid
+
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
+    offering_uuid = None
     async with use_context(ctx):
         async with create_connected_server_and_client_session(server) as s:
             await s.initialize()
@@ -138,6 +160,7 @@ async def test_gig_offering_create_list_get_update_delete(db_session, family, pa
             )).content[0].text)
             assert created["ok"] is True, created
             offering_id = created["data"]["id"]
+            offering_uuid = _uuid.UUID(offering_id)
             assert created["data"]["title"] == "Clean the garage"
 
             # List
@@ -160,11 +183,19 @@ async def test_gig_offering_create_list_get_update_delete(db_session, family, pa
             assert updated["ok"] is True
             assert updated["data"]["title"] == "Clean the garage v2"
 
-            # Delete (deactivate)
+            # Delete (soft-delete: deactivates the offering, retains the row)
             deleted = json.loads((await s.call_tool(
                 "gigs_offering_delete", {"id": offering_id},
             )).content[0].text)
             assert deleted["ok"] is True
+
+    # Post-delete: soft-delete must have set is_active=False, not removed the row.
+    db_session.expire_all()
+    row = (await db_session.execute(
+        select(GigOffering).where(GigOffering.id == offering_uuid)
+    )).scalar_one_or_none()
+    assert row is not None, "GigOffering row should still exist after soft-delete"
+    assert row.is_active is False, "GigOffering should be deactivated (is_active=False)"
 
 
 # ---------------------------------------------------------------------------
@@ -175,8 +206,12 @@ async def test_gig_offering_create_list_get_update_delete(db_session, family, pa
 async def test_gig_claim_list_get_update_delete(db_session, family, parent_user):
     """
     Seed a gig offering + claim; test list/get/update/delete of claim via MCP.
+
+    gigs_claim_delete is a hard-delete (parent override).  Post-delete we
+    verify the row is actually gone from the DB.
     """
     from app.models.gig import GigOffering, GigClaim, GigClaimStatus
+    from sqlalchemy import select
 
     offering = GigOffering(
         family_id=family.id,
@@ -199,6 +234,7 @@ async def test_gig_claim_list_get_update_delete(db_session, family, parent_user)
     await db_session.commit()
     await db_session.refresh(claim)
     claim_id = str(claim.id)
+    claim_uuid = claim.id
 
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
@@ -211,7 +247,7 @@ async def test_gig_claim_list_get_update_delete(db_session, family, parent_user)
             assert "gigs_claim_get" in tool_names
             assert "gigs_claim_update" in tool_names
             assert "gigs_claim_delete" in tool_names
-            # No create for claims
+            # No create for claims — they come from GigClaimService.claim
             assert "gigs_claim_create" not in tool_names
 
             # List
@@ -235,8 +271,15 @@ async def test_gig_claim_list_get_update_delete(db_session, family, parent_user)
             assert updated["ok"] is True
             assert updated["data"]["proof_text"] == "I did it!"
 
-            # Delete
+            # Delete (hard-delete — parent override)
             deleted = json.loads((await s.call_tool(
                 "gigs_claim_delete", {"id": claim_id},
             )).content[0].text)
             assert deleted["ok"] is True
+
+    # Post-delete: verify the claim row is actually gone from the DB.
+    db_session.expire_all()
+    gone = (await db_session.execute(
+        select(GigClaim).where(GigClaim.id == claim_uuid)
+    )).scalar_one_or_none()
+    assert gone is None, "GigClaim row should have been hard-deleted"
