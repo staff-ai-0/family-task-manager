@@ -345,13 +345,13 @@ def _register_legacy_tools() -> None:
         TodayProgressAdapter,
     )
     from app.mcp.adapters_calendar import EventAdapter
-    from app.mcp.adapters_shopping import ItemAdapter as ShoppingItemAdapter
+    from app.mcp.adapters_shopping import ItemAdapter as ShoppingItemAdapter, ListAdapter as ShoppingListAdapter
     from app.mcp.adapters_meals import PlanEntryAdapter, RecipeAdapter
     from app.mcp.adapters_notifications import NotificationAdapter
     from app.mcp.adapters_jarvis import ScheduleAdapter
     from app.mcp.schemas.tasks import TemplateCreate, TemplateUpdate
     from app.mcp.schemas.calendar import EventCreate, EventUpdate
-    from app.mcp.schemas.shopping import ItemCreate, ItemUpdate
+    from app.mcp.schemas.shopping import ItemCreate, ItemUpdate, ListCreate, ListUpdate
     from app.mcp.schemas.meals import (
         PlanEntryCreate,
         PlanEntryUpdate,
@@ -411,10 +411,20 @@ def _register_legacy_tools() -> None:
         ))
 
     # ── shopping ─────────────────────────────────────────────────────────
+    if not _has_spec("shopping", "list"):
+        REGISTRY.append(EntitySpec(
+            name="list", domain="shopping",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=ListCreate, update_schema=ListUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=ShoppingListAdapter(),
+            summarize=lambda op, p: f"{op} shopping list {p.get('name') or p.get('id', '')}",
+        ))
+
     if not _has_spec("shopping", "item"):
         REGISTRY.append(EntitySpec(
             name="item", domain="shopping",
-            ops=frozenset({"list", "create", "update", "delete"}),
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
             create_schema=ItemCreate, update_schema=ItemUpdate,
             destructive_ops=frozenset({"delete"}),
             adapter=ShoppingItemAdapter(),
@@ -434,7 +444,7 @@ def _register_legacy_tools() -> None:
     if not _has_spec("meals", "planentry"):
         REGISTRY.append(EntitySpec(
             name="planentry", domain="meals",
-            ops=frozenset({"create", "update", "delete"}),
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
             create_schema=PlanEntryCreate, update_schema=PlanEntryUpdate,
             destructive_ops=frozenset({"delete"}),
             adapter=PlanEntryAdapter(),

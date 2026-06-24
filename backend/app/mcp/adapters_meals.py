@@ -66,6 +66,35 @@ class RecipeAdapter(ServiceAdapter):
 
 
 class PlanEntryAdapter(ServiceAdapter):
+    async def list(self, ctx: McpContext) -> list[dict]:
+        """Return all plan entries for the family (up to 90 days back)."""
+        from datetime import timedelta, date as _date
+        from app.services.meal_service import MealService
+
+        today = _date.today()
+        rows = await MealService.list_plan(
+            ctx.db,
+            ctx.family_id,
+            start=today - timedelta(days=30),
+            end=today + timedelta(days=90),
+        )
+        return [_ser_entry(e) for e in rows]
+
+    async def get(self, ctx: McpContext, entity_id: UUID) -> dict:
+        from sqlalchemy import and_, select
+        from app.models.meal import MealPlanEntry
+
+        q = select(MealPlanEntry).where(
+            and_(
+                MealPlanEntry.id == entity_id,
+                MealPlanEntry.family_id == ctx.family_id,
+            )
+        )
+        e = (await ctx.db.execute(q)).scalar_one_or_none()
+        if not e:
+            raise ValueError(f"Meal plan entry {entity_id} not found")
+        return _ser_entry(e)
+
     async def create(self, ctx: McpContext, data: dict) -> dict:
         from app.schemas.meal import MealPlanEntryCreate
         from app.services.meal_service import MealService
