@@ -220,6 +220,63 @@ const labels = {
                                 pending.querySelector("div")!.textContent =
                                     `⚡ ${payload.name} · ${liveActions.length} action(s) so far…`;
                             }
+                        } else if (event === "confirm") {
+                            pending?.classList.add("hidden");
+                            if (scroll) {
+                                const actionId: string = payload.action_id ?? "";
+                                const card = document.createElement("div");
+                                card.className = "flex justify-start";
+                                card.dataset.confirmId = actionId;
+                                card.innerHTML = `<div class="max-w-[90%] rounded-2xl px-4 py-3 text-sm bg-amber-50 border border-amber-300 text-brand-ink space-y-2">
+  <p class="font-semibold text-amber-700">⚠️ Confirm action: <code class="font-mono text-xs bg-amber-100 px-1 rounded"></code></p>
+  <p class="text-xs text-brand-ink-soft confirm-summary"></p>
+  <pre class="text-xs bg-white border border-amber-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all"></pre>
+  <div class="flex gap-2 pt-1">
+    <button class="btn-approve px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 active:scale-95">Approve</button>
+    <button class="btn-cancel px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-300 active:scale-95">Cancel</button>
+  </div>
+</div>`;
+                                (card.querySelector("code") as HTMLElement).textContent = payload.tool ?? actionId;
+                                (card.querySelector(".confirm-summary") as HTMLElement).textContent = payload.summary ?? "";
+                                (card.querySelector("pre") as HTMLElement).textContent = JSON.stringify(payload.params ?? {}, null, 2);
+                                const btnApprove = card.querySelector(".btn-approve") as HTMLButtonElement;
+                                const btnCancel = card.querySelector(".btn-cancel") as HTMLButtonElement;
+                                const disableButtons = () => {
+                                    btnApprove.disabled = true;
+                                    btnCancel.disabled = true;
+                                    btnApprove.classList.add("opacity-50");
+                                    btnCancel.classList.add("opacity-50");
+                                };
+                                const renderResult = (ok: boolean, detail: string) => {
+                                    card.innerHTML = `<div class="max-w-[90%] rounded-2xl px-4 py-2.5 text-sm ${ok ? "bg-green-50 border border-green-300 text-green-800" : "bg-red-50 border border-red-300 text-red-800"}"><p class="text-xs font-semibold"></p></div>`;
+                                    (card.querySelector("p") as HTMLElement).textContent = detail;
+                                };
+                                btnApprove.addEventListener("click", async () => {
+                                    disableButtons();
+                                    try {
+                                        const r = await fetch(`/api/jarvis/actions/${actionId}/approve`, { method: "POST" });
+                                        const result = await r.json().catch(() => ({}));
+                                        if (r.ok) {
+                                            renderResult(true, `✅ Approved — ${result.data ? JSON.stringify(result.data) : "done"}`);
+                                        } else {
+                                            renderResult(false, `❌ Approval failed: ${result.detail ?? r.statusText}`);
+                                        }
+                                    } catch (err) {
+                                        renderResult(false, `❌ Network error: ${String(err)}`);
+                                    }
+                                    scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+                                });
+                                btnCancel.addEventListener("click", async () => {
+                                    disableButtons();
+                                    try {
+                                        await fetch(`/api/jarvis/actions/${actionId}/reject`, { method: "POST" });
+                                    } catch {}
+                                    renderResult(false, "🚫 Cancelled");
+                                    scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+                                });
+                                scroll.insertBefore(card, pending);
+                                scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+                            }
                         } else if (event === "reply") {
                             pending?.classList.add("hidden");
                             if (scroll) {
