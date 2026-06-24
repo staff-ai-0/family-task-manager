@@ -345,12 +345,14 @@ def _register_legacy_tools() -> None:
         TodayProgressAdapter,
     )
     from app.mcp.adapters_calendar import EventAdapter
+    from app.mcp.adapters_chat import MessageAdapter
     from app.mcp.adapters_shopping import ItemAdapter as ShoppingItemAdapter, ListAdapter as ShoppingListAdapter
     from app.mcp.adapters_meals import PlanEntryAdapter, RecipeAdapter
     from app.mcp.adapters_notifications import NotificationAdapter
     from app.mcp.adapters_jarvis import ScheduleAdapter
     from app.mcp.schemas.tasks import TemplateCreate, TemplateUpdate
     from app.mcp.schemas.calendar import EventCreate, EventUpdate
+    from app.mcp.schemas.chat import MessageCreate
     from app.mcp.schemas.shopping import ItemCreate, ItemUpdate, ListCreate, ListUpdate
     from app.mcp.schemas.meals import (
         PlanEntryCreate,
@@ -408,6 +410,17 @@ def _register_legacy_tools() -> None:
             destructive_ops=frozenset({"delete"}),
             adapter=EventAdapter(),
             summarize=lambda op, p: f"{op} calendar event {p.get('title') or p.get('id', '')}",
+        ))
+
+    # ── chat ─────────────────────────────────────────────────────────────
+    if not _has_spec("chat", "message"):
+        REGISTRY.append(EntitySpec(
+            name="message", domain="chat",
+            ops=frozenset({"list", "get", "create", "delete"}),
+            create_schema=MessageCreate, update_schema=dict,
+            destructive_ops=frozenset({"delete"}),
+            adapter=MessageAdapter(),
+            summarize=lambda op, p: f"{op} chat message {p.get('id', '')}",
         ))
 
     # ── shopping ─────────────────────────────────────────────────────────
