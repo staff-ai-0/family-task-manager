@@ -5,6 +5,7 @@ from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.main import app
+from app.mcp.http import _extract_bearer
 
 
 @pytest.fixture
@@ -79,3 +80,40 @@ async def test_mcp_valid_token_handshake(monkeypatch, test_engine, db_session, f
         assert body["jsonrpc"] == "2.0"
         assert "result" in body
         assert body["result"]["serverInfo"]["name"] == "family-pg"
+
+
+# ---------------------------------------------------------------------------
+# FIX 3: _extract_bearer must scan ALL Authorization headers, not bail on first
+# ---------------------------------------------------------------------------
+
+def test_extract_bearer_skips_non_bearer_headers():
+    """FIX 3: _extract_bearer must continue past non-Bearer Authorization headers."""
+    scope = {
+        "headers": [
+            (b"authorization", b"Basic abc123"),
+            (b"authorization", b"Bearer mcp_xyz"),
+        ]
+    }
+    assert _extract_bearer(scope) == "mcp_xyz"
+
+
+def test_extract_bearer_returns_none_when_no_bearer():
+    """If no Authorization header has a Bearer prefix, return None."""
+    scope = {
+        "headers": [
+            (b"authorization", b"Basic abc123"),
+            (b"authorization", b"Digest realm=test"),
+        ]
+    }
+    assert _extract_bearer(scope) is None
+
+
+def test_extract_bearer_no_headers():
+    """Empty headers returns None."""
+    assert _extract_bearer({"headers": []}) is None
+
+
+def test_extract_bearer_single_valid_bearer():
+    """Normal case: single Bearer header is extracted correctly."""
+    scope = {"headers": [(b"authorization", b"Bearer mcp_abc123")]}
+    assert _extract_bearer(scope) == "mcp_abc123"

@@ -109,3 +109,56 @@ async def test_list_pending_excludes_expired(db_session, family, parent_user):
 
     assert valid_pa.id in ids, "Valid pending action must appear in list"
     assert expired_pa.id not in ids, "Expired action must be excluded from list"
+
+
+# ---------------------------------------------------------------------------
+# FIX 4: approve() must raise the SAME "expired" error on first AND second call
+# ---------------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_approve_expired_pending_row_raises_expired_first_call(db_session, family, parent_user):
+    """FIX 4: approving an expired-but-still-pending row must raise 'Action has expired'."""
+    expired_pa = JarvisPendingAction(
+        family_id=family.id,
+        user_id=parent_user.id,
+        tool_name="budget_account_delete",
+        params={"id": str(uuid4())},
+        summary="expired action",
+        status="pending",
+        expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+    )
+    db_session.add(expired_pa)
+    await db_session.commit()
+    await db_session.refresh(expired_pa)
+
+    with pytest.raises(ValueError, match="Action has expired"):
+        await PendingActionService.approve(db_session, expired_pa.id, parent_user)
+
+    # Row must now be marked expired
+    await db_session.refresh(expired_pa)
+    assert expired_pa.status == "expired"
+
+
+@pytest.mark.anyio
+async def test_approve_expired_row_second_call_same_error(db_session, family, parent_user):
+    """FIX 4: second approve() on an already-expired row must raise the SAME error."""
+    expired_pa = JarvisPendingAction(
+        family_id=family.id,
+        user_id=parent_user.id,
+        tool_name="budget_account_delete",
+        params={"id": str(uuid4())},
+        summary="already expired",
+        status="pending",
+        expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+    )
+    db_session.add(expired_pa)
+    await db_session.commit()
+    await db_session.refresh(expired_pa)
+
+    # First call: transitions pending→expired, raises "Action has expired"
+    with pytest.raises(ValueError, match="Action has expired"):
+        await PendingActionService.approve(db_session, expired_pa.id, parent_user)
+
+    # Second call: row is already status="expired"; must raise the SAME error
+    with pytest.raises(ValueError, match="Action has expired"):
+        await PendingActionService.approve(db_session, expired_pa.id, parent_user)

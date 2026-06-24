@@ -72,16 +72,18 @@ class PendingActionService:
         if str(pa.family_id) != str(current_user.family_id):
             raise PermissionError("Not allowed to approve actions from another family")
 
-        if pa.status != "pending":
-            raise ValueError(f"Action already resolved with status '{pa.status}'")
-
+        # Expiry check first: an expired row (regardless of status) raises "expired".
         exp = pa.expires_at
         exp = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) > exp:
-            pa.status = "expired"
-            pa.resolved_at = datetime.now(timezone.utc)
-            await db.commit()
+        if pa.status == "expired" or (pa.status == "pending" and datetime.now(timezone.utc) > exp):
+            if pa.status != "expired":
+                pa.status = "expired"
+                pa.resolved_at = datetime.now(timezone.utc)
+                await db.commit()
             raise ValueError("Action has expired")
+
+        if pa.status != "pending":
+            raise ValueError(f"Action already resolved with status '{pa.status}'")
 
         # Bind a fresh McpContext scoped to the approver's family + session.
         role = (

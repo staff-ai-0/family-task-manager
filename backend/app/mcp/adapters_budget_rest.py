@@ -444,8 +444,9 @@ def _ser_tag(t) -> dict:
 class SavedFilterAdapter(ServiceAdapter):
     """Wraps SavedFilterService (BaseFamilyService[BudgetSavedFilter]).
 
-    SavedFilterService.create requires a `created_by` UUID; we use ctx.user_id,
-    falling back to ctx.family_id if user_id is None (HTTP token path).
+    SavedFilterService.create requires a `created_by` UUID (users.id FK).
+    Token-only sessions (user_id=None) cannot create saved filters — a
+    ValueError is raised so dispatch_tool returns {"ok": false, "error": ...}.
     """
 
     async def list(self, ctx: McpContext) -> list[dict]:
@@ -460,8 +461,12 @@ class SavedFilterAdapter(ServiceAdapter):
     async def create(self, ctx: McpContext, data: dict) -> dict:
         from app.services.budget.saved_filter_service import SavedFilterService
         from app.schemas.budget import SavedFilterCreate
-        created_by = ctx.user_id or ctx.family_id
-        r = await SavedFilterService.create(ctx.db, ctx.family_id, created_by, SavedFilterCreate(**data))
+        if ctx.user_id is None:
+            raise ValueError(
+                "saved_filter create requires an authenticated user; "
+                "not available for token-only MCP sessions"
+            )
+        r = await SavedFilterService.create(ctx.db, ctx.family_id, ctx.user_id, SavedFilterCreate(**data))
         return _ser_filter(r)
 
     async def update(self, ctx: McpContext, entity_id: UUID, data: dict) -> dict:
@@ -504,8 +509,12 @@ class CustomReportAdapter(ServiceAdapter):
     async def create(self, ctx: McpContext, data: dict) -> dict:
         from app.services.budget.custom_report_service import CustomReportService
         from app.schemas.budget import CustomReportCreate
-        created_by = ctx.user_id or ctx.family_id
-        r = await CustomReportService.create(ctx.db, ctx.family_id, created_by, CustomReportCreate(**data))
+        if ctx.user_id is None:
+            raise ValueError(
+                "custom_report create requires an authenticated user; "
+                "not available for token-only MCP sessions"
+            )
+        r = await CustomReportService.create(ctx.db, ctx.family_id, ctx.user_id, CustomReportCreate(**data))
         return _ser_report(r)
 
     async def update(self, ctx: McpContext, entity_id: UUID, data: dict) -> dict:

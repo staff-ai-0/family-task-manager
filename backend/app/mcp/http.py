@@ -48,7 +48,7 @@ def _extract_bearer(scope: Scope) -> str | None:
             raw = value.decode("latin-1")
             if raw.lower().startswith("bearer "):
                 return raw[7:].strip()
-            return None
+            continue  # non-Bearer header; keep looking
     return None
 
 

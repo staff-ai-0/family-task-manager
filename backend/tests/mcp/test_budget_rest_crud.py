@@ -216,3 +216,87 @@ async def test_budget_receipt_draft_list_delete(db_session, family, parent_user)
 
             d = await _call(s, "budget_receipt_draft_delete", {"id": str(draft.id)})
             assert d["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# FIX 1: saved_filter + custom_report create must reject token-only sessions
+# ---------------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_saved_filter_create_token_session_returns_error(db_session, family):
+    """SavedFilterAdapter.create with user_id=None must return ok:false,
+    not attempt an FK-violating INSERT of family_id into users.id column."""
+    server = build_server()
+    ctx = McpContext(family_id=family.id, user_id=None, role="MCP_TOKEN", db=db_session)
+    async with use_context(ctx):
+        async with create_connected_server_and_client_session(server) as s:
+            await s.initialize()
+            r = await _call(s, "budget_saved_filter_create", {
+                "name": "Token Filter",
+                "conditions": [{"field": "amount", "operator": "gt", "value": 5000}],
+                "conditions_op": "and",
+            })
+    assert r["ok"] is False
+    assert "user" in r["error"].lower() or "authenticated" in r["error"].lower()
+
+
+@pytest.mark.anyio
+async def test_saved_filter_create_with_user_sets_created_by(db_session, family, parent_user):
+    """SavedFilterAdapter.create with a real user_id must succeed and use user_id as created_by."""
+    from app.models.budget import BudgetSavedFilter
+    from sqlalchemy import select
+    server = build_server()
+    ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
+    async with use_context(ctx):
+        async with create_connected_server_and_client_session(server) as s:
+            await s.initialize()
+            r = await _call(s, "budget_saved_filter_create", {
+                "name": "User Filter",
+                "conditions": [{"field": "amount", "operator": "gt", "value": 1000}],
+                "conditions_op": "and",
+            })
+    assert r["ok"] is True
+    # Verify the row in the DB uses the user's id, not the family id
+    from uuid import UUID
+    row = (await db_session.execute(
+        select(BudgetSavedFilter).where(BudgetSavedFilter.id == UUID(r["data"]["id"]))
+    )).scalar_one()
+    assert row.created_by == parent_user.id
+
+
+@pytest.mark.anyio
+async def test_custom_report_create_token_session_returns_error(db_session, family):
+    """CustomReportAdapter.create with user_id=None must return ok:false."""
+    server = build_server()
+    ctx = McpContext(family_id=family.id, user_id=None, role="MCP_TOKEN", db=db_session)
+    async with use_context(ctx):
+        async with create_connected_server_and_client_session(server) as s:
+            await s.initialize()
+            r = await _call(s, "budget_custom_report_create", {
+                "name": "Token Report",
+                "config": {"group_by": "category"},
+            })
+    assert r["ok"] is False
+    assert "user" in r["error"].lower() or "authenticated" in r["error"].lower()
+
+
+@pytest.mark.anyio
+async def test_custom_report_create_with_user_sets_created_by(db_session, family, parent_user):
+    """CustomReportAdapter.create with a real user_id must succeed."""
+    from app.models.budget import BudgetCustomReport
+    from sqlalchemy import select
+    server = build_server()
+    ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
+    async with use_context(ctx):
+        async with create_connected_server_and_client_session(server) as s:
+            await s.initialize()
+            r = await _call(s, "budget_custom_report_create", {
+                "name": "User Report",
+                "config": {"group_by": "payee"},
+            })
+    assert r["ok"] is True
+    from uuid import UUID
+    row = (await db_session.execute(
+        select(BudgetCustomReport).where(BudgetCustomReport.id == UUID(r["data"]["id"]))
+    )).scalar_one()
+    assert row.created_by == parent_user.id
