@@ -23,3 +23,12 @@ class TemplateUpdate(BaseModel):
     points: Optional[int] = None
     interval_days: Optional[int] = None
     effort_level: Optional[int] = None
+
+
+# ── Assignment (patch-only; created by the shuffle algorithm) ─────────────
+
+class AssignmentUpdate(BaseModel):
+    """Parent-level patch on an individual assignment (reassign / reschedule / cancel)."""
+    assigned_to: Optional[str] = None   # UUID of the family member
+    assigned_date: Optional[str] = None  # ISO date string YYYY-MM-DD
+    status: Optional[str] = None         # "pending" | "cancelled"

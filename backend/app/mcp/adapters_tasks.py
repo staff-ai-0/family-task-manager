@@ -187,3 +187,60 @@ class OverdueTasksAdapter(ServiceAdapter):
             }
             for r in rows
         ]
+
+
+def _ser_assignment(a: TaskAssignment) -> dict:
+    return {
+        "id": str(a.id),
+        "template_id": str(a.template_id) if a.template_id else None,
+        "assigned_to": str(a.assigned_to) if a.assigned_to else None,
+        "assigned_date": a.assigned_date.isoformat() if a.assigned_date else None,
+        "week_of": a.week_of.isoformat() if a.week_of else None,
+        "status": a.status.value if a.status else None,
+        "family_id": str(a.family_id),
+    }
+
+
+class AssignmentAdapter(ServiceAdapter):
+    """LGUD adapter for TaskAssignment.
+
+    Assignments are created by the shuffle algorithm, not directly by MCP tools.
+    list/get/update/delete are supported; the update delegates to patch_assignment
+    which accepts reassignment, reschedule, and status=pending|cancelled.
+    """
+
+    async def list(self, ctx: McpContext) -> list[dict]:
+        from app.services.task_assignment_service import TaskAssignmentService
+        rows = await TaskAssignmentService.list_by_family(ctx.db, ctx.family_id)
+        return [_ser_assignment(a) for a in rows]
+
+    async def get(self, ctx: McpContext, entity_id: UUID) -> dict:
+        from app.services.task_assignment_service import TaskAssignmentService
+        return _ser_assignment(
+            await TaskAssignmentService.get_assignment(ctx.db, entity_id, ctx.family_id)
+        )
+
+    async def update(self, ctx: McpContext, entity_id: UUID, data: dict) -> dict:
+        from datetime import date as date_type
+        from app.models.task_assignment import AssignmentStatus as AS
+        from app.services.task_assignment_service import TaskAssignmentService
+
+        assigned_to = UUID(data["assigned_to"]) if data.get("assigned_to") else None
+        assigned_date_raw = data.get("assigned_date")
+        assigned_date = date_type.fromisoformat(assigned_date_raw) if assigned_date_raw else None
+        status_raw = data.get("status")
+        status = AS(status_raw) if status_raw else None
+
+        a = await TaskAssignmentService.patch_assignment(
+            ctx.db,
+            assignment_id=entity_id,
+            family_id=ctx.family_id,
+            assigned_to=assigned_to,
+            assigned_date=assigned_date,
+            status=status,
+        )
+        return _ser_assignment(a)
+
+    async def delete(self, ctx: McpContext, entity_id: UUID) -> None:
+        from app.services.task_assignment_service import TaskAssignmentService
+        await TaskAssignmentService.delete_by_id(ctx.db, entity_id, ctx.family_id)

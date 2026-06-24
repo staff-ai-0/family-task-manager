@@ -50,6 +50,7 @@ def register_builtin() -> None:
 
     _register_budget_rest()
     _register_points_rewards()
+    _register_tasks_gigs()
     _register_legacy_tools()
 
 
@@ -268,6 +269,51 @@ def _register_points_rewards() -> None:
             destructive_ops=frozenset({"create"}),
             adapter=RedemptionAdapter(),
             summarize=lambda op, p: f"redeem reward {p.get('reward_id', '')} for user {p.get('user_id', '')}",
+        ))
+
+
+def _register_tasks_gigs() -> None:
+    """Register tasks (assignment) + gigs (offering, claim) entities (Phase 5 Task 14).
+
+    tasks:
+      - assignment  (LGUD; delete is destructive — no create, assignments come from shuffle)
+    gigs:
+      - offering  (LGCUD; delete is destructive)
+      - claim     (LGUD; delete is destructive — no create, claims come from GigClaimService.claim)
+    """
+    from app.mcp.adapters_tasks import AssignmentAdapter
+    from app.mcp.adapters_gigs import OfferingAdapter, ClaimAdapter
+    from app.mcp.schemas.tasks import AssignmentUpdate
+    from app.mcp.schemas.gigs import OfferingCreate, OfferingUpdate, ClaimUpdate
+
+    if not _has_spec("tasks", "assignment"):
+        REGISTRY.append(EntitySpec(
+            name="assignment", domain="tasks",
+            ops=frozenset({"list", "get", "update", "delete"}),
+            create_schema=dict, update_schema=AssignmentUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=AssignmentAdapter(),
+            summarize=lambda op, p: f"{op} task assignment {p.get('id', '')}",
+        ))
+
+    if not _has_spec("gigs", "offering"):
+        REGISTRY.append(EntitySpec(
+            name="offering", domain="gigs",
+            ops=frozenset({"list", "get", "create", "update", "delete"}),
+            create_schema=OfferingCreate, update_schema=OfferingUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=OfferingAdapter(),
+            summarize=lambda op, p: f"{op} gig offering {p.get('title') or p.get('id', '')}",
+        ))
+
+    if not _has_spec("gigs", "claim"):
+        REGISTRY.append(EntitySpec(
+            name="claim", domain="gigs",
+            ops=frozenset({"list", "get", "update", "delete"}),
+            create_schema=dict, update_schema=ClaimUpdate,
+            destructive_ops=frozenset({"delete"}),
+            adapter=ClaimAdapter(),
+            summarize=lambda op, p: f"{op} gig claim {p.get('id', '')}",
         ))
 
 
