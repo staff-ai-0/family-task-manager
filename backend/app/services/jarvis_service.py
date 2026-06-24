@@ -6,8 +6,10 @@ as the receipt scanner) for centralized spend tracking. Each call:
 1. Pulls fresh family context (PUP score + today's task summary + pet states).
 2. Loads last N chat turns for the family.
 3. Builds an OpenAI-format messages array with a load-bearing system prompt.
-4. Calls LiteLLM with tool definitions from ``jarvis_tools.REGISTRY``.
-5. Multi-hop tool execution (max ``MAX_TOOL_HOPS``).
+4. Calls LiteLLM with tool definitions sourced from the in-memory MCP server.
+5. Multi-hop tool execution (max ``MAX_TOOL_HOPS``); destructive ops are
+   HITL-gated (queued as JarvisPendingAction + ``confirm`` SSE event) instead
+   of executed inline.
 6. Persists both the user's message and the reply.
 """
 
@@ -16,19 +18,24 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, List
 from uuid import UUID
 
+from mcp.shared.memory import create_connected_server_and_client_session
 from openai import OpenAI
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
+from app.mcp.confirm import is_destructive, summarize
+from app.mcp.context import McpContext, use_context
+from app.mcp.openai_bridge import mcp_tools_to_openai
+from app.mcp.server import server as mcp_server
 from app.models.jarvis_message import JarvisMessage
 from app.models.kid_pet import KidPet
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.user import User
 from app.services.analytics_service import AnalyticsService
 from app.services.budget.receipt_scanner_service import RECEIPT_MODEL
-from app.services.jarvis_tools import REGISTRY, dispatch, tool_definitions
+from app.services.jarvis_pending_action_service import PendingActionService
 
 
 # Jarvis model alias — defaults to receipt scanner's claude-haiku for
@@ -47,9 +54,40 @@ HISTORY_RETURN_LIMIT = 50
 MAX_TOOL_HOPS = 4
 
 
-# Module-level alias kept for tests that import TOOL_DEFINITIONS directly.
-# Source of truth is ``jarvis_tools.REGISTRY``.
-TOOL_DEFINITIONS: list[dict] = tool_definitions()
+async def _mcp_tool_definitions() -> list[dict]:
+    """List tools from the in-memory MCP server, in OpenAI tool format.
+
+    Uses the module-global ``mcp_server`` (already built once at import) so we
+    never re-register the low-level handlers via ``build_server()``.
+    """
+    async with create_connected_server_and_client_session(mcp_server) as session:
+        await session.initialize()
+        tools = (await session.list_tools()).tools
+    return mcp_tools_to_openai(tools)
+
+
+async def _mcp_dispatch(
+    db: AsyncSession,
+    family_id: UUID,
+    user_id: UUID,
+    role: str,
+    name: str,
+    args: dict,
+) -> dict:
+    """Execute a tool through the MCP client, scoped to the family context.
+
+    The MCP server reads family scope only from the bound ``McpContext`` (never
+    from client args), preserving the multi-tenant invariant.
+    """
+    ctx = McpContext(family_id=family_id, user_id=user_id, role=role, db=db)
+    async with use_context(ctx):
+        async with create_connected_server_and_client_session(mcp_server) as session:
+            await session.initialize()
+            result = await session.call_tool(name, args or {})
+    try:
+        return json.loads(result.content[0].text)
+    except (IndexError, AttributeError, json.JSONDecodeError):
+        return {"ok": False, "error": "tool returned no parseable result"}
 
 
 class JarvisService:
@@ -131,9 +169,10 @@ class JarvisService:
         user_id: UUID,
         name: str,
         args: dict,
+        role: str = "PARENT",
     ) -> dict:
-        """Backwards-compat shim — delegates to the tool registry."""
-        return await dispatch(db, family_id, user_id, name, args)
+        """Backwards-compat shim — dispatches through the in-memory MCP client."""
+        return await _mcp_dispatch(db, family_id, user_id, role, name, args)
 
     @staticmethod
     async def _today_message_count(
@@ -168,14 +207,17 @@ class JarvisService:
 
         Events:
           - event: thinking → {}                        (immediately)
-          - event: tool     → {name, ok}                (after each tool hop)
+          - event: tool     → {name, ok}                (after each non-destructive tool hop)
+          - event: confirm  → {action_id, tool, summary, params}
+                              (destructive tool queued for human approval; NOT executed)
           - event: reply    → {reply, actions, message_id}
           - event: error    → {detail}                  (on failure)
           - event: done     → {}                        (sentinel)
 
-        Tool calls and the final reply still hit the LLM the same way as
-        ``chat()`` — this wrapper just splits the timeline into events so
-        the UI can show progress instead of a long spinner.
+        Tools are sourced from the in-memory MCP server. Destructive ops
+        (delete / money) are not executed inline: a JarvisPendingAction is
+        created and a ``confirm`` event is emitted for the parent to approve
+        out-of-band via POST /api/jarvis/actions/{id}/approve.
         """
         try:
             if not settings.LITELLM_API_KEY:
@@ -213,13 +255,14 @@ class JarvisService:
             actions_taken: list[str] = []
             reply = ""
             effective_model = model or CHAT_MODEL
+            tool_defs = await _mcp_tool_definitions()
 
             for hop in range(MAX_TOOL_HOPS + 1):
                 completion = client.chat.completions.create(
                     model=effective_model,
                     max_tokens=512,
                     messages=msgs,
-                    tools=tool_definitions(),
+                    tools=tool_defs,
                     tool_choice="auto",
                 )
                 choice = completion.choices[0].message
@@ -246,16 +289,52 @@ class JarvisService:
                             args = json.loads(tc.function.arguments or "{}")
                         except json.JSONDecodeError:
                             args = {}
-                        result = await dispatch(
-                            db, family_id, user_id, tc.function.name, args
+                        name = tc.function.name
+
+                        if is_destructive(name):
+                            # Do NOT execute. Queue for human approval and emit a
+                            # confirm event. The LLM's tool slot is filled with a
+                            # "pending" acknowledgement so the hop loop can resolve.
+                            ctx = McpContext(
+                                family_id=family_id, user_id=user_id,
+                                role="PARENT", db=db,
+                            )
+                            pa = await PendingActionService.create(
+                                db, ctx, name, args
+                            )
+                            actions_taken.append(f"{name}(pending)")
+                            yield (
+                                "event: confirm\ndata: "
+                                + json.dumps({
+                                    "action_id": str(pa.id),
+                                    "tool": name,
+                                    "summary": pa.summary,
+                                    "params": args,
+                                })
+                                + "\n\n"
+                            )
+                            msgs.append({
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": json.dumps({
+                                    "ok": True,
+                                    "pending": True,
+                                    "action_id": str(pa.id),
+                                    "note": "Queued for parent approval; not executed.",
+                                }),
+                            })
+                            continue
+
+                        result = await _mcp_dispatch(
+                            db, family_id, user_id, "PARENT", name, args
                         )
                         ok = bool(result.get("ok"))
                         actions_taken.append(
-                            f"{tc.function.name}({'ok' if ok else 'err'})"
+                            f"{name}({'ok' if ok else 'err'})"
                         )
                         yield (
                             "event: tool\ndata: "
-                            + json.dumps({"name": tc.function.name, "ok": ok})
+                            + json.dumps({"name": name, "ok": ok})
                             + "\n\n"
                         )
                         msgs.append({
@@ -351,6 +430,7 @@ class JarvisService:
         actions_taken: list[str] = []
         reply = ""
         effective_model = model or CHAT_MODEL
+        tool_defs = await _mcp_tool_definitions()
 
         for hop in range(MAX_TOOL_HOPS + 1):
             try:
@@ -358,7 +438,7 @@ class JarvisService:
                     model=effective_model,
                     max_tokens=512,
                     messages=msgs,
-                    tools=tool_definitions(),
+                    tools=tool_defs,
                     tool_choice="auto",
                 )
             except Exception as exc:
@@ -388,11 +468,33 @@ class JarvisService:
                         args = json.loads(tc.function.arguments or "{}")
                     except json.JSONDecodeError:
                         args = {}
-                    result = await dispatch(
-                        db, family_id, user_id, tc.function.name, args
+                    name = tc.function.name
+
+                    if is_destructive(name):
+                        # Queue for human approval; do not execute inline.
+                        ctx = McpContext(
+                            family_id=family_id, user_id=user_id,
+                            role="PARENT", db=db,
+                        )
+                        pa = await PendingActionService.create(db, ctx, name, args)
+                        actions_taken.append(f"{name}(pending)")
+                        msgs.append({
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": json.dumps({
+                                "ok": True,
+                                "pending": True,
+                                "action_id": str(pa.id),
+                                "note": "Queued for parent approval; not executed.",
+                            }),
+                        })
+                        continue
+
+                    result = await _mcp_dispatch(
+                        db, family_id, user_id, "PARENT", name, args
                     )
                     actions_taken.append(
-                        f"{tc.function.name}({'ok' if result.get('ok') else 'err'})"
+                        f"{name}({'ok' if result.get('ok') else 'err'})"
                     )
                     msgs.append({
                         "role": "tool",
