@@ -1,31 +1,24 @@
 """
-PayPal Payment Service
+PayPal Subscription Service
 
-Handles PayPal payment processing and webhook events.
+Handles PayPal v2 Billing Subscriptions and webhook signature verification
+via direct HTTP through _PayPalV2HTTP (the legacy v1 paypalrestsdk one-off
+payment flow was removed — subscriptions are the only billing path).
 
-Subscriptions use the PayPal v2 Billing Subscriptions API via direct HTTP
-calls (the legacy paypalrestsdk.BillingAgreement is v1 and incompatible
-with v2 Plans created by scripts/setup_paypal_plans.py). The webhook
-signature verification still uses paypalrestsdk since that wraps PayPal's
-verify endpoint identically across versions.
+All blocking ``requests`` calls run inside the helper and are invoked from
+routes via ``asyncio.to_thread`` so they never block the event loop.
 """
 
 import time
-from typing import Any, Dict, List, Optional
-from datetime import datetime
-from uuid import UUID, uuid4
+from typing import Any, Dict, Optional
 
-import paypalrestsdk
 import requests
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import (
     NotFoundException,
     ValidationException,
 )
-from app.models import User
 
 
 PAYPAL_API_BASE = {
@@ -133,155 +126,7 @@ class _PayPalV2HTTP:
 
 
 class PayPalService:
-    """Service for PayPal payment operations"""
-
-    def __init__(self):
-        """Initialize PayPal SDK"""
-        paypalrestsdk.configure(
-            {
-                "mode": settings.PAYPAL_MODE,  # "sandbox" or "live"
-                "client_id": settings.PAYPAL_CLIENT_ID,
-                "client_secret": settings.PAYPAL_CLIENT_SECRET,
-            }
-        )
-
-    @staticmethod
-    def create_payment(
-        amount: float,
-        currency: str = "USD",
-        description: str = "Family Task Manager Subscription",
-        return_url: str = None,
-        cancel_url: str = None,
-    ) -> Dict[str, Any]:
-        """
-        Create a PayPal payment
-
-        Args:
-            amount: Payment amount
-            currency: Currency code (USD, EUR, etc.)
-            description: Payment description
-            return_url: URL to redirect after successful payment
-            cancel_url: URL to redirect if payment is cancelled
-
-        Returns:
-            Dict with payment info including approval_url
-
-        Raises:
-            ValidationException: If payment creation fails
-        """
-        # Set default URLs if not provided
-        if not return_url:
-            return_url = f"{settings.BASE_URL}/payment/success"
-        if not cancel_url:
-            cancel_url = f"{settings.BASE_URL}/payment/cancel"
-
-        payment = paypalrestsdk.Payment(
-            {
-                "intent": "sale",
-                "payer": {"payment_method": "paypal"},
-                "redirect_urls": {"return_url": return_url, "cancel_url": cancel_url},
-                "transactions": [
-                    {
-                        "item_list": {
-                            "items": [
-                                {
-                                    "name": description,
-                                    "sku": "subscription",
-                                    "price": str(amount),
-                                    "currency": currency,
-                                    "quantity": 1,
-                                }
-                            ]
-                        },
-                        "amount": {"total": str(amount), "currency": currency},
-                        "description": description,
-                    }
-                ],
-            }
-        )
-
-        if payment.create():
-            # Get approval URL
-            approval_url = None
-            for link in payment.links:
-                if link.rel == "approval_url":
-                    approval_url = link.href
-                    break
-
-            return {
-                "payment_id": payment.id,
-                "approval_url": approval_url,
-                "status": payment.state,
-            }
-        else:
-            raise ValidationException(
-                f"PayPal payment creation failed: {payment.error}"
-            )
-
-    @staticmethod
-    def execute_payment(payment_id: str, payer_id: str) -> Dict[str, Any]:
-        """
-        Execute/confirm a PayPal payment
-
-        Args:
-            payment_id: PayPal payment ID
-            payer_id: Payer ID from PayPal redirect
-
-        Returns:
-            Dict with payment execution result
-
-        Raises:
-            ValidationException: If payment execution fails
-        """
-        payment = paypalrestsdk.Payment.find(payment_id)
-
-        if payment.execute({"payer_id": payer_id}):
-            return {
-                "payment_id": payment.id,
-                "status": payment.state,
-                "payer_email": payment.payer.payer_info.email,
-                "amount": payment.transactions[0].amount.total,
-                "currency": payment.transactions[0].amount.currency,
-            }
-        else:
-            raise ValidationException(
-                f"PayPal payment execution failed: {payment.error}"
-            )
-
-    @staticmethod
-    def get_payment_details(payment_id: str) -> Dict[str, Any]:
-        """
-        Get details of a PayPal payment
-
-        Args:
-            payment_id: PayPal payment ID
-
-        Returns:
-            Dict with payment details
-
-        Raises:
-            NotFoundException: If payment not found
-        """
-        try:
-            payment = paypalrestsdk.Payment.find(payment_id)
-
-            return {
-                "payment_id": payment.id,
-                "status": payment.state,
-                "create_time": payment.create_time,
-                "update_time": payment.update_time,
-                "amount": payment.transactions[0].amount.total
-                if payment.transactions
-                else None,
-                "currency": payment.transactions[0].amount.currency
-                if payment.transactions
-                else None,
-                "payer_email": payment.payer.payer_info.email
-                if payment.payer and payment.payer.payer_info
-                else None,
-            }
-        except paypalrestsdk.ResourceNotFound:
-            raise NotFoundException(f"Payment {payment_id} not found")
+    """Service for PayPal v2 Billing Subscription operations."""
 
     @staticmethod
     def create_subscription(
@@ -394,9 +239,7 @@ class PayPalService:
         """
         Verify a PayPal webhook signature against the configured webhook_id.
 
-        Uses PayPal's notifications/verify-webhook-signature endpoint directly
-        (paypalrestsdk.WebhookEvent.verify has a different kwarg surface and
-        is unreliable across SDK versions).
+        Uses PayPal's notifications/verify-webhook-signature endpoint directly.
 
         Returns True iff PayPal responds with verification_status == "SUCCESS".
         Any HTTP error or non-SUCCESS verdict returns False.
