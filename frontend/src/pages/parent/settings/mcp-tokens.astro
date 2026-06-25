@@ -109,10 +109,8 @@ const labels = {
 
     <!-- Token list -->
     <div class="mb-6 bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 overflow-hidden">
-        {tokens.length === 0 ? (
-            <p class="text-center text-brand-ink-soft text-sm py-8">{labels.no_tokens}</p>
-        ) : (
-            <table class="w-full text-sm">
+        <p id="no-tokens-msg" class:list={["text-center text-brand-ink-soft text-sm py-8", { hidden: tokens.length > 0 }]}>{labels.no_tokens}</p>
+        <table id="token-table" class:list={["w-full text-sm", { hidden: tokens.length === 0 }]}>
                 <thead class="bg-brand-ink/5 text-brand-ink-soft uppercase text-xs">
                     <tr>
                         <th class="px-4 py-3 text-left">{labels.label_col}</th>
@@ -152,7 +150,6 @@ const labels = {
                     ))}
                 </tbody>
             </table>
-        )}
     </div>
 
     <!-- Mint form -->
@@ -204,7 +201,7 @@ const labels = {
     </div>
 </PageLayout>
 
-<script define:vars={{ copiedLabel: labels.copied, copyLabel: labels.copy }}>
+<script define:vars={{ copiedLabel: labels.copied, copyLabel: labels.copy, neverLabel: labels.never, activeLabel: labels.active, revokedLabel: labels.revoked, revokeLabel: labels.revoke, confirmRevokeLabel: labels.confirm_revoke }}>
     // Revoke buttons
     document.querySelectorAll(".revoke-btn").forEach((btn) => {
         btn.addEventListener("click", async () => {
@@ -218,7 +215,7 @@ const labels = {
                 if (row) {
                     const statusCell = row.querySelector("td:nth-child(4)");
                     if (statusCell) {
-                        statusCell.innerHTML = '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Revoked</span>';
+                        statusCell.innerHTML = `<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">${revokedLabel}</span>`;
                     }
                     btn.remove();
                 }
@@ -271,17 +268,20 @@ const labels = {
             tr.innerHTML = `
                 <td class="px-4 py-3 font-medium text-brand-ink">${newTok.label}</td>
                 <td class="px-4 py-3 font-mono text-brand-ink-soft">${newTok.token_prefix}…</td>
-                <td class="px-4 py-3 text-brand-ink-soft">Never</td>
-                <td class="px-4 py-3"><span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Active</span></td>
+                <td class="px-4 py-3 text-brand-ink-soft">${neverLabel}</td>
+                <td class="px-4 py-3"><span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">${activeLabel}</span></td>
                 <td class="px-4 py-3 text-right">
                     <button class="revoke-btn text-xs text-red-600 hover:text-red-800 font-medium"
                         data-token-id="${newTok.id}"
-                        data-confirm="Revoke this token? External clients using it will lose access.">
-                        Revoke
+                        data-confirm="${confirmRevokeLabel}">
+                        ${revokeLabel}
                     </button>
                 </td>
             `;
             tbody.prepend(tr);
+            // Reveal the table / hide the empty-state placeholder (first token)
+            document.getElementById("no-tokens-msg")?.classList.add("hidden");
+            document.getElementById("token-table")?.classList.remove("hidden");
 
             // Wire revoke on the new row
             tr.querySelector(".revoke-btn")?.addEventListener("click", async (evt) => {
@@ -290,7 +290,7 @@ const labels = {
                 const res2 = await fetch(`/api/jarvis/mcp-tokens/${btn.dataset.tokenId}`, { method: "DELETE" });
                 if (res2.ok || res2.status === 204) {
                     const statusCell = tr.querySelector("td:nth-child(4)");
-                    if (statusCell) statusCell.innerHTML = '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Revoked</span>';
+                    if (statusCell) statusCell.innerHTML = `<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">${revokedLabel}</span>`;
                     btn.remove();
                 }
             });
