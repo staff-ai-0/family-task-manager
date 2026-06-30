@@ -283,6 +283,7 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                     name,
                     email,
                     password,
+                    preferred_lang: lang,
                 };
 
                 if (family_code) {

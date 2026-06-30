@@ -515,6 +515,12 @@ function closeConfirm() {
     document.getElementById("confirm-overlay")?.classList.add("hidden");
 }
 
+// The modal's X / Cancel buttons use inline onclick="closeSettingsModal()",
+// which only resolves if the function is on window. Expose it explicitly so the
+// close/cancel buttons work regardless of how Astro scopes this script.
+window.closeSettingsModal = closeSettingsModal;
+window.closeConfirm = closeConfirm;
+
 function openConfirm(msg, onConfirm) {
     document.getElementById("confirm-msg").textContent = msg;
     document.getElementById("confirm-overlay")?.classList.remove("hidden");

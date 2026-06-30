@@ -77,6 +77,7 @@ export const POST: APIRoute = async ({ request }) => {
             // Stash role for UI theming (W4.2). Non-httpOnly so the
             // Astro server-side Layout can read it on subsequent renders.
             let uiRoleCookie = "";
+            let langCookie = "";
             try {
                 const meResp = await fetch(`${apiUrl}/api/auth/me`, {
                     headers: { Authorization: `Bearer ${result.access_token}` },
@@ -92,6 +93,17 @@ export const POST: APIRoute = async ({ request }) => {
                             secure: !import.meta.env.DEV,
                         });
                     }
+                    // Sync UI language to the account's stored preference so the
+                    // app renders in the user's language on any device.
+                    const pl = String(me?.preferred_lang || "").toLowerCase();
+                    if (pl === "en" || pl === "es") {
+                        langCookie = buildCookie("lang", pl, {
+                            path: "/",
+                            sameSite: "Lax",
+                            maxAge: 60 * 60 * 24 * 365,
+                            secure: !import.meta.env.DEV,
+                        });
+                    }
                 }
             } catch {
                 // Non-critical — fallback to kid theme.
@@ -102,6 +114,7 @@ export const POST: APIRoute = async ({ request }) => {
                 const headers = new Headers({ "Content-Type": "application/json" });
                 for (const c of cookies) headers.append("Set-Cookie", c);
                 if (uiRoleCookie) headers.append("Set-Cookie", uiRoleCookie);
+                if (langCookie) headers.append("Set-Cookie", langCookie);
                 return new Response(
                     JSON.stringify({ success: true, redirect: "/dashboard" }),
                     { status: 200, headers }
@@ -112,6 +125,7 @@ export const POST: APIRoute = async ({ request }) => {
             const headers = new Headers({ Location: "/dashboard" });
             for (const c of cookies) headers.append("Set-Cookie", c);
             if (uiRoleCookie) headers.append("Set-Cookie", uiRoleCookie);
+            if (langCookie) headers.append("Set-Cookie", langCookie);
             return new Response(null, { status: 302, headers });
         } else {
             let errorMessage = "Invalid email or password";

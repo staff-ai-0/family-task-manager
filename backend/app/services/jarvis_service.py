@@ -49,6 +49,28 @@ SYSTEM_BASE = (
     "Avoid platitudes. If you don't know, say so."
 )
 
+LANG_NAMES = {"en": "English", "es": "Spanish"}
+
+# Localized fallback when the model returns nothing useful.
+_EMPTY_REPLY = {
+    "en": "I had nothing useful to say. Try rephrasing?",
+    "es": "No tengo nada útil que decir. ¿Puedes reformular?",
+}
+
+
+def _build_system(context_block: str, preferred_lang: str) -> str:
+    """System prompt with a hard language directive so Jarvis replies in the
+    user's app language from the first turn (not just after they switch)."""
+    lang_name = LANG_NAMES.get(preferred_lang, "English")
+    return (
+        SYSTEM_BASE
+        + f"\n\nIMPORTANT: Always respond in {lang_name}, regardless of the "
+        "language of the family-state data below or earlier turns."
+        + "\n\n"
+        + context_block
+    )
+
+
 MAX_HISTORY_TURNS = 12
 HISTORY_RETURN_LIMIT = 50
 MAX_TOOL_HOPS = 4
@@ -202,6 +224,7 @@ class JarvisService:
         user_id: UUID,
         message: str,
         model: str | None = None,
+        preferred_lang: str = "en",
     ):
         """Async generator yielding SSE event lines.
 
@@ -239,7 +262,7 @@ class JarvisService:
             )
             context_block = await JarvisService._build_context(db, family_id)
             msgs: list[dict[str, Any]] = [
-                {"role": "system", "content": SYSTEM_BASE + "\n\n" + context_block}
+                {"role": "system", "content": _build_system(context_block, preferred_lang)}
             ]
             for h in history:
                 if h.role in ("user", "assistant"):
@@ -348,7 +371,7 @@ class JarvisService:
                 break
 
             if not reply:
-                reply = "I had nothing useful to say. Try rephrasing?"
+                reply = _EMPTY_REPLY.get(preferred_lang, _EMPTY_REPLY["en"])
 
             user_row = JarvisMessage(
                 family_id=family_id, user_id=user_id, role="user", content=msg
@@ -391,6 +414,7 @@ class JarvisService:
         user_id: UUID,
         message: str,
         model: str | None = None,
+        preferred_lang: str = "en",
     ) -> dict:
         if not settings.LITELLM_API_KEY:
             raise ValidationError(
@@ -414,7 +438,7 @@ class JarvisService:
         context_block = await JarvisService._build_context(db, family_id)
 
         msgs: list[dict[str, Any]] = [
-            {"role": "system", "content": SYSTEM_BASE + "\n\n" + context_block}
+            {"role": "system", "content": _build_system(context_block, preferred_lang)}
         ]
         for h in history:
             if h.role in ("user", "assistant"):
@@ -507,7 +531,7 @@ class JarvisService:
             break
 
         if not reply:
-            reply = "I had nothing useful to say. Try rephrasing?"
+            reply = _EMPTY_REPLY.get(preferred_lang, _EMPTY_REPLY["en"])
 
         user_msg = JarvisMessage(
             family_id=family_id, user_id=user_id, role="user", content=message

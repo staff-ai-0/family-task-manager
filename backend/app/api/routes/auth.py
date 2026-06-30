@@ -141,6 +141,7 @@ async def register_family(
         family_id=family.id,
         points=0,
         is_active=True,
+        preferred_lang=data.preferred_lang,
     )
     db.add(user)
     await db.flush()

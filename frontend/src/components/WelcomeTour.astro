@@ -48,4 +48,8 @@ const json = JSON.stringify(data).replace(/</g, "\\u003c");
     }
 
     document.addEventListener("astro:page-load", maybeStartTour);
+    // The one-shot astro:page-load fires on DOMContentLoaded; a module that
+    // executes after that would miss it. Self-trigger if the DOM is already
+    // ready (the __ftmTourStarted guard keeps this idempotent).
+    if (document.readyState !== "loading") maybeStartTour();
 </script>
