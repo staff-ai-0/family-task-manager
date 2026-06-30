@@ -152,11 +152,12 @@ async def test_claim_complete_approve_awards_points(
     assert approve_res.status_code == 200
     data = approve_res.json()
     assert data["status"] == "approved"
-    assert data["points_awarded"] == 25
+    assert data["points_awarded"] == 25  # gig value in pesos
 
-    # Verify points on user
+    # Gigs pay CASH, not privilege points.
     await db_session.refresh(test_child_user)
-    assert test_child_user.points == 125  # 100 initial + 25
+    assert test_child_user.points == 100        # points unchanged
+    assert test_child_user.cash_cents == 2500   # $25 → 2500 cents
 
 
 @pytest.mark.asyncio
@@ -300,6 +301,7 @@ async def test_points_equal_gig_value(
     )
     gig_id = create_res.json()["id"]
     initial_points = test_child_user.points
+    initial_cash = test_child_user.cash_cents
 
     claim_res = await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers)
     claim_id = claim_res.json()["id"]
@@ -307,7 +309,9 @@ async def test_points_equal_gig_value(
     await client.post(f"/api/gigs/claims/{claim_id}/approve", json={"approved": True}, headers=parent_headers)
 
     await db_session.refresh(test_child_user)
-    assert test_child_user.points == initial_points + points_value
+    # 1 pt = $1 MXN = 100 cents; gigs pay cash, points stay put.
+    assert test_child_user.cash_cents == initial_cash + points_value * 100
+    assert test_child_user.points == initial_points
 
 
 async def _claim_complete_approve(client, parent_headers, child_headers, title, points, approve=True):

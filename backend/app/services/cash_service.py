@@ -31,11 +31,13 @@ class CashService:
         assignment_id: Optional[UUID],
         amount_cents: int,
         description: Optional[str] = None,
+        gig_claim_id: Optional[UUID] = None,
     ) -> CashTransaction:
-        """Credit (or claw back, if negative) gig cash. Caller commits.
+        """Credit (or claw back, if negative) gig-board cash. Caller commits.
 
         Mirrors PointsService.award_gig_points: no commit, so it composes
-        inside the gig-approval transaction.
+        inside the gig-approval transaction. Link the source via either
+        ``assignment_id`` or ``gig_claim_id`` (gig board uses the latter).
         """
         user = await get_user_by_id(db, user_id)
         before = user.cash_cents
@@ -44,6 +46,7 @@ class CashService:
             user_id=user_id,
             family_id=family_id,
             assignment_id=assignment_id,
+            gig_claim_id=gig_claim_id,
             amount_cents=amount_cents,
             balance_before=before,
             balance_after=before + amount_cents,

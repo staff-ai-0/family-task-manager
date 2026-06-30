@@ -11,7 +11,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.gig import GigOffering, GigClaim, GigClaimStatus
-from app.models.point_transaction import PointTransaction
+from app.models.cash_transaction import CashTransaction
 from app.services.gig_claim_service import GigClaimService
 from app.core.exceptions import ValidationException
 
@@ -40,6 +40,7 @@ async def test_concurrent_approve_awards_points_once(
     )
     claim_id = claim.id
     points_before = test_child_user.points
+    cash_before = test_child_user.cash_cents
     streak_before = test_child_user.gig_trust_streak
 
     maker = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
@@ -60,16 +61,17 @@ async def test_concurrent_approve_awards_points_once(
         f"expected 1 ValidationException, got {results}"
     )
 
-    # Points credited exactly once.
+    # Cash credited exactly once.
     txn_count = await db_session.scalar(
         select(func.count())
-        .select_from(PointTransaction)
-        .where(PointTransaction.gig_claim_id == claim_id)
+        .select_from(CashTransaction)
+        .where(CashTransaction.gig_claim_id == claim_id)
     )
-    assert txn_count == 1, f"double-award: {txn_count} point transactions"
+    assert txn_count == 1, f"double-award: {txn_count} cash transactions"
 
     await db_session.refresh(test_child_user)
-    assert test_child_user.points == points_before + 25
+    assert test_child_user.cash_cents == cash_before + 2500  # $25 → 2500 cents
+    assert test_child_user.points == points_before           # gigs don't touch points
     assert test_child_user.gig_trust_streak == streak_before + 1
 
 
@@ -114,7 +116,7 @@ async def test_concurrent_complete_auto_approve_awards_once(
 
     txn_count = await db_session.scalar(
         select(func.count())
-        .select_from(PointTransaction)
-        .where(PointTransaction.gig_claim_id == claim_id)
+        .select_from(CashTransaction)
+        .where(CashTransaction.gig_claim_id == claim_id)
     )
-    assert txn_count == 1, f"double-award: {txn_count} point transactions"
+    assert txn_count == 1, f"double-award: {txn_count} cash transactions"

@@ -76,10 +76,12 @@ async def test_mandatory_completion_awards_effective_points(
     assert kid.cash_cents == 0   # mandatory never touches cash
 
 
-# ── Task 6: gig approval credits cash, not points ────────────────────────────
+# ── Bonus task (is_bonus) awards POINTS, not cash ────────────────────────────
+# Bonus tasks are optional extra-credit chores — they pay privilege points like
+# mandatory chores. Only the /gigs board pays cash (see below).
 
 @pytest.mark.asyncio
-async def test_gig_approval_credits_cash_not_points(
+async def test_bonus_task_completion_awards_points_not_cash(
     db, family, gig_template_factory
 ):
     from app.core.config import settings
@@ -90,7 +92,7 @@ async def test_gig_approval_credits_cash_not_points(
     db.add(kid)
     await db.commit()
     await db.refresh(kid)
-    tmpl = await gig_template_factory(family=family, points=20)  # effort 1 → $20
+    tmpl = await gig_template_factory(family=family, points=20)  # effort 1 → 20 pts
     a = TaskAssignment(template_id=tmpl.id, family_id=family.id,
                        assigned_to=kid.id, assigned_date=date.today(),
                        week_of=date.today(), status=AssignmentStatus.PENDING)
@@ -101,5 +103,42 @@ async def test_gig_approval_credits_cash_not_points(
     await TaskAssignmentService.complete_assignment(
         db, a.id, family.id, kid.id, proof_text="did it")
     await db.refresh(kid)
-    assert kid.cash_cents == 2000   # gig pays cash (20 * 100)
-    assert kid.points == 0          # gig does NOT touch points
+    assert kid.points == 20       # bonus task pays privilege points
+    assert kid.cash_cents == 0    # bonus task does NOT pay cash
+
+
+# ── Gig BOARD approval awards CASH, not points ───────────────────────────────
+
+@pytest.mark.asyncio
+async def test_gig_board_approval_credits_cash_not_points(
+    db, family
+):
+    """The /gigs board (GigOffering/GigClaim) is the only thing that pays cash."""
+    from app.models.gig import GigOffering, GigClaim, GigClaimStatus, GigCategory
+    from app.services.gig_claim_service import GigClaimService
+    parent = User(email="par-gb@test.com", name="Parent", role=UserRole.PARENT,
+                  family_id=family.id, email_verified=True)
+    kid = User(email="kid-gb@test.com", name="Kid", role=UserRole.CHILD,
+               family_id=family.id, email_verified=True, points=0, cash_cents=0)
+    db.add_all([parent, kid])
+    await db.commit()
+    await db.refresh(parent)
+    await db.refresh(kid)
+
+    offering = GigOffering(family_id=family.id, created_by=parent.id,
+                           title="Mow lawn", points=50, difficulty=1,
+                           category=GigCategory.CHORES)
+    db.add(offering)
+    await db.commit()
+    await db.refresh(offering)
+    claim = GigClaim(gig_id=offering.id, family_id=family.id,
+                     claimed_by=kid.id, status=GigClaimStatus.COMPLETED)
+    db.add(claim)
+    await db.commit()
+    await db.refresh(claim)
+
+    await GigClaimService.approve(db=db, claim_id=claim.id, family_id=family.id,
+                                  approver_id=parent.id, approved=True, notes=None)
+    await db.refresh(kid)
+    assert kid.cash_cents == 5000   # $50 → 5000 cents
+    assert kid.points == 0          # gig board does NOT touch points

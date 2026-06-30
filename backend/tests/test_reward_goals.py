@@ -312,19 +312,21 @@ async def test_parent_get_goal_returns_null(client, parent_headers, test_family)
 # ── Integration: gig approve triggers nudge ───────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_gig_approve_triggers_nudge(db_session, test_family, test_child_user, test_parent_user, test_reward):
-    """Approving a gig that pushes balance to goal threshold fires GOAL_REACHED."""
+async def test_gig_approve_credits_cash_not_points_no_nudge(db_session, test_family, test_child_user, test_parent_user, test_reward):
+    """Gig-board approval pays CASH, not points — it must NOT fire a points-priced
+    reward-goal nudge (rewards are bought with points, earned from chores)."""
     from app.models.gig import GigOffering, GigClaim, GigClaimStatus, GigCategory
     from app.services.gig_claim_service import GigClaimService
 
     test_child_user.points = 50  # 50 pts below test_reward.points_cost=100
+    cash_before = test_child_user.cash_cents
     await db_session.commit()
 
     offering = GigOffering(
         family_id=test_family.id,
         created_by=test_parent_user.id,
         title="Wash car",
-        points=50,
+        points=50,  # $50 MXN
         difficulty=1,
         category=GigCategory.CHORES,
     )
@@ -352,6 +354,11 @@ async def test_gig_approve_triggers_nudge(db_session, test_family, test_child_us
         notes=None,
     )
 
+    await db_session.refresh(test_child_user)
+    # Cash credited ($50 → 5000 cents); points untouched.
+    assert test_child_user.cash_cents == cash_before + 5000
+    assert test_child_user.points == 50
+
     from app.models.notification import Notification as Notif
     notif = (
         await db_session.execute(
@@ -361,7 +368,7 @@ async def test_gig_approve_triggers_nudge(db_session, test_family, test_child_us
             )
         )
     ).scalar_one_or_none()
-    assert notif is not None
+    assert notif is None  # gig cash does not cross a points-priced goal
 
 
 # ── Integration: task auto-approve triggers nudge ─────────────────────────────
