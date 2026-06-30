@@ -4,7 +4,7 @@ TaskTemplate Pydantic schemas
 Request and response models for task template operations.
 """
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from uuid import UUID
 
@@ -65,16 +65,13 @@ class TaskTemplateBase(BaseModel):
 
 # Request schemas
 class TaskTemplateCreate(TaskTemplateBase):
-    """Schema for creating a new task template"""
+    """Schema for creating a new task template.
 
-    @model_validator(mode="after")
-    def _enforce_mandatory_zero_points(self):
-        if not self.is_bonus and self.points != 0:
-            raise ValueError(
-                "Mandatory tasks (is_bonus=false) must have points=0. "
-                "Set is_bonus=true to award points."
-            )
-        return self
+    Both mandatory chores and gigs may carry points: a chore's points are
+    privilege points awarded on completion; a gig's points are its peso value
+    paid out as cash. (The old mandatory-must-be-zero rule was removed in the
+    two-currency-economy change.)
+    """
 
 
 class TaskTemplateUpdate(BaseModel):
@@ -99,16 +96,6 @@ class TaskTemplateUpdate(BaseModel):
     blocks_rewards: Optional[bool] = None
     gig_mode: Optional[GigMode] = None
     collaboration_min_count: Optional[int] = Field(None, ge=2, le=10)
-
-    @model_validator(mode="after")
-    def _enforce_mandatory_zero_points(self):
-        # Only validate if both fields are present in the update; otherwise
-        # we cannot know the combined state without the existing row.
-        if self.is_bonus is False and self.points is not None and self.points != 0:
-            raise ValueError(
-                "Mandatory tasks (is_bonus=false) must have points=0."
-            )
-        return self
 
 
 # Response schemas
