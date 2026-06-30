@@ -80,9 +80,20 @@ async def set_vision_model(
 async def get_ai_usage(
     current_user: User = Depends(require_parent_role),
 ):
-    """Proxy LiteLLM /key/info for the configured virtual key's spend data."""
+    """Proxy LiteLLM /key/info for the configured virtual key's spend data.
+
+    Degrades gracefully: spend data is an optional stats panel, and the FTM
+    virtual key may not be permitted to call /key/info (an admin endpoint). On
+    any upstream failure return ``available: false`` (HTTP 200) so the settings
+    page shows "unavailable" instead of a hard 502.
+    """
+    unavailable = {
+        "available": False, "spend": None, "max_budget": None,
+        "budget_duration": None, "budget_reset_at": None, "key_alias": None,
+        "models": [], "tpm_limit": None, "rpm_limit": None,
+    }
     if not settings.LITELLM_API_KEY or not settings.LITELLM_API_BASE:
-        raise HTTPException(status_code=503, detail="LiteLLM not configured")
+        return unavailable
 
     base = settings.LITELLM_API_BASE.rstrip("/")
     headers = {"Authorization": f"Bearer {settings.LITELLM_API_KEY}"}
@@ -92,16 +103,12 @@ async def get_ai_usage(
             resp = await client.get(f"{base}/key/info", headers=headers)
             resp.raise_for_status()
             data = resp.json()
-        except httpx.HTTPStatusError as exc:
-            raise HTTPException(
-                status_code=502,
-                detail=f"LiteLLM returned {exc.response.status_code}",
-            )
-        except httpx.RequestError as exc:
-            raise HTTPException(status_code=502, detail=f"LiteLLM unreachable: {exc}")
+        except (httpx.HTTPStatusError, httpx.RequestError):
+            return unavailable
 
     info = data.get("info", data)
     return {
+        "available": True,
         "spend": info.get("spend", 0),
         "max_budget": info.get("max_budget"),
         "budget_duration": info.get("budget_duration"),
