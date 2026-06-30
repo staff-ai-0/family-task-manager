@@ -620,8 +620,11 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         proof_text, and enters PENDING approval state. Points are credited only
         when a parent approves via approve_gig().
         """
+        # Row-lock the assignment: the mandatory path now awards points, so a
+        # concurrent double-submit (kid double-tapping "complete") must not pass
+        # the can_complete check twice and double-award.
         assignment = await TaskAssignmentService.get_assignment(
-            db, assignment_id, family_id
+            db, assignment_id, family_id, for_update=True
         )
 
         if not assignment.can_complete:
@@ -712,10 +715,14 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             else:
                 assignment.approval_status = ApprovalStatus.PENDING
         else:
-            # Mandatory path — silent, no points, no approval
+            # Mandatory path — silent completion, awards privilege points
+            # (no approval). Cash is reserved for gigs; chores credit points.
             assignment.status = AssignmentStatus.COMPLETED
             assignment.completed_at = datetime.now(timezone.utc)
-            # approval_status stays NONE; no PointTransaction row
+            from app.services.points_service import PointsService
+            await PointsService.award_assignment_completion(
+                db, user_id, assignment.id, template.effective_points
+            )
             from app.services.pet_service import PetService
             await PetService.on_task_completed(db, user_id, is_bonus=False)
 
@@ -745,6 +752,24 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 import logging
                 logging.getLogger(__name__).warning(
                     "check_nudge after task auto-approve failed", exc_info=True
+                )
+
+        if not template.is_bonus:
+            # Mandatory chores now grant privilege points, so a completion can
+            # push a kid over a points-priced reward goal — nudge them.
+            try:
+                from app.services.reward_goal_service import RewardGoalService
+                refreshed = await get_user_by_id(db, user_id)
+                await RewardGoalService.check_nudge(
+                    user_id=user_id,
+                    family_id=family_id,
+                    new_balance=refreshed.points,
+                    db=db,
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "check_nudge after mandatory completion failed", exc_info=True
                 )
 
         # Fire-and-forget notifications on gig submission. Failures are
@@ -799,13 +824,15 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
     @staticmethod
     async def _award_assignment(db: AsyncSession, assignment, template, user_id) -> int:
-        """Credit a gig completer and return the points credited to THEM.
+        """Credit a bonus-task completer and return the points credited to THEM.
 
-        Non-collaboration gigs award the full effective_points. Collaboration
-        gigs re-split the instance pot among ALL currently-approved completers
-        (see _settle_collaboration), so the total awarded always equals the pot
-        divided by however many actually complete. The caller must NOT also
-        award separately — this method performs the credit.
+        Bonus tasks (is_bonus=True) award privilege POINTS, like mandatory
+        chores — they are optional extra-credit tasks, not paid gigs. (Cash is
+        earned only on the /gigs board; see GigClaimService.) Non-collaboration
+        bonus tasks award the full effective_points; collaboration re-splits the
+        instance pot among ALL currently-approved completers (see
+        _settle_collaboration), so the total awarded always equals the pot. The
+        caller must NOT also award separately — this method performs the credit.
         """
         from app.services.points_service import PointsService
 

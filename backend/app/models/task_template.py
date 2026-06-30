@@ -56,11 +56,10 @@ class TaskTemplate(Base):
     """Reusable task template for weekly assignment generation"""
 
     __tablename__ = "task_templates"
+    # NOTE: the old chk_mandatory_zero_points constraint was dropped in the
+    # two-currency-economy change — mandatory chores now award (privilege)
+    # points too. See docs/superpowers/specs/2026-06-30-two-currency-economy-design.md.
     __table_args__ = (
-        CheckConstraint(
-            "is_bonus = true OR points = 0",
-            name="chk_mandatory_zero_points",
-        ),
         CheckConstraint(
             "effort_level BETWEEN 1 AND 3",
             name="chk_effort_level_range",

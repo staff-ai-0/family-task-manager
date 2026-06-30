@@ -7,7 +7,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ForbiddenException
-from app.models.point_transaction import PointTransaction
+from app.models.point_transaction import PointTransaction, TransactionType
 from app.models.task_assignment import TaskAssignment, AssignmentStatus, ApprovalStatus
 from app.services.task_assignment_service import TaskAssignmentService
 
@@ -29,10 +29,13 @@ async def test_local_today_returns_family_tz(db_session: AsyncSession, test_fami
 
 
 @pytest.mark.asyncio
-async def test_mandatory_completion_awards_no_points(
+async def test_mandatory_completion_awards_points(
     db_session, test_family, test_child_user, mandatory_template_factory,
 ):
-    template = await mandatory_template_factory(family=test_family, points=0)
+    # Mandatory chores now award privilege points (effort 1 → effective == points),
+    # immediately and without approval. Cash is reserved for gigs.
+    template = await mandatory_template_factory(family=test_family, points=10)
+    assert template.effective_points == 10
     today = date.today()
     assignment = TaskAssignment(
         id=uuid4(),
@@ -47,6 +50,7 @@ async def test_mandatory_completion_awards_no_points(
     await db_session.commit()
 
     before = test_child_user.points
+    cash_before = test_child_user.cash_cents
     result = await TaskAssignmentService.complete_assignment(
         db_session, assignment.id, test_family.id, test_child_user.id, proof_text=None,
     )
@@ -54,12 +58,15 @@ async def test_mandatory_completion_awards_no_points(
     await db_session.refresh(test_child_user)
     assert result.status == AssignmentStatus.COMPLETED
     assert result.approval_status == ApprovalStatus.NONE
-    assert test_child_user.points == before
+    assert test_child_user.points == before + 10
+    assert test_child_user.cash_cents == cash_before  # mandatory never touches cash
 
-    count = await db_session.scalar(
-        select(func.count()).select_from(PointTransaction).where(PointTransaction.user_id == test_child_user.id)
+    txn = await db_session.scalar(
+        select(PointTransaction).where(PointTransaction.user_id == test_child_user.id)
     )
-    assert count == 0
+    assert txn is not None
+    assert txn.type == TransactionType.TASK_COMPLETED
+    assert txn.points == 10
 
 
 @pytest.mark.asyncio

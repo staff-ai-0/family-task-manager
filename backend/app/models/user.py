@@ -26,6 +26,10 @@ class User(Base):
     role = Column(SQLEnum(UserRole), nullable=False, default=UserRole.CHILD)
     family_id = Column(UUID(as_uuid=True), ForeignKey("families.id"), nullable=False, index=True)
     points = Column(Integer, default=0, nullable=False)
+    # Cash balance in centavos — the second currency. Earned by gigs, paid out
+    # by parents. Kept separate from `points` (privileges). See
+    # docs/superpowers/specs/2026-06-30-two-currency-economy-design.md.
+    cash_cents = Column(Integer, default=0, nullable=False, server_default="0")
     token_version = Column(Integer, nullable=False, default=0, server_default="0")
     is_active = Column(Boolean, default=True, nullable=False)
     preferred_lang = Column(String(5), default="en", nullable=False, server_default="en")
@@ -81,6 +85,7 @@ class User(Base):
     task_assignments = relationship("TaskAssignment", back_populates="assigned_user", foreign_keys="TaskAssignment.assigned_to", cascade="all, delete-orphan")
     consequences = relationship("Consequence", back_populates="user", cascade="all, delete-orphan")
     point_transactions = relationship("PointTransaction", foreign_keys="PointTransaction.user_id", back_populates="user", cascade="all, delete-orphan")
+    cash_transactions = relationship("CashTransaction", foreign_keys="CashTransaction.user_id", back_populates="user", cascade="all, delete-orphan")
     password_reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):

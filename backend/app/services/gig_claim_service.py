@@ -5,7 +5,6 @@ from uuid import UUID
 from datetime import datetime, timezone
 
 from app.models.gig import GigClaim, GigClaimStatus, GigOffering
-from app.models.point_transaction import PointTransaction
 from app.core.exceptions import (
     NotFoundException,
     ForbiddenException,
@@ -108,20 +107,19 @@ class GigClaimService:
 
         threshold = max(1, settings.GIG_AUTO_APPROVE_STREAK)
         if claimer.gig_trust_streak >= threshold:
-            # Trusted kid — auto-approve on submission, award points immediately.
-            points = offering.points if offering else 0
-            txn = PointTransaction.create_gig_claim_approval(
-                user_id=claim.claimed_by,
+            # Trusted kid — auto-approve on submission, award CASH immediately.
+            # Gigs pay money (1 pt = $1 MXN = 100 centavos), not privilege points.
+            from app.services.cash_service import CashService
+            pesos = offering.points if offering else 0
+            await CashService.award_gig_cash(
+                db, claim.claimed_by, claim.family_id, None, pesos * 100,
+                description=f"Gig: {offering.title if offering else 'Gig'}",
                 gig_claim_id=claim.id,
-                points=points,
-                balance_before=claimer.points,
             )
-            claimer.points += points
             claimer.gig_trust_streak += 1
-            claim.points_awarded = points
+            claim.points_awarded = pesos
             claim.status = GigClaimStatus.APPROVED
             claim.approved_at = datetime.now(timezone.utc)
-            db.add(txn)
             await db.commit()
             await db.refresh(claim)
             try:
@@ -134,21 +132,8 @@ class GigClaimService:
                     "onboarding advance points_awarded failed", exc_info=True
                 )
             await GigClaimService._notify_claimer_approved(
-                db, claim, offering, points, auto=True
+                db, claim, offering, pesos, auto=True
             )
-            try:
-                from app.services.reward_goal_service import RewardGoalService
-                await RewardGoalService.check_nudge(
-                    user_id=claim.claimed_by,
-                    family_id=claim.family_id,
-                    new_balance=claimer.points,
-                    db=db,
-                )
-            except Exception:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "check_nudge after gig auto-approve failed", exc_info=True
-                )
             return claim
 
         # Normal path — awaits parent review.
@@ -195,7 +180,7 @@ class GigClaimService:
             )
 
     @staticmethod
-    async def _notify_claimer_approved(db, claim, offering, points, auto=False) -> None:
+    async def _notify_claimer_approved(db, claim, offering, pesos, auto=False) -> None:
         try:
             from app.services.notification_service import NotificationService
             from app.models.notification import NotificationType as NT
@@ -207,7 +192,7 @@ class GigClaimService:
                 family_id=claim.family_id,
                 user_id=claim.claimed_by,
                 type=NT.GIG_APPROVED,
-                title=f"{prefix} +{points} pts",
+                title=f"{prefix} +${pesos} MXN",
                 body=f"'{title}' " + ("aprobada al instante (¡buena racha!)." if auto else "aprobada."),
                 link="/gigs/my-gigs",
             )
@@ -422,19 +407,18 @@ class GigClaimService:
         claimer = await _get_user(db, claim.claimed_by)
 
         if approved:
-            points = offering.points if offering else 0
-            txn = PointTransaction.create_gig_claim_approval(
-                user_id=claim.claimed_by,
+            # Gigs pay CASH (1 pt = $1 MXN = 100 centavos), not privilege points.
+            from app.services.cash_service import CashService
+            pesos = offering.points if offering else 0
+            await CashService.award_gig_cash(
+                db, claim.claimed_by, family_id, None, pesos * 100,
+                description=f"Gig: {offering.title if offering else 'Gig'}",
                 gig_claim_id=claim.id,
-                points=points,
-                balance_before=claimer.points,
             )
-            claimer.points += points
             # Build trust toward auto-approval on future gigs.
             claimer.gig_trust_streak += 1
-            claim.points_awarded = points
+            claim.points_awarded = pesos
             claim.status = GigClaimStatus.APPROVED
-            db.add(txn)
             await db.commit()
             await db.refresh(claim)
             try:
@@ -447,21 +431,8 @@ class GigClaimService:
                     "onboarding advance points_awarded failed", exc_info=True
                 )
             await GigClaimService._notify_claimer_approved(
-                db, claim, offering, points, auto=False
+                db, claim, offering, pesos, auto=False
             )
-            try:
-                from app.services.reward_goal_service import RewardGoalService
-                await RewardGoalService.check_nudge(
-                    user_id=claim.claimed_by,
-                    family_id=family_id,
-                    new_balance=claimer.points,
-                    db=db,
-                )
-            except Exception:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "check_nudge after gig approve failed", exc_info=True
-                )
             return claim
         else:
             # Rejection breaks the trust streak.
