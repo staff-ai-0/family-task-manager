@@ -152,23 +152,21 @@ async def create_e2e_account(session: AsyncSession):
 
 
 async def create_task_templates(session: AsyncSession, family, parent):
-    """Create task templates — regular + bonus
+    """Create task templates — regular chores + bonus tasks (both award POINTS).
 
-    DB constraint chk_mandatory_zero_points (migration 2026_05_22) enforces
-    `is_bonus = true OR points = 0`: mandatory/regular chores award no points,
-    only bonus chores earn them. The tuples below are the single source of
-    truth — every regular (is_bonus=False) row therefore carries 0 points, and
-    only bonus rows carry a positive value. Keep it that way or the seed will
-    fail the constraint.
+    Two-currency economy: all task templates award privilege POINTS on completion
+    (mandatory chores and bonus tasks); only the /gigs board pays cash. (The old
+    chk_mandatory_zero_points constraint that forced regular chores to 0 points
+    was dropped in the two-currency-economy migration.)
     """
     print("\nCreating task templates...")
     templates_data = [
-        ("Make Your Bed", "Hacer la Cama", "Make your bed neatly", "Haz tu cama ordenadamente", 0, 1, False),
-        ("Complete Homework", "Terminar la Tarea", "Finish homework before dinner", "Termina la tarea antes de cenar", 0, 1, False),
-        ("Brush Teeth", "Cepillar Dientes", "Brush morning and night", "Cepíllate mañana y noche", 0, 1, False),
-        ("Feed the Pet", "Alimentar Mascota", "Give food and water to the pet", "Dale comida y agua a la mascota", 0, 1, False),
-        ("Take Out Trash", "Sacar la Basura", "Empty trash cans", "Vacía los botes de basura", 0, 3, False),
-        ("Clean Your Room", "Limpiar Cuarto", "Pick up toys and organize", "Recoge juguetes y organiza", 0, 7, False),
+        ("Make Your Bed", "Hacer la Cama", "Make your bed neatly", "Haz tu cama ordenadamente", 10, 1, False),
+        ("Complete Homework", "Terminar la Tarea", "Finish homework before dinner", "Termina la tarea antes de cenar", 15, 1, False),
+        ("Brush Teeth", "Cepillar Dientes", "Brush morning and night", "Cepíllate mañana y noche", 10, 1, False),
+        ("Feed the Pet", "Alimentar Mascota", "Give food and water to the pet", "Dale comida y agua a la mascota", 10, 1, False),
+        ("Take Out Trash", "Sacar la Basura", "Empty trash cans", "Vacía los botes de basura", 15, 3, False),
+        ("Clean Your Room", "Limpiar Cuarto", "Pick up toys and organize", "Recoge juguetes y organiza", 20, 7, False),
         ("Help With Dishes", "Ayudar con Platos", "Wash or dry dishes after dinner", "Lava o seca los platos", 40, 1, True),
         ("Vacuum Living Room", "Aspirar la Sala", "Vacuum living room and hallway", "Aspira sala y pasillo", 75, 7, True),
         ("Help With Laundry", "Ayudar con Ropa", "Fold and put away clothes", "Dobla y guarda la ropa", 60, 7, True),
