@@ -95,6 +95,29 @@ class PointsService:
         return transaction
 
     @staticmethod
+    async def award_assignment_completion(
+        db: AsyncSession,
+        user_id: UUID,
+        assignment_id,
+        points: int,
+    ) -> PointTransaction:
+        """Credit privilege points for a mandatory-chore completion.
+
+        Caller commits. Mirrors award_gig_points (no commit) so it composes
+        inside complete_assignment's single transaction.
+        """
+        user = await get_user_by_id(db, user_id)
+        transaction = PointTransaction.create_assignment_completion(
+            user_id=user_id,
+            assignment_id=assignment_id,
+            points=points,
+            balance_before=user.points,
+        )
+        user.points += points
+        db.add(transaction)
+        return transaction
+
+    @staticmethod
     async def deduct_points_for_reward(
         db: AsyncSession,
         user_id: UUID,

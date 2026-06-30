@@ -693,7 +693,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 assignment.approval_status = ApprovalStatus.APPROVED
                 assignment.approved_at = datetime.now(timezone.utc)
                 assignment.approval_notes = approval_reason
-                pts = await TaskAssignmentService._award_assignment(
+                cents = await TaskAssignmentService._award_assignment(
                     db, assignment, template, user_id
                 )
                 child.gig_trust_streak += 1
@@ -705,17 +705,21 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     family_id=family_id,
                     user_id=user_id,
                     type=NT.GIG_APPROVED,
-                    title=f"✅ +{pts} pts",
+                    title=f"✅ +${cents / 100:.2f} MXN",
                     body=f"'{template.title}' approved automatically. {approval_reason}",
                 )
                 await PetService.on_task_completed(db, user_id, is_bonus=True)
             else:
                 assignment.approval_status = ApprovalStatus.PENDING
         else:
-            # Mandatory path — silent, no points, no approval
+            # Mandatory path — silent completion, awards privilege points
+            # (no approval). Cash is reserved for gigs; chores credit points.
             assignment.status = AssignmentStatus.COMPLETED
             assignment.completed_at = datetime.now(timezone.utc)
-            # approval_status stays NONE; no PointTransaction row
+            from app.services.points_service import PointsService
+            await PointsService.award_assignment_completion(
+                db, user_id, assignment.id, template.effective_points
+            )
             from app.services.pet_service import PetService
             await PetService.on_task_completed(db, user_id, is_bonus=False)
 
@@ -799,20 +803,23 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
     @staticmethod
     async def _award_assignment(db: AsyncSession, assignment, template, user_id) -> int:
-        """Credit a gig completer and return the points credited to THEM.
+        """Credit a gig completer in CASH and return the centavos credited.
 
-        Non-collaboration gigs award the full effective_points. Collaboration
+        Gigs pay cash (1 pt = $1 MXN = 100 centavos), not privilege points.
+        Non-collaboration gigs award the full effective value. Collaboration
         gigs re-split the instance pot among ALL currently-approved completers
         (see _settle_collaboration), so the total awarded always equals the pot
         divided by however many actually complete. The caller must NOT also
-        award separately — this method performs the credit.
+        award separately — this method performs the credit. Returns CENTAVOS.
         """
-        from app.services.points_service import PointsService
+        from app.services.cash_service import CashService
 
         if (template.gig_mode or "claim") != "collaboration":
-            pts = template.award_points_per_completer
-            await PointsService.award_gig_points(db, user_id, assignment.id, pts)
-            return pts
+            cents = template.award_points_per_completer * 100
+            await CashService.award_gig_cash(
+                db, user_id, assignment.family_id, assignment.id, cents
+            )
+            return cents
         return await TaskAssignmentService._settle_collaboration(db, assignment, template)
 
     @staticmethod
@@ -830,9 +837,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         gig settles each date independently.
 
         The caller has already marked this assignment APPROVED, so it is part
-        of the settled set. Returns the points THIS completer ends up with.
+        of the settled set. Returns the CENTAVOS THIS completer ends up with.
         """
-        from app.services.points_service import PointsService
+        from app.services.cash_service import CashService
+        from app.models.cash_transaction import CashTransaction, CashTransactionType
 
         # Lock the whole instance sibling set (all statuses, deterministic id
         # order — no deadlock) so concurrent approvals settle one at a time and
@@ -870,35 +878,37 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             template.effective_points, len(completers) or 1
         )
 
-        this_share = 0
+        this_share_cents = 0
         for share, completer in zip(shares, completers):
-            # Net points already credited to this completer for this instance.
+            share_cents = int(share) * 100
+            # Net cash already credited to this completer for this instance.
             current = (
                 await db.execute(
-                    select(func.coalesce(func.sum(PointTransaction.points), 0))
+                    select(func.coalesce(func.sum(CashTransaction.amount_cents), 0))
                     .where(
                         and_(
-                            PointTransaction.assignment_id == completer.id,
-                            PointTransaction.type == TransactionType.GIG_APPROVED,
+                            CashTransaction.assignment_id == completer.id,
+                            CashTransaction.type == CashTransactionType.GIG_EARNED,
                         )
                     )
                 )
             ).scalar() or 0
-            delta = int(share) - int(current)
+            delta = share_cents - int(current)
             if delta != 0:
-                await PointsService.award_gig_points(
+                await CashService.award_gig_cash(
                     db,
                     completer.assigned_to,
+                    completer.family_id,
                     completer.id,
                     delta,
                     description=(
                         f"Collaboration gig split among {len(completers)} "
-                        f"— your share: {share} pts"
+                        f"— your share: ${share}.00 MXN"
                     ),
                 )
             if completer.id == assignment.id:
-                this_share = int(share)
-        return this_share
+                this_share_cents = share_cents
+        return this_share_cents
 
     # ─── Gig claim (reserve before doing) ────────────────────────────
 
@@ -1070,7 +1080,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     "Upgrade to raise the cap."
                 )
             assignment.approval_status = ApprovalStatus.APPROVED
-            pts = await TaskAssignmentService._award_assignment(
+            cents = await TaskAssignmentService._award_assignment(
                 db, assignment, assignment.template, assignment.assigned_to
             )
             # Increment trust streak so the child graduates to
@@ -1097,7 +1107,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 from app.services.push_service import PushService as _PushService
                 await _PushService.send_to_user(db, assignment.assigned_to, {
                     "title": "¡Tarea aprobada! / Task approved! 🎉",
-                    "body": f"{assignment.template.title} — {pts} pts",
+                    "body": f"{assignment.template.title} — ${cents / 100:.2f} MXN",
                     "url": "/dashboard",
                     "tag": "task-approved",
                 })
@@ -1112,7 +1122,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 family_id=family_id,
                 user_id=assignment.assigned_to,
                 type=NT.GIG_APPROVED,
-                title=f"✅ +{pts} pts",
+                title=f"✅ +${cents / 100:.2f} MXN",
                 body=f"'{assignment.template.title}' approved by parent.",
                 link="/dashboard",
             )

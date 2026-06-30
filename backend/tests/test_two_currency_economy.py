@@ -65,7 +65,7 @@ async def test_mandatory_completion_awards_effective_points(
     tmpl = await mandatory_template_factory(family=family, points=10)  # effort 1 → 10
     a = TaskAssignment(template_id=tmpl.id, family_id=family.id,
                        assigned_to=kid.id, assigned_date=date.today(),
-                       status=AssignmentStatus.PENDING)
+                       week_of=date.today(), status=AssignmentStatus.PENDING)
     db.add(a)
     await db.commit()
     await db.refresh(a)
@@ -93,7 +93,7 @@ async def test_gig_approval_credits_cash_not_points(
     tmpl = await gig_template_factory(family=family, points=20)  # effort 1 → $20
     a = TaskAssignment(template_id=tmpl.id, family_id=family.id,
                        assigned_to=kid.id, assigned_date=date.today(),
-                       status=AssignmentStatus.PENDING)
+                       week_of=date.today(), status=AssignmentStatus.PENDING)
     db.add(a)
     await db.commit()
     await db.refresh(a)
