@@ -33,6 +33,14 @@ def _gemini_safe(node):
             node["properties"] = {
                 k: _gemini_safe(v) for k, v in node["properties"].items()
             }
+        # Nested Pydantic models land under $defs/definitions and are referenced
+        # via $ref — their array fields must be normalized too, or a bare list
+        # inside a nested model still reaches Gemini with empty items.
+        for defs_key in ("$defs", "definitions"):
+            if isinstance(node.get(defs_key), dict):
+                node[defs_key] = {
+                    k: _gemini_safe(v) for k, v in node[defs_key].items()
+                }
         if "items" in node:
             node["items"] = _gemini_safe(node["items"])
         if node.get("type") == "array":

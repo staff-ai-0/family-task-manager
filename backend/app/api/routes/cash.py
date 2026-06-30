@@ -91,8 +91,9 @@ async def payout(
         )
     except ValidationException as e:
         raise HTTPException(status_code=400, detail=str(e))
-    bal = await CashService.get_balance(db, user_id)
-    return PayoutResponse(success=True, new_balance_cents=bal, transaction_id=tx.id)
+    return PayoutResponse(
+        success=True, new_balance_cents=tx.balance_after, transaction_id=tx.id
+    )
 
 
 @router.post("/{user_id}/adjust", response_model=PayoutResponse)
@@ -109,5 +110,6 @@ async def adjust(
         db, user_id, fam, body.amount_cents, body.reason,
         to_uuid_required(current_user.id),
     )
-    bal = await CashService.get_balance(db, user_id)
-    return PayoutResponse(success=True, new_balance_cents=bal, transaction_id=tx.id)
+    return PayoutResponse(
+        success=True, new_balance_cents=tx.balance_after, transaction_id=tx.id
+    )

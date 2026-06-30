@@ -11,8 +11,17 @@ from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cash_transaction import CashTransaction, CashTransactionType
+from app.models.user import User
 from app.core.exceptions import ValidationException
 from app.services.base_service import get_user_by_id
+
+
+async def _get_user_locked(db: AsyncSession, user_id: UUID) -> User:
+    """Fetch a user row with FOR UPDATE so concurrent cash mutations on the same
+    balance serialize (no lost updates, no negative balance from a payout race)."""
+    return (
+        await db.execute(select(User).where(User.id == user_id).with_for_update())
+    ).scalar_one()
 
 
 class CashService:
@@ -39,7 +48,7 @@ class CashService:
         inside the gig-approval transaction. Link the source via either
         ``assignment_id`` or ``gig_claim_id`` (gig board uses the latter).
         """
-        user = await get_user_by_id(db, user_id)
+        user = await _get_user_locked(db, user_id)
         before = user.cash_cents
         tx = CashTransaction(
             type=CashTransactionType.GIG_EARNED,
@@ -67,7 +76,7 @@ class CashService:
         """Parent records a payout (full or partial). Debits cash_cents."""
         if amount_cents <= 0:
             raise ValidationException("Payout amount must be positive")
-        user = await get_user_by_id(db, user_id)
+        user = await _get_user_locked(db, user_id)
         if amount_cents > user.cash_cents:
             raise ValidationException(
                 f"Payout exceeds balance. Balance ${user.cash_cents / 100:.2f}, "
@@ -100,7 +109,7 @@ class CashService:
         created_by: UUID,
     ) -> CashTransaction:
         """Manual signed cash adjustment by a parent. Floors balance at 0."""
-        user = await get_user_by_id(db, user_id)
+        user = await _get_user_locked(db, user_id)
         before = user.cash_cents
         after = before + amount_cents
         if after < 0:
@@ -147,12 +156,14 @@ class CashService:
                 )
             )
         ).scalar() or 0
+        # Count ALL outflows (payouts + negative adjustments), not just PAYOUT
+        # rows, so that earned - paid == current_balance reconciles exactly.
         paid = (
             await db.execute(
                 select(func.coalesce(func.sum(CashTransaction.amount_cents), 0)).where(
                     and_(
                         CashTransaction.user_id == user_id,
-                        CashTransaction.type == CashTransactionType.PAYOUT,
+                        CashTransaction.amount_cents < 0,
                     )
                 )
             )

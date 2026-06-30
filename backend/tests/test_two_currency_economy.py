@@ -15,6 +15,31 @@ from app.models.task_assignment import TaskAssignment, AssignmentStatus
 
 # ── Task 2: mandatory tasks may carry points ─────────────────────────────────
 
+def test_migration_enum_labels_match_orm_names():
+    """Guard the prod-only enum-case trap: SQLEnum(CashTransactionType) has no
+    values_callable, so SQLAlchemy binds the member NAME (uppercase). The
+    migration must create the postgres enum with those same UPPERCASE labels —
+    not the lowercase values — or every cash write 500s on a migrated DB while
+    create_all-based tests stay green.
+    """
+    import pathlib
+    from app.models.cash_transaction import CashTransactionType
+
+    candidates = [
+        pathlib.Path("migrations/versions/2026_06_30_two_currency_economy.py"),
+        pathlib.Path("/app/migrations/versions/2026_06_30_two_currency_economy.py"),
+    ]
+    src = next((p.read_text() for p in candidates if p.exists()), None)
+    assert src is not None, "migration file not found"
+    # The ENUM(...) call must list every member NAME (uppercase). The lowercase
+    # value may legitimately appear in comments, so we only require the names.
+    for member in CashTransactionType:
+        assert f'"{member.name}"' in src, (
+            f"migration missing UPPERCASE enum label {member.name!r}; SQLEnum binds "
+            f"the NAME, so a lowercase-only label breaks every cash write in prod"
+        )
+
+
 def test_mandatory_task_can_have_points_schema():
     # Previously raised: "Mandatory tasks (is_bonus=false) must have points=0"
     t = TaskTemplateCreate(title="Sweep", is_bonus=False, points=10,

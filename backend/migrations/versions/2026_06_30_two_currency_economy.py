@@ -21,10 +21,13 @@ def upgrade():
         sa.Column("cash_cents", sa.Integer(), nullable=False, server_default="0"),
     )
 
-    # 2. Cash transaction type enum. create_type=False so create_table below
-    #    does NOT try to create it a second time; we create it once here.
+    # 2. Cash transaction type enum. Labels MUST be the UPPERCASE member NAMES:
+    #    SQLEnum(CashTransactionType) has no values_callable, so SQLAlchemy binds
+    #    the enum NAME ("GIG_EARNED"), not the value ("gig_earned"). This matches
+    #    the existing transactiontype enum convention (see the 2026_05_22 migration).
+    #    create_type=False so create_table below does not create it a second time.
     cash_type = postgresql.ENUM(
-        "gig_earned", "payout", "adjustment",
+        "GIG_EARNED", "PAYOUT", "ADJUSTMENT",
         name="cashtransactiontype", create_type=False,
     )
     cash_type.create(op.get_bind(), checkfirst=True)
@@ -69,12 +72,20 @@ def upgrade():
     op.create_index("ix_cash_transactions_created_at", "cash_transactions", ["created_at"])
 
     # 4. Drop the mandatory-zero-points CHECK — chores now award points too.
-    op.drop_constraint("chk_mandatory_zero_points", "task_templates", type_="check")
+    #    IF EXISTS guards a DB that never had it (create_all-provisioned).
+    op.execute(
+        "ALTER TABLE task_templates DROP CONSTRAINT IF EXISTS chk_mandatory_zero_points"
+    )
 
 
 def downgrade():
-    op.create_check_constraint(
-        "chk_mandatory_zero_points", "task_templates", "is_bonus = true OR points = 0"
+    # Re-add the old constraint as NOT VALID: by the time this feature ships,
+    # mandatory templates carry points>0, so a validating CHECK would abort the
+    # downgrade. NOT VALID restores the forward guard (new mandatory rows must be
+    # zero) without failing on the existing points-bearing rows.
+    op.execute(
+        "ALTER TABLE task_templates ADD CONSTRAINT chk_mandatory_zero_points "
+        "CHECK (is_bonus = true OR points = 0) NOT VALID"
     )
     op.drop_index("ix_cash_transactions_created_at", table_name="cash_transactions")
     op.drop_index("ix_cash_transactions_type", table_name="cash_transactions")
