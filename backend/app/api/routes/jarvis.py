@@ -64,6 +64,7 @@ async def chat(
             user_id=to_uuid_required(current_user.id),
             message=data.message,
             model=model,
+            preferred_lang=(current_user.preferred_lang or "en"),
         )
     except ValidationError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
@@ -83,6 +84,7 @@ async def chat_stream(
         user_id=to_uuid_required(current_user.id),
         message=data.message,
         model=model,
+        preferred_lang=(current_user.preferred_lang or "en"),
     )
     return StreamingResponse(
         gen,

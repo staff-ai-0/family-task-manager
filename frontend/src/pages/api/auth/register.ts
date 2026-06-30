@@ -6,10 +6,15 @@ import { authCookies } from "../../../lib/auth-cookies";
  * POST /api/auth/register
  * Creates a new family + founding PARENT user, sets httpOnly cookie, and returns JSON.
  */
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, cookies }) => {
     try {
         const body = await request.json();
-        const { family_name, family_code, name, email, password } = body;
+        const { family_name, family_code, name, email, password, preferred_lang } = body;
+        // Carry the UI language into the account so the welcome email + first
+        // login render in the user's language. Fall back to the lang cookie.
+        const lang = preferred_lang === "es" || preferred_lang === "en"
+            ? preferred_lang
+            : (cookies.get("lang")?.value === "es" ? "es" : "en");
 
         // Validate required fields
         if (!name || !email || !password) {
@@ -28,8 +33,8 @@ export const POST: APIRoute = async ({ request }) => {
         }
 
         const apiUrl = process.env.API_BASE_URL || "http://localhost:8002";
-        const registerBody: Record<string, string> = { name, email, password };
-        
+        const registerBody: Record<string, string> = { name, email, password, preferred_lang: lang };
+
         if (family_code) {
             registerBody.family_code = family_code;
         } else {
@@ -46,9 +51,11 @@ export const POST: APIRoute = async ({ request }) => {
 
         if (response.ok) {
             const result = data as LoginResponse;
-            const cookies = authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV);
+            const authCks = authCookies(result.access_token, result.refresh_token, !import.meta.env.DEV);
             const headers = new Headers({ "Content-Type": "application/json" });
-            for (const c of cookies) headers.append("Set-Cookie", c);
+            for (const c of authCks) headers.append("Set-Cookie", c);
+            // Seed the UI language cookie so the dashboard renders in the chosen language.
+            cookies.set("lang", lang, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 365 });
             return new Response(
                 JSON.stringify({ success: true, redirect: "/dashboard" }),
                 { status: 200, headers }

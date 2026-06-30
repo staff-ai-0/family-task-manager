@@ -436,8 +436,8 @@ export const translations = {
         fab_auto_rule: "rule ✓",
 
         // Gigs intro banner (one-time after scope change)
-        intro_banner_title: "What changed",
-        intro_banner_body: "Daily mandatory tasks now award 0 points — they're expected. Gigs (bonus tasks) are the only way to earn points, stay locked until every mandatory task (today and any overdue) is finished, and a parent reviews your proof before points are credited.",
+        intro_banner_title: "How points & cash work",
+        intro_banner_body: "Two ways to earn. Finish your chores to earn points — spend them on rewards and privileges like screen time, movie night, or picking dinner. Take on gigs from the gig board to earn real cash ($MXN), paid out by a parent after they review your proof. Gigs stay locked until every required chore (today and any overdue) is done. Points and cash are separate — points never turn into cash.",
         intro_banner_dismiss: "Got it",
 
         // Welcome tour (driver.js) — shared button labels
@@ -635,7 +635,7 @@ export const translations = {
         pt_allowed_roles: "Quien puede hacer esta tarea",
         pt_role_parent: "Padre/Madre",
         pt_role_teen: "Adolescente",
-        pt_role_child: "Nino",
+        pt_role_child: "Niño",
         pt_allowed_roles_hint: "Auto solo elige miembros con el rol marcado. Deja todo en blanco para permitir a todos.",
 
         // Shuffle
@@ -941,8 +941,8 @@ export const translations = {
         fab_auto_rule: "regla ✓",
 
         // Gigs intro banner (one-time after scope change)
-        intro_banner_title: "Qué cambió",
-        intro_banner_body: "Las tareas obligatorias diarias ahora dan 0 puntos — son lo esperado. Los gigs (tareas bonus) son la única forma de ganar puntos, quedan bloqueados hasta terminar todas las obligatorias (de hoy y atrasadas), y un padre revisa tu evidencia antes de acreditarlos.",
+        intro_banner_title: "Cómo funcionan los puntos y el dinero",
+        intro_banner_body: "Dos formas de ganar. Termina tus tareas para ganar puntos — cámbialos por premios y privilegios como tiempo de pantalla, noche de película o elegir la cena. Toma gigs del tablero de gigs para ganar dinero real ($MXN), que un padre te paga después de revisar tu evidencia. Los gigs quedan bloqueados hasta terminar todas las tareas obligatorias (de hoy y atrasadas). Los puntos y el dinero son separados — los puntos nunca se vuelven dinero.",
         intro_banner_dismiss: "Entendido",
 
         // Recorrido de bienvenida (driver.js) — botones

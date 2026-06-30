@@ -79,7 +79,7 @@ const tourRole = String(user.role).toLowerCase() === "parent" ? "parent" : "kid"
                     <p class="text-brand-coral-deep text-sm">{user.email}</p>
                     <span
                         class="inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-brand-cream/20 border border-white/30"
-                        >{user.role}</span
+                        >{t(lang, `pt_role_${String(user.role).toLowerCase()}`)}</span
                     >
                 </div>
             </div>
@@ -187,6 +187,7 @@ const tourRole = String(user.role).toLowerCase() === "parent" ? "parent" : "kid"
                     </select>
                     <button
                         type="submit"
+                        formnovalidate
                         class="px-5 py-2.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition-colors shadow-[var(--shadow-card)]"
                     >
                         {t(lang, "pt_save")}

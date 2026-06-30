@@ -80,9 +80,12 @@ const {
 const _tourPath = Astro.url.pathname.replace(/\/+$/, "") || "/";
 const _isParent = String(role).toLowerCase() === "parent";
 const tourRole: TourRole = _isParent ? "parent" : "kid";
+// New parents land on /dashboard (not /parent), so allow the parent tour on
+// both — the tour's present-filter drops the /parent-only checklist step when
+// it's absent, so the welcome + nav + help steps still run on /dashboard.
 const showWelcomeTour =
   completedTour === false &&
-  ((_isParent && _tourPath === "/parent") ||
+  ((_isParent && (_tourPath === "/parent" || _tourPath === "/dashboard")) ||
     (!_isParent && _tourPath === "/dashboard"));
 ---
 

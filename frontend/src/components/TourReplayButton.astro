@@ -64,4 +64,8 @@ const json = JSON.stringify(data).replace(/</g, "\\u003c");
     }
 
     document.addEventListener("astro:page-load", bindReplay);
+    // Self-trigger if the DOM is already ready — the one-shot astro:page-load
+    // may have fired before this module executed (the per-button __ftmBound
+    // guard keeps this idempotent), otherwise the replay button never binds.
+    if (document.readyState !== "loading") bindReplay();
 </script>
