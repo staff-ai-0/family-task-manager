@@ -75,7 +75,7 @@ class TestSSEStream:
         )
 
         events = await _collect_events(
-            JarvisService.chat_stream(
+            JarvisService._chat_stream_inner(
                 db_session, test_family.id, test_parent_user.id, "what now?"
             )
         )
@@ -104,7 +104,7 @@ class TestSSEStream:
         )
 
         events = await _collect_events(
-            JarvisService.chat_stream(
+            JarvisService._chat_stream_inner(
                 db_session, test_family.id, test_parent_user.id, "status?"
             )
         )
@@ -121,7 +121,7 @@ class TestSSEStream:
         self, db_session, test_family, test_parent_user
     ):
         events = await _collect_events(
-            JarvisService.chat_stream(
+            JarvisService._chat_stream_inner(
                 db_session, test_family.id, test_parent_user.id, "   "
             )
         )
@@ -140,7 +140,7 @@ class TestSSEStream:
         )
 
         await _collect_events(
-            JarvisService.chat_stream(
+            JarvisService._chat_stream_inner(
                 db_session, test_family.id, test_parent_user.id, "ping"
             )
         )
@@ -184,7 +184,7 @@ class TestSSEStream:
         )
 
         events = await _collect_events(
-            JarvisService.chat_stream(
+            JarvisService._chat_stream_inner(
                 db_session, test_family.id, test_parent_user.id, "delete Doomed"
             )
         )

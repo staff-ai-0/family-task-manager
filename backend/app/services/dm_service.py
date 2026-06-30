@@ -89,30 +89,38 @@ class DMService:
 
     @staticmethod
     async def stream_messages(
-        db: AsyncSession,
         thread_id: UUID,
         user_id: UUID,
         family_id: UUID,
         after_ts: Optional[datetime] = None,
     ):
-        """SSE generator — same pattern as family chat. Verifies participant."""
-        await DMService._get_thread_for_user(db, thread_id, user_id, family_id)
+        """SSE generator — same pattern as family chat. Verifies participant.
+
+        Uses a FRESH short-lived session per poll (not a request-scoped
+        Depends(get_db) session) so a long-lived SSE connection never pins a
+        pooled DB connection idle-in-transaction (pool exhaustion → 502s).
+        """
+        from app.core.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as s:
+            await DMService._get_thread_for_user(s, thread_id, user_id, family_id)
         cursor = after_ts or datetime.now(timezone.utc)
         elapsed = 0.0
         last_heartbeat = 0.0
         while elapsed < STREAM_WINDOW_SECONDS:
-            q = (
-                select(DMMessage)
-                .where(
-                    and_(
-                        DMMessage.thread_id == thread_id,
-                        DMMessage.created_at > cursor,
+            async with AsyncSessionLocal() as s:
+                q = (
+                    select(DMMessage)
+                    .where(
+                        and_(
+                            DMMessage.thread_id == thread_id,
+                            DMMessage.created_at > cursor,
+                        )
                     )
+                    .order_by(DMMessage.created_at.asc())
+                    .limit(50)
                 )
-                .order_by(DMMessage.created_at.asc())
-                .limit(50)
-            )
-            rows = list((await db.execute(q)).scalars().all())
+                rows = list((await s.execute(q)).scalars().all())
             for m in rows:
                 payload = {
                     "id": str(m.id),
