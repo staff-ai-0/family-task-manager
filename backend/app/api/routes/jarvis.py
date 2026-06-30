@@ -74,12 +74,14 @@ async def chat(
 async def chat_stream(
     data: ChatRequest,
     current_user: User = Depends(require_parent_role),
-    db: AsyncSession = Depends(get_db),
 ):
-    """SSE stream of chat progress. Client consumes via fetch + ReadableStream."""
+    """SSE stream of chat progress. Client consumes via fetch + ReadableStream.
+
+    No Depends(get_db): the stream generator owns its own session so the
+    long-lived SSE response never pins a pooled DB connection.
+    """
     model = data.model if data.model in ALLOWED_MODELS else None
     gen = JarvisService.chat_stream(
-        db,
         family_id=to_uuid_required(current_user.family_id),
         user_id=to_uuid_required(current_user.id),
         message=data.message,

@@ -160,11 +160,13 @@ async def remove_reaction(
 async def stream(
     after_ts: Optional[datetime] = Query(None),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
-    """SSE poll-stream of new chat messages. Reconnect every ~30s."""
+    """SSE poll-stream of new chat messages. Reconnect every ~30s.
+
+    No Depends(get_db): the generator manages its own short-lived sessions so a
+    long-lived SSE connection never pins a pooled DB connection.
+    """
     gen = FamilyChatService.stream_messages(
-        db,
         to_uuid_required(current_user.family_id),
         after_ts=after_ts,
     )

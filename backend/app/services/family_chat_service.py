@@ -204,7 +204,6 @@ class FamilyChatService:
 
     @staticmethod
     async def stream_messages(
-        db: AsyncSession,
         family_id: UUID,
         after_ts: Optional[datetime] = None,
     ):
@@ -212,24 +211,33 @@ class FamilyChatService:
         appears after ``after_ts`` (default: now). Closes after
         ``STREAM_WINDOW_SECONDS`` so the client reconnects. Heartbeats
         every ~10s so proxies don't time out.
+
+        Uses a FRESH short-lived session per poll (not a request-scoped
+        Depends(get_db) session): the pooled connection must NOT be held across
+        the sleep window, or every open chat tab pins a connection
+        ``idle in transaction`` and the pool (size 30) exhausts → app-wide 502s.
         """
+        from app.core.database import AsyncSessionLocal
+
         cursor = after_ts or datetime.now(timezone.utc)
         elapsed = 0.0
         last_heartbeat = 0.0
 
         while elapsed < STREAM_WINDOW_SECONDS:
-            q = (
-                select(FamilyChatMessage)
-                .where(
-                    and_(
-                        FamilyChatMessage.family_id == family_id,
-                        FamilyChatMessage.created_at > cursor,
+            async with AsyncSessionLocal() as s:
+                q = (
+                    select(FamilyChatMessage)
+                    .where(
+                        and_(
+                            FamilyChatMessage.family_id == family_id,
+                            FamilyChatMessage.created_at > cursor,
+                        )
                     )
+                    .order_by(FamilyChatMessage.created_at.asc())
+                    .limit(50)
                 )
-                .order_by(FamilyChatMessage.created_at.asc())
-                .limit(50)
-            )
-            rows = list((await db.execute(q)).scalars().all())
+                rows = list((await s.execute(q)).scalars().all())
+            # session closed here — connection returned to the pool before we sleep
             for m in rows:
                 payload = {
                     "id": str(m.id),

@@ -219,6 +219,26 @@ class JarvisService:
 
     @staticmethod
     async def chat_stream(
+        family_id: UUID,
+        user_id: UUID,
+        message: str,
+        model: str | None = None,
+        preferred_lang: str = "en",
+    ):
+        """Public SSE generator — owns a short-lived DB session that is closed on
+        completion AND on client disconnect (the async-with __aexit__ runs on
+        GeneratorExit), so an abandoned stream never leaks a pooled connection
+        ``idle in transaction``. Delegates to _chat_stream_inner.
+        """
+        from app.core.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            async for evt in JarvisService._chat_stream_inner(
+                db, family_id, user_id, message, model, preferred_lang
+            ):
+                yield evt
+
+    @staticmethod
+    async def _chat_stream_inner(
         db: AsyncSession,
         family_id: UUID,
         user_id: UUID,
