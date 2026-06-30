@@ -620,8 +620,11 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         proof_text, and enters PENDING approval state. Points are credited only
         when a parent approves via approve_gig().
         """
+        # Row-lock the assignment: the mandatory path now awards points, so a
+        # concurrent double-submit (kid double-tapping "complete") must not pass
+        # the can_complete check twice and double-award.
         assignment = await TaskAssignmentService.get_assignment(
-            db, assignment_id, family_id
+            db, assignment_id, family_id, for_update=True
         )
 
         if not assignment.can_complete:

@@ -18,9 +18,19 @@ from app.services.base_service import get_user_by_id
 
 async def _get_user_locked(db: AsyncSession, user_id: UUID) -> User:
     """Fetch a user row with FOR UPDATE so concurrent cash mutations on the same
-    balance serialize (no lost updates, no negative balance from a payout race)."""
+    balance serialize (no lost updates, no negative balance from a payout race).
+
+    populate_existing=True is required: callers (cash routes, gig_claim_service)
+    pre-load the User into this session before locking, so without it SQLAlchemy
+    returns the cached instance with STALE attributes and the lock is defeated.
+    """
     return (
-        await db.execute(select(User).where(User.id == user_id).with_for_update())
+        await db.execute(
+            select(User)
+            .where(User.id == user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
     ).scalar_one()
 
 
