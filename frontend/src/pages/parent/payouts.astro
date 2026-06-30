@@ -1,0 +1,164 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import { apiFetch } from "../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+const { data: kidsData } = await apiFetch<any[]>("/api/cash/family", { token });
+const kids: any[] = Array.isArray(kidsData) ? kidsData : [];
+const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+---
+
+<PageLayout
+    title={lang === "es" ? "Pagos" : "Payouts"}
+    headerClass="bg-gradient-to-br from-emerald-800 to-emerald-600"
+    dark
+    role="parent"
+    active="parent"
+    lang={lang}
+>
+    <div class="px-4 py-5 space-y-4">
+        <p class="text-sm text-brand-ink-soft">
+            {lang === "es"
+                ? "El dinero que los kids ganan en los gigs se acumula aquí hasta que lo pagas."
+                : "Cash kids earn from gigs accumulates here until you pay it out."}
+        </p>
+
+        {kids.length === 0 ? (
+            <p class="text-center text-brand-ink-soft py-10">
+                {lang === "es" ? "No hay kids todavía." : "No kids yet."}
+            </p>
+        ) : (
+            <div class="space-y-3">
+                {kids.map((k) => (
+                    <div
+                        class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10"
+                        data-kid-card
+                        data-kid-id={k.user_id}
+                    >
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <h3 class="font-bold text-brand-ink">{k.name}</h3>
+                                <p class="text-xs text-brand-ink-soft">
+                                    {lang === "es" ? "Ganado" : "Earned"}: {fmt(k.total_earned_cents)}
+                                    {" · "}
+                                    {lang === "es" ? "Pagado" : "Paid"}: {fmt(k.total_paid_cents)}
+                                </p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-[11px] text-brand-ink-soft uppercase tracking-wider">
+                                    {lang === "es" ? "Pendiente" : "Pending"}
+                                </p>
+                                <p class="text-2xl font-extrabold text-brand-mint-deep" data-balance>
+                                    {fmt(k.current_balance_cents)}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 mt-3">
+                            <div class="relative flex-1">
+                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-brand-ink-soft">$</span>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder={lang === "es" ? "Monto" : "Amount"}
+                                    data-amount
+                                    class="w-full pl-7 pr-3 py-2 text-sm border border-brand-ink/20 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-brand-cream"
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                data-pay
+                                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl transition-colors"
+                            >
+                                {lang === "es" ? "Pagar" : "Pay"}
+                            </button>
+                            <button
+                                type="button"
+                                data-pay-all
+                                class="px-3 py-2 border-2 border-emerald-600 text-emerald-700 font-semibold text-sm rounded-xl hover:bg-emerald-50 transition-colors"
+                            >
+                                {lang === "es" ? "Todo" : "All"}
+                            </button>
+                        </div>
+                        <p class="hidden text-xs mt-2" data-msg></p>
+                    </div>
+                ))}
+            </div>
+        )}
+    </div>
+</PageLayout>
+
+<script define:vars={{ lang }}>
+(function initPayouts() {
+    const fmt = (cents) => `$${(cents / 100).toFixed(2)}`;
+
+    document.querySelectorAll("[data-kid-card]").forEach((card) => {
+        const kidId = card.getAttribute("data-kid-id");
+        const amountEl = card.querySelector("[data-amount]");
+        const balanceEl = card.querySelector("[data-balance]");
+        const msgEl = card.querySelector("[data-msg]");
+        const payBtn = card.querySelector("[data-pay]");
+        const payAllBtn = card.querySelector("[data-pay-all]");
+
+        function currentBalanceCents() {
+            const txt = (balanceEl.textContent || "").replace(/[^0-9.]/g, "");
+            return Math.round(parseFloat(txt || "0") * 100);
+        }
+
+        function showMsg(text, ok) {
+            msgEl.textContent = text;
+            msgEl.classList.remove("hidden", "text-red-600", "text-emerald-700");
+            msgEl.classList.add(ok ? "text-emerald-700" : "text-red-600");
+        }
+
+        async function pay(amountCents) {
+            if (!amountCents || amountCents <= 0) {
+                showMsg(lang === "es" ? "Ingresa un monto" : "Enter an amount", false);
+                return;
+            }
+            payBtn.disabled = true;
+            payAllBtn.disabled = true;
+            try {
+                const res = await fetch(`/api/cash/${kidId}/payout`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ amount_cents: amountCents }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    showMsg(data.detail || `Error ${res.status}`, false);
+                    return;
+                }
+                balanceEl.textContent = fmt(data.new_balance_cents);
+                amountEl.value = "";
+                showMsg(
+                    (lang === "es" ? "Pagado. Nuevo saldo: " : "Paid. New balance: ") + fmt(data.new_balance_cents),
+                    true
+                );
+            } catch (e) {
+                showMsg(lang === "es" ? "Error de red" : "Network error", false);
+            } finally {
+                payBtn.disabled = false;
+                payAllBtn.disabled = false;
+            }
+        }
+
+        payBtn.addEventListener("click", () => {
+            const pesos = parseFloat(amountEl.value || "0");
+            pay(Math.round(pesos * 100));
+        });
+        payAllBtn.addEventListener("click", () => pay(currentBalanceCents()));
+    });
+})();
+</script>

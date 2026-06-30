@@ -1,6 +1,5 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
-import PointsConverter from "../components/PointsConverter.astro";
 import GigsIntroBanner from "../components/GigsIntroBanner.astro";
 import DifficultyChip from "../components/DifficultyChip.astro";
 import EnablePushButton from "../components/EnablePushButton.astro";
@@ -98,6 +97,26 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     </svg>
                 </div>
             </div>
+            {isKid && (
+                <div class="mt-3 bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 flex items-center justify-between border border-white/30">
+                    <div>
+                        <p class="text-brand-cream text-xs font-semibold uppercase tracking-wider mb-1">
+                            {lang === "es" ? "Mi dinero (de gigs)" : "My cash (from gigs)"}
+                        </p>
+                        <p data-cash-badge class="text-3xl font-extrabold tracking-tight">
+                            ${(user.cash_cents / 100).toFixed(2)}<span class="text-base font-semibold"> MXN</span>
+                        </p>
+                        <p class="text-[11px] text-brand-cream/80 mt-0.5">
+                            {lang === "es" ? "pendiente de pago" : "pending payout"}
+                        </p>
+                    </div>
+                    <div class="bg-brand-mint p-3 rounded-xl shadow-inner">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-brand-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                </div>
+            )}
             {isKid && trustStreak > 0 && (
                 <div class="mt-3 bg-white/15 backdrop-blur-sm rounded-xl px-4 py-2.5 flex items-center gap-3 border border-white/20">
                     <span class="text-2xl">🔥</span>
@@ -176,16 +195,6 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 
     <Fragment slot="banner">
         <GigsIntroBanner lang={lang} show={!user.acknowledged_gigs_intro} />
-
-        <!-- Points Converter (only for teen/child users) -->
-        {(user.role === "teen" || user.role === "child") && (
-            <PointsConverter
-                userId={user.id}
-                currentPoints={user.points}
-                userName={user.name}
-                lang={lang}
-            />
-        )}
 
         {isKid && (
             <div class="px-4 pb-2">
