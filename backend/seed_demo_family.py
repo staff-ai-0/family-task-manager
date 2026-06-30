@@ -210,18 +210,19 @@ async def create_members(session: AsyncSession, family: Family):
 
 
 async def create_tasks(session: AsyncSession, family, parent, members):
-    """Templates (regular=0pts / bonus>0) + a week of assignments.
+    """Templates (chores + bonus tasks award POINTS) + a week of assignments.
 
-    chk_mandatory_zero_points: regular (is_bonus=False) rows MUST be 0 points.
+    Two-currency economy: all task templates award privilege POINTS on completion
+    (mandatory chores and bonus tasks alike); only the /gigs board pays cash.
     Returns (templates, assignments, completed_bonus_by_user).
     """
     print("\nCreating task templates + assignments...")
     templates_data = [
         # title, title_es, desc, desc_es, points, interval_days, is_bonus
-        ("Make Your Bed", "Hacer la Cama", "Make your bed neatly", "Haz tu cama ordenadamente", 0, 1, False),
-        ("Brush Teeth", "Cepillar Dientes", "Brush morning and night", "Cepíllate mañana y noche", 0, 1, False),
-        ("Complete Homework", "Terminar la Tarea", "Finish homework before dinner", "Termina la tarea antes de cenar", 0, 1, False),
-        ("Clean Your Room", "Limpiar Cuarto", "Pick up and organize", "Recoge y organiza", 0, 7, False),
+        ("Make Your Bed", "Hacer la Cama", "Make your bed neatly", "Haz tu cama ordenadamente", 10, 1, False),
+        ("Brush Teeth", "Cepillar Dientes", "Brush morning and night", "Cepíllate mañana y noche", 10, 1, False),
+        ("Complete Homework", "Terminar la Tarea", "Finish homework before dinner", "Termina la tarea antes de cenar", 15, 1, False),
+        ("Clean Your Room", "Limpiar Cuarto", "Pick up and organize", "Recoge y organiza", 20, 7, False),
         ("Help With Dishes", "Ayudar con Platos", "Wash or dry after dinner", "Lava o seca después de cenar", 40, 1, True),
         ("Vacuum Living Room", "Aspirar la Sala", "Vacuum living room and hallway", "Aspira sala y pasillo", 75, 7, True),
         ("Help With Laundry", "Ayudar con Ropa", "Fold and put away clothes", "Dobla y guarda la ropa", 60, 7, True),
@@ -288,7 +289,7 @@ async def create_tasks(session: AsyncSession, family, parent, members):
 
 
 async def create_gigs(session: AsyncSession, family, parent, members):
-    """Offerings + claims across the full lifecycle. Approved claims pay points."""
+    """Offerings + claims across the full lifecycle. Approved claims pay CASH ($MXN)."""
     print("\nCreating gig board...")
     teen = next(m for m in members if m.role == UserRole.TEEN)
     child = next(m for m in members if m.role == UserRole.CHILD)
@@ -344,10 +345,18 @@ async def create_gigs(session: AsyncSession, family, parent, members):
         session.add(c)
     await session.commit()
 
-    # Pay out approved claims (points + transaction), advance trust streak.
+    # Pay out approved claims in CASH (the gig board pays $MXN, 1 pt = 100 cents),
+    # advance trust streak.
+    from app.models.cash_transaction import CashTransaction, CashTransactionType
     for c, kid, pts in approved_claims:
-        _earn(session, kid, lambda bal, _c=c, _p=pts: PointTransaction.create_gig_claim_approval(
-            user_id=_c.claimed_by, gig_claim_id=_c.id, points=_p, balance_before=bal,
+        cents = pts * 100
+        before = kid.cash_cents or 0
+        kid.cash_cents = before + cents
+        session.add(CashTransaction(
+            user_id=kid.id, family_id=family.id,
+            type=CashTransactionType.GIG_EARNED, amount_cents=cents,
+            balance_before=before, balance_after=before + cents,
+            gig_claim_id=c.id, description="Gig (demo seed)",
         ))
         kid.gig_trust_streak = (kid.gig_trust_streak or 0) + 1
     await session.commit()
