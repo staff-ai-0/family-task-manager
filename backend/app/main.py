@@ -12,7 +12,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
-from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, points_conversion, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm
+from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
 from app.api.routes import oversight, onboarding, sync
@@ -216,7 +216,7 @@ app.include_router(budget_router, prefix="/api/budget", tags=["Budget"])
 app.include_router(gigs_router, prefix="/api/gigs", tags=["Gigs"])
 app.include_router(oversight.router, prefix="/api/oversight", tags=["Oversight"])
 app.include_router(sync.router, prefix="/api/sync", tags=["Sync (gone)"])
-app.include_router(points_conversion.router, prefix="/api/points-conversion", tags=["Points Conversion"])
+app.include_router(cash.router, prefix="/api/cash", tags=["Cash"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions"])
 from app.api.routes import subscriptions_webhook  # noqa: E402
 app.include_router(
