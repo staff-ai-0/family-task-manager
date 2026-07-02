@@ -429,7 +429,7 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
 
             const editLink = slot("edit-link");
             if (body.transaction_id) {
-                editLink.href = `/budget/transactions/${encodeURIComponent(body.transaction_id)}`;
+                editLink.href = `/budget/transactions?tx=${encodeURIComponent(body.transaction_id)}`;
             } else {
                 editLink.removeAttribute("href");
             }
@@ -480,7 +480,7 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
 
             const openLink = slot("open-original");
             if (dup.existing_transaction_id) {
-                openLink.href = `/budget/transactions/${encodeURIComponent(dup.existing_transaction_id)}`;
+                openLink.href = `/budget/transactions?tx=${encodeURIComponent(dup.existing_transaction_id)}`;
             } else {
                 openLink.removeAttribute("href");
             }
