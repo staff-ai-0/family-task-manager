@@ -6,8 +6,6 @@ const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 
-let errorMsg = "";
-
 if (Astro.request.method === "POST") {
     const data = await Astro.request.formData();
     const body = String(data.get("body") || "").trim();
@@ -17,10 +15,25 @@ if (Astro.request.method === "POST") {
             token,
             body: JSON.stringify({ body }),
         });
-        if (!ok) errorMsg = error || "Error";
+        if (!ok) {
+            // The redirect below re-renders the page, so surface the failure
+            // (and keep the typed message) via short-lived cookies — otherwise
+            // the message silently vanishes.
+            Astro.cookies.set("chat_error", encodeURIComponent(error || "Error"), { path: "/", maxAge: 30, sameSite: "lax" });
+            Astro.cookies.set("chat_draft", encodeURIComponent(body), { path: "/", maxAge: 30, sameSite: "lax" });
+        }
     }
     return Astro.redirect("/chat");
 }
+
+const rawChatError = Astro.cookies.get("chat_error")?.value;
+if (rawChatError) Astro.cookies.delete("chat_error", { path: "/" });
+const rawChatDraft = Astro.cookies.get("chat_draft")?.value;
+if (rawChatDraft) Astro.cookies.delete("chat_draft", { path: "/" });
+const errorMsg = rawChatError
+    ? (lang === "es" ? "No se pudo enviar tu mensaje. Inténtalo de nuevo." : "Your message could not be sent. Please try again.")
+    : "";
+const draft = rawChatDraft ? decodeURIComponent(rawChatDraft) : "";
 
 // Mark all chat as read on every render of /chat (W8.5)
 await apiFetch("/api/chat/mark-read", { method: "POST", token });
@@ -143,6 +156,7 @@ const labels = {
                 name="body"
                 required
                 maxlength="2000"
+                value={draft}
                 placeholder={labels.placeholder}
                 class="flex-1 px-3 py-2.5 rounded-xl border border-brand-ink/20 text-sm focus:ring-2 focus:ring-cyan-500 outline-none"
             />

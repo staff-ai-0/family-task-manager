@@ -53,8 +53,8 @@ const L = lang === "es"
                 return;
             }
             const { public_key } = await keyResp.json();
-            const reg = await navigator.serviceWorker.register("/sw.js");
-            await navigator.serviceWorker.ready;
+            // Layout.astro registers /sw.js on every page; just wait for it.
+            const reg = await navigator.serviceWorker.ready;
             const sub = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(public_key),
