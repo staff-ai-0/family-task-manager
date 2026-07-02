@@ -98,9 +98,30 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                                      class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all hover:border-brand-ink/20 uppercase"
                                  />
                                  <p class="text-xs text-brand-ink-soft mt-1">
-                                     {lang === "es" 
-                                         ? "Si tienes un código, tu cuenta se agregará a esa familia" 
+                                     {lang === "es"
+                                         ? "Si tienes un código, tu cuenta se agregará a esa familia"
                                          : "If you have a code, your account will be added to that family"}
+                                 </p>
+                             </div>
+
+                             <!-- Who is joining (only shown when a family code is entered) -->
+                             <div id="join-role-wrap" class="hidden">
+                                 <label for="join_role" class="block text-sm font-semibold text-brand-ink mb-2">
+                                     {lang === "es" ? "¿Quién se une?" : "Who is joining?"}
+                                 </label>
+                                 <select
+                                     id="join_role"
+                                     name="join_role"
+                                     class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all bg-white"
+                                 >
+                                     <option value="child" selected>{lang === "es" ? "Niño / Niña" : "Child"}</option>
+                                     <option value="teen">{lang === "es" ? "Adolescente" : "Teen"}</option>
+                                     <option value="parent">{lang === "es" ? "Papá / Mamá" : "Parent"}</option>
+                                 </select>
+                                 <p class="text-xs text-brand-ink-soft mt-1">
+                                     {lang === "es"
+                                         ? "Los papás pueden cambiar el rol después desde Miembros."
+                                         : "Parents can change roles later from the Members page."}
                                  </p>
                              </div>
 
@@ -113,7 +134,6 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                                      type="text"
                                      id="family_name"
                                      name="family_name"
-                                     required
                                      maxlength="100"
                                      placeholder={lang === "es" ? "Ej: Familia García" : "e.g. The Smiths"}
                                      class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all hover:border-brand-ink/20"
@@ -235,6 +255,15 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
         const submitBtn = document.getElementById('register-submit-btn');
         if (!form) return;
 
+        // Role picker only applies when joining an existing family by code
+        const codeInput = document.getElementById('family_code');
+        const roleWrap = document.getElementById('join-role-wrap');
+        const syncRoleVisibility = () => {
+            roleWrap.classList.toggle('hidden', !codeInput.value.trim());
+        };
+        codeInput.addEventListener('input', syncRoleVisibility);
+        syncRoleVisibility();
+
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
 
@@ -288,6 +317,7 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
 
                 if (family_code) {
                     body.family_code = family_code;
+                    body.role = document.getElementById('join_role').value;
                 } else {
                     body.family_name = family_name;
                 }

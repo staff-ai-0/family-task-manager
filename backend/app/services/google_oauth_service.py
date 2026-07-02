@@ -91,6 +91,7 @@ class GoogleOAuthService:
         google_user_info: Dict[str, Any],
         family_id: Optional[str] = None,
         join_code: Optional[str] = None,
+        role: Optional[str] = None,
     ) -> tuple[User, str, str, bool]:
         """
         Authenticate existing user or create new user from Google OAuth
@@ -100,6 +101,8 @@ class GoogleOAuthService:
             google_user_info: User info from Google
             family_id: Optional family ID for new user registration
             join_code: Optional family join code to join an existing family
+            role: Requested role when joining via join_code (child/teen/parent);
+                joining defaults to CHILD, all other paths create a PARENT
 
         Returns:
             Tuple of (User, access_token, refresh_token, is_new_user)
@@ -174,7 +177,14 @@ class GoogleOAuthService:
             await db.flush()
             target_family_id = family.id
         
-        # Create new user
+        # Joining an existing family by code defaults to CHILD (a kid following
+        # the shared-code instructions must not get parent powers); founders and
+        # invited-by-id users remain PARENT.
+        if join_code:
+            new_role = UserRole(role) if role in ("parent", "teen", "child") else UserRole.CHILD
+        else:
+            new_role = UserRole.PARENT
+
         user = User(
             id=uuid4(),
             email=email,
@@ -182,7 +192,7 @@ class GoogleOAuthService:
             password_hash=None,  # No password for OAuth users
             oauth_provider="google",
             oauth_id=google_id,
-            role=UserRole.PARENT,  # Default role for new OAuth users
+            role=new_role,
             family_id=target_family_id,
             points=0,
             is_active=True,

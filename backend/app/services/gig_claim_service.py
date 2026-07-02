@@ -171,7 +171,7 @@ class GigClaimService:
                     type=NT.GIG_PENDING_REVIEW,
                     title="📋 Gig por revisar",
                     body=f"{claimer.name} completó '{title}' — revisa y aprueba.",
-                    link="/parent/gigs?tab=pending",
+                    link="/parent/approvals",
                 )
         except Exception:
             import logging

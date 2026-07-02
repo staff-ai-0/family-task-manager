@@ -80,10 +80,13 @@ async def register_family(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new family + founding PARENT user, or join existing family.
-    
-    - If family_code is provided: join the existing family with that code
-    - If family_code is not provided: create a new family using family_name
-    
+
+    - If family_code is provided: join the existing family with that code,
+      as the requested role (child/teen/parent) — defaults to CHILD.
+      Parents can promote members later from the members page.
+    - If family_code is not provided: create a new family using family_name;
+      the founder is always PARENT.
+
     Returns an access token so the user is logged in immediately.
     """
     # Check email not already taken
@@ -132,12 +135,17 @@ async def register_family(
         db.add(family)
         await db.flush()  # get family.id before creating user
 
-    # Create PARENT user
+    # Founders are PARENT; join-by-code defaults to CHILD unless a role was chosen.
+    if data.family_code:
+        new_role = UR(data.role) if data.role else UR.CHILD
+    else:
+        new_role = UR.PARENT
+
     user = User(
         email=data.email,
         name=data.name,
         password_hash=get_password_hash(data.password),
-        role=UR.PARENT,
+        role=new_role,
         family_id=family.id,
         points=0,
         is_active=True,
