@@ -122,7 +122,6 @@ const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
                                         <input
                                             type="file"
                                             accept="image/jpeg,image/png,image/webp"
-                                            capture="environment"
                                             name="proof_image"
                                             class="w-full text-sm text-brand-ink-soft file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-violet-100 file:text-violet-700 hover:file:bg-violet-200"
                                         />
@@ -172,14 +171,18 @@ document.querySelectorAll("[data-complete-form]").forEach(form => {
         if (fileInput?.files?.length) {
             const uploadForm = new FormData();
             uploadForm.append("file", fileInput.files[0]);
-            const uploadRes = await fetch("/api/task-assignments/proof-upload", {
+            const uploadRes = await fetch("/api/assignments/proof-upload", {
                 method: "POST",
                 body: uploadForm,
             });
-            if (uploadRes.ok) {
-                const uploadData = await uploadRes.json();
-                proofImageUrl = uploadData.url;
+            if (!uploadRes.ok) {
+                btn.disabled = false;
+                btn.textContent = lang === "es" ? "Enviar para aprobación" : "Submit for approval";
+                alert(lang === "es" ? "No se pudo subir la foto. Inténtalo de nuevo." : "Photo upload failed. Please try again.");
+                return;
             }
+            const uploadData = await uploadRes.json();
+            proofImageUrl = uploadData.proof_image_url;
         }
 
         const res = await fetch(`/api/gigs/claims/${claimId}/complete`, {
