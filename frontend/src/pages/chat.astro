@@ -18,9 +18,15 @@ if (Astro.request.method === "POST") {
         if (!ok) {
             // The redirect below re-renders the page, so surface the failure
             // (and keep the typed message) via short-lived cookies — otherwise
-            // the message silently vanishes.
-            Astro.cookies.set("chat_error", encodeURIComponent(error || "Error"), { path: "/", maxAge: 30, sameSite: "lax" });
-            Astro.cookies.set("chat_draft", encodeURIComponent(body), { path: "/", maxAge: 30, sameSite: "lax" });
+            // the message silently vanishes. Astro's cookie layer handles
+            // encoding; trim the draft so the serialized cookie stays under
+            // the 4096-byte browser cap (oversized Set-Cookie is dropped whole).
+            let draftVal = body;
+            while (draftVal && encodeURIComponent(draftVal).length > 3500) {
+                draftVal = draftVal.slice(0, Math.floor(draftVal.length * 0.8));
+            }
+            Astro.cookies.set("chat_error", "1", { path: "/", maxAge: 30, sameSite: "lax" });
+            Astro.cookies.set("chat_draft", draftVal, { path: "/", maxAge: 30, sameSite: "lax" });
         }
     }
     return Astro.redirect("/chat");
@@ -33,7 +39,7 @@ if (rawChatDraft) Astro.cookies.delete("chat_draft", { path: "/" });
 const errorMsg = rawChatError
     ? (lang === "es" ? "No se pudo enviar tu mensaje. Inténtalo de nuevo." : "Your message could not be sent. Please try again.")
     : "";
-const draft = rawChatDraft ? decodeURIComponent(rawChatDraft) : "";
+const draft = rawChatDraft ?? "";
 
 // Mark all chat as read on every render of /chat (W8.5)
 await apiFetch("/api/chat/mark-read", { method: "POST", token });

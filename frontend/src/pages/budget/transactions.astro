@@ -604,10 +604,23 @@ document.addEventListener("astro:after-swap", initFilters);
     // that transaction (scan-receipt's Edit / duplicate links point here).
     const txParam = new URLSearchParams(window.location.search).get("tx");
     if (txParam) {
-        const row = document.querySelector(`.tx-row[data-tx-id="${CSS.escape(txParam)}"]`);
-        if (row) {
-            row.scrollIntoView({ block: "center" });
-            row.click();
+        const openDeepLink = () => {
+            const row = document.querySelector(`.tx-row[data-tx-id="${CSS.escape(txParam)}"]`);
+            if (row) {
+                row.scrollIntoView({ block: "center" });
+                row.click();
+            }
+            // Strip ?tx so save's location.reload() doesn't reopen the sheet.
+            const u = new URL(window.location);
+            u.searchParams.delete("tx");
+            history.replaceState(null, "", u);
+        };
+        // Defer past parse so the price-comparison script (loaded after this
+        // one) has attached its own .tx-row click handlers.
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", openDeepLink, { once: true });
+        } else {
+            openDeepLink();
         }
     }
 

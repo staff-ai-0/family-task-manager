@@ -71,6 +71,50 @@ async def test_founding_family_is_always_parent(client):
 
 
 @pytest.mark.asyncio
+async def test_google_join_existing_family_is_not_parent(db_session, test_family):
+    """A new Google user landing in an EXISTING family (join_code or a
+    client-supplied family_id) must default to CHILD — family_id is not a
+    secret, so it must not mint parents."""
+    from app.services.google_oauth_service import GoogleOAuthService
+
+    code = await _join_code_for(db_session, test_family)
+    for kwargs, email in [
+        ({"join_code": code}, "g-kid-code@test.com"),
+        ({"family_id": str(test_family.id)}, "g-kid-id@test.com"),
+    ]:
+        user, _, _, is_new = await GoogleOAuthService.authenticate_or_create_user(
+            db_session,
+            {
+                "google_id": f"gid-{email}",
+                "email": email,
+                "name": "Google Kid",
+                "email_verified": True,
+            },
+            **kwargs,
+        )
+        assert is_new is True
+        assert user.role == UserRole.CHILD
+        assert str(user.family_id) == str(test_family.id)
+
+
+@pytest.mark.asyncio
+async def test_google_new_family_founder_is_parent(db_session):
+    from app.services.google_oauth_service import GoogleOAuthService
+
+    user, _, _, is_new = await GoogleOAuthService.authenticate_or_create_user(
+        db_session,
+        {
+            "google_id": "gid-founder",
+            "email": "g-founder@test.com",
+            "name": "Google Founder",
+            "email_verified": True,
+        },
+    )
+    assert is_new is True
+    assert user.role == UserRole.PARENT
+
+
+@pytest.mark.asyncio
 async def test_join_by_code_rejects_invalid_role(client, db_session, test_family):
     code = await _join_code_for(db_session, test_family)
     r = await client.post("/api/auth/register-family", json={

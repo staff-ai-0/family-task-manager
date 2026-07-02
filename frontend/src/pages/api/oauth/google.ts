@@ -9,7 +9,7 @@ import { authCookies } from "../../../lib/auth-cookies";
 export const POST: APIRoute = async ({ request }) => {
     try {
         const body = await request.json();
-        const { token, family_id, join_code } = body;
+        const { token, family_id, join_code, role } = body;
 
         if (!token) {
             return new Response(
@@ -24,7 +24,7 @@ export const POST: APIRoute = async ({ request }) => {
         const response = await fetch(`${apiUrl}/api/oauth/google`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token, family_id, join_code }),
+            body: JSON.stringify({ token, family_id, join_code, role }),
         });
 
         const data = await response.json();

@@ -216,9 +216,10 @@ document.querySelectorAll("[data-complete-form]").forEach(form => {
                 body: uploadForm,
             });
             if (!uploadRes.ok) {
+                const uploadErr = await uploadRes.json().catch(() => null);
                 btn.disabled = false;
                 btn.textContent = _lang === "es" ? "Enviar para aprobación" : "Submit for approval";
-                alert(_lang === "es" ? "No se pudo subir la foto. Inténtalo de nuevo." : "Photo upload failed. Please try again.");
+                alert(uploadErr?.detail ?? (_lang === "es" ? "No se pudo subir la foto. Inténtalo de nuevo." : "Photo upload failed. Please try again."));
                 return;
             }
             proofImageUrl = (await uploadRes.json()).proof_image_url;
