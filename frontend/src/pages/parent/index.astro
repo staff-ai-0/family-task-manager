@@ -125,14 +125,14 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                             <span class={onboarding?.reward_created ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
                                 {t(lang, "pd_onb_reward")}
                             </span>
-                            {!onboarding?.reward_created && <a href="/rewards" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
+                            {!onboarding?.reward_created && <a href="/parent/rewards" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
                         </li>
                         <li class="flex items-center gap-3">
                             <span class={onboarding?.child_invited ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.child_invited ? "✅" : "◻"}</span>
                             <span class={onboarding?.child_invited ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
                                 {t(lang, "pd_onb_invite")}
                             </span>
-                            {!onboarding?.child_invited && <a href="/parent/invite" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
+                            {!onboarding?.child_invited && <a href="/parent/members#invite" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
                         </li>
                         <li class="flex items-center gap-3">
                             <span class={onboarding?.points_awarded ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.points_awarded ? "✅" : "◻"}</span>
