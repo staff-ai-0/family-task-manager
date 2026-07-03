@@ -517,6 +517,7 @@ export const translations = {
         lang_toggle: "Switch to English",
         nav_tasks: "Tareas",
         nav_rewards: "Premios",
+        nav_budget: "Dinero",
         nav_profile: "Perfil",
         nav_manage: "Gestion",
         nav_logout: "Salir",

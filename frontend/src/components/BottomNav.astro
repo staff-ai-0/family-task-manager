@@ -62,7 +62,9 @@ const parentItems: Item[] = [
 const items = isParent ? parentItems : kidItems;
 // The "More" item carries the unread badge, since Inbox now lives inside it.
 
-const itemBase = "shrink-0 flex flex-col items-center justify-center gap-0.5 px-1 py-1 rounded-full transition-all flex-1";
+// min-w-0 lets a long label shrink/truncate instead of forcing page overflow
+// (the old build relied on an overflow-x scroll + icon-only fallback).
+const itemBase = "shrink-0 min-w-0 flex flex-col items-center justify-center gap-0.5 px-1 py-1 rounded-full transition-all flex-1";
 const itemIdle = "text-brand-ink-soft hover:text-brand-ink";
 const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shadow-[2px_2px_0_var(--color-brand-ink)]";
 ---
@@ -84,11 +86,11 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
                 <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={it.icon} />
                 </svg>
-                <span class="nav-label text-[10px] font-extrabold font-sans tracking-wider uppercase">{it.label}</span>
+                <span class="nav-label text-[10px] font-extrabold font-sans tracking-wider uppercase max-w-full truncate">{it.label}</span>
             </a>
         ))}
 
-        <button type="button" id="more-nav-btn" data-nav-key="more" class={`${itemBase} relative ${active === "more" ? itemActive : itemIdle}`}>
+        <button type="button" id="more-nav-btn" data-nav-key="more" aria-haspopup="dialog" aria-controls="more-sheet" aria-expanded="false" class={`${itemBase} relative ${active === "more" ? itemActive : itemIdle}`}>
             {unreadCount > 0 && (
                 <span class="absolute top-0 right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-brand-coral text-white text-[10px] font-bold rounded-full border-2 border-brand-cream">
                     {unreadCount > 99 ? "99+" : unreadCount}

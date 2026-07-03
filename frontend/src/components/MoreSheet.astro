@@ -39,9 +39,15 @@ const I = {
     jarvis: "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
     kiosk: "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v14a2 2 0 01-2 2z",
     settings: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z",
+    tasks: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
+    payouts: "M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z",
+    analytics: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+    help: "M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
 };
 
 const inbox: Link = { href: "/notifications", label: es ? "Avisos" : "Inbox", icon: I.bell, badge: unread };
+
+const help: Link = { href: es ? "/ayuda" : "/help", label: es ? "Ayuda" : "Help", icon: I.help };
 
 const kidLinks: Link[] = [
     inbox,
@@ -51,14 +57,18 @@ const kidLinks: Link[] = [
     { href: "/calendar", label: es ? "Calendario" : "Calendar", icon: I.calendar },
     { href: "/dm", label: es ? "Mensajes" : "Messages", icon: I.dm },
     { href: "/profile", label: t(lang, "nav_profile") as string, icon: I.profile },
+    help,
 ];
 
 const parentLinks: Link[] = [
     inbox,
+    { href: "/parent/tasks", label: es ? "Tareas" : "Tasks", icon: I.tasks },
     { href: "/parent/members", label: es ? "Miembros" : "Members", icon: I.members },
     { href: "/parent/rewards", label: t(lang, "nav_rewards") as string, icon: I.rewards },
     { href: "/parent/consequences", label: es ? "Consecuencias" : "Consequences", icon: I.consequences },
+    { href: "/parent/payouts", label: es ? "Pagos" : "Payouts", icon: I.payouts },
     { href: "/parent/assignments", label: es ? "Asignaciones" : "Assignments", icon: I.assignments },
+    { href: "/parent/analytics", label: es ? "Análisis" : "Analytics", icon: I.analytics },
     { href: "/parent/jarvis", label: "Jarvis", icon: I.jarvis },
     { href: "/chat", label: "Chat", icon: I.chat },
     { href: "/dm", label: es ? "Mensajes" : "Messages", icon: I.dm },
@@ -68,6 +78,7 @@ const parentLinks: Link[] = [
     { href: "/parent/kiosk", label: "Kiosk", icon: I.kiosk },
     { href: "/parent/settings", label: es ? "Ajustes" : "Settings", icon: I.settings },
     { href: "/profile", label: t(lang, "nav_profile") as string, icon: I.profile },
+    help,
 ];
 
 const links = isParent ? parentLinks : kidLinks;
@@ -79,6 +90,8 @@ const links = isParent ? parentLinks : kidLinks;
     id="more-sheet"
     role="dialog"
     aria-modal="true"
+    aria-hidden="true"
+    inert
     aria-label={es ? "Más opciones" : "More options"}
     class="fixed bottom-0 left-0 right-0 z-[60] translate-y-full transition-transform duration-300 ease-out"
 >
@@ -86,7 +99,7 @@ const links = isParent ? parentLinks : kidLinks;
         <div class="flex justify-center pt-3 pb-1"><div class="w-10 h-1 bg-brand-cream-deep rounded-full"></div></div>
         <div class="flex items-center justify-between px-5 pt-1 pb-3">
             <h2 class="text-lg font-bold text-brand-ink">{es ? "Más" : "More"}</h2>
-            <button type="button" id="more-close" class="text-brand-ink-soft hover:text-brand-ink p-1" aria-label={es ? "Cerrar" : "Close"}>
+            <button type="button" id="more-close" class="text-brand-ink-soft hover:text-brand-ink p-2.5 -m-1" aria-label={es ? "Cerrar" : "Close"}>
                 <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
         </div>
@@ -133,18 +146,31 @@ const links = isParent ? parentLinks : kidLinks;
         if (!backdrop || !sheet || !openBtn) return;
 
         const open = () => {
+            // Remove inert/aria-hidden so the sheet is focusable + announced
+            // ONLY while open — otherwise its ~15 off-screen links sit in the
+            // tab order and screen readers announce a phantom open modal.
+            sheet.removeAttribute("inert");
+            sheet.removeAttribute("aria-hidden");
+            openBtn.setAttribute("aria-expanded", "true");
             backdrop.classList.remove("hidden");
             requestAnimationFrame(() => {
                 backdrop.classList.remove("opacity-0");
                 backdrop.classList.add("opacity-100");
                 sheet.classList.remove("translate-y-full");
             });
+            closeBtn?.focus();
         };
         const close = () => {
             backdrop.classList.remove("opacity-100");
             backdrop.classList.add("opacity-0");
             sheet.classList.add("translate-y-full");
-            setTimeout(() => backdrop.classList.add("hidden"), 300);
+            openBtn.setAttribute("aria-expanded", "false");
+            setTimeout(() => {
+                backdrop.classList.add("hidden");
+                sheet.setAttribute("inert", "");
+                sheet.setAttribute("aria-hidden", "true");
+            }, 300);
+            openBtn.focus();
         };
 
         openBtn.addEventListener("click", (e) => { e.preventDefault(); open(); });
@@ -152,6 +178,16 @@ const links = isParent ? parentLinks : kidLinks;
         backdrop.addEventListener("click", close);
         document.addEventListener("keydown", (e) => {
             if (e.key === "Escape" && !backdrop.classList.contains("hidden")) close();
+        });
+
+        // Trap Tab within the sheet while open (background is not inert).
+        sheet.addEventListener("keydown", (e) => {
+            if (e.key !== "Tab") return;
+            const f = sheet.querySelectorAll<HTMLElement>('a[href], button:not([disabled])');
+            if (!f.length) return;
+            const first = f[0], last = f[f.length - 1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
         });
 
         // Confirm logout so an accidental tap on a shared tablet doesn't force
