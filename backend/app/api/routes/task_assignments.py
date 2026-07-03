@@ -174,6 +174,9 @@ async def get_daily_progress(
 
     # Convert assignments to detailed format
     progress["assignments"] = [_assignment_to_detail(a) for a in progress["assignments"]]
+    progress["overdue_assignments"] = [
+        _assignment_to_detail(a) for a in progress.get("overdue_assignments", [])
+    ]
 
     return DailyProgressResponse(**progress)
 

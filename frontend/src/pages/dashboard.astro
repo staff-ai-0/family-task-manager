@@ -25,6 +25,9 @@ const bonusUnlocked = progress?.bonus_unlocked ?? false;
 const bonusTotal = progress?.bonus_total ?? 0;
 const bonusCompleted = progress?.bonus_completed ?? 0;
 const assignments: any[] = progress?.assignments ?? [];
+// Prior-day mandatory tasks that went OVERDUE — invisible before, but still
+// blocking bonus/gigs. Surface them so the kid can finish and unlock.
+const overdueAssignments: any[] = progress?.overdue_assignments ?? [];
 
 const requiredAssignments = assignments.filter((a: any) => !a.template_is_bonus);
 const bonusAssignments = assignments.filter((a: any) => a.template_is_bonus);
@@ -260,6 +263,56 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 </div>
             )}
 
+            <!-- Overdue (Atrasadas) — prior-day mandatory tasks that block bonus/gigs -->
+            {overdueAssignments.length > 0 && (
+                <div class="mb-8">
+                    <div class="flex items-center gap-2 mb-3 px-1">
+                        <span class="text-lg">⏰</span>
+                        <h3 class="text-lg font-bold text-red-600">
+                            {lang === "es" ? "Atrasadas" : "Overdue"}
+                        </h3>
+                    </div>
+                    <p class="text-xs text-brand-ink-soft mb-3 px-1">
+                        {lang === "es"
+                            ? "Termina estas para desbloquear tareas bonus y gigs."
+                            : "Finish these to unlock bonus tasks and gigs."}
+                    </p>
+                    <div class="space-y-3">
+                        {overdueAssignments.map((a: any) => (
+                            <div class="bg-red-50 rounded-2xl p-5 shadow-[var(--shadow-card)] border border-red-200 flex justify-between items-center">
+                                <div class="pr-4 flex-1">
+                                    <h3 class="font-bold text-brand-ink text-lg mb-1">
+                                        {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
+                                    </h3>
+                                    <p class="text-brand-ink-soft text-sm line-clamp-2">
+                                        {(lang === "es" && a.template_description_es ? a.template_description_es : a.template_description) || "--"}
+                                    </p>
+                                    <div class="flex items-center gap-2 mt-3 flex-wrap">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                            {lang === "es" ? "Vencida" : "Past due"}
+                                        </span>
+                                        <DifficultyChip level={a.template_effort_level ?? 1} lang={lang} />
+                                    </div>
+                                </div>
+                                {a.can_complete && (
+                                    <form method="POST" action="/api/assignments/complete" data-complete-form data-is-bonus="0">
+                                        <input type="hidden" name="assignment_id" value={a.id} />
+                                        <button
+                                            type="submit"
+                                            class="h-12 w-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-600 hover:text-white transition-colors active:scale-95 flex-shrink-0 shadow-[var(--shadow-card)]"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </button>
+                                    </form>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <!-- Required Tasks Section -->
             {requiredTotal > 0 && (
                 <div class="mb-8">
@@ -349,10 +402,20 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                 </svg>
                             </div>
-                            <p class="text-brand-sun-deep text-sm font-medium">{t(lang, "dashboard_bonus_locked")}</p>
-                            <p class="text-brand-sun-deep text-xs mt-1">
-                                {t(lang, "dashboard_progress")(requiredCompleted, requiredTotal)}
-                            </p>
+                            {overdueAssignments.length > 0 ? (
+                                <p class="text-brand-sun-deep text-sm font-medium">
+                                    {lang === "es"
+                                        ? `Termina tu tarea atrasada "${overdueAssignments[0].template_title_es || overdueAssignments[0].template_title}" para desbloquear`
+                                        : `Finish your overdue task "${overdueAssignments[0].template_title}" to unlock`}
+                                </p>
+                            ) : (
+                                <>
+                                    <p class="text-brand-sun-deep text-sm font-medium">{t(lang, "dashboard_bonus_locked")}</p>
+                                    <p class="text-brand-sun-deep text-xs mt-1">
+                                        {t(lang, "dashboard_progress")(requiredCompleted, requiredTotal)}
+                                    </p>
+                                </>
+                            )}
                         </div>
                     ) : (
                         <!-- Unlocked bonus tasks -->
