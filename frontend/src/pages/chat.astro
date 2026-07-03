@@ -21,10 +21,15 @@ if (Astro.request.method === "POST") {
             // the message silently vanishes. Astro's cookie layer handles
             // encoding; trim the draft so the serialized cookie stays under
             // the 4096-byte browser cap (oversized Set-Cookie is dropped whole).
-            let draftVal = body;
-            while (draftVal && encodeURIComponent(draftVal).length > 3500) {
-                draftVal = draftVal.slice(0, Math.floor(draftVal.length * 0.8));
+            // Trim by code points (Array.from splits on full code points, so a
+            // surrogate pair — emoji — is never cut in half; slicing by code
+            // unit could leave a lone surrogate that makes encodeURIComponent
+            // throw URIError and turn this recovery path into a 500).
+            let draftChars = Array.from(body);
+            while (draftChars.length && encodeURIComponent(draftChars.join("")).length > 3500) {
+                draftChars = draftChars.slice(0, Math.floor(draftChars.length * 0.8));
             }
+            const draftVal = draftChars.join("");
             Astro.cookies.set("chat_error", "1", { path: "/", maxAge: 30, sameSite: "lax" });
             Astro.cookies.set("chat_draft", draftVal, { path: "/", maxAge: 30, sameSite: "lax" });
         }

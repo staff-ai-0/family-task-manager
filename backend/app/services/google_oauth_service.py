@@ -177,15 +177,20 @@ class GoogleOAuthService:
             await db.flush()
             target_family_id = family.id
         
-        # Joining an EXISTING family (by code or by client-supplied family_id)
-        # defaults to CHILD — family_id is not a secret (it appears in every
-        # UserResponse/JWT), so treating it as parent-grade proof of authority
-        # would let any member mint a parent account with a fresh Google login.
-        # Only auto-creating a brand-new family makes the user its PARENT.
-        # Real parent invitations go through the invitation flow, which sets
-        # the invited role explicitly.
-        if join_code or family_id:
+        # Role selection is deliberately narrow to prevent privilege escalation:
+        #  - join_code: a parent-held secret (both join-code endpoints are
+        #    require_parent_role), so honoring a requested role here is the
+        #    intended "who is joining?" flow (defaults to CHILD).
+        #  - family_id: NOT a secret — it appears in every UserResponse/JWT, so
+        #    any member could POST it with a fresh Google token. Force CHILD
+        #    regardless of the requested role; a requested "parent" must never
+        #    be minted from a value everyone in the family already knows.
+        #  - neither: auto-creating a brand-new family makes the founder PARENT.
+        # Real parent additions go through the invitation flow (role set server-side).
+        if join_code:
             new_role = UserRole(role) if role in ("parent", "teen", "child") else UserRole.CHILD
+        elif family_id:
+            new_role = UserRole.CHILD
         else:
             new_role = UserRole.PARENT
 
