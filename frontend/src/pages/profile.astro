@@ -161,7 +161,7 @@ const tourRole = String(user.role).toLowerCase() === "parent" ? "parent" : "kid"
                                             {t(lang, "profile_until")}{" "}
                                             {new Date(
                                                 c.end_date,
-                                            ).toLocaleDateString()}
+                                            ).toLocaleDateString(lang === "es" ? "es-MX" : "en-US")}
                                         </span>
                                     )}
                                 </div>

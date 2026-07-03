@@ -395,7 +395,7 @@ const frequencyLabel = (freq: string) => {
                             {aiUsage.budget_reset_at && (
                                 <div class="flex justify-between">
                                     <span class="text-brand-ink-soft">{es ? "Reseteo" : "Resets"}</span>
-                                    <span class="text-brand-ink text-xs">{new Date(aiUsage.budget_reset_at).toLocaleDateString()}</span>
+                                    <span class="text-brand-ink text-xs">{new Date(aiUsage.budget_reset_at).toLocaleDateString(es ? "es-MX" : "en-US")}</span>
                                 </div>
                             )}
                             {aiUsage.models?.length > 0 && (
@@ -1109,7 +1109,7 @@ document.getElementById("ai-usage-refresh-btn")?.addEventListener("click", async
                         <div class="bg-brand-sky-deep rounded-full h-1.5" style="width:${pct}%"></div>
                     </div>
                 </div>` : ""}
-                ${d.budget_reset_at ? `<div class="flex justify-between"><span class="text-brand-ink-soft">${es ? "Reseteo" : "Resets"}</span><span class="text-brand-ink text-xs">${new Date(d.budget_reset_at).toLocaleDateString()}</span></div>` : ""}
+                ${d.budget_reset_at ? `<div class="flex justify-between"><span class="text-brand-ink-soft">${es ? "Reseteo" : "Resets"}</span><span class="text-brand-ink text-xs">${new Date(d.budget_reset_at).toLocaleDateString(es ? "es-MX" : "en-US")}</span></div>` : ""}
                 ${d.models?.length ? `<div class="pt-1 border-t border-brand-ink/10"><span class="text-xs text-brand-ink-soft">${es ? "Modelos:" : "Models:"} </span><span class="text-xs font-mono text-brand-ink">${d.models.join(", ")}</span></div>` : ""}
             </div>`;
     } catch(e) {
