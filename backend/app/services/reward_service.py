@@ -388,6 +388,15 @@ class RewardService(BaseFamilyService[Reward]):
 
         transaction = None
         if approve:
+            # Lock the KID's balance row too — with_for_update above locks only
+            # this redemption row, so two parents approving two DIFFERENT pending
+            # redemptions for the same kid would each read the same balance and
+            # lost-update it (a free reward). Locking the user row serializes
+            # them: the second approval blocks here, then re-reads the already
+            # decremented balance and its affordability check fails.
+            await db.execute(
+                select(User).where(User.id == redemption.user_id).with_for_update()
+            )
             # Deduct now — re-checks the balance (the kid may have spent points
             # elsewhere since queuing), raising if no longer affordable. No
             # commit here: it shares this method's single commit below.
@@ -400,6 +409,18 @@ class RewardService(BaseFamilyService[Reward]):
             )
             redemption.status = RedemptionStatus.APPROVED.value
             redemption.transaction_id = transaction.id
+            # Mirror the immediate-redeem path: mark any reward goal achieved so
+            # its completion celebration fires (guarded — reward_id is null if
+            # the reward was deleted). Folds into the single commit below.
+            if redemption.reward_id:
+                try:
+                    from app.services.reward_goal_service import RewardGoalService
+                    await RewardGoalService.mark_achieved(
+                        user_id=redemption.user_id, reward_id=redemption.reward_id, db=db
+                    )
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).warning("mark_achieved failed", exc_info=True)
         else:
             redemption.status = RedemptionStatus.REJECTED.value
 

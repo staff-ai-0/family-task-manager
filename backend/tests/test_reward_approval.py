@@ -154,6 +154,34 @@ async def test_approve_deducts_and_notifies_kid(
 
 
 @pytest.mark.asyncio
+async def test_approve_marks_reward_goal_achieved(
+    db_session, test_family, test_child_user, test_parent_user
+):
+    """Approving an approval-gated redemption must mark a matching reward goal
+    achieved — same as the immediate-redeem path."""
+    from app.services.reward_goal_service import RewardGoalService
+
+    test_child_user.points = 200
+    await db_session.commit()
+    reward = await _reward(db_session, test_family, cost=80, approval=True)
+    await RewardGoalService.set_goal(
+        user_id=test_child_user.id, family_id=test_family.id, reward_id=reward.id, db=db_session,
+    )
+    await db_session.commit()
+
+    await RewardService.redeem_reward(
+        db_session, reward_id=reward.id, user_id=test_child_user.id, family_id=test_family.id,
+    )
+    redemption = (await db_session.execute(select(RewardRedemption))).scalars().first()
+    await RewardService.decide_redemption(
+        db_session, redemption_id=redemption.id, family_id=test_family.id,
+        parent_id=test_parent_user.id, approve=True,
+    )
+    goal = await RewardGoalService.get_active_goal(test_child_user.id, test_family.id, db_session)
+    assert goal is None  # active goal is now achieved (achieved_at set) → no longer "active"
+
+
+@pytest.mark.asyncio
 async def test_reject_does_not_deduct(
     db_session, test_family, test_child_user, test_parent_user
 ):
