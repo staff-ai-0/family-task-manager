@@ -36,10 +36,30 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         });
 
         const headers = new Headers({ Location: "/dashboard" });
-        
+
         if (!response.ok) {
             const error = await response.json();
             headers.append("Set-Cookie", `flash_error=${encodeURIComponent(error.detail || "Cannot complete task")}; Path=/`);
+        } else {
+            // Success flash drives the dashboard's confetti + points pulse
+            // ([data-flash-success]) — without it the kid's most frequent
+            // action gives zero feedback.
+            let msg = "🎉";
+            try {
+                const a = await response.json();
+                const es = cookies.get("lang")?.value === "es";
+                const title = (es && a.template_title_es) || a.template_title || "";
+                // approval_status alone is authoritative: auto-approved gigs
+                // (trust streak / AI validation) come back "approved" with
+                // points already credited.
+                const pending = a.approval_status === "pending";
+                msg = pending
+                    ? (es ? `"${title}" enviada para aprobación 🎉` : `"${title}" submitted for approval 🎉`)
+                    : (es ? `¡"${title}" completada! 🎉` : `"${title}" completed! 🎉`);
+            } catch {
+                // keep the bare celebration if the body can't be parsed
+            }
+            headers.append("Set-Cookie", `flash=${encodeURIComponent(msg)}; Path=/; Max-Age=15`);
         }
 
         return new Response(null, { status: 302, headers });

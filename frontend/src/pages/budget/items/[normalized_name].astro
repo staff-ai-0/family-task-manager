@@ -7,6 +7,8 @@ if (!token) return Astro.redirect("/login");
 const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
 const { normalized_name } = Astro.params;
 
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+
 const { data: items } = await apiFetch<any[]>(
   `/api/budget/items?normalized_name=${encodeURIComponent(normalized_name || "")}&limit=100`,
   { token },
@@ -20,6 +22,7 @@ const { data: trend } = await apiFetch<any>(
 <BudgetShell
   title={normalized_name ?? ""}
   lang={lang}
+  role={user?.role}
   budgetActive="transactions"
   pendingDrafts={0}
   mainClass="px-4 pb-32 pt-6 max-w-md mx-auto"

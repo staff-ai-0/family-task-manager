@@ -100,8 +100,10 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
                         id="fab-payee"
                         type="text"
                         autocomplete="off"
+                        list="fab-payees"
                         class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none text-sm"
                     />
+                    <datalist id="fab-payees"></datalist>
                     <span id="fab-rule-indicator" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-xs text-brand-mint-deep font-medium">
                         {t(lang, "fab_auto_rule")}
                     </span>
@@ -134,6 +136,25 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
                         <option value={acc.id}>{acc.name}</option>
                     ))}
                 </select>
+            </div>
+
+            <!-- Date -->
+            <div class="mb-3">
+                <label for="fab-date" class="block text-sm font-medium text-brand-ink-soft mb-1">{lang === "es" ? "Fecha" : "Date"}</label>
+                <div class="flex gap-2">
+                    <input
+                        id="fab-date"
+                        type="date"
+                        class="flex-1 py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none text-sm bg-brand-cream"
+                    />
+                    <button
+                        type="button"
+                        id="fab-date-yesterday"
+                        class="px-3 py-2 text-xs font-semibold bg-brand-cream-deep hover:bg-brand-cream text-brand-ink rounded-lg transition-colors"
+                    >
+                        {lang === "es" ? "Ayer" : "Yesterday"}
+                    </button>
+                </div>
             </div>
 
             <!-- Note -->
@@ -195,6 +216,9 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
     const categorySelect = document.getElementById("fab-category");
     const accountSelect = document.getElementById("fab-account");
     const noteInput = document.getElementById("fab-note");
+    const dateInput = document.getElementById("fab-date");
+    const yesterdayBtn = document.getElementById("fab-date-yesterday");
+    const payeeList = document.getElementById("fab-payees");
     const saveBtn = document.getElementById("fab-save");
     const errorDiv = document.getElementById("fab-error");
     const ruleIndicator = document.getElementById("fab-rule-indicator");
@@ -205,8 +229,68 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
 
     if (!fabBtn || !backdrop || !modal) return;
 
+    // Local (not UTC) YYYY-MM-DD — toISOString() would roll to tomorrow
+    // during Mexico evenings.
+    const localDate = (offsetDays = 0) => {
+        const d = new Date();
+        d.setDate(d.getDate() + offsetDays);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+
+    // Restore last-used account/category so repeat entries skip both pickers;
+    // a single-account family never has to pick at all.
+    function applyDefaults() {
+        if (dateInput) {
+            // Cap at today — a future date would land the transaction in a
+            // month the list's nav can't reach (next chevron stops at now).
+            dateInput.max = localDate();
+            dateInput.value = localDate();
+        }
+        if (accountSelect && !accountSelect.value) {
+            const remembered = localStorage.getItem("ftm-fab-account");
+            if (remembered && accountSelect.querySelector(`option[value="${CSS.escape(remembered)}"]`)) {
+                accountSelect.value = remembered;
+            } else if (accountSelect.options.length === 2) {
+                // exactly one real account (index 0 is the "--" placeholder)
+                accountSelect.value = accountSelect.options[1].value;
+            }
+        }
+        if (categorySelect && !categorySelect.value) {
+            const remembered = localStorage.getItem("ftm-fab-category");
+            if (remembered && categorySelect.querySelector(`option[value="${CSS.escape(remembered)}"]`)) {
+                categorySelect.value = remembered;
+            }
+        }
+    }
+
+    // Fill the payee datalist once per page from the family's existing payees.
+    let payeesLoaded = false;
+    async function loadPayees() {
+        if (payeesLoaded || !payeeList) return;
+        payeesLoaded = true;
+        try {
+            const res = await fetch("/api/budget/payees/", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) return;
+            const payees = await res.json();
+            payeeList.replaceChildren(
+                ...payees
+                    .map((p) => p?.name)
+                    .filter(Boolean)
+                    .map((name) => Object.assign(document.createElement("option"), { value: name }))
+            );
+        } catch (_) { /* suggestions are best-effort */ }
+    }
+
     // --- Open / Close ---
+    let closeTimer = null;
     function openModal() {
+        // Cancel a pending close cleanup — reopening within its 300ms window
+        // would otherwise blank the form and hide the backdrop mid-entry.
+        if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+        applyDefaults();
+        loadPayees();
         backdrop.classList.remove("hidden");
         requestAnimationFrame(() => {
             backdrop.classList.remove("opacity-0");
@@ -220,7 +304,8 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
         backdrop.classList.remove("opacity-100");
         backdrop.classList.add("opacity-0");
         modal.classList.add("translate-y-full");
-        setTimeout(() => {
+        closeTimer = setTimeout(() => {
+            closeTimer = null;
             backdrop.classList.add("hidden");
             resetForm();
         }, 300);
@@ -232,6 +317,7 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
         if (categorySelect) categorySelect.value = "";
         if (accountSelect) accountSelect.value = "";
         if (noteInput) noteInput.value = "";
+        applyDefaults();
         if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
         if (ruleIndicator) ruleIndicator.classList.add("hidden");
         if (stepEntry) stepEntry.classList.remove("hidden");
@@ -247,6 +333,12 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
             closeModal();
         }
     });
+
+    if (yesterdayBtn) {
+        yesterdayBtn.addEventListener("click", () => {
+            if (dateInput) dateInput.value = localDate(-1);
+        });
+    }
 
     // --- Quick amounts ---
     document.querySelectorAll(".fab-quick-amount").forEach((chip) => {
@@ -309,10 +401,9 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
             saveBtn.textContent = "...";
 
             try {
-                const today = new Date().toISOString().split("T")[0];
                 const body = {
                     amount: Math.round(amount * -100),
-                    date: today,
+                    date: dateInput?.value || localDate(),
                     payee_name: payeeInput?.value?.trim() || "",
                     category_id: categoryId,
                     account_id: accountId,
@@ -334,6 +425,13 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
                 }
 
                 const tx = await res.json();
+
+                // Transaction is committed at this point — a storage failure
+                // must not surface as a save error (invites a duplicate).
+                try {
+                    localStorage.setItem("ftm-fab-account", accountId);
+                    localStorage.setItem("ftm-fab-category", categoryId);
+                } catch (_) { /* remembering defaults is best-effort */ }
 
                 // Show confirmation
                 if (confirmSummary) {

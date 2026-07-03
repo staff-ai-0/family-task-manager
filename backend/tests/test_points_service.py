@@ -287,3 +287,74 @@ class TestDeductPointsForReward:
 
         await db_session.refresh(test_child_user)
         assert test_child_user.points == initial_points + 100 - 60
+
+
+@pytest.mark.asyncio
+class TestPointsHistoryRoute:
+    """GET /api/users/me/points/history — the kid-visible ledger."""
+
+    async def test_history_returns_own_transactions_newest_first(
+        self, client, db_session, test_child_user, test_task
+    ):
+        from app.core.security import create_access_token
+
+        await PointsService.award_points_for_task(
+            db=db_session,
+            user_id=test_child_user.id,
+            task_id=test_task.id,
+            points=25,
+        )
+        await PointsService.award_points_for_task(
+            db=db_session,
+            user_id=test_child_user.id,
+            task_id=test_task.id,
+            points=10,
+        )
+
+        token = create_access_token(
+            data={
+                "sub": str(test_child_user.id),
+                "family_id": str(test_child_user.family_id),
+                "role": test_child_user.role.value,
+            }
+        )
+        r = await client.get(
+            "/api/users/me/points/history",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert len(body) == 2
+        assert body[0]["points"] == 10  # newest first
+        assert body[1]["points"] == 25
+        assert all(tx["user_id"] == str(test_child_user.id) for tx in body)
+
+    async def test_history_limit_is_clamped(
+        self, client, db_session, test_child_user, test_task
+    ):
+        """limit is clamped to [1, 200] — junk values return 200, never 500."""
+        from app.core.security import create_access_token
+
+        for _ in range(3):
+            await PointsService.award_points_for_task(
+                db=db_session, user_id=test_child_user.id, task_id=test_task.id, points=5
+            )
+        token = create_access_token(
+            data={
+                "sub": str(test_child_user.id),
+                "family_id": str(test_child_user.family_id),
+                "role": test_child_user.role.value,
+            }
+        )
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # limit <= 0 clamps up to 1
+        for bad in ("0", "-5"):
+            r = await client.get(f"/api/users/me/points/history?limit={bad}", headers=headers)
+            assert r.status_code == 200
+            assert len(r.json()) == 1
+
+        # huge limit clamps down to 200 (only 3 rows exist here, so <= 3)
+        r = await client.get("/api/users/me/points/history?limit=99999", headers=headers)
+        assert r.status_code == 200
+        assert len(r.json()) <= 200

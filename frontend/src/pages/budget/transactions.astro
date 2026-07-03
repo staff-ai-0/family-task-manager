@@ -38,13 +38,57 @@ const accountFilter = Astro.url.searchParams.get("account") || "";
 const categoryFilter = Astro.url.searchParams.get("category") || "";
 const searchFilter = Astro.url.searchParams.get("search") || "";
 
-// Get current month for default filter
+// Month from URL (?year=&month=), defaulting to the current month — without
+// this the list was hard-locked to "now" and last month's spending was
+// unreachable.
 const now = new Date();
-const year = now.getFullYear();
-const month = now.getMonth() + 1;
+const yearParam = parseInt(Astro.url.searchParams.get("year") || "", 10);
+const monthParam = parseInt(Astro.url.searchParams.get("month") || "", 10);
+const hasValidYear = yearParam >= 2000 && yearParam <= 2100;
+const hasValidMonth = monthParam >= 1 && monthParam <= 12;
+const year = hasValidYear ? yearParam : now.getFullYear();
+const month = hasValidMonth ? monthParam : now.getMonth() + 1;
+
+// A ?tx= deep link (scan-receipt Edit / duplicate) may point at a transaction
+// dated outside the default month. Resolve its month and REDIRECT with
+// year/month in the URL — the client later strips only ?tx, so the month
+// survives save-reloads, filter changes, and refreshes.
+const txDeepLink = Astro.url.searchParams.get("tx");
+if (txDeepLink && !(hasValidYear && hasValidMonth)) {
+    const { data: deepTx } = await apiFetch<{ date?: string }>(
+        `/api/budget/transactions/${encodeURIComponent(txDeepLink)}`,
+        { token },
+    );
+    const m = deepTx?.date?.match(/^(\d{4})-(\d{2})/);
+    // Only redirect when the resolved month passes the SAME validity check the
+    // redirected page will apply — otherwise the page can't converge and would
+    // re-resolve → redirect forever (bad-data dates outside 2000-2100).
+    const ry = m ? parseInt(m[1], 10) : 0;
+    const rm = m ? parseInt(m[2], 10) : 0;
+    if (m && ry >= 2000 && ry <= 2100 && rm >= 1 && rm <= 12) {
+        const p = new URLSearchParams(Astro.url.searchParams);
+        p.set("year", m[1]);
+        p.set("month", String(rm));
+        return Astro.redirect(`/budget/transactions?${p.toString()}`);
+    }
+}
 const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
 const endOfMonth = new Date(year, month, 0);
 const endDate = `${year}-${String(month).padStart(2, '0')}-${String(endOfMonth.getDate()).padStart(2, '0')}`;
+
+const monthUrl = (y: number, m: number) => {
+    const p = new URLSearchParams(Astro.url.searchParams);
+    p.set("year", String(y));
+    p.set("month", String(m));
+    p.delete("tx");
+    return `/budget/transactions?${p.toString()}`;
+};
+const prevMonthDate = new Date(year, month - 2, 1);
+const nextMonthDate = new Date(year, month, 1);
+const prevMonthUrl = monthUrl(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1);
+const nextMonthUrl = monthUrl(nextMonthDate.getFullYear(), nextMonthDate.getMonth() + 1);
+const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(es ? "es-MX" : "en-US", { month: "long", year: "numeric" });
+const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
 
 // Build transaction fetch params with filters
 let txParams: any = { startDate: startOfMonth, endDate: endDate, limit: 200 };
@@ -137,6 +181,29 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                 </a>
+            </div>
+
+            <!-- Month navigation -->
+            <div class="flex items-center justify-center gap-4 mb-4">
+                <a href={prevMonthUrl} class="p-1.5 rounded-full hover:bg-white/20 transition" aria-label={es ? "Mes anterior" : "Previous month"}>
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <span class="text-sm font-bold capitalize min-w-[10rem] text-center">{monthLabel}</span>
+                {isCurrentMonth ? (
+                    <span class="p-1.5 opacity-30" aria-hidden="true">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </span>
+                ) : (
+                    <a href={nextMonthUrl} class="p-1.5 rounded-full hover:bg-white/20 transition" aria-label={es ? "Mes siguiente" : "Next month"}>
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </a>
+                )}
             </div>
 
             <!-- Summary -->
@@ -443,6 +510,10 @@ function initFilters() {
 
     function applyFilters() {
         const params = new URLSearchParams();
+        // Keep the selected month when re-filtering.
+        const current = new URLSearchParams(window.location.search);
+        if (current.get("year")) params.set("year", current.get("year")!);
+        if (current.get("month")) params.set("month", current.get("month")!);
         if (account?.value) params.set("account", account.value);
         if (category?.value) params.set("category", category.value);
         if (search?.value) params.set("search", search.value);

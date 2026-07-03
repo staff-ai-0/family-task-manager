@@ -41,7 +41,7 @@ const { data: cfg } = await apiFetch<any>("/api/budget/a2a-webhook", { token });
       <pre id="secret-out" class="hidden text-xs bg-fg/5 p-2 rounded"></pre>
     </form>
   </main>
-  <BottomNav lang={lang} active="parent" />
+  <BottomNav lang={lang} role={user?.role} active="parent" />
 </Layout>
 
 <script type="module" define:vars={{ token, lang }}>

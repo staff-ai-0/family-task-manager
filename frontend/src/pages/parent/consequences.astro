@@ -258,7 +258,7 @@ const members: any[] = family?.members ?? [];
                                                     {t(lang, "pc_until")}{" "}
                                                     {new Date(
                                                         c.end_date,
-                                                    ).toLocaleDateString()}
+                                                    ).toLocaleDateString(lang === "es" ? "es-MX" : "en-US")}
                                                 </p>
                                             )}
                                         </div>

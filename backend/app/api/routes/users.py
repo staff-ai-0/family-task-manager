@@ -34,6 +34,22 @@ async def get_my_points_summary(
     return summary
 
 
+@router.get("/me/points/history", response_model=List[PointTransactionResponse])
+async def get_my_points_history(
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """My point transaction ledger (earned, spent, adjustments) — newest first.
+
+    Gives kids a visible answer to "why did my balance change?"; the reason a
+    parent types on an adjustment is stored in `description`.
+    """
+    return await PointsService.get_transaction_history(
+        db, current_user.id, limit=min(max(limit, 1), 200)
+    )
+
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user: User = Depends(get_family_user),

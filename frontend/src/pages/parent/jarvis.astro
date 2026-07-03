@@ -22,10 +22,37 @@ if (Astro.request.method === "POST") {
     return Astro.redirect("/parent/jarvis");
 }
 
-const { data: historyRaw } = await apiFetch<any[]>("/api/jarvis/history", {
-    token,
-});
+const [{ data: historyRaw }, { data: familyRaw }] = await Promise.all([
+    apiFetch<any[]>("/api/jarvis/history", { token }),
+    apiFetch<any>("/api/families/me", { token }),
+]);
 const history: any[] = Array.isArray(historyRaw) ? historyRaw : [];
+
+// Example prompts grounded in tools Jarvis actually has (budget, tasks,
+// approvals, shopping, gigs) — otherwise nothing tells the parent this is
+// more than a chat bot. Personalize with a real kid's name when possible.
+const kidName =
+    (familyRaw?.members ?? [])
+        .find((m: any) => String(m.role).toLowerCase() !== "parent")
+        ?.name?.split(" ")[0] ?? (lang === "es" ? "tu hijo/a" : "your kid");
+const exampleChips =
+    lang === "es"
+        ? [
+              "Registra $250 de súper en OXXO",
+              `Asigna lavar los platos a ${kidName} esta semana`,
+              "¿Qué falta por aprobar?",
+              "Agrega leche a la lista del súper",
+              "Publica una gig: lavar el coche por $50",
+              "¿Cómo vamos con el presupuesto este mes?",
+          ]
+        : [
+              "Log a $250 grocery run at OXXO",
+              `Assign doing the dishes to ${kidName} this week`,
+              "What's waiting for my approval?",
+              "Add milk to the shopping list",
+              "Post a gig: wash the car for $50",
+              "How's the budget looking this month?",
+          ];
 
 const labels = {
     title: lang === "es" ? "Jarvis" : "Jarvis",
@@ -90,9 +117,22 @@ const labels = {
             </div>
     </Fragment>
             {history.length === 0 ? (
-                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10">
+                <div class="bg-brand-cream rounded-2xl p-6 text-center border border-brand-ink/10">
                     <p class="text-4xl mb-2">🤖</p>
-                    <p class="text-brand-ink-soft text-sm">{labels.empty}</p>
+                    <p class="text-brand-ink-soft text-sm mb-4">{labels.empty}</p>
+                    <p class="text-[11px] font-bold text-brand-ink-soft uppercase tracking-wider mb-2">
+                        {lang === "es" ? "Prueba con:" : "Try:"}
+                    </p>
+                    <div class="flex flex-wrap justify-center gap-2">
+                        {exampleChips.map((c) => (
+                            <button
+                                type="button"
+                                class="jarvis-chip px-3 py-1.5 rounded-full bg-violet-100 text-violet-700 text-xs font-semibold hover:bg-violet-200 active:scale-95 transition-all"
+                            >
+                                {c}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             ) : (
                 history.map((m: any) => (
@@ -156,6 +196,101 @@ const labels = {
 
         scroll?.scrollTo({ top: scroll.scrollHeight });
 
+        // Confirm card for HITL-gated tool calls — used both for live SSE
+        // "confirm" events and for pending actions restored after a reload.
+        function renderConfirmCard(actionId: string, tool: string, summary: string, params: any) {
+            if (!scroll) return;
+            const card = document.createElement("div");
+            card.className = "flex justify-start";
+            card.dataset.confirmId = actionId;
+            card.innerHTML = `<div class="max-w-[90%] rounded-2xl px-4 py-3 text-sm bg-amber-50 border border-amber-300 text-brand-ink space-y-2">
+  <p class="font-semibold text-amber-700">⚠️ Confirm action: <code class="font-mono text-xs bg-amber-100 px-1 rounded"></code></p>
+  <p class="text-xs text-brand-ink-soft confirm-summary"></p>
+  <pre class="text-xs bg-white border border-amber-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all"></pre>
+  <div class="flex gap-2 pt-1">
+    <button class="btn-approve px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 active:scale-95">Approve</button>
+    <button class="btn-cancel px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-300 active:scale-95">Cancel</button>
+  </div>
+</div>`;
+            (card.querySelector("code") as HTMLElement).textContent = tool || actionId;
+            (card.querySelector(".confirm-summary") as HTMLElement).textContent = summary;
+            (card.querySelector("pre") as HTMLElement).textContent = JSON.stringify(params ?? {}, null, 2);
+            const btnApprove = card.querySelector(".btn-approve") as HTMLButtonElement;
+            const btnCancel = card.querySelector(".btn-cancel") as HTMLButtonElement;
+            const disableButtons = () => {
+                btnApprove.disabled = true;
+                btnCancel.disabled = true;
+                btnApprove.classList.add("opacity-50");
+                btnCancel.classList.add("opacity-50");
+            };
+            const renderResult = (ok: boolean, detail: string) => {
+                card.innerHTML = `<div class="max-w-[90%] rounded-2xl px-4 py-2.5 text-sm ${ok ? "bg-green-50 border border-green-300 text-green-800" : "bg-red-50 border border-red-300 text-red-800"}"><p class="text-xs font-semibold"></p></div>`;
+                (card.querySelector("p") as HTMLElement).textContent = detail;
+            };
+            btnApprove.addEventListener("click", async () => {
+                disableButtons();
+                try {
+                    const r = await fetch(`/api/jarvis/actions/${actionId}/approve`, { method: "POST" });
+                    const result = await r.json().catch(() => ({}));
+                    if (r.ok) {
+                        renderResult(true, `✅ Approved — ${result.data ? JSON.stringify(result.data) : "done"}`);
+                    } else {
+                        renderResult(false, `❌ Approval failed: ${result.detail ?? r.statusText}`);
+                    }
+                } catch (err) {
+                    renderResult(false, `❌ Network error: ${String(err)}`);
+                }
+                scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+            });
+            btnCancel.addEventListener("click", async () => {
+                disableButtons();
+                try {
+                    await fetch(`/api/jarvis/actions/${actionId}/reject`, { method: "POST" });
+                } catch {}
+                renderResult(false, "🚫 Cancelled");
+                scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+            });
+            scroll.insertBefore(card, pending);
+        }
+
+        // Restore pending HITL confirmations — previously they existed only as
+        // live SSE DOM nodes, so a reload or navigation silently dropped them
+        // and the action expired unanswered.
+        (async () => {
+            try {
+                const r = await fetch("/api/jarvis/actions");
+                if (!r.ok) return;
+                const actions = await r.json();
+                if (!Array.isArray(actions) || actions.length === 0) return;
+                // API returns newest-first; render oldest-first to match the feed.
+                for (const a of actions.slice().reverse()) {
+                    renderConfirmCard(String(a.id), a.tool_name ?? "", a.summary ?? "", a.params ?? {});
+                }
+                scroll?.scrollTo({ top: scroll.scrollHeight });
+            } catch {
+                // best-effort; live SSE cards still work
+            }
+        })();
+
+        // Example-prompt chips fill the composer (no auto-send — the parent
+        // edits amounts/names before firing).
+        document.querySelectorAll<HTMLElement>(".jarvis-chip").forEach((chip) => {
+            chip.addEventListener("click", () => {
+                input.value = (chip.textContent || "").trim();
+                input.focus();
+            });
+        });
+
+        // Deep-link prefill: /parent/jarvis?q=... lets other pages offer an
+        // "ask Jarvis" shortcut with a domain-specific template.
+        const qParam = new URLSearchParams(window.location.search).get("q");
+        if (qParam && !input.value) {
+            // Clamp: maxlength doesn't apply to script-set values, and the
+            // backend rejects >2000 chars with a 422.
+            input.value = qParam.slice(0, 2000);
+            input.focus();
+        }
+
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
             const message = input.value.trim();
@@ -185,7 +320,11 @@ const labels = {
                 if (!resp.ok || !resp.body) {
                     pending?.classList.add("hidden");
                     let txt = "Error";
-                    try { txt = (await resp.json()).detail || txt; } catch {}
+                    try {
+                        const d = (await resp.json()).detail;
+                        // 422s carry an array of Pydantic error objects.
+                        txt = Array.isArray(d) ? d.map((x: any) => x.msg || JSON.stringify(x)).join("; ") : (d || txt);
+                    } catch {}
                     alert(txt);
                     return;
                 }
@@ -222,61 +361,13 @@ const labels = {
                             }
                         } else if (event === "confirm") {
                             pending?.classList.add("hidden");
-                            if (scroll) {
-                                const actionId: string = payload.action_id ?? "";
-                                const card = document.createElement("div");
-                                card.className = "flex justify-start";
-                                card.dataset.confirmId = actionId;
-                                card.innerHTML = `<div class="max-w-[90%] rounded-2xl px-4 py-3 text-sm bg-amber-50 border border-amber-300 text-brand-ink space-y-2">
-  <p class="font-semibold text-amber-700">⚠️ Confirm action: <code class="font-mono text-xs bg-amber-100 px-1 rounded"></code></p>
-  <p class="text-xs text-brand-ink-soft confirm-summary"></p>
-  <pre class="text-xs bg-white border border-amber-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all"></pre>
-  <div class="flex gap-2 pt-1">
-    <button class="btn-approve px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-bold hover:bg-violet-700 active:scale-95">Approve</button>
-    <button class="btn-cancel px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-300 active:scale-95">Cancel</button>
-  </div>
-</div>`;
-                                (card.querySelector("code") as HTMLElement).textContent = payload.tool ?? actionId;
-                                (card.querySelector(".confirm-summary") as HTMLElement).textContent = payload.summary ?? "";
-                                (card.querySelector("pre") as HTMLElement).textContent = JSON.stringify(payload.params ?? {}, null, 2);
-                                const btnApprove = card.querySelector(".btn-approve") as HTMLButtonElement;
-                                const btnCancel = card.querySelector(".btn-cancel") as HTMLButtonElement;
-                                const disableButtons = () => {
-                                    btnApprove.disabled = true;
-                                    btnCancel.disabled = true;
-                                    btnApprove.classList.add("opacity-50");
-                                    btnCancel.classList.add("opacity-50");
-                                };
-                                const renderResult = (ok: boolean, detail: string) => {
-                                    card.innerHTML = `<div class="max-w-[90%] rounded-2xl px-4 py-2.5 text-sm ${ok ? "bg-green-50 border border-green-300 text-green-800" : "bg-red-50 border border-red-300 text-red-800"}"><p class="text-xs font-semibold"></p></div>`;
-                                    (card.querySelector("p") as HTMLElement).textContent = detail;
-                                };
-                                btnApprove.addEventListener("click", async () => {
-                                    disableButtons();
-                                    try {
-                                        const r = await fetch(`/api/jarvis/actions/${actionId}/approve`, { method: "POST" });
-                                        const result = await r.json().catch(() => ({}));
-                                        if (r.ok) {
-                                            renderResult(true, `✅ Approved — ${result.data ? JSON.stringify(result.data) : "done"}`);
-                                        } else {
-                                            renderResult(false, `❌ Approval failed: ${result.detail ?? r.statusText}`);
-                                        }
-                                    } catch (err) {
-                                        renderResult(false, `❌ Network error: ${String(err)}`);
-                                    }
-                                    scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
-                                });
-                                btnCancel.addEventListener("click", async () => {
-                                    disableButtons();
-                                    try {
-                                        await fetch(`/api/jarvis/actions/${actionId}/reject`, { method: "POST" });
-                                    } catch {}
-                                    renderResult(false, "🚫 Cancelled");
-                                    scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
-                                });
-                                scroll.insertBefore(card, pending);
-                                scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
-                            }
+                            renderConfirmCard(
+                                String(payload.action_id ?? ""),
+                                payload.tool ?? "",
+                                payload.summary ?? "",
+                                payload.params ?? {},
+                            );
+                            scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
                         } else if (event === "reply") {
                             pending?.classList.add("hidden");
                             if (scroll) {
