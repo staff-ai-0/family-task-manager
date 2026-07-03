@@ -27,8 +27,9 @@ export interface MutateOptions {
   errorFallback?: string;
 }
 
-/** Returns true on success, false on failure (after reverting + toasting). */
-export async function mutate(url: string, opts: MutateOptions = {}): Promise<boolean> {
+/** Returns the Response on success (body unread, caller may parse it for
+ *  authoritative state), or null on failure (after reverting + toasting). */
+export async function mutate(url: string, opts: MutateOptions = {}): Promise<Response | null> {
   opts.optimistic?.();
   try {
     const hasBody = opts.body !== undefined && opts.body !== null;
@@ -43,10 +44,10 @@ export async function mutate(url: string, opts: MutateOptions = {}): Promise<boo
       throw new Error(typeof detail === "string" ? detail : (opts.errorFallback ?? `Error ${res.status}`));
     }
     if (opts.successToast) showToast(opts.successToast, "success");
-    return true;
+    return res;
   } catch (e) {
     opts.revert?.();
     showToast(e instanceof Error ? e.message : (opts.errorFallback ?? "Error"), "error");
-    return false;
+    return null;
   }
 }

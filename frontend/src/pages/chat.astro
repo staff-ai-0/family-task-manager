@@ -282,35 +282,41 @@ const labels = {
         const feed = document.getElementById("chat-feed");
         if (!feed) return;
 
-        // Apply/undo a reaction to a message bubble's chip row in place.
-        function applyReaction(bubble: HTMLElement, emoji: string, adding: boolean) {
+        // Set a message's chip for one emoji to an EXACT count (authoritative,
+        // from the server response) — reconciles away any optimistic drift when
+        // other members reacted concurrently.
+        function setChip(bubble: HTMLElement, emoji: string, count: number, mine: boolean) {
             const chips = bubble.querySelector<HTMLElement>("[data-reaction-chips]");
             if (!chips) return;
             let chip = chips.querySelector<HTMLButtonElement>(`button[data-emoji="${CSS.escape(emoji)}"]`);
-            if (adding) {
-                if (!chip) {
-                    chip = document.createElement("button");
-                    chip.type = "button";
-                    chip.dataset.react = bubble.dataset.msgId || "";
-                    chip.dataset.emoji = emoji;
-                    chip.dataset.count = "0";
-                    chips.appendChild(chip);
-                }
-                const n = (parseInt(chip.dataset.count || "0", 10) || 0) + 1;
-                chip.dataset.count = String(n);
-                chip.dataset.toggle = "off"; // now mine → next tap removes
-                chip.className = "text-[11px] px-1.5 py-0.5 rounded-full bg-cyan-500 text-white";
-                chip.textContent = `${emoji} ${n}`;
-            } else {
-                if (!chip) return;
-                const n = (parseInt(chip.dataset.count || "1", 10) || 1) - 1;
-                if (n <= 0) { chip.remove(); return; }
-                chip.dataset.count = String(n);
-                chip.dataset.toggle = "on";
-                chip.className = "text-[11px] px-1.5 py-0.5 rounded-full bg-brand-cream-deep text-brand-ink";
-                chip.textContent = `${emoji} ${n}`;
+            if (count <= 0) { chip?.remove(); return; }
+            if (!chip) {
+                chip = document.createElement("button");
+                chip.type = "button";
+                chip.dataset.react = bubble.dataset.msgId || "";
+                chip.dataset.emoji = emoji;
+                chips.appendChild(chip);
             }
+            chip.dataset.count = String(count);
+            chip.dataset.toggle = mine ? "off" : "on";
+            chip.className = mine
+                ? "text-[11px] px-1.5 py-0.5 rounded-full bg-cyan-500 text-white"
+                : "text-[11px] px-1.5 py-0.5 rounded-full bg-brand-cream-deep text-brand-ink";
+            chip.textContent = `${emoji} ${count}`;
         }
+
+        // Optimistic ±1 (before the request resolves).
+        function applyReaction(bubble: HTMLElement, emoji: string, adding: boolean) {
+            const chip = bubble.querySelector<HTMLButtonElement>(`[data-reaction-chips] button[data-emoji="${CSS.escape(emoji)}"]`);
+            const cur = chip ? (parseInt(chip.dataset.count || "0", 10) || 0) : 0;
+            const isMine = chip?.dataset.toggle === "off";
+            const next = adding ? cur + 1 : cur - 1;
+            setChip(bubble, emoji, next, adding ? true : (isMine ? false : isMine));
+        }
+
+        // One in-flight request per (message, emoji) — rapid double-taps would
+        // otherwise overlap apply/revert and leave a phantom chip + dup toasts.
+        const inFlight = new Set<string>();
 
         feed.addEventListener("click", async (ev) => {
             const target = ev.target;
@@ -321,6 +327,10 @@ const labels = {
             const emoji = btn.dataset.emoji;
             if (!bubble || !msgId || !emoji) return;
 
+            const key = `${msgId}|${emoji}`;
+            if (inFlight.has(key)) return;
+            inFlight.add(key);
+
             // Derive intent from the CHIP's state (my membership), not the
             // clicked button — palette buttons are always "add", but tapping a
             // chip I already own must remove. Uniform + matches the server.
@@ -328,18 +338,29 @@ const labels = {
             const existing = chips?.querySelector<HTMLButtonElement>(`button[data-emoji="${CSS.escape(emoji)}"]`);
             const adding = !(existing && existing.dataset.toggle === "off");
 
-            await mutate(
-                adding
-                    ? `/api/chat/${msgId}/reactions`
-                    : `/api/chat/${msgId}/reactions?emoji=${encodeURIComponent(emoji)}`,
-                {
-                    method: adding ? "POST" : "DELETE",
-                    body: adding ? { emoji } : undefined,
-                    optimistic: () => applyReaction(bubble, emoji, adding),
-                    revert: () => applyReaction(bubble, emoji, !adding),
-                    errorFallback: "Could not update reaction",
-                },
-            );
+            try {
+                const res = await mutate(
+                    adding
+                        ? `/api/chat/${msgId}/reactions`
+                        : `/api/chat/${msgId}/reactions?emoji=${encodeURIComponent(emoji)}`,
+                    {
+                        method: adding ? "POST" : "DELETE",
+                        body: adding ? { emoji } : undefined,
+                        optimistic: () => applyReaction(bubble, emoji, adding),
+                        revert: () => applyReaction(bubble, emoji, !adding),
+                        errorFallback: "Could not update reaction",
+                    },
+                );
+                // Reconcile to the authoritative server count.
+                if (res) {
+                    const data = await res.json().catch(() => null);
+                    if (data && typeof data.count === "number") {
+                        setChip(bubble, data.emoji ?? emoji, data.count, !!data.mine);
+                    }
+                }
+            } finally {
+                inFlight.delete(key);
+            }
         });
     });
 </script>
