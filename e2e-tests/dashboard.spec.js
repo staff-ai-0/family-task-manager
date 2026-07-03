@@ -35,16 +35,22 @@ test.describe('Dashboard', () => {
 
   // ── Bottom navigation ──────────────────────────────────────────────────
 
-  test('bottom nav contains all required links', async ({ page }) => {
+  test('bottom nav contains the 5 kid destinations', async ({ page }) => {
     const nav = page.locator('nav');
     await expect(nav).toBeVisible();
 
-    // Core links present for all roles
+    // Kid bottom nav: Tasks, Gigs, Rewards, Chat, More (5 items).
     await expect(nav.locator('a[href="/dashboard"]')).toBeVisible();
+    await expect(nav.locator('a[href="/gigs"]')).toBeVisible();
     await expect(nav.locator('a[href="/rewards"]')).toBeVisible();
-    await expect(nav.locator('a[href="/notifications"]')).toBeVisible();
     await expect(nav.locator('a[href="/chat"]')).toBeVisible();
-    await expect(nav.locator('a[href="/profile"]')).toBeVisible();
+    await expect(nav.locator('#more-nav-btn')).toBeVisible();
+
+    // Secondary destinations (notifications, profile) live in the More sheet.
+    await nav.locator('#more-nav-btn').click();
+    const sheet = page.locator('#more-sheet');
+    await expect(sheet.locator('a[href="/notifications"]')).toBeVisible();
+    await expect(sheet.locator('a[href="/profile"]')).toBeVisible();
   });
 
   test('chat nav link is reachable', async ({ page }) => {
@@ -53,8 +59,9 @@ test.describe('Dashboard', () => {
     await expect(page).toHaveURL(/\/chat$/);
   });
 
-  test('notifications nav link is reachable', async ({ page }) => {
-    await page.locator('nav a[href="/notifications"]').click();
+  test('notifications reachable via the More sheet', async ({ page }) => {
+    await page.locator('nav #more-nav-btn').click();
+    await page.locator('#more-sheet a[href="/notifications"]').click();
     await page.waitForURL('**/notifications', { timeout: 8000 });
     await expect(page).toHaveURL(/\/notifications$/);
   });
@@ -66,7 +73,7 @@ test.describe('Dashboard', () => {
 
     const navAfterVT = page.locator('nav');
     await expect(navAfterVT.locator('a[href="/chat"]')).toBeVisible({ timeout: 5000 });
-    await expect(navAfterVT.locator('a[href="/notifications"]')).toBeVisible();
+    await expect(navAfterVT.locator('#more-nav-btn')).toBeVisible();
 
     // Navigate back to dashboard
     await page.locator('nav a[href="/dashboard"]').click();

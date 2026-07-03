@@ -34,10 +34,13 @@ test.describe('Notifications feed', () => {
     }
   });
 
-  test('nav has notifications icon with optional badge', async ({ page }) => {
+  test('nav More button carries the unread badge; notifications live in the sheet', async ({ page }) => {
     await login(page);
     await page.goto(`${BASE_URL}/dashboard`);
-    const navLink = page.locator('nav a[href="/notifications"]');
-    await expect(navLink).toBeVisible();
+    // Inbox moved into the More sheet; the More button carries the unread badge.
+    const moreBtn = page.locator('nav #more-nav-btn');
+    await expect(moreBtn).toBeVisible();
+    await moreBtn.click();
+    await expect(page.locator('#more-sheet a[href="/notifications"]')).toBeVisible();
   });
 });
