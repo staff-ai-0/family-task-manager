@@ -12,15 +12,23 @@ const langLabel = lang === "es" ? "EN" : "ES";
 
 const token = Astro.cookies.get("access_token")?.value;
 let unreadCount = 0;
+let pendingApprovals = 0;
 if (token) {
     try {
-        const { data } = await apiFetch<{ unread: number }>(
-            "/api/notifications/unread-count",
-            { token },
-        );
-        unreadCount = data?.unread ?? 0;
+        const [unread, taskPending, gigPending] = await Promise.all([
+            apiFetch<{ unread: number }>("/api/notifications/unread-count", { token }),
+            role === "parent"
+                ? apiFetch<any[]>("/api/task-assignments/pending-approvals", { token })
+                : Promise.resolve({ data: null as any[] | null }),
+            role === "parent"
+                ? apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token })
+                : Promise.resolve({ data: null as any[] | null }),
+        ]);
+        unreadCount = unread.data?.unread ?? 0;
+        pendingApprovals = (taskPending.data?.length ?? 0) + (gigPending.data?.length ?? 0);
     } catch {
         unreadCount = 0;
+        pendingApprovals = 0;
     }
 }
 
@@ -127,7 +135,12 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
         )}
 
         {role === "parent" && (
-            <a href="/parent" data-nav-key="parent" class={`${itemBase} ${active === "parent" ? itemActive : itemIdle}`}>
+            <a href="/parent" data-nav-key="parent" class={`${itemBase} relative ${active === "parent" ? itemActive : itemIdle}`}>
+                {pendingApprovals > 0 && (
+                    <span class="absolute top-0 right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-brand-coral text-white text-[10px] font-bold rounded-full border-2 border-brand-cream">
+                        {pendingApprovals > 99 ? "99+" : pendingApprovals}
+                    </span>
+                )}
                 <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
