@@ -382,6 +382,12 @@ class AllocationResponse(AllocationBase):
         from_attributes = True
 
 
+class SetAllocationResponse(AllocationResponse):
+    """Assign-funds response — the allocation plus the recomputed month-level
+    Ready-to-Assign, so the modal can update it live without a page reload."""
+    ready_to_assign: int = 0
+
+
 # ============================================================================
 # COMPLEX/COMPOSITE SCHEMAS
 # ============================================================================

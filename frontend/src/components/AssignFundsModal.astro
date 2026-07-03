@@ -101,7 +101,7 @@ const {
                         {lang === "es" ? "Cantidad Rápida" : "Quick Amounts"}
                     </p>
                     <div class="grid grid-cols-3 gap-2">
-                        {[25, 50, 100].filter(amt => amt < readyToAssign).map(amt => (
+                        {[25, 50, 100].filter(amt => amt * 100 < readyToAssign).map(amt => (
                             <button
                                 type="button"
                                 class={`${baseRoute}-quick-amount px-3 py-2 rounded-lg text-sm font-semibold transition border border-brand-ink/20 hover:border-brand-sky-deep hover:text-brand-sky-deep`}
@@ -145,13 +145,43 @@ const {
 
 <script define:vars={{ readyToAssign, baseRoute, lang, year, month }}>
     document.addEventListener('astro:page-load', () => {
+    // Running (dollar) Ready-to-Assign — updated live from each /set response so
+    // the parent can assign category after category in ONE modal session with
+    // no page reload. `changed` triggers a single reload on close to sync the
+    // category rows on the page underneath.
+    let currentReady = readyToAssign;  // CENTS (matches the prop + formatCurrency)
+    let changed = false;
+
+    // Mirror the app's canonical formatCurrency (lib/api/budget.ts): es-MX MXN,
+    // 0 fraction digits, Intl-placed sign ("-$1,234", not "$-1,234"). Keeps the
+    // live value identical to the server-rendered figures on the page.
+    const _rtaFmt = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const fmtCents = (cents) => _rtaFmt.format((Number(cents) || 0) / 100);
+    function paintReady() {
+        const modalDisp = document.getElementById(`${baseRoute}-available-display`);
+        if (modalDisp) modalDisp.textContent = fmtCents(currentReady);
+        const headerDisp = document.querySelector('[data-ready-to-assign]');
+        if (headerDisp) {
+            headerDisp.textContent = fmtCents(currentReady);
+            // Repaint the sign-driven color (server bound it once at render).
+            headerDisp.classList.toggle('text-red-700', currentReady < 0);
+            headerDisp.classList.toggle('text-brand-ink', currentReady >= 0);
+        }
+    }
+    function closeModal() {
+        document.getElementById(`${baseRoute}-modal`).classList.add('hidden');
+        // Sync the category rows (their budgeted/available are now stale) with
+        // one reload — only if something was actually assigned.
+        if (changed) window.location.reload();
+    }
+
     // Quick amount button handlers
     document.querySelectorAll(`.${baseRoute}-quick-amount`).forEach(btn => {
         btn.addEventListener('click', () => {
             const amount = btn.dataset.amount;
             const amountInput = document.getElementById(`${baseRoute}-amount-input`);
             if (amount === 'all') {
-                amountInput.value = readyToAssign;
+                amountInput.value = (currentReady / 100).toFixed(2);  // input is dollars
             } else {
                 amountInput.value = parseFloat(amount);
             }
@@ -160,9 +190,7 @@ const {
     });
 
     // Cancel button
-    document.getElementById(`${baseRoute}-cancel-btn`)?.addEventListener('click', () => {
-        document.getElementById(`${baseRoute}-modal`).classList.add('hidden');
-    });
+    document.getElementById(`${baseRoute}-cancel-btn`)?.addEventListener('click', closeModal);
 
     // Confirm button — POST to /api/budget/allocations/set via proxy
     document.getElementById(`${baseRoute}-confirm-btn`)?.addEventListener('click', async () => {
@@ -205,11 +233,20 @@ const {
                 throw new Error(data.detail || data.message || (lang === 'es' ? 'Error al asignar fondos' : 'Failed to assign funds'));
             }
 
+            // Update the running Ready-to-Assign from the authoritative response
+            // and keep the modal open for the next category — no reload.
+            const body = await res.json().catch(() => ({}));
+            if (typeof body.ready_to_assign === 'number') {
+                currentReady = body.ready_to_assign;  // cents
+                paintReady();
+            }
+            changed = true;
             successEl?.classList.remove('hidden');
             if (amountInput) amountInput.value = '';
             if (categorySelect) categorySelect.value = '';
-
-            setTimeout(() => { window.location.reload(); }, 800);
+            confirmBtn.disabled = false;
+            categorySelect?.focus();
+            setTimeout(() => successEl?.classList.add('hidden'), 1500);
         } catch (err) {
             if (errorEl) { errorEl.textContent = err.message; errorEl.classList.remove('hidden'); }
             confirmBtn.disabled = false;
@@ -217,8 +254,14 @@ const {
     });
 
     // Close button
-    document.getElementById(`${baseRoute}-close-btn`)?.addEventListener('click', () => {
-        document.getElementById(`${baseRoute}-modal`).classList.add('hidden');
+    document.getElementById(`${baseRoute}-close-btn`)?.addEventListener('click', closeModal);
+
+    // Backdrop click + Escape also close (through closeModal, so the
+    // changed→reload row-sync always runs).
+    const modalEl = document.getElementById(`${baseRoute}-modal`);
+    modalEl?.addEventListener('click', (e) => { if (e.target === modalEl) closeModal(); });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modalEl && !modalEl.classList.contains('hidden')) closeModal();
     });
 
     // Clear error/success messages when user edits

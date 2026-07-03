@@ -225,6 +225,34 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
         result = await db.execute(query)
         return list(result.scalars().all())
 
+    @staticmethod
+    async def compute_ready_to_assign(
+        db: AsyncSession, family_id: UUID, month_date: date
+    ) -> int:
+        """Envelope 'Ready to Assign' for a month — the single source of truth,
+        reused by the month view and the assign-funds endpoint so they never
+        diverge. Formula (Actual Budget style):
+            on_budget_balance - expense_budgeted_this_month
+                              - (prior_expense_budgeted + prior_expense_activity)
+        """
+        from datetime import timedelta
+        from app.services.budget.account_service import AccountService
+
+        if month_date.month == 12:
+            end_of_month = date(month_date.year + 1, 1, 1) - timedelta(days=1)
+        else:
+            end_of_month = date(month_date.year, month_date.month + 1, 1) - timedelta(days=1)
+
+        total_on_budget = await AccountService.get_total_on_budget_balance(db, family_id, end_of_month)
+        this_month = await AllocationService.get_total_expense_budgeted_for_month(db, family_id, month_date)
+        prior_budgeted = await AllocationService.get_total_expense_budgeted_before_month(db, family_id, month_date)
+        prior_activity = await AllocationService.get_total_expense_activity_before_month(db, family_id, month_date)
+        # int() is required: func.sum over BigInteger returns Decimal under
+        # asyncpg, which Pydantic serializes as a JSON STRING even on an int
+        # field — the frontend's `typeof === 'number'` guard would then silently
+        # drop the live Ready-to-Assign update (see CLAUDE.md).
+        return int(total_on_budget - this_month - (prior_budgeted + prior_activity))
+
     @classmethod
     async def set_category_budget(
         cls,

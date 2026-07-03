@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.services.budget.allocation_service import AllocationService
-from app.schemas.budget import AllocationCreate, AllocationUpdate, AllocationResponse, AutoFillRequest, AutoFillResponse
+from app.schemas.budget import AllocationCreate, AllocationUpdate, AllocationResponse, SetAllocationResponse, AutoFillRequest, AutoFillResponse
 from app.models import User
 
 router = APIRouter()
@@ -101,7 +101,7 @@ async def delete_allocation(
     )
 
 
-@router.post("/set", response_model=AllocationResponse)
+@router.post("/set", response_model=SetAllocationResponse)
 async def set_category_budget(
     category_id: UUID = Body(...),
     month: date = Body(...),
@@ -109,15 +109,22 @@ async def set_category_budget(
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Set budget amount for a category in a specific month (creates or updates)"""
+    """Set budget amount for a category in a specific month (creates or updates).
+
+    Returns the recomputed month-level ready_to_assign so the assign-funds
+    modal can update it live and stay open for the next category (no reload).
+    """
+    family_id = to_uuid_required(current_user.family_id)
+    # Normalize to the first of the month so the stored allocation and the
+    # ready-to-assign / month-view queries always key off the same date.
+    month = month.replace(day=1)
     allocation = await AllocationService.set_category_budget(
-        db,
-        family_id=to_uuid_required(current_user.family_id),
-        category_id=category_id,
-        month=month,
-        amount=amount,
+        db, family_id=family_id, category_id=category_id, month=month, amount=amount,
     )
-    return allocation
+    ready = await AllocationService.compute_ready_to_assign(db, family_id, month)
+    resp = SetAllocationResponse.model_validate(allocation)
+    resp.ready_to_assign = ready
+    return resp
 
 
 @router.post("/auto-fill", response_model=AutoFillResponse)
