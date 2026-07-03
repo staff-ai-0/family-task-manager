@@ -14,7 +14,6 @@ from app.core.dependencies import get_current_user
 from app.core.type_utils import to_uuid_required
 from app.services.budget.category_service import CategoryGroupService
 from app.services.budget.allocation_service import AllocationService
-from app.services.budget.account_service import AccountService
 from app.models import User
 from app.models.budget import BudgetAccount, BudgetTransaction
 from sqlalchemy import select, and_, func

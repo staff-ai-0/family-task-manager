@@ -115,12 +115,13 @@ async def set_category_budget(
     modal can update it live and stay open for the next category (no reload).
     """
     family_id = to_uuid_required(current_user.family_id)
+    # Normalize to the first of the month so the stored allocation and the
+    # ready-to-assign / month-view queries always key off the same date.
+    month = month.replace(day=1)
     allocation = await AllocationService.set_category_budget(
         db, family_id=family_id, category_id=category_id, month=month, amount=amount,
     )
-    ready = await AllocationService.compute_ready_to_assign(
-        db, family_id, month.replace(day=1)
-    )
+    ready = await AllocationService.compute_ready_to_assign(db, family_id, month)
     resp = SetAllocationResponse.model_validate(allocation)
     resp.ready_to_assign = ready
     return resp

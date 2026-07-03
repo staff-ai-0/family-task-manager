@@ -247,7 +247,11 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
         this_month = await AllocationService.get_total_expense_budgeted_for_month(db, family_id, month_date)
         prior_budgeted = await AllocationService.get_total_expense_budgeted_before_month(db, family_id, month_date)
         prior_activity = await AllocationService.get_total_expense_activity_before_month(db, family_id, month_date)
-        return total_on_budget - this_month - (prior_budgeted + prior_activity)
+        # int() is required: func.sum over BigInteger returns Decimal under
+        # asyncpg, which Pydantic serializes as a JSON STRING even on an int
+        # field — the frontend's `typeof === 'number'` guard would then silently
+        # drop the live Ready-to-Assign update (see CLAUDE.md).
+        return int(total_on_budget - this_month - (prior_budgeted + prior_activity))
 
     @classmethod
     async def set_category_budget(
