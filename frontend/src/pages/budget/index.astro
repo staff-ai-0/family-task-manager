@@ -114,6 +114,22 @@ const allCategories = (allGroups || [])
             formatCurrency={formatCurrency}
         />
     </div>
+
+    {/* Copy last month — exposes the existing auto-fill (copy_previous) so a
+        parent can seed the whole month in one tap instead of one modal per
+        category. Skips categories already budgeted (overwrite_existing=false). */}
+    <div class="px-4 mt-3">
+        <button
+            type="button"
+            id="copy-last-month"
+            data-month={`${year}-${String(month).padStart(2, "0")}-01`}
+            data-busy={lang === "es" ? "Copiando…" : "Copying…"}
+            class="w-full py-2.5 rounded-xl border border-brand-sky-deep/30 bg-brand-sky-deep/10 text-brand-sky-deep font-semibold text-sm hover:bg-brand-sky-deep/20 transition-colors"
+        >
+            {lang === "es" ? "📋 Copiar presupuesto del mes anterior" : "📋 Copy last month's budget"}
+        </button>
+        <p id="copy-last-month-msg" class="text-xs text-brand-ink-soft mt-1 hidden text-center"></p>
+    </div>
     {/* Income groups */}
     {incomeGroups.map((group: any) => (
         <BudgetCategoryGroup
@@ -176,3 +192,45 @@ const allCategories = (allGroups || [])
         />
     </Fragment>
 </BudgetShell>
+
+<script>
+    document.addEventListener("astro:page-load", () => {
+        const btn = document.getElementById("copy-last-month") as HTMLButtonElement | null;
+        const msg = document.getElementById("copy-last-month-msg");
+        if (!btn) return;
+        const es = document.documentElement.lang === "es";
+        btn.addEventListener("click", async () => {
+            if (!window.confirm(es
+                ? "¿Copiar los montos del mes anterior a las categorías sin presupuesto de este mes?"
+                : "Copy last month's amounts into this month's un-budgeted categories?")) return;
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = btn.dataset.busy || "…";
+            try {
+                // Same-origin proxy injects the httpOnly token.
+                const res = await fetch("/api/budget/allocations/auto-fill", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        target_month: btn.dataset.month,
+                        strategy: "copy_previous",
+                        overwrite_existing: false,
+                    }),
+                });
+                if (!res.ok) throw new Error(String(res.status));
+                const data = await res.json();
+                if (msg) {
+                    msg.textContent = es
+                        ? `Se copiaron ${data.filled_count} categorías.`
+                        : `Copied ${data.filled_count} categories.`;
+                    msg.classList.remove("hidden");
+                }
+                window.location.reload();
+            } catch (e) {
+                btn.disabled = false;
+                btn.textContent = original;
+                alert(es ? "No se pudo copiar el mes anterior." : "Could not copy last month.");
+            }
+        });
+    });
+</script>
