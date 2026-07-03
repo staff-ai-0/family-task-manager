@@ -38,6 +38,19 @@ export const POST: APIRoute = async ({ request }) => {
             const headers = new Headers({ "Content-Type": "application/json" });
             for (const c of cookies) headers.append("Set-Cookie", c);
 
+            // Mirror login.ts: sync UI language + role cookies from the account
+            // so a Spanish-speaking family isn't dumped into English (and kid
+            // pages into adult mode) after every Google sign-in on a new device.
+            const secure = import.meta.env.DEV ? "" : "; Secure";
+            const pl = String((result.user as any)?.preferred_lang || "").toLowerCase();
+            if (pl === "en" || pl === "es") {
+                headers.append("Set-Cookie", `lang=${pl}; Path=/; Max-Age=${60 * 60 * 24 * 365}; SameSite=Lax${secure}`);
+            }
+            const uiRole = String((result.user as any)?.role || "").toLowerCase();
+            if (uiRole) {
+                headers.append("Set-Cookie", `ui_role=${uiRole}; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Lax${secure}`);
+            }
+
             return new Response(
                 JSON.stringify({ success: true, user: result.user }),
                 { status: 200, headers }
