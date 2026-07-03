@@ -102,8 +102,14 @@ class RewardService(BaseFamilyService[Reward]):
         reward_id: UUID,
         user_id: UUID,
         family_id: UUID,
-    ) -> PointTransaction:
-        """Redeem a reward with user's points"""
+    ) -> dict:
+        """Redeem a reward with user's points.
+
+        Returns a dict describing the outcome:
+          - {"status": "completed", ...} when points were deducted now
+          - {"status": "pending", ...} when the reward requires parent approval
+            and the request was queued (no deduction yet).
+        """
         # Get reward
         reward = await RewardService.get_reward(db, reward_id, family_id)
 
@@ -156,6 +162,79 @@ class RewardService(BaseFamilyService[Reward]):
                 f"Finish your locked chores before redeeming rewards: {joined}"
             )
 
+        from app.models.user import User, UserRole
+
+        redeemer = await db.get(User, user_id)
+        redeemer_name = redeemer.name if redeemer else "A kid"
+
+        # Balance must cover the cost now, whether we deduct immediately or
+        # queue for approval (don't let a kid queue an unaffordable request).
+        if redeemer and redeemer.points < reward.points_cost:
+            raise ValidationException(
+                f"Insufficient points. Need {reward.points_cost}, have {redeemer.points}"
+            )
+
+        # ── Parent-approval path: queue instead of deducting ──────────────
+        if reward.requires_parent_approval:
+            from app.models.reward import RewardRedemption, RedemptionStatus
+
+            redemption = RewardRedemption(
+                reward_id=reward.id,
+                reward_title=reward.title,
+                points_cost=reward.points_cost,
+                user_id=user_id,
+                family_id=family_id,
+                status=RedemptionStatus.PENDING.value,
+            )
+            db.add(redemption)
+            await db.commit()
+            await db.refresh(redemption)
+
+            # Notify parents that a redemption awaits their approval.
+            try:
+                from app.services.notification_service import NotificationService
+                from app.models.notification import NotificationType as NT
+
+                parents = (await db.scalars(
+                    select(User).where(
+                        and_(
+                            User.family_id == family_id,
+                            User.role == UserRole.PARENT,
+                            User.is_active.is_(True),
+                            User.id != user_id,
+                        )
+                    )
+                )).all()
+                for parent in parents:
+                    p_es = getattr(parent, "preferred_lang", "en") == "es"
+                    await NotificationService.create(
+                        db,
+                        family_id=family_id,
+                        user_id=parent.id,
+                        type=NT.REWARD_REDEEMED,
+                        title="🎁 " + ("Canje por aprobar" if p_es else "Redemption to approve"),
+                        body=(
+                            f"{redeemer_name} quiere canjear \"{reward.title}\" ({reward.points_cost} pts). Aprueba o rechaza."
+                            if p_es else
+                            f"{redeemer_name} wants to redeem \"{reward.title}\" ({reward.points_cost} pts). Approve or reject."
+                        ),
+                        link="/parent/approvals",
+                    )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "notify parents of pending redemption failed", exc_info=True
+                )
+
+            return {
+                "status": "pending",
+                "message": "Sent to a parent for approval.",
+                "points_spent": 0,
+                "new_balance": redeemer.points if redeemer else None,
+                "redemption_id": redemption.id,
+            }
+
+        # ── Immediate path: deduct now ────────────────────────────────────
         # Deduct points using PointsService
         transaction = await PointsService.deduct_points_for_reward(
             db=db,
@@ -193,10 +272,7 @@ class RewardService(BaseFamilyService[Reward]):
         try:
             from app.services.notification_service import NotificationService
             from app.models.notification import NotificationType as NT
-            from app.models.user import User, UserRole
 
-            redeemer = await db.get(User, user_id)
-            redeemer_name = redeemer.name if redeemer else "A kid"
             parents = (await db.scalars(
                 select(User).where(
                     and_(
@@ -228,7 +304,104 @@ class RewardService(BaseFamilyService[Reward]):
                 "notify parents of reward redemption failed", exc_info=True
             )
 
-        return transaction
+        return {
+            "status": "completed",
+            "message": "Reward redeemed.",
+            "points_spent": reward.points_cost,
+            "new_balance": transaction.balance_after,
+            "redemption_id": None,
+            "transaction_id": transaction.id,
+        }
+
+    @staticmethod
+    async def list_pending_redemptions(db: AsyncSession, family_id: UUID) -> list:
+        """Pending (awaiting-approval) reward redemptions for the family,
+        enriched with the requesting kid's name. Newest first."""
+        from app.models.reward import RewardRedemption, RedemptionStatus
+        from app.models.user import User
+
+        rows = (await db.execute(
+            select(RewardRedemption, User.name)
+            .join(User, RewardRedemption.user_id == User.id)
+            .where(
+                and_(
+                    RewardRedemption.family_id == family_id,
+                    RewardRedemption.status == RedemptionStatus.PENDING.value,
+                )
+            )
+            .order_by(RewardRedemption.created_at.desc())
+        )).all()
+        result = []
+        for redemption, user_name in rows:
+            redemption.user_name = user_name  # transient attr for the schema
+            result.append(redemption)
+        return result
+
+    @staticmethod
+    async def decide_redemption(
+        db: AsyncSession,
+        redemption_id: UUID,
+        family_id: UUID,
+        parent_id: UUID,
+        approve: bool,
+        notes: Optional[str] = None,
+    ):
+        """Approve (deduct points now) or reject a queued redemption."""
+        from datetime import datetime as _dt
+        from app.models.reward import RewardRedemption, RedemptionStatus
+        from app.models.user import User
+
+        redemption = await db.get(RewardRedemption, redemption_id)
+        if redemption is None or redemption.family_id != family_id:
+            raise NotFoundException("Redemption not found")
+        if redemption.status != RedemptionStatus.PENDING.value:
+            raise ValidationException("This redemption has already been decided")
+
+        transaction = None
+        if approve:
+            # Deduct now — re-checks the balance (the kid may have spent points
+            # elsewhere since queuing), raising if no longer affordable.
+            transaction = await PointsService.deduct_points_for_reward(
+                db=db,
+                user_id=redemption.user_id,
+                reward_id=redemption.reward_id,
+                points_cost=redemption.points_cost,
+            )
+            redemption.status = RedemptionStatus.APPROVED.value
+            redemption.transaction_id = transaction.id
+        else:
+            redemption.status = RedemptionStatus.REJECTED.value
+
+        redemption.decided_by = parent_id
+        redemption.decided_at = _dt.utcnow()
+        redemption.decision_notes = notes
+        await db.commit()
+        await db.refresh(redemption)
+
+        # Tell the kid the outcome.
+        try:
+            from app.services.notification_service import NotificationService
+            from app.models.notification import NotificationType as NT
+
+            kid = await db.get(User, redemption.user_id)
+            k_es = getattr(kid, "preferred_lang", "en") == "es"
+            if approve:
+                title = "🎁 " + ("¡Canje aprobado!" if k_es else "Redemption approved!")
+                body = (f"Tu canje de \"{redemption.reward_title}\" fue aprobado."
+                        if k_es else f'Your "{redemption.reward_title}" redemption was approved.')
+            else:
+                title = ("Canje rechazado" if k_es else "Redemption declined")
+                body = (f"Tu canje de \"{redemption.reward_title}\" fue rechazado."
+                        if k_es else f'Your "{redemption.reward_title}" redemption was declined.')
+            await NotificationService.create(
+                db, family_id=family_id, user_id=redemption.user_id,
+                type=NT.REWARD_REDEEMED, title=title, body=body, link="/rewards",
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("notify kid of decision failed", exc_info=True)
+
+        return redemption
 
     @staticmethod
     async def delete_reward(db: AsyncSession, reward_id: UUID, family_id: UUID) -> None:

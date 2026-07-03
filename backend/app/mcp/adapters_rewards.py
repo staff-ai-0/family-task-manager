@@ -114,10 +114,20 @@ class RedemptionAdapter(ServiceAdapter):
         payload = dict(data)
         reward_id = UUID(payload["reward_id"]) if isinstance(payload.get("reward_id"), str) else payload["reward_id"]
         user_id = UUID(payload["user_id"]) if isinstance(payload.get("user_id"), str) else payload["user_id"]
-        txn = await RewardService.redeem_reward(
+        result = await RewardService.redeem_reward(
             db=ctx.db,
             reward_id=reward_id,
             user_id=user_id,
             family_id=ctx.family_id,
         )
-        return _ser_redemption(txn)
+        # redeem_reward now returns a result dict: "completed" (points deducted,
+        # carries transaction_id) or "pending" (approval-gated, carries
+        # redemption_id — no deduction yet).
+        return {
+            "id": str(result.get("transaction_id") or result.get("redemption_id") or ""),
+            "status": result.get("status"),
+            "message": result.get("message"),
+            "points_spent": result.get("points_spent", 0),
+            "new_balance": result.get("new_balance"),
+            "redemption_id": str(result["redemption_id"]) if result.get("redemption_id") else None,
+        }

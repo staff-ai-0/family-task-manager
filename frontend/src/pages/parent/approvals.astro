@@ -14,14 +14,17 @@ if (!user) {
 }
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
-// One queue, BOTH sources: chore/bonus task proofs AND gig-board claim proofs.
-const [taskRes, gigRes] = await Promise.all([
+// One queue, THREE sources: chore/bonus task proofs, gig-board claim proofs,
+// and parent-approval reward redemptions.
+const [taskRes, gigRes, redemptionRes] = await Promise.all([
     apiFetch<any[]>("/api/task-assignments/pending-approvals", { token }),
     apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token }),
+    apiFetch<any[]>("/api/rewards/redemptions/pending", { token }),
 ]);
 const taskItems: any[] = taskRes.data ?? [];
 const gigItems: any[] = gigRes.data ?? [];
-const total = taskItems.length + gigItems.length;
+const redemptionItems: any[] = redemptionRes.data ?? [];
+const total = taskItems.length + gigItems.length + redemptionItems.length;
 
 const flash = Astro.cookies.get("flash")?.value;
 if (flash) Astro.cookies.delete("flash", { path: "/" });
@@ -202,6 +205,50 @@ const fmtDate = (d: string) =>
                     </ul>
                 </section>
             )}
+
+            {redemptionItems.length > 0 && (
+                <section>
+                    <h2 class="text-sm font-bold text-brand-ink-soft uppercase tracking-wide mb-3 px-1">
+                        {lang === "es" ? "Canjes de premios" : "Reward redemptions"} ({redemptionItems.length})
+                    </h2>
+                    <ul class="space-y-3 approvals-list">
+                        {redemptionItems.map((r: any) => (
+                            <li
+                                class="bg-brand-cream rounded-2xl p-5 border border-brand-ink/10 shadow-[var(--shadow-card)]"
+                                data-kind="redemption"
+                                data-id={r.id}
+                            >
+                                <div class="flex justify-between items-start mb-3 gap-3">
+                                    <div class="min-w-0">
+                                        <h3 class="font-bold text-brand-ink truncate">🎁 {r.reward_title}</h3>
+                                        <p class="text-sm text-brand-ink-soft mt-0.5">
+                                            {r.user_name}
+                                            <span class="mx-1">·</span>
+                                            <span class="text-brand-sun-deep font-semibold">−{r.points_cost} pts</span>
+                                        </p>
+                                    </div>
+                                    {r.created_at && (
+                                        <span class="text-xs text-brand-ink-soft whitespace-nowrap">{fmtDate(r.created_at)}</span>
+                                    )}
+                                </div>
+                                <textarea data-notes rows="2"
+                                    class="w-full border border-brand-ink/20 rounded-lg p-2 mb-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-brand-cream"
+                                    placeholder={lang === "es" ? "Notas (opcional)" : "Notes (optional)"}></textarea>
+                                <div class="flex justify-end gap-2">
+                                    <button type="button" data-action="reject"
+                                        class="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold text-sm hover:bg-red-50 transition-colors">
+                                        {lang === "es" ? "Rechazar" : "Reject"}
+                                    </button>
+                                    <button type="button" data-action="approve"
+                                        class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity">
+                                        {lang === "es" ? "Aprobar" : "Approve"}
+                                    </button>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
     <script>
         document.addEventListener("astro:page-load", () => {
             const lists = document.querySelectorAll(".approvals-list");
@@ -219,18 +266,26 @@ const fmtDate = (d: string) =>
                 const notes = li.querySelector<HTMLTextAreaElement>("[data-notes]");
                 const noteVal = notes?.value.trim() || null;
                 try {
-                    const r =
-                        kind === "gig"
-                            ? await fetch(`/api/gigs/claims/${id}/approve`, {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ approved: approve, notes: noteVal }),
-                              })
-                            : await fetch("/api/assignments/approve", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ assignment_id: id, approve, notes: noteVal }),
-                              });
+                    let r: Response;
+                    if (kind === "gig") {
+                        r = await fetch(`/api/gigs/claims/${id}/approve`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ approved: approve, notes: noteVal }),
+                        });
+                    } else if (kind === "redemption") {
+                        r = await fetch(`/api/rewards/redemptions/${id}/${approve ? "approve" : "reject"}`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ notes: noteVal }),
+                        });
+                    } else {
+                        r = await fetch("/api/assignments/approve", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ assignment_id: id, approve, notes: noteVal }),
+                        });
+                    }
                     if (r.ok) {
                         li.remove();
                         return true;

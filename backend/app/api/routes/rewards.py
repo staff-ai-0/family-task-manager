@@ -19,8 +19,10 @@ from app.schemas.reward import (
     RewardCreate,
     RewardUpdate,
     RewardResponse,
+    RewardRedemptionResponse,
+    RedeemResult,
+    RedemptionDecision,
 )
-from app.schemas.points import PointTransactionResponse
 from app.schemas.reward_goal import GoalSet, GoalProgress
 from app.services.reward_goal_service import RewardGoalService
 from app.models import User
@@ -125,20 +127,71 @@ async def get_reward(
     return reward
 
 
-@router.post("/{reward_id}/redeem", response_model=PointTransactionResponse)
+@router.post("/{reward_id}/redeem", response_model=RedeemResult)
 async def redeem_reward(
     reward_id: UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Redeem a reward with points"""
-    transaction = await RewardService.redeem_reward(
+    """Redeem a reward with points.
+
+    Returns status="completed" (points deducted now) or status="pending"
+    (reward requires parent approval — queued, no deduction yet).
+    """
+    result = await RewardService.redeem_reward(
         db,
         reward_id=reward_id,
         user_id=to_uuid_required(current_user.id),
         family_id=to_uuid_required(current_user.family_id),
     )
-    return transaction
+    return RedeemResult(**result)
+
+
+# ── Parent-approval reward queue ──────────────────────────────────────────
+
+@router.get("/redemptions/pending", response_model=List[RewardRedemptionResponse])
+async def list_pending_redemptions(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reward redemptions awaiting a parent decision (parent only)."""
+    return await RewardService.list_pending_redemptions(
+        db, to_uuid_required(current_user.family_id)
+    )
+
+
+@router.post("/redemptions/{redemption_id}/approve", response_model=RewardRedemptionResponse)
+async def approve_redemption(
+    redemption_id: UUID,
+    decision: RedemptionDecision | None = None,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Approve a queued redemption — deducts the points now (parent only)."""
+    return await RewardService.decide_redemption(
+        db, redemption_id=redemption_id,
+        family_id=to_uuid_required(current_user.family_id),
+        parent_id=to_uuid_required(current_user.id),
+        approve=True,
+        notes=(decision.notes if decision else None),
+    )
+
+
+@router.post("/redemptions/{redemption_id}/reject", response_model=RewardRedemptionResponse)
+async def reject_redemption(
+    redemption_id: UUID,
+    decision: RedemptionDecision | None = None,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reject a queued redemption — no points deducted (parent only)."""
+    return await RewardService.decide_redemption(
+        db, redemption_id=redemption_id,
+        family_id=to_uuid_required(current_user.family_id),
+        parent_id=to_uuid_required(current_user.id),
+        approve=False,
+        notes=(decision.notes if decision else None),
+    )
 
 
 @router.put("/{reward_id}", response_model=RewardResponse)
