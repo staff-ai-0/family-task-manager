@@ -241,6 +241,31 @@ class TestReadyToAssign:
         assert balance == 2_342_340_000
 
     @pytest.mark.asyncio
+    async def test_compute_ready_to_assign_helper(self, db: AsyncSession, family_id):
+        """The extracted AllocationService.compute_ready_to_assign helper (reused
+        by the month view AND the assign-funds endpoint) returns the envelope
+        figure and drops as categories are budgeted."""
+        account = await AccountService.create(
+            db, family_id, AccountCreate(name="Checking", type="checking")
+        )
+        grp = await CategoryGroupService.create(
+            db, family_id, CategoryGroupCreate(name="Food", is_income=False)
+        )
+        cat = await CategoryService.create(
+            db, family_id,
+            CategoryCreate(name="Groceries", group_id=grp.id, rollover_enabled=False)
+        )
+        month = date(2026, 5, 1)
+        await TransactionService.create(
+            db, family_id,
+            TransactionCreate(account_id=account.id, date=month, amount=100_000, category_id=None),
+        )
+        # Nothing budgeted → all $1,000 is ready to assign.
+        assert await AllocationService.compute_ready_to_assign(db, family_id, month) == 100_000
+        # Budget $300 → $700 remains.
+        await AllocationService.set_category_budget(db, family_id, cat.id, month, 30_000)
+        assert await AllocationService.compute_ready_to_assign(db, family_id, month) == 70_000
+
     async def test_ready_to_assign_formula_full(self, db: AsyncSession, family_id):
         """
         End-to-end test of the ready_to_assign formula:

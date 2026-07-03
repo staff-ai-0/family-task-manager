@@ -75,7 +75,7 @@ const monthName = monthNames[lang][month - 1];
             {t(lang, 'fin_ready_to_assign')}
         </p>
         <div class="flex items-center justify-between">
-            <p class={`font-display text-3xl font-extrabold tracking-tight num ${readyToAssign < 0 ? 'text-red-700' : 'text-brand-ink'}`}>
+            <p data-ready-to-assign class={`font-display text-3xl font-extrabold tracking-tight num ${readyToAssign < 0 ? 'text-red-700' : 'text-brand-ink'}`}>
                 {formatCurrency(readyToAssign)}
             </p>
             {readyToAssign > 0 && (

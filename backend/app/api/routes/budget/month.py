@@ -61,33 +61,17 @@ async def get_month_budget(
         }
     }
     
-    # Compute end-of-month date for balance snapshot
+    # Compute end-of-month date for the income query below.
     if month_date.month == 12:
         end_of_month = date(month_date.year + 1, 1, 1) - timedelta(days=1)
     else:
         end_of_month = date(month_date.year, month_date.month + 1, 1) - timedelta(days=1)
 
-    # Envelope budgeting formula (Actual Budget style):
-    #   ready_to_assign = total_on_budget_balance
-    #                     - expense_budgeted_this_month
-    #                     - (prior_expense_budgeted + prior_expense_activity)
-    #
-    # prior_expense_budgeted + prior_expense_activity = net leftover already "used" from the pool
-    total_on_budget_balance = await AccountService.get_total_on_budget_balance(
-        db, family_id, end_of_month
-    )
-    expense_budgeted_this_month = await AllocationService.get_total_expense_budgeted_for_month(
+    # Envelope 'Ready to Assign' — shared helper so the assign-funds endpoint
+    # returns exactly the same figure.
+    result["ready_to_assign"] = await AllocationService.compute_ready_to_assign(
         db, family_id, month_date
     )
-    prior_expense_budgeted = await AllocationService.get_total_expense_budgeted_before_month(
-        db, family_id, month_date
-    )
-    prior_expense_activity = await AllocationService.get_total_expense_activity_before_month(
-        db, family_id, month_date
-    )
-    prior_net = prior_expense_budgeted + prior_expense_activity
-
-    result["ready_to_assign"] = total_on_budget_balance - expense_budgeted_this_month - prior_net
 
     # Total income this month = all positive transactions in on-budget accounts for this month.
     # This includes uncategorized income (category_id=NULL) like payroll deposits.
