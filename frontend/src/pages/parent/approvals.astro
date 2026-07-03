@@ -49,6 +49,24 @@ const fmtDate = (d: string) =>
             ? "Todo el trabajo enviado, en un solo lugar."
             : "All submitted work, in one place."}
     </p>
+            {total > 1 && (
+                <div id="batch-bar" class="sticky top-2 z-20 flex flex-wrap gap-2 items-center bg-brand-cream/95 backdrop-blur rounded-2xl p-3 border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                    <span id="batch-count" class="text-sm font-semibold text-brand-ink mr-auto">
+                        {total} {lang === "es" ? "por revisar" : "to review"}
+                    </span>
+                    {taskItems.some((r: any) => (r.ai_validation_score ?? 0) >= 0.7) && (
+                        <button type="button" id="approve-ai" data-busy={lang === "es" ? "Aprobando…" : "Approving…"}
+                            class="px-3 py-2 rounded-lg bg-brand-mint/20 text-brand-mint-deep border border-brand-mint-deep/30 font-semibold text-sm hover:bg-brand-mint/30 transition-colors">
+                            {lang === "es" ? "Aprobar IA ≥70%" : "Approve AI ≥70%"}
+                        </button>
+                    )}
+                    <button type="button" id="approve-all" data-busy={lang === "es" ? "Aprobando…" : "Approving…"}
+                        class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)] hover:opacity-90 transition-opacity">
+                        {lang === "es" ? "Aprobar todo" : "Approve all"}
+                    </button>
+                </div>
+            )}
+
             {total === 0 && (
                 <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
                     <div class="w-16 h-16 bg-brand-mint/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -73,6 +91,7 @@ const fmtDate = (d: string) =>
                                 class="bg-brand-cream rounded-2xl p-5 border border-brand-ink/10 shadow-[var(--shadow-card)]"
                                 data-kind="task"
                                 data-id={row.assignment_id}
+                                data-ai-score={row.ai_validation_score ?? ""}
                             >
                                 <div class="flex justify-between items-start mb-3 gap-3">
                                     <div class="min-w-0">
@@ -191,44 +210,93 @@ const fmtDate = (d: string) =>
             const remaining = () =>
                 document.querySelectorAll(".approvals-list li[data-id]").length;
 
+            // One request per item, reused by the per-item buttons and the
+            // batch buttons. Resolves true on success (li removed), false on
+            // failure (li kept for manual handling).
+            async function decide(li: HTMLLIElement, approve: boolean): Promise<boolean> {
+                const id = li.dataset.id!;
+                const kind = li.dataset.kind;
+                const notes = li.querySelector<HTMLTextAreaElement>("[data-notes]");
+                const noteVal = notes?.value.trim() || null;
+                try {
+                    const r =
+                        kind === "gig"
+                            ? await fetch(`/api/gigs/claims/${id}/approve`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ approved: approve, notes: noteVal }),
+                              })
+                            : await fetch("/api/assignments/approve", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ assignment_id: id, approve, notes: noteVal }),
+                              });
+                    if (r.ok) {
+                        li.remove();
+                        return true;
+                    }
+                    return false;
+                } catch {
+                    return false;
+                }
+            }
+
+            const countEl = document.getElementById("batch-count");
+            const es = document.documentElement.lang === "es";
+            const afterChange = () => {
+                const n = remaining();
+                if (n === 0) { window.location.reload(); return; }
+                if (countEl) countEl.textContent = `${n} ${es ? "por revisar" : "to review"}`;
+            };
+
             lists.forEach((list) => {
                 list.querySelectorAll<HTMLLIElement>("li[data-id]").forEach((li) => {
-                    const id = li.dataset.id!;
-                    const kind = li.dataset.kind;
-                    const notes = li.querySelector<HTMLTextAreaElement>("[data-notes]");
                     li.querySelectorAll<HTMLButtonElement>("button[data-action]").forEach((btn) => {
                         btn.addEventListener("click", async () => {
-                            const approve = btn.dataset.action === "approve";
-                            const noteVal = notes?.value.trim() || null;
                             btn.disabled = true;
-                            try {
-                                const req =
-                                    kind === "gig"
-                                        ? fetch(`/api/gigs/claims/${id}/approve`, {
-                                              method: "POST",
-                                              headers: { "Content-Type": "application/json" },
-                                              body: JSON.stringify({ approved: approve, notes: noteVal }),
-                                          })
-                                        : fetch("/api/assignments/approve", {
-                                              method: "POST",
-                                              headers: { "Content-Type": "application/json" },
-                                              body: JSON.stringify({ assignment_id: id, approve, notes: noteVal }),
-                                          });
-                                const r = await req;
-                                if (r.ok) {
-                                    li.remove();
-                                    if (remaining() === 0) window.location.reload();
-                                } else {
-                                    const err = await r.text();
-                                    alert(`Error: ${err}`);
-                                    btn.disabled = false;
-                                }
-                            } catch (e) {
-                                alert(`Error: ${(e as Error).message}`);
-                                btn.disabled = false;
-                            }
+                            const ok = await decide(li, btn.dataset.action === "approve");
+                            if (ok) afterChange();
+                            else { alert(es ? "Error al procesar" : "Error processing"); btn.disabled = false; }
                         });
                     });
+                });
+            });
+
+            // Batch approve — loops the same single-item request. `filter`
+            // selects a subset (e.g. AI-confident task items).
+            async function batchApprove(btn: HTMLButtonElement, filter: (li: HTMLLIElement) => boolean) {
+                const items = Array.from(
+                    document.querySelectorAll<HTMLLIElement>(".approvals-list li[data-id]")
+                ).filter(filter);
+                if (!items.length) return;
+                const original = btn.textContent;
+                document.querySelectorAll<HTMLButtonElement>("#batch-bar button").forEach((b) => (b.disabled = true));
+                let done = 0, failed = 0;
+                for (const li of items) {
+                    const ok = await decide(li, true);
+                    ok ? done++ : failed++;
+                    if (countEl) countEl.textContent = `${remaining()} ${es ? "por revisar" : "to review"}`;
+                }
+                if (remaining() === 0) { window.location.reload(); return; }
+                document.querySelectorAll<HTMLButtonElement>("#batch-bar button").forEach((b) => (b.disabled = false));
+                btn.textContent = original;
+                if (failed) alert(es ? `${failed} no se pudieron aprobar` : `${failed} could not be approved`);
+            }
+
+            const allBtn = document.getElementById("approve-all") as HTMLButtonElement | null;
+            allBtn?.addEventListener("click", () => {
+                if (!window.confirm(es ? "¿Aprobar todo el trabajo pendiente?" : "Approve all pending work?")) return;
+                allBtn.textContent = allBtn.dataset.busy || "…";
+                batchApprove(allBtn, () => true);
+            });
+
+            const aiBtn = document.getElementById("approve-ai") as HTMLButtonElement | null;
+            aiBtn?.addEventListener("click", () => {
+                aiBtn.textContent = aiBtn.dataset.busy || "…";
+                // Only task items expose an AI score; gigs are excluded.
+                batchApprove(aiBtn, (li) => {
+                    const s = parseFloat(li.dataset.aiScore || "");
+                    return !isNaN(s) && s >= 0.7;
                 });
             });
         });
