@@ -175,8 +175,28 @@ class RewardService(BaseFamilyService[Reward]):
             )
 
         # ── Parent-approval path: queue instead of deducting ──────────────
-        if reward.requires_parent_approval:
+        # A parent redeeming their own approval-gated reward IS the authority,
+        # so they deduct immediately rather than queue-and-self-approve.
+        redeemer_is_parent = bool(redeemer and redeemer.role == UserRole.PARENT)
+        if reward.requires_parent_approval and not redeemer_is_parent:
             from app.models.reward import RewardRedemption, RedemptionStatus
+
+            # Don't let a kid queue more than they can afford in aggregate:
+            # already-pending redemptions reserve future balance.
+            pending_total = (await db.execute(
+                select(func.coalesce(func.sum(RewardRedemption.points_cost), 0))
+                .where(
+                    and_(
+                        RewardRedemption.user_id == user_id,
+                        RewardRedemption.status == RedemptionStatus.PENDING.value,
+                    )
+                )
+            )).scalar_one()
+            if redeemer and (pending_total + reward.points_cost) > redeemer.points:
+                raise ValidationException(
+                    "You already have pending redemptions using those points. "
+                    "Wait for a parent to decide before redeeming more."
+                )
 
             redemption = RewardRedemption(
                 reward_id=reward.id,
@@ -311,6 +331,7 @@ class RewardService(BaseFamilyService[Reward]):
             "new_balance": transaction.balance_after,
             "redemption_id": None,
             "transaction_id": transaction.id,
+            "transaction": transaction,  # for the backward-compatible route response
         }
 
     @staticmethod
@@ -351,7 +372,15 @@ class RewardService(BaseFamilyService[Reward]):
         from app.models.reward import RewardRedemption, RedemptionStatus
         from app.models.user import User
 
-        redemption = await db.get(RewardRedemption, redemption_id)
+        # Row-lock the redemption so two concurrent approves can't both pass the
+        # PENDING guard and double-deduct. The deduction and the status flip then
+        # commit together (deduct with commit=False) — a crash rolls back both,
+        # leaving the row cleanly re-approvable exactly once.
+        redemption = (await db.execute(
+            select(RewardRedemption)
+            .where(RewardRedemption.id == redemption_id)
+            .with_for_update()
+        )).scalar_one_or_none()
         if redemption is None or redemption.family_id != family_id:
             raise NotFoundException("Redemption not found")
         if redemption.status != RedemptionStatus.PENDING.value:
@@ -360,12 +389,14 @@ class RewardService(BaseFamilyService[Reward]):
         transaction = None
         if approve:
             # Deduct now — re-checks the balance (the kid may have spent points
-            # elsewhere since queuing), raising if no longer affordable.
+            # elsewhere since queuing), raising if no longer affordable. No
+            # commit here: it shares this method's single commit below.
             transaction = await PointsService.deduct_points_for_reward(
                 db=db,
                 user_id=redemption.user_id,
                 reward_id=redemption.reward_id,
                 points_cost=redemption.points_cost,
+                commit=False,
             )
             redemption.status = RedemptionStatus.APPROVED.value
             redemption.transaction_id = transaction.id

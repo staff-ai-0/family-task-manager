@@ -23,6 +23,7 @@ from app.schemas.reward import (
     RedeemResult,
     RedemptionDecision,
 )
+from app.schemas.points import PointTransactionResponse
 from app.schemas.reward_goal import GoalSet, GoalProgress
 from app.services.reward_goal_service import RewardGoalService
 from app.models import User
@@ -127,7 +128,7 @@ async def get_reward(
     return reward
 
 
-@router.post("/{reward_id}/redeem", response_model=RedeemResult)
+@router.post("/{reward_id}/redeem", response_model=None)
 async def redeem_reward(
     reward_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -135,8 +136,10 @@ async def redeem_reward(
 ):
     """Redeem a reward with points.
 
-    Returns status="completed" (points deducted now) or status="pending"
-    (reward requires parent approval — queued, no deduction yet).
+    Backward-compatible: the immediate (non-approval) path returns the same
+    PointTransaction shape as before, so existing strict-decoding mobile
+    clients keep working. Approval-gated rewards instead return a RedeemResult
+    with status="pending" (queued, no deduction yet).
     """
     result = await RewardService.redeem_reward(
         db,
@@ -144,7 +147,16 @@ async def redeem_reward(
         user_id=to_uuid_required(current_user.id),
         family_id=to_uuid_required(current_user.family_id),
     )
-    return RedeemResult(**result)
+    if result.get("status") == "completed" and result.get("transaction") is not None:
+        # Unchanged legacy contract for the common path.
+        return PointTransactionResponse.model_validate(result["transaction"])
+    return RedeemResult(
+        status=result["status"],
+        message=result["message"],
+        points_spent=result.get("points_spent", 0),
+        new_balance=result.get("new_balance"),
+        redemption_id=result.get("redemption_id"),
+    )
 
 
 # ── Parent-approval reward queue ──────────────────────────────────────────

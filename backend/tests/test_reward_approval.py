@@ -81,6 +81,41 @@ async def test_non_approval_reward_deducts_immediately(
 
 
 @pytest.mark.asyncio
+async def test_parent_redeeming_approval_reward_deducts_immediately(
+    db_session, test_family, test_parent_user
+):
+    """A parent IS the approval authority — no self-approval queue."""
+    test_parent_user.points = 200
+    await db_session.commit()
+    reward = await _reward(db_session, test_family, cost=80, approval=True)
+    result = await RewardService.redeem_reward(
+        db_session, reward_id=reward.id, user_id=test_parent_user.id, family_id=test_family.id,
+    )
+    assert result["status"] == "completed"
+    await db_session.refresh(test_parent_user)
+    assert test_parent_user.points == 120
+    pending = (await db_session.execute(select(RewardRedemption))).scalars().all()
+    assert pending == []  # nothing queued
+
+
+@pytest.mark.asyncio
+async def test_cannot_over_queue_beyond_balance(db_session, test_family, test_child_user):
+    """Pending redemptions reserve balance — can't queue more than affordable."""
+    test_child_user.points = 100
+    await db_session.commit()
+    reward = await _reward(db_session, test_family, cost=80, approval=True)
+    # First 80 queues fine (100 >= 80).
+    await RewardService.redeem_reward(
+        db_session, reward_id=reward.id, user_id=test_child_user.id, family_id=test_family.id,
+    )
+    # Second 80 would total 160 > 100 → rejected.
+    with pytest.raises(ValidationException):
+        await RewardService.redeem_reward(
+            db_session, reward_id=reward.id, user_id=test_child_user.id, family_id=test_family.id,
+        )
+
+
+@pytest.mark.asyncio
 async def test_cannot_queue_when_unaffordable(db_session, test_family, test_child_user):
     test_child_user.points = 10
     await db_session.commit()

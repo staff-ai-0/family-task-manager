@@ -123,6 +123,7 @@ class PointsService:
         user_id: UUID,
         reward_id: UUID,
         points_cost: int,
+        commit: bool = True,
     ) -> PointTransaction:
         """
         Deduct points from a user for redeeming a reward.
@@ -132,6 +133,9 @@ class PointsService:
             user_id: ID of user redeeming reward
             reward_id: ID of reward being redeemed
             points_cost: Number of points to deduct
+            commit: Commit here (default). Pass False to fold the deduction into
+                the caller's transaction (e.g. approving a queued redemption,
+                where the point deduction and the status flip must be atomic).
 
         Returns:
             Created PointTransaction
@@ -160,8 +164,11 @@ class PointsService:
         user.points -= points_cost
 
         db.add(transaction)
-        await db.commit()
-        await db.refresh(transaction)
+        if commit:
+            await db.commit()
+            await db.refresh(transaction)
+        else:
+            await db.flush()  # assign transaction.id without committing
 
         return transaction
 

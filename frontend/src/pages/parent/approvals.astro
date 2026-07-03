@@ -290,11 +290,17 @@ const fmtDate = (d: string) =>
                         li.remove();
                         return true;
                     }
+                    // Surface the backend reason (e.g. "Insufficient points.
+                    // Need X, have Y") instead of a blanket error.
+                    const err = await r.json().catch(() => null);
+                    lastError = (err && (err.detail || err.message)) || null;
                     return false;
                 } catch {
+                    lastError = null;
                     return false;
                 }
             }
+            let lastError: string | null = null;
 
             const countEl = document.getElementById("batch-count");
             const es = document.documentElement.lang === "es";
@@ -311,7 +317,7 @@ const fmtDate = (d: string) =>
                             btn.disabled = true;
                             const ok = await decide(li, btn.dataset.action === "approve");
                             if (ok) afterChange();
-                            else { alert(es ? "Error al procesar" : "Error processing"); btn.disabled = false; }
+                            else { alert(lastError || (es ? "Error al procesar" : "Error processing")); btn.disabled = false; }
                         });
                     });
                 });

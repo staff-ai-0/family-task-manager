@@ -82,7 +82,7 @@ class RewardRedemption(Base):
 
     __tablename__ = "reward_redemptions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     # Keep the row if the reward is later deleted; the snapshot preserves history.
     reward_id = Column(UUID(as_uuid=True), ForeignKey("rewards.id", ondelete="SET NULL"), nullable=True)
     reward_title = Column(String(200), nullable=False)
