@@ -21,15 +21,17 @@ if (Astro.request.method === "POST") {
     } else if (action === "clear_goal") {
         await apiFetch("/api/rewards/goal", { method: "DELETE", token });
     } else if (rewardId) {
-        const { ok, error } = await apiFetch(
+        const { ok, error, data } = await apiFetch<any>(
             `/api/rewards/${rewardId}/redeem`,
             { method: "POST", token },
         );
         if (ok) {
-            Astro.cookies.set("flash", t(lang, "rewards_redeemed_flash"), {
-                path: "/",
-                maxAge: 5,
-            });
+            // Approval-gated rewards queue for a parent instead of deducting.
+            const pending = data?.status === "pending";
+            const msg = pending
+                ? (lang === "es" ? "Enviado a tus papás para aprobación 🎁" : "Sent to a parent for approval 🎁")
+                : (t(lang, "rewards_redeemed_flash") as string);
+            Astro.cookies.set("flash", msg, { path: "/", maxAge: 5 });
         } else {
             Astro.cookies.set("flash_error", error || "Error", {
                 path: "/",

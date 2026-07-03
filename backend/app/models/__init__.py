@@ -14,7 +14,7 @@ from app.models.user import User, UserRole
 from app.models.task import Task, TaskStatus, TaskFrequency
 from app.models.task_template import TaskTemplate
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
-from app.models.reward import Reward, RewardCategory
+from app.models.reward import Reward, RewardCategory, RewardRedemption, RedemptionStatus
 from app.models.consequence import Consequence, ConsequenceSeverity, RestrictionType
 from app.models.point_transaction import PointTransaction, TransactionType
 from app.models.password_reset import PasswordResetToken
@@ -65,6 +65,8 @@ __all__ = [
     "TaskTemplate",
     "TaskAssignment",
     "Reward",
+    "RewardRedemption",
+    "RedemptionStatus",
     "Consequence",
     "PointTransaction",
     "CashTransaction",

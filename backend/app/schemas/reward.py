@@ -7,6 +7,7 @@ Request and response models for reward-related operations.
 from pydantic import BaseModel, Field
 from typing import Optional
 from uuid import UUID
+from datetime import datetime
 
 from app.models.reward import RewardCategory
 from app.schemas.base import FamilyEntityResponse
@@ -78,3 +79,37 @@ class RewardWithStatus(RewardResponse):
     can_afford: bool = False  # User has enough points
     is_redeemable: bool = True  # Active and available
     times_redeemed: int = 0  # How many times user redeemed this
+
+
+class RewardRedemptionResponse(BaseModel):
+    """A queued (parent-approval) reward redemption."""
+
+    id: UUID
+    reward_id: Optional[UUID] = None
+    reward_title: str
+    points_cost: int
+    user_id: UUID
+    user_name: Optional[str] = None
+    status: str
+    created_at: datetime
+    decided_at: Optional[datetime] = None
+    decision_notes: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class RedeemResult(BaseModel):
+    """Result of a redeem attempt: either an immediate deduction ('completed')
+    or a queued request awaiting a parent ('pending')."""
+
+    status: str  # "completed" | "pending"
+    message: str
+    points_spent: int = 0
+    new_balance: Optional[int] = None
+    redemption_id: Optional[UUID] = None
+
+
+class RedemptionDecision(BaseModel):
+    """Parent approve/reject of a queued redemption."""
+
+    notes: Optional[str] = Field(None, max_length=2000)
