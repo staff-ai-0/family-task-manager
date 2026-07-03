@@ -91,6 +91,7 @@ class GoogleOAuthService:
         google_user_info: Dict[str, Any],
         family_id: Optional[str] = None,
         join_code: Optional[str] = None,
+        role: Optional[str] = None,
     ) -> tuple[User, str, str, bool]:
         """
         Authenticate existing user or create new user from Google OAuth
@@ -100,6 +101,8 @@ class GoogleOAuthService:
             google_user_info: User info from Google
             family_id: Optional family ID for new user registration
             join_code: Optional family join code to join an existing family
+            role: Requested role when joining via join_code (child/teen/parent);
+                joining defaults to CHILD, all other paths create a PARENT
 
         Returns:
             Tuple of (User, access_token, refresh_token, is_new_user)
@@ -174,7 +177,23 @@ class GoogleOAuthService:
             await db.flush()
             target_family_id = family.id
         
-        # Create new user
+        # Role selection is deliberately narrow to prevent privilege escalation:
+        #  - join_code: a parent-held secret (both join-code endpoints are
+        #    require_parent_role), so honoring a requested role here is the
+        #    intended "who is joining?" flow (defaults to CHILD).
+        #  - family_id: NOT a secret — it appears in every UserResponse/JWT, so
+        #    any member could POST it with a fresh Google token. Force CHILD
+        #    regardless of the requested role; a requested "parent" must never
+        #    be minted from a value everyone in the family already knows.
+        #  - neither: auto-creating a brand-new family makes the founder PARENT.
+        # Real parent additions go through the invitation flow (role set server-side).
+        if join_code:
+            new_role = UserRole(role) if role in ("parent", "teen", "child") else UserRole.CHILD
+        elif family_id:
+            new_role = UserRole.CHILD
+        else:
+            new_role = UserRole.PARENT
+
         user = User(
             id=uuid4(),
             email=email,
@@ -182,7 +201,7 @@ class GoogleOAuthService:
             password_hash=None,  # No password for OAuth users
             oauth_provider="google",
             oauth_id=google_id,
-            role=UserRole.PARENT,  # Default role for new OAuth users
+            role=new_role,
             family_id=target_family_id,
             points=0,
             is_active=True,

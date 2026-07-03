@@ -119,6 +119,8 @@ class RegisterFamilyRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
     preferred_lang: str = Field("en", pattern=r"^(en|es)$")
+    # Only honored when joining via family_code; founding a family is always PARENT.
+    role: Optional[str] = Field(None, pattern=r"^(parent|teen|child)$")
 
 
 class RegisterFamilyResponse(BaseModel):

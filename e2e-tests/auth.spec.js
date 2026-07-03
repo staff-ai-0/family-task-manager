@@ -99,10 +99,9 @@ test.describe('Authentication', () => {
       // Submit form
       await page.click('button[type="submit"]');
 
-      // Wait for success message or redirect
-      await page.waitForURL('**/dashboard', { timeout: 10000 }).catch(() => {
-        // If redirect doesn't happen, check for success message
-      });
+      // A founding parent now lands on /parent (kids/teens on /dashboard) —
+      // accept either, and let a broken redirect actually fail the test.
+      await page.waitForURL(/\/(dashboard|parent)/, { timeout: 10000 });
 
       // Verify we're logged in (either on dashboard or have access token)
       const cookies = await page.context().cookies();

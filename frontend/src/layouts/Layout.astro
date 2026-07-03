@@ -131,6 +131,17 @@ const bannerCopy = {
     </script>
 
     <script is:inline>
+        // Register the service worker for everyone — offline fallback,
+        // asset caching, and notification-click routing live in sw.js.
+        // (Previously only EnablePushButton registered it, so the PWA the
+        // install banner promotes had no offline support unless the user
+        // had tapped "Enable push".)
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("/sw.js").catch(function () {});
+        }
+    </script>
+
+    <script is:inline>
 (function installBanner() {
     // Skip if already running as installed PWA
     if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) return;

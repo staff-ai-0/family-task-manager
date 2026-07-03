@@ -9,7 +9,7 @@ import { authCookies } from "../../../lib/auth-cookies";
 export const POST: APIRoute = async ({ request, cookies }) => {
     try {
         const body = await request.json();
-        const { family_name, family_code, name, email, password, preferred_lang } = body;
+        const { family_name, family_code, name, email, password, preferred_lang, role } = body;
         // Carry the UI language into the account so the welcome email + first
         // login render in the user's language. Fall back to the lang cookie.
         const lang = preferred_lang === "es" || preferred_lang === "en"
@@ -37,6 +37,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
         if (family_code) {
             registerBody.family_code = family_code;
+            if (role === "child" || role === "teen" || role === "parent") {
+                registerBody.role = role;
+            }
         } else {
             registerBody.family_name = family_name;
         }
@@ -56,8 +59,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
             for (const c of authCks) headers.append("Set-Cookie", c);
             // Seed the UI language cookie so the dashboard renders in the chosen language.
             cookies.set("lang", lang, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 365 });
+            // Parents land on the parent dashboard (getting-started checklist);
+            // kids/teens land on the kid task dashboard.
+            const isParent = (data as any)?.user?.role === "parent";
             return new Response(
-                JSON.stringify({ success: true, redirect: "/dashboard" }),
+                JSON.stringify({ success: true, redirect: isParent ? "/parent" : "/dashboard" }),
                 { status: 200, headers }
             );
         }

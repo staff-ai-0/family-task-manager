@@ -23,6 +23,11 @@ class GoogleTokenRequest(BaseModel):
     token: str = Field(..., description="Google ID token from frontend")
     family_id: Optional[str] = Field(None, description="Family ID for new user registration")
     join_code: Optional[str] = Field(None, description="Family join code to join an existing family")
+    role: Optional[str] = Field(
+        None,
+        pattern=r"^(parent|teen|child)$",
+        description="Role when joining via join_code (defaults to child)",
+    )
 
 
 @router.post("/google", response_model=TokenResponse, status_code=status.HTTP_200_OK)
@@ -46,7 +51,7 @@ async def google_oauth_login(
     
     # Authenticate or create user
     user, access_token, refresh_token, is_new_user = await GoogleOAuthService.authenticate_or_create_user(
-        db, google_user_info, request.family_id, request.join_code
+        db, google_user_info, request.family_id, request.join_code, request.role
     )
 
     logger.info(f"Google OAuth successful: user_id={user.id}, email={user.email}, family_id={user.family_id}, is_new={is_new_user}")
