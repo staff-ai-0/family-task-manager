@@ -49,7 +49,10 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
                 const a = await response.json();
                 const es = cookies.get("lang")?.value === "es";
                 const title = (es && a.template_title_es) || a.template_title || "";
-                const pending = a.approval_status === "pending" || a.template_is_bonus;
+                // approval_status alone is authoritative: auto-approved gigs
+                // (trust streak / AI validation) come back "approved" with
+                // points already credited.
+                const pending = a.approval_status === "pending";
                 msg = pending
                     ? (es ? `"${title}" enviada para aprobación 🎉` : `"${title}" submitted for approval 🎉`)
                     : (es ? `¡"${title}" completada! 🎉` : `"${title}" completed! 🎉`);

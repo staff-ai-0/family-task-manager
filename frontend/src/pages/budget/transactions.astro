@@ -44,22 +44,27 @@ const searchFilter = Astro.url.searchParams.get("search") || "";
 const now = new Date();
 const yearParam = parseInt(Astro.url.searchParams.get("year") || "", 10);
 const monthParam = parseInt(Astro.url.searchParams.get("month") || "", 10);
-let year = yearParam >= 2000 && yearParam <= 2100 ? yearParam : now.getFullYear();
-let month = monthParam >= 1 && monthParam <= 12 ? monthParam : now.getMonth() + 1;
+const hasValidYear = yearParam >= 2000 && yearParam <= 2100;
+const hasValidMonth = monthParam >= 1 && monthParam <= 12;
+const year = hasValidYear ? yearParam : now.getFullYear();
+const month = hasValidMonth ? monthParam : now.getMonth() + 1;
 
 // A ?tx= deep link (scan-receipt Edit / duplicate) may point at a transaction
-// dated outside the default month; jump the view to its month so the row is
-// actually in the list.
+// dated outside the default month. Resolve its month and REDIRECT with
+// year/month in the URL — the client later strips only ?tx, so the month
+// survives save-reloads, filter changes, and refreshes.
 const txDeepLink = Astro.url.searchParams.get("tx");
-if (txDeepLink && !(yearParam >= 2000) && !(monthParam >= 1)) {
+if (txDeepLink && !(hasValidYear && hasValidMonth)) {
     const { data: deepTx } = await apiFetch<{ date?: string }>(
         `/api/budget/transactions/${encodeURIComponent(txDeepLink)}`,
         { token },
     );
     const m = deepTx?.date?.match(/^(\d{4})-(\d{2})/);
     if (m) {
-        year = parseInt(m[1], 10);
-        month = parseInt(m[2], 10);
+        const p = new URLSearchParams(Astro.url.searchParams);
+        p.set("year", m[1]);
+        p.set("month", String(parseInt(m[2], 10)));
+        return Astro.redirect(`/budget/transactions?${p.toString()}`);
     }
 }
 const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;

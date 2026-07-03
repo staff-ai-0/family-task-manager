@@ -51,7 +51,9 @@ const [
     apiFetch<any>("/api/auth/me", { token }),
     apiFetch<any>("/api/users/me/points", { token }),
     apiFetch<any[]>("/api/consequences/me/active", { token }),
-    apiFetch<any[]>("/api/users/me/points/history?limit=25", { token }),
+    // Fetch windows must be >= the merged display window (30) or newer rows
+    // from one source get dropped in favor of older rows from the other.
+    apiFetch<any[]>("/api/users/me/points/history?limit=30", { token }),
     apiFetch<any[]>("/api/cash/history", { token }),
 ]);
 if (!user) {
@@ -201,11 +203,14 @@ const ledgerDate = (iso: string) =>
                                     </span>
                                     <div class="flex-1 min-w-0">
                                         <p class="text-sm font-semibold text-brand-ink truncate">
-                                            {e.description || ledgerLabel(e.type)}
+                                            {ledgerLabel(e.type)}
                                         </p>
-                                        {e.description && (
-                                            <p class="text-[11px] text-brand-ink-soft">
-                                                {ledgerLabel(e.type)}
+                                        {/* Machine-written descriptions are English boilerplate;
+                                            only surface human-entered reasons (adjustments). */}
+                                        {e.description &&
+                                            ["parent_adjustment", "adjustment", "penalty", "transfer"].includes(e.type) && (
+                                            <p class="text-[11px] text-brand-ink-soft truncate">
+                                                {e.description}
                                             </p>
                                         )}
                                     </div>

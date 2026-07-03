@@ -6,7 +6,7 @@ import { authCookies } from "../../../lib/auth-cookies";
  * POST /api/oauth/google
  * Proxies Google OAuth token to backend and sets httpOnly access_token cookie
  */
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, cookies }) => {
     try {
         const body = await request.json();
         const { token, family_id, join_code, role } = body;
@@ -42,8 +42,12 @@ export const POST: APIRoute = async ({ request }) => {
             // so a Spanish-speaking family isn't dumped into English (and kid
             // pages into adult mode) after every Google sign-in on a new device.
             const secure = import.meta.env.DEV ? "" : "; Secure";
+            // Restore the account language only when this browser has no lang
+            // cookie yet (new device / cleared storage). A brand-new Google
+            // account defaults to "en" server-side and must not clobber the
+            // Spanish the user was already browsing in.
             const pl = String((result.user as any)?.preferred_lang || "").toLowerCase();
-            if (pl === "en" || pl === "es") {
+            if (!cookies.has("lang") && (pl === "en" || pl === "es")) {
                 headers.append("Set-Cookie", `lang=${pl}; Path=/; Max-Age=${60 * 60 * 24 * 365}; SameSite=Lax${secure}`);
             }
             const uiRole = String((result.user as any)?.role || "").toLowerCase();

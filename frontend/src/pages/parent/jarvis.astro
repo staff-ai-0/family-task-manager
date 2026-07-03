@@ -262,7 +262,8 @@ const labels = {
                 if (!r.ok) return;
                 const actions = await r.json();
                 if (!Array.isArray(actions) || actions.length === 0) return;
-                for (const a of actions) {
+                // API returns newest-first; render oldest-first to match the feed.
+                for (const a of actions.slice().reverse()) {
                     renderConfirmCard(String(a.id), a.tool_name ?? "", a.summary ?? "", a.params ?? {});
                 }
                 scroll?.scrollTo({ top: scroll.scrollHeight });
@@ -284,7 +285,9 @@ const labels = {
         // "ask Jarvis" shortcut with a domain-specific template.
         const qParam = new URLSearchParams(window.location.search).get("q");
         if (qParam && !input.value) {
-            input.value = qParam;
+            // Clamp: maxlength doesn't apply to script-set values, and the
+            // backend rejects >2000 chars with a 422.
+            input.value = qParam.slice(0, 2000);
             input.focus();
         }
 
@@ -317,7 +320,11 @@ const labels = {
                 if (!resp.ok || !resp.body) {
                     pending?.classList.add("hidden");
                     let txt = "Error";
-                    try { txt = (await resp.json()).detail || txt; } catch {}
+                    try {
+                        const d = (await resp.json()).detail;
+                        // 422s carry an array of Pydantic error objects.
+                        txt = Array.isArray(d) ? d.map((x: any) => x.msg || JSON.stringify(x)).join("; ") : (d || txt);
+                    } catch {}
                     alert(txt);
                     return;
                 }

@@ -26,6 +26,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
                         Authorization: `Bearer ${token}`,
                     },
                     body: JSON.stringify({ preferred_lang: lang }),
+                    // Don't let a slow backend hold the toggle's redirect hostage.
+                    signal: AbortSignal.timeout(1500),
                 });
             } catch {
                 // cookie is already set; account sync is best-effort
