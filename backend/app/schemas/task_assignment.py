@@ -121,6 +121,9 @@ class DailyProgressResponse(BaseModel):
     bonus_total: int
     bonus_completed: int
     assignments: List[TaskAssignmentWithDetails]
+    # Prior-day mandatory tasks still open (OVERDUE) that keep bonus/gigs
+    # locked — surfaced so the kid can find and finish them.
+    overdue_assignments: List[TaskAssignmentWithDetails] = []
 
 
 class CompleteAssignmentRequest(BaseModel):

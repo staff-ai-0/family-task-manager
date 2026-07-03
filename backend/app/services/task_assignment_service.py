@@ -604,6 +604,41 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         return (await db.execute(q)).scalar_one() > 0
 
     @staticmethod
+    async def list_open_mandatory_before(
+        db: AsyncSession,
+        user_id: UUID,
+        family_id: UUID,
+        before_date: date,
+    ) -> List[TaskAssignment]:
+        """Open (PENDING/OVERDUE) mandatory assignments dated strictly BEFORE
+        ``before_date`` — i.e. the prior-day blockers that the sweep flipped to
+        OVERDUE and that vanish from today's list, yet keep bonus/gigs locked.
+        Returned so the dashboard can surface them ("Atrasadas") and let the kid
+        finish them (can_complete already allows OVERDUE).
+        """
+        query = (
+            select(TaskAssignment)
+            .options(
+                selectinload(TaskAssignment.template),
+                selectinload(TaskAssignment.assigned_user),
+            )
+            .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
+            .where(
+                and_(
+                    TaskAssignment.assigned_to == user_id,
+                    TaskAssignment.family_id == family_id,
+                    TaskAssignment.assigned_date < before_date,
+                    TaskTemplate.is_bonus.is_(False),
+                    TaskAssignment.status.in_(
+                        [AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]
+                    ),
+                )
+            )
+            .order_by(TaskAssignment.assigned_date.asc())
+        )
+        return list((await db.execute(query)).scalars().all())
+
+    @staticmethod
     async def complete_assignment(
         db: AsyncSession,
         assignment_id: UUID,
@@ -1309,11 +1344,19 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         )
 
         # Carry-over: also block bonus when any prior-day mandatory is
-        # still PENDING/OVERDUE. has_open_mandatory_through covers both
-        # same-day and historical opens.
-        has_open_mandatory = await TaskAssignmentService.has_open_mandatory_through(
+        # still PENDING/OVERDUE. Fetch those blockers so the dashboard can
+        # render them and name what's blocking bonus, instead of showing the
+        # generic "complete all required" message next to "N/N done".
+        overdue_assignments = await TaskAssignmentService.list_open_mandatory_before(
             db, user_id, family_id, check_date
         )
+        # Same-day open mandatory are already in `assignments`; combined with the
+        # prior-day blockers this is the full unlock gate.
+        same_day_open = any(
+            a.status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE)
+            for a in required_assignments
+        )
+        has_open_mandatory = bool(overdue_assignments) or same_day_open
         bonus_unlocked = not has_open_mandatory
 
         return {
@@ -1324,6 +1367,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             "bonus_total": len(bonus_assignments),
             "bonus_completed": bonus_completed,
             "assignments": assignments,
+            "overdue_assignments": overdue_assignments,
         }
 
     # ─── Overdue Check ───────────────────────────────────────────────
@@ -1461,16 +1505,26 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     end_date=end_dt,
                 )
                 db.add(penalty)
+                # Localize to the affected kid's language (penalties are rare,
+                # so the per-assignment user load is fine).
+                penalized_user = await db.get(User, a.assigned_to)
+                is_es = getattr(penalized_user, "preferred_lang", "en") == "es"
+                # Truncate to the notification title column width (String(200)),
+                # matching the Consequence title above — an overflow would abort
+                # the single end-of-sweep commit and roll back every family's flips.
+                if is_es:
+                    title = f"⏰ Atrasada: {tmpl.title}"[:200]
+                    body = f"Penalización automática: {restriction.value} por {duration} día(s)."
+                else:
+                    title = f"⏰ Late: {tmpl.title}"[:200]
+                    body = f"Auto-penalty applied: {restriction.value} for {duration} day(s)."
                 await NotificationService.create_no_commit(
                     db,
                     family_id=a.family_id,
                     user_id=a.assigned_to,
                     type=NT.LATE_PENALTY_APPLIED,
-                    title=f"⏰ Late: {tmpl.title}",
-                    body=(
-                        f"Auto-penalty applied: {restriction.value} "
-                        f"for {duration} day(s)."
-                    ),
+                    title=title,
+                    body=body,
                 )
             total += len(stale)
         await db.commit()

@@ -188,6 +188,46 @@ class RewardService(BaseFamilyService[Reward]):
                 "push reward-redeemed failed", exc_info=True
             )
 
+        # Notify parents — before this, a kid could redeem "30 min screen time"
+        # and no parent ever learned of it (the redeemer got the only push).
+        try:
+            from app.services.notification_service import NotificationService
+            from app.models.notification import NotificationType as NT
+            from app.models.user import User, UserRole
+
+            redeemer = await db.get(User, user_id)
+            redeemer_name = redeemer.name if redeemer else "A kid"
+            parents = (await db.scalars(
+                select(User).where(
+                    and_(
+                        User.family_id == family_id,
+                        User.role == UserRole.PARENT,
+                        User.is_active.is_(True),
+                        User.id != user_id,  # don't notify the redeemer about their own action
+                    )
+                )
+            )).all()
+            for parent in parents:
+                p_es = getattr(parent, "preferred_lang", "en") == "es"
+                await NotificationService.create(
+                    db,
+                    family_id=family_id,
+                    user_id=parent.id,
+                    type=NT.REWARD_REDEEMED,
+                    title="🎁 " + ("Recompensa canjeada" if p_es else "Reward redeemed"),
+                    body=(
+                        f"{redeemer_name} canjeó \"{reward.title}\" por {reward.points_cost} puntos."
+                        if p_es else
+                        f"{redeemer_name} redeemed \"{reward.title}\" for {reward.points_cost} points."
+                    ),
+                    link="/parent/rewards",
+                )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "notify parents of reward redemption failed", exc_info=True
+            )
+
         return transaction
 
     @staticmethod

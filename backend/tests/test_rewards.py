@@ -49,6 +49,7 @@ class TestRewardRedemption:
         self,
         client: AsyncClient,
         test_child_user,
+        test_parent_user,
         test_reward,
         db_session: AsyncSession,
     ):
@@ -76,6 +77,18 @@ class TestRewardRedemption:
         # Check points were deducted
         await db_session.refresh(test_child_user)
         assert test_child_user.points == initial_points - test_reward.points_cost
+
+        # Parents are notified so a redemption can't happen behind their back.
+        from sqlalchemy import select
+        from app.models.notification import Notification, NotificationType
+        notifs = (await db_session.execute(
+            select(Notification).where(
+                Notification.type == NotificationType.REWARD_REDEEMED,
+                Notification.user_id == test_parent_user.id,
+            )
+        )).scalars().all()
+        assert notifs, "expected a REWARD_REDEEMED notification for the parent"
+        assert test_reward.title in (notifs[0].body or "")
 
     @pytest.mark.asyncio
     async def test_cannot_redeem_without_sufficient_points(
