@@ -315,9 +315,12 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
                 overlay.classList.add("hidden");
 
                 if (status === 403) {
-                    alert(lang === "es"
-                        ? "El escaneo de recibos requiere un plan Plus o Pro."
-                        : "Receipt scanning requires a Plus or Pro plan.");
+                    // Premium gate — give a real path to upgrade instead of a
+                    // dead-end alert.
+                    const go = confirm(lang === "es"
+                        ? "El escaneo de recibos requiere un plan Plus o Pro. ¿Ver los planes?"
+                        : "Receipt scanning requires a Plus or Pro plan. See the plans?");
+                    if (go) window.location.href = "/parent/settings/subscription";
                     return;
                 }
                 if (status === 409 && body && body.dup_warning) {

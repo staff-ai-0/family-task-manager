@@ -84,9 +84,9 @@ const fmtDate = (d: string) =>
             )}
 
             {taskItems.length > 0 && (
-                <section>
+                <section data-approval-section>
                     <h2 class="text-sm font-bold text-brand-ink-soft uppercase tracking-wide mb-3 px-1">
-                        {lang === "es" ? "Tareas y bonus" : "Chores & bonus"} ({taskItems.length})
+                        {lang === "es" ? "Tareas y bonus" : "Chores & bonus"} (<span data-section-count>{taskItems.length}</span>)
                     </h2>
                     <ul class="space-y-3 approvals-list">
                         {taskItems.map((row: any) => (
@@ -153,9 +153,9 @@ const fmtDate = (d: string) =>
             )}
 
             {gigItems.length > 0 && (
-                <section>
+                <section data-approval-section>
                     <h2 class="text-sm font-bold text-brand-ink-soft uppercase tracking-wide mb-3 px-1">
-                        {lang === "es" ? "Tablero de gigs" : "Gig board"} ({gigItems.length})
+                        {lang === "es" ? "Tablero de gigs" : "Gig board"} (<span data-section-count>{gigItems.length}</span>)
                     </h2>
                     <ul class="space-y-3 approvals-list">
                         {gigItems.map((claim: any) => (
@@ -207,9 +207,9 @@ const fmtDate = (d: string) =>
             )}
 
             {redemptionItems.length > 0 && (
-                <section>
+                <section data-approval-section>
                     <h2 class="text-sm font-bold text-brand-ink-soft uppercase tracking-wide mb-3 px-1">
-                        {lang === "es" ? "Canjes de premios" : "Reward redemptions"} ({redemptionItems.length})
+                        {lang === "es" ? "Canjes de premios" : "Reward redemptions"} (<span data-section-count>{redemptionItems.length}</span>)
                     </h2>
                     <ul class="space-y-3 approvals-list">
                         {redemptionItems.map((r: any) => (
@@ -308,6 +308,14 @@ const fmtDate = (d: string) =>
                 const n = remaining();
                 if (n === 0) { window.location.reload(); return; }
                 if (countEl) countEl.textContent = `${n} ${es ? "por revisar" : "to review"}`;
+                // Keep each section's header count honest and hide an emptied
+                // section (its list stays otherwise until a full reload).
+                document.querySelectorAll<HTMLElement>("[data-approval-section]").forEach((sec) => {
+                    const left = sec.querySelectorAll("li[data-id]").length;
+                    const countSpan = sec.querySelector("[data-section-count]");
+                    if (countSpan) countSpan.textContent = String(left);
+                    if (left === 0) sec.classList.add("hidden");
+                });
             };
 
             lists.forEach((list) => {
@@ -342,6 +350,7 @@ const fmtDate = (d: string) =>
                     if (countEl) countEl.textContent = `${remaining()} ${es ? "por revisar" : "to review"}`;
                 }
                 if (remaining() === 0) { window.location.reload(); return; }
+                afterChange();  // refresh section counts + hide emptied sections
                 document.querySelectorAll<HTMLButtonElement>("#batch-bar button").forEach((b) => (b.disabled = false));
                 btn.textContent = original;
                 if (failed) alert(es ? `${failed} no se pudieron aprobar` : `${failed} could not be approved`);

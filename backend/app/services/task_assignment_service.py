@@ -1509,15 +1509,28 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 # so the per-assignment user load is fine).
                 penalized_user = await db.get(User, a.assigned_to)
                 is_es = getattr(penalized_user, "preferred_lang", "en") == "es"
+                # Human, localized label for the restriction — not the raw enum
+                # token ("screen_time") which leaked into the kid-facing body.
+                _RESTRICTION_LABELS = {
+                    "screen_time": ("tiempo de pantalla", "screen time"),
+                    "rewards": ("recompensas", "rewards"),
+                    "extra_tasks": ("tareas extra", "extra tasks"),
+                    "allowance": ("mesada", "allowance"),
+                    "activities": ("actividades", "activities"),
+                    "custom": ("una restricción", "a restriction"),
+                }
+                _r_es, _r_en = _RESTRICTION_LABELS.get(
+                    restriction.value, (restriction.value, restriction.value)
+                )
                 # Truncate to the notification title column width (String(200)),
                 # matching the Consequence title above — an overflow would abort
                 # the single end-of-sweep commit and roll back every family's flips.
                 if is_es:
                     title = f"⏰ Atrasada: {tmpl.title}"[:200]
-                    body = f"Penalización automática: {restriction.value} por {duration} día(s)."
+                    body = f"Penalización automática: sin {_r_es} por {duration} día(s)."
                 else:
                     title = f"⏰ Late: {tmpl.title}"[:200]
-                    body = f"Auto-penalty applied: {restriction.value} for {duration} day(s)."
+                    body = f"Auto-penalty applied: no {_r_en} for {duration} day(s)."
                 await NotificationService.create_no_commit(
                     db,
                     family_id=a.family_id,
