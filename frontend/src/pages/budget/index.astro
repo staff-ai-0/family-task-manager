@@ -219,13 +219,21 @@ const allCategories = (allGroups || [])
                 });
                 if (!res.ok) throw new Error(String(res.status));
                 const data = await res.json();
+                if (data.filled_count > 0) {
+                    // Amounts changed — reload to show them.
+                    window.location.reload();
+                    return;
+                }
+                // Nothing to copy (no prior month, or all categories already
+                // budgeted) — a silent reload looks like a failure, so say so.
                 if (msg) {
                     msg.textContent = es
-                        ? `Se copiaron ${data.filled_count} categorías.`
-                        : `Copied ${data.filled_count} categories.`;
+                        ? "No hay nada que copiar (el mes anterior está vacío o ya tienes presupuesto)."
+                        : "Nothing to copy (last month is empty or already budgeted).";
                     msg.classList.remove("hidden");
                 }
-                window.location.reload();
+                btn.disabled = false;
+                btn.textContent = original;
             } catch (e) {
                 btn.disabled = false;
                 btn.textContent = original;

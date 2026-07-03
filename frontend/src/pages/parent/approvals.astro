@@ -269,7 +269,10 @@ const fmtDate = (d: string) =>
                     document.querySelectorAll<HTMLLIElement>(".approvals-list li[data-id]")
                 ).filter(filter);
                 if (!items.length) return;
+                // Capture the real label BEFORE swapping in the busy text, so a
+                // partial-failure restore doesn't leave it stuck on "Approving…".
                 const original = btn.textContent;
+                btn.textContent = btn.dataset.busy || "…";
                 document.querySelectorAll<HTMLButtonElement>("#batch-bar button").forEach((b) => (b.disabled = true));
                 let done = 0, failed = 0;
                 for (const li of items) {
@@ -286,13 +289,11 @@ const fmtDate = (d: string) =>
             const allBtn = document.getElementById("approve-all") as HTMLButtonElement | null;
             allBtn?.addEventListener("click", () => {
                 if (!window.confirm(es ? "¿Aprobar todo el trabajo pendiente?" : "Approve all pending work?")) return;
-                allBtn.textContent = allBtn.dataset.busy || "…";
                 batchApprove(allBtn, () => true);
             });
 
             const aiBtn = document.getElementById("approve-ai") as HTMLButtonElement | null;
             aiBtn?.addEventListener("click", () => {
-                aiBtn.textContent = aiBtn.dataset.busy || "…";
                 // Only task items expose an AI score; gigs are excluded.
                 batchApprove(aiBtn, (li) => {
                     const s = parseFloat(li.dataset.aiScore || "");

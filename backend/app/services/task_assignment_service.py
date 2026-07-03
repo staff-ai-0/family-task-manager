@@ -1509,11 +1509,14 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 # so the per-assignment user load is fine).
                 penalized_user = await db.get(User, a.assigned_to)
                 is_es = getattr(penalized_user, "preferred_lang", "en") == "es"
+                # Truncate to the notification title column width (String(200)),
+                # matching the Consequence title above — an overflow would abort
+                # the single end-of-sweep commit and roll back every family's flips.
                 if is_es:
-                    title = f"⏰ Atrasada: {tmpl.title}"
+                    title = f"⏰ Atrasada: {tmpl.title}"[:200]
                     body = f"Penalización automática: {restriction.value} por {duration} día(s)."
                 else:
-                    title = f"⏰ Late: {tmpl.title}"
+                    title = f"⏰ Late: {tmpl.title}"[:200]
                     body = f"Auto-penalty applied: {restriction.value} for {duration} day(s)."
                 await NotificationService.create_no_commit(
                     db,

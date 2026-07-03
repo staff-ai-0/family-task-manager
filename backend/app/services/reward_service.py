@@ -203,6 +203,7 @@ class RewardService(BaseFamilyService[Reward]):
                         User.family_id == family_id,
                         User.role == UserRole.PARENT,
                         User.is_active.is_(True),
+                        User.id != user_id,  # don't notify the redeemer about their own action
                     )
                 )
             )).all()
