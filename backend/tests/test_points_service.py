@@ -287,3 +287,44 @@ class TestDeductPointsForReward:
 
         await db_session.refresh(test_child_user)
         assert test_child_user.points == initial_points + 100 - 60
+
+
+@pytest.mark.asyncio
+class TestPointsHistoryRoute:
+    """GET /api/users/me/points/history — the kid-visible ledger."""
+
+    async def test_history_returns_own_transactions_newest_first(
+        self, client, db_session, test_child_user, test_task
+    ):
+        from app.core.security import create_access_token
+
+        await PointsService.award_points_for_task(
+            db=db_session,
+            user_id=test_child_user.id,
+            task_id=test_task.id,
+            points=25,
+        )
+        await PointsService.award_points_for_task(
+            db=db_session,
+            user_id=test_child_user.id,
+            task_id=test_task.id,
+            points=10,
+        )
+
+        token = create_access_token(
+            data={
+                "sub": str(test_child_user.id),
+                "family_id": str(test_child_user.family_id),
+                "role": test_child_user.role.value,
+            }
+        )
+        r = await client.get(
+            "/api/users/me/points/history",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert len(body) == 2
+        assert body[0]["points"] == 10  # newest first
+        assert body[1]["points"] == 25
+        assert all(tx["user_id"] == str(test_child_user.id) for tx in body)
