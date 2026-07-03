@@ -7,12 +7,11 @@ import { t } from "@lib/i18n";
 
 interface Props {
     lang: "en" | "es";
-    token: string;
     accounts: Array<{ id: string; name: string; type: string }>;
     categories: Array<{ id: string; name: string; group_name: string }>;
 }
 
-const { lang, token, accounts, categories } = Astro.props;
+const { lang, accounts, categories } = Astro.props;
 
 const errAmount = lang === "es" ? "Ingresa un monto" : "Enter an amount";
 const errCategory = lang === "es" ? "Selecciona una categoría" : "Select a category";
@@ -204,7 +203,7 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
     </div>
 </div>
 
-<script define:vars={{ token, errAmount, errCategory, errAccount }}>
+<script define:vars={{ errAmount, errCategory, errAccount }}>
 (function initFABModal() {
     const fabBtn = document.getElementById("fab-button");
     const backdrop = document.getElementById("fab-backdrop");
@@ -269,9 +268,9 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
         if (payeesLoaded || !payeeList) return;
         payeesLoaded = true;
         try {
-            const res = await fetch("/api/budget/payees/", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            // Same-origin proxy injects the httpOnly access_token cookie; no
+            // need to echo the JWT into the page and re-send it here.
+            const res = await fetch("/api/budget/payees/");
             if (!res.ok) return;
             const payees = await res.json();
             payeeList.replaceChildren(
@@ -358,8 +357,7 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
             catTimer = setTimeout(async () => {
                 try {
                     const res = await fetch(
-                        `/api/budget/categorization-rules/suggest?payee=${encodeURIComponent(val)}`,
-                        { headers: { Authorization: `Bearer ${token}` } }
+                        `/api/budget/categorization-rules/suggest?payee=${encodeURIComponent(val)}`
                     );
                     if (res.ok) {
                         const data = await res.json();
@@ -412,10 +410,7 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
 
                 const res = await fetch("/api/budget/transactions/", {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`,
-                    },
+                    headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(body),
                 });
 
