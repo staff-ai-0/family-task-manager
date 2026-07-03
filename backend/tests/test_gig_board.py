@@ -143,6 +143,17 @@ async def test_claim_complete_approve_awards_points(
     assert complete_res.status_code == 200
     assert complete_res.json()["status"] == "completed"
 
+    # Submitting for review notifies parents with a link to the unified
+    # approvals queue — /parent/gigs?tab=pending no longer renders claims, so
+    # this asserts the dead-link regression can't silently return.
+    from sqlalchemy import select
+    from app.models.notification import Notification, NotificationType
+    notifs = (await db_session.execute(
+        select(Notification).where(Notification.type == NotificationType.GIG_PENDING_REVIEW)
+    )).scalars().all()
+    assert notifs, "expected a GIG_PENDING_REVIEW notification for the parent"
+    assert all(n.link == "/parent/approvals" for n in notifs)
+
     # Parent approves
     approve_res = await client.post(
         f"/api/gigs/claims/{claim_id}/approve",

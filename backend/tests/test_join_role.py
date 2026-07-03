@@ -125,3 +125,46 @@ async def test_join_by_code_rejects_invalid_role(client, db_session, test_family
         "role": "admin",
     })
     assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_google_join_by_code_honors_requested_role(db_session, test_family):
+    """Requested role IS honored on the Google join-by-CODE path (parent-held
+    secret) — this is the intended 'who is joining?' selection."""
+    from app.services.google_oauth_service import GoogleOAuthService
+
+    code = await _join_code_for(db_session, test_family)
+    for role, email in [("teen", "g-teen@test.com"), ("parent", "g-par@test.com")]:
+        user, _, _, _ = await GoogleOAuthService.authenticate_or_create_user(
+            db_session,
+            {"google_id": f"gid-{email}", "email": email, "name": "G", "email_verified": True},
+            join_code=code,
+            role=role,
+        )
+        assert user.role == UserRole(role)
+
+
+@pytest.mark.asyncio
+async def test_google_family_id_ignores_requested_parent_role(db_session, test_family):
+    """SECURITY: family_id is not a secret, so role='parent' on the family_id
+    path must NOT mint a parent — it is forced to CHILD."""
+    from app.services.google_oauth_service import GoogleOAuthService
+
+    user, _, _, _ = await GoogleOAuthService.authenticate_or_create_user(
+        db_session,
+        {"google_id": "gid-escalate", "email": "g-escalate@test.com", "name": "G", "email_verified": True},
+        family_id=str(test_family.id),
+        role="parent",
+    )
+    assert user.role == UserRole.CHILD
+    assert str(user.family_id) == str(test_family.id)
+
+
+@pytest.mark.asyncio
+async def test_google_route_rejects_invalid_role(client):
+    """Pydantic validates role before Google verification, so no token mock
+    is needed to prove the enum is enforced at the route boundary."""
+    r = await client.post("/api/oauth/google", json={
+        "token": "x", "join_code": "ABC123", "role": "admin",
+    })
+    assert r.status_code == 422
