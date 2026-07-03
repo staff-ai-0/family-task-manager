@@ -20,6 +20,7 @@ class NotificationType:
     GIG_PENDING_REVIEW = "gig_pending_review"
     LATE_PENALTY_APPLIED = "late_penalty_applied"
     REWARDS_LOCKED = "rewards_locked"
+    REWARD_REDEEMED = "reward_redeemed"
     CALENDAR_EVENT_ADDED = "calendar_event_added"
     SHOPPING_ITEM_ADDED = "shopping_item_added"
     PET_NEEDS_ATTENTION = "pet_needs_attention"
