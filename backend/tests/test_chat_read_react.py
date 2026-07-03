@@ -141,3 +141,38 @@ class TestReactions:
         by_emoji = {g["emoji"]: g for g in groups[msg.id]}
         assert by_emoji["👍"]["count"] == 2
         assert by_emoji["🎉"]["count"] == 1
+
+    async def test_reaction_endpoint_returns_authoritative_count(
+        self, client, db_session, test_family, test_parent_user, test_child_user
+    ):
+        """POST/DELETE reactions return {emoji, count, mine} so the client can
+        reconcile its optimistic chip to server truth."""
+        from app.core.security import create_access_token
+
+        msg = await FamilyChatService.post_message(
+            db_session, test_family.id, test_parent_user.id, "react"
+        )
+        # child already reacted 👍 → server count 1
+        await FamilyChatService.add_reaction(
+            db_session, msg.id, test_child_user.id, test_family.id, "👍"
+        )
+        await db_session.commit()
+
+        tok = create_access_token(data={
+            "sub": str(test_parent_user.id),
+            "family_id": str(test_parent_user.family_id),
+            "role": test_parent_user.role.value,
+        })
+        headers = {"Authorization": f"Bearer {tok}"}
+
+        # Parent adds 👍 → authoritative count is 2, mine=true.
+        r = await client.post(f"/api/chat/{msg.id}/reactions", json={"emoji": "👍"}, headers=headers)
+        assert r.status_code == 200
+        body = r.json()
+        assert body["emoji"] == "👍" and body["count"] == 2 and body["mine"] is True
+
+        # Parent removes 👍 → count back to 1 (child's), mine=false.
+        r = await client.delete(f"/api/chat/{msg.id}/reactions?emoji=%F0%9F%91%8D", headers=headers)
+        assert r.status_code == 200
+        body = r.json()
+        assert body["count"] == 1 and body["mine"] is False

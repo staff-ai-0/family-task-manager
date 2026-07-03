@@ -129,25 +129,24 @@ const labels = {
                                 <p class={`text-[10px] mt-1 ${mine ? "text-brand-cream/60" : "text-brand-ink-soft"}`}>
                                     {timeAgo(m.created_at)}
                                 </p>
-                                {reactions.length > 0 && (
-                                    <div class="flex flex-wrap gap-1 mt-1">
-                                        {reactions.map((r: any) => (
-                                            <button
-                                                type="button"
-                                                data-react={m.id}
-                                                data-emoji={r.emoji}
-                                                data-toggle={r.user_ids.includes(user.id) ? "off" : "on"}
-                                                class={`text-[11px] px-1.5 py-0.5 rounded-full ${
-                                                    r.user_ids.includes(user.id)
-                                                        ? "bg-cyan-500 text-white"
-                                                        : "bg-brand-cream-deep text-brand-ink"
-                                                }`}
-                                            >
-                                                {r.emoji} {r.count}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
+                                <div data-reaction-chips class="flex flex-wrap gap-1 mt-1 empty:mt-0">
+                                    {reactions.map((r: any) => (
+                                        <button
+                                            type="button"
+                                            data-react={m.id}
+                                            data-emoji={r.emoji}
+                                            data-count={r.count}
+                                            data-toggle={r.user_ids.includes(user.id) ? "off" : "on"}
+                                            class={`text-[11px] px-1.5 py-0.5 rounded-full ${
+                                                r.user_ids.includes(user.id)
+                                                    ? "bg-cyan-500 text-white"
+                                                    : "bg-brand-cream-deep text-brand-ink"
+                                            }`}
+                                        >
+                                            {r.emoji} {r.count}
+                                        </button>
+                                    ))}
+                                </div>
                                 <div class="mt-1 flex gap-1 opacity-40 hover:opacity-100 transition-opacity">
                                     {["👍","❤️","😂","🎉","🙏","✅"].map((e) => (
                                         <button type="button" data-react={m.id} data-emoji={e} data-toggle="on"
@@ -224,29 +223,9 @@ const labels = {
             feed.scrollTo({ top: feed.scrollHeight, behavior: "smooth" });
         }
 
-        // Reaction click delegation (W8.6)
-        feed.addEventListener("click", async (ev) => {
-            const btn = /** @type {HTMLElement | null} */ (ev.target instanceof Element ? ev.target.closest("[data-react]") : null);
-            if (!btn) return;
-            const msgId = btn.getAttribute("data-react");
-            const emoji = btn.getAttribute("data-emoji");
-            const toggle = btn.getAttribute("data-toggle") || "on";
-            if (!msgId || !emoji) return;
-            try {
-                if (toggle === "on") {
-                    await fetch(`/api/chat/${msgId}/reactions`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ emoji }),
-                    });
-                } else {
-                    await fetch(`/api/chat/${msgId}/reactions?emoji=${encodeURIComponent(emoji)}`, {
-                        method: "DELETE",
-                    });
-                }
-                location.reload();
-            } catch {}
-        });
+        // Reaction handling lives in a separate bundled <script> below (it uses
+        // the shared mutate() helper for optimistic updates — imports aren't
+        // allowed in this is:inline define:vars block).
 
         let aborted = false;
         async function connect() {
@@ -291,5 +270,97 @@ const labels = {
         }
         connect();
         document.addEventListener("astro:before-swap", () => { aborted = true; }, { once: true });
+    });
+</script>
+
+<script>
+    // Optimistic reaction toggles — replaces a full page reload on every emoji
+    // tap. Bundled (not is:inline) so it can import the shared mutate() helper.
+    import { mutate } from "../lib/mutate";
+
+    document.addEventListener("astro:page-load", () => {
+        const feed = document.getElementById("chat-feed");
+        if (!feed) return;
+
+        // Set a message's chip for one emoji to an EXACT count (authoritative,
+        // from the server response) — reconciles away any optimistic drift when
+        // other members reacted concurrently.
+        function setChip(bubble: HTMLElement, emoji: string, count: number, mine: boolean) {
+            const chips = bubble.querySelector<HTMLElement>("[data-reaction-chips]");
+            if (!chips) return;
+            let chip = chips.querySelector<HTMLButtonElement>(`button[data-emoji="${CSS.escape(emoji)}"]`);
+            if (count <= 0) { chip?.remove(); return; }
+            if (!chip) {
+                chip = document.createElement("button");
+                chip.type = "button";
+                chip.dataset.react = bubble.dataset.msgId || "";
+                chip.dataset.emoji = emoji;
+                chips.appendChild(chip);
+            }
+            chip.dataset.count = String(count);
+            chip.dataset.toggle = mine ? "off" : "on";
+            chip.className = mine
+                ? "text-[11px] px-1.5 py-0.5 rounded-full bg-cyan-500 text-white"
+                : "text-[11px] px-1.5 py-0.5 rounded-full bg-brand-cream-deep text-brand-ink";
+            chip.textContent = `${emoji} ${count}`;
+        }
+
+        // Optimistic ±1 (before the request resolves).
+        function applyReaction(bubble: HTMLElement, emoji: string, adding: boolean) {
+            const chip = bubble.querySelector<HTMLButtonElement>(`[data-reaction-chips] button[data-emoji="${CSS.escape(emoji)}"]`);
+            const cur = chip ? (parseInt(chip.dataset.count || "0", 10) || 0) : 0;
+            const isMine = chip?.dataset.toggle === "off";
+            const next = adding ? cur + 1 : cur - 1;
+            setChip(bubble, emoji, next, adding ? true : (isMine ? false : isMine));
+        }
+
+        // One in-flight request per (message, emoji) — rapid double-taps would
+        // otherwise overlap apply/revert and leave a phantom chip + dup toasts.
+        const inFlight = new Set<string>();
+
+        feed.addEventListener("click", async (ev) => {
+            const target = ev.target;
+            const btn = target instanceof Element ? target.closest<HTMLElement>("[data-react]") : null;
+            if (!btn) return;
+            const bubble = btn.closest<HTMLElement>("[data-msg-id]");
+            const msgId = btn.dataset.react;
+            const emoji = btn.dataset.emoji;
+            if (!bubble || !msgId || !emoji) return;
+
+            const key = `${msgId}|${emoji}`;
+            if (inFlight.has(key)) return;
+            inFlight.add(key);
+
+            // Derive intent from the CHIP's state (my membership), not the
+            // clicked button — palette buttons are always "add", but tapping a
+            // chip I already own must remove. Uniform + matches the server.
+            const chips = bubble.querySelector<HTMLElement>("[data-reaction-chips]");
+            const existing = chips?.querySelector<HTMLButtonElement>(`button[data-emoji="${CSS.escape(emoji)}"]`);
+            const adding = !(existing && existing.dataset.toggle === "off");
+
+            try {
+                const res = await mutate(
+                    adding
+                        ? `/api/chat/${msgId}/reactions`
+                        : `/api/chat/${msgId}/reactions?emoji=${encodeURIComponent(emoji)}`,
+                    {
+                        method: adding ? "POST" : "DELETE",
+                        body: adding ? { emoji } : undefined,
+                        optimistic: () => applyReaction(bubble, emoji, adding),
+                        revert: () => applyReaction(bubble, emoji, !adding),
+                        errorFallback: "Could not update reaction",
+                    },
+                );
+                // Reconcile to the authoritative server count.
+                if (res) {
+                    const data = await res.json().catch(() => null);
+                    if (data && typeof data.count === "number") {
+                        setChip(bubble, data.emoji ?? emoji, data.count, !!data.mine);
+                    }
+                }
+            } finally {
+                inFlight.delete(key);
+            }
+        });
     });
 </script>

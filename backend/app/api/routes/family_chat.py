@@ -116,44 +116,51 @@ async def mark_read(
     return None
 
 
-@router.post("/{message_id}/reactions", status_code=status.HTTP_204_NO_CONTENT)
+async def _reaction_state(db, message_id: UUID, user_id: UUID, emoji: str) -> dict:
+    """Authoritative count + membership for one emoji on a message — returned so
+    the client can reconcile its optimistic chip to server truth (avoids drift
+    when other members reacted concurrently)."""
+    groups = (await FamilyChatService.reactions_for_messages(db, [message_id])).get(message_id, [])
+    grp = next((g for g in groups if g["emoji"] == emoji), None)
+    return {
+        "emoji": emoji,
+        "count": grp["count"] if grp else 0,
+        "mine": bool(grp and str(user_id) in grp["user_ids"]),
+    }
+
+
+@router.post("/{message_id}/reactions")
 async def add_reaction(
     message_id: UUID,
     data: ReactionRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    uid = to_uuid_required(current_user.id)
     try:
         await FamilyChatService.add_reaction(
-            db,
-            message_id,
-            to_uuid_required(current_user.id),
-            to_uuid_required(current_user.family_id),
-            data.emoji,
+            db, message_id, uid, to_uuid_required(current_user.family_id), data.emoji,
         )
     except ValidationException as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return None
+    return await _reaction_state(db, message_id, uid, data.emoji)
 
 
-@router.delete("/{message_id}/reactions", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{message_id}/reactions")
 async def remove_reaction(
     message_id: UUID,
     emoji: str = Query(..., min_length=1, max_length=16),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    uid = to_uuid_required(current_user.id)
     try:
         await FamilyChatService.remove_reaction(
-            db,
-            message_id,
-            to_uuid_required(current_user.id),
-            to_uuid_required(current_user.family_id),
-            emoji,
+            db, message_id, uid, to_uuid_required(current_user.family_id), emoji,
         )
     except ValidationException as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return None
+    return await _reaction_state(db, message_id, uid, emoji)
 
 
 @router.get("/stream")
