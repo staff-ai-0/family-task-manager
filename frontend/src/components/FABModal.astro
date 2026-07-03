@@ -240,7 +240,12 @@ const errAccount = lang === "es" ? "Selecciona una cuenta" : "Select an account"
     // Restore last-used account/category so repeat entries skip both pickers;
     // a single-account family never has to pick at all.
     function applyDefaults() {
-        if (dateInput) dateInput.value = localDate();
+        if (dateInput) {
+            // Cap at today — a future date would land the transaction in a
+            // month the list's nav can't reach (next chevron stops at now).
+            dateInput.max = localDate();
+            dateInput.value = localDate();
+        }
         if (accountSelect && !accountSelect.value) {
             const remembered = localStorage.getItem("ftm-fab-account");
             if (remembered && accountSelect.querySelector(`option[value="${CSS.escape(remembered)}"]`)) {

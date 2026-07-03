@@ -60,10 +60,15 @@ if (txDeepLink && !(hasValidYear && hasValidMonth)) {
         { token },
     );
     const m = deepTx?.date?.match(/^(\d{4})-(\d{2})/);
-    if (m) {
+    // Only redirect when the resolved month passes the SAME validity check the
+    // redirected page will apply — otherwise the page can't converge and would
+    // re-resolve → redirect forever (bad-data dates outside 2000-2100).
+    const ry = m ? parseInt(m[1], 10) : 0;
+    const rm = m ? parseInt(m[2], 10) : 0;
+    if (m && ry >= 2000 && ry <= 2100 && rm >= 1 && rm <= 12) {
         const p = new URLSearchParams(Astro.url.searchParams);
         p.set("year", m[1]);
-        p.set("month", String(parseInt(m[2], 10)));
+        p.set("month", String(rm));
         return Astro.redirect(`/budget/transactions?${p.toString()}`);
     }
 }
