@@ -109,7 +109,7 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                                 </div>
 
                                 {!hasClaim && (
-                                    <form method="POST" action="/api/gigs/claim">
+                                    <form method="POST" action={`/api/gigs/offerings/${o.id}/claim`} data-claim-form>
                                         <input type="hidden" name="gig_id" value={o.id} />
                                         <button
                                             type="submit"
@@ -174,6 +174,7 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
 
 <script>
 import { mutate } from "../../lib/mutate";
+import { showToast } from "../../lib/toast";
 
 const _lang = document.cookie.split(";").find(c => c.trim().startsWith("lang="))?.split("=")[1] ?? "en";
 const es = _lang === "es";
@@ -202,18 +203,25 @@ document.addEventListener("submit", async (e) => {
     const target = e.target as HTMLElement;
 
     // ── Claim a gig → swap the button for the proof form (no reload) ──
-    const claimForm = target.closest?.("form[action='/api/gigs/claim']") as HTMLFormElement | null;
+    const claimForm = target.closest?.("[data-claim-form]") as HTMLFormElement | null;
     if (claimForm) {
         e.preventDefault();
         const gigId = (claimForm.querySelector("[name=gig_id]") as HTMLInputElement).value;
         const btn = claimForm.querySelector("button") as HTMLButtonElement;
         const label = btn.getAttribute("data-label") ?? (es ? "Reclamar" : "Claim");
+        // Capture the card BEFORE the outerHTML swap detaches claimForm.
+        const card = claimForm.closest<HTMLElement>(".rounded-2xl");
         btn.disabled = true; btn.textContent = "...";
         const res = await mutate(`/api/gigs/offerings/${gigId}/claim`, { errorFallback: es ? "No se pudo reclamar" : "Could not claim" });
         if (res) {
             const claim = await res.json().catch(() => null);
-            if (claim && claim.id) claimForm.outerHTML = proofFormHTML(claim.id);
-            else window.location.reload();
+            if (claim && claim.id) {
+                claimForm.outerHTML = proofFormHTML(claim.id);
+                // Match the server-rendered claimed-card border (was grey).
+                card?.classList.replace("border-brand-ink/10", "border-violet-200");
+            } else {
+                window.location.reload();
+            }
         } else { btn.disabled = false; btn.textContent = label; }
         return;
     }
@@ -237,7 +245,7 @@ document.addEventListener("submit", async (e) => {
             if (!uploadRes.ok) {
                 const uploadErr = await uploadRes.json().catch(() => null);
                 btn.disabled = false; btn.textContent = submitLabel;
-                alert(uploadErr?.detail ?? (es ? "No se pudo subir la foto. Inténtalo de nuevo." : "Photo upload failed. Please try again."));
+                showToast(uploadErr?.detail ?? (es ? "No se pudo subir la foto. Inténtalo de nuevo." : "Photo upload failed. Please try again."), "error");
                 return;
             }
             proofImageUrl = (await uploadRes.json()).proof_image_url;
