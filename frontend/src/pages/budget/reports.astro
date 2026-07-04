@@ -10,6 +10,7 @@ import ReportSubTabs from "@components/ReportSubTabs.astro";
 import PeriodSelector from "@components/PeriodSelector.astro";
 import FABButton from "@components/FABButton.astro";
 import FABModal from "@components/FABModal.astro";
+import UpgradePrompt from "@components/UpgradePrompt.astro";
 import { apiFetch } from "@lib/api";
 import {
     getSpendingReport,
@@ -75,6 +76,12 @@ const allGroups: any[] = groupsRes.data || [];
 const allCategories = allGroups
     .flatMap((g: any) => (g.categories || []).map((c: any) => ({ id: c.id, name: c.name, group_name: g.name })));
 
+// Budget Reports is a Plus/Pro feature — free-plan families otherwise hit
+// empty/blocked charts with no explanation. Show the upsell instead.
+const { data: subRaw } = await apiFetch<any>("/api/subscriptions/current", { token });
+const planName = (subRaw?.plan_name ?? "free").toLowerCase();
+const reportsLocked = planName === "free";
+
 ---
 
 <BudgetShell
@@ -89,6 +96,13 @@ const allCategories = allGroups
     <ReportSubTabs slot="after-nav" active={tab} lang={lang} />
     <PeriodSelector slot="after-nav" activePeriod={period} lang={lang} />
 
+    {reportsLocked && (
+        <div class="p-6">
+            <UpgradePrompt feature="budget_reports" planNeeded="Plus" lang={lang} />
+        </div>
+    )}
+    {!reportsLocked && (
+      <>
         <!-- ==================== SPENDING ==================== -->
         <div id="report-spending" class={tab !== "spending" ? "hidden" : ""}>
             <div class="px-4 pb-6">
@@ -278,6 +292,8 @@ const allCategories = allGroups
                 </div>
             </div>
         </div>
+      </>
+    )}
 
     <Fragment slot="overlays">
         <FABButton />

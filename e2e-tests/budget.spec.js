@@ -19,20 +19,18 @@ test.describe('Budget & Finance Management', () => {
 
   test.describe('Budget Dashboard', () => {
     test('should display budget overview page', async ({ page }) => {
+      // /parent/finances now 301-redirects to the canonical /budget home.
       await page.goto(`${BASE_URL}/parent/finances`);
       await page.waitForLoadState('networkidle');
-
-      // Check for budget page elements
-      const pageTitle = page.locator('h1').first();
-      expect(await pageTitle.count()).toBeGreaterThan(0);
+      await expect(page).toHaveURL(/\/budget/);
+      // Budget home shows the Ready-to-Assign card.
+      await expect(page.locator('main, [slot="after-nav"]').first()).toBeVisible();
     });
 
     test('should display financial summary', async ({ page }) => {
-      await page.goto(`${BASE_URL}/parent/finances`);
+      await page.goto(`${BASE_URL}/budget/`);
       await page.waitForLoadState('networkidle');
-
-      // Look for summary cards
-      const summaryCards = page.locator('div.rounded-2xl, div.bg-white');
+      const summaryCards = page.locator('div.rounded-2xl, div.rounded-xl');
       expect(await summaryCards.count()).toBeGreaterThan(0);
     });
   });

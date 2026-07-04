@@ -30,10 +30,12 @@ test.describe('Family chat', () => {
     await expect(page.getByText(body)).toBeVisible({ timeout: 10000 });
   });
 
-  test('chat nav badge visible after sending', async ({ page }) => {
+  test('chat is reachable from the nav More sheet', async ({ page }) => {
     await login(page);
     await page.goto(`${BASE_URL}/dashboard`);
-    const chatLink = page.locator('nav a[href="/chat"]');
-    await expect(chatLink).toBeVisible();
+    // Chat lives in the More sheet for parents (a top nav item for kids); the
+    // sheet path works for both roles.
+    await page.locator('nav #more-nav-btn').click();
+    await expect(page.locator('#more-sheet a[href="/chat"]')).toBeVisible();
   });
 });
