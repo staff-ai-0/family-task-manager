@@ -173,72 +173,82 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
 </PageLayout>
 
 <script>
+import { mutate } from "../../lib/mutate";
+
 const _lang = document.cookie.split(";").find(c => c.trim().startsWith("lang="))?.split("=")[1] ?? "en";
+const es = _lang === "es";
+const submitLabel = es ? "Enviar para aprobación" : "Submit for approval";
 
-document.querySelectorAll("form[action='/api/gigs/claim']").forEach(form => {
-    form.addEventListener("submit", async (e) => {
+// Markup for the two post-action card states — injected in place of a full
+// page reload so a claimed gig immediately shows its proof form, and a
+// submitted one shows the awaiting-approval pill.
+function proofFormHTML(claimId: string): string {
+    return `<form class="space-y-3 mt-1" data-complete-form data-claim-id="${claimId}">
+        <p class="text-xs font-semibold text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">${es ? "Reclamada — envía tu evidencia abajo" : "Claimed — submit your proof below"}</p>
+        <div><label class="block text-sm font-medium text-brand-ink mb-1">${es ? "¿Qué hiciste? (opcional)" : "What did you do? (optional)"}</label>
+        <textarea name="proof_text" rows="3" class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink placeholder-brand-ink-soft focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="${es ? "Describe lo que hiciste..." : "Describe what you did..."}"></textarea></div>
+        <div><label class="block text-sm font-medium text-brand-ink mb-1">${es ? "Foto de evidencia (opcional)" : "Photo evidence (optional)"}</label>
+        <input type="file" accept="image/jpeg,image/png,image/webp" name="proof_image" class="w-full text-sm text-brand-ink-soft file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-violet-100 file:text-violet-700 hover:file:bg-violet-200" /></div>
+        <button type="submit" class="w-full py-2.5 px-4 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-700 active:scale-[.98] transition-all text-sm">${submitLabel}</button>
+    </form>`;
+}
+function awaitingHTML(): string {
+    return `<div class="w-full py-2.5 px-4 bg-sky-100 text-sky-700 font-semibold rounded-xl text-center text-sm">${es ? "⏳ Pendiente de aprobación" : "⏳ Awaiting approval"}</div>`;
+}
+
+// Delegated so it also handles the proof form INJECTED after a claim (which
+// wouldn't have a per-element listener).
+document.addEventListener("submit", async (e) => {
+    const target = e.target as HTMLElement;
+
+    // ── Claim a gig → swap the button for the proof form (no reload) ──
+    const claimForm = target.closest?.("form[action='/api/gigs/claim']") as HTMLFormElement | null;
+    if (claimForm) {
         e.preventDefault();
-        const formEl = e.target as HTMLFormElement;
-        const gigId = (formEl.querySelector("[name=gig_id]") as HTMLInputElement).value;
-        const btn = formEl.querySelector("button") as HTMLButtonElement;
-        btn.disabled = true;
-        btn.textContent = "...";
-        const res = await fetch(`/api/gigs/offerings/${gigId}/claim`, { method: "POST" });
-        if (res.ok) {
-            window.location.reload();
-        } else {
-            const err = await res.json().catch(() => ({ detail: "Error" }));
-            btn.disabled = false;
-            btn.textContent = btn.getAttribute("data-label") ?? (_lang === "es" ? "Reclamar" : "Claim");
-            alert(err.detail ?? "Error");
-        }
-    });
-});
+        const gigId = (claimForm.querySelector("[name=gig_id]") as HTMLInputElement).value;
+        const btn = claimForm.querySelector("button") as HTMLButtonElement;
+        const label = btn.getAttribute("data-label") ?? (es ? "Reclamar" : "Claim");
+        btn.disabled = true; btn.textContent = "...";
+        const res = await mutate(`/api/gigs/offerings/${gigId}/claim`, { errorFallback: es ? "No se pudo reclamar" : "Could not claim" });
+        if (res) {
+            const claim = await res.json().catch(() => null);
+            if (claim && claim.id) claimForm.outerHTML = proofFormHTML(claim.id);
+            else window.location.reload();
+        } else { btn.disabled = false; btn.textContent = label; }
+        return;
+    }
 
-document.querySelectorAll("[data-complete-form]").forEach(form => {
-    form.addEventListener("submit", async (e) => {
+    // ── Submit proof → swap for the awaiting-approval pill (no reload) ──
+    const completeForm = target.closest?.("[data-complete-form]") as HTMLFormElement | null;
+    if (completeForm) {
         e.preventDefault();
-        const formEl = e.target as HTMLFormElement;
-        const claimId = (formEl as HTMLElement).dataset.claimId;
-        const btn = formEl.querySelector("button[type=submit]") as HTMLButtonElement;
-        btn.disabled = true;
-        btn.textContent = "...";
+        const claimId = (completeForm as HTMLElement).dataset.claimId;
+        const btn = completeForm.querySelector("button[type=submit]") as HTMLButtonElement;
+        btn.disabled = true; btn.textContent = "...";
 
-        const proofText = (formEl.querySelector("[name=proof_text]") as HTMLTextAreaElement)?.value || null;
-        const fileInput = formEl.querySelector("[name=proof_image]") as HTMLInputElement;
+        const proofText = (completeForm.querySelector("[name=proof_text]") as HTMLTextAreaElement)?.value || null;
+        const fileInput = completeForm.querySelector("[name=proof_image]") as HTMLInputElement;
         let proofImageUrl: string | null = null;
 
         if (fileInput?.files?.length) {
             const uploadForm = new FormData();
             uploadForm.append("file", fileInput.files[0]);
-            const uploadRes = await fetch("/api/assignments/proof-upload", {
-                method: "POST",
-                body: uploadForm,
-            });
+            const uploadRes = await fetch("/api/assignments/proof-upload", { method: "POST", body: uploadForm });
             if (!uploadRes.ok) {
                 const uploadErr = await uploadRes.json().catch(() => null);
-                btn.disabled = false;
-                btn.textContent = _lang === "es" ? "Enviar para aprobación" : "Submit for approval";
-                alert(uploadErr?.detail ?? (_lang === "es" ? "No se pudo subir la foto. Inténtalo de nuevo." : "Photo upload failed. Please try again."));
+                btn.disabled = false; btn.textContent = submitLabel;
+                alert(uploadErr?.detail ?? (es ? "No se pudo subir la foto. Inténtalo de nuevo." : "Photo upload failed. Please try again."));
                 return;
             }
             proofImageUrl = (await uploadRes.json()).proof_image_url;
         }
 
-        const res = await fetch(`/api/gigs/claims/${claimId}/complete`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ proof_text: proofText, proof_image_url: proofImageUrl }),
+        const res = await mutate(`/api/gigs/claims/${claimId}/complete`, {
+            body: { proof_text: proofText, proof_image_url: proofImageUrl },
+            errorFallback: es ? "No se pudo enviar" : "Could not submit",
         });
-
-        if (res.ok) {
-            window.location.reload();
-        } else {
-            const err = await res.json().catch(() => ({ detail: "Error" }));
-            btn.disabled = false;
-            btn.textContent = _lang === "es" ? "Enviar para aprobación" : "Submit for approval";
-            alert(err.detail ?? "Error");
-        }
-    });
+        if (res) completeForm.outerHTML = awaitingHTML();
+        else { btn.disabled = false; btn.textContent = submitLabel; }
+    }
 });
 </script>
