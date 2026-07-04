@@ -35,26 +35,24 @@ test.describe('Dashboard', () => {
 
   // ── Bottom navigation ──────────────────────────────────────────────────
 
-  test('bottom nav contains the 5 kid destinations', async ({ page }) => {
+  test('bottom nav is 5 items + a More sheet with secondary destinations', async ({ page }) => {
+    // Role-agnostic: the 5th item is always the More button, and the More
+    // sheet holds the secondary destinations (notifications, profile, chat)
+    // for both kid and parent navs.
     const nav = page.locator('nav');
     await expect(nav).toBeVisible();
-
-    // Kid bottom nav: Tasks, Gigs, Rewards, Chat, More (5 items).
-    await expect(nav.locator('a[href="/dashboard"]')).toBeVisible();
-    await expect(nav.locator('a[href="/gigs"]')).toBeVisible();
-    await expect(nav.locator('a[href="/rewards"]')).toBeVisible();
-    await expect(nav.locator('a[href="/chat"]')).toBeVisible();
     await expect(nav.locator('#more-nav-btn')).toBeVisible();
 
-    // Secondary destinations (notifications, profile) live in the More sheet.
     await nav.locator('#more-nav-btn').click();
     const sheet = page.locator('#more-sheet');
     await expect(sheet.locator('a[href="/notifications"]')).toBeVisible();
     await expect(sheet.locator('a[href="/profile"]')).toBeVisible();
+    await expect(sheet.locator('a[href="/chat"]')).toBeVisible();
   });
 
-  test('chat nav link is reachable', async ({ page }) => {
-    await page.locator('nav a[href="/chat"]').click();
+  test('chat is reachable via the More sheet', async ({ page }) => {
+    await page.locator('nav #more-nav-btn').click();
+    await page.locator('#more-sheet a[href="/chat"]').click();
     await page.waitForURL('**/chat', { timeout: 8000 });
     await expect(page).toHaveURL(/\/chat$/);
   });
@@ -66,35 +64,32 @@ test.describe('Dashboard', () => {
     await expect(page).toHaveURL(/\/notifications$/);
   });
 
-  test('nav persists after view-transition navigation', async ({ page }) => {
-    // Navigate away and back via VT (client-side); nav must still have chat
-    await page.locator('nav a[href="/rewards"]').click();
-    await page.waitForURL('**/rewards', { timeout: 8000 });
-
-    const navAfterVT = page.locator('nav');
-    await expect(navAfterVT.locator('a[href="/chat"]')).toBeVisible({ timeout: 5000 });
-    await expect(navAfterVT.locator('#more-nav-btn')).toBeVisible();
-
-    // Navigate back to dashboard
-    await page.locator('nav a[href="/dashboard"]').click();
-    await page.waitForURL('**/dashboard', { timeout: 8000 });
-    await expect(page.locator('nav a[href="/chat"]')).toBeVisible();
+  test('nav (and its More button) persists after client-side navigation', async ({ page }) => {
+    // Open a secondary page from the More sheet, then confirm the 5-item nav
+    // (incl. the More button) is still present.
+    await page.locator('nav #more-nav-btn').click();
+    await page.locator('#more-sheet a[href="/profile"]').click();
+    await page.waitForURL('**/profile', { timeout: 8000 });
+    await expect(page.locator('nav #more-nav-btn')).toBeVisible({ timeout: 5000 });
   });
 
   // ── Language toggle ────────────────────────────────────────────────────
 
-  test('language toggle switches between EN and ES', async ({ page }) => {
-    // Default language: EN — header says "Hello,"
-    const header = page.locator('header');
-    await expect(header).toContainText(/hello|hola/i);
+  test('language toggle in the More sheet flips the lang cookie', async ({ page }) => {
+    const langBefore = (await page.context().cookies())
+      .find((c) => c.name === 'lang')?.value ?? 'en';
 
-    // Switch to ES
-    const langBtn = page.locator('nav button', { hasText: /es|en/i }).first();
-    await langBtn.click();
+    // The language toggle now lives in the More sheet (not a top nav slot).
+    await page.locator('nav #more-nav-btn').click();
+    const langForm = page.locator('#more-sheet form[action="/api/lang"]');
+    await expect(langForm).toBeVisible();
+    await langForm.locator('button').click();
     await page.waitForLoadState('networkidle');
 
-    // Now header should say "Hola," or "Hello," depending on direction
-    await expect(page.locator('header')).toContainText(/hola|hello/i);
+    const langAfter = (await page.context().cookies())
+      .find((c) => c.name === 'lang')?.value;
+    expect(langAfter).toBeTruthy();
+    expect(langAfter).not.toBe(langBefore);
   });
 
   // ── Responsive / visual ────────────────────────────────────────────────

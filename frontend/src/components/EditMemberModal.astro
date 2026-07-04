@@ -114,7 +114,11 @@ const { lang } = Astro.props;
     window.openEditMemberModal = (memberId, memberName, currentRole) => {
         currentMemberId = memberId;
         memberNameDiv.textContent = memberName;
-        roleSelect.value = currentRole;
+        // Prefer the live row value (kept fresh by the in-place update below)
+        // over the SSR-baked param, so re-editing after an optimistic change
+        // pre-selects the current role, not the stale one.
+        const liveRole = document.querySelector(`[data-member-role="${memberId}"]`)?.textContent?.trim();
+        roleSelect.value = liveRole || currentRole;
         errorDiv.classList.add("hidden");
         successDiv.classList.add("hidden");
         modal.classList.remove("hidden");
@@ -157,17 +161,16 @@ const { lang } = Astro.props;
             const data = await response.json();
 
             if (response.ok) {
-                successDiv.textContent = lang === "es" 
-                    ? "Cambios guardados exitosamente" 
+                successDiv.textContent = lang === "es"
+                    ? "Cambios guardados exitosamente"
                     : "Changes saved successfully";
                 successDiv.classList.remove("hidden");
-                
-                // Close modal after 1.5 seconds
-                setTimeout(() => {
-                    window.closeEditMemberModal();
-                    // Reload page to show updated member
-                    window.location.reload();
-                }, 1500);
+
+                // Update the member row's role in place — no full page reload.
+                const roleSpan = document.querySelector(`[data-member-role="${currentMemberId}"]`);
+                if (roleSpan) roleSpan.textContent = role;
+
+                setTimeout(() => { window.closeEditMemberModal(); }, 1200);
             } else {
                 errorDiv.textContent = data.detail || (lang === "es" ? "Error al guardar cambios" : "Error saving changes");
                 errorDiv.classList.remove("hidden");
