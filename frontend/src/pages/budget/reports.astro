@@ -78,8 +78,13 @@ const allCategories = allGroups
 
 // Budget Reports is a Plus/Pro feature — free-plan families otherwise hit
 // empty/blocked charts with no explanation. Show the upsell instead.
+// /api/subscriptions/current returns the plan name at plan.name for a paid
+// subscription (SubscriptionResponse) but as a flat plan_name on the free
+// fallback dict — read both. Fail OPEN: only lock when we positively know the
+// plan is free (a fetch error/unknown shape must not upsell a paying parent;
+// the backend still enforces require_feature so nothing leaks).
 const { data: subRaw } = await apiFetch<any>("/api/subscriptions/current", { token });
-const planName = (subRaw?.plan_name ?? "free").toLowerCase();
+const planName = (subRaw?.plan?.name ?? subRaw?.plan_name ?? "").toLowerCase();
 const reportsLocked = planName === "free";
 
 ---

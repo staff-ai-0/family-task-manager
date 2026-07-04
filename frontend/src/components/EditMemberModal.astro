@@ -114,7 +114,11 @@ const { lang } = Astro.props;
     window.openEditMemberModal = (memberId, memberName, currentRole) => {
         currentMemberId = memberId;
         memberNameDiv.textContent = memberName;
-        roleSelect.value = currentRole;
+        // Prefer the live row value (kept fresh by the in-place update below)
+        // over the SSR-baked param, so re-editing after an optimistic change
+        // pre-selects the current role, not the stale one.
+        const liveRole = document.querySelector(`[data-member-role="${memberId}"]`)?.textContent?.trim();
+        roleSelect.value = liveRole || currentRole;
         errorDiv.classList.add("hidden");
         successDiv.classList.add("hidden");
         modal.classList.remove("hidden");
