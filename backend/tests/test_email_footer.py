@@ -10,6 +10,7 @@ def test_build_html_footer_uses_email_link_base(monkeypatch):
         btn_text="Go", link_label="or", expiry_note="e", ignore_note="i",
     )
     assert "https://family.agent-ia.mx" in html
+    assert ">family.agent-ia.mx</a>" in html   # footer anchor text, not the button URL
     assert "gcp-family.agent-ia.mx" not in html
 
 
@@ -21,4 +22,5 @@ def test_welcome_html_footer_uses_email_link_base(monkeypatch):
         guide_url="https://family.agent-ia.mx/help",
     )
     assert "https://family.agent-ia.mx" in html
+    assert ">family.agent-ia.mx</a>" in html   # footer anchor text, not the button URL
     assert "gcp-family.agent-ia.mx" not in html

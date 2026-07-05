@@ -43,9 +43,9 @@ fi
 # ── Backup (if stack already running) ─────────────────────────────────────
 if [[ "$SKIP_BACKUP" != "true" ]]; then
   section "Backup"
-  rssh "cd $REMOTE_PATH && if $DC ps postgres 2>/dev/null | grep -q Up; then \
+  rssh "cd $REMOTE_PATH && if [ \"\$(podman inspect --format '{{.State.Running}}' family_onprem_db 2>/dev/null)\" = true ]; then \
     COMPOSE_CMD='podman compose' COMPOSE_FILE=$COMPOSE_FILE ./scripts/backup-db.sh; \
-    else echo 'no running postgres — skipping'; fi"
+    else echo 'no running postgres — skipping backup'; fi"
 fi
 
 # ── Sync code ─────────────────────────────────────────────────────────────
@@ -96,13 +96,17 @@ section "Start"
 rssh "cd $REMOTE_PATH && $DC up -d"
 
 section "Health"
+HEALTH_FAIL=0
 for c in family_onprem_db family_onprem_redis family_onprem_backend family_onprem_frontend; do
-  rssh "for i in \$(seq 1 40); do \
+  if ! rssh "for i in \$(seq 1 40); do \
     s=\$(podman inspect --format '{{.State.Health.Status}}' $c 2>/dev/null); \
     [ \"\$s\" = healthy ] && { echo '$c healthy'; break; }; sleep 3; done; \
-    [ \"\$(podman inspect --format '{{.State.Health.Status}}' $c 2>/dev/null)\" = healthy ] || echo '⚠️ $c not healthy'"
+    [ \"\$(podman inspect --format '{{.State.Health.Status}}' $c 2>/dev/null)\" = healthy ]"; then
+    echo "⚠️ $c not healthy"; HEALTH_FAIL=1
+  fi
 done
 rssh "cd $REMOTE_PATH && $DC ps"
+[ "$HEALTH_FAIL" = 0 ] || { echo "❌ one or more containers unhealthy after deploy"; exit 1; }
 
 # ── Verify public (may 000 until tunnel + DNS live) ───────────────────────
 section "Verify public"

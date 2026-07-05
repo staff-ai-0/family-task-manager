@@ -1,0 +1,19 @@
+# USER unit — install under ~/.config/systemd/user/ on 10.1.0.91:
+#   cp scripts/systemd/family-task-manager.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable family-task-manager.service
+# Rootless podman (no sudo). Linger (loginctl enable-linger jc) keeps this firing at boot.
+[Unit]
+Description=Family Task Manager (on-prem) stack
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/jc/family-task-manager
+ExecStart=/usr/bin/podman compose -p family-task-manager --env-file .env -f docker-compose.onprem.yml up -d
+ExecStop=/usr/bin/podman compose -p family-task-manager --env-file .env -f docker-compose.onprem.yml down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=default.target
