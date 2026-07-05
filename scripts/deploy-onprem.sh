@@ -69,6 +69,20 @@ if [[ "$SKIP_BUILD" != "true" ]]; then
   rssh "cd $REMOTE_PATH && $DC build backend frontend"
 fi
 
+# ── Prepare networks (rootless netavark external-DNS pin) ─────────────────
+# The host resolv.conf's IPv6 link-local upstream (fe80::1%eno1) breaks
+# aardvark external forwarding, so cloudflared can't reach the Cloudflare edge
+# (HTTP 530) and the backend can't resolve LiteLLM/OAuth/PayPal/SMTP. Pin
+# explicit DNS on the egress network. Pre-create both nets before any `up` so
+# containers start with working resolution (matches the sibling stacks on .91).
+section "Prepare networks"
+rssh "podman network exists ${COMPOSE_PROJECT}_frontend || \
+  podman network create --dns 1.1.1.1 --dns 8.8.8.8 ${COMPOSE_PROJECT}_frontend"
+rssh "podman network inspect ${COMPOSE_PROJECT}_frontend --format '{{.NetworkDNSServers}}' | grep -q 1.1.1.1 || \
+  podman network update ${COMPOSE_PROJECT}_frontend --dns-add 1.1.1.1 --dns-add 8.8.8.8"
+rssh "podman network exists ${COMPOSE_PROJECT}_backend || \
+  podman network create --internal ${COMPOSE_PROJECT}_backend"
+
 # ── Prepare volumes (rootless UID mapping — Rule 4) ───────────────────────
 section "Prepare volumes"
 rssh "cd $REMOTE_PATH && \

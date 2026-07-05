@@ -121,8 +121,15 @@ services:
       backend:
         condition: service_healthy
     networks:
+      # frontend net ONLY. The tunnel reaches both frontend and backend here
+      # (backend is dual-homed on this net). Do NOT add the internal `backend`
+      # net: on rootless netavark a second, egress-less network strips the
+      # connector's outbound to Cloudflare's edge → HTTP 530.
+      # CF public-hostname routes must target the CONTAINER NAMES on this net:
+      #   family.agent-ia.mx     → http://family_onprem_frontend:3000
+      #   api-family.agent-ia.mx → http://family_onprem_backend:8000
+      # (the bare `backend` alias resolves to the unreachable internal-net IP.)
       - frontend
-      - backend
 
 networks:
   backend:
