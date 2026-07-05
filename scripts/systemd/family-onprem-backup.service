@@ -7,6 +7,6 @@ Description=Family Task Manager (on-prem) — daily PostgreSQL backup
 [Service]
 Type=oneshot
 WorkingDirectory=/home/jc/family-task-manager
-Environment=COMPOSE_CMD=podman compose
+Environment="COMPOSE_CMD=podman compose"
 Environment=COMPOSE_FILE=docker-compose.onprem.yml
 ExecStart=/home/jc/family-task-manager/scripts/backup-db.sh

@@ -2,7 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
 
-const mcpBase = import.meta.env.PUBLIC_API_BASE_URL || 'https://api-family.agent-ia.mx';
+const mcpBase = process.env.PUBLIC_API_BASE_URL || 'https://api-family.agent-ia.mx';
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
