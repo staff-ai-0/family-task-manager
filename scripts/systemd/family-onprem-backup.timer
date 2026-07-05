@@ -1,0 +1,10 @@
+# scripts/systemd/family-onprem-backup.timer
+[Unit]
+Description=Run the on-prem Family Task Manager DB backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

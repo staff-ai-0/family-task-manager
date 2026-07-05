@@ -16,6 +16,7 @@
 !.env.example
 !.env.template
 !.env.gcp.example
+!.env.onprem.example
 
 # Credentials files
 CREDENTIALS.md

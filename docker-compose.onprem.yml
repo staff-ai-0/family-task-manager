@@ -1,0 +1,147 @@
+# ================================
+# On-prem (10.1.0.91) Deployment — Family Task Manager
+# ================================
+# Rootless podman under user jc. Never `sudo podman` (corrupts rootless storage).
+# Deterministic project name: pass `-p family-task-manager` on every command.
+#
+#   podman compose -p family-task-manager --env-file .env -f docker-compose.onprem.yml up -d
+#
+# Ingress: per-stack Cloudflare tunnel container (fresh token). No host ports.
+# AI routes to on-prem LiteLLM at https://litellm.agent-ia.mx.
+# DB/redis addressed by UNIQUE container name (global Rule 5 — DNS collision).
+# ================================
+
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: family_onprem_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: family_onprem_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: family_onprem_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@family_onprem_db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://family_onprem_redis:6379/0
+      BASE_URL: ${PUBLIC_API_URL}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      LITELLM_API_BASE: ${LITELLM_API_BASE:-https://litellm.agent-ia.mx}
+      ENVIRONMENT: production
+      DEBUG: "false"
+      VAULT_ENABLED: "false"
+    volumes:
+      - receipt_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+      - frontend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips="*"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:8000/health\", timeout=3).status==200 else 1)'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        PUBLIC_GOOGLE_CLIENT_ID: ${PUBLIC_GOOGLE_CLIENT_ID:-}
+    container_name: family_onprem_frontend
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://family_onprem_backend:8000
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_URL}
+      PORT: 3000
+      HOST: 0.0.0.0
+      NODE_ENV: production
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - frontend
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  tunnel:
+    image: cloudflare/cloudflared@sha256:6d91c121b803126f7a5344005d17a9324788fc09d305b6e2560ec6040a7ae283
+    container_name: family_onprem_tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      # frontend net ONLY. The tunnel reaches both frontend and backend here
+      # (backend is dual-homed on this net). Do NOT add the internal `backend`
+      # net: on rootless netavark a second, egress-less network strips the
+      # connector's outbound to Cloudflare's edge → HTTP 530.
+      # CF public-hostname routes must target the CONTAINER NAMES on this net:
+      #   family.agent-ia.mx     → http://family_onprem_frontend:3000
+      #   api-family.agent-ia.mx → http://family_onprem_backend:8000
+      # (the bare `backend` alias resolves to the unreachable internal-net IP.)
+      - frontend
+
+networks:
+  backend:
+    driver: bridge
+    internal: true
+  frontend:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  receipt_uploads:
+    driver: local

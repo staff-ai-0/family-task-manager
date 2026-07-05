@@ -16,6 +16,7 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/home/jc/family-task-manager}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.gcp.yml}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
+COMPOSE_CMD="${COMPOSE_CMD:-sudo docker compose}"
 
 cd "$APP_DIR"
 
@@ -31,7 +32,8 @@ OUT="backups/scheduled/db-${TS}.sql.gz"
 
 echo "[backup-db] dumping ${POSTGRES_DB} -> ${OUT}"
 # --clean --if-exists makes the dump idempotent to restore over a populated DB.
-sudo docker compose --env-file .env -f "$COMPOSE_FILE" exec -T postgres \
+# shellcheck disable=SC2086
+$COMPOSE_CMD --env-file .env -f "$COMPOSE_FILE" exec -T postgres \
     pg_dump --clean --if-exists -U "$POSTGRES_USER" "$POSTGRES_DB" | gzip > "$OUT"
 
 echo "[backup-db] wrote ${OUT} ($(du -h "$OUT" | cut -f1))"

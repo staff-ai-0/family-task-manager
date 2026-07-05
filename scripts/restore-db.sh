@@ -14,6 +14,7 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/home/jc/family-task-manager}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.gcp.yml}"
+COMPOSE_CMD="${COMPOSE_CMD:-sudo docker compose}"
 
 cd "$APP_DIR"
 
@@ -49,7 +50,8 @@ else
     DECOMP=(cat "$FILE")
 fi
 
-"${DECOMP[@]}" | sudo docker compose --env-file .env -f "$COMPOSE_FILE" exec -T postgres \
+# shellcheck disable=SC2086
+"${DECOMP[@]}" | $COMPOSE_CMD --env-file .env -f "$COMPOSE_FILE" exec -T postgres \
     psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 
 echo "[restore-db] restore complete"

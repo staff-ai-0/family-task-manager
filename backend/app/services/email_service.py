@@ -179,8 +179,17 @@ def _t(key: str, lang: str) -> str:
 # HTML email template (AgentIA brand colours)
 # ---------------------------------------------------------------------------
 
+def _footer_host() -> tuple[str, str]:
+    """Display host + URL for the email footer, from the public frontend origin."""
+    from urllib.parse import urlparse
+    base = settings.email_link_base
+    host = urlparse(base).netloc or base.replace("https://", "").replace("http://", "")
+    return base, host
+
+
 def _build_html(*, heading: str, body: str, btn_text: str, btn_url: str,
                 link_label: str, expiry_note: str, ignore_note: str) -> str:
+    footer_url, footer_host = _footer_host()
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -212,7 +221,7 @@ def _build_html(*, heading: str, body: str, btn_text: str, btn_url: str,
     <p class="note">{expiry_note}</p>
     <p class="note">{ignore_note}</p>
   </div>
-  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="https://gcp-family.agent-ia.mx" style="color:#00D9FF;text-decoration:none">gcp-family.agent-ia.mx</a></div>
+  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="{footer_url}" style="color:#00D9FF;text-decoration:none">{footer_host}</a></div>
 </div>
 </body>
 </html>"""
@@ -275,6 +284,7 @@ def _build_welcome_html(
         for i in range(1, step_count + 1)
     )
 
+    footer_url, footer_host = _footer_host()
     return f"""<!DOCTYPE html>
 <html lang="{lang}">
 <head>
@@ -309,7 +319,7 @@ def _build_welcome_html(
     <a href="{dashboard_url}" class="btn">{cta}</a>
     <a href="{guide_url}" class="guide-link">{guide_link_label}</a>
   </div>
-  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="https://gcp-family.agent-ia.mx" style="color:#00D9FF;text-decoration:none">gcp-family.agent-ia.mx</a></div>
+  <div class="ftr">&copy; 2026 AgentIA &mdash; Family Task Manager &mdash; <a href="{footer_url}" style="color:#00D9FF;text-decoration:none">{footer_host}</a></div>
 </div>
 </body>
 </html>"""
@@ -851,7 +861,12 @@ class EmailService:
         html = html.replace("{{ acceptance_link }}", acceptance_link)
         html = html.replace("{{ invitation_code }}", invitation.invitation_code)
         html = html.replace("{{ expiration_date }}", expiration_date)
-        
+
+        from urllib.parse import urlparse
+        site_host = urlparse(base_url).netloc or base_url
+        html = html.replace("{{ site_url }}", base_url)
+        html = html.replace("{{ site_host }}", site_host)
+
         return await EmailService._send(
             to=invitation.invited_email,
             subject=f"¡{inviting_user.name} te ha invitado a unirte a {family_name}!",
