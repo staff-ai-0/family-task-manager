@@ -1,0 +1,12 @@
+# scripts/systemd/family-onprem-backup.service
+# USER unit — install under ~/.config/systemd/user/ on 10.1.0.91.
+# Rootless podman: NO sudo (global Rule 1). Runs as jc.
+[Unit]
+Description=Family Task Manager (on-prem) — daily PostgreSQL backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jc/family-task-manager
+Environment=COMPOSE_CMD=podman compose
+Environment=COMPOSE_FILE=docker-compose.onprem.yml
+ExecStart=/home/jc/family-task-manager/scripts/backup-db.sh
