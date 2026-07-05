@@ -336,6 +336,11 @@ async def test_invitation_email_link_uses_frontend_origin(
     assert "https://gcp-family.agent-ia.mx/accept-invitation?code=" in html
     # Must NOT leak the API origin into a user-facing link.
     assert "api-gcp-family.agent-ia.mx/accept-invitation" not in html
+    # Footer placeholders must be substituted
+    assert "{{ site_url }}" not in html
+    assert "{{ site_host }}" not in html
+    # PUBLIC_URL fixture is gcp-family.agent-ia.mx; footer should reflect it
+    assert "gcp-family.agent-ia.mx" in html
 
 
 @pytest.mark.asyncio

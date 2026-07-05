@@ -861,7 +861,12 @@ class EmailService:
         html = html.replace("{{ acceptance_link }}", acceptance_link)
         html = html.replace("{{ invitation_code }}", invitation.invitation_code)
         html = html.replace("{{ expiration_date }}", expiration_date)
-        
+
+        from urllib.parse import urlparse
+        site_host = urlparse(base_url).netloc or base_url
+        html = html.replace("{{ site_url }}", base_url)
+        html = html.replace("{{ site_host }}", site_host)
+
         return await EmailService._send(
             to=invitation.invited_email,
             subject=f"¡{inviting_user.name} te ha invitado a unirte a {family_name}!",
