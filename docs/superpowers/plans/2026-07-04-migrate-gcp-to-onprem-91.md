@@ -696,7 +696,7 @@ ssh jc@10.1.0.91 'mkdir -p ~/.config/systemd/user && \
   cp ~/family-task-manager/scripts/systemd/family-onprem-backup.service ~/.config/systemd/user/ && \
   cp ~/family-task-manager/scripts/systemd/family-onprem-backup.timer ~/.config/systemd/user/'
 ```
-- [ ] **Step 2:** Create a boot unit `~/.config/systemd/user/family-task-manager.service` that runs `podman compose -p family-task-manager --env-file .env -f docker-compose.onprem.yml up -d` from `/home/jc/family-task-manager` (Type=oneshot, RemainAfterExit=yes, `WantedBy=default.target`). Enable it.
+- [ ] **Step 2:** Install the boot unit (now shipped in-repo at `scripts/systemd/family-task-manager.service` — Type=oneshot, RemainAfterExit=yes, `WantedBy=default.target`): `cp ~/family-task-manager/scripts/systemd/family-task-manager.service ~/.config/systemd/user/`. Enable it (Step 3).
 - [ ] **Step 3:** Enable timer + boot unit (rootless, no sudo):
 ```bash
 ssh jc@10.1.0.91 'systemctl --user daemon-reload && \
