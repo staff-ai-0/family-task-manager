@@ -4,18 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Family Task Manager** — gamified family chore/task app with points, rewards, and consequences. Multi-tenant by design (each family is fully isolated). Live at https://gcp-family.agent-ia.mx.
+**Family Task Manager** — gamified family chore/task app with points, rewards, and consequences. Multi-tenant by design (each family is fully isolated). Live at https://family.agent-ia.mx.
 
 **Stack**: Python 3.12 + FastAPI (backend) · Astro 5 + Tailwind CSS v4 (frontend) · PostgreSQL 15 + Redis 7 · Docker Compose · Anthropic Claude API (receipt scanner)
 
 **Environments**:
 - Local (dev): frontend `http://localhost:3003`, backend `http://localhost:8003/docs` — secrets in `.env`
-- **Production (GCP)**: `https://gcp-family.agent-ia.mx` + `https://api-gcp-family.agent-ia.mx` (Cloudflare Tunnel `gcp-family`). VM `family-app` (e2-medium) in project `family-prod`, zone `us-central1-a`. App at `/home/jc/family-task-manager/`, compose file `docker-compose.gcp.yml`, secrets in `.env` on host. Deploy via `./scripts/deploy-gcp.sh`. Canonical GCP env config (project, zone, instance name) lives in `.deploy.gcp.env` at the repo root and is sourced by every `scripts/*.sh` helper.
-- **On-prem (10.1.0.99) — DECOMMISSIONED 2026-05-23**: was `https://family.agent-ia.mx` under rootless podman. systemd unit disabled, containers stopped. DB dump retained at `/mnt/nvme/docker-prod/family-task-manager/backups/pre-gig-photo-*.sql`. Repo + volumes preserved in case of rollback. Do NOT redeploy without a full reassessment — the canonical DB now lives on the GCP VM.
+- **Production (on-prem 10.1.0.91) — CANONICAL (since 2026-07-05)**: `https://family.agent-ia.mx` + `https://api-family.agent-ia.mx` (Cloudflare Tunnel `family-onprem`). RHEL 10 rootless podman under user `jc`. App at `/home/jc/family-task-manager/`, compose file `docker-compose.onprem.yml`, secrets in `.env` on host (template `.env.onprem.example`). Deploy via `./scripts/deploy-onprem.sh` (config in `.deploy.onprem.env`). SHARED box (school-admin/medical/platform/vault also run here) — never `sudo podman` (global `~/.claude/CLAUDE.md` rootless rules apply).
+- **GCP (`family-app`) — DECOMMISSIONED 2026-07-05**: was `https://gcp-family.agent-ia.mx` + `https://api-gcp-family.agent-ia.mx` (Docker CE, project `family-prod`/`us-central1-a`). VM **stopped** (not yet deleted), stack down, volumes kept for rollback. Final pre-cutover dump at `backups/prod-cutover-gcp-20260705.sql` (local + on .91). `deploy-gcp.sh` / `docker-compose.gcp.yml` / `.deploy.gcp.env` retained for archival + rollback only — do NOT deploy there without reassessment.
+- **On-prem (10.1.0.99) — DECOMMISSIONED 2026-05-23**: earlier host under rootless podman. systemd unit disabled, containers stopped. DB dump retained at `/mnt/nvme/docker-prod/family-task-manager/backups/pre-gig-photo-*.sql`. Do NOT redeploy — canonical DB now lives on 10.1.0.91.
 
-**Production deployment**: `./scripts/deploy-gcp.sh` is the canonical path — rsyncs source, builds images, brings the stack up, runs alembic migrations, smoke-checks the public endpoints. Local `docker-compose.yml` is for dev only.
+**Production deployment**: `./scripts/deploy-onprem.sh` is the canonical path (target: on-prem 10.1.0.91) — rsyncs source over SSH, builds images with rootless `podman compose`, pins network DNS + chowns volumes, runs alembic migrations against the new image, brings the stack up, smoke-checks the public endpoints. Local `docker-compose.yml` is for dev only. `deploy-gcp.sh` targets the now-decommissioned GCP VM (rollback only).
 
-> Note: There is NO `docker-compose.onprem.yml` or `docker-compose.production.yml`. There is NO `start-onprem.sh`. There is NO `.github/workflows/`. The legacy `deploy-prod.sh` is kept for archival only — do not run it.
+> Note: `docker-compose.onprem.yml` + `scripts/deploy-onprem.sh` + `.deploy.onprem.env` are the live on-prem path. `docker-compose.gcp.yml` / `deploy-gcp.sh` are retained for GCP rollback. There is NO `.github/workflows/`. The legacy `deploy-prod.sh` is kept for archival only — do not run it.
 
 ---
 
@@ -35,11 +36,11 @@ gcloud --account=info@agent-ia.mx --project=family-prod \
 
 Then `./scripts/gcp-bootstrap.sh` → scp .env → `./scripts/deploy-gcp.sh` → restore DB from the most recent dump.
 
-**Cloudflare Tunnel `gcp-family`** routes the public hostnames. Configured in the Zero Trust dashboard (NOT in `cloudflared` config.yaml):
-- `gcp-family.agent-ia.mx` → `http://frontend:3000`
-- `api-gcp-family.agent-ia.mx` → `http://backend:8000`
+**Cloudflare Tunnel `family-onprem`** routes the public hostnames (per-stack `cloudflared` container on 10.1.0.91). Configured in the Zero Trust dashboard (NOT in `cloudflared` config.yaml):
+- `family.agent-ia.mx` → `http://family_onprem_frontend:3000`
+- `api-family.agent-ia.mx` → `http://family_onprem_backend:8000`
 
-The on-prem `family.agent-ia.mx` apex is **retired**. Canonical URL is `gcp-family.agent-ia.mx`.
+Routes MUST target the **container names**, not bare `frontend`/`backend`: on rootless netavark the tunnel joins the egress `frontend` net ONLY (`backend` is dual-homed there as `family_onprem_backend`; the bare `backend` alias resolves to the unreachable internal-net IP). That egress net pins explicit DNS (`--dns 1.1.1.1 8.8.8.8`, done by `deploy-onprem.sh`) because the host resolv.conf's IPv6 link-local upstream breaks aardvark external forwarding — without it the connector can't reach Cloudflare's edge (HTTP 530) and backend egress (LiteLLM/OAuth/PayPal/SMTP) fails to resolve. Google OAuth redirect URI is `https://family.agent-ia.mx/auth/google/callback`. The old GCP `gcp-family` tunnel + apex are **retired**. Canonical URL is `family.agent-ia.mx`.
 
 ### Bootstrap (one-time per VM)
 
