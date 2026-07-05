@@ -43,7 +43,6 @@ fi
 # ── Backup (if stack already running) ─────────────────────────────────────
 if [[ "$SKIP_BACKUP" != "true" ]]; then
   section "Backup"
-  # shellcheck disable=SC2086
   rssh "cd $REMOTE_PATH && if $DC ps postgres 2>/dev/null | grep -q Up; then \
     COMPOSE_CMD='podman compose' COMPOSE_FILE=$COMPOSE_FILE ./scripts/backup-db.sh; \
     else echo 'no running postgres — skipping'; fi"
@@ -67,37 +66,33 @@ rssh "[[ -f $REMOTE_PATH/.env ]]" || { echo "❌ .env missing on host — cp .en
 # ── Build ─────────────────────────────────────────────────────────────────
 if [[ "$SKIP_BUILD" != "true" ]]; then
   section "Build"
-  # shellcheck disable=SC2086
   rssh "cd $REMOTE_PATH && $DC build backend frontend"
 fi
 
 # ── Prepare volumes (rootless UID mapping — Rule 4) ───────────────────────
 section "Prepare volumes"
 rssh "cd $REMOTE_PATH && \
-  podman volume create ${COMPOSE_PROJECT}_postgres_data >/dev/null 2>&1 || true; \
-  podman volume create ${COMPOSE_PROJECT}_redis_data >/dev/null 2>&1 || true; \
-  podman volume create ${COMPOSE_PROJECT}_receipt_uploads >/dev/null 2>&1 || true; \
-  podman unshare chown -R 70:70   \$(podman volume inspect ${COMPOSE_PROJECT}_postgres_data --format '{{.Mountpoint}}'); \
-  podman unshare chown -R 999:1000 \$(podman volume inspect ${COMPOSE_PROJECT}_redis_data --format '{{.Mountpoint}}'); \
+  { podman volume create ${COMPOSE_PROJECT}_postgres_data >/dev/null 2>&1 || true; } && \
+  { podman volume create ${COMPOSE_PROJECT}_redis_data >/dev/null 2>&1 || true; } && \
+  { podman volume create ${COMPOSE_PROJECT}_receipt_uploads >/dev/null 2>&1 || true; } && \
+  podman unshare chown -R 70:70   \$(podman volume inspect ${COMPOSE_PROJECT}_postgres_data --format '{{.Mountpoint}}') && \
+  podman unshare chown -R 999:1000 \$(podman volume inspect ${COMPOSE_PROJECT}_redis_data --format '{{.Mountpoint}}') && \
   podman unshare chown -R 1000:1000 \$(podman volume inspect ${COMPOSE_PROJECT}_receipt_uploads --format '{{.Mountpoint}}')"
 
 # ── Migrate against new image (old backend keeps serving) ─────────────────
 if [[ "$SKIP_MIGRATIONS" != "true" ]]; then
   section "Migrate"
-  # shellcheck disable=SC2086
   rssh "cd $REMOTE_PATH && $DC up -d --no-recreate postgres redis"
   # wait postgres healthy
   rssh "cd $REMOTE_PATH && for i in \$(seq 1 30); do \
-    [ \"\$(podman inspect --format '{{.State.Health.Status}}' family_onprem_db 2>/dev/null)\" = healthy ] && break; sleep 2; done"
-  # shellcheck disable=SC2086
+    [ \"\$(podman inspect --format '{{.State.Health.Status}}' family_onprem_db 2>/dev/null)\" = healthy ] && break; sleep 2; done; \
+    [ \"\$(podman inspect --format '{{.State.Health.Status}}' family_onprem_db 2>/dev/null)\" = healthy ] || { echo '❌ postgres not healthy after 60s — aborting before migrate'; exit 1; }"
   rssh "cd $REMOTE_PATH && $DC run --rm -T --no-deps backend alembic upgrade head"
-  # shellcheck disable=SC2086
   rssh "cd $REMOTE_PATH && $DC run --rm -T --no-deps backend alembic current"
 fi
 
 # ── Start ─────────────────────────────────────────────────────────────────
 section "Start"
-# shellcheck disable=SC2086
 rssh "cd $REMOTE_PATH && $DC up -d"
 
 section "Health"
@@ -107,7 +102,6 @@ for c in family_onprem_db family_onprem_redis family_onprem_backend family_onpre
     [ \"\$s\" = healthy ] && { echo '$c healthy'; break; }; sleep 3; done; \
     [ \"\$(podman inspect --format '{{.State.Health.Status}}' $c 2>/dev/null)\" = healthy ] || echo '⚠️ $c not healthy'"
 done
-# shellcheck disable=SC2086
 rssh "cd $REMOTE_PATH && $DC ps"
 
 # ── Verify public (may 000 until tunnel + DNS live) ───────────────────────
