@@ -106,7 +106,20 @@ if [[ "$SKIP_MIGRATIONS" != "true" ]]; then
 fi
 
 # ── Start ─────────────────────────────────────────────────────────────────
+# The stack runs as a podman POD. `podman compose up -d` alone does NOT swap
+# pod containers onto a freshly-built image — it treats the existing containers
+# as up-to-date, so a rebuild silently keeps serving the OLD image while the
+# deploy still reports healthy + 200. Recreate the pod: `down`, re-pin the
+# egress DNS (down removes the project networks), then `up`. Brief downtime
+# (~1 min) is the trade for actually shipping the new image.
 section "Start"
+rssh "cd $REMOTE_PATH && $DC down"
+rssh "podman network exists ${COMPOSE_PROJECT}_frontend || \
+  podman network create --dns 1.1.1.1 --dns 8.8.8.8 ${COMPOSE_PROJECT}_frontend"
+rssh "podman network inspect ${COMPOSE_PROJECT}_frontend --format '{{.NetworkDNSServers}}' | grep -q 1.1.1.1 || \
+  podman network update ${COMPOSE_PROJECT}_frontend --dns-add 1.1.1.1 --dns-add 8.8.8.8"
+rssh "podman network exists ${COMPOSE_PROJECT}_backend || \
+  podman network create --internal ${COMPOSE_PROJECT}_backend"
 rssh "cd $REMOTE_PATH && $DC up -d"
 
 section "Health"
