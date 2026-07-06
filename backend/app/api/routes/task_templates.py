@@ -21,6 +21,7 @@ from app.schemas.task_template import (
     TaskTemplateUpdate,
     TaskTemplateResponse,
     TranslateRequest,
+    TranslateTextRequest,
     TranslateResponse,
 )
 from app.models import User
@@ -114,6 +115,54 @@ async def toggle_template(
         db, template_id, to_uuid_required(current_user.family_id)
     )
     return template
+
+
+@router.post("/translate-text", response_model=TranslateResponse)
+async def translate_text(
+    request: TranslateTextRequest,
+    current_user: User = Depends(require_parent_role),
+):
+    """
+    Stateless auto-translation of arbitrary title/description text (parent only).
+
+    Translates the text carried in the request body — so the editor can translate
+    an in-progress edit before it is saved, and the create flow can translate
+    before the template row exists. Does NOT persist anything.
+    """
+    # Same-language request is a no-op — echo the input back without a proxy call.
+    if request.source_lang == request.target_lang:
+        return TranslateResponse(
+            title=request.title,
+            description=request.description,
+            source_lang=request.source_lang,
+            target_lang=request.target_lang,
+        )
+
+    try:
+        result = await TranslationService.translate_template_fields(
+            title=request.title,
+            description=request.description,
+            source_lang=request.source_lang,
+            target_lang=request.target_lang,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Stateless text translation failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Translation service failed. Please try again.",
+        )
+
+    return TranslateResponse(
+        title=result["title"],
+        description=result["description"],
+        source_lang=request.source_lang,
+        target_lang=request.target_lang,
+    )
 
 
 @router.post("/{template_id}/translate", response_model=TranslateResponse)

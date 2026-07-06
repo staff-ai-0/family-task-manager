@@ -140,6 +140,21 @@ class TranslateRequest(BaseModel):
     target_lang: str = Field("es", pattern=r"^(en|es)$")
 
 
+class TranslateTextRequest(BaseModel):
+    """Schema for stateless translation of arbitrary title/description text.
+
+    Unlike TranslateRequest (which re-reads a saved template's DB values), this
+    carries the text to translate in the body — so the editor can translate
+    in-progress edits before the first save, and the create flow can translate
+    before the row exists. Nothing is persisted.
+    """
+
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    source_lang: str = Field("en", pattern=r"^(en|es)$")
+    target_lang: str = Field("es", pattern=r"^(en|es)$")
+
+
 class TranslateResponse(BaseModel):
     """Schema for translation response"""
 

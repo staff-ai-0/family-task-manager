@@ -93,3 +93,108 @@ async def test_translate_endpoint(client: AsyncClient, test_parent_user: User):
         get_res = await client.get(f"/api/task-templates/{tmpl_id}", headers=headers)
         tmpl = get_res.json()
         assert tmpl["title_es"] == "Lavar Platos"
+
+
+async def _login(client: AsyncClient, user: User) -> dict:
+    res = await client.post(
+        "/api/auth/login",
+        json={"email": user.email, "password": "password123"},
+    )
+    assert res.status_code == 200
+    return {"Authorization": f"Bearer {res.json()['access_token']}"}
+
+
+@pytest.mark.asyncio
+async def test_translate_text_en_to_es(client: AsyncClient, test_parent_user: User):
+    """Stateless translate-text returns body text translated, without persisting."""
+    headers = await _login(client, test_parent_user)
+
+    with patch(
+        "app.services.translation_service.TranslationService.translate_template_fields",
+        new_callable=AsyncMock,
+    ) as mock_translate:
+        mock_translate.return_value = {
+            "title": "Barrer el piso",
+            "description": "Barre el piso de la cocina",
+        }
+        res = await client.post(
+            "/api/task-templates/translate-text",
+            json={
+                "title": "Sweep Floor",
+                "description": "Sweep the kitchen floor",
+                "source_lang": "en",
+                "target_lang": "es",
+            },
+            headers=headers,
+        )
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["title"] == "Barrer el piso"
+    assert data["description"] == "Barre el piso de la cocina"
+    assert data["source_lang"] == "en"
+    assert data["target_lang"] == "es"
+    mock_translate.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_translate_text_es_to_en(client: AsyncClient, test_parent_user: User):
+    """es->en direction is honored (the Spanish-UI create path relies on this)."""
+    headers = await _login(client, test_parent_user)
+
+    with patch(
+        "app.services.translation_service.TranslationService.translate_template_fields",
+        new_callable=AsyncMock,
+    ) as mock_translate:
+        mock_translate.return_value = {"title": "Sweep Floor", "description": None}
+        res = await client.post(
+            "/api/task-templates/translate-text",
+            json={"title": "Barrer el piso", "source_lang": "es", "target_lang": "en"},
+            headers=headers,
+        )
+
+    assert res.status_code == 200
+    assert res.json()["title"] == "Sweep Floor"
+    # The service must be invoked with the es->en direction, not the default en->es.
+    _, kwargs = mock_translate.call_args
+    assert kwargs["source_lang"] == "es"
+    assert kwargs["target_lang"] == "en"
+
+
+@pytest.mark.asyncio
+async def test_translate_text_same_lang_is_noop(client: AsyncClient, test_parent_user: User):
+    """source == target echoes the input and never calls the translation service."""
+    headers = await _login(client, test_parent_user)
+
+    with patch(
+        "app.services.translation_service.TranslationService.translate_template_fields",
+        new_callable=AsyncMock,
+    ) as mock_translate:
+        res = await client.post(
+            "/api/task-templates/translate-text",
+            json={"title": "Sweep Floor", "source_lang": "en", "target_lang": "en"},
+            headers=headers,
+        )
+
+    assert res.status_code == 200
+    assert res.json()["title"] == "Sweep Floor"
+    mock_translate.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_translate_text_service_unavailable(client: AsyncClient, test_parent_user: User):
+    """A missing LiteLLM key surfaces as 503 rather than a 500."""
+    headers = await _login(client, test_parent_user)
+
+    with patch(
+        "app.services.translation_service.TranslationService.translate_template_fields",
+        new_callable=AsyncMock,
+    ) as mock_translate:
+        mock_translate.side_effect = ValueError("LITELLM_API_KEY is not configured")
+        res = await client.post(
+            "/api/task-templates/translate-text",
+            json={"title": "Sweep Floor", "source_lang": "en", "target_lang": "es"},
+            headers=headers,
+        )
+
+    assert res.status_code == 503
