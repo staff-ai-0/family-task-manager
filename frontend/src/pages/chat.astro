@@ -49,10 +49,11 @@ const draft = rawChatDraft ?? "";
 // Mark all chat as read on every render of /chat (W8.5)
 await apiFetch("/api/chat/mark-read", { method: "POST", token });
 
-const [{ data: user }, { data: msgsRaw }, { data: familyRaw }] = await Promise.all([
+const [{ data: user }, { data: msgsRaw }, { data: familyRaw }, { data: colorsRaw }] = await Promise.all([
     apiFetch<any>("/api/auth/me", { token }),
     apiFetch<any[]>("/api/chat/?limit=100", { token }),
     apiFetch<any>("/api/families/me", { token }),
+    apiFetch<any[]>("/api/users/colors", { token }),
 ]);
 if (!user) {
     Astro.cookies.delete("access_token", { path: "/" });
@@ -63,6 +64,12 @@ const memberLookup = new Map<string, string>();
 const members: any[] = familyRaw?.members ?? [];
 for (const m of members) memberLookup.set(m.id, m.name);
 memberLookup.set(user.id, user.name);
+
+// Per-member display colors (P1-KIOSK) — sender names carry each member's color.
+const memberColorLookup = new Map<string, string>();
+for (const c of Array.isArray(colorsRaw) ? colorsRaw : []) {
+    memberColorLookup.set(c.user_id, c.color);
+}
 
 function timeAgo(iso: string): string {
     const ms = Date.now() - new Date(iso).getTime();
@@ -121,7 +128,10 @@ const labels = {
                                     : "bg-brand-cream border border-brand-ink/10 text-brand-ink"
                             }`}>
                                 {!mine && (
-                                    <p class="text-[10px] font-bold text-brand-ink-soft mb-0.5">
+                                    <p
+                                        class="text-[10px] font-bold text-brand-ink-soft mb-0.5"
+                                        style={memberColorLookup.get(m.sender_id) ? `color: ${memberColorLookup.get(m.sender_id)};` : undefined}
+                                    >
                                         {name}
                                     </p>
                                 )}
@@ -179,7 +189,7 @@ const labels = {
     </form>
 </ChatShell>
 
-<script define:vars={{ currentUserId: user.id, memberMap: Object.fromEntries(memberLookup), lang }}>
+<script define:vars={{ currentUserId: user.id, memberMap: Object.fromEntries(memberLookup), memberColors: Object.fromEntries(memberColorLookup), lang }}>
     document.addEventListener("astro:page-load", () => {
         const feed = document.getElementById("chat-feed");
         if (!feed) return;
@@ -214,7 +224,11 @@ const labels = {
                 mine ? "text-brand-cream/60" : "text-brand-ink-soft"
             }"></p></div>`;
             const ps = wrapper.querySelectorAll("p");
-            if (!mine) (ps[0]).textContent = name;
+            if (!mine) {
+                (ps[0]).textContent = name;
+                const c = memberColors[msg.sender_id];
+                if (c) (ps[0]).style.color = c;
+            }
             const bodyP = mine ? ps[0] : ps[1];
             const timeP = mine ? ps[1] : ps[2];
             bodyP.textContent = msg.body;

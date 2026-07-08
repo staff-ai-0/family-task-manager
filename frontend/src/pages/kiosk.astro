@@ -1,4 +1,10 @@
 ---
+// Tailwind entry — this page is a standalone <html> document (no Layout),
+// so it must pull the global stylesheet into its own module graph or NO
+// Tailwind utilities load at all (the PIN-pad overlay's hidden/fixed/z-50
+// mechanics, the keypad grid, and every board style depend on it). Astro
+// injects the bundled <link> into the <head> below at render time.
+import "../styles/global.css";
 import { apiFetch } from "../lib/api";
 
 const token = Astro.url.searchParams.get("token");
@@ -32,7 +38,35 @@ const labels = {
     no_tasks: lang === "es" ? "Sin tareas" : "No tasks",
     shopping: lang === "es" ? "Compras" : "Shopping",
     pending: lang === "es" ? "pendientes" : "pending",
+    leaderboard: lang === "es" ? "Tabla de la semana" : "This week's leaderboard",
+    week_points: lang === "es" ? "pts esta semana" : "pts this week",
+    tap_avatar: lang === "es" ? "Toca tu foto para ver tus tareas" : "Tap your avatar to see your chores",
+    scan_flyer: lang === "es" ? "Escanear un aviso" : "Scan a flyer",
+    parent_corner: lang === "es" ? "Rincón de papás" : "Parent corner",
+    // PIN pad
+    pin_title: lang === "es" ? "Escribe tu PIN" : "Enter your PIN",
+    pin_wrong: lang === "es" ? "PIN incorrecto, intenta de nuevo" : "Wrong PIN, try again",
+    pin_none: lang === "es" ? "Aún no tienes PIN. Pídele a papá o mamá que lo configure." : "No PIN yet. Ask a parent to set one up.",
+    pin_locked: lang === "es" ? "Demasiados intentos. Espera unos minutos." : "Too many attempts. Wait a few minutes.",
+    pin_error: lang === "es" ? "Algo salió mal. Intenta de nuevo." : "Something went wrong. Try again.",
+    cancel: lang === "es" ? "Cancelar" : "Cancel",
+    // Kid view
+    hello: lang === "es" ? "¡Hola" : "Hi",
+    my_chores: lang === "es" ? "Mis tareas de hoy" : "My chores today",
+    no_chores: lang === "es" ? "¡Sin tareas hoy! 🎉" : "No chores today! 🎉",
+    points: lang === "es" ? "puntos" : "points",
+    cash: lang === "es" ? "ahorros" : "savings",
+    gigs_open_1: lang === "es" ? "gig disponible en el tablero" : "gig open on the board",
+    gigs_open_n: lang === "es" ? "gigs disponibles en el tablero" : "gigs open on the board",
+    back: lang === "es" ? "Volver al tablero" : "Back to board",
+    done_of: lang === "es" ? "de" : "of",
 };
+
+const medals = ["🥇", "🥈", "🥉"];
+const maxWeekPoints = Math.max(
+    1,
+    ...((data.leaderboard ?? []).map((e: any) => e.points_week)),
+);
 ---
 
 <html lang={lang} class="bg-slate-950 text-white">
@@ -42,20 +76,41 @@ const labels = {
         <title>{data.family_name} — Kiosk</title>
         <style>
             html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; }
-            .grid { display: grid; gap: 1rem; padding: 1rem; height: 100vh; box-sizing: border-box; }
+            /* Board layout class is deliberately NOT named .grid: this scoped
+               rule would out-specificity Tailwind's .grid/.grid-cols-* on the
+               keypad + kid-view stat grids and mangle their column counts. */
+            .board { display: grid; gap: 1rem; padding: 1rem; height: 100vh; box-sizing: border-box; }
             @media (orientation: landscape) {
-                .grid { grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr auto; }
+                .board { grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr auto auto; }
             }
             @media (orientation: portrait) {
-                .grid { grid-template-rows: auto auto 1fr auto; }
+                .board { grid-template-rows: auto auto auto auto 1fr; overflow-y: auto; }
+                html, body { overflow: auto; }
             }
+            .keypad button { touch-action: manipulation; }
+            @keyframes shake {
+                0%, 100% { transform: translateX(0); }
+                25% { transform: translateX(-8px); }
+                75% { transform: translateX(8px); }
+            }
+            .shake { animation: shake 0.3s ease-in-out 2; }
         </style>
     </head>
     <body class="bg-slate-950 text-white">
-        <div class="grid">
-            <header class="col-span-full flex items-baseline justify-between border-b border-white/10 pb-2">
+        <div class="board">
+            <header class="col-span-full flex items-baseline justify-between gap-3 border-b border-white/10 pb-2 flex-wrap">
                 <h1 class="text-3xl font-bold">{data.family_name}</h1>
-                <span id="clock" class="text-4xl font-mono tabular-nums"></span>
+                <div class="flex items-center gap-4">
+                    <a
+                        href="/calendar/scan"
+                        class="flex items-center gap-2 bg-fuchsia-600/80 hover:bg-fuchsia-500 rounded-xl px-3 py-1.5 text-sm font-semibold"
+                        title={labels.parent_corner}
+                    >
+                        📄 {labels.scan_flyer}
+                        <span class="text-[10px] font-normal text-fuchsia-200 hidden sm:inline">· {labels.parent_corner}</span>
+                    </a>
+                    <span id="clock" class="text-4xl font-mono tabular-nums"></span>
+                </div>
             </header>
 
             <section class="bg-white/5 rounded-xl p-4 overflow-auto">
@@ -112,7 +167,12 @@ const labels = {
                                 <span class={`flex-1 ${t.is_done ? "line-through" : ""}`}>
                                     {t.is_bonus && "⭐ "}{t.title}
                                 </span>
-                                <span class="text-white/40 text-sm">{t.user_name}</span>
+                                <span
+                                    class="text-sm font-semibold px-2 py-0.5 rounded-full"
+                                    style={`background-color: ${t.user_color}22; color: ${t.user_color};`}
+                                >
+                                    {t.user_name}
+                                </span>
                             </li>
                         ))}
                     </ul>
@@ -120,14 +180,56 @@ const labels = {
             </section>
 
             <section class="col-span-full bg-white/5 rounded-xl p-4 overflow-auto">
+                <h2 class="text-xl font-semibold mb-3 text-amber-300">🏆 {labels.leaderboard}</h2>
+                {(data.leaderboard ?? []).length === 0 ? (
+                    <p class="text-white/50 text-sm">—</p>
+                ) : (
+                    <ul class="space-y-2">
+                        {(data.leaderboard ?? []).map((e: any, i: number) => (
+                            <li class="flex items-center gap-3">
+                                <span class="text-2xl w-9 text-center flex-shrink-0">{medals[i] ?? "🏅"}</span>
+                                <span class="font-bold text-lg w-32 truncate flex-shrink-0" style={`color: ${e.color_hex};`}>
+                                    {e.name}
+                                </span>
+                                <div class="flex-1 bg-white/10 rounded-full h-6 overflow-hidden">
+                                    <div
+                                        class="h-6 rounded-full transition-all"
+                                        style={`width: ${Math.max(4, Math.round((e.points_week / maxWeekPoints) * 100))}%; background-color: ${e.color_hex};`}
+                                    ></div>
+                                </div>
+                                <span class="font-mono text-xl font-bold w-16 text-right flex-shrink-0">{e.points_week}</span>
+                                <span class="text-white/40 text-[10px] w-20 flex-shrink-0">{labels.week_points}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </section>
+
+            <section class="col-span-full bg-white/5 rounded-xl p-4 overflow-auto">
+                <p class="text-white/40 text-xs mb-2">👆 {labels.tap_avatar}</p>
                 <div class="flex flex-wrap gap-3">
                     {data.members.map((m: any) => (
-                        <div class="bg-white/10 rounded-lg px-3 py-2 flex-1 min-w-[120px]">
-                            <p class="text-sm font-semibold">{m.name}</p>
-                            <p class="text-xs text-white/60">
-                                {m.tasks_done}/{m.tasks_today} {labels.tasks.toLowerCase()}
-                            </p>
-                        </div>
+                        <button
+                            type="button"
+                            class="kiosk-member bg-white/10 hover:bg-white/20 active:scale-95 transition-all rounded-xl px-3 py-2 flex-1 min-w-[120px] flex items-center gap-3 text-left"
+                            data-user-id={m.id}
+                            data-name={m.name}
+                            data-color={m.color_hex}
+                            data-has-pin={m.has_pin ? "1" : "0"}
+                        >
+                            <span
+                                class="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-slate-900 flex-shrink-0"
+                                style={`background-color: ${m.color_hex};`}
+                            >
+                                {m.name.charAt(0).toUpperCase()}
+                            </span>
+                            <span class="min-w-0">
+                                <span class="block text-sm font-semibold truncate">{m.name} {m.has_pin && "🔒"}</span>
+                                <span class="block text-xs text-white/60">
+                                    {m.tasks_done}/{m.tasks_today} {labels.tasks.toLowerCase()}
+                                </span>
+                            </span>
+                        </button>
                     ))}
                 </div>
                 {data.shopping.length > 0 && (
@@ -144,7 +246,67 @@ const labels = {
             </section>
         </div>
 
-        <script define:vars={{ token }}>
+        <!-- PIN pad overlay -->
+        <div id="pin-overlay" class="hidden fixed inset-0 bg-slate-950/95 z-50 flex flex-col items-center justify-center p-6">
+            <span id="pin-avatar" class="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-slate-900 mb-2"></span>
+            <p id="pin-name" class="text-xl font-bold mb-1"></p>
+            <p class="text-white/60 text-sm mb-4">{labels.pin_title}</p>
+            <div id="pin-dots" class="flex gap-3 mb-2">
+                {[0, 1, 2, 3].map(() => (
+                    <span class="pin-dot w-4 h-4 rounded-full border-2 border-white/40"></span>
+                ))}
+            </div>
+            <p id="pin-error" class="text-rose-400 text-sm h-5 mb-3"></p>
+            <div class="keypad grid grid-cols-3 gap-3">
+                {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((k) => (
+                    k === "" ? (
+                        <span></span>
+                    ) : (
+                        <button
+                            type="button"
+                            data-key={k}
+                            class="w-20 h-20 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-3xl font-bold"
+                        >
+                            {k}
+                        </button>
+                    )
+                ))}
+            </div>
+            <button id="pin-cancel" type="button" class="mt-6 px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-semibold">
+                {labels.cancel}
+            </button>
+        </div>
+
+        <!-- Kid view overlay -->
+        <div id="kid-overlay" class="hidden fixed inset-0 bg-slate-950/98 z-50 flex-col p-6 overflow-y-auto" style="display: none;">
+            <div class="max-w-2xl mx-auto w-full">
+                <div class="flex items-center gap-4 mb-6">
+                    <span id="kid-avatar" class="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-bold text-slate-900 flex-shrink-0"></span>
+                    <h2 class="text-3xl font-bold flex-1"><span>{labels.hello}</span> <span id="kid-name"></span>!</h2>
+                    <button id="kid-close" type="button" class="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-semibold flex-shrink-0">
+                        ← {labels.back}
+                    </button>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="bg-white/5 rounded-2xl p-5 text-center">
+                        <p class="text-4xl font-mono font-bold text-amber-300" id="kid-points">0</p>
+                        <p class="text-white/60 text-sm mt-1">⭐ {labels.points}</p>
+                    </div>
+                    <div class="bg-white/5 rounded-2xl p-5 text-center">
+                        <p class="text-4xl font-mono font-bold text-emerald-300" id="kid-cash">$0</p>
+                        <p class="text-white/60 text-sm mt-1">💰 {labels.cash}</p>
+                    </div>
+                </div>
+                <div class="bg-white/5 rounded-2xl p-5 mb-4">
+                    <h3 class="text-lg font-semibold mb-1 text-emerald-300">✅ {labels.my_chores} <span id="kid-chores-count" class="text-white/50 text-sm font-normal"></span></h3>
+                    <ul id="kid-chores" class="space-y-2 mt-3"></ul>
+                    <p id="kid-no-chores" class="hidden text-white/60 text-lg py-4 text-center">{labels.no_chores}</p>
+                </div>
+                <p id="kid-gigs" class="text-white/70 text-sm text-center pb-6"></p>
+            </div>
+        </div>
+
+        <script define:vars={{ token, labels, lang }}>
             // Live clock
             function updateClock() {
                 const el = document.getElementById("clock");
@@ -153,8 +315,179 @@ const labels = {
             updateClock();
             setInterval(updateClock, 1000);
 
-            // Auto-refresh page every 60s to pull latest snapshot
-            setTimeout(() => location.reload(), 60_000);
+            const pinOverlay = document.getElementById("pin-overlay");
+            const kidOverlay = document.getElementById("kid-overlay");
+            const overlayOpen = () =>
+                !pinOverlay.classList.contains("hidden") ||
+                !kidOverlay.classList.contains("hidden");
+
+            // Auto-refresh every 60s to pull the latest snapshot, but never
+            // while a kid is mid-PIN or reading their view.
+            setInterval(() => {
+                if (!overlayOpen()) location.reload();
+            }, 60_000);
+
+            // ── Per-kid PIN flow ─────────────────────────────────────────
+            let pinDigits = "";
+            let activeMember = null;
+            let idleTimer = null;
+
+            const dots = Array.from(document.querySelectorAll(".pin-dot"));
+            const pinError = document.getElementById("pin-error");
+            const pinAvatar = document.getElementById("pin-avatar");
+            const pinName = document.getElementById("pin-name");
+
+            function renderDots() {
+                dots.forEach((d, i) => {
+                    d.style.backgroundColor = i < pinDigits.length ? "#fff" : "transparent";
+                });
+            }
+
+            function openPinPad(member) {
+                activeMember = member;
+                pinDigits = "";
+                renderDots();
+                pinError.textContent = member.hasPin ? "" : labels.pin_none;
+                pinAvatar.style.backgroundColor = member.color;
+                pinAvatar.textContent = member.name.charAt(0).toUpperCase();
+                pinName.textContent = member.name;
+                pinOverlay.classList.remove("hidden");
+                armIdle(45_000, closeAll);
+            }
+
+            function closeAll() {
+                pinOverlay.classList.add("hidden");
+                kidOverlay.classList.add("hidden");
+                kidOverlay.style.display = "none";
+                pinDigits = "";
+                activeMember = null;
+                if (idleTimer) clearTimeout(idleTimer);
+            }
+
+            // Idle timeout: auto-return to the family board.
+            function armIdle(ms, fn) {
+                if (idleTimer) clearTimeout(idleTimer);
+                idleTimer = setTimeout(fn, ms);
+            }
+
+            document.querySelectorAll(".kiosk-member").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    openPinPad({
+                        id: btn.dataset.userId,
+                        name: btn.dataset.name || "",
+                        color: btn.dataset.color || "#4FB8E6",
+                        hasPin: btn.dataset.hasPin === "1",
+                    });
+                });
+            });
+
+            document.querySelectorAll(".keypad [data-key]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    armIdle(45_000, closeAll);
+                    const k = btn.dataset.key;
+                    if (k === "⌫") {
+                        pinDigits = pinDigits.slice(0, -1);
+                    } else if (pinDigits.length < 4) {
+                        pinDigits += k;
+                    }
+                    renderDots();
+                    if (pinDigits.length === 4) submitPin();
+                });
+            });
+
+            document.getElementById("pin-cancel").addEventListener("click", closeAll);
+            document.getElementById("kid-close").addEventListener("click", closeAll);
+
+            async function submitPin() {
+                if (!activeMember) return;
+                const pin = pinDigits;
+                pinDigits = "";
+                try {
+                    const res = await fetch("/api/kiosk/pin-view", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ token, user_id: activeMember.id, pin }),
+                    });
+                    if (res.ok) {
+                        const view = await res.json();
+                        showKidView(view);
+                        return;
+                    }
+                    renderDots();
+                    const detail = (await res.json().catch(() => ({}))).detail || "";
+                    if (res.status === 429) {
+                        pinError.textContent = labels.pin_locked;
+                    } else if (String(detail).toLowerCase().includes("not set")) {
+                        pinError.textContent = labels.pin_none;
+                    } else if (res.status === 403) {
+                        pinError.textContent = labels.pin_wrong;
+                    } else {
+                        pinError.textContent = labels.pin_error;
+                    }
+                    document.getElementById("pin-dots").classList.add("shake");
+                    setTimeout(() => document.getElementById("pin-dots").classList.remove("shake"), 700);
+                } catch {
+                    renderDots();
+                    pinError.textContent = labels.pin_error;
+                }
+            }
+
+            function showKidView(view) {
+                pinOverlay.classList.add("hidden");
+                const avatar = document.getElementById("kid-avatar");
+                avatar.style.backgroundColor = view.color_hex;
+                avatar.textContent = (view.name || "?").charAt(0).toUpperCase();
+                document.getElementById("kid-name").textContent = view.name;
+                document.getElementById("kid-name").style.color = view.color_hex;
+                document.getElementById("kid-points").textContent = String(view.points);
+                document.getElementById("kid-cash").textContent =
+                    "$" + (view.cash_cents / 100).toFixed(0) + " MXN";
+
+                const list = document.getElementById("kid-chores");
+                const empty = document.getElementById("kid-no-chores");
+                list.innerHTML = "";
+                const chores = Array.isArray(view.chores) ? view.chores : [];
+                document.getElementById("kid-chores-count").textContent =
+                    chores.length ? `(${view.chores_done} ${labels.done_of} ${chores.length})` : "";
+                if (chores.length === 0) {
+                    empty.classList.remove("hidden");
+                } else {
+                    empty.classList.add("hidden");
+                    for (const c of chores) {
+                        const li = document.createElement("li");
+                        li.className = "flex items-center gap-3 text-lg" + (c.is_done ? " opacity-50" : "");
+                        const check = document.createElement("span");
+                        check.className = "w-6 h-6 rounded border-2 flex-shrink-0 flex items-center justify-center text-sm " +
+                            (c.is_done ? "bg-emerald-400 border-emerald-400 text-slate-900" : "border-white/30");
+                        check.textContent = c.is_done ? "✓" : "";
+                        const title = document.createElement("span");
+                        title.className = "flex-1" + (c.is_done ? " line-through" : "");
+                        title.textContent =
+                            (c.is_bonus ? "⭐ " : "") +
+                            ((lang === "es" && c.title_es) ? c.title_es : c.title);
+                        const pts = document.createElement("span");
+                        pts.className = "text-amber-300 font-mono text-sm";
+                        pts.textContent = c.points > 0 ? `+${c.points}` : "";
+                        li.append(check, title, pts);
+                        list.appendChild(li);
+                    }
+                }
+
+                const gigs = document.getElementById("kid-gigs");
+                gigs.textContent = view.gigs_open > 0
+                    ? `💼 ${view.gigs_open} ${view.gigs_open === 1 ? labels.gigs_open_1 : labels.gigs_open_n}`
+                    : "";
+
+                kidOverlay.classList.remove("hidden");
+                kidOverlay.style.display = "flex";
+                // Auto-return to the family board after 60s of no interaction.
+                armIdle(60_000, closeAll);
+            }
+
+            // Any tap inside the kid view re-arms the 60s idle return.
+            kidOverlay.addEventListener("pointerdown", () => {
+                if (!kidOverlay.classList.contains("hidden")) armIdle(60_000, closeAll);
+            });
         </script>
     </body>
 </html>

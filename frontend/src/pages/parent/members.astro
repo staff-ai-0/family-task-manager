@@ -18,6 +18,8 @@ if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 let successMsg = "";
 let errorMsg = "";
+// After adding/approving a kid, offer the age-preset starter packs (P1-W3).
+let showPackCta = false;
 
 if (Astro.request.method === "POST") {
   const data = await Astro.request.formData();
@@ -53,6 +55,7 @@ if (Astro.request.method === "POST") {
     });
     if (ok) {
       successMsg = lang === "es" ? "Miembro aprobado. Ya puede iniciar sesión." : "Member approved. They can now sign in.";
+      showPackCta = true;
     } else {
       errorMsg = error || "Error";
     }
@@ -110,6 +113,7 @@ if (Astro.request.method === "POST") {
     });
     if (ok) {
       successMsg = t(lang, "pm_registered");
+      showPackCta = true;
     } else {
       // Handle Pydantic validation errors (array of objects) or simple string errors
       if (typeof error === 'string') {
@@ -186,6 +190,21 @@ if (!joinCodeOk && joinCodeError) {
           <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
             {errorMsg}
           </div>
+        )
+      }
+      {
+        showPackCta && (
+          <a
+            href="/parent/starter-packs"
+            class="flex items-center justify-between gap-3 rounded-xl bg-brand-sky-deep/10 border border-brand-sky-deep/30 px-4 py-3 hover:bg-brand-sky-deep/20 transition-colors"
+          >
+            <span class="text-sm font-semibold text-brand-ink">
+              📦 {lang === "es"
+                ? "¿Nuevo en la familia? Precarga tareas, gigs y recompensas según su edad"
+                : "New family member? Preload age-appropriate chores, gigs and rewards"}
+            </span>
+            <span class="text-brand-sky-deep font-bold">→</span>
+          </a>
         )
       }
 
@@ -417,9 +436,29 @@ if (!joinCodeOk && joinCodeError) {
                 </p>
               </div>
               <span class="text-sm font-bold text-brand-sun-deep">
-                {m.points ?? 0} pts
+                <span data-member-points={m.id}>{m.points ?? 0}</span> pts
               </span>
             </div>
+
+            <!-- 1-tap points (W4.5): tap a chip → instant award/deduct -->
+            {String(m.role).toLowerCase() !== "parent" && (
+              <div class="mb-3 flex items-center gap-1.5 flex-wrap" data-quick-points data-member-id={m.id} data-member-name={m.name}>
+                <span class="text-xs text-brand-ink-soft mr-0.5" title={lang === "es" ? "Puntos rápidos" : "Quick points"}>⚡</span>
+                {[-5, -1, 1, 5, 10].map((delta) => (
+                  <button
+                    type="button"
+                    data-delta={delta}
+                    class={`px-2.5 py-1 rounded-full text-xs font-bold border transition-colors active:scale-95 ${
+                      delta > 0
+                        ? "bg-brand-mint/15 text-brand-mint-deep border-brand-mint-deep/30 hover:bg-brand-mint/30"
+                        : "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+                    }`}
+                  >
+                    {delta > 0 ? `+${delta}` : delta}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div class="flex gap-2 flex-wrap">
               <form method="POST" class="inline-flex">
@@ -549,6 +588,47 @@ if (!joinCodeOk && joinCodeError) {
       if (modal) {
         modal.classList.remove('hidden');
       }
+    });
+
+    // 1-tap points chips (W4.5): member row → +/- chip → done (2 taps max).
+    const esLang = (document.cookie.split(";").find(c => c.trim().startsWith("lang="))?.split("=")[1] ?? "es") === "es";
+    document.querySelectorAll<HTMLElement>('[data-quick-points]').forEach((row) => {
+      const memberId = row.dataset.memberId!;
+      const memberName = row.dataset.memberName ?? "";
+      row.querySelectorAll<HTMLButtonElement>('button[data-delta]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const delta = parseInt(btn.dataset.delta ?? "0", 10);
+          if (!delta) return;
+          btn.disabled = true;
+          try {
+            const res = await fetch('/api/users/points/quick-adjust', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ user_id: memberId, points: delta }),
+            });
+            if (res.ok) {
+              const tx = await res.json().catch(() => null);
+              const ptsEl = document.querySelector(`[data-member-points="${memberId}"]`);
+              if (ptsEl && tx && typeof tx.balance_after === 'number') {
+                ptsEl.textContent = String(tx.balance_after);
+              }
+              const sign = delta > 0 ? `+${delta}` : `${delta}`;
+              showToast(
+                esLang ? `${sign} pts para ${memberName}` : `${sign} pts for ${memberName}`,
+                'success'
+              );
+            } else {
+              const err = await res.json().catch(() => ({}));
+              showToast(err.detail || (esLang ? 'No se pudo ajustar' : 'Could not adjust'), 'error');
+            }
+          } catch {
+            showToast(esLang ? 'Error de conexión' : 'Connection error', 'error');
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
     });
 
     document.getElementById('copy-code-btn')?.addEventListener('click', () => {

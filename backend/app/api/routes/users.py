@@ -17,6 +17,7 @@ from app.schemas.points import (
     PointsSummary,
     PointTransactionResponse,
     ParentAdjustment,
+    QuickPointsAdjustment,
 )
 from app.models import User
 from app.models.user import UserRole
@@ -50,6 +51,48 @@ async def get_my_points_history(
     )
 
 
+@router.get("/colors")
+async def get_member_colors(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-member display colors for the caller's family (P1-KIOSK).
+
+    Any member may read (colors show on chat/calendar/task lists for
+    everyone). Resolution = parent-set override (Redis) or deterministic
+    brand-palette fallback. Registered BEFORE /{user_id} so the literal
+    path wins over the UUID param route.
+    """
+    from sqlalchemy import and_ as sa_and, select as sa_select
+
+    from app.services.member_prefs_service import (
+        MemberPrefsService,
+        color_hex,
+        resolve_color_name,
+    )
+
+    # Active members only — matches the kiosk /member-prefs listing so
+    # deactivated members never leak into client color maps.
+    q = sa_select(User).where(
+        sa_and(
+            User.family_id == current_user.family_id,
+            User.is_active.is_(True),
+        )
+    )
+    users = list((await db.execute(q)).scalars().all())
+    prefs = await MemberPrefsService.get_family_prefs(current_user.family_id)
+    return [
+        {
+            "user_id": str(u.id),
+            "name": u.name,
+            "color": color_hex(
+                resolve_color_name(u.id, prefs.get(str(u.id)))
+            ),
+        }
+        for u in users
+    ]
+
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user: User = Depends(get_family_user),
@@ -81,6 +124,74 @@ async def adjust_user_points(
         parent_id=current_user.id,
         family_id=current_user.family_id,
     )
+    return transaction
+
+
+@router.post("/points/quick-adjust", response_model=PointTransactionResponse)
+async def quick_adjust_points(
+    adjustment: QuickPointsAdjustment,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """1-tap parent award/deduct (W4.5).
+
+    Same ledger as /points/adjust (PARENT_ADJUSTMENT transaction with the
+    reason in `description`), but the reason is optional — a localized
+    default is filled in — and the kid gets an in-app notification so the
+    balance change is never silent.
+    """
+    from app.services.base_service import get_user_by_id
+    from app.core.exceptions import ForbiddenException
+
+    target = await get_user_by_id(db, adjustment.user_id)
+    # Quick-adjust is a kid affordance: the dashboard hides the chips on
+    # parent rows, so the API must match — no adjusting another parent's
+    # (or your own) balance through this shortcut. The full /points/adjust
+    # ledger flow is unchanged.
+    if target.role == UserRole.PARENT:
+        raise ForbiddenException(
+            "Quick adjust only targets kids — parent balances cannot be "
+            "adjusted here"
+        )
+    kid_lang = getattr(target, "preferred_lang", None) or "es"
+    reason = (adjustment.reason or "").strip() or (
+        "⚡ Ajuste rápido" if kid_lang == "es" else "⚡ Quick adjustment"
+    )
+
+    transaction = await PointsService.create_parent_adjustment(
+        db,
+        ParentAdjustment(
+            user_id=adjustment.user_id,
+            points=adjustment.points,
+            reason=reason,
+        ),
+        parent_id=current_user.id,
+        family_id=current_user.family_id,
+    )
+
+    # Tell the kid why their balance moved. Best-effort.
+    try:
+        from app.services.notification_service import NotificationService
+
+        delta = (
+            f"+{adjustment.points}" if adjustment.points > 0
+            else str(adjustment.points)
+        )
+        await NotificationService.create_localized(
+            db,
+            family_id=current_user.family_id,
+            key="points_adjusted",
+            user_id=adjustment.user_id,
+            params={"delta": delta, "reason": reason},
+            link="/dashboard",
+            lang=kid_lang,
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "points quick-adjust notification failed", exc_info=True
+        )
+
     return transaction
 
 
