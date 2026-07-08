@@ -80,6 +80,22 @@ const allExpenseCategories = (allGroups || [])
 // --- All categories for FAB modal ---
 const allCategories = (allGroups || [])
     .flatMap((g: any) => g.categories.map((c: any) => ({ id: c.id, name: c.name, group_name: g.name })));
+
+// --- Jarvis entry point (P1-KIOSK #6) ---
+// Suggested money questions deep-link into the Jarvis chat with the question
+// pre-filled (/parent/jarvis?q=… — the chat page reads ?q into the composer).
+const jarvisQuestions: string[] =
+    lang === "es"
+        ? [
+              "¿Cuánto gastamos en comida este mes?",
+              "¿En qué categorías nos pasamos del presupuesto este mes?",
+              "¿Cuánto llevamos gastado esta semana y en qué?",
+          ]
+        : [
+              "How much did we spend on food this month?",
+              "Which categories are over budget this month?",
+              "How much have we spent this week, and on what?",
+          ];
 ---
 
 <BudgetShell
@@ -115,6 +131,32 @@ const allCategories = (allGroups || [])
         />
     </div>
 
+    {/* Budget cold start (P1-W3): with zero accounts nothing else works —
+        transactions error out and every list is empty. Front-load account
+        creation with an inline modal (no detour to /budget/settings). */}
+    {accounts.length === 0 && (
+        <div class="px-4 mt-3">
+            <div class="bg-brand-cream rounded-2xl p-5 border-2 border-dashed border-brand-sky-deep/40 shadow-[var(--shadow-card)] text-center">
+                <div class="text-4xl mb-2">🏦</div>
+                <h2 class="font-bold text-brand-ink text-base mb-1">
+                    {lang === "es" ? "Crea tu primera cuenta" : "Create your first account"}
+                </h2>
+                <p class="text-sm text-brand-ink-soft mb-4">
+                    {lang === "es"
+                        ? "Tu presupuesto vive en cuentas (banco, efectivo, tarjeta). Crea la primera para empezar a registrar gastos."
+                        : "Your budget lives in accounts (bank, cash, card). Create the first one to start tracking spending."}
+                </p>
+                <button
+                    type="button"
+                    data-open-account-modal="reload"
+                    class="px-5 py-2.5 rounded-xl bg-brand-sky-deep hover:bg-brand-ink text-white font-semibold text-sm shadow-[var(--shadow-card)] active:scale-[0.98] transition-all"
+                >
+                    + {lang === "es" ? "Nueva cuenta" : "New account"}
+                </button>
+            </div>
+        </div>
+    )}
+
     {/* Copy last month — exposes the existing auto-fill (copy_previous) so a
         parent can seed the whole month in one tap instead of one modal per
         category. Skips categories already budgeted (overwrite_existing=false). */}
@@ -129,6 +171,31 @@ const allCategories = (allGroups || [])
             {lang === "es" ? "📋 Copiar presupuesto del mes anterior" : "📋 Copy last month's budget"}
         </button>
         <p id="copy-last-month-msg" class="text-xs text-brand-ink-soft mt-1 hidden text-center"></p>
+    </div>
+
+    {/* Jarvis entry point — compact card with suggested money questions that
+        deep-link into the chat with the question pre-filled. */}
+    <div class="px-4">
+        <div class="bg-brand-cream rounded-2xl p-3 border border-violet-200 shadow-[var(--shadow-card)]">
+            <div class="flex items-center justify-between gap-2 mb-2">
+                <p class="text-sm font-bold text-brand-ink">
+                    🤖 {lang === "es" ? "Pregúntale a Jarvis" : "Ask Jarvis"}
+                </p>
+                <a href="/parent/jarvis" class="text-xs font-semibold text-violet-700 hover:underline whitespace-nowrap">
+                    {lang === "es" ? "Abrir chat →" : "Open chat →"}
+                </a>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+                {jarvisQuestions.map((q) => (
+                    <a
+                        href={`/parent/jarvis?q=${encodeURIComponent(q)}`}
+                        class="px-2.5 py-1.5 rounded-full bg-violet-100 text-violet-700 text-xs font-semibold hover:bg-violet-200 active:scale-95 transition-all"
+                    >
+                        {q}
+                    </a>
+                ))}
+            </div>
+        </div>
     </div>
     {/* Income groups */}
     {incomeGroups.map((group: any) => (

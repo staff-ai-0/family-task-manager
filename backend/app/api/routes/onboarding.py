@@ -1,4 +1,4 @@
-"""Onboarding checklist routes — GET state, POST dismiss."""
+"""Onboarding routes — checklist state/dismiss + age-preset starter packs."""
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,10 +9,35 @@ from app.schemas.onboarding import (
     OnboardingState,
     OnboardingEventCreate,
     OnboardingAnalytics,
+    StarterPackApplyRequest,
+    StarterPackApplyResult,
+    StarterPackList,
 )
 from app.services.onboarding_service import OnboardingService
+from app.services.starter_pack_service import StarterPackService
 
 router = APIRouter()
+
+
+@router.get("/starter-packs", response_model=StarterPackList)
+async def list_starter_packs(
+    current_user: User = Depends(require_parent_role),
+):
+    """Curated ES/MX starter packs by kid age band (static data)."""
+    return StarterPackService.list_packs()
+
+
+@router.post("/starter-packs/apply", response_model=StarterPackApplyResult)
+async def apply_starter_pack(
+    payload: StarterPackApplyRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create the selected pack items for the family (idempotent by title)."""
+    family_id = to_uuid_required(current_user.family_id)
+    return await StarterPackService.apply(
+        db, family_id, to_uuid_required(current_user.id), payload
+    )
 
 
 @router.get("", response_model=OnboardingState)

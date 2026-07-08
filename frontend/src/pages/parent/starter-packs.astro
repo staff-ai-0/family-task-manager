@@ -1,0 +1,356 @@
+---
+/**
+ * Age-preset starter packs (P1-W3) — onboarding cold-start killer.
+ *
+ * Parent picks an age band per kid → previews the curated ES/MX pack
+ * (chores → points, gigs → $MXN board, rewards → point prices) with
+ * checkboxes → one tap creates everything. Idempotent server-side: items
+ * whose titles already exist in the family are skipped, so re-applying
+ * (or overlapping bands) never duplicates.
+ */
+import PageLayout from "@components/ui/PageLayout.astro";
+import { apiFetch } from "../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+const es = lang === "es";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+const [{ data: packsData }, { data: family }] = await Promise.all([
+    apiFetch<any>("/api/families/onboarding/starter-packs", { token }),
+    apiFetch<any>("/api/families/me", { token }),
+]);
+const packs: any[] = packsData?.packs ?? [];
+const kids: any[] = (family?.members ?? []).filter(
+    (m: any) => (m.role || "").toLowerCase() !== "parent"
+);
+
+// ?band=6-8 preselects a tab (linked from members/onboarding); default first.
+const requestedBand = Astro.url.searchParams.get("band");
+const activeBand = packs.some((p) => p.age_band === requestedBand)
+    ? (requestedBand as string)
+    : packs[0]?.age_band;
+
+const scheduleLabel = (days: number) => {
+    if (days === 1) return es ? "Diario" : "Daily";
+    if (days === 7) return es ? "Semanal" : "Weekly";
+    return es ? `Cada ${days} días` : `Every ${days} days`;
+};
+const difficultyLabel = (d: number) =>
+    d === 3 ? (es ? "Difícil" : "Hard") : d === 2 ? (es ? "Media" : "Medium") : (es ? "Fácil" : "Easy");
+
+const i18n = {
+    applying: es ? "Agregando…" : "Adding…",
+    applyFail: es ? "No se pudo aplicar el paquete. Intenta de nuevo." : "Could not apply the pack. Please try again.",
+    nothingSelected: es ? "Selecciona al menos un elemento." : "Select at least one item.",
+    successTpl: es
+        ? "¡Listo! Se agregaron {chores} tareas, {gigs} gigs y {rewards} recompensas."
+        : "Done! Added {chores} chores, {gigs} gigs and {rewards} rewards.",
+    skippedTpl: es
+        ? " Se omitieron {n} que ya tenías."
+        : " Skipped {n} you already had.",
+    lang,
+};
+---
+
+<PageLayout
+    title={es ? "Paquetes por edad" : "Age starter packs"}
+    headerClass="bg-gradient-to-br from-slate-800 to-slate-700"
+    dark
+    role="parent"
+    active="parent"
+    lang={lang}
+>
+    <div class="px-4 py-5 space-y-4 max-w-2xl mx-auto">
+        <div>
+            <h1 class="text-xl font-bold text-brand-ink">
+                📦 {es ? "Empieza en minutos" : "Set up in minutes"}
+            </h1>
+            <p class="text-sm text-brand-ink-soft mt-1">
+                {es
+                    ? "Elige la edad de tu hijo(a) y precargamos tareas con puntos, gigs con pago en pesos y recompensas listas para canjear. Todo se puede editar después."
+                    : "Pick your kid's age and we preload point-earning chores, MXN-paying gigs and redeemable rewards. Everything is editable later."}
+            </p>
+        </div>
+
+        {kids.length > 0 && (
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider">
+                    {es ? "Tu familia:" : "Your family:"}
+                </span>
+                {kids.map((k: any) => (
+                    <span class="px-2.5 py-1 rounded-full bg-brand-cream text-brand-ink text-xs font-semibold border border-brand-ink/10">
+                        {k.name}
+                    </span>
+                ))}
+            </div>
+        )}
+
+        {/* Band tabs */}
+        <div class="flex gap-2 overflow-x-auto pb-1" role="tablist">
+            {packs.map((pack: any) => (
+                <button
+                    type="button"
+                    role="tab"
+                    data-band-tab={pack.age_band}
+                    aria-selected={pack.age_band === activeBand ? "true" : "false"}
+                    class:list={[
+                        "px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap border-2 transition-colors",
+                        pack.age_band === activeBand
+                            ? "bg-brand-sky-deep text-white border-brand-sky-deep"
+                            : "bg-brand-cream text-brand-ink border-brand-ink/10 hover:border-brand-sky-deep/40",
+                    ]}
+                >
+                    {es ? pack.label_es : pack.label_en}
+                </button>
+            ))}
+        </div>
+
+        <div id="pack-result" class="hidden rounded-2xl p-4 text-sm font-semibold"></div>
+
+        {packs.length === 0 && (
+            <p class="text-center text-brand-ink-soft py-10">
+                {es ? "No hay paquetes disponibles." : "No packs available."}
+            </p>
+        )}
+
+        {/* One panel per band; JS toggles visibility */}
+        {packs.map((pack: any) => (
+            <section
+                data-band-panel={pack.age_band}
+                class:list={["space-y-4", pack.age_band === activeBand ? "" : "hidden"]}
+            >
+                <p class="text-sm text-brand-ink-soft italic">
+                    {es ? pack.tagline_es : pack.tagline_en}
+                </p>
+
+                {/* Chores */}
+                <div class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="font-bold text-brand-ink text-sm">
+                            🧹 {es ? "Tareas (ganan puntos)" : "Chores (earn points)"}
+                        </h2>
+                        <label class="flex items-center gap-1.5 text-xs text-brand-ink-soft font-semibold cursor-pointer">
+                            <input type="checkbox" checked data-select-all class="accent-[var(--color-brand-sky-deep,#2563eb)]" />
+                            {es ? "Todas" : "All"}
+                        </label>
+                    </div>
+                    <ul class="divide-y divide-brand-ink/5">
+                        {pack.chores.map((c: any) => (
+                            <li>
+                                <label class="flex items-center gap-3 py-2 cursor-pointer">
+                                    <input type="checkbox" checked data-kind="chore" data-id={c.id} class="accent-[var(--color-brand-sky-deep,#2563eb)]" />
+                                    <span class="flex-1 text-sm text-brand-ink">{es ? c.title_es : c.title_en}</span>
+                                    <span class="text-[11px] text-brand-ink-soft whitespace-nowrap">{scheduleLabel(c.interval_days)}</span>
+                                    <span class="px-2 py-0.5 rounded-full bg-brand-sky-deep/10 text-brand-sky-deep text-xs font-bold whitespace-nowrap">
+                                        {c.points} pts
+                                    </span>
+                                </label>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                {/* Gigs */}
+                <div class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="font-bold text-brand-ink text-sm">
+                            💵 {es ? "Gigs (pagan en pesos)" : "Gigs (pay cash)"}
+                        </h2>
+                        <label class="flex items-center gap-1.5 text-xs text-brand-ink-soft font-semibold cursor-pointer">
+                            <input type="checkbox" checked data-select-all class="accent-[var(--color-brand-sky-deep,#2563eb)]" />
+                            {es ? "Todos" : "All"}
+                        </label>
+                    </div>
+                    <p class="text-[11px] text-brand-ink-soft mb-1">
+                        {es
+                            ? "Trabajos extra del tablero de gigs — la única forma de ganar dinero real."
+                            : "Extra jobs on the gig board — the only way to earn real cash."}
+                    </p>
+                    <ul class="divide-y divide-brand-ink/5">
+                        {pack.gigs.map((g: any) => (
+                            <li>
+                                <label class="flex items-center gap-3 py-2 cursor-pointer">
+                                    <input type="checkbox" checked data-kind="gig" data-id={g.id} class="accent-[var(--color-brand-sky-deep,#2563eb)]" />
+                                    <span class="flex-1 text-sm text-brand-ink">{es ? g.title_es : g.title_en}</span>
+                                    <span class="text-[11px] text-brand-ink-soft whitespace-nowrap">{difficultyLabel(g.difficulty)}</span>
+                                    <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold whitespace-nowrap">
+                                        ${g.points} MXN
+                                    </span>
+                                </label>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                {/* Rewards */}
+                <div class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="font-bold text-brand-ink text-sm">
+                            🎁 {es ? "Recompensas (se canjean con puntos)" : "Rewards (redeemed with points)"}
+                        </h2>
+                        <label class="flex items-center gap-1.5 text-xs text-brand-ink-soft font-semibold cursor-pointer">
+                            <input type="checkbox" checked data-select-all class="accent-[var(--color-brand-sky-deep,#2563eb)]" />
+                            {es ? "Todas" : "All"}
+                        </label>
+                    </div>
+                    <ul class="divide-y divide-brand-ink/5">
+                        {pack.rewards.map((r: any) => (
+                            <li>
+                                <label class="flex items-center gap-3 py-2 cursor-pointer">
+                                    <input type="checkbox" checked data-kind="reward" data-id={r.id} class="accent-[var(--color-brand-sky-deep,#2563eb)]" />
+                                    <span class="flex-1 text-sm text-brand-ink">{r.icon} {es ? r.title_es : r.title_en}</span>
+                                    <span class="px-2 py-0.5 rounded-full bg-brand-coral/10 text-brand-coral text-xs font-bold whitespace-nowrap">
+                                        {r.points_cost} pts
+                                    </span>
+                                </label>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                <button
+                    type="button"
+                    data-apply-band={pack.age_band}
+                    class="w-full py-3 bg-brand-sky-deep hover:bg-brand-ink active:scale-[0.98] text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition-all"
+                >
+                    ✨ {es ? "Agregar seleccionados a mi familia" : "Add selected to my family"}
+                    (<span data-count>0</span>)
+                </button>
+            </section>
+        ))}
+
+        <div id="pack-links" class="hidden flex-wrap gap-2 pt-1">
+            <a href="/parent/tasks" class="px-3 py-2 rounded-lg bg-brand-cream text-brand-ink text-xs font-semibold border border-brand-ink/15 hover:border-brand-sky-deep/50 transition-colors">
+                📋 {es ? "Ver tareas" : "View chores"}
+            </a>
+            <a href="/parent/gigs" class="px-3 py-2 rounded-lg bg-brand-cream text-brand-ink text-xs font-semibold border border-brand-ink/15 hover:border-brand-sky-deep/50 transition-colors">
+                💵 {es ? "Ver gigs" : "View gigs"}
+            </a>
+            <a href="/parent/rewards" class="px-3 py-2 rounded-lg bg-brand-cream text-brand-ink text-xs font-semibold border border-brand-ink/15 hover:border-brand-sky-deep/50 transition-colors">
+                🎁 {es ? "Ver recompensas" : "View rewards"}
+            </a>
+        </div>
+    </div>
+</PageLayout>
+
+<script define:vars={{ i18n }}>
+    document.addEventListener("astro:page-load", () => {
+        const tabs = document.querySelectorAll("[data-band-tab]");
+        if (!tabs.length) return;
+
+        const activeTabClasses = ["bg-brand-sky-deep", "text-white", "border-brand-sky-deep"];
+        const idleTabClasses = ["bg-brand-cream", "text-brand-ink", "border-brand-ink/10", "hover:border-brand-sky-deep/40"];
+
+        function showBand(band) {
+            tabs.forEach((t) => {
+                const on = t.getAttribute("data-band-tab") === band;
+                t.setAttribute("aria-selected", on ? "true" : "false");
+                t.classList.remove(...(on ? idleTabClasses : activeTabClasses));
+                t.classList.add(...(on ? activeTabClasses : idleTabClasses));
+            });
+            document.querySelectorAll("[data-band-panel]").forEach((p) => {
+                p.classList.toggle("hidden", p.getAttribute("data-band-panel") !== band);
+            });
+        }
+        tabs.forEach((t) =>
+            t.addEventListener("click", () => showBand(t.getAttribute("data-band-tab")))
+        );
+
+        // Live selected-count per band + select-all per section
+        function refreshCount(panel) {
+            const n = panel.querySelectorAll("input[data-kind]:checked").length;
+            const span = panel.querySelector("[data-count]");
+            if (span) span.textContent = String(n);
+        }
+        document.querySelectorAll("[data-band-panel]").forEach((panel) => {
+            refreshCount(panel);
+            panel.addEventListener("change", (e) => {
+                const target = e.target;
+                if (target && target.hasAttribute("data-select-all")) {
+                    const card = target.closest("div.bg-brand-cream");
+                    card?.querySelectorAll("input[data-kind]").forEach((cb) => {
+                        cb.checked = target.checked;
+                    });
+                }
+                refreshCount(panel);
+            });
+        });
+
+        // Apply
+        const resultBox = document.getElementById("pack-result");
+        const linksBox = document.getElementById("pack-links");
+        document.querySelectorAll("[data-apply-band]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                const band = btn.getAttribute("data-apply-band");
+                const panel = document.querySelector(`[data-band-panel="${band}"]`);
+                if (!panel) return;
+                const ids = (kind) =>
+                    Array.from(panel.querySelectorAll(`input[data-kind="${kind}"]:checked`))
+                        .map((cb) => cb.getAttribute("data-id"));
+                const chore_ids = ids("chore");
+                const gig_ids = ids("gig");
+                const reward_ids = ids("reward");
+                if (!chore_ids.length && !gig_ids.length && !reward_ids.length) {
+                    alert(i18n.nothingSelected);
+                    return;
+                }
+                const original = btn.innerHTML;
+                btn.disabled = true;
+                btn.textContent = i18n.applying;
+                try {
+                    const res = await fetch("/api/families/onboarding/starter-packs/apply", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            age_band: band,
+                            chore_ids,
+                            gig_ids,
+                            reward_ids,
+                            lang: i18n.lang,
+                        }),
+                    });
+                    if (!res.ok) throw new Error(String(res.status));
+                    const data = await res.json();
+                    const created = data.created || {};
+                    const skipped = data.skipped || {};
+                    const skippedTotal =
+                        (skipped.chores || 0) + (skipped.gigs || 0) + (skipped.rewards || 0);
+                    let msg = i18n.successTpl
+                        .replace("{chores}", String(created.chores || 0))
+                        .replace("{gigs}", String(created.gigs || 0))
+                        .replace("{rewards}", String(created.rewards || 0));
+                    if (skippedTotal > 0) {
+                        msg += i18n.skippedTpl.replace("{n}", String(skippedTotal));
+                    }
+                    if (resultBox) {
+                        resultBox.textContent = `✅ ${msg}`;
+                        resultBox.className =
+                            "rounded-2xl p-4 text-sm font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200";
+                        resultBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    }
+                    if (linksBox) {
+                        linksBox.classList.remove("hidden");
+                        linksBox.classList.add("flex");
+                    }
+                } catch (_) {
+                    if (resultBox) {
+                        resultBox.textContent = `⚠️ ${i18n.applyFail}`;
+                        resultBox.className =
+                            "rounded-2xl p-4 text-sm font-semibold bg-red-50 text-red-700 border border-red-200";
+                    }
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = original;
+                }
+            });
+        });
+    });
+</script>
