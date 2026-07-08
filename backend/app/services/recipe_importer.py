@@ -12,11 +12,12 @@ from dataclasses import dataclass
 from typing import Optional
 
 import httpx
+from fastapi.concurrency import run_in_threadpool
 from openai import OpenAI
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
-from app.services.budget.receipt_scanner_service import RECEIPT_MODEL
+from app.services.budget.receipt_scanner_service import LLM_TIMEOUT, RECEIPT_MODEL
 
 
 # Strip cap so we keep the prompt comfortably under the model's context.
@@ -94,14 +95,19 @@ async def import_recipe_from_url(url: str) -> ImportedRecipe:
     client = OpenAI(
         base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
         api_key=settings.LITELLM_API_KEY,
+        timeout=LLM_TIMEOUT,  # connect fails fast; read capped at 60s
     )
     try:
-        completion = client.chat.completions.create(
-            model=RECEIPT_MODEL,
-            max_tokens=1024,
-            messages=[
-                {"role": "user", "content": f"{RECIPE_PROMPT}\n\nPAGE TEXT:\n{text_block}"},
-            ],
+        # Sync OpenAI client (blocking I/O) — offload to a worker thread so a
+        # slow provider can't stall the async event loop.
+        completion = await run_in_threadpool(
+            lambda: client.chat.completions.create(
+                model=RECEIPT_MODEL,
+                max_tokens=1024,
+                messages=[
+                    {"role": "user", "content": f"{RECIPE_PROMPT}\n\nPAGE TEXT:\n{text_block}"},
+                ],
+            )
         )
     except Exception as exc:
         raise ValidationError(f"Recipe extraction failed: {exc}")
