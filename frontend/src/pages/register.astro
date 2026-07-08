@@ -82,6 +82,7 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                          </div>
 
                         <div id="register-error" class="hidden mb-6 p-4 rounded-xl bg-red-100 border border-red-200 text-red-700 text-sm font-medium"></div>
+                        <div id="register-pending" class="hidden mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium"></div>
 
                         <form id="register-form" class="space-y-5">
                              <!-- Family code (optional) -->
@@ -116,13 +117,25 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                                  >
                                      <option value="child" selected>{lang === "es" ? "Niño / Niña" : "Child"}</option>
                                      <option value="teen">{lang === "es" ? "Adolescente" : "Teen"}</option>
-                                     <option value="parent">{lang === "es" ? "Papá / Mamá" : "Parent"}</option>
                                  </select>
                                  <p class="text-xs text-brand-ink-soft mt-1">
                                      {lang === "es"
-                                         ? "Los papás pueden cambiar el rol después desde Miembros."
-                                         : "Parents can change roles later from the Members page."}
+                                         ? "Un papá o mamá deberá aprobar tu cuenta antes de que puedas entrar. Los papás se unen por invitación de correo."
+                                         : "A parent must approve your account before you can sign in. Parents join via email invitation."}
                                  </p>
+                             </div>
+
+                             <!-- Birthdate (optional, join flow only) -->
+                             <div id="join-birthdate-wrap" class="hidden">
+                                 <label for="birthdate" class="block text-sm font-semibold text-brand-ink mb-2">
+                                     {lang === "es" ? "Fecha de nacimiento (opcional)" : "Birthdate (optional)"}
+                                 </label>
+                                 <input
+                                     type="date"
+                                     id="birthdate"
+                                     name="birthdate"
+                                     class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all hover:border-brand-ink/20 bg-white"
+                                 />
                              </div>
 
                              <!-- Family name -->
@@ -211,6 +224,27 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                                 />
                             </div>
 
+                            <!-- Terms + privacy consent (required) -->
+                            <div class="flex items-start gap-3 p-4 rounded-lg bg-brand-cream-deep border border-brand-ink/10">
+                                <input
+                                    type="checkbox"
+                                    id="accept_terms"
+                                    name="accept_terms"
+                                    required
+                                    class="w-5 h-5 mt-0.5 rounded border-brand-ink/20 text-brand-coral focus:ring-2 focus:ring-brand-coral cursor-pointer"
+                                />
+                                <label for="accept_terms" class="text-sm text-brand-ink cursor-pointer flex-1 leading-relaxed">
+                                    {lang === "es" ? "Acepto los " : "I accept the "}
+                                    <a href="/terminos" target="_blank" rel="noopener" class="font-bold underline text-brand-coral-deep hover:text-brand-coral transition-colors">
+                                        {lang === "es" ? "Términos" : "Terms"}
+                                    </a>
+                                    {lang === "es" ? " y el " : " and the "}
+                                    <a href="/privacidad" target="_blank" rel="noopener" class="font-bold underline text-brand-coral-deep hover:text-brand-coral transition-colors">
+                                        {lang === "es" ? "Aviso de Privacidad" : "Privacy Notice"}
+                                    </a>
+                                </label>
+                            </div>
+
                             <button
                                 type="submit"
                                 id="register-submit-btn"
@@ -252,14 +286,18 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
         document.addEventListener('astro:page-load', () => {
         const form = document.getElementById('register-form');
         const errorDiv = document.getElementById('register-error');
+        const pendingDiv = document.getElementById('register-pending');
         const submitBtn = document.getElementById('register-submit-btn');
         if (!form) return;
 
-        // Role picker only applies when joining an existing family by code
+        // Role + birthdate pickers only apply when joining a family by code
         const codeInput = document.getElementById('family_code');
         const roleWrap = document.getElementById('join-role-wrap');
+        const birthdateWrap = document.getElementById('join-birthdate-wrap');
         const syncRoleVisibility = () => {
-            roleWrap.classList.toggle('hidden', !codeInput.value.trim());
+            const hidden = !codeInput.value.trim();
+            roleWrap.classList.toggle('hidden', hidden);
+            birthdateWrap.classList.toggle('hidden', hidden);
         };
         codeInput.addEventListener('input', syncRoleVisibility);
         syncRoleVisibility();
@@ -273,9 +311,21 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
             const passwordConfirm = document.getElementById('password_confirm').value;
+            const acceptTerms = document.getElementById('accept_terms').checked;
+            const birthdate = document.getElementById('birthdate').value;
 
             errorDiv.classList.add('hidden');
             errorDiv.textContent = '';
+            pendingDiv.classList.add('hidden');
+            pendingDiv.textContent = '';
+
+            if (!acceptTerms) {
+                errorDiv.textContent = lang === 'es'
+                    ? 'Debes aceptar los Términos y el Aviso de Privacidad'
+                    : 'You must accept the Terms and the Privacy Notice';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
 
             // Validate passwords
             if (password !== passwordConfirm) {
@@ -313,11 +363,13 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
                     email,
                     password,
                     preferred_lang: lang,
+                    accept_terms: acceptTerms,
                 };
 
                 if (family_code) {
                     body.family_code = family_code;
                     body.role = document.getElementById('join_role').value;
+                    if (birthdate) body.birthdate = birthdate;
                 } else {
                     body.family_name = family_name;
                 }
@@ -330,7 +382,16 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
 
                 const data = await response.json();
 
-                if (data.success && data.redirect) {
+                if (data.success && data.pending) {
+                    // Join-code signup: account created but pending parental
+                    // approval — no session, tell them to wait for a parent.
+                    form.classList.add('hidden');
+                    pendingDiv.textContent = data.message || (lang === 'es'
+                        ? 'Tu cuenta fue creada y está pendiente de aprobación. Pide a tu papá o mamá que la apruebe para poder iniciar sesión.'
+                        : 'Your account was created and is pending approval. Ask a parent to approve it before you can log in.');
+                    pendingDiv.classList.remove('hidden');
+                    pendingDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else if (data.success && data.redirect) {
                     window.location.href = data.redirect;
                 } else {
                     errorDiv.textContent = data.error || (lang === 'es' ? 'Error al crear la cuenta' : 'Registration failed');

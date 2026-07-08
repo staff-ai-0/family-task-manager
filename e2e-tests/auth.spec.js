@@ -95,6 +95,7 @@ test.describe('Authentication', () => {
       await page.fill('input[name="password_confirm"]', NEW_USER.password);
       await page.fill('input[name="name"]', 'John Doe');
       await page.fill('input[name="family_name"]', NEW_USER.familyName);
+      await page.check('#accept_terms');
 
       // Submit form
       await page.click('button[type="submit"]');
@@ -119,6 +120,9 @@ test.describe('Authentication', () => {
       await page.fill('input[name="password_confirm"]', 'DifferentPassword123!');
       await page.fill('input[name="name"]', 'John Doe');
       await page.fill('input[name="family_name"]', NEW_USER.familyName);
+      // Consent must be ticked or native validation blocks submit before
+      // the JS mismatch check runs.
+      await page.check('#accept_terms');
 
       // Try to submit
       const submitButton = page.locator('button[type="submit"]').first();

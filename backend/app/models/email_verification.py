@@ -5,7 +5,7 @@ Stores tokens for email verification and password reset.
 """
 from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 from datetime import datetime, timedelta, timezone, timezone
 import uuid
 import secrets
@@ -27,8 +27,19 @@ class EmailVerificationToken(Base):
     
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     
-    # Relationship
-    user = relationship("User", backref="verification_tokens")
+    # Relationship. delete-orphan + passive_deletes: without it, deleting a
+    # User whose unconsumed token is present would make the ORM NULL out
+    # user_id (NOT NULL violation) instead of letting the row be removed —
+    # broke parent 'reject pending member' and member deletion of
+    # never-verified accounts. The DB FK already has ON DELETE CASCADE.
+    user = relationship(
+        "User",
+        backref=backref(
+            "verification_tokens",
+            cascade="all, delete-orphan",
+            passive_deletes=True,
+        ),
+    )
     
     @staticmethod
     def generate_token() -> str:

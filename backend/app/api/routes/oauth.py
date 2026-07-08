@@ -26,7 +26,13 @@ class GoogleTokenRequest(BaseModel):
     role: Optional[str] = Field(
         None,
         pattern=r"^(parent|teen|child)$",
-        description="Role when joining via join_code (defaults to child)",
+        description="Role when joining via join_code (defaults to child; "
+        "capped at teen — parent is never granted via join code)",
+    )
+    accept_terms: Optional[bool] = Field(
+        None,
+        description="Terms + privacy-notice consent. REQUIRED (true) when "
+        "the signup creates a NEW family; recorded when true.",
     )
 
 
@@ -37,21 +43,26 @@ async def google_oauth_login(
 ):
     """
     Authenticate with Google OAuth
-    
-    For existing users: Returns access token (join_code ignored)
-    For new users with join_code: Joins existing family
-    For new users without join_code: Creates new family
+
+    For existing users: Returns access token (join_code ignored). Accounts
+    pending parental approval get 403 until a parent approves them.
+    For new users with join_code/family_id: Joins the existing family as
+    CHILD/TEEN (never PARENT) in PENDING state — 403 with a wait-for-parent
+    message, NO tokens, and the family's parents are notified in-app.
+    For new users without join_code: Creates a new family (founder PARENT);
+    requires accept_terms=true (consent is recorded).
     """
     import logging
     logger = logging.getLogger(__name__)
-    
+
     # Verify Google token
     google_user_info = await GoogleOAuthService.verify_google_token(request.token)
     logger.info(f"Google OAuth login attempt: email={google_user_info.get('email')}, join_code={request.join_code}")
-    
+
     # Authenticate or create user
     user, access_token, refresh_token, is_new_user = await GoogleOAuthService.authenticate_or_create_user(
-        db, google_user_info, request.family_id, request.join_code, request.role
+        db, google_user_info, request.family_id, request.join_code, request.role,
+        accept_terms=bool(request.accept_terms),
     )
 
     logger.info(f"Google OAuth successful: user_id={user.id}, email={user.email}, family_id={user.family_id}, is_new={is_new_user}")

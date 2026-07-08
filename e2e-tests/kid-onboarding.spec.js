@@ -28,6 +28,7 @@ test.describe('Kid onboarding', () => {
     await page.fill('input[name="email"]', parentEmail);
     await page.fill('input[name="password"]', PASS);
     await page.fill('input[name="password_confirm"]', PASS);
+    await page.check('#accept_terms');
     await page.click('#register-submit-btn');
     await page.waitForURL(/\/(dashboard|parent)/, { timeout: 30000 });
 

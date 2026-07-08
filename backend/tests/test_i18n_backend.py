@@ -43,7 +43,7 @@ async def test_register_family_sets_spanish_user(client):
     the welcome email + first login render in Spanish."""
     r = await client.post("/api/auth/register-family", json={
         "family_name": "Familia ES", "name": "Papa", "email": "papa-es@test.com",
-        "password": "password123", "preferred_lang": "es",
+        "password": "password123", "preferred_lang": "es", "accept_terms": True,
     })
     assert r.status_code in (200, 201), r.text
     assert r.json()["user"]["preferred_lang"] == "es"

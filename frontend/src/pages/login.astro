@@ -3,7 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import { t } from "../lib/i18n";
 
 let error = "";
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = Astro.cookies.get("lang")?.value ?? "es";
 
 if (Astro.cookies.has("access_token")) {
     return Astro.redirect("/dashboard");
@@ -54,6 +54,12 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                     body: JSON.stringify({
                         token: response.credential,
                         join_code: null,
+                        // Clickwrap-lite consent for OAuth signups: the notice
+                        // under the Google button says continuing accepts the
+                        // Terms + Privacy Notice. The backend REQUIRES this
+                        // when the sign-in creates a brand-new family and
+                        // records consented_at + policy version.
+                        accept_terms: true,
                     }),
                 });
                 const data = await result.json();
@@ -182,6 +188,20 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                                 data-logo_alignment="left"
                                 data-width="360">
                             </div>
+                            <!-- Consent notice for OAuth signups: a brand-new
+                                 Google account creates a family, and the
+                                 backend requires accept_terms — this notice is
+                                 what the sent accept_terms:true refers to. -->
+                            <p class="mt-3 text-xs text-brand-ink-soft leading-relaxed">
+                                {lang === "es" ? "Al continuar con Google, aceptas los " : "By continuing with Google, you accept the "}
+                                <a href="/terminos" class="underline font-semibold text-brand-coral-deep hover:text-brand-coral-deep">
+                                    {lang === "es" ? "Términos" : "Terms"}
+                                </a>
+                                {lang === "es" ? " y el " : " and the "}
+                                <a href="/privacidad" class="underline font-semibold text-brand-coral-deep hover:text-brand-coral-deep">
+                                    {lang === "es" ? "Aviso de Privacidad" : "Privacy Notice"}
+                                </a>.
+                            </p>
                         </div>
 
                         <!-- Divider -->
@@ -207,7 +227,7 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                                     id="email"
                                     name="email"
                                     required
-                                    placeholder="parent@demo.com"
+                                    placeholder={lang === "es" ? "tu@correo.com" : "you@email.com"}
                                     class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-coral focus:border-transparent outline-none transition-all hover:border-brand-ink/20"
                                 />
                             </div>
@@ -270,10 +290,6 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                 </div>
             </div>
 
-            <!-- Demo credentials hint (mobile) -->
-            <div class="mt-6 text-center text-xs text-brand-ink-soft md:hidden">
-                <p>{lang === "es" ? "Demo: parent@demo.com / password123" : "Demo: parent@demo.com / password123"}</p>
-            </div>
         </div>
     </main>
 

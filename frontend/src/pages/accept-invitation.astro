@@ -150,6 +150,24 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
                                  />
                              </div>
 
+                             <!-- Birthdate (optional; relevant for child/teen invitations) -->
+                             <div>
+                                 <label for="birthdate" class="block text-sm font-semibold text-brand-ink mb-2">
+                                     {lang === "es" ? "Fecha de nacimiento (opcional)" : "Birthdate (optional)"}
+                                 </label>
+                                 <input
+                                     type="date"
+                                     id="birthdate"
+                                     name="birthdate"
+                                     class="w-full px-4 py-3 rounded-lg border border-brand-ink/20 focus:ring-2 focus:ring-brand-sky-deep focus:border-transparent outline-none transition-all hover:border-brand-ink/20 bg-white"
+                                 />
+                                 <p class="text-xs text-brand-ink-soft mt-2">
+                                     {lang === "es"
+                                         ? "Para cuentas de niños o adolescentes"
+                                         : "For child or teen accounts"}
+                                 </p>
+                             </div>
+
                              <!-- Age verification checkbox -->
                              <div class="flex items-start gap-3 p-4 rounded-lg bg-brand-cream-deep border border-brand-ink/10">
                                  <input
@@ -262,14 +280,18 @@ const invitationCode = Astro.url.searchParams.get("code") || "";
             submitBtn.textContent = lang === "es" ? "Procesando..." : "Processing...";
 
             try {
+                const birthdate = document.getElementById("birthdate")?.value || "";
+                const payload = {
+                    invitation_code: code,
+                    password,
+                    name
+                };
+                if (birthdate) payload.birthdate = birthdate;
+
                 const response = await fetch("/api/invitations/accept", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        invitation_code: code,
-                        password,
-                        name
-                    })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await response.json();

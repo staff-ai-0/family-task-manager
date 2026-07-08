@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user, require_parent_role, verify_family_id
+from app.core.dependencies import (
+    ensure_email_verified,
+    get_current_user,
+    require_parent_role,
+    verify_family_id,
+)
 from app.core.config import settings
 from app.core.type_utils import to_uuid_required
 from app.core.security import create_access_token, create_refresh_token
@@ -54,6 +59,10 @@ async def send_invitation(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to invite to this family"
         )
+
+    # Inviting emails a third-party address — require a verified sender
+    # account first (spam-signup / outbound-abuse defense).
+    ensure_email_verified(current_user)
 
     # Gate behind premium — each pending+accepted invitation consumes
     # one family_member quota slot. Block before InvitationService.send
@@ -138,6 +147,7 @@ async def accept_invitation(
             invitation_code=request_data.invitation_code,
             user_name=request_data.name,
             user_password=request_data.password,
+            birthdate=request_data.birthdate,
         )
         
         # Validate that only PARENT role can accept invitations
@@ -226,6 +236,8 @@ async def resend_invitation(
     """
     Re-send a pending invitation email and refresh its expiry (parent only).
     """
+    # Same outbound-email guard as /send.
+    ensure_email_verified(current_user)
     try:
         invitation = await InvitationService.resend_invitation(
             db,

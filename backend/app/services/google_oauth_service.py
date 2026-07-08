@@ -92,6 +92,7 @@ class GoogleOAuthService:
         family_id: Optional[str] = None,
         join_code: Optional[str] = None,
         role: Optional[str] = None,
+        accept_terms: bool = False,
     ) -> tuple[User, str, str, bool]:
         """
         Authenticate existing user or create new user from Google OAuth
@@ -101,11 +102,23 @@ class GoogleOAuthService:
             google_user_info: User info from Google
             family_id: Optional family ID for new user registration
             join_code: Optional family join code to join an existing family
-            role: Requested role when joining via join_code (child/teen/parent);
-                joining defaults to CHILD, all other paths create a PARENT
+            role: Requested role when joining via join_code (child/teen);
+                joining defaults to CHILD and never grants PARENT — founding
+                a new family (no join_code/family_id) is always PARENT
+            accept_terms: Terms + privacy-notice consent. REQUIRED (true)
+                when the signup founds a NEW family; recorded (consented_at
+                + policy version) whenever true.
 
         Returns:
             Tuple of (User, access_token, refresh_token, is_new_user)
+
+        Raises:
+            ForbiddenException: When the account is (or just became) PENDING
+                parental approval — join-code/family_id self-signups get NO
+                tokens until a parent approves from the members page. The
+                account IS created before this is raised.
+            ValidationException: New-family signup without accept_terms, or
+                an invalid join code.
         """
         google_id = google_user_info['google_id']
         email = google_user_info['email']
@@ -134,7 +147,17 @@ class GoogleOAuthService:
         if user:
             if not user.is_active:
                 raise UnauthorizedException("Account is deactivated")
-            
+
+            # Pending join-code signups must not bypass parental approval by
+            # signing in with Google using the same email.
+            from app.models.user import APPROVAL_PENDING
+            from app.services.auth_service import pending_approval_message
+            from app.core.exceptions import ForbiddenException
+            if getattr(user, "approval_status", None) == APPROVAL_PENDING:
+                raise ForbiddenException(
+                    pending_approval_message(user.preferred_lang)
+                )
+
             access_token = create_access_token(
                 data={
                     "sub": str(user.id),
@@ -168,6 +191,17 @@ class GoogleOAuthService:
         
         # Priority 3: Auto-create a new family
         else:
+            # Founding an account/family requires explicit consent to the
+            # terms + privacy notice (LFPDPPP) — same rule as
+            # POST /api/auth/register-family. Bilingual because this
+            # unauthenticated request carries no language preference.
+            if not accept_terms:
+                raise ValidationException(
+                    "Debes aceptar los Términos y el Aviso de Privacidad "
+                    "para crear tu cuenta. / You must accept the Terms and "
+                    "the Privacy Notice to create your account."
+                )
+
             user_name = google_user_info.get('name', email.split('@')[0])
             family = Family(
                 id=uuid4(),
@@ -176,23 +210,39 @@ class GoogleOAuthService:
             db.add(family)
             await db.flush()
             target_family_id = family.id
-        
-        # Role selection is deliberately narrow to prevent privilege escalation:
-        #  - join_code: a parent-held secret (both join-code endpoints are
-        #    require_parent_role), so honoring a requested role here is the
-        #    intended "who is joining?" flow (defaults to CHILD).
-        #  - family_id: NOT a secret — it appears in every UserResponse/JWT, so
-        #    any member could POST it with a fresh Google token. Force CHILD
-        #    regardless of the requested role; a requested "parent" must never
-        #    be minted from a value everyone in the family already knows.
-        #  - neither: auto-creating a brand-new family makes the founder PARENT.
+
+        # Role selection is deliberately narrow to prevent privilege escalation.
+        # This route is UNAUTHENTICATED, so nothing in the payload is trusted:
+        #  - join_code: shared with kids, so it must never mint a PARENT.
+        #    The requested role is capped at TEEN (a requested "parent" is
+        #    demoted to CHILD) — same policy as /api/auth/register-family.
+        #  - family_id: NOT even a secret — it appears in every
+        #    UserResponse/JWT, so any member could POST it with a fresh
+        #    Google token. Force CHILD regardless of the requested role.
+        #  - neither: auto-creating a brand-new family makes the founder
+        #    PARENT (consent enforced above).
         # Real parent additions go through the invitation flow (role set server-side).
         if join_code:
-            new_role = UserRole(role) if role in ("parent", "teen", "child") else UserRole.CHILD
+            new_role = UserRole(role) if role in ("teen", "child") else UserRole.CHILD
         elif family_id:
             new_role = UserRole.CHILD
         else:
             new_role = UserRole.PARENT
+
+        from datetime import datetime, timezone
+
+        from app.models.user import (
+            APPROVAL_APPROVED,
+            APPROVAL_PENDING,
+            CONSENT_POLICY_VERSION,
+        )
+
+        # Any self-signup into an EXISTING family (join_code or family_id)
+        # starts PENDING parental approval — no tokens until a parent
+        # approves from the members page. Founding a new family is trusted
+        # (the founder just consented above).
+        joining_existing_family = bool(join_code or family_id)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         user = User(
             id=uuid4(),
@@ -206,8 +256,15 @@ class GoogleOAuthService:
             points=0,
             is_active=True,
             email_verified=google_user_info.get('email_verified', False),
+            approval_status=(
+                APPROVAL_PENDING if joining_existing_family else APPROVAL_APPROVED
+            ),
+            approved_at=None if joining_existing_family else now,
+            # Record consent whenever it was given (required for founders).
+            consented_at=now if accept_terms else None,
+            consent_policy_version=CONSENT_POLICY_VERSION if accept_terms else None,
         )
-        
+
         db.add(user)
         await db.flush()
 
@@ -217,6 +274,31 @@ class GoogleOAuthService:
 
         await db.commit()
         await db.refresh(user)
+
+        # Pending self-signups get NO tokens — a parent must approve them
+        # first. Notify the family's parents in-app (same flow as the
+        # register-family join-code path), then surface the pending state
+        # as a 403 with the bilingual wait-for-parent copy. NB: the account
+        # was committed above on purpose; retrying "Sign in with Google"
+        # lands in the existing-user pending block and gets the same 403.
+        if user.approval_status == APPROVAL_PENDING:
+            from app.services.auth_service import (
+                AuthService,
+                pending_approval_message,
+            )
+            from app.core.exceptions import ForbiddenException
+
+            try:
+                await AuthService.notify_parents_of_pending_member(db, user)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "pending-member parent notification failed (OAuth signup)",
+                    exc_info=True,
+                )
+            raise ForbiddenException(
+                pending_approval_message(user.preferred_lang)
+            )
 
         # Create access + refresh tokens
         access_token = create_access_token(

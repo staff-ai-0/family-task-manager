@@ -10,7 +10,7 @@ import { authCookies } from "../../../lib/auth-cookies";
 export const POST: APIRoute = async ({ request }) => {
     try {
         const body = await request.json();
-        const { invitation_code, password, name } = body;
+        const { invitation_code, password, name, birthdate } = body;
 
         if (!invitation_code || !password || !name) {
             return new Response(
@@ -19,11 +19,14 @@ export const POST: APIRoute = async ({ request }) => {
             );
         }
 
+        const payload: Record<string, string> = { invitation_code, password, name };
+        if (typeof birthdate === "string" && birthdate) payload.birthdate = birthdate;
+
         const apiUrl = process.env.API_BASE_URL || "http://localhost:8002";
         const response = await fetch(`${apiUrl}/api/invitations/accept`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ invitation_code, password, name }),
+            body: JSON.stringify(payload),
         });
 
         const data = await response.json();

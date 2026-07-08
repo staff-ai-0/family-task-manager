@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import type { LoginResponse } from "../../../types/api";
 import { authCookies } from "../../../lib/auth-cookies";
+import { clientIpHeaders } from "../../../lib/client-ip";
 
 /**
  * POST /api/auth/register
@@ -9,7 +10,7 @@ import { authCookies } from "../../../lib/auth-cookies";
 export const POST: APIRoute = async ({ request, cookies }) => {
     try {
         const body = await request.json();
-        const { family_name, family_code, name, email, password, preferred_lang, role } = body;
+        const { family_name, family_code, name, email, password, preferred_lang, role, accept_terms, birthdate } = body;
         // Carry the UI language into the account so the welcome email + first
         // login render in the user's language. Fall back to the lang cookie.
         const lang = preferred_lang === "es" || preferred_lang === "en"
@@ -33,12 +34,23 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         }
 
         const apiUrl = process.env.API_BASE_URL || "http://localhost:8002";
-        const registerBody: Record<string, string> = { name, email, password, preferred_lang: lang };
+        const registerBody: Record<string, string | boolean> = {
+            name,
+            email,
+            password,
+            preferred_lang: lang,
+            accept_terms: accept_terms === true,
+        };
 
         if (family_code) {
             registerBody.family_code = family_code;
-            if (role === "child" || role === "teen" || role === "parent") {
+            // PARENT is never granted via join code (invitation-only); the
+            // backend enforces this too — only pass through child/teen.
+            if (role === "child" || role === "teen") {
                 registerBody.role = role;
+            }
+            if (typeof birthdate === "string" && birthdate) {
+                registerBody.birthdate = birthdate;
             }
         } else {
             registerBody.family_name = family_name;
@@ -46,11 +58,20 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
         const response = await fetch(`${apiUrl}/api/auth/register-family`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...clientIpHeaders(request) },
             body: JSON.stringify(registerBody),
         });
 
         const data = await response.json();
+
+        if (response.ok && data.pending_approval) {
+            // Join-code signup pending parental approval: no tokens were
+            // issued, so no auth cookies — surface the wait-for-parent message.
+            return new Response(
+                JSON.stringify({ success: true, pending: true, message: data.message }),
+                { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+        }
 
         if (response.ok) {
             const result = data as LoginResponse;
