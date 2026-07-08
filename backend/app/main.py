@@ -267,7 +267,7 @@ register_exception_handlers(app)
 # every gig-proof / receipt image to anyone over the public tunnel.
 import os
 try:
-    os.makedirs("/app/uploads/gig-proofs", exist_ok=True)
+    os.makedirs(os.path.join(settings.UPLOADS_ROOT, "gig-proofs"), exist_ok=True)
 except OSError:
     # Non-container environments (e.g. running the test suite on the host)
     # have no writable /app; the uploads routes are container-only anyway.

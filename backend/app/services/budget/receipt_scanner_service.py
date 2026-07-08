@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 # Alternatives: "qwen-vl", "claude-haiku", "claude-sonnet", "gpt-4o".
 RECEIPT_MODEL = settings.RECEIPT_MODEL
 
-RECEIPT_UPLOADS_DIR = "/app/uploads/receipt-drafts"
+RECEIPT_UPLOADS_DIR = os.path.join(settings.UPLOADS_ROOT, "receipt-drafts")
 
 
 def _build_notes(payee_name: Optional[str], items: list, currency: str = "MXN") -> str:

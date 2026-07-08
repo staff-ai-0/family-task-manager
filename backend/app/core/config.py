@@ -194,6 +194,10 @@ class Settings(BaseSettings):
     # when set via /api/budget/ai-settings/models.
     RECEIPT_MODEL: str = "gemini-2.5-flash"
 
+    # Root of the uploads volume. /app/uploads inside the backend container;
+    # override (e.g. to a temp dir) when running the suite outside a container.
+    UPLOADS_ROOT: str = "/app/uploads"
+
     # Anthropic API (for receipt scanning via Claude Vision)
     ANTHROPIC_API_KEY: str = ""
 

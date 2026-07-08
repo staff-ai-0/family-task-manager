@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 # Canonical upload locations inside the backend container. Keep in sync with
 # app/api/routes/uploads.py (gig proofs) and
 # app/services/budget/receipt_scanner_service.py (receipt drafts).
-UPLOADS_ROOT = "/app/uploads"
+UPLOADS_ROOT = settings.UPLOADS_ROOT
 GIG_PROOFS_DIR = os.path.join(UPLOADS_ROOT, "gig-proofs")
 RECEIPT_DRAFTS_DIR = os.path.join(UPLOADS_ROOT, "receipt-drafts")
 

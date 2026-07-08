@@ -87,6 +87,8 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://familyapp:familyapp123@localhost:5432/familyapp_test
           REDIS_URL: redis://localhost:6379/0
           PYTHONPATH: .
+          # No /app on the runner; upload tests write here instead (see app/core/config.py UPLOADS_ROOT)
+          UPLOADS_ROOT: ${{ runner.temp }}/uploads
         run: pytest tests/
 
   frontend:

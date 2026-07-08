@@ -197,6 +197,7 @@ async def upload_gig_proof(
     import uuid as _uuid
     import os as _os
 
+    from app.core.config import settings
     from app.core.upload_validation import (
         read_upload_capped,
         assert_allowed_type,
@@ -214,7 +215,7 @@ async def upload_gig_proof(
 
     ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[real_type]
     fname = f"{_uuid.uuid4().hex}.{ext}"
-    dest_dir = "/app/uploads/gig-proofs"
+    dest_dir = _os.path.join(settings.UPLOADS_ROOT, "gig-proofs")
     _os.makedirs(dest_dir, exist_ok=True)
     dest = _os.path.join(dest_dir, fname)
     with open(dest, "wb") as fh:
