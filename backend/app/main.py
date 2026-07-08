@@ -12,6 +12,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
+from app.core.request_context import RequestIDLogFilter, RequestIDMiddleware
 from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
@@ -23,11 +24,15 @@ from app.services.pet_service import PetService
 from app.services.analytics_service import AnalyticsService
 from app.services.jarvis_schedule_service import JarvisScheduleService
 
-# Configure logging — level driven by LOG_LEVEL env var (default "INFO")
+# Configure logging — level driven by LOG_LEVEL env var (default "INFO").
+# %(request_id)s is injected by RequestIDLogFilter (contextvar-backed), so
+# every record — app or library — correlates to a request ("-" outside one).
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format="%(asctime)s - %(name)s - %(levelname)s - [rid=%(request_id)s] %(message)s",
 )
+for _root_handler in logging.getLogger().handlers:
+    _root_handler.addFilter(RequestIDLogFilter())
 logger = logging.getLogger(__name__)
 
 # Error monitoring — activates only when SENTRY_DSN is set in .env
@@ -238,6 +243,13 @@ class SecurityHeadersMiddleware:
 # Added AFTER CORS/Session so it wraps them (outermost) — headers land on
 # every response, including CORS preflights and error responses.
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Request-ID correlation — added LAST so it is the outermost user middleware:
+# the id is assigned before anything else runs/logs, and the X-Request-ID
+# header lands on every response that passes through the middleware chain.
+# (500s from the catch-all handler get the header from the handler itself —
+# ServerErrorMiddleware sits above even this middleware.)
+app.add_middleware(RequestIDMiddleware)
 
 # Rate limiting (slowapi) — protects auth + AI endpoints from abuse.
 from slowapi import _rate_limit_exceeded_handler  # noqa: E402
