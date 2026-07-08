@@ -120,11 +120,31 @@ async def lifespan(app: FastAPI):
                 except Exception:
                     logger.exception("Jarvis schedule sweep failed")
 
+        async def _morning_reminder_sweep():
+            # 'Tienes N tareas hoy' per member with pending chores due today.
+            # Idempotent per local day (DB guard inside the service), so a
+            # restart or duplicate tick never double-sends.
+            async with AsyncSessionLocal() as session:
+                try:
+                    n = await TaskAssignmentService.send_morning_reminders(session)
+                    if n:
+                        logger.info("Morning reminder sweep sent %d reminder(s)", n)
+                except Exception:
+                    logger.exception("Morning reminder sweep failed")
+
         scheduler = AsyncIOScheduler()
         scheduler.add_job(run_sweep, "cron", hour=3, minute=0, id="subscription_sweep")
         scheduler.add_job(_pet_decay_sweep, "cron", hour=8, minute=0, id="pet_decay_sweep")
         scheduler.add_job(_pup_snapshot_sweep, "cron", hour=23, minute=30, id="pup_snapshot_sweep")
         scheduler.add_job(_jarvis_schedule_sweep, "cron", minute="*/5", id="jarvis_sched_sweep")
+        scheduler.add_job(
+            _morning_reminder_sweep,
+            "cron",
+            hour=7,
+            minute=30,
+            timezone="America/Mexico_City",
+            id="morning_reminder_sweep",
+        )
         scheduler.start()
 
         if leader_client is not None:
@@ -180,6 +200,45 @@ app.add_middleware(
     max_age=1800,  # 30 minutes
 )
 
+
+class SecurityHeadersMiddleware:
+    """Set baseline security headers on every API response.
+
+    Pure ASGI (not BaseHTTPMiddleware) so SSE/streaming responses pass
+    through without buffering. ``setdefault`` lets a route override any of
+    these per-response if it ever needs to.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                from starlette.datastructures import MutableHeaders
+
+                headers = MutableHeaders(scope=message)
+                # Public API is HTTPS-only behind the Cloudflare tunnel.
+                headers.setdefault(
+                    "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+                )
+                headers.setdefault("X-Content-Type-Options", "nosniff")
+                # The API never renders framable UI.
+                headers.setdefault("X-Frame-Options", "DENY")
+                headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
+# Added AFTER CORS/Session so it wraps them (outermost) — headers land on
+# every response, including CORS preflights and error responses.
+app.add_middleware(SecurityHeadersMiddleware)
+
 # Rate limiting (slowapi) — protects auth + AI endpoints from abuse.
 from slowapi import _rate_limit_exceeded_handler  # noqa: E402
 from slowapi.errors import RateLimitExceeded  # noqa: E402
@@ -195,7 +254,12 @@ register_exception_handlers(app)
 # (app.api.routes.uploads), NOT a public StaticFiles mount — the old mount exposed
 # every gig-proof / receipt image to anyone over the public tunnel.
 import os
-os.makedirs("/app/uploads/gig-proofs", exist_ok=True)
+try:
+    os.makedirs("/app/uploads/gig-proofs", exist_ok=True)
+except OSError:
+    # Non-container environments (e.g. running the test suite on the host)
+    # have no writable /app; the uploads routes are container-only anyway.
+    pass
 from app.api.routes import uploads as uploads_routes  # noqa: E402
 app.include_router(uploads_routes.router, tags=["Uploads"])
 

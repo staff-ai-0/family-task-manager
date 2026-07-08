@@ -170,6 +170,61 @@ async def update_user_role(
     return updated_user
 
 
+@router.post("/{user_id}/approve", response_model=UserResponse)
+async def approve_pending_member(
+    user: User = Depends(get_family_user),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Approve a join-code member pending parental approval (parent only).
+
+    The member can log in once approved. 400 if the account is not pending.
+    """
+    approved = await AuthService.approve_user(db, user)
+
+    # Tell the kid their account is live (in-app; visible after first login).
+    try:
+        from app.services.notification_service import NotificationService
+
+        await NotificationService.create_localized(
+            db,
+            family_id=approved.family_id,
+            key="member_approved",
+            user_id=approved.id,
+            params={"parent": current_user.name},
+            link="/dashboard",
+            lang=approved.preferred_lang or "es",
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "member-approved notification failed", exc_info=True
+        )
+    return approved
+
+
+@router.post("/{user_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+async def reject_pending_member(
+    user: User = Depends(get_family_user),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reject a join-code member pending parental approval (parent only).
+
+    Rejection DELETES the account (it never got in — nothing to keep).
+    Only pending accounts can be rejected; established members go through
+    the normal deactivate/delete endpoints instead.
+    """
+    from app.core.exceptions import ValidationException
+    from app.models.user import APPROVAL_PENDING
+
+    if user.approval_status != APPROVAL_PENDING:
+        raise ValidationException("User is not pending approval")
+
+    await AuthService.delete_user(db, user.id)
+    return None
+
+
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user: User = Depends(get_family_user),

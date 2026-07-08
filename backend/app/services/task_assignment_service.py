@@ -403,6 +403,30 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         for a in assignments:
             await db.refresh(a)
 
+        # TASK_ASSIGNED: one localized notification (+ push) per assignee,
+        # aggregated so a weekly shuffle never spams a device per-row.
+        # Best-effort — a notification failure must never break the shuffle.
+        try:
+            from collections import Counter
+            from app.services.notification_service import NotificationService
+
+            counts = Counter(a.assigned_to for a in assignments)
+            for uid, cnt in counts.items():
+                key = "task_assigned_one" if cnt == 1 else "task_assigned"
+                await NotificationService.create_localized(
+                    db,
+                    family_id=family_id,
+                    key=key,
+                    user_id=uid,
+                    params={"count": cnt},
+                    link="/dashboard",
+                )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "task-assigned notification fan-out failed"
+            )
+
         return assignments
 
     @staticmethod
@@ -737,14 +761,16 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 child.gig_trust_streak += 1
                 from app.services.notification_service import NotificationService
                 from app.services.pet_service import PetService
-                from app.models.notification import NotificationType as NT
-                await NotificationService.create_no_commit(
+                await NotificationService.create_localized_no_commit(
                     db,
                     family_id=family_id,
+                    key="gig_approved_auto",
                     user_id=user_id,
-                    type=NT.GIG_APPROVED,
-                    title=f"✅ +{pts} pts",
-                    body=f"'{template.title}' approved automatically. {approval_reason}",
+                    params={
+                        "pts": pts,
+                        "title": template.title,
+                        "reason": approval_reason,
+                    },
                 )
                 await PetService.on_task_completed(db, user_id, is_bonus=True)
             else:
@@ -828,15 +854,14 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 logging.getLogger(__name__).exception("notify_parents_gig_pending failed")
             try:
                 from app.services.notification_service import NotificationService
-                from app.models.notification import NotificationType as NT
-                # Family-wide notification (parents see it on dashboard)
-                await NotificationService.create(
+                # Family-wide notification (parents see it on dashboard).
+                # Broadcasts have no single recipient — Spanish-first copy.
+                await NotificationService.create_localized(
                     db,
                     family_id=family_id,
+                    key="gig_pending_review",
                     user_id=None,
-                    type=NT.GIG_PENDING_REVIEW,
-                    title="🛎️ Gig pending review",
-                    body=f"{child.name} finished '{template.title}'. Approve or reject in /parent/approvals.",
+                    params={"child": child.name, "title": template.title},
                     link="/parent/approvals",
                 )
             except Exception:
@@ -1141,7 +1166,6 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             child.gig_trust_streak += 1
             from app.services.notification_service import NotificationService
             from app.services.pet_service import PetService
-            from app.models.notification import NotificationType as NT
             await PetService.on_task_completed(
                 db, assignment.assigned_to, is_bonus=True
             )
@@ -1155,11 +1179,17 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 logging.getLogger(__name__).warning(
                     "onboarding advance points_awarded failed", exc_info=True
                 )
+            child_lang = getattr(child, "preferred_lang", None) or "es"
             try:
                 from app.services.push_service import PushService as _PushService
+                _p_title, _p_body = NotificationService.render(
+                    "task_approved_push",
+                    child_lang,
+                    {"title": assignment.template.title, "pts": pts},
+                )
                 await _PushService.send_to_user(db, assignment.assigned_to, {
-                    "title": "¡Tarea aprobada! / Task approved! 🎉",
-                    "body": f"{assignment.template.title} — {pts} pts",
+                    "title": _p_title,
+                    "body": _p_body,
                     "url": "/dashboard",
                     "tag": "task-approved",
                 })
@@ -1169,14 +1199,14 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     "push task-approved failed", exc_info=True
                 )
             # NotificationService.create commits + fans out push.
-            await NotificationService.create(
+            await NotificationService.create_localized(
                 db,
                 family_id=family_id,
+                key="gig_approved",
                 user_id=assignment.assigned_to,
-                type=NT.GIG_APPROVED,
-                title=f"✅ +{pts} pts",
-                body=f"'{assignment.template.title}' approved by parent.",
+                params={"pts": pts, "title": assignment.template.title},
                 link="/dashboard",
+                lang=child_lang,
             )
         else:
             assignment.approval_status = ApprovalStatus.REJECTED
@@ -1185,16 +1215,15 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             child = await get_user_by_id(db, assignment.assigned_to)
             child.gig_trust_streak = 0
             from app.services.notification_service import NotificationService
-            from app.models.notification import NotificationType as NT
             await db.commit()
-            await NotificationService.create(
+            await NotificationService.create_localized(
                 db,
                 family_id=family_id,
+                key="gig_rejected",
                 user_id=assignment.assigned_to,
-                type=NT.GIG_REJECTED,
-                title="❌ Gig rejected",
-                body=f"'{assignment.template.title}' was not approved. {notes or ''}".strip(),
+                params={"title": assignment.template.title, "notes": notes or ""},
                 link="/dashboard",
+                lang=getattr(child, "preferred_lang", None) or "es",
             )
 
         await db.commit()
@@ -1433,7 +1462,6 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             RestrictionType,
         )
         from app.services.notification_service import NotificationService
-        from app.models.notification import NotificationType as NT
 
         # Single query: all family IDs + timezones (no per-family round-trip)
         family_rows = (
@@ -1505,12 +1533,13 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     end_date=end_dt,
                 )
                 db.add(penalty)
-                # Localize to the affected kid's language (penalties are rare,
-                # so the per-assignment user load is fine).
-                penalized_user = await db.get(User, a.assigned_to)
-                is_es = getattr(penalized_user, "preferred_lang", "en") == "es"
                 # Human, localized label for the restriction — not the raw enum
                 # token ("screen_time") which leaked into the kid-facing body.
+                # create_localized_no_commit resolves the kid's preferred_lang
+                # (penalties are rare, so the per-assignment user load is fine)
+                # and truncates the title to the column width (String(200)) —
+                # an overflow would abort the single end-of-sweep commit and
+                # roll back every family's flips.
                 _RESTRICTION_LABELS = {
                     "screen_time": ("tiempo de pantalla", "screen time"),
                     "rewards": ("recompensas", "rewards"),
@@ -1522,23 +1551,112 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 _r_es, _r_en = _RESTRICTION_LABELS.get(
                     restriction.value, (restriction.value, restriction.value)
                 )
-                # Truncate to the notification title column width (String(200)),
-                # matching the Consequence title above — an overflow would abort
-                # the single end-of-sweep commit and roll back every family's flips.
-                if is_es:
-                    title = f"⏰ Atrasada: {tmpl.title}"[:200]
-                    body = f"Penalización automática: sin {_r_es} por {duration} día(s)."
-                else:
-                    title = f"⏰ Late: {tmpl.title}"[:200]
-                    body = f"Auto-penalty applied: no {_r_en} for {duration} day(s)."
-                await NotificationService.create_no_commit(
+                await NotificationService.create_localized_no_commit(
                     db,
                     family_id=a.family_id,
+                    key="late_penalty",
                     user_id=a.assigned_to,
-                    type=NT.LATE_PENALTY_APPLIED,
-                    title=title,
-                    body=body,
+                    params={
+                        "title": tmpl.title,
+                        "restriction": {"es": _r_es, "en": _r_en},
+                        "days": duration,
+                    },
                 )
             total += len(stale)
         await db.commit()
         return total
+
+    @staticmethod
+    async def send_morning_reminders(db: AsyncSession) -> int:
+        """Sweep across ALL families: for every member with >=1 PENDING
+        assignment due today (family-local date), send one localized
+        'Tienes N tareas hoy' / 'You have N chores today' notification+push.
+
+        Idempotent per local day: a member who already has a TASK_DUE
+        notification created since their family's local midnight is skipped,
+        so a process restart (or a duplicate scheduler tick) never
+        double-sends. Intended for the 07:30 America/Mexico_City cron job.
+
+        Returns the number of reminders sent.
+        """
+        from zoneinfo import ZoneInfo
+        from collections import defaultdict
+        from app.models.family import Family
+        from app.models.notification import Notification, NotificationType as NT
+        from app.services.notification_service import NotificationService
+        from datetime import time as dt_time
+
+        family_rows = (
+            await db.execute(select(Family.id, Family.timezone))
+        ).all()
+
+        # Group families by their local "today" (one query per date bucket).
+        date_to_families: dict = defaultdict(list)
+        tz_by_family: dict = {}
+        for fid, tz_name in family_rows:
+            try:
+                tz = ZoneInfo(tz_name or "UTC")
+            except Exception:
+                tz = ZoneInfo("UTC")
+            tz_by_family[fid] = tz
+            date_to_families[datetime.now(tz).date()].append(fid)
+
+        sent = 0
+        for today, family_ids in date_to_families.items():
+            rows = (
+                await db.execute(
+                    select(
+                        TaskAssignment.assigned_to,
+                        TaskAssignment.family_id,
+                        func.count(),
+                    )
+                    .where(
+                        and_(
+                            TaskAssignment.family_id.in_(family_ids),
+                            TaskAssignment.status == AssignmentStatus.PENDING,
+                            TaskAssignment.assigned_date == today,
+                        )
+                    )
+                    .group_by(TaskAssignment.assigned_to, TaskAssignment.family_id)
+                )
+            ).all()
+
+            for user_id, fam_id, cnt in rows:
+                if not cnt:
+                    continue
+                # Idempotency guard: already reminded since local midnight?
+                local_midnight = datetime.combine(
+                    today, dt_time.min, tzinfo=tz_by_family.get(fam_id, timezone.utc)
+                )
+                already = (
+                    await db.execute(
+                        select(func.count())
+                        .select_from(Notification)
+                        .where(
+                            and_(
+                                Notification.user_id == user_id,
+                                Notification.type == NT.TASK_DUE,
+                                Notification.created_at >= local_midnight,
+                            )
+                        )
+                    )
+                ).scalar()
+                if already:
+                    continue
+                try:
+                    key = "task_due_today_one" if cnt == 1 else "task_due_today"
+                    await NotificationService.create_localized(
+                        db,
+                        family_id=fam_id,
+                        key=key,
+                        user_id=user_id,
+                        params={"count": int(cnt)},
+                        link="/dashboard",
+                    )
+                    sent += 1
+                except Exception:
+                    import logging
+                    logging.getLogger(__name__).exception(
+                        "morning reminder failed for user %s", user_id
+                    )
+        return sent
