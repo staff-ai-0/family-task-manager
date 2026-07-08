@@ -19,14 +19,28 @@ from app.core.database import Base
 
 
 class SubscriptionPlan(Base):
-    """Defines available subscription tiers and their limits."""
+    """Defines available subscription tiers and their limits.
+
+    A tier (``name``: free/plus/pro) may exist in multiple currencies —
+    one row per (name, currency). All rows of a tier share the same limits;
+    premium gating resolves entitlements by ``name`` only, so it is
+    currency-agnostic. Prices are stored in the currency's minor unit
+    (cents / centavos).
+    """
 
     __tablename__ = "subscription_plans"
+    __table_args__ = (
+        UniqueConstraint("name", "currency", name="uq_subscription_plans_name_currency"),
+    )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     display_name_es: Mapped[str] = mapped_column(String(100), nullable=False)
+    # ISO 4217 currency code the price_* columns are denominated in.
+    currency: Mapped[str] = mapped_column(
+        String(3), default="USD", server_default="USD", nullable=False
+    )
     price_monthly_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     price_annual_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     paypal_plan_id_monthly: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

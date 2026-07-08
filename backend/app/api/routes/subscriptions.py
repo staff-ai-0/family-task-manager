@@ -9,8 +9,8 @@ import asyncio
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, and_
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -34,13 +34,36 @@ router = APIRouter()
 
 
 @router.get("/plans", response_model=List[PlanResponse])
-async def list_plans(db: AsyncSession = Depends(get_db)):
-    """List all active subscription plans ordered by sort_order."""
-    query = (
-        select(SubscriptionPlan)
-        .where(SubscriptionPlan.is_active == True)  # noqa: E712
-        .order_by(SubscriptionPlan.sort_order)
+async def list_plans(
+    currency: str | None = Query(
+        None,
+        min_length=3,
+        max_length=3,
+        description=(
+            "Filter paid plans by ISO 4217 currency (e.g. MXN, USD). The free "
+            "tier is currency-less (price 0) and is always included. Omitted "
+            "→ every active plan row in every currency."
+        ),
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """List active subscription plans, optionally filtered by currency."""
+    query = select(SubscriptionPlan).where(
+        SubscriptionPlan.is_active == True  # noqa: E712
     )
+    if currency:
+        query = query.where(
+            or_(
+                SubscriptionPlan.currency == currency.upper(),
+                # The free tier is effectively currency-less — always listed.
+                # Matched by tier identity (name), the same key premium gating
+                # resolves entitlements by — NOT by a zero-price heuristic,
+                # which would leak future promo/trial tiers priced at 0 into
+                # every currency-filtered listing.
+                SubscriptionPlan.name == "free",
+            )
+        )
+    query = query.order_by(SubscriptionPlan.sort_order, SubscriptionPlan.currency)
     result = await db.execute(query)
     plans = result.scalars().all()
     return plans
@@ -133,28 +156,53 @@ async def create_checkout(
     """Create a PayPal subscription checkout session and persist a pending row."""
     from app.core.config import settings
 
+    if request.billing_cycle not in ("monthly", "annual"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid billing_cycle. Use 'monthly' or 'annual'",
+        )
+
     query = select(SubscriptionPlan).where(
         and_(
             SubscriptionPlan.name == request.plan_name,
             SubscriptionPlan.is_active == True,  # noqa: E712
         )
     )
-    plan = (await db.execute(query)).scalar_one_or_none()
-    if not plan:
+    if request.currency:
+        query = query.where(SubscriptionPlan.currency == request.currency.upper())
+    candidates = (await db.execute(query)).scalars().all()
+    if not candidates:
+        detail = f"Plan '{request.plan_name}' not found"
+        if request.currency:
+            detail += f" in currency '{request.currency.upper()}'"
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Plan '{request.plan_name}' not found",
+            detail=detail,
+        )
+    # A tier may exist in several currencies (one row per (name, currency)).
+    # Without an explicit currency the preference is:
+    #   1. rows whose PayPal plan id for the requested billing cycle is wired
+    #      (an MXN row seeded by migration but not yet provisioned at PayPal
+    #      must NOT shadow a working USD row — that would 501 every upgrade
+    #      until the operator finishes wiring),
+    #   2. MXN among those (Mexico-first default),
+    #   3. deterministic alphabetical fallback.
+    # With an explicit currency the query above narrowed candidates to a
+    # single row (UNIQUE(name, currency)), so the key is a no-op and an
+    # unwired row still surfaces the 501 below — the client asked for it.
+    def _paypal_id(p: SubscriptionPlan) -> str | None:
+        return (
+            p.paypal_plan_id_monthly
+            if request.billing_cycle == "monthly"
+            else p.paypal_plan_id_annual
         )
 
-    if request.billing_cycle == "monthly":
-        paypal_plan_id = plan.paypal_plan_id_monthly
-    elif request.billing_cycle == "annual":
-        paypal_plan_id = plan.paypal_plan_id_annual
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid billing_cycle. Use 'monthly' or 'annual'",
-        )
+    plan = min(
+        candidates,
+        key=lambda p: (_paypal_id(p) is None, p.currency != "MXN", p.currency or ""),
+    )
+
+    paypal_plan_id = _paypal_id(plan)
     if not paypal_plan_id:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
