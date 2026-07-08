@@ -89,18 +89,30 @@ rangeEnd.setDate(rangeEnd.getDate() + 60);
 const startISO = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 const endISO = rangeEnd.toISOString();
 
-const [{ data: user }, { data: eventsRaw }] = await Promise.all([
+const [{ data: user }, { data: eventsRaw }, { data: colorsRaw }] = await Promise.all([
     apiFetch<any>("/api/auth/me", { token }),
     apiFetch<any[]>(
         `/api/calendar/events?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`,
         { token },
     ),
+    apiFetch<any[]>("/api/users/colors", { token }),
 ]);
 if (!user) {
     Astro.cookies.delete("access_token", { path: "/" });
     return Astro.redirect("/login");
 }
 const events: any[] = Array.isArray(eventsRaw) ? eventsRaw : [];
+
+// Per-member colors (P1-KIOSK) — dot an event with its member's color
+// (first attendee, else creator) so entries read per-person at a glance.
+const memberColor = new Map<string, string>();
+for (const c of Array.isArray(colorsRaw) ? colorsRaw : []) {
+    memberColor.set(c.user_id, c.color);
+}
+function eventColor(evt: any): string | null {
+    const uid = (Array.isArray(evt.attendees) && evt.attendees[0]) || evt.created_by;
+    return uid ? (memberColor.get(String(uid)) ?? null) : null;
+}
 
 const groups = new Map<string, any[]>();
 for (const evt of events) {
@@ -147,8 +159,9 @@ const labels = {
             : "Nothing in the next 60 days. Add above.",
     scan_hint:
         lang === "es"
-            ? "Tip: pronto podrás escanear volantes escolares."
-            : "Tip: school flyer scanning coming soon.",
+            ? "Tip: toma foto a un aviso escolar y los eventos se agregan solos."
+            : "Tip: snap a school flyer and events add themselves.",
+    scan_cta: lang === "es" ? "Escanear un aviso" : "Scan a flyer",
 };
 
 const sourceIcon = (src: string): string => {
@@ -168,13 +181,22 @@ const sourceIcon = (src: string): string => {
     lang={lang}
     mainClass="flex-1 px-4 py-6 space-y-4"
 >
-    <a
-        slot="actions"
-        href="/calendar/month"
-        class="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs font-semibold whitespace-nowrap"
-    >
-        {lang === "es" ? "Vista mes" : "Month view"}
-    </a>
+    <div slot="actions" class="flex items-center gap-2">
+        {user.role === "parent" && (
+            <a
+                href="/calendar/scan"
+                class="px-3 py-1.5 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-400 text-xs font-bold whitespace-nowrap shadow-[var(--shadow-card)]"
+            >
+                📄 {labels.scan_cta}
+            </a>
+        )}
+        <a
+            href="/calendar/month"
+            class="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs font-semibold whitespace-nowrap"
+        >
+            {lang === "es" ? "Vista mes" : "Month view"}
+        </a>
+    </div>
     <p slot="header-extra" class="text-sky-100 text-sm">{labels.subtitle}</p>
 
     {errorMsg && (
@@ -279,12 +301,21 @@ const sourceIcon = (src: string): string => {
                     </div>
                     <ul class="divide-y divide-brand-ink/10">
                         {items.map((evt: any) => (
-                            <li class="flex items-start gap-3 p-4">
+                            <li
+                                class="flex items-start gap-3 p-4"
+                                style={eventColor(evt) ? `box-shadow: inset 4px 0 0 ${eventColor(evt)};` : undefined}
+                            >
                                 <span class="text-lg flex-shrink-0">
                                     {sourceIcon(evt.source)}
                                 </span>
                                 <div class="flex-1 min-w-0">
-                                    <p class="font-semibold text-brand-ink text-sm">
+                                    <p class="font-semibold text-brand-ink text-sm flex items-center gap-1.5">
+                                        {eventColor(evt) && (
+                                            <span
+                                                class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                                style={`background-color: ${eventColor(evt)};`}
+                                            ></span>
+                                        )}
                                         {evt.title}
                                     </p>
                                     <p class="text-xs text-brand-ink-soft">

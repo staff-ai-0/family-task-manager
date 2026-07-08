@@ -115,6 +115,36 @@ const labels = {
     ingredients_ph: lang === "es" ? "Ingredientes" : "Ingredients",
     prep_ph: lang === "es" ? "Minutos prep" : "Prep min",
     no_recipes: lang === "es" ? "Sin recetas guardadas" : "No saved recipes",
+    jarvis_title: lang === "es" ? "Jarvis: cenas en automático" : "Jarvis: dinners on autopilot",
+    jarvis_desc:
+        lang === "es"
+            ? "Cada domingo a las 6pm, Jarvis planea las cenas de la semana y agrega los ingredientes que falten a la lista del súper."
+            : "Every Sunday at 6pm, Jarvis plans the week's dinners and adds any missing ingredients to the shopping list.",
+    jarvis_cta: lang === "es" ? "Activar plan semanal" : "Enable weekly plan",
+    jarvis_done: lang === "es" ? "✅ Listo — Jarvis planeará las cenas cada domingo." : "✅ Done — Jarvis will plan dinners every Sunday.",
+    jarvis_exists: lang === "es" ? "Ya tienes esta programación activa." : "You already have this schedule.",
+    jarvis_error: lang === "es" ? "No se pudo crear. Intenta de nuevo." : "Could not create it. Try again.",
+    jarvis_view: lang === "es" ? "Ver programaciones" : "View schedules",
+    jarvis_working: lang === "es" ? "Creando…" : "Creating…",
+};
+
+// Jarvis scheduled-prompt template (P1-KIOSK #5) — created via the existing
+// /api/jarvis/schedules API; Sunday 18:00, notification channel.
+// BOTH language variants of the template name — the duplicate guard must
+// match against both, or a parent who enables the plan in Spanish, switches
+// the UI to English, and taps again gets a second identical weekly schedule.
+const jarvisTemplateNames = [
+    "Cenas de la semana + súper",
+    "Weekly dinners + groceries",
+];
+const jarvisTemplate = {
+    name: lang === "es" ? jarvisTemplateNames[0] : jarvisTemplateNames[1],
+    prompt:
+        lang === "es"
+            ? "Planea las cenas de la próxima semana (lunes a domingo) para la familia: sugiere un platillo por día, agrégalos al plan de comidas y añade los ingredientes que falten a la lista de compras."
+            : "Plan next week's dinners (Monday to Sunday) for the family: suggest one dish per day, add them to the meal plan, and add any missing ingredients to the shopping list.",
+    cron_expr: "0 18 * * 0",
+    channel: "notification",
 };
 ---
 
@@ -134,6 +164,25 @@ const labels = {
         <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
             {errorMsg}
         </div>
+    )}
+
+    {user.role === "parent" && (
+        <section class="bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white rounded-2xl p-4 shadow-[var(--shadow-card)]">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex-1 min-w-0">
+                    <p class="font-bold text-sm">🤖 {labels.jarvis_title}</p>
+                    <p class="text-xs text-violet-100 mt-1">{labels.jarvis_desc}</p>
+                    <p id="jarvis-mealplan-status" class="text-xs font-semibold mt-2 hidden"></p>
+                </div>
+                <button
+                    type="button"
+                    id="jarvis-mealplan-btn"
+                    class="px-3 py-2 rounded-xl bg-white text-violet-700 text-xs font-bold hover:bg-violet-50 active:scale-95 whitespace-nowrap flex-shrink-0"
+                >
+                    ⏰ {labels.jarvis_cta}
+                </button>
+            </div>
+        </section>
     )}
 
     <details class="bg-brand-cream rounded-2xl border border-brand-ink/10 shadow-[var(--shadow-card)]">
@@ -255,8 +304,64 @@ const labels = {
     </details>
 </PageLayout>
 
-<script define:vars={{ lang }}>
+<script define:vars={{ lang, jarvisTemplate, jarvisTemplateNames, jarvisLabels: { done: labels.jarvis_done, exists: labels.jarvis_exists, error: labels.jarvis_error, view: labels.jarvis_view, working: labels.jarvis_working } }}>
     document.addEventListener("astro:page-load", () => {
+        // One-click Jarvis weekly meal-plan schedule (parents only; button
+        // only renders for parents). Reuses the existing schedules API.
+        const jBtn = document.getElementById("jarvis-mealplan-btn");
+        const jStatus = document.getElementById("jarvis-mealplan-status");
+        if (jBtn && jStatus) {
+            const showStatus = (text, withLink) => {
+                jStatus.textContent = text;
+                if (withLink) {
+                    const a = document.createElement("a");
+                    a.href = "/parent/jarvis-schedules";
+                    a.className = "underline ml-1";
+                    a.textContent = jarvisLabels.view;
+                    jStatus.appendChild(a);
+                }
+                jStatus.classList.remove("hidden");
+            };
+            jBtn.addEventListener("click", async () => {
+                jBtn.disabled = true;
+                const original = jBtn.textContent;
+                jBtn.textContent = jarvisLabels.working;
+                try {
+                    // Duplicate guard: skip creation if an identical schedule
+                    // exists under EITHER language variant of the template
+                    // name (the parent may have enabled it in the other UI
+                    // language), or an edited copy that kept the Sunday-18:00
+                    // cron with a meal-plan prompt.
+                    const listRes = await fetch("/api/jarvis/schedules/", { credentials: "include" });
+                    if (listRes.ok) {
+                        const existing = await listRes.json();
+                        const isDup = (s) =>
+                            jarvisTemplateNames.includes(s.name) ||
+                            (s.cron_expr === jarvisTemplate.cron_expr &&
+                                /cenas|dinners/i.test(String(s.prompt || "")));
+                        if (Array.isArray(existing) && existing.some(isDup)) {
+                            showStatus(jarvisLabels.exists, true);
+                            jBtn.classList.add("hidden");
+                            return;
+                        }
+                    }
+                    const res = await fetch("/api/jarvis/schedules/", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify(jarvisTemplate),
+                    });
+                    if (!res.ok) throw new Error(String(res.status));
+                    showStatus(jarvisLabels.done, true);
+                    jBtn.classList.add("hidden");
+                } catch {
+                    showStatus(jarvisLabels.error, false);
+                    jBtn.disabled = false;
+                    jBtn.textContent = original;
+                }
+            });
+        }
+
         const btn = document.getElementById("recipe-import-btn");
         const input = document.getElementById("recipe-import-url");
         const status = document.getElementById("recipe-import-status");

@@ -5,8 +5,17 @@ import { t } from "../lib/i18n";
 let error = "";
 const lang = Astro.cookies.get("lang")?.value ?? "es";
 
+// Post-login destination (?next=/calendar/scan), set by the middleware when
+// an anonymous visitor hits a protected page (e.g. the kiosk wall tablet's
+// "Scan a flyer" button). Open-redirect guard: only same-origin relative
+// paths — must start with a single "/" (rejects "//evil.com" and absolute
+// URLs). The client scripts below re-derive it from location.search with
+// the same validation.
+const rawNext = Astro.url.searchParams.get("next") ?? "";
+const nextPath = /^\/(?!\/)/.test(rawNext) ? rawNext : "";
+
 if (Astro.cookies.has("access_token")) {
-    return Astro.redirect("/dashboard");
+    return Astro.redirect(nextPath || "/dashboard");
 }
 
 const flashError = Astro.cookies.get("login_error")?.value;
@@ -45,7 +54,7 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
       module below; this inline stub only has to exist on window so GIS
       accepts the config.
     */}
-    <script is:inline define:vars={{ API_URL: "/api/oauth/google" }}>
+    <script is:inline define:vars={{ API_URL: "/api/oauth/google", NEXT_PATH: nextPath }}>
         window.handleGoogleLogin = async function (response) {
             try {
                 const result = await fetch(API_URL, {
@@ -64,7 +73,9 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                 });
                 const data = await result.json();
                 if (result.ok) {
-                    window.location.href = "/dashboard";
+                    // Resume at the pre-login destination when the middleware
+                    // set one (validated server-side in the frontmatter).
+                    window.location.href = NEXT_PATH || "/dashboard";
                 } else {
                     const msg = data.message || data.detail || "Login failed";
                     // Toast library is loaded by the module script below;
@@ -397,7 +408,12 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                         const data = await response.json();
 
                         if (data.success && data.redirect) {
-                            window.location.href = data.redirect;
+                            // Resume at the pre-login destination (?next=…)
+                            // when present — same relative-path validation as
+                            // the frontmatter (single leading "/", no "//").
+                            const rawNext = new URLSearchParams(window.location.search).get('next') || '';
+                            const nextPath = /^\/(?!\/)/.test(rawNext) ? rawNext : '';
+                            window.location.href = nextPath || data.redirect;
                         } else {
                             showToast(data.error || 'Login failed', 'error');
                             submitBtn.disabled = false;

@@ -87,7 +87,8 @@ async def payout(
     await verify_user_in_family(db, user_id, fam)
     try:
         tx = await CashService.record_payout(
-            db, user_id, fam, body.amount_cents, to_uuid_required(current_user.id)
+            db, user_id, fam, body.amount_cents, to_uuid_required(current_user.id),
+            jar=body.jar,
         )
     except ValidationException as e:
         raise HTTPException(status_code=400, detail=str(e))

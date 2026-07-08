@@ -25,16 +25,26 @@ def test_migration_enum_labels_match_orm_names():
     import pathlib
     from app.models.cash_transaction import CashTransactionType
 
-    candidates = [
-        pathlib.Path("migrations/versions/2026_06_30_two_currency_economy.py"),
-        pathlib.Path("/app/migrations/versions/2026_06_30_two_currency_economy.py"),
-    ]
-    src = next((p.read_text() for p in candidates if p.exists()), None)
-    assert src is not None, "migration file not found"
-    # The ENUM(...) call must list every member NAME (uppercase). The lowercase
-    # value may legitimately appear in comments, so we only require the names.
+    # The base three labels are created by the two_currency migration (double-
+    # quoted ENUM(...) args); the Family Bank additions are ADD VALUE'd by the
+    # family_bank migration (single-quoted). Both use the UPPERCASE member NAME.
+    def _read(*names):
+        out = ""
+        for name in names:
+            for base in ("migrations/versions", "/app/migrations/versions"):
+                p = pathlib.Path(base) / name
+                if p.exists():
+                    out += p.read_text()
+        return out
+
+    src = _read(
+        "2026_06_30_two_currency_economy.py",
+        "2026_07_08_family_bank.py",
+    )
+    assert src, "migration files not found"
+    # Require every member NAME (uppercase), in either quote style.
     for member in CashTransactionType:
-        assert f'"{member.name}"' in src, (
+        assert (f'"{member.name}"' in src) or (f"'{member.name}'" in src), (
             f"migration missing UPPERCASE enum label {member.name!r}; SQLEnum binds "
             f"the NAME, so a lowercase-only label breaks every cash write in prod"
         )

@@ -78,9 +78,21 @@ const ledgerTypeLabels: Record<string, { en: string; es: string }> = {
     gig_earned: { en: "Gig cash earned", es: "Dinero de gig" },
     payout: { en: "Paid out", es: "Pago entregado" },
     adjustment: { en: "Adjustment", es: "Ajuste" },
+    // Family Bank ledger types
+    allowance: { en: "Allowance", es: "Domingo" },
+    interest: { en: "Interest earned", es: "Interés ganado" },
+    match: { en: "Parent match", es: "Aportación de papás" },
+    jar_transfer: { en: "Jar transfer", es: "Movimiento entre frascos" },
 };
 const ledgerLabel = (type: string) =>
     ledgerTypeLabels[type]?.[lang] ?? type.replaceAll("_", " ");
+
+// Jar chip (Family Bank attribution) for cash rows.
+const jarChip: Record<string, { label: string; cls: string }> = {
+    spend: { label: lang === "es" ? "Gastar" : "Spend", cls: "bg-brand-coral/15 text-brand-coral-deep" },
+    save: { label: lang === "es" ? "Ahorrar" : "Save", cls: "bg-brand-mint/20 text-brand-mint-deep" },
+    share: { label: lang === "es" ? "Compartir" : "Share", cls: "bg-brand-sun/25 text-brand-sun-deep" },
+};
 const ledger = [
     ...(Array.isArray(pointsHistoryRaw) ? pointsHistoryRaw : []).map((tx: any) => ({
         kind: "points",
@@ -88,6 +100,7 @@ const ledger = [
         type: String(tx.type || ""),
         description: tx.description as string | null,
         created_at: tx.created_at as string,
+        jar: null as string | null,
     })),
     ...(Array.isArray(cashHistoryRaw) ? cashHistoryRaw : []).map((tx: any) => ({
         kind: "cash",
@@ -95,6 +108,7 @@ const ledger = [
         type: String(tx.type || ""),
         description: tx.description as string | null,
         created_at: tx.created_at as string,
+        jar: (tx.jar as string | null) ?? null,
     })),
 ]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -204,6 +218,11 @@ const ledgerDate = (iso: string) =>
                                     <div class="flex-1 min-w-0">
                                         <p class="text-sm font-semibold text-brand-ink truncate">
                                             {ledgerLabel(e.type)}
+                                            {e.kind === "cash" && e.jar && jarChip[e.jar] && (
+                                                <span class={`ml-1.5 inline-block px-1.5 py-0.5 rounded-full text-[10px] font-bold align-middle ${jarChip[e.jar].cls}`}>
+                                                    {jarChip[e.jar].label}
+                                                </span>
+                                            )}
                                         </p>
                                         {/* Machine-written descriptions are English boilerplate;
                                             only surface human-entered reasons (adjustments). */}

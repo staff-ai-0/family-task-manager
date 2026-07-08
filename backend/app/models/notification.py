@@ -29,6 +29,10 @@ class NotificationType:
     GOAL_REACHED = "goal_reached"
     MEMBER_PENDING_APPROVAL = "member_pending_approval"
     MEMBER_APPROVED = "member_approved"
+    POINTS_ADJUSTED = "points_adjusted"
+    # Family Bank (P1)
+    PAYDAY = "payday"
+    BANK_REQUEST = "bank_request"
 
 
 class Notification(Base):

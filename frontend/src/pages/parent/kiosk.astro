@@ -44,10 +44,25 @@ if (Astro.request.method === "POST") {
     }
 }
 
-const { data: devicesRaw } = await apiFetch<any[]>("/api/kiosk/devices", {
-    token,
-});
+const [{ data: devicesRaw }, { data: prefsRaw }] = await Promise.all([
+    apiFetch<any[]>("/api/kiosk/devices", { token }),
+    apiFetch<any[]>("/api/kiosk/member-prefs", { token }),
+]);
 const devices: any[] = Array.isArray(devicesRaw) ? devicesRaw : [];
+const memberPrefs: any[] = Array.isArray(prefsRaw) ? prefsRaw : [];
+
+// Brand palette (docs/design-tokens.md) — names must match the backend's
+// MEMBER_COLORS in app/services/member_prefs_service.py.
+const PALETTE: { name: string; hex: string }[] = [
+    { name: "sky", hex: "#4FB8E6" },
+    { name: "coral", hex: "#FF8A65" },
+    { name: "mint", hex: "#5DD4A8" },
+    { name: "sun", hex: "#FFC857" },
+    { name: "sky-deep", hex: "#2E9BCC" },
+    { name: "coral-deep", hex: "#E96A45" },
+    { name: "mint-deep", hex: "#3DB689" },
+    { name: "sun-deep", hex: "#E5A91F" },
+];
 
 const baseUrl =
     typeof Astro.url.origin === "string" ? Astro.url.origin : "";
@@ -72,6 +87,19 @@ const labels = {
     save_token: lang === "es"
         ? "⚠️ Guarda esta URL ahora — no se vuelve a mostrar."
         : "⚠️ Save this URL now — it won't be shown again.",
+    members_title: lang === "es" ? "Miembros en el kiosko" : "Members on the kiosk",
+    members_hint:
+        lang === "es"
+            ? "Elige un color para cada quien y un PIN de 4 dígitos para que vean sus tareas y puntos en la pantalla."
+            : "Pick a color for each member and a 4-digit PIN so they can open their own chores and points on the display.",
+    pin_ph: lang === "es" ? "PIN (4 dígitos)" : "PIN (4 digits)",
+    pin_save: lang === "es" ? "Guardar PIN" : "Save PIN",
+    pin_remove: lang === "es" ? "Quitar PIN" : "Remove PIN",
+    pin_set: lang === "es" ? "PIN configurado" : "PIN set",
+    pin_unset: lang === "es" ? "Sin PIN" : "No PIN",
+    saved: lang === "es" ? "Guardado ✓" : "Saved ✓",
+    save_error: lang === "es" ? "Error al guardar" : "Save failed",
+    pin_invalid: lang === "es" ? "El PIN debe tener 4 dígitos" : "PIN must be 4 digits",
 };
 
 function timeAgo(iso: string | null): string {
@@ -133,6 +161,76 @@ function timeAgo(iso: string | null): string {
                 </button>
             </form>
 
+            <section class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)] space-y-4">
+                <div>
+                    <h2 class="font-bold text-brand-ink text-sm">🎨 {labels.members_title}</h2>
+                    <p class="text-xs text-brand-ink-soft mt-1">{labels.members_hint}</p>
+                </div>
+                {memberPrefs.map((m: any) => (
+                    <div class="border-t border-brand-ink/10 pt-3" data-member-row={m.user_id}>
+                        <div class="flex items-center gap-3 mb-2">
+                            <span
+                                data-member-avatar
+                                class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-brand-ink flex-shrink-0"
+                                style={`background-color: ${m.color_hex};`}
+                            >
+                                {m.name.charAt(0).toUpperCase()}
+                            </span>
+                            <div class="flex-1 min-w-0">
+                                <p class="font-semibold text-brand-ink text-sm truncate">{m.name}</p>
+                                <p data-pin-state class="text-[11px] text-brand-ink-soft">
+                                    {m.has_pin ? `🔒 ${labels.pin_set}` : labels.pin_unset}
+                                </p>
+                            </div>
+                            <span data-save-status class="text-[11px] font-semibold text-brand-mint-deep"></span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-1.5 mb-2">
+                            {PALETTE.map((c) => (
+                                <button
+                                    type="button"
+                                    data-color-swatch
+                                    data-user-id={m.user_id}
+                                    data-color-name={c.name}
+                                    data-color-hex={c.hex}
+                                    aria-label={c.name}
+                                    class={`w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 ${m.color === c.name ? "border-brand-ink ring-2 ring-brand-ink/30" : "border-brand-ink/15"}`}
+                                    style={`background-color: ${c.hex};`}
+                                ></button>
+                            ))}
+                        </div>
+                        <div class="flex gap-2 items-center">
+                            <input
+                                type="password"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                maxlength="4"
+                                autocomplete="off"
+                                data-pin-input
+                                data-user-id={m.user_id}
+                                placeholder={labels.pin_ph}
+                                class="w-32 px-2.5 py-1.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
+                            />
+                            <button
+                                type="button"
+                                data-pin-save
+                                data-user-id={m.user_id}
+                                class="px-3 py-1.5 rounded-lg bg-brand-ink text-brand-cream text-xs font-semibold hover:bg-brand-ink-soft active:scale-95"
+                            >
+                                {labels.pin_save}
+                            </button>
+                            <button
+                                type="button"
+                                data-pin-remove
+                                data-user-id={m.user_id}
+                                class={`px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200 ${m.has_pin ? "" : "hidden"}`}
+                            >
+                                {labels.pin_remove}
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </section>
+
             <ul class="space-y-2">
                 {devices.map((d: any) => (
                     <li class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)] flex items-start justify-between gap-3">
@@ -158,4 +256,91 @@ function timeAgo(iso: string | null): string {
                     </li>
                 ))}
             </ul>
+
+    <script define:vars={{ jsLabels: { saved: labels.saved, save_error: labels.save_error, pin_invalid: labels.pin_invalid, pin_set: labels.pin_set, pin_unset: labels.pin_unset } }}>
+        document.addEventListener("astro:page-load", () => {
+            async function updatePrefs(userId, body) {
+                const res = await fetch(`/api/kiosk/member-prefs/${userId}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) throw new Error(String(res.status));
+                return res.json();
+            }
+
+            function flash(row, text, isError) {
+                const el = row?.querySelector("[data-save-status]");
+                if (!el) return;
+                el.textContent = text;
+                el.classList.toggle("text-red-600", !!isError);
+                el.classList.toggle("text-brand-mint-deep", !isError);
+                setTimeout(() => { el.textContent = ""; }, 2500);
+            }
+
+            // Color swatches
+            document.querySelectorAll("[data-color-swatch]").forEach((btn) => {
+                btn.addEventListener("click", async () => {
+                    const userId = btn.dataset.userId;
+                    const row = document.querySelector(`[data-member-row="${userId}"]`);
+                    try {
+                        const out = await updatePrefs(userId, { color: btn.dataset.colorName });
+                        row?.querySelectorAll("[data-color-swatch]").forEach((b) => {
+                            b.classList.remove("border-brand-ink", "ring-2", "ring-brand-ink/30");
+                            b.classList.add("border-brand-ink/15");
+                        });
+                        btn.classList.remove("border-brand-ink/15");
+                        btn.classList.add("border-brand-ink", "ring-2", "ring-brand-ink/30");
+                        const avatar = row?.querySelector("[data-member-avatar]");
+                        if (avatar) avatar.style.backgroundColor = out.color_hex || btn.dataset.colorHex;
+                        flash(row, jsLabels.saved, false);
+                    } catch {
+                        flash(row, jsLabels.save_error, true);
+                    }
+                });
+            });
+
+            // Save PIN
+            document.querySelectorAll("[data-pin-save]").forEach((btn) => {
+                btn.addEventListener("click", async () => {
+                    const userId = btn.dataset.userId;
+                    const row = document.querySelector(`[data-member-row="${userId}"]`);
+                    const input = row?.querySelector("[data-pin-input]");
+                    const pin = (input?.value || "").trim();
+                    if (!/^\d{4}$/.test(pin)) {
+                        flash(row, jsLabels.pin_invalid, true);
+                        return;
+                    }
+                    try {
+                        await updatePrefs(userId, { pin });
+                        if (input) input.value = "";
+                        const state = row?.querySelector("[data-pin-state]");
+                        if (state) state.textContent = `🔒 ${jsLabels.pin_set}`;
+                        row?.querySelector("[data-pin-remove]")?.classList.remove("hidden");
+                        flash(row, jsLabels.saved, false);
+                    } catch {
+                        flash(row, jsLabels.save_error, true);
+                    }
+                });
+            });
+
+            // Remove PIN
+            document.querySelectorAll("[data-pin-remove]").forEach((btn) => {
+                btn.addEventListener("click", async () => {
+                    const userId = btn.dataset.userId;
+                    const row = document.querySelector(`[data-member-row="${userId}"]`);
+                    try {
+                        await updatePrefs(userId, { pin: "" });
+                        const state = row?.querySelector("[data-pin-state]");
+                        if (state) state.textContent = jsLabels.pin_unset;
+                        btn.classList.add("hidden");
+                        flash(row, jsLabels.saved, false);
+                    } catch {
+                        flash(row, jsLabels.save_error, true);
+                    }
+                });
+            });
+        });
+    </script>
 </PageLayout>

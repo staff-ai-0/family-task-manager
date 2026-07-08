@@ -14,14 +14,17 @@ if (!user) {
 }
 if (user.role !== "parent") return Astro.redirect("/gigs");
 
-const [offeringsRes, pendingRes] = await Promise.all([
+const [offeringsRes, pendingRes, proposalsRes] = await Promise.all([
     apiFetch<any[]>("/api/gigs/offerings?include_inactive=false", { token }),
     apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token }),
+    apiFetch<any[]>("/api/gigs/offerings/proposals/pending", { token }),
 ]);
 const offerings: any[] = offeringsRes.data ?? [];
 // Claim approvals now live in the unified /parent/approvals queue — keep only the
 // pending count here for the "review" link so there is a single approval surface.
 const pendingCount = Array.isArray(pendingRes.data) ? pendingRes.data.length : 0;
+// Kid-proposed gigs awaiting review (W4.4).
+const proposals: any[] = Array.isArray(proposalsRes.data) ? proposalsRes.data : [];
 
 const flash = Astro.cookies.get("flash")?.value;
 if (flash) Astro.cookies.delete("flash", { path: "/" });
@@ -75,6 +78,65 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 <div class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                     {flashError}
                 </div>
+            )}
+
+            <!-- Kid proposals awaiting review (W4.4) -->
+            {proposals.length > 0 && (
+                <section class="mb-6">
+                    <h2 class="text-sm font-bold text-brand-ink-soft uppercase tracking-wide mb-3 px-1">
+                        💡 {lang === "es" ? "Propuestas de tus hijos" : "Kid proposals"} ({proposals.length})
+                    </h2>
+                    <div class="space-y-3">
+                        {proposals.map((row: any) => {
+                            const o = row.offering;
+                            return (
+                                <div data-proposal-card data-id={o.id} class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-amber-300">
+                                    <div class="flex justify-between items-start gap-3">
+                                        <div class="min-w-0 flex-1">
+                                            <h3 class="font-bold text-brand-ink">{o.title}</h3>
+                                            {o.description && (
+                                                <p class="text-brand-ink-soft text-sm mt-0.5 line-clamp-2">{o.description}</p>
+                                            )}
+                                            <p class="text-xs text-brand-ink-soft mt-1">
+                                                {lang === "es" ? "Propuesta por" : "Proposed by"} <span class="font-semibold">{row.proposer_name}</span>
+                                            </p>
+                                        </div>
+                                        <label class="text-right flex-shrink-0">
+                                            <span class="block text-[10px] text-brand-ink-soft font-medium mb-1">$MXN</span>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="1000"
+                                                value={o.points}
+                                                data-proposal-points
+                                                class="w-20 px-2 py-1.5 rounded-lg border border-brand-ink/20 text-sm font-bold text-emerald-700 text-right focus:ring-2 focus:ring-violet-400 outline-none bg-brand-cream-deep"
+                                            />
+                                        </label>
+                                    </div>
+                                    <input
+                                        data-proposal-notes
+                                        placeholder={lang === "es" ? "Nota para tu hijo/a (opcional)" : "Note for your kid (optional)"}
+                                        class="mt-3 w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm bg-brand-cream focus:ring-2 focus:ring-violet-400 outline-none"
+                                    />
+                                    <div class="flex gap-2 mt-3">
+                                        <button
+                                            data-proposal-action="reject"
+                                            class="flex-1 py-2 text-sm font-semibold text-red-700 border border-red-300 rounded-xl hover:bg-red-50 transition-colors"
+                                        >
+                                            {lang === "es" ? "Rechazar" : "Reject"}
+                                        </button>
+                                        <button
+                                            data-proposal-action="approve"
+                                            class="flex-1 py-2 text-sm font-semibold text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors"
+                                        >
+                                            {lang === "es" ? "Aprobar y publicar" : "Approve & publish"}
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
             )}
 
             <!-- Gig offerings -->
@@ -249,6 +311,38 @@ form.addEventListener("submit", async (e) => {
         btn.disabled = false;
         alert(err.detail ?? "Error");
     }
+});
+
+// ── Kid proposals: approve (with optional price edit) / reject ──────
+document.querySelectorAll<HTMLElement>("[data-proposal-card]").forEach(card => {
+    card.querySelectorAll<HTMLButtonElement>("[data-proposal-action]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const approve = btn.dataset.proposalAction === "approve";
+            if (!approve && !confirm(lang === "es" ? "¿Rechazar esta propuesta?" : "Reject this proposal?")) return;
+            const id = card.dataset.id;
+            const pointsInput = card.querySelector<HTMLInputElement>("[data-proposal-points]");
+            const notesInput = card.querySelector<HTMLInputElement>("[data-proposal-notes]");
+            const points = pointsInput ? parseInt(pointsInput.value, 10) : NaN;
+            btn.disabled = true;
+            const res = await fetch(`/api/gigs/offerings/${id}/review`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    approve,
+                    points: approve && !isNaN(points) && points > 0 ? points : null,
+                    notes: notesInput?.value.trim() || null,
+                }),
+            });
+            if (res.ok) {
+                // Approved gigs join the live board — reload so they render there.
+                window.location.reload();
+            } else {
+                const err = await res.json().catch(() => ({ detail: "Error" }));
+                btn.disabled = false;
+                alert(err.detail ?? "Error");
+            }
+        });
+    });
 });
 
 document.querySelectorAll(".archive-gig-btn").forEach(btn => {

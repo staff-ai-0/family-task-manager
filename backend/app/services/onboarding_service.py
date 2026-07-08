@@ -45,12 +45,23 @@ class OnboardingService:
                 reward_created=False, points_awarded=False,
                 dismissed=False,
             )
+        # Derived optional step: has this family ever imported a scanned
+        # flyer? (calendar_events.source='ocr_flyer' — set by the /calendar
+        # scan flow). Derived on read so no new family column is needed.
+        from app.models.calendar_event import CalendarEvent
+        flyer_scanned = (await db.execute(
+            select(CalendarEvent.id).where(
+                CalendarEvent.family_id == family_id,
+                CalendarEvent.source == "ocr_flyer",
+            ).limit(1)
+        )).scalar_one_or_none() is not None
         return OnboardingState(
             child_invited=row.onboarding_child_invited,
             task_created=row.onboarding_task_created,
             reward_created=row.onboarding_reward_created,
             points_awarded=row.onboarding_points_awarded,
             dismissed=row.onboarding_dismissed,
+            flyer_scanned=flyer_scanned,
         )
 
     @staticmethod

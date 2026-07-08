@@ -46,16 +46,17 @@ Highest-ROI build = "Family Bank" (payday + jars + parent interest/match) on exi
 - [x] Push: TASK_ASSIGNED notification type + morning "chores due today" job ✅ DONE
 - [x] i18n: locale middleware (cookie → Accept-Language → es); NotificationService keyed translations (port email _t pattern, ~30 call sites) ✅ DONE
 
-### P1 — Launch differentiators (~3–4 wk)
-- [ ] Family Bank: weekly payday job; Save/Share/Spend jars w/ % auto-split; parent-paid interest; parent match
-- [ ] Onboarding: age-preset ES/MX chore+gig+reward template packs (Jarvis-generated); budget first-account empty state + FAB "+ New account"
-- [ ] Tasks: sibling rotation strategy; interval-since-completion recurrence; photo proof + approval on task templates (reuse gig infra); kid-proposed gigs; 1-tap award/deduct points
-- [ ] Kid money: goal jar (earmark points toward reward, progress visual); kid envelopes in budget; star mode for ages 3-7
-- [ ] Kiosk: per-kid PIN switch; per-member colors app-wide; leaderboard panel; "convierte tu tablet en un Skylight" marketing
-- [ ] Pricing: MXN PayPal plans (Plus ~MX$79-99, Pro ~MX$149-199, per-family); pricing page copy
-- [ ] Packaging: scan-a-flyer button on kiosk+onboarding; Jarvis weekly meal-plan scheduled prompt; Jarvis surfaced in budget pages (suggested ES money questions)
+### P1 — Launch differentiators (~3–4 wk) — CODE-COMPLETE in PR #93 (branch feat/launch-p1; suite 1520 green; NOT merged/deployed)
+- [x] Family Bank: weekly payday job; Save/Share/Spend jars w/ % auto-split; parent-paid interest; parent match ✅ (cash ledger, spec docs/specs/family-bank.md, migration family_bank_w1)
+- [x] Onboarding: age-preset ES/MX chore+gig+reward template packs; budget first-account empty state + FAB "+ New account" ✅ (static ES/MX packs, not Jarvis-generated — runtime-free/deterministic; Jarvis custom packs noted as future)
+- [x] Tasks: sibling rotation strategy; interval-since-completion recurrence; photo proof + approval on task templates; kid-proposed gigs; 1-tap award/deduct points ✅ (migration task_mechanics_w4)
+- [~] Kid money: goal jar / kid envelopes / star mode — PARTIAL: Family Bank Save-jar goal + interest covers the "save toward X" motivation; dedicated goal-jar UI, budget kid-envelopes, and ages 3-7 star mode still open (move to P2)
+- [x] Kiosk: per-kid PIN switch; per-member colors app-wide; leaderboard panel ✅ (member_prefs_service; Redis volatile-lru so prefs aren't evicted)
+- [x] Pricing: MXN PayPal plans (Plus MX$99, Pro MX$199, per-family); pricing page copy ✅ (migration mxn_plan_currency_w6; operator must run setup_paypal_plans.py against live PayPal)
+- [x] Packaging: scan-a-flyer entry points; Jarvis weekly meal-plan scheduled prompt; Jarvis surfaced in budget pages ✅
 
 ### P2 — Post-launch growth
+- [ ] Kid money leftovers from P1: dedicated goal-jar UI, kid budget-envelopes, ages 3-7 star mode
 - [ ] Quest-mode kid UI + pet evolution stages — BLOCKED on pet go/no-go decision (memory: feedback_virtual_pet_uncertain; research strongly supports — Joon evidence in 02, decays wk 4-8 without progression ladder)
 - [ ] Family Cup weekly leaderboard season; cooperative family boss battle; completions auto-post to chat
 - [ ] Budget: month rollover + cover-overspend flow; bill calendar + 30/60d forecast; learning categorization (corrections as few-shot); recurring-charge detection

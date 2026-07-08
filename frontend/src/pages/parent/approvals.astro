@@ -98,7 +98,14 @@ const fmtDate = (d: string) =>
                             >
                                 <div class="flex justify-between items-start mb-3 gap-3">
                                     <div class="min-w-0">
-                                        <h3 class="font-bold text-brand-ink truncate">{row.template_title}</h3>
+                                        <h3 class="font-bold text-brand-ink truncate">
+                                            {row.template_title}
+                                            {row.template_is_bonus === false && (
+                                                <span class="ml-1 align-middle text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-sky/15 text-brand-sky-deep">
+                                                    📸 {lang === "es" ? "Tarea" : "Chore"}
+                                                </span>
+                                            )}
+                                        </h3>
                                         <p class="text-sm text-brand-ink-soft mt-0.5">
                                             {row.assigned_to_name}
                                             <span class="mx-1">·</span>

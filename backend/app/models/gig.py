@@ -35,6 +35,19 @@ class GigClaimStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class GigOfferingStatus(str, Enum):
+    """Lifecycle of an offering on the board (W4.4 kid proposals).
+
+    - approved: live on the board (all parent-created offerings start here).
+    - pending:  kid-proposed draft awaiting parent review (is_active=False,
+                never claimable).
+    - rejected: parent declined the proposal (review_notes says why).
+    """
+    APPROVED = "approved"
+    PENDING = "pending"
+    REJECTED = "rejected"
+
+
 class GigOffering(Base):
     """A gig posted by a parent that kids can claim independently."""
 
@@ -60,6 +73,20 @@ class GigOffering(Base):
         comment="List of role strings eligible to claim; null = all non-parent roles",
     )
     is_active = Column(Boolean, nullable=False, default=True, server_default="true", index=True)
+    # Kid-proposed gigs (W4.4): parent-created offerings are 'approved';
+    # kid proposals start 'pending' (with is_active=False) until a parent
+    # approves (→ 'approved' + active) or rejects (→ 'rejected').
+    status = Column(
+        String(16), nullable=False,
+        default=GigOfferingStatus.APPROVED.value,
+        server_default=GigOfferingStatus.APPROVED.value,
+        index=True,
+    )
+    review_notes = Column(Text, nullable=True)
+    reviewed_by = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
     created_by = Column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

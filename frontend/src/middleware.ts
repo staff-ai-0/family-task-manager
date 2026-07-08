@@ -178,6 +178,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/api/invitations/accept", // Only public endpoint is accepting an invitation (no auth needed)
         "/kiosk",  // Wall display — token gated via ?token=...
         "/api/kiosk/snapshot",
+        "/api/kiosk/pin-view",  // Kiosk per-kid PIN view — device token in body, PIN-scoped
     ];
     const isPublicRoute = publicRoutes.some(route => path === route || path.startsWith("/api/translate"));
 
@@ -248,9 +249,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
         console.log(`No access_token for protected route: ${path}`);
         // The refresh cookie (if any) is stale/unusable — clear both cookies.
         const { clearAuthCookies } = await import("./lib/auth-cookies");
-        // Redirect to login for HTML pages
+        // Redirect to login for HTML pages. Carry the intended destination as
+        // ?next= so login can resume there after auth (e.g. the kiosk wall
+        // tablet's "Scan a flyer" button → /calendar/scan). login.astro
+        // validates it as a same-origin relative path before honoring it.
         if (!path.startsWith("/api/")) {
-            const response = redirect("/login", 302);
+            const next = encodeURIComponent(path + url.search);
+            const response = redirect(`/login?next=${next}`, 302);
             for (const c of clearAuthCookies()) response.headers.append("Set-Cookie", c);
             return withSecurityHeaders(response);
         }

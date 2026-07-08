@@ -149,6 +149,40 @@ _COPY = {
         },
         "body": {"es": "{reason}", "en": "{reason}"},
     },
+    # ── Kid-proposed gigs (W4.4) ────────────────────────────────────
+    "gig_proposal_pending": {
+        "type": NT.GIG_PENDING_REVIEW,
+        "title": {
+            "es": "💡 Nueva propuesta de gig",
+            "en": "💡 New gig proposal",
+        },
+        "body": {
+            "es": "{child} propone '{title}' por ${pesos} MXN. Revísala en Gigs.",
+            "en": "{child} proposed '{title}' for ${pesos} MXN. Review it in Gigs.",
+        },
+    },
+    "gig_proposal_approved": {
+        "type": NT.GIG_APPROVED,
+        "title": {"es": "✅ ¡Propuesta aprobada!", "en": "✅ Proposal approved!"},
+        "body": {
+            "es": "'{title}' (${pesos} MXN) ya está en el tablero de gigs.",
+            "en": "'{title}' (${pesos} MXN) is now on the gig board.",
+        },
+    },
+    "gig_proposal_rejected": {
+        "type": NT.GIG_REJECTED,
+        "title": {"es": "❌ Propuesta rechazada", "en": "❌ Proposal declined"},
+        "body": {
+            "es": "'{title}' no fue aprobada. {notes}",
+            "en": "'{title}' was not approved. {notes}",
+        },
+    },
+    # ── 1-tap points (W4.5) ─────────────────────────────────────────
+    "points_adjusted": {
+        "type": NT.POINTS_ADJUSTED,
+        "title": {"es": "⭐ {delta} pts", "en": "⭐ {delta} pts"},
+        "body": {"es": "{reason}", "en": "{reason}"},
+    },
     # ── Calendar ────────────────────────────────────────────────────
     "calendar_event_added": {
         "type": NT.CALENDAR_EVENT_ADDED,
@@ -236,6 +270,48 @@ _COPY = {
             "es": "{parent} aprobó tu cuenta. Ya puedes iniciar sesión.",
             "en": "{parent} approved your account. You can now log in.",
         },
+    },
+    # ── Family Bank (P1) ────────────────────────────────────────────
+    "payday": {
+        "type": NT.PAYDAY,
+        "title": {
+            "es": "🎉 ¡Día de pago! +{total}",
+            "en": "🎉 Payday! +{total}",
+        },
+        "body": {
+            "es": "Tu domingo: {allowance} · interés: {interest} · aportación de papás: {match}",
+            "en": "Allowance: {allowance} · interest: {interest} · parent match: {match}",
+        },
+    },
+    "payday_interest_only": {
+        "type": NT.PAYDAY,
+        "title": {
+            "es": "💰 ¡Tu ahorro creció!",
+            "en": "💰 Your savings grew!",
+        },
+        "body": {
+            "es": "Ganaste {interest} de interés esta semana.",
+            "en": "You earned {interest} in interest this week.",
+        },
+    },
+    "bank_save_withdrawal_request": {
+        "type": NT.BANK_REQUEST,
+        "title": {
+            "es": "🏦 {child} quiere retirar {amount} de su ahorro",
+            "en": "🏦 {child} wants to withdraw {amount} from savings",
+        },
+        "body": {
+            "es": "{reason}",
+            "en": "{reason}",
+        },
+    },
+    "bank_payout_request": {
+        "type": NT.BANK_REQUEST,
+        "title": {
+            "es": "💵 {child} pide su pago de {amount}",
+            "en": "💵 {child} is asking to be paid {amount}",
+        },
+        "body": None,
     },
     # ── Virtual pet ─────────────────────────────────────────────────
     "pet_starving": {

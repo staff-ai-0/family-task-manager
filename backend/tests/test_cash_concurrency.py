@@ -91,3 +91,58 @@ async def test_concurrent_mandatory_complete_awards_points_once(
     assert txn_count == 1, f"double-award: {txn_count} point transactions"
     await db_session.refresh(test_child_user)
     assert test_child_user.points == 10
+
+
+@pytest.mark.asyncio
+async def test_concurrent_first_touch_bank_account_no_integrity_error(
+    test_engine, db_session, test_family, test_child_user
+):
+    """Regression (Family Bank W1 review): the locked lazy-create path
+    (_get_or_create_account_locked, used by award_gig_cash) and the non-locking
+    BankService.ensure_account (used by GET /api/bank/me) can race on a brand-new
+    kid — a FOR UPDATE select over a missing row takes no lock, so ensure_account
+    can insert between the locked path's miss and its flush. Both must complete
+    without a 500 on the UNIQUE(user_id) constraint, leaving exactly one account
+    row with the jar invariant intact."""
+    from app.models.kid_bank import KidBankAccount
+    from app.models.user import User
+    from app.services.bank_service import BankService
+
+    test_child_user.cash_cents = 0
+    await db_session.commit()
+    kid_id = test_child_user.id
+    fam_id = test_family.id
+
+    maker = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def _award():
+        async with maker() as s:
+            await s.get(User, kid_id)
+            r = await CashService.award_gig_cash(s, kid_id, fam_id, None, 5000, "gig")
+            await s.commit()
+            return r
+
+    async def _ensure():
+        async with maker() as s:
+            u = await s.get(User, kid_id)
+            return await BankService.ensure_account(s, u)
+
+    results = await asyncio.gather(_award(), _ensure(), return_exceptions=True)
+    errs = [r for r in results if isinstance(r, Exception)]
+    assert not errs, f"first-touch race raised: {errs}"
+
+    rows = await db_session.scalar(
+        select(func.count()).select_from(KidBankAccount).where(
+            KidBankAccount.user_id == kid_id
+        )
+    )
+    assert rows == 1, f"expected exactly one bank account row, got {rows}"
+
+    acct = (await db_session.execute(
+        select(KidBankAccount).where(KidBankAccount.user_id == kid_id)
+    )).scalar_one()
+    await db_session.refresh(test_child_user)
+    assert (
+        acct.spend_cents + acct.save_cents + acct.share_cents
+        == test_child_user.cash_cents
+    )

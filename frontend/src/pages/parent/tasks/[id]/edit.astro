@@ -23,6 +23,7 @@ if (Astro.request.method === "POST") {
     const assignedUserIds = data.getAll("assigned_user_ids[]").filter(id => id);
     const allowedRoles = data.getAll("allowed_roles[]").filter(r => r);
 
+    const recurrenceMode = data.get("recurrence_mode")?.toString() || "weekly";
     const payload: any = {
         title: data.get("title"),
         description: data.get("description") || null,
@@ -31,6 +32,12 @@ if (Astro.request.method === "POST") {
         points: Number(data.get("points")) || 10,
         effort_level: Number(data.get("effort_level")) || 1,
         interval_days: Number(data.get("interval_days")) || 1,
+        recurrence_mode: recurrenceMode,
+        recur_every_n_days:
+            recurrenceMode === "since_completion"
+                ? Number(data.get("recur_every_n_days")) || 3
+                : null,
+        requires_proof: data.get("requires_proof") === "on",
         is_bonus: data.get("is_bonus") === "on",
         blocks_rewards: data.get("blocks_rewards") === "on",
         gig_mode: data.get("gig_mode") || "claim",
@@ -199,6 +206,42 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                     </div>
                 </div>
                 
+                <!-- Recurrence mode (W4.2): weekly presets vs 'every N days after done' -->
+                <div class="pt-2 border-t border-brand-ink/10">
+                    <label class="text-sm font-medium text-brand-ink mb-1 block">
+                        {lang === "es" ? "Recurrencia" : "Recurrence"}
+                    </label>
+                    <select
+                        id="recurrence_mode"
+                        name="recurrence_mode"
+                        class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none bg-brand-cream"
+                    >
+                        <option value="weekly" selected={!tmpl.recurrence_mode || tmpl.recurrence_mode === "weekly"}>
+                            {lang === "es" ? "Semanal (según frecuencia)" : "Weekly (per frequency above)"}
+                        </option>
+                        <option value="since_completion" selected={tmpl.recurrence_mode === "since_completion"}>
+                            {lang === "es" ? "Cada N días después de completarla" : "Every N days after completion"}
+                        </option>
+                    </select>
+                    <div id="recur_n_container" class={`mt-2 flex items-center gap-2 ${tmpl.recurrence_mode === "since_completion" ? "" : "hidden"}`}>
+                        <span class="text-sm text-brand-ink">{lang === "es" ? "Cada" : "Every"}</span>
+                        <input
+                            type="number"
+                            name="recur_every_n_days"
+                            min="1"
+                            max="90"
+                            value={tmpl.recur_every_n_days ?? 3}
+                            class="w-20 px-3 py-2 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none bg-brand-cream"
+                        />
+                        <span class="text-sm text-brand-ink">{lang === "es" ? "días después de completarla" : "days after it's completed"}</span>
+                    </div>
+                    <p class="text-xs text-brand-ink-soft mt-1">
+                        {lang === "es"
+                            ? "En este modo la tarea no entra al sorteo semanal: reaparece sola N días después de terminarla."
+                            : "In this mode the task skips the weekly shuffle: it respawns on its own N days after it's done."}
+                    </p>
+                </div>
+
                 <div class="pt-2 border-t border-brand-ink/10">
                     <label class="text-sm font-medium text-brand-ink mb-1 block">
                         {t(lang, "pt_assignment_type")}
@@ -312,6 +355,26 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input
                             type="checkbox"
+                            name="requires_proof"
+                            class="sr-only peer"
+                            checked={tmpl.requires_proof}
+                        />
+                        <div class="w-9 h-5 bg-brand-cream-deep rounded-full peer peer-checked:bg-brand-sky-deep peer-focus:ring-2 peer-focus:ring-sky-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-brand-cream after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                    <div>
+                        <span class="text-sm font-medium text-brand-ink">📸 {lang === "es" ? "Requiere foto de evidencia" : "Requires photo proof"}</span>
+                        <p class="text-xs text-brand-ink-soft">
+                            {lang === "es"
+                                ? "Al completar deben subir foto; tú la apruebas antes de dar los puntos."
+                                : "Kid attaches a photo on completion; you approve before points are credited."}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 py-1">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
                             name="blocks_rewards"
                             class="sr-only peer"
                             checked={tmpl.blocks_rewards}
@@ -385,6 +448,13 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
             }
         }
     };
+
+    // Reveal the 'every N days' input only for since_completion mode
+    const recurrenceSelect = document.getElementById("recurrence_mode") as HTMLSelectElement | null;
+    const recurNContainer = document.getElementById("recur_n_container");
+    recurrenceSelect?.addEventListener("change", () => {
+        recurNContainer?.classList.toggle("hidden", recurrenceSelect.value !== "since_completion");
+    });
 
     const btnTranslate = document.getElementById("btn-translate");
     const statusDiv = document.getElementById("translate-status");

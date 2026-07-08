@@ -599,7 +599,7 @@ window.openAccountModal = function(acc) {
             <div>
                 <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Tipo" : "Type"} *</label>
                 <select id="acc-type" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream focus:ring-2 focus:ring-brand-sky-deep outline-none">
-                    ${['checking','savings','credit_card','cash','investment','loan','other'].map(t =>
+                    ${['checking','savings','credit','investment','loan','other'].map(t =>
                         `<option value="${t}" ${(acc?.account_type||acc?.type)===t?'selected':''}>${t}</option>`
                     ).join('')}
                 </select>
@@ -624,7 +624,10 @@ window.openAccountModal = function(acc) {
         const type = document.getElementById("acc-type").value;
         if (!name) { showModalError(es ? "El nombre es requerido" : "Name is required"); return; }
         try {
-            const body = { name, account_type: type, notes: document.getElementById("acc-notes").value.trim() || undefined };
+            // Backend AccountCreate/AccountUpdate expect `type` (account_type
+            // is only a response/list-filter name) — sending account_type made
+            // creates 422 with "type: Field required".
+            const body = { name, type, notes: document.getElementById("acc-notes").value.trim() || undefined };
             if (!isEdit) {
                 const bal = parseFloat(document.getElementById("acc-balance").value || "0");
                 if (bal) body.starting_balance = Math.round(bal * 100);

@@ -1,0 +1,360 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import { apiFetch } from "../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+const es = lang === "es";
+
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+// Parents have no jars — send them to the config surface (spec §9).
+if (user.role === "parent") return Astro.redirect("/parent/settings/family-bank");
+
+const { data: bank, ok: bankOk } = await apiFetch<any>("/api/bank/me", { token });
+
+const spend = bank?.spend_cents ?? 0;
+const save = bank?.save_cents ?? 0;
+const share = bank?.share_cents ?? 0;
+const total = bank?.total_cents ?? (spend + save + share);
+const interestBps = bank?.interest_rate_bps ?? 0;
+const matchPct = bank?.match_pct ?? 0;
+const pendingMatch = bank?.pending_match_cents ?? 0;
+const daysUntil = bank?.days_until_payday ?? null;
+const paydayWeekday = bank?.payday_weekday ?? 6;
+const allowanceCents = bank?.allowance_cents ?? 0;
+const requiresApproval = bank?.save_withdrawal_requires_approval ?? true;
+const automationOn = bank?.automation_enabled ?? false;
+
+// Weekly interest "boost" preview on the CURRENT Save balance (floor, matches
+// the backend: save * bps / 10000). Only meaningful when the parent enabled a
+// rate AND the family is entitled to automation.
+const interestPreview = automationOn && interestBps > 0 ? Math.floor((save * interestBps) / 10000) : 0;
+const showMatchPreview = automationOn && matchPct > 0 && pendingMatch > 0;
+const showPayday = automationOn && (allowanceCents > 0 || interestBps > 0 || matchPct > 0);
+
+const weekdayNames = es
+    ? ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+    : ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const paydayName = weekdayNames[paydayWeekday] ?? (es ? "domingo" : "Sunday");
+
+const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+function countdownText(): string {
+    if (daysUntil === null) return "";
+    if (daysUntil === 0) return es ? "¡Tu día de pago es hoy! 🎉" : "Your payday is today! 🎉";
+    if (daysUntil === 1) return es ? "Tu pago es mañana" : "Your payday is tomorrow";
+    return es ? `Faltan ${daysUntil} días para tu pago` : `${daysUntil} days until your payday`;
+}
+---
+
+<PageLayout title={es ? "Mi Banco" : "My Bank"} role={user.role} active="tasks" lang={lang}>
+    <header slot="header" class="bg-gradient-to-br from-brand-mint-deep to-brand-mint text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <p class="text-white/80 text-sm font-medium">{es ? "Mi Banco" : "My Bank"}</p>
+                <h1 class="text-2xl font-bold">🏦 {user.name}</h1>
+            </div>
+            <a href="/dashboard" class="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-white/30 transition-colors">
+                {es ? "Inicio" : "Home"}
+            </a>
+        </div>
+        <div class="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3">
+            <p class="text-white/80 text-xs font-semibold uppercase tracking-wider mb-0.5">
+                {es ? "Total en mi banco" : "Total in my bank"}
+            </p>
+            <p class="text-3xl font-extrabold tracking-tight" data-total-balance>
+                {fmt(total)}<span class="text-base font-semibold"> MXN</span>
+            </p>
+        </div>
+    </header>
+
+    <span data-bank-me={user.id} class="hidden"></span>
+
+    {!bankOk && (
+        <div class="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+            {es ? "No pudimos cargar tu banco. Intenta de nuevo." : "Could not load your bank. Please try again."}
+        </div>
+    )}
+
+    <!-- Three jars -->
+    <section class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <!-- Gastar / Spend -->
+        <div class="bg-brand-coral/15 border-2 border-brand-ink rounded-[var(--radius-card)] p-5 shadow-[var(--shadow-card)] text-center">
+            <div class="text-4xl mb-1">🛍️</div>
+            <p class="text-xs font-bold uppercase tracking-wide text-brand-coral-deep">{es ? "Gastar" : "Spend"}</p>
+            <p class="text-2xl font-extrabold text-brand-ink mt-1" data-jar-balance="spend">{fmt(spend)}</p>
+        </div>
+        <!-- Ahorrar / Save -->
+        <div class="bg-brand-mint/20 border-2 border-brand-ink rounded-[var(--radius-card)] p-5 shadow-[var(--shadow-card)] text-center">
+            <div class="text-4xl mb-1">🐷</div>
+            <p class="text-xs font-bold uppercase tracking-wide text-brand-mint-deep">{es ? "Ahorrar" : "Save"}</p>
+            <p class="text-2xl font-extrabold text-brand-ink mt-1" data-jar-balance="save">{fmt(save)}</p>
+        </div>
+        <!-- Compartir / Share -->
+        <div class="bg-brand-sun/25 border-2 border-brand-ink rounded-[var(--radius-card)] p-5 shadow-[var(--shadow-card)] text-center">
+            <div class="text-4xl mb-1">💝</div>
+            <p class="text-xs font-bold uppercase tracking-wide text-brand-sun-deep">{es ? "Compartir" : "Share"}</p>
+            <p class="text-2xl font-extrabold text-brand-ink mt-1" data-jar-balance="share">{fmt(share)}</p>
+        </div>
+    </section>
+
+    <!-- Payday countdown + boosts -->
+    {showPayday && (
+        <section class="mb-6 bg-brand-sky/15 border-2 border-brand-ink rounded-[var(--radius-card)] p-5 shadow-[var(--shadow-card)]">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">📅</span>
+                <div>
+                    <p class="font-display font-extrabold text-brand-ink text-lg leading-tight">
+                        {es ? "Domingo de pago" : "Payday"}
+                    </p>
+                    <p class="text-sm text-brand-ink-soft">
+                        {es ? `Tu pago cae el ${paydayName}. ` : `Your payday is ${paydayName}. `}{countdownText()}
+                    </p>
+                </div>
+            </div>
+            {allowanceCents > 0 && (
+                <p class="text-sm text-brand-ink mt-3 bg-white/50 rounded-xl px-3 py-2">
+                    {es ? `Este ${paydayName} recibirás tu domingo de ` : `This ${paydayName} you'll get your allowance of `}
+                    <strong>{fmt(allowanceCents)}</strong>.
+                </p>
+            )}
+            {interestPreview > 0 && (
+                <p class="text-sm text-brand-mint-deep font-semibold mt-2 bg-brand-mint/15 rounded-xl px-3 py-2">
+                    ✨ {es
+                        ? `Si dejas tu dinero en Ahorrar, el ${paydayName} ganas +${fmt(interestPreview)} de interés.`
+                        : `If you keep your money in Save, you'll earn +${fmt(interestPreview)} in interest on ${paydayName}.`}
+                </p>
+            )}
+            {showMatchPreview && (
+                <p class="text-sm text-brand-sun-deep font-semibold mt-2 bg-brand-sun/15 rounded-xl px-3 py-2">
+                    💪 {es
+                        ? `Has ahorrado desde tu último pago → tus papás pondrán +${fmt(pendingMatch)}.`
+                        : `You've saved since your last payday → your parents will add +${fmt(pendingMatch)}.`}
+                </p>
+            )}
+        </section>
+    )}
+
+    <!-- Actions -->
+    <section class="space-y-3">
+        <h2 class="text-sm font-bold text-brand-ink-soft uppercase tracking-wide px-1">
+            {es ? "Mover mi dinero" : "Move my money"}
+        </h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button type="button" data-bank-action="spend-save"
+                class="press flex items-center gap-3 bg-brand-mint text-brand-ink border-2 border-brand-ink rounded-[var(--radius-card)] px-4 py-3 font-bold shadow-[var(--shadow-card)] hover:-translate-y-0.5 active:translate-y-0 transition-transform text-left">
+                <span class="text-2xl">🐷</span>
+                <span class="text-sm">{es ? "Guardar en Ahorrar" : "Move to Save"}</span>
+            </button>
+            <button type="button" data-bank-action="spend-share"
+                class="press flex items-center gap-3 bg-brand-sun text-brand-ink border-2 border-brand-ink rounded-[var(--radius-card)] px-4 py-3 font-bold shadow-[var(--shadow-card)] hover:-translate-y-0.5 active:translate-y-0 transition-transform text-left">
+                <span class="text-2xl">💝</span>
+                <span class="text-sm">{es ? "Mover a Compartir" : "Move to Share"}</span>
+            </button>
+            {requiresApproval ? (
+                <button type="button" data-bank-action="save-withdrawal-request"
+                    class="press flex items-center gap-3 bg-brand-cream text-brand-ink border-2 border-brand-ink rounded-[var(--radius-card)] px-4 py-3 font-bold shadow-[var(--shadow-card)] hover:-translate-y-0.5 active:translate-y-0 transition-transform text-left">
+                    <span class="text-2xl">🙋</span>
+                    <span class="text-sm">{es ? "Pedir permiso para sacar de Ahorrar" : "Ask to withdraw from Save"}</span>
+                </button>
+            ) : (
+                <button type="button" data-bank-action="save-spend"
+                    class="press flex items-center gap-3 bg-brand-cream text-brand-ink border-2 border-brand-ink rounded-[var(--radius-card)] px-4 py-3 font-bold shadow-[var(--shadow-card)] hover:-translate-y-0.5 active:translate-y-0 transition-transform text-left">
+                    <span class="text-2xl">↩️</span>
+                    <span class="text-sm">{es ? "Sacar de Ahorrar" : "Withdraw from Save"}</span>
+                </button>
+            )}
+            <button type="button" data-bank-action="payout-request"
+                class="press flex items-center gap-3 bg-brand-coral text-brand-ink border-2 border-brand-ink rounded-[var(--radius-card)] px-4 py-3 font-bold shadow-[var(--shadow-card)] hover:-translate-y-0.5 active:translate-y-0 transition-transform text-left">
+                <span class="text-2xl">💵</span>
+                <span class="text-sm">{es ? "Pedir mi pago (Gastar)" : "Ask to be paid (Spend)"}</span>
+            </button>
+        </div>
+        <p class="text-xs text-brand-ink-soft px-1 pt-1">
+            {es
+                ? "Guardar y compartir es tuyo. Para sacar de Ahorrar o cobrar, tus papás lo autorizan."
+                : "Saving and sharing is all yours. To take money out of Save or cash out, your parents approve it."}
+        </p>
+    </section>
+
+    <!-- Move / request modal -->
+    <div id="bank-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+        <div class="bg-brand-cream rounded-t-3xl sm:rounded-[var(--radius-card)] w-full max-w-md p-6 border-2 border-brand-ink shadow-[var(--shadow-pop)]">
+            <div class="flex justify-between items-center mb-2">
+                <h2 id="bank-modal-title" class="text-lg font-bold text-brand-ink"></h2>
+                <button id="bank-modal-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
+            </div>
+            <p id="bank-modal-desc" class="text-xs text-brand-ink-soft mb-4"></p>
+            <label class="block text-sm font-medium text-brand-ink mb-1">{es ? "Cantidad ($MXN)" : "Amount ($MXN)"}</label>
+            <input id="bank-modal-amount" type="number" min="1" step="0.01" inputmode="decimal"
+                class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-lg text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep"
+                placeholder="0.00" />
+            <div id="bank-modal-reason-wrap" class="hidden mt-3">
+                <label class="block text-sm font-medium text-brand-ink mb-1">{es ? "¿Para qué? (opcional)" : "What for? (optional)"}</label>
+                <input id="bank-modal-reason" type="text" maxlength="200"
+                    class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep"
+                    placeholder={es ? "Ej: para un juego" : "e.g. for a game"} />
+            </div>
+            <div id="bank-modal-error" class="hidden text-sm text-red-600 mt-3"></div>
+            <button id="bank-modal-submit" type="button"
+                class="press w-full mt-4 py-3 bg-brand-mint-deep text-white font-bold rounded-xl border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint active:scale-[.99] transition-all">
+                {es ? "Confirmar" : "Confirm"}
+            </button>
+        </div>
+    </div>
+</PageLayout>
+
+<script>
+    import { mutate } from "../lib/mutate";
+    import { showToast } from "../lib/toast";
+
+    document.addEventListener("astro:page-load", () => {
+        const modal = document.getElementById("bank-modal");
+        if (!modal) return;
+        const es = document.documentElement.lang === "es";
+
+        const titleEl = document.getElementById("bank-modal-title") as HTMLElement;
+        const descEl = document.getElementById("bank-modal-desc") as HTMLElement;
+        const amountEl = document.getElementById("bank-modal-amount") as HTMLInputElement;
+        const reasonWrap = document.getElementById("bank-modal-reason-wrap") as HTMLElement;
+        const reasonEl = document.getElementById("bank-modal-reason") as HTMLInputElement;
+        const errEl = document.getElementById("bank-modal-error") as HTMLElement;
+        const submitBtn = document.getElementById("bank-modal-submit") as HTMLButtonElement;
+
+        // Kid's own user id — the transfer endpoint requires user_id in the body.
+        const myUserId = document.querySelector<HTMLElement>("[data-bank-me]")?.dataset.bankMe ?? "";
+
+        type ActionKind = "transfer" | "save-withdrawal-request" | "payout-request";
+        interface ActionCfg {
+            kind: ActionKind;
+            title: string;
+            desc: string;
+            reason?: boolean;
+            fromJar?: string;
+            toJar?: string;
+        }
+
+        const ACTIONS: Record<string, ActionCfg> = {
+            "spend-save": {
+                kind: "transfer", fromJar: "spend", toJar: "save",
+                title: es ? "Guardar en Ahorrar 🐷" : "Move to Save 🐷",
+                desc: es ? "Mueve dinero de Gastar a Ahorrar. ¡Ahorrar es tuyo!" : "Move money from Spend to Save. Saving is all yours!",
+            },
+            "spend-share": {
+                kind: "transfer", fromJar: "spend", toJar: "share",
+                title: es ? "Mover a Compartir 💝" : "Move to Share 💝",
+                desc: es ? "Mueve dinero de Gastar a Compartir." : "Move money from Spend to Share.",
+            },
+            "save-spend": {
+                kind: "transfer", fromJar: "save", toJar: "spend",
+                title: es ? "Sacar de Ahorrar ↩️" : "Withdraw from Save ↩️",
+                desc: es ? "Regresa dinero de Ahorrar a Gastar." : "Move money from Save back to Spend.",
+            },
+            "save-withdrawal-request": {
+                kind: "save-withdrawal-request", reason: true,
+                title: es ? "Pedir permiso 🙋" : "Ask to withdraw 🙋",
+                desc: es ? "Le avisaremos a tus papás para que autoricen sacar de tu Ahorro." : "We'll let your parents know so they can approve taking money out of Save.",
+            },
+            "payout-request": {
+                kind: "payout-request",
+                title: es ? "Pedir mi pago 💵" : "Ask to be paid 💵",
+                desc: es ? "Le avisaremos a tus papás que quieres que te paguen de tu Gastar." : "We'll let your parents know you'd like to be paid from your Spend jar.",
+            },
+        };
+
+        let current: ActionCfg | null = null;
+
+        const jarEl = (jar: string) => document.querySelector<HTMLElement>(`[data-jar-balance="${jar}"]`);
+        const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+        const setJar = (jar: string, cents: number) => { const el = jarEl(jar); if (el) el.textContent = fmt(cents); };
+
+        function openModal(key: string) {
+            const cfg = ACTIONS[key];
+            if (!cfg) return;
+            current = cfg;
+            titleEl.textContent = cfg.title;
+            descEl.textContent = cfg.desc;
+            amountEl.value = "";
+            reasonEl.value = "";
+            reasonWrap.classList.toggle("hidden", !cfg.reason);
+            errEl.classList.add("hidden");
+            submitBtn.disabled = false;
+            modal!.classList.remove("hidden");
+            setTimeout(() => amountEl.focus(), 50);
+        }
+        function closeModal() {
+            modal!.classList.add("hidden");
+            current = null;
+        }
+
+        document.querySelectorAll<HTMLElement>("[data-bank-action]").forEach((btn) => {
+            btn.addEventListener("click", () => openModal(btn.dataset.bankAction!));
+        });
+        document.getElementById("bank-modal-close")?.addEventListener("click", closeModal);
+        modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+        function showError(msg: string) {
+            errEl.textContent = msg;
+            errEl.classList.remove("hidden");
+        }
+
+        submitBtn.addEventListener("click", async () => {
+            if (!current) return;
+            const pesos = parseFloat(amountEl.value);
+            if (isNaN(pesos) || pesos <= 0) {
+                showError(es ? "Escribe una cantidad válida." : "Enter a valid amount.");
+                return;
+            }
+            const cents = Math.round(pesos * 100);
+            submitBtn.disabled = true;
+
+            if (current.kind === "transfer") {
+                const res = await mutate("/api/bank/transfer", {
+                    body: { user_id: myUserId, from_jar: current.fromJar, to_jar: current.toJar, amount_cents: cents },
+                    errorFallback: es ? "No se pudo mover el dinero" : "Could not move the money",
+                });
+                if (res) {
+                    const jb = await res.json().catch(() => null);
+                    if (jb) {
+                        setJar("spend", jb.spend_cents);
+                        setJar("save", jb.save_cents);
+                        setJar("share", jb.share_cents);
+                        const totalEl = document.querySelector<HTMLElement>("[data-total-balance]");
+                        if (totalEl) totalEl.innerHTML = `${fmt(jb.total_cents)}<span class="text-base font-semibold"> MXN</span>`;
+                    }
+                    closeModal();
+                    showToast(es ? "¡Listo! Dinero movido 🎉" : "Done! Money moved 🎉", "success");
+                } else {
+                    submitBtn.disabled = false;
+                }
+            } else if (current.kind === "save-withdrawal-request") {
+                const res = await mutate("/api/bank/requests/save-withdrawal", {
+                    body: { amount_cents: cents, reason: reasonEl.value.trim() || null },
+                    errorFallback: es ? "No se pudo enviar" : "Could not send",
+                });
+                if (res) {
+                    closeModal();
+                    showToast(es ? "¡Enviado a tus papás! 🙋" : "Sent to your parents! 🙋", "success");
+                } else {
+                    submitBtn.disabled = false;
+                }
+            } else if (current.kind === "payout-request") {
+                const res = await mutate("/api/bank/requests/payout", {
+                    body: { amount_cents: cents },
+                    errorFallback: es ? "No se pudo enviar" : "Could not send",
+                });
+                if (res) {
+                    closeModal();
+                    showToast(es ? "¡Enviado a tus papás! 💵" : "Sent to your parents! 💵", "success");
+                } else {
+                    submitBtn.disabled = false;
+                }
+            }
+        });
+    });
+</script>

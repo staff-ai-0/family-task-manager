@@ -1,0 +1,213 @@
+---
+/**
+ * Inline budget-account create modal (P1-W3 budget cold-start fix).
+ *
+ * Shipped with FABModal so every page with the quick-expense FAB can create
+ * an account without a detour to /budget/settings. Openers:
+ *  - any element with [data-open-account-modal] (e.g. the /budget empty-state
+ *    card); set data-open-account-modal="reload" to reload the page after a
+ *    successful create.
+ *  - the FAB account <select>'s "+ New account" option (FABModal wires this).
+ *
+ * On success dispatches `ftm:account-created` on document with
+ * { id, name, source } so openers can update in place.
+ */
+
+interface Props {
+    lang: "en" | "es";
+}
+
+const { lang } = Astro.props;
+const es = lang === "es";
+
+// Values must match AccountBase.validate_type (backend/app/schemas/budget.py):
+// checking | savings | credit | investment | loan | other. "Efectivo" (very
+// common in MX) maps to "other" — there is no dedicated cash type.
+const ACCOUNT_TYPES = [
+    { value: "checking", label: es ? "Cheques / débito" : "Checking" },
+    { value: "savings", label: es ? "Ahorros" : "Savings" },
+    { value: "credit", label: es ? "Tarjeta de crédito" : "Credit card" },
+    { value: "other", label: es ? "Efectivo u otra" : "Cash or other" },
+    { value: "investment", label: es ? "Inversión" : "Investment" },
+    { value: "loan", label: es ? "Préstamo" : "Loan" },
+];
+
+const errName = es ? "El nombre es requerido" : "Name is required";
+const errSave = es ? "No se pudo crear la cuenta" : "Could not create the account";
+---
+
+<!-- Backdrop + centered dialog (above the FAB sheet: z-55/60 vs 40/50) -->
+<div
+    id="acct-modal-backdrop"
+    class="fixed inset-0 bg-black/50 z-[55] hidden"
+></div>
+<div
+    id="acct-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="acct-modal-title"
+    class="fixed inset-0 z-[60] hidden items-center justify-center px-4"
+>
+    <div class="w-full max-w-sm bg-brand-cream rounded-2xl shadow-[var(--shadow-stamp)] p-5">
+        <div class="flex items-center justify-between mb-4">
+            <h2 id="acct-modal-title" class="text-lg font-semibold text-brand-ink">
+                🏦 {es ? "Nueva cuenta" : "New account"}
+            </h2>
+            <button
+                type="button"
+                id="acct-modal-close"
+                class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none"
+                aria-label={es ? "Cerrar" : "Close"}
+            >×</button>
+        </div>
+
+        <div class="mb-3">
+            <label for="acct-name" class="block text-sm font-medium text-brand-ink-soft mb-1">
+                {es ? "Nombre" : "Name"} *
+            </label>
+            <input
+                id="acct-name"
+                type="text"
+                placeholder={es ? "Ej. BBVA débito" : "e.g. Main checking"}
+                class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none text-sm"
+            />
+        </div>
+
+        <div class="mb-3">
+            <label for="acct-type" class="block text-sm font-medium text-brand-ink-soft mb-1">
+                {es ? "Tipo" : "Type"} *
+            </label>
+            <select
+                id="acct-type"
+                class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none text-sm bg-brand-cream"
+            >
+                {ACCOUNT_TYPES.map((t) => (
+                    <option value={t.value}>{t.label}</option>
+                ))}
+            </select>
+        </div>
+
+        <div class="mb-4">
+            <label for="acct-balance" class="block text-sm font-medium text-brand-ink-soft mb-1">
+                {es ? "Balance inicial ($)" : "Starting balance ($)"}
+            </label>
+            <input
+                id="acct-balance"
+                type="number"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="0.00"
+                class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none text-sm"
+            />
+            <p class="text-xs text-brand-ink-soft mt-1">
+                {es ? "Lo que hay en la cuenta hoy (opcional)." : "What's in the account today (optional)."}
+            </p>
+        </div>
+
+        <div id="acct-modal-error" class="hidden text-sm text-red-600 mb-3"></div>
+
+        <button
+            type="button"
+            id="acct-modal-save"
+            class="w-full py-3 bg-brand-sky-deep hover:bg-brand-ink active:scale-[0.98] text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition-all duration-150"
+        >
+            {es ? "Crear cuenta" : "Create account"}
+        </button>
+    </div>
+</div>
+
+<script define:vars={{ errName, errSave }}>
+(function initAccountCreateModal() {
+    const backdrop = document.getElementById("acct-modal-backdrop");
+    const modal = document.getElementById("acct-modal");
+    const nameInput = document.getElementById("acct-name");
+    const typeSelect = document.getElementById("acct-type");
+    const balanceInput = document.getElementById("acct-balance");
+    const errorDiv = document.getElementById("acct-modal-error");
+    const saveBtn = document.getElementById("acct-modal-save");
+    const closeBtn = document.getElementById("acct-modal-close");
+
+    if (!backdrop || !modal || !saveBtn) return;
+
+    // Where the open request came from ("reload" | "fab" | "" ...). Echoed in
+    // the ftm:account-created event so each opener reacts appropriately.
+    let openSource = "";
+
+    function openModal(source) {
+        openSource = source || "";
+        if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+        backdrop.classList.remove("hidden");
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+        setTimeout(() => nameInput?.focus(), 50);
+    }
+
+    function closeModal() {
+        backdrop.classList.add("hidden");
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+        if (nameInput) nameInput.value = "";
+        if (balanceInput) balanceInput.value = "";
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = saveBtn.dataset.originalText || saveBtn.textContent; }
+    }
+
+    // Expose for programmatic openers (FABModal's "+ New account" option).
+    window.ftmOpenAccountModal = openModal;
+
+    document.querySelectorAll("[data-open-account-modal]").forEach((el) => {
+        el.addEventListener("click", () =>
+            openModal(el.getAttribute("data-open-account-modal") || "")
+        );
+    });
+
+    backdrop.addEventListener("click", closeModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeModal);
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !modal.classList.contains("hidden")) closeModal();
+    });
+
+    saveBtn.dataset.originalText = saveBtn.textContent;
+    saveBtn.addEventListener("click", async () => {
+        if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+        const name = (nameInput?.value || "").trim();
+        if (!name) {
+            if (errorDiv) { errorDiv.textContent = errName; errorDiv.classList.remove("hidden"); }
+            return;
+        }
+        saveBtn.disabled = true;
+        saveBtn.textContent = "…";
+        try {
+            const body = { name, type: typeSelect?.value || "checking" };
+            const bal = parseFloat(balanceInput?.value || "0");
+            if (bal) body.starting_balance = Math.round(bal * 100);
+            // Same-origin proxy injects the httpOnly access_token cookie.
+            const res = await fetch("/api/budget/accounts/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || errSave);
+            }
+            const account = await res.json();
+            const source = openSource;
+            closeModal();
+            document.dispatchEvent(new CustomEvent("ftm:account-created", {
+                detail: { id: account.id, name: account.name, source },
+            }));
+            if (source === "reload") window.location.reload();
+        } catch (err) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = saveBtn.dataset.originalText;
+            if (errorDiv) {
+                errorDiv.textContent = (err && err.message) || errSave;
+                errorDiv.classList.remove("hidden");
+            }
+        }
+    });
+
+    // Re-init on Astro page swap (View Transitions) — same pattern as FABModal.
+    document.addEventListener("astro:after-swap", initAccountCreateModal);
+})();
+</script>

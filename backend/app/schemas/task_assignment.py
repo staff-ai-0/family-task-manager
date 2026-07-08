@@ -66,6 +66,7 @@ class TaskAssignmentWithDetails(TaskAssignmentResponse):
     template_description_es: Optional[str] = None
     template_points: int = 0
     template_is_bonus: bool = False
+    template_requires_proof: bool = False
     assigned_user_name: str = ""
     is_overdue: bool = False
     can_complete: bool = True
@@ -141,6 +142,7 @@ class GigApprovalRow(BaseModel):
     assignment_id: UUID
     template_id: UUID
     template_title: str
+    template_is_bonus: bool = True
     points: int
     assigned_to: UUID
     assigned_to_name: str

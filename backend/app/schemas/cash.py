@@ -19,6 +19,7 @@ class CashTxn(BaseModel):
     type: str
     amount_cents: int
     balance_after: int
+    jar: str = "spend"
     description: Optional[str] = None
     created_at: datetime
 
@@ -27,6 +28,9 @@ class CashTxn(BaseModel):
 
 class PayoutRequest(BaseModel):
     amount_cents: int = Field(..., gt=0)
+    # Which jar to debit (Family Bank). Default 'spend'; 'share' settles the
+    # Share pledge. Validated against that jar's balance by CashService.
+    jar: str = "spend"
 
 
 class AdjustRequest(BaseModel):

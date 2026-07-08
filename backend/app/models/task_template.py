@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Integer,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Text,
@@ -47,6 +48,20 @@ class GigMode(str, Enum):
     ROTATION = "rotation"
     COMPETITION = "competition"
     COLLABORATION = "collaboration"
+
+
+class RecurrenceMode(str, Enum):
+    """How occurrences of a template are generated.
+
+    - weekly:           existing weekday expansion by the weekly shuffle
+                        (interval_days within the week).
+    - since_completion: 'every N days since last completion' — a new
+                        assignment spawns recur_every_n_days days after the
+                        last completed one (hourly sweep; excluded from the
+                        weekly shuffle).
+    """
+    WEEKLY = "weekly"
+    SINCE_COMPLETION = "since_completion"
 
 
 EFFORT_MULTIPLIERS: dict[int, float] = {1: 1.0, 2: 1.5, 3: 2.0}
@@ -106,6 +121,36 @@ class TaskTemplate(Base):
 
     # Scheduling: how often per week (1=daily, 3=every 3 days, 7=weekly)
     interval_days = Column(Integer, nullable=False, default=1)
+
+    # Recurrence mode (W4.2). 'weekly' = classic weekday expansion above;
+    # 'since_completion' = spawn a fresh assignment recur_every_n_days days
+    # after the last completion (excluded from the weekly shuffle).
+    recurrence_mode = Column(
+        String(16), nullable=False, default=RecurrenceMode.WEEKLY.value,
+        server_default=RecurrenceMode.WEEKLY.value,
+    )
+    recur_every_n_days = Column(Integer, nullable=True)
+
+    # Photo proof (W4.3). When True the assignee must attach a photo on
+    # completion and the completion enters the parent approval queue —
+    # points credit only on approval (mandatory chores included).
+    requires_proof = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    # Persisted round-robin state for assignment_type='rotate' (W4.1).
+    # rotation_cursor = the NEXT start index into assigned_user_ids after the
+    # week in rotation_week_of (start used + occurrences generated, captured
+    # at shuffle time so a later interval_days change cannot corrupt the
+    # continuation). Re-shuffling the same week backs out this week's
+    # occurrences to reuse the same start (deterministic); shuffling another
+    # week continues from the stored cursor. For 'since_completion' templates
+    # the cursor simply advances by one per spawned occurrence
+    # (rotation_week_of unused).
+    rotation_cursor = Column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    rotation_week_of = Column(Date, nullable=True)
 
     # Assignment configuration
     assignment_type = Column(

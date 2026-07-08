@@ -83,7 +83,12 @@ for (const a of assignmentList) {
     assignmentsByUser[name].push(a);
 }
 
-function freqLabel(interval: number): string {
+function freqLabel(tmpl: any): string {
+    if (tmpl.recurrence_mode === "since_completion") {
+        const n = tmpl.recur_every_n_days ?? 1;
+        return lang === "es" ? `c/${n}d al terminar` : `every ${n}d after done`;
+    }
+    const interval = tmpl.interval_days;
     if (interval === 1) return t(lang, "pt_daily") as string;
     if (interval === 7) return t(lang, "pt_weekly") as string;
     return (t(lang, "pt_every_n_days") as any)(interval);
@@ -200,8 +205,13 @@ function freqLabel(interval: number): string {
                                                 {tmpl.is_bonus ? t(lang, "pt_bonus") : t(lang, "pt_regular")}
                                             </span>
                                             <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-cream-deep text-brand-ink-soft">
-                                                {freqLabel(tmpl.interval_days)}
+                                                {freqLabel(tmpl)}
                                             </span>
+                                            {tmpl.requires_proof && (
+                                                <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-sky/15 text-brand-sky-deep" title={lang === "es" ? "Requiere foto de evidencia" : "Requires photo proof"}>
+                                                    📸 {lang === "es" ? "Foto" : "Photo"}
+                                                </span>
+                                            )}
                                             {tmpl.assignment_type && tmpl.assignment_type !== 'auto' && (
                                                 <span class={`text-xs font-medium px-2 py-0.5 rounded-full ${
                                                     tmpl.assignment_type === 'fixed' 

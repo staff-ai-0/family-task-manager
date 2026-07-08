@@ -47,9 +47,35 @@ class GigOfferingResponse(BaseModel):
     category: str
     allowed_roles: Optional[List[str]]
     is_active: bool
+    status: str = "approved"
+    review_notes: Optional[str] = None
+    created_by: Optional[UUID] = None
 
     class Config:
         from_attributes = True
+
+
+class GigProposalCreate(BaseModel):
+    """Kid-proposed gig draft (W4.4). Kept intentionally small: title + the
+    suggested pay; parents can edit on approval."""
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    points: int = Field(..., gt=0, le=1000, description="Suggested pay in $MXN (1 pt = $1)")
+    difficulty: int = Field(1, ge=1, le=3)
+    category: str = "other"
+
+
+class GigProposalReview(BaseModel):
+    approve: bool
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    points: Optional[int] = Field(None, gt=0, le=1000)
+    notes: Optional[str] = Field(None, max_length=500)
+
+
+class GigProposalRow(BaseModel):
+    offering: GigOfferingResponse
+    proposer_name: str = ""
 
 
 class GigClaimResponse(BaseModel):
@@ -132,6 +158,7 @@ async def update_offering(
         db,
         offering_id=offering_id,
         family_id=to_uuid_required(current_user.family_id),
+        acting_user_id=to_uuid_required(current_user.id),
         **{k: v for k, v in data.model_dump().items() if v is not None},
     )
     return offering
@@ -148,6 +175,87 @@ async def deactivate_offering(
         offering_id=offering_id,
         family_id=to_uuid_required(current_user.family_id),
     )
+
+
+# ── Kid-proposed gigs (W4.4) ─────────────────────────────────────────────────
+# NOTE: registered before the {offering_id}-parameterized claim route so the
+# literal 'proposals' segment can never be swallowed by a UUID param.
+
+@router.post("/offerings/propose", response_model=GigOfferingResponse, status_code=status.HTTP_201_CREATED)
+async def propose_offering(
+    data: GigProposalCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """TEEN/CHILD proposes a gig. Lands as a DRAFT awaiting parent review —
+    parents are notified; it is not claimable until approved."""
+    from app.models.user import UserRole
+    if current_user.role == UserRole.PARENT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Los padres crean gigs directamente, no propuestas",
+        )
+    offering = await GigOfferingService.propose(
+        db,
+        family_id=to_uuid_required(current_user.family_id),
+        created_by=to_uuid_required(current_user.id),
+        **data.model_dump(),
+    )
+    return offering
+
+
+@router.get("/offerings/proposals/mine", response_model=List[GigOfferingResponse])
+async def my_proposals(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The caller's own pending/rejected proposals (approved ones show on the
+    board itself)."""
+    return await GigOfferingService.list_my_proposals(
+        db,
+        family_id=to_uuid_required(current_user.family_id),
+        user_id=to_uuid_required(current_user.id),
+    )
+
+
+@router.get("/offerings/proposals/pending", response_model=List[GigProposalRow])
+async def pending_proposals(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    items = await GigOfferingService.list_pending_proposals(
+        db, family_id=to_uuid_required(current_user.family_id)
+    )
+    return [
+        GigProposalRow(
+            offering=GigOfferingResponse.model_validate(item["offering"]),
+            proposer_name=item["proposer_name"],
+        )
+        for item in items
+    ]
+
+
+@router.post("/offerings/{offering_id}/review", response_model=GigOfferingResponse)
+async def review_proposal(
+    offering_id: UUID,
+    data: GigProposalReview,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parent approves (optionally editing title/description/points) or
+    rejects a kid proposal. The kid is notified either way."""
+    offering = await GigOfferingService.review_proposal(
+        db,
+        offering_id=offering_id,
+        family_id=to_uuid_required(current_user.family_id),
+        reviewer_id=to_uuid_required(current_user.id),
+        approve=data.approve,
+        title=data.title,
+        description=data.description,
+        points=data.points,
+        notes=data.notes,
+    )
+    return offering
 
 
 # ── Claim endpoints ──────────────────────────────────────────────────────────

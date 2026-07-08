@@ -84,6 +84,9 @@ class OfferingAdapter(ServiceAdapter):
             ctx.db,
             offering_id=entity_id,
             family_id=ctx.family_id,
+            # Activating a pending/rejected kid proposal through this path is
+            # an implicit approval — stamp who did it (see service).
+            acting_user_id=ctx.user_id,
             **{k: v for k, v in data.items() if v is not None},
         )
         return _ser_offering(offering)

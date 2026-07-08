@@ -6,7 +6,7 @@ Business logic for task assignments, weekly shuffle, completion, and bonus gatin
 
 import random
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, delete as sql_delete
+from sqlalchemy import select, and_, or_, func, delete as sql_delete
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime, date, timedelta, timezone
@@ -109,12 +109,22 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         db: AsyncSession, family_id: UUID
     ) -> tuple[list[TaskTemplate], list[TaskTemplate], list[User]]:
         """Fetch regular templates, bonus templates, and participating members
-        (active AND parent-approved — see _participating_member_clause)."""
+        (active AND parent-approved — see _participating_member_clause).
+
+        Templates with recurrence_mode='since_completion' are excluded — they
+        spawn via spawn_interval_assignments (N days after last completion),
+        not via the weekly expansion.
+        """
+        weekly_only = func.coalesce(
+            TaskTemplate.recurrence_mode, "weekly"
+        ) != "since_completion"
+
         regular_query = select(TaskTemplate).where(
             and_(
                 TaskTemplate.family_id == family_id,
                 TaskTemplate.is_active == True,
                 TaskTemplate.is_bonus == False,
+                weekly_only,
             )
         )
         regular_templates = list((await db.execute(regular_query)).scalars().all())
@@ -124,6 +134,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 TaskTemplate.family_id == family_id,
                 TaskTemplate.is_active == True,
                 TaskTemplate.is_bonus == True,
+                weekly_only,
             )
         )
         bonus_templates = list((await db.execute(bonus_query)).scalars().all())
@@ -179,6 +190,55 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         return carry
 
     @staticmethod
+    def _occurrences_per_week(interval_days: int) -> int:
+        """Number of dates _expand_dates yields for a week (depends only on
+        the interval): 1→7, 2→4, 3→3, 4→2, 5→2, 6→2, 7→1."""
+        anchor = date(2026, 1, 5)  # any Monday
+        return len(TaskAssignmentService._expand_dates(anchor, max(1, interval_days)))
+
+    @staticmethod
+    def _rotation_start_for_week(template: TaskTemplate, week_monday: date) -> int:
+        """Starting rotation offset for a ROTATE template in a given week.
+
+        Persisted state: (rotation_week_of, rotation_cursor) = the week last
+        shuffled and the NEXT start offset after it (start actually used +
+        occurrences actually generated, both captured at shuffle time — see
+        shuffle_tasks). Storing the post-week cursor means continuity never
+        re-derives the past week's occurrence count from the template's
+        CURRENT interval_days, so a parent changing the frequency between
+        weeks (e.g. daily → weekly) cannot skip or repeat a kid. Semantics:
+        - never shuffled → 0;
+        - same week again → cursor minus THIS week's occurrences (backs out
+          to the same start, so a re-shuffle is deterministic while the
+          interval is unchanged; clamped at 0 if the interval shrank);
+        - any other week → cursor as stored (rotation continues where the
+          last shuffled week left off).
+        The value is an absolute counter; callers mod by len(eligible).
+        """
+        if template.rotation_week_of is None:
+            return 0
+        if template.rotation_week_of == week_monday:
+            occurrences = TaskAssignmentService._occurrences_per_week(
+                template.interval_days or 1
+            )
+            return max(0, int(template.rotation_cursor or 0) - occurrences)
+        return int(template.rotation_cursor or 0)
+
+    @staticmethod
+    def _rotation_eligible(
+        template: TaskTemplate, members: list[User]
+    ) -> list[User]:
+        """Members eligible for a ROTATE template, in assigned_user_ids order
+        (parent-defined, stable) — NOT the shuffled member order, so the
+        round-robin sequence is deterministic across shuffles and weeks."""
+        by_id = {str(m.id): m for m in members}
+        return [
+            by_id[uid]
+            for uid in (template.assigned_user_ids or [])
+            if uid in by_id
+        ]
+
+    @staticmethod
     def _compute_assignments(
         rng: random.Random,
         family_id: UUID,
@@ -187,6 +247,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         bonus_templates: list[TaskTemplate],
         members: list[User],
         member_carry: Optional[dict[UUID, int]] = None,
+        rotation_starts: Optional[dict[UUID, int]] = None,
     ) -> tuple[list[TaskAssignment], dict[UUID, int]]:
         """
         Pure builder — produces TaskAssignment instances WITHOUT db.add/commit.
@@ -210,7 +271,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         totals: dict[UUID, int] = {m.id: 0 for m in members}
 
         regular_templates = sorted(regular_templates, key=lambda t: t.points, reverse=True)
-        rotation_state: dict[UUID, int] = {}
+        rotation_starts = rotation_starts or {}
         assignments: list[TaskAssignment] = []
 
         def _new_assignment(template_id: UUID, user_id: UUID, d: date) -> TaskAssignment:
@@ -254,10 +315,12 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             elif template.assignment_type == AssignmentType.ROTATE:
                 if not template.assigned_user_ids:
                     continue
-                eligible_members = [m for m in members if str(m.id) in template.assigned_user_ids]
+                # assigned_user_ids order (stable), not shuffled member order
+                eligible_members = TaskAssignmentService._rotation_eligible(
+                    template, members
+                )
                 if not eligible_members:
                     continue
-                rotation_state.setdefault(template.id, 0)
 
             if template.interval_days == 7:
                 task_dates = week_dates
@@ -273,12 +336,19 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     _credit(fixed_user.id, d, template.points)
 
             elif template.assignment_type == AssignmentType.ROTATE:
-                for d in task_dates:
-                    idx = rotation_state[template.id]
-                    chosen = eligible_members[idx % len(eligible_members)]
+                # ONE occurrence per recurrence date (weekly → exactly one,
+                # not one per weekday) — duplicates here were the Chorsee
+                # failure mode. Start offset comes from the persisted cursor
+                # so the rotation continues across weeks and is identical on
+                # a same-week re-shuffle.
+                rotate_dates = TaskAssignmentService._expand_dates(
+                    week_monday, template.interval_days
+                )
+                start = rotation_starts.get(template.id, 0)
+                for i, d in enumerate(rotate_dates):
+                    chosen = eligible_members[(start + i) % len(eligible_members)]
                     assignments.append(_new_assignment(template.id, chosen.id, d))
                     _credit(chosen.id, d, template.points)
-                    rotation_state[template.id] += 1
 
             else:  # AUTO
                 if template.interval_days == 7:
@@ -394,12 +464,33 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         rng = random.Random(f"{family_id}:{week_monday.isoformat()}")
 
-        # Delete existing PENDING rows for this week (preserves completed/overdue/cancelled)
+        # Persisted rotation cursors: same week → same start (idempotent
+        # re-shuffle); a new week continues after the stored week's end.
+        rotation_starts = {
+            t.id: TaskAssignmentService._rotation_start_for_week(t, week_monday)
+            for t in regular_templates
+            if t.assignment_type == AssignmentType.ROTATE
+        }
+
+        # Delete existing PENDING rows for this week (preserves completed/
+        # overdue/cancelled). Interval-mode ('since_completion') templates are
+        # NOT re-expanded by the shuffle (they spawn via
+        # spawn_interval_assignments), so their open rows must survive a
+        # (re-)shuffle — deleting them here silently vanished the chore until
+        # the next hourly sweep and double-advanced the rotation cursor.
+        interval_template_ids = select(TaskTemplate.id).where(
+            and_(
+                TaskTemplate.family_id == family_id,
+                func.coalesce(TaskTemplate.recurrence_mode, "weekly")
+                == "since_completion",
+            )
+        )
         delete_stmt = sql_delete(TaskAssignment).where(
             and_(
                 TaskAssignment.family_id == family_id,
                 TaskAssignment.week_of == week_monday,
                 TaskAssignment.status == AssignmentStatus.PENDING,
+                TaskAssignment.template_id.not_in(interval_template_ids),
             )
         )
         await db.execute(delete_stmt)
@@ -412,7 +503,22 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             bonus_templates,
             members,
             member_carry=carry,
+            rotation_starts=rotation_starts,
         )
+
+        # Persist the rotation state actually used for this week so the next
+        # shuffle continues the round-robin instead of restarting at 0.
+        # rotation_cursor stores the NEXT start (start used + occurrences
+        # generated NOW, with the interval as it was at shuffle time), so a
+        # later interval change can't corrupt the continuation offset.
+        for t in regular_templates:
+            if t.id in rotation_starts:
+                t.rotation_week_of = week_monday
+                t.rotation_cursor = rotation_starts[
+                    t.id
+                ] + TaskAssignmentService._occurrences_per_week(
+                    t.interval_days or 1
+                )
 
         for a in assignments:
             db.add(a)
@@ -467,6 +573,13 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         )
 
         rng = random.Random(f"{family_id}:{week_monday.isoformat()}")
+        # Same rotation starts as a real shuffle would use — but NOT persisted
+        # (preview must be side-effect free).
+        rotation_starts = {
+            t.id: TaskAssignmentService._rotation_start_for_week(t, week_monday)
+            for t in regular_templates
+            if t.assignment_type == AssignmentType.ROTATE
+        }
         assignments, totals = TaskAssignmentService._compute_assignments(
             rng,
             family_id,
@@ -475,6 +588,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             bonus_templates,
             members,
             member_carry=carry,
+            rotation_starts=rotation_starts,
         )
 
         # Build lightweight detail dicts (no DB IDs since not persisted)
@@ -730,6 +844,12 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             if not proof_text or not proof_text.strip():
                 raise ValidationException("Gigs require proof text describing what you did")
 
+            if template.requires_proof and not proof_image_url:
+                raise ValidationException(
+                    "Esta tarea requiere una foto del trabajo terminado / "
+                    "This task requires a photo of the finished work"
+                )
+
             assignment.status = AssignmentStatus.COMPLETED
             assignment.completed_at = datetime.now(timezone.utc)
             assignment.proof_text = proof_text.strip()
@@ -801,6 +921,21 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 await PetService.on_task_completed(db, user_id, is_bonus=True)
             else:
                 assignment.approval_status = ApprovalStatus.PENDING
+        elif template.requires_proof:
+            # Mandatory chore WITH photo proof (W4.3): the kid must attach a
+            # photo; the completion parks in the parent approval queue and
+            # points credit only on approval (see approve_gig's mandatory
+            # branch). Rejection re-opens the assignment.
+            if not proof_image_url:
+                raise ValidationException(
+                    "Esta tarea requiere una foto del trabajo terminado / "
+                    "This task requires a photo of the finished work"
+                )
+            assignment.status = AssignmentStatus.COMPLETED
+            assignment.completed_at = datetime.now(timezone.utc)
+            assignment.proof_text = (proof_text or "").strip() or None
+            assignment.proof_image_url = proof_image_url
+            assignment.approval_status = ApprovalStatus.PENDING
         else:
             # Mandatory path — silent completion, awards privilege points
             # (no approval). Cash is reserved for gigs; chores credit points.
@@ -841,9 +976,11 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     "check_nudge after task auto-approve failed", exc_info=True
                 )
 
-        if not template.is_bonus:
+        if not template.is_bonus and assignment.approval_status != ApprovalStatus.PENDING:
             # Mandatory chores now grant privilege points, so a completion can
             # push a kid over a points-priced reward goal — nudge them.
+            # (Skipped for proof-required chores awaiting approval — no points
+            # moved yet; the nudge runs on approval instead.)
             try:
                 from app.services.reward_goal_service import RewardGoalService
                 refreshed = await get_user_by_id(db, user_id)
@@ -859,11 +996,11 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     "check_nudge after mandatory completion failed", exc_info=True
                 )
 
-        # Fire-and-forget notifications on gig submission. Failures are
-        # swallowed so the API response is never blocked by an upstream
-        # issue. Skip for auto-approved gigs — parents don't need a
-        # heads-up on something already credited.
-        if template.is_bonus and assignment.approval_status == ApprovalStatus.PENDING:
+        # Fire-and-forget notifications on submission for approval (gigs AND
+        # proof-required chores). Failures are swallowed so the API response
+        # is never blocked by an upstream issue. Skip for auto-approved gigs
+        # — parents don't need a heads-up on something already credited.
+        if assignment.approval_status == ApprovalStatus.PENDING:
             child = await get_user_by_id(db, user_id)
             try:
                 from app.services.email_service import EmailService
@@ -1169,31 +1306,43 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         assignment.approved_at = datetime.now(timezone.utc)
         assignment.approval_notes = notes
 
+        # Mandatory chores with requires_proof also flow through this queue —
+        # they award privilege points on approval (no gig cap, no trust
+        # streak, TASK_COMPLETED transaction), unlike bonus-task gigs.
+        is_bonus = bool(assignment.template.is_bonus)
+
         if approve:
-            # Enforce per-family monthly gig approval cap. Atomic increment
-            # prevents two concurrent approvals from slipping past the limit.
-            plan = await get_family_plan(db, parent)
-            limit = int(plan.limits.get("max_gigs_per_month", 3))
-            new_count = await UsageService.try_increment_within_limit(
-                db, family_id, "gig_completion", limit, amount=1,
-            )
-            if new_count is None:
-                raise ValidationException(
-                    f"Family has hit the monthly gig approval cap ({limit}). "
-                    "Upgrade to raise the cap."
+            if is_bonus:
+                # Enforce per-family monthly gig approval cap. Atomic increment
+                # prevents two concurrent approvals from slipping past the limit.
+                plan = await get_family_plan(db, parent)
+                limit = int(plan.limits.get("max_gigs_per_month", 3))
+                new_count = await UsageService.try_increment_within_limit(
+                    db, family_id, "gig_completion", limit, amount=1,
                 )
+                if new_count is None:
+                    raise ValidationException(
+                        f"Family has hit the monthly gig approval cap ({limit}). "
+                        "Upgrade to raise the cap."
+                    )
             assignment.approval_status = ApprovalStatus.APPROVED
-            pts = await TaskAssignmentService._award_assignment(
-                db, assignment, assignment.template, assignment.assigned_to
-            )
-            # Increment trust streak so the child graduates to
-            # auto-approval after enough consecutive approvals.
             child = await get_user_by_id(db, assignment.assigned_to)
-            child.gig_trust_streak += 1
+            if is_bonus:
+                pts = await TaskAssignmentService._award_assignment(
+                    db, assignment, assignment.template, assignment.assigned_to
+                )
+                # Increment trust streak so the child graduates to
+                # auto-approval after enough consecutive approvals.
+                child.gig_trust_streak += 1
+            else:
+                pts = assignment.template.effective_points
+                await PointsService.award_assignment_completion(
+                    db, assignment.assigned_to, assignment.id, pts
+                )
             from app.services.notification_service import NotificationService
             from app.services.pet_service import PetService
             await PetService.on_task_completed(
-                db, assignment.assigned_to, is_bonus=True
+                db, assignment.assigned_to, is_bonus=is_bonus
             )
             await db.commit()
             try:
@@ -1236,10 +1385,16 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             )
         else:
             assignment.approval_status = ApprovalStatus.REJECTED
-            # Reset trust streak — a rejection signals the child still
-            # needs review on subsequent gigs.
             child = await get_user_by_id(db, assignment.assigned_to)
-            child.gig_trust_streak = 0
+            if is_bonus:
+                # Reset trust streak — a rejection signals the child still
+                # needs review on subsequent gigs.
+                child.gig_trust_streak = 0
+            else:
+                # Proof-required chore rejected: re-open it so the kid must
+                # redo the work (and it blocks gigs again until done).
+                assignment.status = AssignmentStatus.PENDING
+                assignment.completed_at = None
             from app.services.notification_service import NotificationService
             await db.commit()
             await NotificationService.create_localized(
@@ -1602,6 +1757,220 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 )
             total += len(stale)
         await db.commit()
+        return total
+
+    # ─── Interval recurrence ('every N days since last completion') ───
+
+    @staticmethod
+    async def spawn_interval_assignments_for_family(
+        db: AsyncSession,
+        family_id: UUID,
+        today: Optional[date] = None,
+    ) -> List[TaskAssignment]:
+        """Spawn due assignments for recurrence_mode='since_completion'
+        templates of one family (W4.2).
+
+        Rules per template:
+        - Never spawn while an OPEN row (PENDING/CLAIMED/OVERDUE) exists —
+          an overdue interval chore stays on the board until done; no pile-up.
+        - Anchor = the later of (last completion date, last spawned
+          assigned_date). Next occurrence is due at anchor + N days. The
+          assigned_date term prevents a cancel → instant-respawn loop.
+        - First spawn (no rows at all) is due immediately.
+        - Assignee: FIXED → first of assigned_user_ids; ROTATE → round-robin
+          over assigned_user_ids via the persisted rotation_cursor; AUTO →
+          round-robin over eligible members (role-filtered, sorted by id)
+          via the same persisted cursor. Deterministic, no duplicates.
+
+        Idempotent per day: calling it again spawns nothing new (the spawned
+        row is open). Pass ``today`` to pin the date in tests.
+        """
+        from zoneinfo import ZoneInfo
+        from app.models.family import Family
+
+        family = await db.get(Family, family_id)
+        if family is None:
+            return []
+        try:
+            tz = ZoneInfo(family.timezone or "UTC")
+        except Exception:
+            tz = ZoneInfo("UTC")
+        if today is None:
+            today = datetime.now(tz).date()
+
+        templates = list((await db.execute(
+            select(TaskTemplate).where(
+                and_(
+                    TaskTemplate.family_id == family_id,
+                    TaskTemplate.is_active == True,  # noqa: E712
+                    func.coalesce(TaskTemplate.recurrence_mode, "weekly")
+                    == "since_completion",
+                )
+            )
+        )).scalars().all())
+        if not templates:
+            return []
+
+        members = list((await db.execute(
+            select(User).where(
+                and_(
+                    User.family_id == family_id,
+                    TaskAssignmentService._participating_member_clause(),
+                )
+            )
+        )).scalars().all())
+        if not members:
+            return []
+
+        created: list[TaskAssignment] = []
+        for tmpl in templates:
+            n_days = max(1, int(tmpl.recur_every_n_days or 1))
+
+            # Open row → nothing to do for this template. A proof-required
+            # completion still awaiting parent review (status=COMPLETED,
+            # approval_status=PENDING) counts as OPEN: if the parent rejects
+            # it, the row re-opens (status back to PENDING) — spawning the
+            # next occurrence meanwhile would leave two open rows for the
+            # same template.
+            open_count = (await db.execute(
+                select(func.count()).select_from(TaskAssignment).where(
+                    and_(
+                        TaskAssignment.template_id == tmpl.id,
+                        or_(
+                            TaskAssignment.status.in_([
+                                AssignmentStatus.PENDING,
+                                AssignmentStatus.CLAIMED,
+                                AssignmentStatus.OVERDUE,
+                            ]),
+                            and_(
+                                TaskAssignment.status
+                                == AssignmentStatus.COMPLETED,
+                                TaskAssignment.approval_status
+                                == ApprovalStatus.PENDING,
+                            ),
+                        ),
+                    )
+                )
+            )).scalar_one()
+            if open_count:
+                continue
+
+            last_completed_at = (await db.execute(
+                select(func.max(TaskAssignment.completed_at)).where(
+                    and_(
+                        TaskAssignment.template_id == tmpl.id,
+                        TaskAssignment.status == AssignmentStatus.COMPLETED,
+                    )
+                )
+            )).scalar()
+            max_assigned = (await db.execute(
+                select(func.max(TaskAssignment.assigned_date)).where(
+                    TaskAssignment.template_id == tmpl.id
+                )
+            )).scalar()
+
+            if max_assigned is None:
+                due = True  # never spawned — first occurrence is due now
+            else:
+                anchor = max_assigned
+                if last_completed_at is not None:
+                    completed_local = (
+                        last_completed_at.astimezone(tz).date()
+                        if last_completed_at.tzinfo
+                        else last_completed_at.date()
+                    )
+                    anchor = max(anchor, completed_local)
+                due = today >= anchor + timedelta(days=n_days)
+            if not due:
+                continue
+
+            # Resolve the assignee.
+            eligible = list(members)
+            allowed = tmpl.allowed_roles or None
+            if allowed:
+                allowed_lower = {r.lower() for r in allowed}
+                eligible = [
+                    m for m in eligible
+                    if (m.role.value if hasattr(m.role, "value") else str(m.role)).lower()
+                    in allowed_lower
+                ]
+            if tmpl.assignment_type in (AssignmentType.FIXED, AssignmentType.ROTATE):
+                eligible = TaskAssignmentService._rotation_eligible(tmpl, members)
+            else:
+                eligible = sorted(eligible, key=lambda m: str(m.id))
+            if not eligible:
+                continue
+
+            if tmpl.assignment_type == AssignmentType.FIXED:
+                chosen = eligible[0]
+            else:
+                # ROTATE and AUTO both round-robin on the persisted cursor —
+                # deterministic and fair across spawns.
+                cursor = int(tmpl.rotation_cursor or 0)
+                chosen = eligible[cursor % len(eligible)]
+                tmpl.rotation_cursor = cursor + 1
+
+            row = TaskAssignment(
+                template_id=tmpl.id,
+                assigned_to=chosen.id,
+                family_id=family_id,
+                status=AssignmentStatus.PENDING,
+                assigned_date=today,
+                week_of=TaskAssignmentService._get_monday(today),
+            )
+            db.add(row)
+            created.append(row)
+
+            try:
+                from app.services.notification_service import NotificationService
+                await NotificationService.create_localized_no_commit(
+                    db,
+                    family_id=family_id,
+                    key="task_assigned_one",
+                    user_id=chosen.id,
+                    params={"count": 1},
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "interval-spawn notification failed", exc_info=True
+                )
+
+        if created:
+            await db.commit()
+            for row in created:
+                await db.refresh(row)
+        return created
+
+    @staticmethod
+    async def spawn_interval_assignments(db: AsyncSession) -> int:
+        """Sweep across ALL families: spawn due 'since_completion'
+        assignments (family-local dates). Intended for the hourly background
+        loop, right after the overdue sweep."""
+        family_ids = [
+            fid for (fid,) in (await db.execute(
+                select(TaskTemplate.family_id).where(
+                    and_(
+                        TaskTemplate.is_active == True,  # noqa: E712
+                        func.coalesce(TaskTemplate.recurrence_mode, "weekly")
+                        == "since_completion",
+                    )
+                ).distinct()
+            )).all()
+        ]
+        total = 0
+        for fid in family_ids:
+            try:
+                total += len(
+                    await TaskAssignmentService.spawn_interval_assignments_for_family(
+                        db, fid
+                    )
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception(
+                    "interval spawn failed for family %s", fid
+                )
         return total
 
     @staticmethod

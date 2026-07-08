@@ -26,6 +26,16 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
     model = TaskTemplate
 
     @staticmethod
+    def _validate_recurrence(mode: str, every_n: int | None) -> None:
+        """since_completion mode needs its N; weekly ignores it."""
+        if mode == "since_completion":
+            if not every_n or not (1 <= int(every_n) <= 90):
+                raise ValidationException(
+                    "recur_every_n_days (1-90) is required when "
+                    "recurrence_mode=since_completion"
+                )
+
+    @staticmethod
     async def create_template(
         db: AsyncSession,
         data: TaskTemplateCreate,
@@ -36,6 +46,10 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
         # Validate interval_days is sensible
         if data.interval_days not in (1, 2, 3, 4, 5, 6, 7):
             raise ValidationException("interval_days must be between 1 and 7")
+
+        TaskTemplateService._validate_recurrence(
+            data.recurrence_mode, data.recur_every_n_days
+        )
 
         title_es = data.title_es
         description_es = data.description_es
@@ -68,6 +82,13 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
             points=data.points,
             effort_level=data.effort_level,
             interval_days=data.interval_days,
+            recurrence_mode=data.recurrence_mode,
+            recur_every_n_days=(
+                data.recur_every_n_days
+                if data.recurrence_mode == "since_completion"
+                else None
+            ),
+            requires_proof=data.requires_proof,
             assignment_type=data.assignment_type,
             assigned_user_ids=(
                 [str(u) for u in data.assigned_user_ids]
@@ -100,6 +121,23 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
             await db.commit()
         except Exception:
             logger.warning("onboarding advance task_created failed", exc_info=True)
+
+        # since_completion templates aren't part of the weekly shuffle — spawn
+        # the first assignment right away so the kid sees it today instead of
+        # waiting for the next hourly sweep. Best-effort.
+        if template.recurrence_mode == "since_completion" and template.is_active:
+            try:
+                from app.services.task_assignment_service import (
+                    TaskAssignmentService,
+                )
+                await TaskAssignmentService.spawn_interval_assignments_for_family(
+                    db, family_id
+                )
+            except Exception:
+                logger.warning(
+                    "initial interval spawn failed (family=%s)", family_id,
+                    exc_info=True,
+                )
         return template
 
     @staticmethod
@@ -142,6 +180,18 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
         if "interval_days" in update_fields:
             if update_fields["interval_days"] not in (1, 2, 3, 4, 5, 6, 7):
                 raise ValidationException("interval_days must be between 1 and 7")
+
+        # Validate the RESULTING recurrence combination (mode may come from
+        # the update while N stays on the row, or vice versa).
+        if "recurrence_mode" in update_fields or "recur_every_n_days" in update_fields:
+            current = await TaskTemplateService.get_by_id(db, template_id, family_id)
+            mode = update_fields.get("recurrence_mode", current.recurrence_mode)
+            every_n = update_fields.get(
+                "recur_every_n_days", current.recur_every_n_days
+            )
+            TaskTemplateService._validate_recurrence(mode, every_n)
+            if mode != "since_completion":
+                update_fields["recur_every_n_days"] = None
 
         # Normalize allowed_roles to lowercase strings (or None to clear)
         if "allowed_roles" in update_fields:

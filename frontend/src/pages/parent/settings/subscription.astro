@@ -13,7 +13,9 @@ if (!user) {
 }
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
-// Fetch subscription data in parallel
+// Fetch subscription data in parallel. Plans are fetched WITHOUT a currency
+// filter so we can tell which currencies are actually checkout-able (wired
+// to PayPal) before choosing a default or rendering the toggle.
 const [plansRes, currentRes, usageRes] = await Promise.all([
     apiFetch<any[]>("/api/subscriptions/plans", { token }),
     apiFetch<any>("/api/subscriptions/current", { token }),
@@ -24,10 +26,106 @@ const plans = plansRes.data ?? [];
 const current = currentRes.data;
 const usage = usageRes.data;
 
+// A currency is checkout-READY when it offers paid rows and every one of
+// them is wired to a PayPal plan (checkout_ready_monthly — the upgrade
+// buttons checkout monthly). Migration-seeded MXN rows start inactive (never
+// listed) until the operator wires them; this additionally guards rows that
+// are active but not (yet fully) wired.
+const PAID_TIERS = ["plus", "pro"];
+const paidPlans = plans.filter((p: any) => PAID_TIERS.includes(p.name));
+const rowCurrency = (p: any) => p.currency ?? "USD";
+const offeredCurrencies = [...new Set(paidPlans.map(rowCurrency))];
+const isCurrencyReady = (cur: string) => {
+    const rows = paidPlans.filter((p: any) => rowCurrency(p) === cur);
+    // Missing checkout_ready_* (older backend) → assume ready (legacy behavior).
+    return rows.length > 0 && rows.every((p: any) => p.checkout_ready_monthly !== false);
+};
+const readyCurrencies = ["MXN", "USD"].filter(
+    (c) => offeredCurrencies.includes(c) && isCurrencyReady(c),
+);
+
+// Currency selection — Mexico-first (MXN default) among READY currencies, so
+// users are never defaulted onto prices they cannot check out. An explicit
+// ?currency= is still honored; its upgrade buttons disable below if unwired.
+const requestedCurrency = Astro.url.searchParams.get("currency")?.toUpperCase();
+const validRequested =
+    requestedCurrency === "USD" || requestedCurrency === "MXN" ? requestedCurrency : null;
+const defaultCurrency =
+    readyCurrencies[0] ??
+    (offeredCurrencies.includes("MXN") ? "MXN" : offeredCurrencies[0] ?? "MXN");
+const selectedCurrency = validRequested ?? defaultCurrency;
+
+// Toggle pills: only checkout-ready currencies (plus the selected one so the
+// active pill always renders). A single option needs no toggle at all —
+// nobody should be able to switch onto un-checkout-able prices.
+const toggleCurrencies = ["MXN", "USD"].filter(
+    (c) => readyCurrencies.includes(c) || c === selectedCurrency,
+);
+const showCurrencyToggle = toggleCurrencies.length >= 2;
+// Preserve unrelated query params (e.g. ?cancelled=1 from a PayPal cancel
+// return) — only the currency key is replaced.
+const currencyHref = (cur: string) => {
+    const params = new URLSearchParams(Astro.url.searchParams);
+    params.set("currency", cur);
+    return `?${params.toString()}`;
+};
+
+// Resolve the paid tiers' price rows for the selected currency.
+const planForTier = (name: string) =>
+    plans.find((p: any) => p.name === name && rowCurrency(p) === selectedCurrency) ??
+    plans.find((p: any) => p.name === name);
+const plusPlan = planForTier("plus");
+const proPlan = planForTier("pro");
+
+// A tier is upgradeable only when its row matches the selected currency AND
+// is wired to PayPal — otherwise checkout would 404/501.
+const canCheckout = (plan: any) =>
+    Boolean(
+        plan &&
+        rowCurrency(plan) === selectedCurrency &&
+        plan.checkout_ready_monthly !== false,
+    );
+
+// Fallbacks if the currency's plan rows are missing (pre-migration DBs).
+// THIRD copy of the launch price constants — keep in sync with PLAN_PRICES
+// in backend/scripts/setup_paypal_plans.py and MXN_PRICES in
+// backend/migrations/versions/2026_07_08_mxn_plan_currency_w6.py.
+const fallbackCents: Record<string, Record<string, number>> = {
+    MXN: { plus_monthly: 9900, plus_annual: 99000, pro_monthly: 19900, pro_annual: 199000 },
+    USD: { plus_monthly: 500, plus_annual: 5000, pro_monthly: 1500, pro_annual: 15000 },
+};
+
+// 'MX$99' / 'US$5' style — Intl.NumberFormat es-MX renders both MXN and USD
+// as a bare '$', so prefix the country code to disambiguate the two pesos.
+function formatPrice(cents: number, currency: string): string {
+    const amount = cents / 100;
+    let s = new Intl.NumberFormat(lang === "es" ? "es-MX" : "en-US", {
+        style: "currency",
+        currency,
+        currencyDisplay: "narrowSymbol",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    }).format(amount);
+    if (currency === "MXN" && !s.includes("MX")) s = `MX${s}`;
+    if (currency === "USD" && !s.includes("US")) s = `US${s}`;
+    return s;
+}
+
+const price = (plan: any, cycle: "monthly" | "annual", tier: string) =>
+    formatPrice(
+        plan?.[`price_${cycle}_cents`] ?? fallbackCents[selectedCurrency][`${tier}_${cycle}`],
+        plan?.currency ?? selectedCurrency,
+    );
+
 const currentPlanName = (current?.plan?.name ?? current?.plan_name ?? "free").toLowerCase();
 const isActive = current?.status === "active";
 const isCancelled = current?.status === "cancelled";
 const isPaid = currentPlanName !== "free";
+// True when at least one rendered upgrade button is disabled because the
+// selected currency's row is not checkout-able — shows the explainer note.
+const upgradeUnavailable =
+    (currentPlanName === "free" && !canCheckout(plusPlan)) ||
+    (currentPlanName !== "pro" && !canCheckout(proPlan));
 const cancelAtPeriodEnd = Boolean(current?.cancel_at_period_end);
 const periodEndIso = current?.current_period_end ?? null;
 const periodEndLabel = periodEndIso
@@ -52,6 +150,8 @@ const i18n = {
         unlimited: "Unlimited",
         this_month: "this month",
         plan_comparison: "Plan Comparison",
+        one_membership: "One membership, the whole family",
+        currency_toggle: "Currency",
         feature: "Feature",
         free: "Free",
         plus: "Plus",
@@ -59,7 +159,7 @@ const i18n = {
         month: "/mo",
         year: "/yr",
         upgrade: "Upgrade",
-        coming_soon: "Coming soon — PayPal integration pending",
+        coming_soon: "Upgrades in this currency are coming soon — checkout is not available yet.",
         cancel: "Cancel Subscription",
         cancel_confirm: "Are you sure you want to cancel your subscription?",
         support_prompt: "Questions about your plan or billing? Email us at",
@@ -88,6 +188,8 @@ const i18n = {
         unlimited: "Ilimitado",
         this_month: "este mes",
         plan_comparison: "Comparaci\u00f3n de Planes",
+        one_membership: "Una membres\u00eda, toda la familia",
+        currency_toggle: "Moneda",
         feature: "Caracter\u00edstica",
         free: "Gratis",
         plus: "Plus",
@@ -95,7 +197,7 @@ const i18n = {
         month: "/mes",
         year: "/a\u00f1o",
         upgrade: "Mejorar Plan",
-        coming_soon: "Pr\u00f3ximamente \u2014 integraci\u00f3n con PayPal pendiente",
+        coming_soon: "Muy pronto podr\u00e1s mejorar tu plan en esta moneda \u2014 el pago a\u00fan no est\u00e1 disponible.",
         cancel: "Cancelar Suscripci\u00f3n",
         cancel_confirm: "\u00bfEst\u00e1s seguro de que quieres cancelar tu suscripci\u00f3n?",
         support_prompt: "\u00bfDudas sobre tu plan o facturaci\u00f3n? Escr\u00edbenos a",
@@ -249,7 +351,23 @@ function cellClass(value: any): string {
 
             <!-- Plan Comparison Table -->
             <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 overflow-x-auto">
-                <h2 class="text-lg font-bold text-brand-ink mb-4">{l.plan_comparison}</h2>
+                <div class="flex flex-wrap items-start justify-between gap-2 mb-1">
+                    <h2 class="text-lg font-bold text-brand-ink">{l.plan_comparison}</h2>
+                    {showCurrencyToggle && (
+                        <div class="flex items-center gap-1 bg-brand-cream-deep rounded-full p-1" role="group" aria-label={l.currency_toggle}>
+                            {toggleCurrencies.map((cur) => (
+                                <a
+                                    href={currencyHref(cur)}
+                                    class={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${selectedCurrency === cur ? "bg-brand-sky-deep text-white" : "text-brand-ink-soft hover:text-brand-ink"}`}
+                                    aria-current={selectedCurrency === cur ? "true" : undefined}
+                                >
+                                    {cur === "MXN" ? "MX$" : "US$"}
+                                </a>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                <p class="text-sm text-brand-ink-soft mb-4">{l.one_membership}</p>
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-brand-ink/10">
@@ -265,7 +383,7 @@ function cellClass(value: any): string {
                             </th>
                             <th class={`text-center py-3 px-2 ${currentPlanName === "plus" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
                                 <div class="font-bold text-brand-ink">{l.plus}</div>
-                                <div class="text-xs text-brand-ink-soft">$5{l.month} ($50{l.year})</div>
+                                <div class="text-xs text-brand-ink-soft">{price(plusPlan, "monthly", "plus")}{l.month} ({price(plusPlan, "annual", "plus")}{l.year})</div>
                                 {currentPlanName === "plus" && (
                                     <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
                                         {l.current_plan}
@@ -274,7 +392,7 @@ function cellClass(value: any): string {
                             </th>
                             <th class={`text-center py-3 px-2 ${currentPlanName === "pro" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
                                 <div class="font-bold text-brand-ink">{l.pro}</div>
-                                <div class="text-xs text-brand-ink-soft">$15{l.month} ($150{l.year})</div>
+                                <div class="text-xs text-brand-ink-soft">{price(proPlan, "monthly", "pro")}{l.month} ({price(proPlan, "annual", "pro")}{l.year})</div>
                                 {currentPlanName === "pro" && (
                                     <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
                                         {l.current_plan}
@@ -305,18 +423,22 @@ function cellClass(value: any): string {
                 <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
                     {currentPlanName === "free" && (
                         <button
-                            class="upgrade-btn px-6 py-2.5 bg-brand-sky-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-sky-deep transition-colors"
+                            class="upgrade-btn px-6 py-2.5 bg-brand-sky-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-sky-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             data-plan="plus"
                             data-cycle="monthly"
+                            data-currency={selectedCurrency}
+                            disabled={!canCheckout(plusPlan)}
                         >
                             {l.upgrade} → {l.plus}
                         </button>
                     )}
                     {currentPlanName !== "pro" && (
                         <button
-                            class="upgrade-btn px-6 py-2.5 bg-brand-coral-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-coral-deep transition-colors"
+                            class="upgrade-btn px-6 py-2.5 bg-brand-coral-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-coral-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             data-plan="pro"
                             data-cycle="monthly"
+                            data-currency={selectedCurrency}
+                            disabled={!canCheckout(proPlan)}
                         >
                             {l.upgrade} → {l.pro}
                         </button>
@@ -330,6 +452,9 @@ function cellClass(value: any): string {
                         </button>
                     )}
                 </div>
+                {upgradeUnavailable && (
+                    <p class="mt-3 text-center text-xs text-brand-ink-soft">{l.coming_soon}</p>
+                )}
             </section>
 
             <!-- Support contact -->
@@ -361,6 +486,7 @@ function cellClass(value: any): string {
                 const target = evt.currentTarget;
                 const plan = target.dataset.plan;
                 const cycle = target.dataset.cycle || 'monthly';
+                const currency = target.dataset.currency || 'MXN';
                 const originalText = target.textContent;
                 target.disabled = true;
                 target.textContent = '...';
@@ -368,7 +494,7 @@ function cellClass(value: any): string {
                     const resp = await fetch('/api/subscriptions/checkout', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ plan_name: plan, billing_cycle: cycle }),
+                        body: JSON.stringify({ plan_name: plan, billing_cycle: cycle, currency }),
                     });
                     if (!resp.ok) {
                         const err = await resp.json().catch(() => ({ detail: 'Error' }));

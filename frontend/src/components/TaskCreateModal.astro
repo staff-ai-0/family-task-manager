@@ -159,7 +159,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                     <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider mb-2">
                         {lang === "es" ? "¿Con qué frecuencia?" : "How Often"}
                     </p>
-                    <div class="flex gap-2" data-chipgroup="interval">
+                    <div class="flex gap-2 flex-wrap" data-chipgroup="interval">
                         <button type="button" class="tcm-chip flex-1 py-2 px-3 text-sm font-semibold rounded-xl border-2 transition-colors" data-value="1">
                             {lang === "es" ? "Diario" : "Daily"}
                         </button>
@@ -169,6 +169,24 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                         <button type="button" class="tcm-chip flex-1 py-2 px-3 text-sm font-semibold rounded-xl border-2 transition-colors" data-value="7">
                             {lang === "es" ? "Semanal" : "Weekly"}
                         </button>
+                        <button type="button" class="tcm-chip flex-1 py-2 px-3 text-sm font-semibold rounded-xl border-2 transition-colors" data-value="interval" title={lang === "es" ? "Se reprograma N días después de completarla" : "Reschedules N days after it's completed"}>
+                            {lang === "es" ? "Al terminar" : "After done"}
+                        </button>
+                    </div>
+                    <!-- N-days input (revealed for 'after done' mode) -->
+                    <div id="tcm-interval-n-wrap" class="hidden mt-3 flex items-center gap-2 p-3 bg-brand-cream-deep rounded-xl border border-brand-ink/10">
+                        <span class="text-sm text-brand-ink">{lang === "es" ? "Cada" : "Every"}</span>
+                        <input
+                            id="tcm-interval-n"
+                            type="number"
+                            min="1"
+                            max="90"
+                            value="3"
+                            class="w-20 px-3 py-2 text-sm border border-brand-ink/20 rounded-lg focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep outline-none bg-brand-cream"
+                        />
+                        <span class="text-sm text-brand-ink flex-1">
+                            {lang === "es" ? "días después de completarla" : "days after it's completed"}
+                        </span>
                     </div>
                 </div>
 
@@ -203,6 +221,20 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                                 <span class="text-xs text-brand-ink-soft">{member.role.toLowerCase()}</span>
                             </label>
                         ))}
+                    </div>
+                </div>
+
+                <!-- 4b. Photo proof toggle -->
+                <div class="flex items-center gap-3 py-1">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input id="tcm-proof" type="checkbox" class="sr-only peer" />
+                        <div class="w-9 h-5 bg-brand-cream-deep rounded-full peer peer-checked:bg-brand-sky-deep peer-focus:ring-2 peer-focus:ring-sky-300 transition-colors after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-brand-cream after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                    <div>
+                        <span class="text-sm font-medium text-brand-ink">📸 {lang === "es" ? "Requiere foto" : "Requires photo"}</span>
+                        <p class="text-xs text-brand-ink-soft">
+                            {lang === "es" ? "Deben subir foto; tú apruebas antes de dar puntos." : "Kid must attach a photo; you approve before points."}
+                        </p>
                     </div>
                 </div>
 
@@ -349,9 +381,12 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
     const searchInput = document.getElementById("tcm-search");
     const bonusChk = document.getElementById("tcm-bonus");
     const blocksChk = document.getElementById("tcm-blocks-rewards");
+    const proofChk = document.getElementById("tcm-proof");
     const gigSelect = document.getElementById("tcm-gig");
     const gigWrap = document.getElementById("tcm-gig-wrap");
     const pointsInput = document.getElementById("tcm-points");
+    const intervalNWrap = document.getElementById("tcm-interval-n-wrap");
+    const intervalNInput = document.getElementById("tcm-interval-n");
 
     // Gig mode is only relevant to bonus tasks — keep its jargon out of plain chores.
     bonusChk?.addEventListener("change", () => {
@@ -388,6 +423,11 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             } else {
                 membersDiv.classList.add("hidden");
             }
+        }
+
+        // Show/hide the N-days input for the 'after done' recurrence mode
+        if (group === "interval" && intervalNWrap) {
+            intervalNWrap.classList.toggle("hidden", String(value) !== "interval");
         }
     }
 
@@ -438,9 +478,12 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         if (descTA) descTA.value = "";
         if (bonusChk) bonusChk.checked = false;
         if (blocksChk) blocksChk.checked = false;
+        if (proofChk) proofChk.checked = false;
         if (gigSelect) gigSelect.value = "claim";
         if (gigWrap) gigWrap.classList.add("hidden");
         if (pointsInput) pointsInput.value = "10";
+        if (intervalNInput) intervalNInput.value = "3";
+        if (intervalNWrap) intervalNWrap.classList.add("hidden");
         if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
         if (membersDiv) membersDiv.classList.add("hidden");
         modal.querySelectorAll(".tcm-member-cb").forEach((cb) => { cb.checked = false; });
@@ -535,6 +578,20 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             return;
         }
 
+        // 'interval' chip = 'every N days since last completion' mode.
+        const isIntervalMode = chipState.interval === "interval";
+        let recurEveryN = null;
+        if (isIntervalMode) {
+            recurEveryN = parseInt(intervalNInput?.value, 10);
+            if (isNaN(recurEveryN) || recurEveryN < 1 || recurEveryN > 90) {
+                showError(document.documentElement.lang === "es"
+                    ? "Los días deben estar entre 1 y 90"
+                    : "Days must be between 1 and 90");
+                intervalNInput?.focus();
+                return;
+            }
+        }
+
         const payload = {
             title,
             description,
@@ -542,7 +599,10 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             description_es: null,
             points,
             effort_level: parseInt(chipState.effort, 10),
-            interval_days: parseInt(chipState.interval, 10),
+            interval_days: isIntervalMode ? 7 : parseInt(chipState.interval, 10),
+            recurrence_mode: isIntervalMode ? "since_completion" : "weekly",
+            recur_every_n_days: recurEveryN,
+            requires_proof: proofChk?.checked || false,
             is_bonus: isBonus,
             blocks_rewards: blocksRewards,
             gig_mode: gigMode,
@@ -663,7 +723,12 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             : "";
 
         const freqMap = { 1: "Daily", 3: "Every 3 days", 7: "Weekly" };
-        const freqLabel = freqMap[tmpl.interval_days] || `Every ${tmpl.interval_days} days`;
+        const freqLabel = tmpl.recurrence_mode === "since_completion"
+            ? `Every ${tmpl.recur_every_n_days || 1}d after done`
+            : (freqMap[tmpl.interval_days] || `Every ${tmpl.interval_days} days`);
+        const proofBadge = tmpl.requires_proof
+            ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-sky/15 text-brand-sky-deep">📸 Photo</span>`
+            : "";
 
         const esMissingBadge = !tmpl.title_es
             ? `<span class="inline-block ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title="Translation missing">ES missing</span>`
@@ -703,6 +768,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                 </h3>
                 <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${bonusBadgeClass}">${bonusBadgeText}</span>
                 <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-cream-deep text-brand-ink-soft">${freqLabel}</span>
+                ${proofBadge}
                 ${assignmentBadge}
                 ${inactiveBadge}
             </div>
