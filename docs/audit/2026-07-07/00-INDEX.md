@@ -29,22 +29,22 @@ Highest-ROI build = "Family Bank" (payday + jars + parent interest/match) on exi
 ## Roadmap / status — update as work lands
 
 ### P0 — Don't launch without (~2–3 wk)
-- [ ] Legal: /privacidad + /terminos pages (ES/EN), consent checkbox at register, link from footer; register URL with Google OAuth + PayPal
-- [ ] Legal: child-signup consent flow (birthdate, parent-initiated/approved child accounts, optional child email, consent record)
-- [ ] Legal: family delete endpoint (wire FamilyService.delete_family + cascade + confirm/re-auth) + whole-family data export
-- [ ] Legal: AI disclosure + parental opt-in for AI on kid content (proof photos → Gemini, chat → Jarvis MCP)
-- [ ] Billing: honor grace period (payment_failed entitled N days), handle PAYMENT.SALE.COMPLETED → reactivate, dunning email
-- [ ] Billing: /checkout guard (don't mutate active sub pre-payment; cancel old PayPal sub on upgrade activate)
-- [ ] Billing: daily PayPal reconciliation in sweep; handle SUSPENDED/EXPIRED/refund events
-- [ ] Billing: require_feature('family_member') on join-code register branch (auth.py:105-155)
-- [ ] Data: offsite backup push (rclone) + tar uploads volume + fix restore-db.sh onprem defaults + run ONE restore drill
-- [ ] Ops: SENTRY_DSN in prod .env (code already wired); external uptime check on /ready; catch-all exception handler
-- [ ] CI: GitHub Actions — backend pytest (pg+redis services) + astro build + astro check; tagged images + rollback in deploy-onprem.sh
-- [ ] Perf: run_in_threadpool + timeout on 5 sync LLM sites (jarvis_service.py:304,481; calendar_scanner_service.py:102; recipe_importer.py:99; task_proof_validator.py:114; category_ai_service.py:115) — copy receipt_scanner pattern
-- [ ] Sec: rate-limit key on CF-Connecting-IP (drop --forwarded-allow-ips="*" trust), Redis RATE_LIMIT_STORAGE_URI; rate-limit + meter Jarvis chat/stream + calendar scan-document; security headers (HSTS/CSP/XFO/nosniff)
-- [ ] Product: support email (soporte@) in footer/help/billing; fix login demo creds (parent@demo.com doesn't exist); landing CTAs → /register; 404/500 pages; enforce email verification (min: gate email-triggering actions)
-- [ ] Push: TASK_ASSIGNED notification type + morning "chores due today" job
-- [ ] i18n: locale middleware (cookie → Accept-Language → es); NotificationService keyed translations (port email _t pattern, ~30 call sites)
+- [x] Legal: /privacidad + /terminos pages (ES/EN), consent checkbox at register, link from footer; register URL with Google OAuth + PayPal ✅ CODE DONE (operator: register the /privacidad URL with Google OAuth + PayPal)
+- [x] Legal: child-signup consent flow (birthdate, parent-initiated/approved child accounts, optional child email, consent record) ✅ CODE DONE (follow-up: child email still required at signup; optional-email needs username login design)
+- [x] Legal: family delete endpoint (wire FamilyService.delete_family + cascade + confirm/re-auth) + whole-family data export ✅ CODE DONE
+- [x] Legal: AI disclosure + parental opt-in for AI on kid content (proof photos → Gemini, chat → Jarvis MCP) ✅ CODE DONE (aviso discloses AI; families.ai_processing_consent gates kid-content AI, default off)
+- [x] Billing: honor grace period (payment_failed entitled N days), handle PAYMENT.SALE.COMPLETED → reactivate, dunning email ✅ CODE DONE
+- [x] Billing: /checkout guard (don't mutate active sub pre-payment; cancel old PayPal sub on upgrade activate) ✅ CODE DONE
+- [x] Billing: daily PayPal reconciliation in sweep; handle SUSPENDED/EXPIRED/refund events ✅ CODE DONE
+- [x] Billing: require_feature('family_member') on join-code register branch (auth.py:105-155) ✅ CODE DONE
+- [x] Data: offsite backup push (rclone) + tar uploads volume + fix restore-db.sh onprem defaults + run ONE restore drill ✅ SCRIPTS DONE (operator: rclone remote on .91 + set OFFSITE_RCLONE_REMOTE + run the restore drill)
+- [x] Ops: SENTRY_DSN in prod .env (code already wired); external uptime check on /ready; catch-all exception handler ✅ handler+request-ID DONE (operator: SENTRY_DSN in prod .env + external uptime check)
+- [x] CI: GitHub Actions — backend pytest (pg+redis services) + astro build + astro check; tagged images + rollback in deploy-onprem.sh ✅ DONE (CI validated on first push; deploy rollback via SHA tags + --rollback)
+- [x] Perf: run_in_threadpool + timeout on 5 sync LLM sites (jarvis_service.py:304,481; calendar_scanner_service.py:102; recipe_importer.py:99; task_proof_validator.py:114; category_ai_service.py:115) — copy receipt_scanner pattern ✅ DONE
+- [x] Sec: rate-limit key on CF-Connecting-IP (drop --forwarded-allow-ips="*" trust), Redis RATE_LIMIT_STORAGE_URI; rate-limit + meter Jarvis chat/stream + calendar scan-document; security headers (HSTS/CSP/XFO/nosniff) ✅ DONE (operator: RATE_LIMIT_STORAGE_URI in live prod .env)
+- [x] Product: support email (soporte@) in footer/help/billing; fix login demo creds (parent@demo.com doesn't exist); landing CTAs → /register; 404/500 pages; enforce email verification (min: gate email-triggering actions) ✅ DONE
+- [x] Push: TASK_ASSIGNED notification type + morning "chores due today" job ✅ DONE
+- [x] i18n: locale middleware (cookie → Accept-Language → es); NotificationService keyed translations (port email _t pattern, ~30 call sites) ✅ DONE
 
 ### P1 — Launch differentiators (~3–4 wk)
 - [ ] Family Bank: weekly payday job; Save/Share/Spend jars w/ % auto-split; parent-paid interest; parent match
