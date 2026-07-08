@@ -10,8 +10,30 @@ independently (still bounded, just N x looser).
 """
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from starlette.requests import Request
 
 from app.core.config import settings
+
+
+def get_client_ip(request: Request) -> str:
+    """Rate-limit key: the real client IP, spoof-resistant behind Cloudflare.
+
+    Prefer ``CF-Connecting-IP``: prod ingress is a Cloudflare Tunnel and the
+    CF edge always sets/overwrites this header (a client-supplied value never
+    survives the edge), so it is not forgeable through the tunnel. This is
+    deliberately NOT ``X-Forwarded-For``: Cloudflare *appends* the real IP to
+    the client-supplied XFF list instead of replacing it, so any XFF-derived
+    key (including uvicorn's ``--proxy-headers`` rewrite of
+    ``request.client.host`` when ``--forwarded-allow-ips`` trusts the chain)
+    lets an attacker rotate the leftmost entry and bypass every limit.
+
+    Falls back to ``request.client.host`` (direct access: local dev, tests,
+    container-internal calls) via slowapi's own helper.
+    """
+    cf_ip = (request.headers.get("CF-Connecting-IP") or "").strip()
+    if cf_ip:
+        return cf_ip
+    return get_remote_address(request)
 
 _storage_uri = getattr(settings, "RATE_LIMIT_STORAGE_URI", "") or "memory://"
 
@@ -32,7 +54,7 @@ if _rate_limit_enabled is None:
     _rate_limit_enabled = not settings.DEBUG
 
 limiter = Limiter(
-    key_func=get_remote_address,
+    key_func=get_client_ip,
     storage_uri=_storage_uri,
     enabled=_rate_limit_enabled,
 )

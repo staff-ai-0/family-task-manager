@@ -30,6 +30,7 @@ test.describe('Welcome tour', () => {
     await page.fill('input[name="email"]', NEW_USER.email);
     await page.fill('input[name="password"]', NEW_USER.password);
     await page.fill('input[name="password_confirm"]', NEW_USER.password);
+    await page.check('#accept_terms');
     await page.click('#register-submit-btn');
     await page.waitForURL(/\/(dashboard|parent)/, { timeout: 30000 });
 

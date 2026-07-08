@@ -5,7 +5,7 @@ Request and response models for family invitation operations.
 """
 
 from pydantic import BaseModel, EmailStr, Field
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 from typing import Optional
 from app.models.user import UserRole
@@ -40,6 +40,11 @@ class AcceptInvitationRequest(BaseModel):
     invitation_code: str = Field(..., description="The invitation code from the email")
     password: str = Field(..., min_length=8, description="Password for new user account")
     name: str = Field(..., max_length=100, description="User's full name")
+    birthdate: Optional[date] = Field(
+        None,
+        description="Optional birthdate (collected for child/teen invitees; "
+        "no age gating yet)",
+    )
 
 
 class AcceptInvitationResponse(BaseModel):

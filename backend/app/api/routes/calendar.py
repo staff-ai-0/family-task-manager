@@ -4,13 +4,15 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.exceptions import ValidationError
+from app.core.premium import require_feature
+from app.core.rate_limiter import limiter, AI_LIMIT
 from app.core.type_utils import to_uuid_required
 from app.core.upload_validation import read_upload_capped
 from app.models import User
@@ -188,7 +190,9 @@ class ScanCalendarResponse(BaseModel):
 
 
 @router.post("/scan-document", response_model=ScanCalendarResponse)
+@limiter.limit(AI_LIMIT)
 async def scan_document(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
@@ -198,6 +202,10 @@ async def scan_document(
     permission slip. Returns the parsed events for the caller to review and
     confirm via POST /events. No persistence happens here.
     """
+    # Plan gate BEFORE touching the upload: this endpoint burns LLM tokens,
+    # so free-tier families (ai_features=False) are blocked up front —
+    # same machinery as budget scan-receipt.
+    await require_feature("ai_features", db, current_user)
     if file.content_type not in ALLOWED_SCAN_TYPES:
         raise HTTPException(
             status_code=415,

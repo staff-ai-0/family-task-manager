@@ -1,6 +1,49 @@
 import { defineMiddleware } from "astro:middleware";
 import type { User } from "./types/api";
 
+// ---------------------------------------------------------------------------
+// Security headers (WS-F1). Starter CSP notes:
+// - The browser talks to the backend ONLY through same-origin Astro proxy
+//   routes (/api/*, /uploads/*) — no page fetches api-family.agent-ia.mx
+//   directly — so connect-src stays 'self' plus accounts.google.com (Google
+//   Identity Services pings its own origin from the GSI client script).
+// - Astro emits inline <script> tags → script-src needs 'unsafe-inline'.
+// - Google Sign-In: script + iframe + stylesheet from accounts.google.com.
+// - Fonts: Google Fonts stylesheet (fonts.googleapis.com) + files (gstatic).
+// - img-src blob:/data: for camera-capture previews (receipt/proof upload).
+// - frame-ancestors 'none' + X-Frame-Options DENY: nothing embeds this app
+//   (the kiosk page is opened directly, never iframed).
+// CSP is only sent in production: dev needs Vite HMR websockets/eval, and
+// guarding it here keeps local DX untouched.
+const CSP = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://accounts.google.com",
+    "style-src 'self' 'unsafe-inline' https://accounts.google.com https://fonts.googleapis.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "img-src 'self' data: blob:",
+    "connect-src 'self' https://accounts.google.com",
+    "frame-src https://accounts.google.com",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+].join("; ");
+
+function withSecurityHeaders(response: Response): Response {
+    const h = response.headers;
+    h.set("X-Content-Type-Options", "nosniff");
+    h.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    if (!import.meta.env.DEV) {
+        h.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
+    // Page-level headers only make sense on HTML documents.
+    if ((h.get("content-type") ?? "").includes("text/html")) {
+        h.set("X-Frame-Options", "DENY");
+        if (!import.meta.env.DEV) h.set("Content-Security-Policy", CSP);
+    }
+    return response;
+}
+
 /**
  * Decode a JWT locally and decide whether it is expired (or unusable).
  * Refreshes 30s early to avoid edge races near the boundary.
@@ -53,10 +96,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 ];
                 if (!devOrigins.includes(origin)) {
                     console.error(`CSRF violation in dev: origin ${origin} not in allowed list for ${path}`);
-                    return new Response(
+                    return withSecurityHeaders(new Response(
                         JSON.stringify({ detail: "CSRF validation failed" }),
                         { status: 403, headers: { "Content-Type": "application/json" } }
-                    );
+                    ));
                 }
             } else {
                 // In production, strictly enforce same-origin or allowed hosts
@@ -65,10 +108,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 
                 if (!allowedHosts.includes(originHost)) {
                     console.error(`CSRF violation: origin ${origin} (host: ${originHost}) does not match allowed hosts: ${allowedHosts.join(', ')}`);
-                    return new Response(
+                    return withSecurityHeaders(new Response(
                         JSON.stringify({ detail: "CSRF validation failed" }),
                         { status: 403, headers: { "Content-Type": "application/json" } }
-                    );
+                    ));
                 }
             }
         }
@@ -76,7 +119,35 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
     // Always allow static assets (CSS, JS, images, fonts)
     if (path.startsWith("/_astro/") || path.startsWith("/favicon") || path.match(/\.(css|js|png|svg|ico|woff2?|ttf|otf)$/)) {
-        return next();
+        return withSecurityHeaders(await next());
+    }
+
+    // Anonymous-visitor locale: if no lang cookie exists yet, derive one from
+    // Accept-Language (first es*/en* tag wins; anything else — or no header —
+    // defaults to "es", Mexico-first) and SET the cookie so every downstream
+    // page resolves the same language instead of each page guessing its own
+    // fallback. Attributes mirror /api/lang (not httpOnly — client scripts
+    // read document.cookie for lang). Only set on HTML page requests — API and
+    // proxy routes must not grow a Set-Cookie on every JSON/binary response
+    // (assets already returned early above).
+    const isPageRequest = !path.startsWith("/api/") && !path.startsWith("/uploads/");
+    if (isPageRequest && !cookies.get("lang")?.value) {
+        const acceptLanguage = request.headers.get("accept-language") ?? "";
+        let lang = "es";
+        for (const part of acceptLanguage.split(",")) {
+            const tag = part.split(";")[0].trim().toLowerCase();
+            if (tag.startsWith("es")) break; // lang already "es"
+            if (tag.startsWith("en")) {
+                lang = "en";
+                break;
+            }
+        }
+        cookies.set("lang", lang, {
+            path: "/",
+            maxAge: 60 * 60 * 24 * 365,
+            sameSite: "lax",
+            secure: !import.meta.env.DEV, // match auth cookie flags
+        });
     }
 
     // Public routes that don't require authentication
@@ -90,6 +161,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/accept-invitation",
         "/help",   // English user guide — linked from welcome email
         "/ayuda",  // Spanish user guide — linked from welcome email
+        "/privacidad",  // Aviso de Privacidad (bilingual) — legal, must be public
+        "/terminos",    // Términos y Condiciones (bilingual) — legal, must be public
         "/api/auth/login",
         "/api/auth/refresh",  // BFF refresh route — callable even when the access token is dead
         "/api/auth/register",  // Frontend API route for registration (calls backend /api/auth/register-family)
@@ -127,7 +200,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 "unsafe-none"
             );
         }
-        return response;
+        return withSecurityHeaders(response);
+    }
+
+    // Genuinely-unmatched page paths fall through to Astro's custom 404
+    // instead of bouncing anonymous visitors to /login. When no file-based
+    // route matches, Astro resolves the request to the /404 route, so
+    // routePattern is an authoritative "this is not a known page" signal —
+    // real protected pages (e.g. /dashboard) never match it and still hit
+    // the auth redirect below. API paths keep their JSON 401 contract.
+    if (!path.startsWith("/api/") && context.routePattern === "/404") {
+        return withSecurityHeaders(await next());
     }
 
     // Check authentication for protected routes
@@ -169,15 +252,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
         if (!path.startsWith("/api/")) {
             const response = redirect("/login", 302);
             for (const c of clearAuthCookies()) response.headers.append("Set-Cookie", c);
-            return response;
+            return withSecurityHeaders(response);
         }
         // Return 401 for API routes
         const headers = new Headers({ "Content-Type": "application/json" });
         for (const c of clearAuthCookies()) headers.append("Set-Cookie", c);
-        return new Response(
+        return withSecurityHeaders(new Response(
             JSON.stringify({ detail: "Unauthorized" }),
             { status: 401, headers }
-        );
+        ));
     }
 
     // Verify token is valid by checking with backend for API routes
@@ -203,18 +286,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
                     const { clearAuthCookies } = await import("./lib/auth-cookies");
                     const headers = new Headers({ "Content-Type": "application/json" });
                     for (const c of clearAuthCookies()) headers.append("Set-Cookie", c);
-                    return new Response(
+                    return withSecurityHeaders(new Response(
                         JSON.stringify({ detail: "Invalid or expired token" }),
                         { status: 401, headers }
-                    );
+                    ));
                 }
-                return new Response(
+                return withSecurityHeaders(new Response(
                     JSON.stringify({
                         detail: "Backend temporarily unavailable. Retry shortly.",
                         code: "backend_error",
                     }),
                     { status: 503, headers: { "Content-Type": "application/json" } }
-                );
+                ));
             }
 
             const user: User = await response.json();
@@ -240,13 +323,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
             // The token may be perfectly valid; the backend just isn't reachable.
             // Surface that clearly and DO NOT delete the cookie.
             console.error("Backend unreachable during auth check:", error);
-            return new Response(
+            return withSecurityHeaders(new Response(
                 JSON.stringify({
                     detail: "Backend temporarily unavailable. Retry shortly.",
                     code: "backend_unreachable",
                 }),
                 { status: 503, headers: { "Content-Type": "application/json" } }
-            );
+            ));
         }
     }
 
@@ -256,5 +339,5 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (refreshedSetCookies) {
         for (const c of refreshedSetCookies) response.headers.append("Set-Cookie", c);
     }
-    return response;
+    return withSecurityHeaders(response);
 });

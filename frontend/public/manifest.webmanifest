@@ -1,7 +1,7 @@
 {
-  "name": "Family Task Manager",
+  "name": "Family Task Manager — Tareas en familia",
   "short_name": "Family Task",
-  "description": "Chores, rewards, budget — together.",
+  "description": "Tareas del hogar, premios y presupuesto — en familia.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -9,7 +9,7 @@
   "orientation": "portrait",
   "background_color": "#4FB8E6",
   "theme_color": "#4FB8E6",
-  "lang": "en",
+  "lang": "es",
   "dir": "ltr",
   "categories": ["productivity", "lifestyle", "family"],
   "icons": [
@@ -20,7 +20,7 @@
     { "src": "/favicon.svg",          "type": "image/svg+xml", "sizes": "any", "purpose": "any" }
   ],
   "shortcuts": [
-    { "name": "Today's chores", "short_name": "Chores", "url": "/today", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Rewards",        "short_name": "Rewards", "url": "/rewards", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Tareas de hoy", "short_name": "Tareas",  "url": "/today",   "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Premios",       "short_name": "Premios", "url": "/rewards", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
   ]
 }

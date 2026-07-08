@@ -1,0 +1,11 @@
+{
+  "id": "WH-TEST-SUSPENDED-001",
+  "event_type": "BILLING.SUBSCRIPTION.SUSPENDED",
+  "create_time": "2026-07-07T18:00:00Z",
+  "resource_type": "subscription",
+  "summary": "Subscription suspended",
+  "resource": {
+    "id": "I-WEBHOOK-SUB-123",
+    "status": "SUSPENDED"
+  }
+}

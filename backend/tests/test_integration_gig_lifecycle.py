@@ -59,6 +59,8 @@ class TestGigLifecycleAIAutoApproval:
         # Force trust streak below threshold so AI is the gate.
         test_child_user.gig_trust_streak = 0
         test_child_user.points = 0
+        # AI photo validation requires the family's parental opt-in.
+        test_family.ai_processing_consent = True
         await db_session.commit()
 
         tmpl, a = await _seed_gig(db_session, test_family, test_child_user)
@@ -125,6 +127,8 @@ class TestGigLifecycleAIAutoApproval:
     ):
         test_child_user.gig_trust_streak = 0
         test_child_user.points = 0
+        # AI photo validation requires the family's parental opt-in.
+        test_family.ai_processing_consent = True
         await db_session.commit()
         tmpl, a = await _seed_gig(db_session, test_family, test_child_user)
 

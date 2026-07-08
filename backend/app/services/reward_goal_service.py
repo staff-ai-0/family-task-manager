@@ -144,17 +144,12 @@ class RewardGoalService:
             return
         try:
             from app.services.notification_service import NotificationService
-            from app.models.notification import NotificationType as NT
-            await NotificationService.create(
+            await NotificationService.create_localized(
                 db,
                 family_id=family_id,
+                key="goal_reached_kid",
                 user_id=user_id,
-                type=NT.GOAL_REACHED,
-                title="🎯 ¡Meta alcanzada! / Goal reached!",
-                body=(
-                    f"Tienes suficiente para {reward.title}. "
-                    f"/ You have enough for {reward.title}."
-                ),
+                params={"reward": reward.title},
                 link="/rewards",
                 push=True,
             )
@@ -178,15 +173,19 @@ class RewardGoalService:
                 )
             ).all()
             for parent in parents:
-                await NotificationService.create(
+                await NotificationService.create_localized(
                     db,
                     family_id=family_id,
+                    key="goal_reached_parent",
                     user_id=parent.id,
-                    type=NT.GOAL_REACHED,
-                    title=f"🎯 {kid_name} alcanzó su meta / reached their goal",
-                    body=f"{reward.title} — {reward.points_cost} pts",
+                    params={
+                        "kid": kid_name,
+                        "reward": reward.title,
+                        "pts": reward.points_cost,
+                    },
                     link="/parent",
                     push=True,
+                    lang=getattr(parent, "preferred_lang", None) or "es",
                 )
         except Exception:
             log.warning("check_nudge: parent fan-out failed", exc_info=True)

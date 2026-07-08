@@ -4,6 +4,7 @@ Premium gating utilities.
 Provides helpers to resolve a family's current plan and enforce feature limits.
 """
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -11,6 +12,7 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from app.core.config import settings
 from app.models.subscription import FamilySubscription, SubscriptionPlan
 from app.models.user import User
 from app.services.usage_service import UsageService
@@ -99,27 +101,57 @@ class FamilyPlan:
 # Plan resolution
 # ---------------------------------------------------------------------------
 
-async def get_family_plan(db: AsyncSession, user: User) -> FamilyPlan:
+# Subscription statuses that keep paid entitlements. payment_failed is
+# honored only while inside the dunning grace window (see
+# _payment_failed_within_grace) — the daily sweep flips grace-expired rows
+# to 'grace_expired' which is NOT in this list.
+ENTITLED_STATUSES = ("active", "past_due", "payment_failed")
+
+
+def _payment_failed_within_grace(sub: FamilySubscription) -> bool:
+    """True while a payment_failed sub is still inside the grace window.
+
+    payment_failure_at + BILLING_GRACE_DAYS >= now. A missing timestamp is
+    treated as within grace (the sweep/webhook will populate or resolve it)
+    so a paying customer is never dropped by a bookkeeping gap.
     """
-    Resolve the active plan for the user's family.
+    if sub.payment_failure_at is None:
+        return True
+    failure_at = sub.payment_failure_at
+    if failure_at.tzinfo is None:
+        failure_at = failure_at.replace(tzinfo=timezone.utc)
+    deadline = failure_at + timedelta(days=settings.BILLING_GRACE_DAYS)
+    return datetime.now(timezone.utc) <= deadline
+
+
+async def get_family_plan_by_id(db: AsyncSession, family_id) -> FamilyPlan:
+    """
+    Resolve the active plan for a family by id.
 
     Falls back to the free plan (from DB, then hardcoded defaults).
     """
-    family_id = user.family_id
-
-    # 1. Look for an active (or past_due) subscription with plan eager-loaded
+    # 1. Look for an entitled subscription with plan eager-loaded.
+    #    payment_failed counts only while within the dunning grace window.
     query = (
         select(FamilySubscription)
         .options(joinedload(FamilySubscription.plan))
         .where(
             and_(
                 FamilySubscription.family_id == family_id,
-                FamilySubscription.status.in_(["active", "past_due"]),
+                FamilySubscription.status.in_(list(ENTITLED_STATUSES)),
             )
         )
     )
     result = await db.execute(query)
     subscription = result.scalar_one_or_none()
+
+    if (
+        subscription
+        and subscription.status == "payment_failed"
+        and not _payment_failed_within_grace(subscription)
+    ):
+        # Grace expired but the sweep hasn't run yet — treat as free now.
+        subscription = None
 
     if subscription and subscription.plan:
         plan = subscription.plan
@@ -151,6 +183,11 @@ async def get_family_plan(db: AsyncSession, user: User) -> FamilyPlan:
         status="active",
         family_id=family_id,
     )
+
+
+async def get_family_plan(db: AsyncSession, user: User) -> FamilyPlan:
+    """Resolve the active plan for the user's family (see get_family_plan_by_id)."""
+    return await get_family_plan_by_id(db, user.family_id)
 
 
 # ---------------------------------------------------------------------------

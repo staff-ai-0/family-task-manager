@@ -1,0 +1,16 @@
+{
+  "id": "WH-TEST-SALE-REFUNDED-001",
+  "event_type": "PAYMENT.SALE.REFUNDED",
+  "create_time": "2026-07-07T18:00:00Z",
+  "resource_type": "refund",
+  "summary": "Payment refunded",
+  "resource": {
+    "id": "REFUND-9",
+    "state": "completed",
+    "billing_agreement_id": "I-WEBHOOK-SUB-123",
+    "amount": {
+      "total": "-5.00",
+      "currency": "USD"
+    }
+  }
+}

@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import type { LoginResponse, ApiError } from "../../../types/api";
 import { authCookies } from "../../../lib/auth-cookies";
+import { clientIpHeaders } from "../../../lib/client-ip";
 
 /**
  * Helper to build a Set-Cookie header string.
@@ -65,7 +66,7 @@ export const POST: APIRoute = async ({ request }) => {
         const apiUrl = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
         const response = await fetch(`${apiUrl}/api/auth/login`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...clientIpHeaders(request) },
             body: JSON.stringify({ email, password }),
         });
 
@@ -130,8 +131,11 @@ export const POST: APIRoute = async ({ request }) => {
         } else {
             let errorMessage = "Invalid email or password";
             try {
-                const errData: ApiError = await response.json();
-                errorMessage = errData.detail || errorMessage;
+                const errData = await response.json() as ApiError & { message?: string };
+                // FastAPI HTTPException uses `detail`; the app's global
+                // exception handlers (e.g. 403 pending parental approval)
+                // use `message` — surface whichever is present.
+                errorMessage = errData.detail || errData.message || errorMessage;
             } catch {
                 // If response isn't JSON, use default message
             }
@@ -139,7 +143,7 @@ export const POST: APIRoute = async ({ request }) => {
             if (isJsonRequest) {
                 return new Response(
                     JSON.stringify({ success: false, error: errorMessage }),
-                    { status: 401, headers: { "Content-Type": "application/json" } }
+                    { status: response.status || 401, headers: { "Content-Type": "application/json" } }
                 );
             }
 

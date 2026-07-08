@@ -4,7 +4,7 @@ import { apiFetch } from "../../../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
 
 const { data: user } = await apiFetch<any>("/api/auth/me", { token });
 if (!user) {
@@ -51,6 +51,30 @@ const labels = {
         save: "Save",
         saved: "Saved.",
         error: "Could not save. Try again.",
+        ai_title: "AI and your kids' content",
+        ai_label: "Allow AI to process task proof photos and family chat messages",
+        ai_hint: "When enabled, AI can auto-validate your kids' gig proof photos and the assistant can read family chat. When off, proofs always go to manual parent approval and the assistant cannot read the chat.",
+        ai_privacy: "Privacy notice",
+        ai_saved_on: "AI processing enabled.",
+        ai_saved_off: "AI processing disabled. Proofs will go to manual approval.",
+        dz_title: "Danger zone",
+        dz_export_title: "Export your data",
+        dz_export_hint: "Download a ZIP with all your family's data (members, tasks, gigs, points, budget, chat, and more). Uploaded photos are listed in a manifest, not included.",
+        dz_export_btn: "Download my data (ZIP)",
+        dz_export_error: "Export failed. Try again.",
+        dz_delete_title: "Delete this family",
+        dz_delete_hint: "Permanently deletes EVERY account in the family and ALL data: tasks, points, budget, chat, photos, subscription. This cannot be undone.",
+        dz_delete_btn: "Delete family…",
+        dz_confirm_warn: "This will permanently erase all accounts and data for the whole family. There is no way back.",
+        dz_confirm_name_label: "Type the family name to confirm",
+        dz_confirm_pw_label: "Your password",
+        dz_confirm_pw_hint: "If you sign in with Google and have no password, leave it empty.",
+        dz_confirm_btn: "Delete everything permanently",
+        dz_cancel: "Cancel",
+        dz_deleting: "Deleting…",
+        dz_error_pw: "Incorrect password.",
+        dz_error_name: "The family name doesn't match.",
+        dz_error: "Could not delete. Try again.",
     },
     es: {
         title: "Ajustes de la familia",
@@ -60,6 +84,30 @@ const labels = {
         save: "Guardar",
         saved: "Guardado.",
         error: "No se pudo guardar. Inténtalo de nuevo.",
+        ai_title: "IA y el contenido de tus hijos",
+        ai_label: "Permitir que la IA procese fotos de tareas y mensajes del chat familiar",
+        ai_hint: "Si lo activas, la IA puede validar automáticamente las fotos de prueba de tus hijos y el asistente puede leer el chat familiar. Si está apagado, las pruebas siempre pasan a aprobación manual de un padre y el asistente no puede leer el chat.",
+        ai_privacy: "Aviso de privacidad",
+        ai_saved_on: "Procesamiento con IA activado.",
+        ai_saved_off: "Procesamiento con IA desactivado. Las pruebas pasarán a aprobación manual.",
+        dz_title: "Zona de peligro",
+        dz_export_title: "Exporta tus datos",
+        dz_export_hint: "Descarga un ZIP con todos los datos de tu familia (miembros, tareas, gigs, puntos, presupuesto, chat y más). Las fotos subidas se listan en un manifiesto, no se incluyen.",
+        dz_export_btn: "Descargar mis datos (ZIP)",
+        dz_export_error: "No se pudo exportar. Inténtalo de nuevo.",
+        dz_delete_title: "Eliminar esta familia",
+        dz_delete_hint: "Elimina permanentemente TODAS las cuentas de la familia y TODOS los datos: tareas, puntos, presupuesto, chat, fotos, suscripción. No se puede deshacer.",
+        dz_delete_btn: "Eliminar familia…",
+        dz_confirm_warn: "Esto borrará para siempre todas las cuentas y datos de toda la familia. No hay vuelta atrás.",
+        dz_confirm_name_label: "Escribe el nombre de la familia para confirmar",
+        dz_confirm_pw_label: "Tu contraseña",
+        dz_confirm_pw_hint: "Si entras con Google y no tienes contraseña, déjala vacía.",
+        dz_confirm_btn: "Eliminar todo permanentemente",
+        dz_cancel: "Cancelar",
+        dz_deleting: "Eliminando…",
+        dz_error_pw: "Contraseña incorrecta.",
+        dz_error_name: "El nombre de la familia no coincide.",
+        dz_error: "No se pudo eliminar. Inténtalo de nuevo.",
     },
 }[lang] ?? null;
 const L = labels ?? {
@@ -70,7 +118,32 @@ const L = labels ?? {
     save: "Save",
     saved: "Saved.",
     error: "Could not save. Try again.",
+    ai_title: "AI and your kids' content",
+    ai_label: "Allow AI to process task proof photos and family chat messages",
+    ai_hint: "When off, proofs always go to manual parent approval and the assistant cannot read the chat.",
+    ai_privacy: "Privacy notice",
+    ai_saved_on: "AI processing enabled.",
+    ai_saved_off: "AI processing disabled. Proofs will go to manual approval.",
+    dz_title: "Danger zone",
+    dz_export_title: "Export your data",
+    dz_export_hint: "Download a ZIP with all your family's data.",
+    dz_export_btn: "Download my data (ZIP)",
+    dz_export_error: "Export failed. Try again.",
+    dz_delete_title: "Delete this family",
+    dz_delete_hint: "Permanently deletes every account in the family and all data. This cannot be undone.",
+    dz_delete_btn: "Delete family…",
+    dz_confirm_warn: "This will permanently erase all accounts and data for the whole family. There is no way back.",
+    dz_confirm_name_label: "Type the family name to confirm",
+    dz_confirm_pw_label: "Your password",
+    dz_confirm_pw_hint: "If you sign in with Google and have no password, leave it empty.",
+    dz_confirm_btn: "Delete everything permanently",
+    dz_cancel: "Cancel",
+    dz_deleting: "Deleting…",
+    dz_error_pw: "Incorrect password.",
+    dz_error_name: "The family name doesn't match.",
+    dz_error: "Could not delete. Try again.",
 };
+const aiConsent: boolean = family?.ai_processing_consent === true;
 ---
 
 <PageLayout
@@ -110,13 +183,250 @@ const L = labels ?? {
             <span id="status-msg" class="text-sm" aria-live="polite"></span>
         </div>
     </form>
+
+    <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3">
+        <h2 class="text-sm font-bold text-brand-ink">{L.ai_title}</h2>
+        <label class="flex items-start gap-3 cursor-pointer">
+            <input
+                type="checkbox"
+                id="ai-consent-toggle"
+                checked={aiConsent}
+                class="mt-1 h-4 w-4 rounded border-brand-ink/30 text-brand-sky-deep focus:ring-brand-sky"
+            />
+            <span class="text-sm text-brand-ink">{L.ai_label}</span>
+        </label>
+        <p class="text-xs text-brand-ink-soft">
+            {L.ai_hint}
+            <a href="/privacidad" class="text-brand-sky-deep font-semibold hover:underline">{L.ai_privacy}</a>
+        </p>
+        <span id="ai-status-msg" class="text-sm block" aria-live="polite"></span>
+    </section>
+
+    <section class="mt-8 rounded-2xl border-2 border-red-300 bg-red-50 p-5 space-y-5">
+        <h2 class="text-sm font-bold uppercase tracking-wide text-red-700">{L.dz_title}</h2>
+
+        <div class="space-y-2">
+            <h3 class="text-sm font-semibold text-brand-ink">{L.dz_export_title}</h3>
+            <p class="text-xs text-brand-ink-soft">{L.dz_export_hint}</p>
+            <div class="flex items-center gap-3">
+                <button
+                    type="button"
+                    id="export-btn"
+                    class="px-4 py-2 bg-white border border-brand-ink/20 text-brand-ink rounded-lg text-sm font-medium hover:bg-brand-cream transition-colors disabled:opacity-60"
+                >
+                    {L.dz_export_btn}
+                </button>
+                <span id="export-status" class="text-sm" aria-live="polite"></span>
+            </div>
+        </div>
+
+        <hr class="border-red-200" />
+
+        <div class="space-y-2">
+            <h3 class="text-sm font-semibold text-red-700">{L.dz_delete_title}</h3>
+            <p class="text-xs text-red-700/80">{L.dz_delete_hint}</p>
+            <button
+                type="button"
+                id="delete-reveal-btn"
+                class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition-colors"
+            >
+                {L.dz_delete_btn}
+            </button>
+
+            <div id="delete-confirm" class="hidden mt-3 rounded-xl border border-red-400 bg-white p-4 space-y-3">
+                <p class="text-sm font-semibold text-red-700">⚠️ {L.dz_confirm_warn}</p>
+                <div>
+                    <label for="confirm-name" class="block text-xs font-semibold text-brand-ink mb-1">
+                        {L.dz_confirm_name_label}: <span class="font-mono text-red-700">{family?.name}</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="confirm-name"
+                        autocomplete="off"
+                        class="w-full rounded-lg border border-brand-ink/20 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                    />
+                </div>
+                <div>
+                    <label for="confirm-password" class="block text-xs font-semibold text-brand-ink mb-1">{L.dz_confirm_pw_label}</label>
+                    <input
+                        type="password"
+                        id="confirm-password"
+                        autocomplete="current-password"
+                        class="w-full rounded-lg border border-brand-ink/20 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                    />
+                    <p class="text-xs text-brand-ink-soft mt-1">{L.dz_confirm_pw_hint}</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button
+                        type="button"
+                        id="delete-confirm-btn"
+                        disabled
+                        class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {L.dz_confirm_btn}
+                    </button>
+                    <button
+                        type="button"
+                        id="delete-cancel-btn"
+                        class="px-4 py-2 bg-white border border-brand-ink/20 text-brand-ink rounded-lg text-sm font-medium hover:bg-brand-cream transition-colors"
+                    >
+                        {L.dz_cancel}
+                    </button>
+                </div>
+                <span id="delete-status" class="text-sm block" aria-live="assertive"></span>
+            </div>
+        </div>
+    </section>
 </PageLayout>
 
-<script define:vars={{ savedLabel: L.saved, errorLabel: L.error }}>
+<script define:vars={{
+    savedLabel: L.saved,
+    errorLabel: L.error,
+    aiSavedOnLabel: L.ai_saved_on,
+    aiSavedOffLabel: L.ai_saved_off,
+    familyName: family?.name ?? "",
+    dzLabels: {
+        exportError: L.dz_export_error,
+        deleting: L.dz_deleting,
+        errorPw: L.dz_error_pw,
+        errorName: L.dz_error_name,
+        error: L.dz_error,
+    },
+}}>
     const form = document.getElementById("family-form");
     const btn = document.getElementById("save-btn");
     const status = document.getElementById("status-msg");
     const tzInput = document.getElementById("timezone");
+
+    // AI processing consent — saves immediately on change so the decision is
+    // always an explicit parent action (also stamps consent_at server-side,
+    // which dismisses the dashboard prompt banner).
+    const aiToggle = document.getElementById("ai-consent-toggle");
+    const aiStatus = document.getElementById("ai-status-msg");
+    aiToggle?.addEventListener("change", async () => {
+        if (!aiStatus) return;
+        const enabled = aiToggle.checked;
+        aiToggle.setAttribute("disabled", "true");
+        aiStatus.textContent = "";
+        aiStatus.className = "text-sm block";
+        try {
+            const r = await fetch("/api/families/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ai_processing_consent: enabled }),
+            });
+            if (r.ok) {
+                aiStatus.textContent = enabled ? aiSavedOnLabel : aiSavedOffLabel;
+                aiStatus.className = "text-sm block text-green-700";
+            } else {
+                aiToggle.checked = !enabled; // revert
+                aiStatus.textContent = errorLabel;
+                aiStatus.className = "text-sm block text-red-700";
+                console.error("ai consent update failed:", await r.text());
+            }
+        } catch (err) {
+            aiToggle.checked = !enabled; // revert
+            aiStatus.textContent = errorLabel;
+            aiStatus.className = "text-sm block text-red-700";
+            console.error(err);
+        } finally {
+            aiToggle.removeAttribute("disabled");
+        }
+    });
+
+    // --- Danger zone: export ------------------------------------------------
+    const exportBtn = document.getElementById("export-btn");
+    const exportStatus = document.getElementById("export-status");
+    exportBtn?.addEventListener("click", async () => {
+        if (!exportStatus) return;
+        exportBtn.setAttribute("disabled", "true");
+        exportStatus.textContent = "…";
+        exportStatus.className = "text-sm";
+        try {
+            const r = await fetch("/api/families/export");
+            if (!r.ok) throw new Error(`export failed: ${r.status}`);
+            const blob = await r.blob();
+            const dispo = r.headers.get("content-disposition") ?? "";
+            const m = dispo.match(/filename="?([^";]+)"?/);
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = m?.[1] ?? "family-export.zip";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(a.href);
+            exportStatus.textContent = "";
+        } catch (err) {
+            console.error(err);
+            exportStatus.textContent = dzLabels.exportError;
+            exportStatus.className = "text-sm text-red-700";
+        } finally {
+            exportBtn.removeAttribute("disabled");
+        }
+    });
+
+    // --- Danger zone: delete family (two-step confirm) ----------------------
+    const revealBtn = document.getElementById("delete-reveal-btn");
+    const confirmBox = document.getElementById("delete-confirm");
+    const confirmName = document.getElementById("confirm-name");
+    const confirmPassword = document.getElementById("confirm-password");
+    const confirmBtn = document.getElementById("delete-confirm-btn");
+    const cancelBtn = document.getElementById("delete-cancel-btn");
+    const deleteStatus = document.getElementById("delete-status");
+
+    revealBtn?.addEventListener("click", () => {
+        confirmBox?.classList.remove("hidden");
+        revealBtn.classList.add("hidden");
+        confirmName?.focus();
+    });
+
+    cancelBtn?.addEventListener("click", () => {
+        confirmBox?.classList.add("hidden");
+        revealBtn?.classList.remove("hidden");
+        if (confirmName) confirmName.value = "";
+        if (confirmPassword) confirmPassword.value = "";
+        if (deleteStatus) deleteStatus.textContent = "";
+        confirmBtn?.setAttribute("disabled", "true");
+    });
+
+    const nameMatches = () =>
+        (confirmName?.value ?? "").trim().toLowerCase() ===
+        familyName.trim().toLowerCase();
+
+    confirmName?.addEventListener("input", () => {
+        if (nameMatches()) confirmBtn?.removeAttribute("disabled");
+        else confirmBtn?.setAttribute("disabled", "true");
+    });
+
+    confirmBtn?.addEventListener("click", async () => {
+        if (!deleteStatus || !nameMatches()) return;
+        confirmBtn.setAttribute("disabled", "true");
+        deleteStatus.textContent = dzLabels.deleting;
+        deleteStatus.className = "text-sm block text-red-700";
+        try {
+            const r = await fetch("/api/families/me", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    password: confirmPassword?.value || null,
+                    confirm_name: confirmName?.value?.trim() || null,
+                }),
+            });
+            if (r.status === 204) {
+                window.location.href = "/login";
+                return;
+            }
+            if (r.status === 403) deleteStatus.textContent = dzLabels.errorPw;
+            else if (r.status === 400) deleteStatus.textContent = dzLabels.errorName;
+            else deleteStatus.textContent = dzLabels.error;
+            console.error("family delete failed:", r.status, await r.text());
+        } catch (err) {
+            deleteStatus.textContent = dzLabels.error;
+            console.error(err);
+        } finally {
+            if (nameMatches()) confirmBtn.removeAttribute("disabled");
+        }
+    });
 
     form?.addEventListener("submit", async (e) => {
         e.preventDefault();

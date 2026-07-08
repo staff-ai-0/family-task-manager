@@ -210,7 +210,20 @@ const {
                     window.location.reload();
                 }, 1500);
             } else {
-                errorDiv.textContent = data.error || (lang === "es" ? "Error al enviar la invitación" : "Error sending invitation");
+                // data.error is normally a string (the BFF normalizes backend
+                // details), but stay defensive: a structured dict like
+                // {error, message, message_es} must surface its bilingual
+                // copy, never "[object Object]".
+                let errText = data.error;
+                if (errText && typeof errText === "object") {
+                    errText = (lang === "es"
+                        ? (errText.message_es || errText.message)
+                        : (errText.message || errText.message_es))
+                        || errText.error;
+                }
+                errorDiv.textContent = (typeof errText === "string" && errText)
+                    ? errText
+                    : (lang === "es" ? "Error al enviar la invitación" : "Error sending invitation");
                 errorDiv.classList.remove("hidden");
             }
         } catch (error) {

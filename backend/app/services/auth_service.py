@@ -10,15 +10,33 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from app.models import User, Family
-from app.models.user import UserRole
+from app.models.user import (
+    APPROVAL_APPROVED,
+    APPROVAL_PENDING,
+    UserRole,
+)
 from app.schemas.user import UserCreate, UserLogin
 from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
 from app.core.config import settings
 from app.core.exceptions import (
+    ForbiddenException,
     NotFoundException,
     ValidationException,
     UnauthorizedException,
 )
+
+
+def pending_approval_message(lang: str | None) -> str:
+    """Bilingual 'account pending parental approval' copy (403 detail)."""
+    if (lang or "es") == "es":
+        return (
+            "Tu cuenta está pendiente de aprobación por un padre o madre "
+            "de tu familia. Pídeles que la aprueben desde Miembros."
+        )
+    return (
+        "Your account is pending parental approval. "
+        "Ask a parent to approve it from the Members page."
+    )
 
 
 class AuthService:
@@ -83,6 +101,12 @@ class AuthService:
         # Check if user is active
         if not user.is_active:
             raise UnauthorizedException("Account is deactivated")
+
+        # Join-code self-signups cannot log in until a parent approves.
+        if getattr(user, "approval_status", APPROVAL_APPROVED) == APPROVAL_PENDING:
+            raise ForbiddenException(
+                pending_approval_message(user.preferred_lang)
+            )
 
         # Create access + refresh tokens
         access_token = create_access_token(
@@ -159,6 +183,60 @@ class AuthService:
         await db.commit()
         await db.refresh(user)
         return user
+
+    @staticmethod
+    async def approve_user(db: AsyncSession, user: User) -> User:
+        """Approve a pending join-code member (parent action).
+
+        Flips approval_status to 'approved' and stamps approved_at so the
+        member can log in. Raises ValidationException when the account is
+        not pending (approve is not a generic state toggle).
+        """
+        if user.approval_status != APPROVAL_PENDING:
+            raise ValidationException("User is not pending approval")
+
+        user.approval_status = APPROVAL_APPROVED
+        user.approved_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        await db.commit()
+        await db.refresh(user)
+        return user
+
+    @staticmethod
+    async def notify_parents_of_pending_member(
+        db: AsyncSession, new_user: User
+    ) -> None:
+        """In-app notify every active parent that a member awaits approval.
+
+        Called after a join-code self-signup lands in 'pending'. Each parent
+        gets the copy in their own preferred language with a link to the
+        members page (where the Approve/Reject buttons live).
+        """
+        from app.services.notification_service import NotificationService
+
+        parents = (
+            (
+                await db.execute(
+                    select(User).where(
+                        User.family_id == new_user.family_id,
+                        User.role == UserRole.PARENT,
+                        User.is_active == True,  # noqa: E712
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for parent in parents:
+            await NotificationService.create_localized(
+                db,
+                family_id=new_user.family_id,
+                key="member_pending_approval",
+                user_id=parent.id,
+                params={"name": new_user.name, "email": new_user.email},
+                link="/parent/members",
+                lang=parent.preferred_lang or "es",
+            )
 
     @staticmethod
     async def delete_user(db: AsyncSession, user_id: UUID) -> None:

@@ -16,11 +16,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
 
+from fastapi.concurrency import run_in_threadpool
 from openai import OpenAI
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
 from app.services.budget.receipt_scanner_service import (
+    LLM_TIMEOUT,
     RECEIPT_MODEL,
     _pdf_first_page_to_png,
 )
@@ -87,30 +89,36 @@ async def scan_calendar_document(
         )
 
     if media_type == "application/pdf":
-        image_bytes = _pdf_first_page_to_png(image_bytes)
+        # CPU-bound PyMuPDF rasterization — keep it off the event loop.
+        image_bytes = await run_in_threadpool(_pdf_first_page_to_png, image_bytes)
         media_type = "image/jpeg"
 
     client = OpenAI(
         base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
         api_key=settings.LITELLM_API_KEY,
+        timeout=LLM_TIMEOUT,  # connect fails fast; read capped at 60s
     )
 
     image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
     data_uri = f"data:{media_type};base64,{image_b64}"
 
     try:
-        completion = client.chat.completions.create(
-            model=RECEIPT_MODEL,
-            max_tokens=2048,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": data_uri}},
-                        {"type": "text", "text": CALENDAR_PROMPT},
-                    ],
-                }
-            ],
+        # Sync OpenAI client (blocking I/O) — offload to a worker thread so a
+        # slow provider can't stall the async event loop.
+        completion = await run_in_threadpool(
+            lambda: client.chat.completions.create(
+                model=RECEIPT_MODEL,
+                max_tokens=2048,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": data_uri}},
+                            {"type": "text", "text": CALENDAR_PROMPT},
+                        ],
+                    }
+                ],
+            )
         )
     except Exception as exc:
         raise ValidationError(f"Calendar scan via LiteLLM failed: {exc}")

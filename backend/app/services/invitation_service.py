@@ -100,18 +100,20 @@ class InvitationService:
         invitation_code: str,
         user_name: str,
         user_password: str,
-        user_id: UUID = None
+        user_id: UUID = None,
+        birthdate=None,
     ) -> tuple[FamilyInvitation, User]:
         """
         Accept a family invitation and create/update user account.
-        
+
         Args:
             db: Database session
             invitation_code: The invitation code from the email
             user_name: User's name
             user_password: User's password
             user_id: Optional existing user ID to link to invitation
-            
+            birthdate: Optional date of birth (child/teen; no age gating yet)
+
         Returns:
             Tuple of (invitation, user)
             
@@ -146,7 +148,9 @@ class InvitationService:
             
             user.family_id = invitation.family_id
         else:
-            # Create new user
+            # Create new user. Invitation-created accounts are parent-vetted
+            # by construction (a parent sent the invite), so approval_status
+            # stays at its 'approved' default.
             user = User(
                 email=invitation.invited_email,
                 name=user_name,
@@ -155,6 +159,7 @@ class InvitationService:
                 family_id=invitation.family_id,
                 points=0,
                 is_active=True,
+                birthdate=birthdate,
             )
             db.add(user)
             await db.flush()

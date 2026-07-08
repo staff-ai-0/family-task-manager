@@ -27,6 +27,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from uuid import UUID
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -39,6 +40,12 @@ from app.core.exceptions import ValidationError
 # Hard ceiling for any single LiteLLM/vision request. A hung or slow provider
 # must never block the event loop indefinitely.
 LLM_REQUEST_TIMEOUT_SECONDS = 60.0
+# Shared client timeout for every LLM call site in the app: fail fast (5s)
+# when the LiteLLM proxy is unreachable, while giving a healthy provider the
+# full read window to produce a response. Import this wherever an OpenAI
+# client is built (jarvis, calendar scanner, recipe importer, proof
+# validator, category AI) so the connect/read split stays consistent.
+LLM_TIMEOUT = httpx.Timeout(LLM_REQUEST_TIMEOUT_SECONDS, connect=5.0)
 from app.core.premium import FEATURE_MIN_PLAN, PLAN_ORDER, get_family_plan
 from app.models.budget import (
     BudgetAccount,
@@ -60,7 +67,7 @@ logger = logging.getLogger(__name__)
 # Alternatives: "qwen-vl", "claude-haiku", "claude-sonnet", "gpt-4o".
 RECEIPT_MODEL = settings.RECEIPT_MODEL
 
-RECEIPT_UPLOADS_DIR = "/app/uploads/receipt-drafts"
+RECEIPT_UPLOADS_DIR = os.path.join(settings.UPLOADS_ROOT, "receipt-drafts")
 
 
 def _build_notes(payee_name: Optional[str], items: list, currency: str = "MXN") -> str:
@@ -246,7 +253,10 @@ async def scan_receipt(
     # image_url data-URIs only — no direct PDF support over that wire.
     # Normalize the media_type so the downstream data URI is correct.
     if media_type == "application/pdf":
-        image_bytes = _pdf_first_page_to_png(image_bytes)
+        # PyMuPDF rasterization of a full-res camera scan is CPU-bound
+        # (0.5-2s) — run it in a worker thread so it can't stall the
+        # event loop alongside every other in-flight request.
+        image_bytes = await run_in_threadpool(_pdf_first_page_to_png, image_bytes)
         media_type = "image/jpeg"  # rasterizer outputs JPEG for size
 
     # OpenAI SDK pointed at LiteLLM's /v1 endpoint. The proxy handles
@@ -255,7 +265,7 @@ async def scan_receipt(
     client = OpenAI(
         base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
         api_key=settings.LITELLM_API_KEY,
-        timeout=LLM_REQUEST_TIMEOUT_SECONDS,
+        timeout=LLM_TIMEOUT,
     )
 
     image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")

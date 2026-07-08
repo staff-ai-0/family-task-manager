@@ -13,7 +13,7 @@ if (!ok || !data) {
     return new Response("Invalid token", { status: status ?? 401 });
 }
 
-const lang = Astro.cookies.get("lang")?.value ?? "en";
+const lang = Astro.cookies.get("lang")?.value ?? "es";
 
 function formatTime(iso: string, allDay: boolean): string {
     if (allDay) return lang === "es" ? "Todo el día" : "All day";

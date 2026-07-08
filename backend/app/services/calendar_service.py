@@ -171,15 +171,13 @@ class CalendarService:
         if evt.source in ("ocr_flyer", "school_import"):
             try:
                 from app.services.notification_service import NotificationService
-                from app.models.notification import NotificationType
                 when = evt.start_ts.strftime("%a %b %d, %H:%M")
-                await NotificationService.create(
+                await NotificationService.create_localized(
                     db,
                     family_id=family_id,
+                    key="calendar_event_added",
                     user_id=None,
-                    type=NotificationType.CALENDAR_EVENT_ADDED,
-                    title=f"📅 {evt.title}",
-                    body=f"Added from scan · {when}",
+                    params={"title": evt.title, "when": when},
                     link="/calendar",
                     push=False,  # family-wide; per-user push handled separately
                 )

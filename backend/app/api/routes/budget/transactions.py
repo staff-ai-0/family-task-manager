@@ -14,7 +14,13 @@ from uuid import UUID
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
-from app.core.premium import require_feature
+from app.core.premium import (
+    DEFAULT_FREE_LIMITS,
+    FEATURE_LIMIT_MAP,
+    FEATURE_MIN_PLAN,
+    FamilyPlan,
+    require_feature,
+)
 from app.core.rate_limiter import limiter, AI_LIMIT
 from app.core.upload_validation import (
     read_upload_capped,
@@ -44,6 +50,34 @@ def _build_split_response(parent, children) -> SplitTransactionResponse:
     """Construct response with sum-of-children total; surfaces drift if data corrupt."""
     total = sum(c.amount for c in children)
     return SplitTransactionResponse(parent=parent, children=children, total=total)
+
+
+def _plan_limit(plan: FamilyPlan, feature: str) -> int:
+    """Numeric limit for *feature* from the resolved plan (with free fallback)."""
+    limit_key = FEATURE_LIMIT_MAP[feature]
+    value = plan.limits.get(limit_key)
+    if value is None:
+        value = DEFAULT_FREE_LIMITS.get(limit_key, 0)
+    return int(value)
+
+
+def _raise_upgrade_required(feature: str, limit: int) -> None:
+    """403 payload matching require_feature's contract (atomic-gate variant)."""
+    plan_needed = FEATURE_MIN_PLAN.get(feature, "plus")
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "error": "upgrade_required",
+            "feature": feature,
+            "plan_needed": plan_needed,
+            "current_usage": limit,
+            "limit": limit,
+            "message": (
+                f"You've reached the {feature} limit ({limit}/{limit}). "
+                f"Upgrade to {plan_needed} for more."
+            ),
+        },
+    )
 
 
 @router.get("/", response_model=List[TransactionResponse])
@@ -87,14 +121,24 @@ async def create_transaction(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new transaction (parent only)"""
-    await require_feature("budget_transaction", db, current_user)
+    # require_feature handles the tier/boolean/zero-limit 403s; the atomic
+    # UPSERT below is the authoritative metering gate (closes the
+    # read-then-write race where two concurrent requests both pass the
+    # check and increment past the cap). Uncommitted here — it rides on
+    # TransactionService.create's commit, so a failed create charges nothing.
+    plan = await require_feature("budget_transaction", db, current_user)
+    limit = _plan_limit(plan, "budget_transaction")
+    new_count = await UsageService.try_increment_within_limit(
+        db, current_user.family_id, "budget_transaction", limit
+    )
+    if new_count is None:
+        _raise_upgrade_required("budget_transaction", limit)
     transaction = await TransactionService.create(
         db,
         family_id=to_uuid_required(current_user.family_id),
         data=data,
         user_id=current_user.id,
     )
-    await UsageService.increment(db, current_user.family_id, "budget_transaction")
     return transaction
 
 
@@ -318,9 +362,19 @@ async def create_split_transaction(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a parent + N child split transaction (parent only)."""
-    await require_feature(
+    # Charge usage per child leg (the parent row is a virtual aggregator).
+    # Atomic gate: see create_transaction — the increment is uncommitted
+    # until create_split's commit, so a failed create charges nothing.
+    plan = await require_feature(
         "budget_transaction", db, current_user, units=len(data.splits)
     )
+    limit = _plan_limit(plan, "budget_transaction")
+    new_count = await UsageService.try_increment_within_limit(
+        db, current_user.family_id, "budget_transaction", limit,
+        amount=len(data.splits),
+    )
+    if new_count is None:
+        _raise_upgrade_required("budget_transaction", limit)
     family_id = to_uuid_required(current_user.family_id)
     parent = await TransactionService.create_split(
         db,
@@ -334,11 +388,6 @@ async def create_split_transaction(
         cleared=data.cleared,
         reconciled=data.reconciled,
         user_id=current_user.id,
-    )
-    # Charge usage per child leg; the parent row is a virtual aggregator and
-    # is not user-visible as an independent transaction.
-    await UsageService.increment(
-        db, current_user.family_id, "budget_transaction", amount=len(data.splits)
     )
     children = await TransactionService.get_split_children(db, parent.id, family_id)
     return _build_split_response(parent, children)
@@ -549,13 +598,22 @@ async def scan_receipt_endpoint(
     # area can be toggled at the plan level independently of the
     # per-month metered receipt_scan quota.
     await require_feature("ai_features", db, current_user)
-    await require_feature("receipt_scan", db, current_user)
+    plan = await require_feature("receipt_scan", db, current_user)
 
     # Track usage. force=True is a retry after a dup-warning; the original
     # attempt already incremented the meter, so we skip to avoid charging
-    # the user twice for the same logical scan.
+    # the user twice for the same logical scan. The atomic UPSERT is the
+    # authoritative gate (no read-then-write race); committed immediately so
+    # the attempt is charged even if the downstream scan fails (parity with
+    # the previous UsageService.increment behavior).
     if not force:
-        await UsageService.increment(db, family_id, "receipt_scan")
+        limit = _plan_limit(plan, "receipt_scan")
+        new_count = await UsageService.try_increment_within_limit(
+            db, family_id, "receipt_scan", limit
+        )
+        if new_count is None:
+            _raise_upgrade_required("receipt_scan", limit)
+        await db.commit()
 
     # Validate caller-supplied account belongs to this family (404 on mismatch)
     if account_id is not None:

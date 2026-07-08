@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from app.models.task_template import TaskTemplate
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
-from app.models.user import User, UserRole
+from app.models.user import APPROVAL_PENDING, User, UserRole
 from app.core.security import get_password_hash
 from app.schemas.task_template import TaskTemplateCreate
 from app.services.task_template_service import TaskTemplateService
@@ -42,7 +42,9 @@ async def _create_template(db, family_id, parent_id, **kwargs):
     )
 
 
-async def _create_extra_user(db, family_id, email, role=UserRole.CHILD):
+async def _create_extra_user(
+    db, family_id, email, role=UserRole.CHILD, approval_status=None
+):
     """Helper to create an additional family member"""
     user = User(
         email=email,
@@ -53,6 +55,8 @@ async def _create_extra_user(db, family_id, email, role=UserRole.CHILD):
         email_verified=True,
         points=0,
     )
+    if approval_status is not None:
+        user.approval_status = approval_status
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -175,6 +179,73 @@ class TestShuffle:
         )
         for a in assignments:
             assert a.week_of.weekday() == 0  # Monday
+
+    async def test_shuffle_excludes_pending_approval_member(
+        self, db_session, test_family, test_parent_user
+    ):
+        """A join-code self-signup awaiting parental approval is is_active=True
+        but cannot log in — the shuffle must skip it entirely. With one
+        approved member and one pending member, every instance goes to the
+        approved member (deterministic)."""
+        pending = await _create_extra_user(
+            db_session, test_family.id, "pending-kid@test.com",
+            approval_status=APPROVAL_PENDING,
+        )
+        await _create_template(
+            db_session, test_family.id, test_parent_user.id,
+            title="Daily Task", interval_days=1
+        )
+        assignments = await TaskAssignmentService.shuffle_tasks(
+            db_session, test_family.id
+        )
+        assert assignments  # the approved member still gets the whole week
+        assert all(a.assigned_to == test_parent_user.id for a in assignments)
+        assert not any(a.assigned_to == pending.id for a in assignments)
+
+    async def test_shuffle_includes_approved_member_excludes_pending(
+        self, db_session, test_family, test_parent_user
+    ):
+        """Approved members (default approval_status) participate; the pending
+        one never appears among assignees."""
+        approved = await _create_extra_user(
+            db_session, test_family.id, "approved-kid@test.com"
+        )
+        pending = await _create_extra_user(
+            db_session, test_family.id, "pending-kid-2@test.com",
+            approval_status=APPROVAL_PENDING,
+        )
+        await _create_template(
+            db_session, test_family.id, test_parent_user.id,
+            title="Daily Task", interval_days=1
+        )
+        assignments = await TaskAssignmentService.shuffle_tasks(
+            db_session, test_family.id
+        )
+        assignees = {a.assigned_to for a in assignments}
+        assert pending.id not in assignees
+        assert assignees <= {test_parent_user.id, approved.id}
+
+    async def test_preview_shuffle_excludes_pending_approval_member(
+        self, db_session, test_family, test_parent_user
+    ):
+        """Preview uses the same member selection as the real shuffle."""
+        pending = await _create_extra_user(
+            db_session, test_family.id, "pending-preview@test.com",
+            approval_status=APPROVAL_PENDING,
+        )
+        await _create_template(
+            db_session, test_family.id, test_parent_user.id,
+            title="Daily Task", interval_days=1
+        )
+        preview = await TaskAssignmentService.preview_shuffle(
+            db_session, test_family.id
+        )
+        member_ids = {row["user_id"] for row in preview["totals_by_member"]}
+        assert pending.id not in member_ids
+        assert test_parent_user.id in member_ids
+        assert not any(
+            item["assigned_to"] == pending.id for item in preview["assignments"]
+        )
 
 
 # ─── Assignment Queries ──────────────────────────────────────────────

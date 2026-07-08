@@ -7,7 +7,7 @@ import { t } from "../../lib/i18n";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
 
 const { data: user } = await apiFetch<any>("/api/auth/me", { token });
 if (!user) {
@@ -41,6 +41,30 @@ if (Astro.request.method === "POST") {
     });
     if (ok) {
       successMsg = t(lang, "pm_deleted");
+    } else {
+      errorMsg = error || "Error";
+    }
+  }
+  if (action === "approve_member") {
+    const memberId = data.get("member_id");
+    const { ok, error } = await apiFetch(`/api/users/${memberId}/approve`, {
+      method: "POST",
+      token,
+    });
+    if (ok) {
+      successMsg = lang === "es" ? "Miembro aprobado. Ya puede iniciar sesión." : "Member approved. They can now sign in.";
+    } else {
+      errorMsg = error || "Error";
+    }
+  }
+  if (action === "reject_member") {
+    const memberId = data.get("member_id");
+    const { ok, error } = await apiFetch(`/api/users/${memberId}/reject`, {
+      method: "POST",
+      token,
+    });
+    if (ok) {
+      successMsg = lang === "es" ? "Solicitud rechazada y cuenta eliminada." : "Request rejected and account deleted.";
     } else {
       errorMsg = error || "Error";
     }
@@ -111,7 +135,10 @@ if (Astro.request.method === "POST") {
 }
 
 const { data: family } = await apiFetch<any>("/api/families/me", { token });
-const members: any[] = family?.members ?? [];
+const allMembers: any[] = family?.members ?? [];
+// Join-code self-signups awaiting parental approval (can't log in yet).
+const pendingMembers = allMembers.filter((m: any) => m.approval_status === "pending");
+const members = allMembers.filter((m: any) => m.approval_status !== "pending");
 
 // Fetch pending invitations server-side.
 // Backend route is path-param (/{family_id}/pending) and returns a plain list.
@@ -301,6 +328,70 @@ if (!joinCodeOk && joinCodeError) {
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          </section>
+        )
+      }
+
+      <!-- Members pending parental approval (join-code self-signups) -->
+      {
+        pendingMembers.length > 0 && (
+          <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-coral">
+            <div class="flex items-center gap-2 mb-2">
+              <svg class="h-5 w-5 text-brand-coral-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.062 19h13.876c1.54 0 2.502-1.667 1.732-3L13.732 5c-.77-1.333-2.694-1.333-3.464 0L4.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <h2 class="font-bold text-brand-ink">
+                {lang === "es" ? "Pendientes de Aprobación" : "Pending Approval"}
+              </h2>
+              <span class="ml-auto text-xs bg-brand-coral/15 text-brand-coral-deep px-2 py-1 rounded-full font-semibold">
+                {pendingMembers.length}
+              </span>
+            </div>
+            <p class="text-xs text-brand-ink-soft mb-4">
+              {lang === "es"
+                ? "Estas personas se registraron con tu código de familia. No podrán iniciar sesión hasta que las apruebes."
+                : "These people signed up with your family code. They can't sign in until you approve them."}
+            </p>
+            <div class="space-y-3">
+              {
+                pendingMembers.map((m: any) => (
+                  <div class="flex items-center justify-between p-4 bg-gradient-to-r from-rose-50 to-amber-50 rounded-xl border border-brand-coral/40">
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-semibold text-brand-ink break-all">{m.name}</p>
+                      <p class="text-xs text-brand-ink-soft break-all">
+                        <span class="capitalize">{m.role}</span> · {m.email}
+                      </p>
+                    </div>
+                    <div class="ml-3 flex-shrink-0 flex items-center gap-2">
+                      <form method="POST" class="inline-flex">
+                        <input type="hidden" name="action" value="approve_member" />
+                        <input type="hidden" name="member_id" value={m.id} />
+                        <button
+                          type="submit"
+                          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors bg-brand-mint/20 text-brand-mint-deep hover:bg-brand-mint"
+                        >
+                          {lang === "es" ? "Aprobar" : "Approve"}
+                        </button>
+                      </form>
+                      <form
+                        method="POST"
+                        class="inline-flex"
+                        onsubmit={`return confirm('${lang === "es" ? "¿Rechazar esta solicitud? La cuenta será eliminada." : "Reject this request? The account will be deleted."}');`}
+                      >
+                        <input type="hidden" name="action" value="reject_member" />
+                        <input type="hidden" name="member_id" value={m.id} />
+                        <button
+                          type="submit"
+                          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors bg-red-100 text-red-700 hover:bg-red-200"
+                        >
+                          {lang === "es" ? "Rechazar" : "Reject"}
+                        </button>
+                      </form>
                     </div>
                   </div>
                 ))

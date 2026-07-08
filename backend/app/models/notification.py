@@ -15,6 +15,8 @@ from app.core.database import Base
 
 
 class NotificationType:
+    TASK_ASSIGNED = "task_assigned"
+    TASK_DUE = "task_due"
     GIG_APPROVED = "gig_approved"
     GIG_REJECTED = "gig_rejected"
     GIG_PENDING_REVIEW = "gig_pending_review"
@@ -25,6 +27,8 @@ class NotificationType:
     SHOPPING_ITEM_ADDED = "shopping_item_added"
     PET_NEEDS_ATTENTION = "pet_needs_attention"
     GOAL_REACHED = "goal_reached"
+    MEMBER_PENDING_APPROVAL = "member_pending_approval"
+    MEMBER_APPROVED = "member_approved"
 
 
 class Notification(Base):

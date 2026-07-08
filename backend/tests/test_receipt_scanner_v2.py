@@ -392,13 +392,17 @@ async def family_with_recent_heb_tx(
         "app.api.routes.budget.transactions.scan_and_create_transaction",
         _fake_pipeline,
     )
+    from app.core.premium import FamilyPlan
+
     monkeypatch.setattr(
         "app.api.routes.budget.transactions.require_feature",
-        AsyncMock(),
+        AsyncMock(return_value=FamilyPlan(
+            name="pro", limits={"max_receipt_scans_per_month": -1},
+        )),
     )
     monkeypatch.setattr(
-        "app.api.routes.budget.transactions.UsageService.increment",
-        AsyncMock(),
+        "app.api.routes.budget.transactions.UsageService.try_increment_within_limit",
+        AsyncMock(return_value=1),
     )
     return test_family
 
@@ -412,14 +416,17 @@ async def account_factory_authed(
     success result that echoes back 'override' strategy.
     """
     from app.models.budget import BudgetAccount
+    from app.core.premium import FamilyPlan
 
     monkeypatch.setattr(
         "app.api.routes.budget.transactions.require_feature",
-        AsyncMock(),
+        AsyncMock(return_value=FamilyPlan(
+            name="pro", limits={"max_receipt_scans_per_month": -1},
+        )),
     )
     monkeypatch.setattr(
-        "app.api.routes.budget.transactions.UsageService.increment",
-        AsyncMock(),
+        "app.api.routes.budget.transactions.UsageService.try_increment_within_limit",
+        AsyncMock(return_value=1),
     )
 
     async def _make(*, currency: str = "MXN"):

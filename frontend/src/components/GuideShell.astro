@@ -20,6 +20,11 @@ interface Props {
     contentsLabel: string;
     noResultsText: string;
     tocAria: string;
+    /** Labels for the legal footer links (/privacidad, /terminos). ES defaults. */
+    privacyLabel?: string;
+    termsLabel?: string;
+    /** Label for the support mailto link in the footer. ES default. */
+    supportLabel?: string;
 }
 const {
     title,
@@ -34,6 +39,9 @@ const {
     contentsLabel,
     noResultsText,
     tocAria,
+    privacyLabel = "Aviso de Privacidad",
+    termsLabel = "Términos y Condiciones",
+    supportLabel = "Contactar soporte",
 } = Astro.props;
 ---
 
@@ -65,6 +73,13 @@ const {
         <article class="guide">
             <slot />
         </article>
+        <footer class="guide-legal">
+            <a href="/privacidad">{privacyLabel}</a>
+            <span aria-hidden="true">·</span>
+            <a href="/terminos">{termsLabel}</a>
+            <span aria-hidden="true">·</span>
+            <a href="mailto:soporte@agent-ia.mx">{supportLabel}: soporte@agent-ia.mx</a>
+        </footer>
     </main>
 
     <script>
@@ -564,5 +579,26 @@ const {
         color: #94a3b8;
         font-size: 14px;
         margin: 8px 0 0;
+    }
+
+    /* Legal footer links (privacy / terms) */
+    .guide-legal {
+        margin-top: 48px;
+        padding-top: 16px;
+        border-top: 1px solid #e2e8f0;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-size: 13px;
+        color: #94a3b8;
+    }
+    .guide-legal a {
+        color: #64748b;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    .guide-legal a:hover {
+        color: #4f46e5;
+        text-decoration: underline;
     }
 </style>

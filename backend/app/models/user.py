@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, String, Integer, Boolean, Date, DateTime, ForeignKey, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -6,6 +6,19 @@ import uuid
 import enum
 
 from app.core.database import Base
+
+# Version tag stored alongside a user's terms/privacy consent. Bump when the
+# legal documents (/terminos, /privacidad) change materially so re-consent can
+# be requested from users holding an older version.
+CONSENT_POLICY_VERSION = "2026-07-07-v1"
+
+# users.approval_status values. Plain strings (not a PG enum) on purpose —
+# minimal schema, easy to extend. Every pre-existing account and every
+# trusted creation path (family founder, parent-created member, invitation
+# accept) is 'approved'; only join-by-family-code self-signups start
+# 'pending' until a parent approves them.
+APPROVAL_APPROVED = "approved"
+APPROVAL_PENDING = "pending"
 
 
 class UserRole(str, enum.Enum):
@@ -65,6 +78,27 @@ class User(Base):
     gig_trust_streak = Column(
         Integer, default=0, nullable=False, server_default="0"
     )
+
+    # Consent capture (LFPDPPP / terms acceptance). Set when the user (or the
+    # registering adult) accepts the terms + privacy notice at signup.
+    consented_at = Column(DateTime, nullable=True)
+    consent_policy_version = Column(String(32), nullable=True)
+
+    # Parental-approval state for join-code self-signups. 'approved' for all
+    # trusted paths; 'pending' users cannot log in until a parent approves
+    # (POST /api/users/{id}/approve) — rejection deletes the account.
+    approval_status = Column(
+        String(16),
+        nullable=False,
+        default=APPROVAL_APPROVED,
+        server_default=APPROVAL_APPROVED,
+        index=True,
+    )
+    approved_at = Column(DateTime, nullable=True)
+
+    # Optional birthdate collected for CHILD/TEEN signups. No hard age logic
+    # yet — enables future age gating (COPPA-style flows).
+    birthdate = Column(Date, nullable=True)
 
     oauth_provider = Column(String(50), nullable=True)
     oauth_id = Column(String(255), nullable=True)

@@ -1,0 +1,335 @@
+---
+/**
+ * Aviso de Privacidad (LFPDPPP) — public, bilingual (ES primary / EN via lang
+ * cookie). Linked from the landing footer, register page, and help pages.
+ * Listed in middleware publicRoutes.
+ */
+import Layout from "../layouts/Layout.astro";
+import Logo from "../components/brand/Logo.astro";
+
+const lang = Astro.cookies.get("lang")?.value ?? "es";
+const es = lang === "es";
+
+type Section = {
+    h: string;
+    ps?: string[];
+    list?: string[];
+    after?: string[];
+};
+
+const meta = es
+    ? {
+          title: "Aviso de Privacidad — Family Task Manager",
+          kicker: "Legal",
+          h1: "Aviso de Privacidad",
+          version: "v1 — 7 de julio de 2026",
+          draft: "BORRADOR — pendiente de revisión legal",
+          intro: "Este Aviso de Privacidad describe cómo Family Task Manager (family.agent-ia.mx), operado por Agent-IA, recaba, usa, comparte y protege los datos personales de las familias que usan la plataforma, conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP), su Reglamento y los Lineamientos del Aviso de Privacidad.",
+          contactLabel: "Contacto para dudas de privacidad y ejercicio de derechos ARCO",
+          backHome: "← Inicio",
+          toc: [],
+      }
+    : {
+          title: "Privacy Notice — Family Task Manager",
+          kicker: "Legal",
+          h1: "Privacy Notice",
+          version: "v1 — July 7, 2026",
+          draft: "DRAFT — pending legal review",
+          intro: "This Privacy Notice describes how Family Task Manager (family.agent-ia.mx), operated by Agent-IA, collects, uses, shares, and protects the personal data of families using the platform, in accordance with Mexico's Federal Law on the Protection of Personal Data Held by Private Parties (LFPDPPP), its Regulations, and the Privacy Notice Guidelines.",
+          contactLabel: "Contact for privacy questions and to exercise your ARCO rights",
+          backHome: "← Home",
+          toc: [],
+      };
+
+const sections: Section[] = es
+    ? [
+          {
+              h: "1. Responsable del tratamiento",
+              ps: [
+                  "El responsable del tratamiento de tus datos personales es Agent-IA.",
+                  "[PENDIENTE LEGAL — TODO: insertar razón social completa y domicilio fiscal de Agent-IA antes de publicar este aviso.]",
+                  "Sitio: https://family.agent-ia.mx · Correo de contacto: soporte@agent-ia.mx.",
+              ],
+          },
+          {
+              h: "2. Datos personales que recabamos",
+              ps: ["Recabamos únicamente los datos necesarios para operar el servicio:"],
+              list: [
+                  "Datos de cuenta de madres/padres y de hijas/hijos: nombre y correo electrónico.",
+                  "Fecha de nacimiento (para adaptar la experiencia según la edad del menor).",
+                  "Actividad de tareas y quehaceres: tareas asignadas, completadas, puntos, rachas y recompensas.",
+                  "Fotografías que los miembros de la familia suben como evidencia de tareas o encargos (gigs) y fotografías de tickets/recibos para el escáner de gastos.",
+                  "Mensajes del chat familiar y mensajes directos dentro de la app.",
+                  "Registros de presupuesto y finanzas familiares: cuentas, transacciones, categorías y asignaciones que la familia captura.",
+                  "Datos de pago de suscripciones, procesados por PayPal. Nunca almacenamos números de tarjeta ni credenciales bancarias en nuestros servidores.",
+              ],
+          },
+          {
+              h: "3. Datos de menores de edad",
+              ps: [
+                  "Family Task Manager es una app familiar: las cuentas de niñas, niños y adolescentes existen únicamente dentro de una familia administrada por una madre, padre o tutor.",
+                  "Tratamos datos personales de menores únicamente con el consentimiento verificable de la madre, padre o tutor que administra la familia, quien es responsable de crear o autorizar las cuentas de los menores.",
+                  "Las madres y padres pueden en todo momento revisar la información de sus hijas/hijos dentro de la app y solicitar su corrección o eliminación escribiendo a soporte@agent-ia.mx.",
+              ],
+          },
+          {
+              h: "4. Finalidades del tratamiento",
+              ps: ["Usamos tus datos para las siguientes finalidades primarias, necesarias para el servicio:"],
+              list: [
+                  "Crear y administrar las cuentas de la familia y autenticar a sus miembros.",
+                  "Operar las funciones de la app: tareas, puntos, recompensas, encargos, presupuesto familiar, chat, calendario, comidas y listas de compras.",
+                  "Validar evidencias de tareas y extraer datos de tickets/recibos (ver sección de IA).",
+                  "Procesar suscripciones y pagos a través de PayPal.",
+                  "Enviar correos transaccionales (verificación de cuenta, restablecimiento de contraseña, invitaciones, avisos del servicio).",
+                  "Brindar soporte y mantener la seguridad de la plataforma.",
+              ],
+              after: [
+                  "No usamos tus datos para finalidades secundarias como publicidad de terceros, ni vendemos datos personales.",
+              ],
+          },
+          {
+              h: "5. Procesamiento con inteligencia artificial",
+              ps: [
+                  "Algunas funciones usan modelos de inteligencia artificial: el escáner de recibos, la validación de fotos de evidencia, el escáner de calendario y el asistente familiar.",
+                  "Para ofrecer estas funciones, imágenes y texto pueden ser procesados por proveedores externos de IA — Anthropic (Claude) y Google (Gemini) — a través de un proxy LiteLLM autogestionado por Agent-IA.",
+                  "Estos datos se envían únicamente para prestar la función solicitada y no se utilizan para entrenar los modelos de dichos terceros.",
+              ],
+          },
+          {
+              h: "6. Encargados y transferencias (subprocesadores)",
+              ps: ["Compartimos datos únicamente con los proveedores necesarios para operar el servicio:"],
+              list: [
+                  "Anthropic (EE. UU.) — procesamiento de IA (funciones descritas en la sección 5).",
+                  "Google (EE. UU.) — procesamiento de IA (Gemini), inicio de sesión con Google (OAuth) y envío de correo vía Google Workspace SMTP.",
+                  "PayPal (EE. UU.) — procesamiento de pagos de suscripciones.",
+                  "Resend (EE. UU.) — envío de correos transaccionales.",
+                  "Cloudflare (EE. UU.) — red de entrega, seguridad y túnel de conexión del sitio.",
+              ],
+              after: [
+                  "Fuera de estos encargados, no transferimos tus datos personales a terceros sin tu consentimiento, salvo los casos previstos por el artículo 37 de la LFPDPPP (por ejemplo, requerimientos de autoridad competente).",
+              ],
+          },
+          {
+              h: "7. Derechos ARCO y revocación del consentimiento",
+              ps: [
+                  "Tienes derecho a Acceder, Rectificar y Cancelar tus datos personales, así como a Oponerte a su tratamiento (derechos ARCO) y a revocar el consentimiento que nos hayas otorgado.",
+                  "Para ejercerlos, envía tu solicitud a soporte@agent-ia.mx indicando: nombre del titular, medio para comunicarte la respuesta, descripción clara de los datos y del derecho que deseas ejercer, y documentos que acrediten tu identidad (o la representación del menor, en su caso).",
+                  "Responderemos en los plazos que marca la LFPDPPP (máximo 20 días hábiles para comunicarte la determinación y 15 días hábiles adicionales para hacerla efectiva).",
+                  "Si consideras que tu derecho a la protección de datos ha sido vulnerado, puedes acudir al Instituto Nacional de Transparencia, Acceso a la Información y Protección de Datos Personales (INAI).",
+              ],
+          },
+          {
+              h: "8. Plazos de conservación",
+              ps: [
+                  "Conservamos los datos mientras la cuenta familiar esté activa y sean necesarios para las finalidades descritas.",
+                  "Al eliminarse una cuenta o una familia, los datos personales se eliminan o anonimizan en un plazo razonable, salvo aquellos que debamos conservar por obligaciones legales (por ejemplo, registros fiscales de pagos).",
+                  "Los respaldos de base de datos se rotan periódicamente y los datos eliminados desaparecen de ellos conforme a esa rotación.",
+              ],
+          },
+          {
+              h: "9. Cookies",
+              ps: [
+                  "Usamos únicamente cookies estrictamente necesarias: cookies de sesión y autenticación (access_token, refresh_token) y una cookie de preferencia de idioma (lang). Sin ellas la app no puede funcionar.",
+                  "Cloudflare, nuestro proveedor de red, puede establecer cookies técnicas propias (por ejemplo, de seguridad) al servir el sitio.",
+                  "No usamos cookies de publicidad ni de analítica de terceros. Si esto cambiara, actualizaremos este aviso y solicitaremos el consentimiento que corresponda.",
+              ],
+          },
+          {
+              h: "10. Transferencias internacionales",
+              ps: [
+                  "Nuestros proveedores (sección 6) pueden procesar datos en servidores ubicados fuera de México, principalmente en Estados Unidos. Estas transferencias se realizan únicamente para las finalidades descritas y con proveedores que mantienen medidas de seguridad y confidencialidad acordes a este aviso.",
+              ],
+          },
+          {
+              h: "11. Seguridad",
+              ps: [
+                  "Aplicamos medidas administrativas, técnicas y físicas razonables para proteger tus datos: cifrado en tránsito (HTTPS), contraseñas cifradas con hash, aislamiento de datos por familia y controles de acceso por rol.",
+              ],
+          },
+          {
+              h: "12. Cambios a este aviso",
+              ps: [
+                  "Podemos actualizar este Aviso de Privacidad. Publicaremos cualquier cambio en esta misma página, indicando la versión y la fecha. Los cambios sustanciales se comunicarán dentro de la app o por correo.",
+              ],
+          },
+      ]
+    : [
+          {
+              h: "1. Data controller",
+              ps: [
+                  "The controller of your personal data is Agent-IA.",
+                  "[LEGAL TODO — insert Agent-IA's full legal entity name (razón social) and registered address before publishing this notice.]",
+                  "Site: https://family.agent-ia.mx · Contact email: soporte@agent-ia.mx.",
+              ],
+          },
+          {
+              h: "2. Personal data we collect",
+              ps: ["We collect only the data needed to run the service:"],
+              list: [
+                  "Account data for parents and children: name and email address.",
+                  "Date of birth (to adapt the experience to a child's age).",
+                  "Task and chore activity: assigned and completed tasks, points, streaks, and rewards.",
+                  "Photos that family members upload as proof of tasks or gigs, and photos of receipts for the expense scanner.",
+                  "Family chat messages and direct messages within the app.",
+                  "Family budget and finance records: accounts, transactions, categories, and allocations the family enters.",
+                  "Subscription payment data, processed by PayPal. We never store card numbers or bank credentials on our servers.",
+              ],
+          },
+          {
+              h: "3. Children's data",
+              ps: [
+                  "Family Task Manager is a family app: child and teen accounts exist only inside a family administered by a parent or guardian.",
+                  "We process minors' personal data only with the verifiable consent of the parent or guardian who administers the family, who is responsible for creating or authorizing the minors' accounts.",
+                  "Parents may at any time review their children's information in the app and request its correction or deletion by writing to soporte@agent-ia.mx.",
+              ],
+          },
+          {
+              h: "4. Purposes of processing",
+              ps: ["We use your data for the following primary purposes, which are necessary for the service:"],
+              list: [
+                  "Creating and administering family accounts and authenticating members.",
+                  "Operating app features: tasks, points, rewards, gigs, family budgeting, chat, calendar, meals, and shopping lists.",
+                  "Validating task proof photos and extracting data from receipts (see the AI section).",
+                  "Processing subscriptions and payments through PayPal.",
+                  "Sending transactional emails (account verification, password reset, invitations, service notices).",
+                  "Providing support and keeping the platform secure.",
+              ],
+              after: [
+                  "We do not use your data for secondary purposes such as third-party advertising, and we do not sell personal data.",
+              ],
+          },
+          {
+              h: "5. AI processing",
+              ps: [
+                  "Some features use artificial-intelligence models: the receipt scanner, task-proof photo validation, the calendar scanner, and the family assistant.",
+                  "To provide these features, images and text may be processed by third-party AI providers — Anthropic (Claude) and Google (Gemini) — through a LiteLLM proxy self-hosted by Agent-IA.",
+                  "This data is sent solely to provide the requested feature and is not used to train those third parties' models.",
+              ],
+          },
+          {
+              h: "6. Processors and transfers (subprocessors)",
+              ps: ["We share data only with the providers needed to operate the service:"],
+              list: [
+                  "Anthropic (USA) — AI processing (features described in section 5).",
+                  "Google (USA) — AI processing (Gemini), Sign in with Google (OAuth), and email delivery via Google Workspace SMTP.",
+                  "PayPal (USA) — subscription payment processing.",
+                  "Resend (USA) — transactional email delivery.",
+                  "Cloudflare (USA) — content delivery, security, and the site's connection tunnel.",
+              ],
+              after: [
+                  "Beyond these processors, we do not transfer your personal data to third parties without your consent, except in the cases provided by Article 37 of the LFPDPPP (for example, requests from a competent authority).",
+              ],
+          },
+          {
+              h: "7. ARCO rights and withdrawal of consent",
+              ps: [
+                  "You have the right to Access, Rectify, and Cancel your personal data, and to Object to its processing (ARCO rights), as well as to withdraw any consent you have given us.",
+                  "To exercise them, send your request to soporte@agent-ia.mx including: the data subject's name, a means of contact for our reply, a clear description of the data and the right you wish to exercise, and documents proving your identity (or your authority over the minor, where applicable).",
+                  "We will respond within the timeframes set by the LFPDPPP (up to 20 business days to communicate our determination and 15 additional business days to make it effective).",
+                  "If you believe your data-protection rights have been violated, you may file a complaint with Mexico's INAI (Instituto Nacional de Transparencia, Acceso a la Información y Protección de Datos Personales).",
+              ],
+          },
+          {
+              h: "8. Retention",
+              ps: [
+                  "We keep data while the family account is active and the data is needed for the purposes described.",
+                  "When an account or family is deleted, personal data is deleted or anonymized within a reasonable period, except for data we must retain to meet legal obligations (for example, tax records of payments).",
+                  "Database backups rotate periodically, and deleted data ages out of them with that rotation.",
+              ],
+          },
+          {
+              h: "9. Cookies",
+              ps: [
+                  "We use only strictly necessary cookies: session and authentication cookies (access_token, refresh_token) and a language-preference cookie (lang). The app cannot work without them.",
+                  "Cloudflare, our network provider, may set its own technical cookies (for example, for security) when serving the site.",
+                  "We do not use third-party advertising or analytics cookies. If that ever changes, we will update this notice and request any consent required.",
+              ],
+          },
+          {
+              h: "10. International transfers",
+              ps: [
+                  "Our providers (section 6) may process data on servers located outside Mexico, mainly in the United States. These transfers occur only for the purposes described and with providers that maintain security and confidentiality measures consistent with this notice.",
+              ],
+          },
+          {
+              h: "11. Security",
+              ps: [
+                  "We apply reasonable administrative, technical, and physical measures to protect your data: encryption in transit (HTTPS), hashed passwords, per-family data isolation, and role-based access controls.",
+              ],
+          },
+          {
+              h: "12. Changes to this notice",
+              ps: [
+                  "We may update this Privacy Notice. Any changes will be published on this page with a version number and date. Substantial changes will be communicated in the app or by email.",
+              ],
+          },
+      ];
+---
+
+<!-- DRAFT — pending legal review -->
+<!-- TODO (legal): fill in Agent-IA razón social + domicilio in section 1 before launch. -->
+<Layout title={meta.title}>
+    <!-- TOP BAR -->
+    <header class="sticky top-0 z-50 bg-brand-cream border-b-2 border-brand-ink px-6 py-3 flex items-center gap-4">
+        <Logo size="sm" href="/" />
+        <nav class="ml-auto flex gap-2 items-center">
+            <a href="/" class="hidden md:inline-flex font-display font-extrabold text-sm text-brand-ink px-3 py-2 hover:text-brand-coral-deep">{meta.backHome}</a>
+            <form method="POST" action="/api/lang" class="inline">
+                <input type="hidden" name="lang" value={es ? "en" : "es"} />
+                <button type="submit" class="press inline-flex items-center gap-1 px-3 py-1.5 border-2 border-brand-ink rounded-full text-xs font-extrabold font-display bg-brand-cream shadow-[2px_2px_0_var(--color-brand-ink)]">
+                    {es ? "EN" : "ES"}
+                </button>
+            </form>
+        </nav>
+    </header>
+
+    <main class="bg-brand-cream px-6 py-12">
+        <div class="max-w-3xl mx-auto">
+            <p class="font-sans font-extrabold text-xs tracking-[0.18em] uppercase text-brand-ink-soft">{meta.kicker}</p>
+            <h1 class="font-display text-4xl md:text-5xl mt-2 leading-tight">{meta.h1}</h1>
+            <p class="mt-2 text-sm font-sans font-bold text-brand-ink-soft">{meta.version}</p>
+            <p class="mt-1 inline-block text-xs font-sans font-extrabold uppercase tracking-wide text-brand-coral-deep border-2 border-dashed border-brand-coral-deep rounded px-2 py-0.5">{meta.draft}</p>
+
+            <p class="mt-6 font-sans text-base leading-relaxed text-brand-ink">{meta.intro}</p>
+
+            {sections.map((s) => (
+                <section class="mt-10">
+                    <h2 class="font-display text-2xl text-brand-ink">{s.h}</h2>
+                    {s.ps?.map((p) => (
+                        <p class="mt-3 font-sans text-base leading-relaxed text-brand-ink">{p}</p>
+                    ))}
+                    {s.list && (
+                        <ul class="mt-3 list-disc pl-6 space-y-2 font-sans text-base leading-relaxed text-brand-ink">
+                            {s.list.map((li) => <li>{li}</li>)}
+                        </ul>
+                    )}
+                    {s.after?.map((p) => (
+                        <p class="mt-3 font-sans text-base leading-relaxed text-brand-ink">{p}</p>
+                    ))}
+                </section>
+            ))}
+
+            <div class="mt-12 border-2 border-brand-ink rounded-xl bg-brand-sun/40 p-5">
+                <p class="font-sans font-extrabold text-sm text-brand-ink">{meta.contactLabel}</p>
+                <a href="mailto:soporte@agent-ia.mx" class="font-display font-extrabold text-brand-coral-deep underline">soporte@agent-ia.mx</a>
+            </div>
+
+            <p class="mt-10 text-sm font-sans text-brand-ink-soft">
+                {es ? "Consulta también nuestros " : "See also our "}
+                <a href="/terminos" class="underline font-bold text-brand-coral-deep">{es ? "Términos y Condiciones" : "Terms of Service"}</a>.
+            </p>
+        </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-brand-ink text-brand-cream px-6 py-10 border-t-2 border-brand-ink">
+        <div class="max-w-3xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <p class="font-sans text-xs text-brand-cream/70">family.agent-ia.mx · © 2026</p>
+            <nav class="flex gap-4 text-xs font-sans font-bold">
+                <a href="/privacidad" class="text-brand-cream/80 hover:text-brand-sun transition">{es ? "Aviso de Privacidad" : "Privacy Notice"}</a>
+                <a href="/terminos" class="text-brand-cream/80 hover:text-brand-sun transition">{es ? "Términos" : "Terms"}</a>
+                <a href={es ? "/ayuda" : "/help"} class="text-brand-cream/80 hover:text-brand-sun transition">{es ? "Ayuda" : "Help"}</a>
+            </nav>
+        </div>
+    </footer>
+</Layout>

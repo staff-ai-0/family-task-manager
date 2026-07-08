@@ -1,11 +1,12 @@
 import type { APIRoute } from "astro";
+import { normalizeErrorDetail } from "../../../lib/api";
 
 /**
  * POST /api/invitations/send
  * Sends a family invitation to an email address
  * Requires authentication (parent only)
  */
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = async ({ request, locals, cookies }) => {
     try {
         // Check authentication
         const token = locals.token;
@@ -45,7 +46,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
             );
         }
 
-        const errorMessage = data.detail || "Failed to send invitation";
+        // detail may be a structured dict (e.g. the 403 email_not_verified
+        // guard returns {error, message, message_es}) — normalize it to the
+        // bilingual string so the UI never renders "[object Object]".
+        const lang = cookies.get("lang")?.value;
+        const errorMessage =
+            normalizeErrorDetail(data.detail, lang) || "Failed to send invitation";
         return new Response(
             JSON.stringify({ success: false, error: errorMessage }),
             { status: response.status, headers: { "Content-Type": "application/json" } }

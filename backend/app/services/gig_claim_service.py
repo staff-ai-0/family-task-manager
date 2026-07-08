@@ -148,7 +148,6 @@ class GigClaimService:
         """In-app + push to every parent that a gig awaits review."""
         try:
             from app.services.notification_service import NotificationService
-            from app.models.notification import NotificationType as NT
             from app.models.user import User, UserRole
 
             parents = (
@@ -164,14 +163,14 @@ class GigClaimService:
             ).all()
             title = offering.title if offering else "Gig"
             for parent in parents:
-                await NotificationService.create(
+                await NotificationService.create_localized(
                     db,
                     family_id=claim.family_id,
+                    key="gig_claim_pending",
                     user_id=parent.id,
-                    type=NT.GIG_PENDING_REVIEW,
-                    title="📋 Gig por revisar",
-                    body=f"{claimer.name} completó '{title}' — revisa y aprueba.",
+                    params={"claimer": claimer.name, "title": title},
                     link="/parent/approvals",
+                    lang=getattr(parent, "preferred_lang", None) or "es",
                 )
         except Exception:
             import logging
@@ -183,17 +182,14 @@ class GigClaimService:
     async def _notify_claimer_approved(db, claim, offering, pesos, auto=False) -> None:
         try:
             from app.services.notification_service import NotificationService
-            from app.models.notification import NotificationType as NT
 
             title = offering.title if offering else "Gig"
-            prefix = "⚡ Auto-aprobada" if auto else "✅"
-            await NotificationService.create(
+            await NotificationService.create_localized(
                 db,
                 family_id=claim.family_id,
+                key="gig_claim_approved_auto" if auto else "gig_claim_approved",
                 user_id=claim.claimed_by,
-                type=NT.GIG_APPROVED,
-                title=f"{prefix} +${pesos} MXN",
-                body=f"'{title}' " + ("aprobada al instante (¡buena racha!)." if auto else "aprobada."),
+                params={"pesos": pesos, "title": title},
                 link="/gigs/my-gigs",
             )
         except Exception:
@@ -442,14 +438,15 @@ class GigClaimService:
             await db.refresh(claim)
             try:
                 from app.services.notification_service import NotificationService
-                from app.models.notification import NotificationType as NT
-                await NotificationService.create(
+                await NotificationService.create_localized(
                     db,
                     family_id=family_id,
+                    key="gig_claim_rejected",
                     user_id=claim.claimed_by,
-                    type=NT.GIG_REJECTED,
-                    title="↩️ Gig necesita otro intento",
-                    body=(notes or (offering.title if offering else "Tu gig")),
+                    params={
+                        "reason": notes
+                        or (offering.title if offering else "Tu gig"),
+                    },
                     link="/gigs/my-gigs",
                 )
             except Exception:

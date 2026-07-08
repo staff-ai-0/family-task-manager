@@ -7,6 +7,7 @@ Request and response models for user-related operations.
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from uuid import UUID
+from datetime import date
 
 from app.models.user import UserRole
 from app.schemas.base import EntityResponse
@@ -62,6 +63,14 @@ class UserResponse(EntityResponse):
     acknowledged_gigs_intro: bool = False
     completed_welcome_tour: bool = False
     gig_trust_streak: int = 0
+    # Parental-approval state: 'approved' everywhere except join-code
+    # self-signups, which start 'pending' until a parent approves.
+    approval_status: str = "approved"
+    # NB: users.birthdate is deliberately NOT serialized here. UserResponse
+    # is returned by member-listing endpoints visible to CHILD/TEEN accounts,
+    # and birthdates shouldn't be readable by every family member. The field
+    # is write-only for now (collected at signup for future age gating); add
+    # it to a parent-only schema if the members page ever needs to show it.
 
 
 class UserWithStats(UserResponse):
@@ -119,13 +128,27 @@ class RegisterFamilyRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
     preferred_lang: str = Field("en", pattern=r"^(en|es)$")
-    # Only honored when joining via family_code; founding a family is always PARENT.
+    # Only honored when joining via family_code; founding a family is always
+    # PARENT and joining by code is capped at TEEN (parent requests are
+    # demoted — PARENT is only granted via invitation or family creation).
     role: Optional[str] = Field(None, pattern=r"^(parent|teen|child)$")
+    # Terms + privacy-notice consent. REQUIRED (must be true) when founding a
+    # new family; recorded (consented_at + policy version) whenever true.
+    accept_terms: bool = False
+    # Optional birthdate for CHILD/TEEN join-code signups (future age gating).
+    birthdate: Optional[date] = None
 
 
 class RegisterFamilyResponse(BaseModel):
-    """Response after creating a family + user"""
-    access_token: str
+    """Response after creating a family + user.
+
+    Join-by-code signups start pending parental approval: no tokens are
+    issued (access_token is null, pending_approval is true) and ``message``
+    tells the user to wait for a parent to approve them.
+    """
+    access_token: Optional[str] = None
     refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user: UserResponse
+    pending_approval: bool = False
+    message: Optional[str] = None

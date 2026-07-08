@@ -213,7 +213,6 @@ class RewardService(BaseFamilyService[Reward]):
             # Notify parents that a redemption awaits their approval.
             try:
                 from app.services.notification_service import NotificationService
-                from app.models.notification import NotificationType as NT
 
                 parents = (await db.scalars(
                     select(User).where(
@@ -226,19 +225,18 @@ class RewardService(BaseFamilyService[Reward]):
                     )
                 )).all()
                 for parent in parents:
-                    p_es = getattr(parent, "preferred_lang", "en") == "es"
-                    await NotificationService.create(
+                    await NotificationService.create_localized(
                         db,
                         family_id=family_id,
+                        key="redemption_pending_parent",
                         user_id=parent.id,
-                        type=NT.REWARD_REDEEMED,
-                        title="🎁 " + ("Canje por aprobar" if p_es else "Redemption to approve"),
-                        body=(
-                            f"{redeemer_name} quiere canjear \"{reward.title}\" ({reward.points_cost} pts). Aprueba o rechaza."
-                            if p_es else
-                            f"{redeemer_name} wants to redeem \"{reward.title}\" ({reward.points_cost} pts). Approve or reject."
-                        ),
+                        params={
+                            "name": redeemer_name,
+                            "reward": reward.title,
+                            "pts": reward.points_cost,
+                        },
                         link="/parent/approvals",
+                        lang=getattr(parent, "preferred_lang", None) or "es",
                     )
             except Exception:
                 import logging
@@ -291,7 +289,6 @@ class RewardService(BaseFamilyService[Reward]):
         # and no parent ever learned of it (the redeemer got the only push).
         try:
             from app.services.notification_service import NotificationService
-            from app.models.notification import NotificationType as NT
 
             parents = (await db.scalars(
                 select(User).where(
@@ -304,19 +301,18 @@ class RewardService(BaseFamilyService[Reward]):
                 )
             )).all()
             for parent in parents:
-                p_es = getattr(parent, "preferred_lang", "en") == "es"
-                await NotificationService.create(
+                await NotificationService.create_localized(
                     db,
                     family_id=family_id,
+                    key="reward_redeemed_parent",
                     user_id=parent.id,
-                    type=NT.REWARD_REDEEMED,
-                    title="🎁 " + ("Recompensa canjeada" if p_es else "Reward redeemed"),
-                    body=(
-                        f"{redeemer_name} canjeó \"{reward.title}\" por {reward.points_cost} puntos."
-                        if p_es else
-                        f"{redeemer_name} redeemed \"{reward.title}\" for {reward.points_cost} points."
-                    ),
+                    params={
+                        "name": redeemer_name,
+                        "reward": reward.title,
+                        "pts": reward.points_cost,
+                    },
                     link="/parent/rewards",
+                    lang=getattr(parent, "preferred_lang", None) or "es",
                 )
         except Exception:
             import logging
@@ -433,21 +429,14 @@ class RewardService(BaseFamilyService[Reward]):
         # Tell the kid the outcome.
         try:
             from app.services.notification_service import NotificationService
-            from app.models.notification import NotificationType as NT
 
-            kid = await db.get(User, redemption.user_id)
-            k_es = getattr(kid, "preferred_lang", "en") == "es"
-            if approve:
-                title = "🎁 " + ("¡Canje aprobado!" if k_es else "Redemption approved!")
-                body = (f"Tu canje de \"{redemption.reward_title}\" fue aprobado."
-                        if k_es else f'Your "{redemption.reward_title}" redemption was approved.')
-            else:
-                title = ("Canje rechazado" if k_es else "Redemption declined")
-                body = (f"Tu canje de \"{redemption.reward_title}\" fue rechazado."
-                        if k_es else f'Your "{redemption.reward_title}" redemption was declined.')
-            await NotificationService.create(
-                db, family_id=family_id, user_id=redemption.user_id,
-                type=NT.REWARD_REDEEMED, title=title, body=body, link="/rewards",
+            await NotificationService.create_localized(
+                db,
+                family_id=family_id,
+                key="redemption_approved" if approve else "redemption_declined",
+                user_id=redemption.user_id,
+                params={"reward": redemption.reward_title},
+                link="/rewards",
             )
         except Exception:
             import logging

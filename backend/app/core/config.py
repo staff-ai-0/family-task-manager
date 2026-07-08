@@ -119,6 +119,12 @@ class Settings(BaseSettings):
     PAYPAL_PLAN_ID_PLUS_ANNUAL: str = ""
     PAYPAL_PLAN_ID_PRO_MONTHLY: str = ""
     PAYPAL_PLAN_ID_PRO_ANNUAL: str = ""
+
+    # Days a family keeps paid entitlements after a failed recurring payment
+    # (dunning grace window). The daily subscription sweep downgrades
+    # payment_failed subs to Free once payment_failure_at + this many days
+    # has passed. get_family_plan honors payment_failed within this window.
+    BILLING_GRACE_DAYS: int = 3
     
     # Email Configuration
     # Transport priority in EmailService._send: SMTP (when SMTP_HOST/USER/PASSWORD
@@ -187,6 +193,10 @@ class Settings(BaseSettings):
     # litellm_config.yaml. Per-family override stored in Redis takes precedence
     # when set via /api/budget/ai-settings/models.
     RECEIPT_MODEL: str = "gemini-2.5-flash"
+
+    # Root of the uploads volume. /app/uploads inside the backend container;
+    # override (e.g. to a temp dir) when running the suite outside a container.
+    UPLOADS_ROOT: str = "/app/uploads"
 
     # Anthropic API (for receipt scanning via Claude Vision)
     ANTHROPIC_API_KEY: str = ""

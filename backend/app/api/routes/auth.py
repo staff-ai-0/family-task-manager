@@ -82,13 +82,20 @@ async def register_family(
     """Create a new family + founding PARENT user, or join existing family.
 
     - If family_code is provided: join the existing family with that code,
-      as the requested role (child/teen/parent) — defaults to CHILD.
-      Parents can promote members later from the members page.
+      as the requested role (child/teen) — defaults to CHILD. Parents can
+      promote members later from the members page.
     - If family_code is not provided: create a new family using family_name;
       the founder is always PARENT.
 
-    Returns an access token so the user is logged in immediately.
+    Consent + approval rules (2026-07-07 compliance):
+    - Founding a new family REQUIRES accept_terms=true (terms + privacy
+      notice); the acceptance timestamp and policy version are stored.
+    - Joining by code never grants PARENT (capped at TEEN) and the account
+      starts PENDING parental approval: no tokens are issued and login is
+      blocked until a parent approves from the members page.
     """
+    lang = "es" if (data.preferred_lang or "es") == "es" else "en"
+
     # Check email not already taken
     existing = (await db.execute(
         select(User).where(User.email == data.email)
@@ -99,8 +106,15 @@ async def register_family(
             detail="Email already registered",
         )
 
-    from app.models.user import UserRole as UR
-    
+    from datetime import datetime, timezone
+
+    from app.models.user import (
+        APPROVAL_APPROVED,
+        APPROVAL_PENDING,
+        CONSENT_POLICY_VERSION,
+        UserRole as UR,
+    )
+
     # Determine which family to use
     if data.family_code:
         # Join existing family by code
@@ -120,6 +134,50 @@ async def register_family(
                 status_code=status.HTTP_410_GONE,
                 detail="This family is no longer active.",
             )
+
+        # Enforce the plan's family_member limit — the same cap the
+        # invitation path applies (invitations.py). Without this, anyone
+        # holding the join code could grow the family past its plan limit.
+        from sqlalchemy import func as sa_func
+        from app.core.premium import (
+            DEFAULT_FREE_LIMITS,
+            get_family_plan_by_id,
+        )
+
+        plan = await get_family_plan_by_id(db, family.id)
+        limit_value = plan.limits.get("max_family_members")
+        if limit_value is None:
+            limit_value = DEFAULT_FREE_LIMITS.get("max_family_members", 4)
+        member_limit = int(limit_value)
+
+        if member_limit != -1:  # -1 = unlimited
+            member_count = (
+                await db.execute(
+                    select(sa_func.count(User.id)).where(
+                        User.family_id == family.id,
+                        User.is_active == True,  # noqa: E712
+                    )
+                )
+            ).scalar_one()
+            if member_count >= member_limit:
+                lang = "es" if (data.preferred_lang or "es") == "es" else "en"
+                detail = (
+                    (
+                        f"Esta familia alcanzó el límite de miembros de su plan "
+                        f"({member_limit}). Pide a un padre/madre que mejore el "
+                        f"plan para agregar más miembros."
+                    )
+                    if lang == "es"
+                    else (
+                        f"This family has reached its plan's member limit "
+                        f"({member_limit}). Ask a parent to upgrade the plan "
+                        f"to add more members."
+                    )
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=detail,
+                )
     else:
         # Create new family
         if not data.family_name:
@@ -127,7 +185,21 @@ async def register_family(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Provide either a family_code or family_name.",
             )
-        
+
+        # Founding an account requires explicit consent to the terms +
+        # privacy notice (LFPDPPP). Reject when absent/false.
+        if not data.accept_terms:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Debes aceptar los Términos y el Aviso de Privacidad "
+                    "para crear tu cuenta."
+                    if lang == "es"
+                    else "You must accept the Terms and the Privacy Notice "
+                    "to create your account."
+                ),
+            )
+
         family = Family(
             name=data.family_name,
             join_code=generate_join_code(),
@@ -135,11 +207,19 @@ async def register_family(
         db.add(family)
         await db.flush()  # get family.id before creating user
 
-    # Founders are PARENT; join-by-code defaults to CHILD unless a role was chosen.
+    # Founders are PARENT. Join-by-code defaults to CHILD and is capped at
+    # TEEN — PARENT can only be granted via email invitation or by founding
+    # a family (a join code is shared with kids; it must not mint parents).
     if data.family_code:
-        new_role = UR(data.role) if data.role else UR.CHILD
+        requested = UR(data.role) if data.role else UR.CHILD
+        new_role = requested if requested in (UR.CHILD, UR.TEEN) else UR.CHILD
     else:
         new_role = UR.PARENT
+
+    # Join-by-code signups start pending parental approval; every other
+    # path is trusted (founder consented above, invitations are parent-sent).
+    approval_status = APPROVAL_PENDING if data.family_code else APPROVAL_APPROVED
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     user = User(
         email=data.email,
@@ -150,6 +230,13 @@ async def register_family(
         points=0,
         is_active=True,
         preferred_lang=data.preferred_lang,
+        approval_status=approval_status,
+        approved_at=now if approval_status == APPROVAL_APPROVED else None,
+        birthdate=data.birthdate,
+        # Record consent whenever the box was ticked (required for founders,
+        # also sent by the join form).
+        consented_at=now if data.accept_terms else None,
+        consent_policy_version=CONSENT_POLICY_VERSION if data.accept_terms else None,
     )
     db.add(user)
     await db.flush()
@@ -178,6 +265,33 @@ async def register_family(
         await EmailService.send_verification_email(db, user, base_url=settings.email_link_base)
     except Exception:
         pass  # Don't block registration on email failure
+
+    # Pending join-code signups get NO tokens — they must wait for a parent
+    # to approve them from the members page. Notify the family's parents.
+    if user.approval_status == APPROVAL_PENDING:
+        try:
+            await AuthService.notify_parents_of_pending_member(db, user)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "pending-member parent notification failed", exc_info=True
+            )
+        return RegisterFamilyResponse(
+            access_token=None,
+            refresh_token=None,
+            token_type="bearer",
+            user=UserResponse.model_validate(user),
+            pending_approval=True,
+            message=(
+                "Tu cuenta fue creada y está pendiente de aprobación. "
+                "Pide a tu papá o mamá que la apruebe desde la página de "
+                "Miembros para poder iniciar sesión."
+                if lang == "es"
+                else "Your account was created and is pending approval. "
+                "Ask a parent to approve it from the Members page before "
+                "you can log in."
+            ),
+        )
 
     # Issue access + refresh tokens
     access_token = create_access_token(

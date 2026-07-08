@@ -4,7 +4,7 @@ import { apiFetch } from "../../../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
 
 const { data: user } = await apiFetch<any>("/api/auth/me", { token });
 if (!user) {
@@ -62,6 +62,7 @@ const i18n = {
         coming_soon: "Coming soon — PayPal integration pending",
         cancel: "Cancel Subscription",
         cancel_confirm: "Are you sure you want to cancel your subscription?",
+        support_prompt: "Questions about your plan or billing? Email us at",
         features: {
             tasks_rewards: "Tasks & Rewards",
             family_members: "Family Members",
@@ -97,6 +98,7 @@ const i18n = {
         coming_soon: "Pr\u00f3ximamente \u2014 integraci\u00f3n con PayPal pendiente",
         cancel: "Cancelar Suscripci\u00f3n",
         cancel_confirm: "\u00bfEst\u00e1s seguro de que quieres cancelar tu suscripci\u00f3n?",
+        support_prompt: "\u00bfDudas sobre tu plan o facturaci\u00f3n? Escr\u00edbenos a",
         features: {
             tasks_rewards: "Tareas y Recompensas",
             family_members: "Miembros de Familia",
@@ -329,6 +331,12 @@ function cellClass(value: any): string {
                     )}
                 </div>
             </section>
+
+            <!-- Support contact -->
+            <p class="mt-6 text-center text-sm text-brand-ink-soft font-sans">
+                {l.support_prompt}
+                <a href="mailto:soporte@agent-ia.mx" class="font-semibold underline hover:text-brand-coral-deep">soporte@agent-ia.mx</a>
+            </p>
 </PageLayout>
 
 <script define:vars={{ cancelConfirm: l.cancel_confirm }}>

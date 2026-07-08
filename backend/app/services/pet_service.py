@@ -194,15 +194,13 @@ class PetService:
                 ).scalar_one_or_none()
                 if user is None or user.family_id is None:
                     continue
-                title = (
-                    f"🥺 {pet.name} is starving"
-                    if after_label == "starving"
-                    else f"😞 {pet.name} is sad"
+                from app.services.notification_service import (
+                    NotificationService,
                 )
-                body = (
-                    "Feed them before they get too hungry."
-                    if after_label == "starving"
-                    else "Play or feed them to cheer them up."
+                title, body = NotificationService.render(
+                    "pet_starving" if after_label == "starving" else "pet_sad",
+                    getattr(user, "preferred_lang", None) or "es",
+                    {"pet": pet.name},
                 )
                 db.add(
                     Notification(

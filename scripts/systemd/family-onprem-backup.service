@@ -2,11 +2,21 @@
 # USER unit — install under ~/.config/systemd/user/ on 10.1.0.91.
 # Rootless podman: NO sudo (global Rule 1). Runs as jc.
 [Unit]
-Description=Family Task Manager (on-prem) — daily PostgreSQL backup
+Description=Family Task Manager (on-prem) — daily PostgreSQL + uploads backup
 
 [Service]
 Type=oneshot
 WorkingDirectory=/home/jc/family-task-manager
 Environment="COMPOSE_CMD=podman compose"
 Environment=COMPOSE_FILE=docker-compose.onprem.yml
+# ── Offsite push (audit 2026-07-07: backups must not live only on this disk) ──
+# 1. Install rclone (sudo dnf install -y rclone) and configure a remote AS
+#    USER jc (no sudo): rclone config   — see scripts/systemd/README.md.
+# 2. Uncomment the two lines below with your remote (e.g. B2 bucket
+#    "family-backups"), re-install the unit, and run it once by hand.
+#    backup-db.sh exits non-zero if the push fails, so failures show up in
+#    `systemctl --user status family-onprem-backup.service`. Until these are
+#    set, every run logs a loud "backups exist ONLY on this host" warning.
+#Environment=OFFSITE_RCLONE_REMOTE=b2-family:family-backups
+#Environment=OFFSITE_RETENTION_DAYS=30
 ExecStart=/home/jc/family-task-manager/scripts/backup-db.sh

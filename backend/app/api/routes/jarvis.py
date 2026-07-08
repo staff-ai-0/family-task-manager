@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import require_parent_role
 from app.core.exceptions import ValidationError
+from app.core.premium import require_feature
+from app.core.rate_limiter import limiter, AI_LIMIT
 from app.core.type_utils import to_uuid_required
 from app.models import User
 from app.services.jarvis_service import JarvisService
@@ -51,11 +53,17 @@ class HistoryItem(BaseModel):
 
 
 @router.post("/chat", response_model=ChatReply)
+@limiter.limit(AI_LIMIT)
 async def chat(
+    request: Request,
     data: ChatRequest,
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
+    # Plan gate: Jarvis is an LLM feature — free tier has ai_features=False.
+    # The per-family JARVIS_DAILY_MESSAGE_CAP inside the service still applies;
+    # AI_LIMIT above adds per-IP burst protection on top.
+    await require_feature("ai_features", db, current_user)
     model = data.model if data.model in ALLOWED_MODELS else None
     try:
         return await JarvisService.chat(
@@ -71,15 +79,23 @@ async def chat(
 
 
 @router.post("/chat-stream")
+@limiter.limit(AI_LIMIT)
 async def chat_stream(
+    request: Request,
     data: ChatRequest,
     current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
 ):
     """SSE stream of chat progress. Client consumes via fetch + ReadableStream.
 
-    No Depends(get_db): the stream generator owns its own session so the
-    long-lived SSE response never pins a pooled DB connection.
+    The stream generator owns its own short-lived session so the long-lived
+    SSE body never pins a pooled DB connection. The ``db`` dependency here is
+    only used for the pre-stream plan gate and is the SAME cached session the
+    auth dependency (require_parent_role → get_current_user) already checked
+    out for this request — it adds no extra pool pressure.
     """
+    # Plan gate before the stream starts (mirrors /chat).
+    await require_feature("ai_features", db, current_user)
     model = data.model if data.model in ALLOWED_MODELS else None
     gen = JarvisService.chat_stream(
         family_id=to_uuid_required(current_user.family_id),

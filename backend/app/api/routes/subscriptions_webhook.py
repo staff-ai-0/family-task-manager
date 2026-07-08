@@ -18,7 +18,11 @@ from app.services.paypal_service import PayPalService
 from app.services.subscription_state import (
     apply_activated,
     apply_cancelled,
+    apply_expired,
+    apply_payment_completed,
     apply_payment_failed,
+    mark_for_review,
+    promote_pending_checkout,
 )
 
 
@@ -83,9 +87,15 @@ async def receive_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         return {"received": True}
 
     event_id = payload.get("id")
-    event_type = payload.get("event_type")
+    event_type = payload.get("event_type") or ""
     resource = payload.get("resource", {}) or {}
-    subscription_id = resource.get("id")
+    # BILLING.SUBSCRIPTION.* events carry the subscription id in resource.id;
+    # PAYMENT.SALE.* events carry a sale object whose subscription reference
+    # is resource.billing_agreement_id.
+    if event_type.startswith("PAYMENT.SALE."):
+        subscription_id = resource.get("billing_agreement_id")
+    else:
+        subscription_id = resource.get("id")
 
     if not settings.PAYPAL_WEBHOOK_ID:
         logger.error("PAYPAL_WEBHOOK_ID not configured; rejecting webhook")
@@ -132,16 +142,86 @@ async def receive_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 if next_billing
                 else datetime.now(timezone.utc)
             )
-            await apply_activated(
+            sub = await apply_activated(
                 db,
                 paypal_subscription_id=subscription_id,
                 period_end=period_end,
             )
+            if sub is None:
+                # Not the live id — maybe a staged plan-change checkout the
+                # buyer approved but never returned from (/activate never
+                # ran). Promote it here so PayPal-active == locally-active,
+                # and cancel the superseded PayPal subscription.
+                sub, old_paypal_id = await promote_pending_checkout(
+                    db,
+                    paypal_subscription_id=subscription_id,
+                    period_end=period_end,
+                )
+                if sub is not None and old_paypal_id:
+                    try:
+                        await asyncio.to_thread(
+                            PayPalService.cancel_subscription,
+                            old_paypal_id,
+                            reason="Superseded by plan change",
+                        )
+                    except Exception:
+                        # Best-effort — the promotion stands and the webhook
+                        # must still 200 — but a cancel failure means the
+                        # superseded agreement keeps charging, so it MUST
+                        # leave a persistent trace (same handling as the
+                        # /activate route's staged-promotion path).
+                        logger.error(
+                            "DOUBLE-BILLING RISK: failed to cancel superseded "
+                            "PayPal sub %s after staged promotion of %s — "
+                            "flagging for operator review",
+                            old_paypal_id, subscription_id, exc_info=True,
+                        )
+                        try:
+                            await mark_for_review(
+                                db,
+                                paypal_subscription_id=subscription_id,
+                                reason=(
+                                    f"Cancel of superseded PayPal sub "
+                                    f"{old_paypal_id} failed — verify no "
+                                    "double billing"
+                                ),
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Could not flag subscription %s for review "
+                                "after cancel failure of %s",
+                                subscription_id, old_paypal_id,
+                            )
         elif event_type == "BILLING.SUBSCRIPTION.CANCELLED":
             await apply_cancelled(db, paypal_subscription_id=subscription_id)
-        elif event_type == "BILLING.SUBSCRIPTION.PAYMENT.FAILED":
+        elif event_type in (
+            "BILLING.SUBSCRIPTION.PAYMENT.FAILED",
+            # SUSPENDED = PayPal exhausted its own retries / paused billing.
+            # Same customer-facing situation as a failed payment: keep the
+            # family entitled through the grace window + send dunning email.
+            "BILLING.SUBSCRIPTION.SUSPENDED",
+        ):
             await apply_payment_failed(
                 db, paypal_subscription_id=subscription_id
+            )
+        elif event_type == "BILLING.SUBSCRIPTION.EXPIRED":
+            await apply_expired(db, paypal_subscription_id=subscription_id)
+        elif event_type == "PAYMENT.SALE.COMPLETED":
+            # Renewal charge or dunning recovery — advance the period /
+            # restore entitlements.
+            await apply_payment_completed(
+                db, paypal_subscription_id=subscription_id
+            )
+        elif event_type in ("PAYMENT.SALE.REFUNDED", "PAYMENT.SALE.REVERSED"):
+            # Conservative by design: refunds/reversals do NOT auto-downgrade
+            # (a partial or goodwill refund must not kick a paying family to
+            # free). Flag for operator review; if PayPal itself suspends or
+            # cancels the subscription over the dispute, those events are
+            # handled above.
+            await mark_for_review(
+                db,
+                paypal_subscription_id=subscription_id,
+                reason=f"{event_type} (event {event_id})",
             )
         else:
             logger.info("Ignoring webhook event_type %s", event_type)

@@ -23,12 +23,14 @@ import re
 from typing import Optional
 from uuid import UUID
 
+from fastapi.concurrency import run_in_threadpool
 from openai import OpenAI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.budget import BudgetCategory, BudgetCategoryGroup, BudgetPayee, BudgetTransaction
+from app.services.budget.receipt_scanner_service import LLM_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -111,13 +113,18 @@ class CategoryAIService:
             client = OpenAI(
                 base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
                 api_key=settings.LITELLM_API_KEY,
+                timeout=LLM_TIMEOUT,  # connect fails fast; read capped at 60s
             )
-            completion = client.chat.completions.create(
-                model=CATEGORIZER_MODEL,
-                max_tokens=50,
-                response_format={"type": "json_object"},
-                messages=[{"role": "user", "content": prompt}],
-                extra_body={"thinking_config": {"thinking_budget": 0}},
+            # Sync OpenAI client (blocking I/O) — offload to a worker thread
+            # so a slow provider can't stall the async event loop.
+            completion = await run_in_threadpool(
+                lambda: client.chat.completions.create(
+                    model=CATEGORIZER_MODEL,
+                    max_tokens=50,
+                    response_format={"type": "json_object"},
+                    messages=[{"role": "user", "content": prompt}],
+                    extra_body={"thinking_config": {"thinking_budget": 0}},
+                )
             )
             text = (completion.choices[0].message.content or "").strip()
         except Exception:

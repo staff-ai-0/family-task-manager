@@ -87,6 +87,11 @@ async def test_calendar_event_create_list_get_update_delete(db_session, family, 
 @pytest.mark.anyio
 async def test_chat_message_create_list_get_delete(db_session, family, parent_user):
     """LGCD cycle (no update) for a chat message via MCP tools."""
+    # Reading chat via MCP requires the family's parental AI opt-in
+    # (see test_ai_consent_gate.py for the gated behavior).
+    family.ai_processing_consent = True
+    await db_session.commit()
+
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):

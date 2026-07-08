@@ -1,0 +1,36 @@
+---
+/**
+ * Custom 404 — rendered by Astro (dev server + node adapter in prod) for any
+ * unmatched route. Bilingual via the lang cookie (middleware guarantees the
+ * cookie exists for every visitor; Mexico-first default is "es").
+ */
+import Layout from "../layouts/Layout.astro";
+import Logo from "../components/brand/Logo.astro";
+import Button from "../components/ui/Button.astro";
+
+const lang = Astro.cookies.get("lang")?.value ?? "es";
+const es = lang === "es";
+---
+
+<Layout title={es ? "Página no encontrada — Family Task Manager" : "Page not found — Family Task Manager"}>
+    <main class="min-h-screen bg-brand-cream flex flex-col items-center justify-center px-6 py-16 text-center">
+        <Logo size="sm" href="/" />
+        <p class="mt-10 font-display font-extrabold text-7xl md:text-8xl text-brand-coral leading-none num">404</p>
+        <h1 class="font-display text-3xl md:text-4xl mt-4 text-brand-ink">
+            {es ? "Página no encontrada" : "Page not found"}
+        </h1>
+        <p class="mt-3 text-brand-ink-soft font-sans font-medium max-w-md">
+            {es
+                ? "La página que buscas no existe o fue movida."
+                : "The page you're looking for doesn't exist or has moved."}
+        </p>
+        <div class="mt-8 flex gap-3 flex-wrap justify-center">
+            <Button variant="primary" size="lg" href="/dashboard">{es ? "Ir a mi panel" : "Go to dashboard"}</Button>
+            <Button variant="ghost" size="lg" href="/">{es ? "Ir al inicio" : "Go home"}</Button>
+        </div>
+        <p class="mt-10 text-xs text-brand-ink-soft font-sans">
+            {es ? "¿Necesitas ayuda? Escríbenos a " : "Need help? Email us at "}
+            <a href="mailto:soporte@agent-ia.mx" class="underline font-bold hover:text-brand-coral-deep">soporte@agent-ia.mx</a>
+        </p>
+    </main>
+</Layout>

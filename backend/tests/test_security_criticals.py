@@ -114,7 +114,7 @@ class TestRegisterAccessControl:
 
 # ─────────────────────────── A2: uploads auth + family scope ───────────────────────────
 
-UPLOAD_SUBDIR = "/app/uploads/gig-proofs"
+from app.api.routes.uploads import GIG_PROOFS_DIR as UPLOAD_SUBDIR
 
 
 async def _make_claim_with_proof(db_session, family_id, claimed_by, fname: str):

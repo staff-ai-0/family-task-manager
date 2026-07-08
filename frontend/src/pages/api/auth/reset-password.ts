@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { clientIpHeaders } from "../../../lib/client-ip";
 
 const API = import.meta.env.API_BASE_URL ?? "http://backend:8000";
 
@@ -8,7 +9,7 @@ export const POST: APIRoute = async ({ request }) => {
         const body = await request.json();
         const res = await fetch(`${API}/api/auth/reset-password`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...clientIpHeaders(request) },
             body: JSON.stringify(body),
         });
         const data = await res.json();

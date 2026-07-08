@@ -12,7 +12,7 @@ export const prerender = false;
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 
-const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
 
 const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
 if (!userOk) {

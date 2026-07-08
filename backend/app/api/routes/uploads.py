@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models import User
@@ -20,7 +21,7 @@ from app.models.task_assignment import TaskAssignment
 
 router = APIRouter()
 
-UPLOADS_ROOT = "/app/uploads"
+UPLOADS_ROOT = settings.UPLOADS_ROOT
 GIG_PROOFS_DIR = os.path.join(UPLOADS_ROOT, "gig-proofs")
 
 
@@ -77,4 +78,12 @@ async def serve_gig_proof(
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="Not found")
 
-    return FileResponse(path, headers={"Cache-Control": "private, max-age=300"})
+    return FileResponse(
+        path,
+        headers={
+            "Cache-Control": "private, max-age=300",
+            # User-uploaded bytes: never let the browser sniff a different
+            # (potentially active) content type out of an image response.
+            "X-Content-Type-Options": "nosniff",
+        },
+    )

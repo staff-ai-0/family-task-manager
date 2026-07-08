@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, List
 from uuid import UUID
 
+from fastapi.concurrency import run_in_threadpool
 from mcp.shared.memory import create_connected_server_and_client_session
 from openai import OpenAI
 from sqlalchemy import and_, func, select
@@ -34,7 +35,7 @@ from app.models.kid_pet import KidPet
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.user import User
 from app.services.analytics_service import AnalyticsService
-from app.services.budget.receipt_scanner_service import RECEIPT_MODEL
+from app.services.budget.receipt_scanner_service import LLM_TIMEOUT, RECEIPT_MODEL
 from app.services.jarvis_pending_action_service import PendingActionService
 
 
@@ -292,7 +293,7 @@ class JarvisService:
             client = OpenAI(
                 base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
                 api_key=settings.LITELLM_API_KEY,
-                timeout=60.0,  # never block the event loop indefinitely
+                timeout=LLM_TIMEOUT,  # connect fails fast; read capped at 60s
             )
 
             actions_taken: list[str] = []
@@ -301,12 +302,19 @@ class JarvisService:
             tool_defs = await _mcp_tool_definitions()
 
             for hop in range(MAX_TOOL_HOPS + 1):
-                completion = client.chat.completions.create(
-                    model=effective_model,
-                    max_tokens=512,
-                    messages=msgs,
-                    tools=tool_defs,
-                    tool_choice="auto",
+                # Sync OpenAI client: offload each hop to a worker thread so a
+                # slow provider can't stall the event loop (SSE heartbeats and
+                # all other requests share it). This call is NOT stream=True —
+                # the SSE framing is produced by this generator, so a plain
+                # threadpool offload preserves event ordering exactly.
+                completion = await run_in_threadpool(
+                    lambda: client.chat.completions.create(
+                        model=effective_model,
+                        max_tokens=512,
+                        messages=msgs,
+                        tools=tool_defs,
+                        tool_choice="auto",
+                    )
                 )
                 choice = completion.choices[0].message
                 tool_calls = getattr(choice, "tool_calls", None) or []
@@ -468,7 +476,7 @@ class JarvisService:
         client = OpenAI(
             base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
             api_key=settings.LITELLM_API_KEY,
-            timeout=60.0,  # never block the event loop indefinitely
+            timeout=LLM_TIMEOUT,  # connect fails fast; read capped at 60s
         )
 
         actions_taken: list[str] = []
@@ -478,12 +486,16 @@ class JarvisService:
 
         for hop in range(MAX_TOOL_HOPS + 1):
             try:
-                completion = client.chat.completions.create(
-                    model=effective_model,
-                    max_tokens=512,
-                    messages=msgs,
-                    tools=tool_defs,
-                    tool_choice="auto",
+                # Sync client — offload to a worker thread per hop so the
+                # event loop stays free; client timeout bounds the wait.
+                completion = await run_in_threadpool(
+                    lambda: client.chat.completions.create(
+                        model=effective_model,
+                        max_tokens=512,
+                        messages=msgs,
+                        tools=tool_defs,
+                        tool_choice="auto",
+                    )
                 )
             except Exception as exc:
                 raise ValidationError(f"Jarvis chat failed: {exc}")
