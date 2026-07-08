@@ -1,0 +1,278 @@
+---
+/**
+ * Términos y Condiciones — public, bilingual (ES primary / EN via lang cookie).
+ * Linked from the landing footer, register page, and help pages.
+ * Listed in middleware publicRoutes.
+ */
+import Layout from "../layouts/Layout.astro";
+import Logo from "../components/brand/Logo.astro";
+
+const lang = Astro.cookies.get("lang")?.value ?? "es";
+const es = lang === "es";
+
+type Section = {
+    h: string;
+    ps?: string[];
+    list?: string[];
+    after?: string[];
+};
+
+const meta = es
+    ? {
+          title: "Términos y Condiciones — Family Task Manager",
+          kicker: "Legal",
+          h1: "Términos y Condiciones",
+          version: "v1 — 7 de julio de 2026",
+          draft: "BORRADOR — pendiente de revisión legal",
+          intro: "Estos Términos y Condiciones (los “Términos”) regulan el uso de Family Task Manager (family.agent-ia.mx), operado por Agent-IA. Al crear una cuenta o usar el servicio aceptas estos Términos y nuestro Aviso de Privacidad. Si no estás de acuerdo, no uses el servicio.",
+          contactLabel: "Contacto",
+          backHome: "← Inicio",
+      }
+    : {
+          title: "Terms of Service — Family Task Manager",
+          kicker: "Legal",
+          h1: "Terms of Service",
+          version: "v1 — July 7, 2026",
+          draft: "DRAFT — pending legal review",
+          intro: "These Terms of Service (the “Terms”) govern the use of Family Task Manager (family.agent-ia.mx), operated by Agent-IA. By creating an account or using the service you accept these Terms and our Privacy Notice. If you do not agree, do not use the service.",
+          contactLabel: "Contact",
+          backHome: "← Home",
+      };
+
+const sections: Section[] = es
+    ? [
+          {
+              h: "1. Descripción del servicio",
+              ps: [
+                  "Family Task Manager es una aplicación familiar gamificada que permite organizar tareas y quehaceres, otorgar puntos y recompensas, administrar encargos (gigs), llevar un presupuesto familiar por sobres, comunicarse mediante chat familiar y usar funciones asistidas por inteligencia artificial (por ejemplo, el escáner de recibos).",
+                  "El servicio se ofrece en planes gratuitos y de pago. Las funciones incluidas en cada plan pueden cambiar; los cambios sustanciales se comunicarán con anticipación razonable.",
+              ],
+          },
+          {
+              h: "2. Cuentas y roles familiares",
+              ps: [
+                  "Cada familia es administrada por al menos una persona adulta con rol de madre/padre (Parent), quien crea la familia, invita y autoriza a los demás miembros y administra la configuración, las suscripciones y los datos familiares.",
+                  "Las cuentas de menores de edad (roles Niño/a y Adolescente) solo pueden usarse bajo la supervisión y con el consentimiento de su madre, padre o tutor, quien es responsable del uso que los menores hagan del servicio.",
+                  "Eres responsable de mantener la confidencialidad de tus credenciales y de toda la actividad que ocurra en tu cuenta. Debes proporcionar información veraz al registrarte.",
+              ],
+          },
+          {
+              h: "3. Suscripciones y facturación",
+              ps: [
+                  "Los planes de pago se facturan de forma recurrente a través de PayPal. Al contratar un plan autorizas a PayPal a realizar los cargos periódicos correspondientes.",
+                  "Los precios se muestran antes de contratar. Podemos modificar los precios con aviso previo; el nuevo precio aplicará a partir del siguiente periodo de facturación.",
+                  "Los impuestos aplicables se incluyen o desglosan conforme a la legislación mexicana.",
+              ],
+          },
+          {
+              h: "4. Cancelación",
+              ps: [
+                  "Puedes cancelar tu suscripción en cualquier momento desde la propia app (Configuración → Suscripción), sin necesidad de contactar a soporte.",
+                  "La cancelación surte efecto al final del periodo de facturación en curso: conservas las funciones de pago hasta esa fecha y no se realizan más cargos posteriores.",
+                  "Salvo que la ley disponga otra cosa, no se otorgan reembolsos proporcionales por periodos parciales ya cobrados.",
+              ],
+          },
+          {
+              h: "5. Uso aceptable",
+              ps: ["Al usar el servicio te comprometes a NO:"],
+              list: [
+                  "Usar el servicio para fines ilegales o en contravención de estos Términos.",
+                  "Subir contenido ilegal, ofensivo, violento o que vulnere derechos de terceros (incluidos derechos de autor y de imagen).",
+                  "Intentar acceder a datos de otras familias, vulnerar la seguridad de la plataforma o interferir con su funcionamiento.",
+                  "Usar el servicio de forma automatizada abusiva (scraping, sobrecarga deliberada, reventa del servicio).",
+                  "Suplantar la identidad de otra persona o crear cuentas con información falsa.",
+              ],
+              after: [
+                  "Podemos suspender o cancelar cuentas que incumplan estas reglas, notificándolo cuando sea razonable.",
+              ],
+          },
+          {
+              h: "6. Contenido y propiedad de los datos",
+              ps: [
+                  "Tu familia es propietaria de los datos que captura en el servicio: tareas, fotos, mensajes, registros de presupuesto y demás contenido familiar.",
+                  "Nos otorgas una licencia limitada para alojar y procesar ese contenido únicamente con el fin de prestar el servicio (incluido el procesamiento de IA descrito en el Aviso de Privacidad).",
+                  "Puedes solicitar la exportación de los datos de tu familia y su eliminación escribiendo a soporte@agent-ia.mx. El presupuesto familiar cuenta además con exportación integrada dentro de la app.",
+                  "El software, las marcas y el diseño de Family Task Manager son propiedad de Agent-IA o de sus licenciantes.",
+              ],
+          },
+          {
+              h: "7. Disponibilidad del servicio",
+              ps: [
+                  "El servicio se proporciona “tal cual” y “según disponibilidad”. Procuramos una alta disponibilidad, pero no garantizamos que el servicio sea ininterrumpido o libre de errores, y puede haber ventanas de mantenimiento.",
+                  "Las funciones de inteligencia artificial dependen de proveedores externos y pueden producir resultados inexactos; verifica siempre la información importante (por ejemplo, los montos extraídos de recibos).",
+              ],
+          },
+          {
+              h: "8. Limitación de responsabilidad",
+              ps: [
+                  "En la máxima medida permitida por la ley aplicable, Agent-IA no será responsable por daños indirectos, incidentales o consecuenciales derivados del uso o la imposibilidad de uso del servicio.",
+                  "La responsabilidad total de Agent-IA frente a ti por cualquier reclamación relacionada con el servicio se limita al monto pagado por tu familia en los 12 meses anteriores al hecho que origine la reclamación.",
+                  "Nada en estos Términos limita derechos irrenunciables que te correspondan como consumidor conforme a la legislación mexicana.",
+                  "Family Task Manager es una herramienta de organización familiar y educación financiera; no constituye asesoría financiera, legal ni fiscal profesional.",
+              ],
+          },
+          {
+              h: "9. Ley aplicable y jurisdicción",
+              ps: [
+                  "Estos Términos se rigen por las leyes de los Estados Unidos Mexicanos. Para cualquier controversia, las partes se someten a los tribunales competentes en México, sin perjuicio de los derechos que te asistan ante la PROFECO u otras autoridades de protección al consumidor.",
+              ],
+          },
+          {
+              h: "10. Cambios a estos Términos",
+              ps: [
+                  "Podemos actualizar estos Términos. Publicaremos los cambios en esta página indicando la versión y la fecha; los cambios sustanciales se comunicarán dentro de la app o por correo. El uso continuado del servicio tras la entrada en vigor de los cambios constituye su aceptación.",
+              ],
+          },
+      ]
+    : [
+          {
+              h: "1. Description of the service",
+              ps: [
+                  "Family Task Manager is a gamified family app for organizing tasks and chores, granting points and rewards, managing gigs, keeping an envelope-based family budget, communicating through family chat, and using AI-assisted features (for example, the receipt scanner).",
+                  "The service is offered in free and paid plans. The features included in each plan may change; substantial changes will be communicated with reasonable notice.",
+              ],
+          },
+          {
+              h: "2. Accounts and family roles",
+              ps: [
+                  "Each family is administered by at least one adult with the Parent role, who creates the family, invites and authorizes the other members, and manages settings, subscriptions, and family data.",
+                  "Accounts for minors (Child and Teen roles) may only be used under the supervision and with the consent of their parent or guardian, who is responsible for the minors' use of the service.",
+                  "You are responsible for keeping your credentials confidential and for all activity on your account. You must provide accurate information when registering.",
+              ],
+          },
+          {
+              h: "3. Subscriptions and billing",
+              ps: [
+                  "Paid plans are billed on a recurring basis through PayPal. By subscribing to a plan you authorize PayPal to make the corresponding periodic charges.",
+                  "Prices are shown before you subscribe. We may change prices with prior notice; the new price applies from the next billing period.",
+                  "Applicable taxes are included or itemized as required by Mexican law.",
+              ],
+          },
+          {
+              h: "4. Cancellation",
+              ps: [
+                  "You can cancel your subscription at any time from within the app (Settings → Subscription), with no need to contact support.",
+                  "Cancellation takes effect at the end of the current billing period: you keep paid features until that date and no further charges are made.",
+                  "Unless the law provides otherwise, no prorated refunds are given for partial periods already charged.",
+              ],
+          },
+          {
+              h: "5. Acceptable use",
+              ps: ["When using the service you agree NOT to:"],
+              list: [
+                  "Use the service for unlawful purposes or in breach of these Terms.",
+                  "Upload content that is illegal, offensive, violent, or that infringes third-party rights (including copyright and image rights).",
+                  "Attempt to access other families' data, compromise the platform's security, or interfere with its operation.",
+                  "Use the service in an abusive automated way (scraping, deliberate overload, reselling the service).",
+                  "Impersonate another person or create accounts with false information.",
+              ],
+              after: [
+                  "We may suspend or terminate accounts that break these rules, with notice where reasonable.",
+              ],
+          },
+          {
+              h: "6. Content and data ownership",
+              ps: [
+                  "Your family owns the data it enters into the service: tasks, photos, messages, budget records, and other family content.",
+                  "You grant us a limited license to host and process that content solely to provide the service (including the AI processing described in the Privacy Notice).",
+                  "You may request an export of your family's data and its deletion by writing to soporte@agent-ia.mx. The family budget also has built-in export inside the app.",
+                  "The Family Task Manager software, trademarks, and design are the property of Agent-IA or its licensors.",
+              ],
+          },
+          {
+              h: "7. Service availability",
+              ps: [
+                  "The service is provided “as is” and “as available”. We aim for high availability but do not guarantee that the service will be uninterrupted or error-free, and maintenance windows may occur.",
+                  "AI features depend on third-party providers and may produce inaccurate results; always verify important information (for example, amounts extracted from receipts).",
+              ],
+          },
+          {
+              h: "8. Limitation of liability",
+              ps: [
+                  "To the maximum extent permitted by applicable law, Agent-IA will not be liable for indirect, incidental, or consequential damages arising from the use of, or inability to use, the service.",
+                  "Agent-IA's total liability to you for any claim related to the service is limited to the amount paid by your family in the 12 months preceding the event giving rise to the claim.",
+                  "Nothing in these Terms limits non-waivable rights you hold as a consumer under Mexican law.",
+                  "Family Task Manager is a family-organization and financial-education tool; it does not constitute professional financial, legal, or tax advice.",
+              ],
+          },
+          {
+              h: "9. Governing law and jurisdiction",
+              ps: [
+                  "These Terms are governed by the laws of the United Mexican States (Mexico). Any dispute is subject to the competent courts of Mexico, without prejudice to any rights you may have before PROFECO or other consumer-protection authorities.",
+              ],
+          },
+          {
+              h: "10. Changes to these Terms",
+              ps: [
+                  "We may update these Terms. Changes will be published on this page with a version number and date; substantial changes will be communicated in the app or by email. Continued use of the service after changes take effect constitutes acceptance.",
+              ],
+          },
+      ];
+---
+
+<!-- DRAFT — pending legal review -->
+<Layout title={meta.title}>
+    <!-- TOP BAR -->
+    <header class="sticky top-0 z-50 bg-brand-cream border-b-2 border-brand-ink px-6 py-3 flex items-center gap-4">
+        <Logo size="sm" href="/" />
+        <nav class="ml-auto flex gap-2 items-center">
+            <a href="/" class="hidden md:inline-flex font-display font-extrabold text-sm text-brand-ink px-3 py-2 hover:text-brand-coral-deep">{meta.backHome}</a>
+            <form method="POST" action="/api/lang" class="inline">
+                <input type="hidden" name="lang" value={es ? "en" : "es"} />
+                <button type="submit" class="press inline-flex items-center gap-1 px-3 py-1.5 border-2 border-brand-ink rounded-full text-xs font-extrabold font-display bg-brand-cream shadow-[2px_2px_0_var(--color-brand-ink)]">
+                    {es ? "EN" : "ES"}
+                </button>
+            </form>
+        </nav>
+    </header>
+
+    <main class="bg-brand-cream px-6 py-12">
+        <div class="max-w-3xl mx-auto">
+            <p class="font-sans font-extrabold text-xs tracking-[0.18em] uppercase text-brand-ink-soft">{meta.kicker}</p>
+            <h1 class="font-display text-4xl md:text-5xl mt-2 leading-tight">{meta.h1}</h1>
+            <p class="mt-2 text-sm font-sans font-bold text-brand-ink-soft">{meta.version}</p>
+            <p class="mt-1 inline-block text-xs font-sans font-extrabold uppercase tracking-wide text-brand-coral-deep border-2 border-dashed border-brand-coral-deep rounded px-2 py-0.5">{meta.draft}</p>
+
+            <p class="mt-6 font-sans text-base leading-relaxed text-brand-ink">{meta.intro}</p>
+
+            {sections.map((s) => (
+                <section class="mt-10">
+                    <h2 class="font-display text-2xl text-brand-ink">{s.h}</h2>
+                    {s.ps?.map((p) => (
+                        <p class="mt-3 font-sans text-base leading-relaxed text-brand-ink">{p}</p>
+                    ))}
+                    {s.list && (
+                        <ul class="mt-3 list-disc pl-6 space-y-2 font-sans text-base leading-relaxed text-brand-ink">
+                            {s.list.map((li) => <li>{li}</li>)}
+                        </ul>
+                    )}
+                    {s.after?.map((p) => (
+                        <p class="mt-3 font-sans text-base leading-relaxed text-brand-ink">{p}</p>
+                    ))}
+                </section>
+            ))}
+
+            <div class="mt-12 border-2 border-brand-ink rounded-xl bg-brand-sun/40 p-5">
+                <p class="font-sans font-extrabold text-sm text-brand-ink">{meta.contactLabel}</p>
+                <a href="mailto:soporte@agent-ia.mx" class="font-display font-extrabold text-brand-coral-deep underline">soporte@agent-ia.mx</a>
+            </div>
+
+            <p class="mt-10 text-sm font-sans text-brand-ink-soft">
+                {es ? "Consulta también nuestro " : "See also our "}
+                <a href="/privacidad" class="underline font-bold text-brand-coral-deep">{es ? "Aviso de Privacidad" : "Privacy Notice"}</a>.
+            </p>
+        </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-brand-ink text-brand-cream px-6 py-10 border-t-2 border-brand-ink">
+        <div class="max-w-3xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <p class="font-sans text-xs text-brand-cream/70">family.agent-ia.mx · © 2026</p>
+            <nav class="flex gap-4 text-xs font-sans font-bold">
+                <a href="/privacidad" class="text-brand-cream/80 hover:text-brand-sun transition">{es ? "Aviso de Privacidad" : "Privacy Notice"}</a>
+                <a href="/terminos" class="text-brand-cream/80 hover:text-brand-sun transition">{es ? "Términos" : "Terms"}</a>
+                <a href={es ? "/ayuda" : "/help"} class="text-brand-cream/80 hover:text-brand-sun transition">{es ? "Ayuda" : "Help"}</a>
+            </nav>
+        </div>
+    </footer>
+</Layout>
