@@ -28,6 +28,26 @@ class TaskTemplateBase(BaseModel):
         description="Difficulty 1=easy (×1.0), 2=medium (×1.5), 3=hard (×2.0). Multiplies points on gig award.",
     )
     interval_days: int = Field(1, ge=1, le=7, description="1=daily, 3=every 3 days, 7=weekly")
+    recurrence_mode: str = Field(
+        "weekly",
+        pattern=r"^(weekly|since_completion)$",
+        description=(
+            "weekly = weekday expansion via the shuffle; since_completion = "
+            "spawn a new assignment recur_every_n_days days after the last "
+            "completion (excluded from the weekly shuffle)."
+        ),
+    )
+    recur_every_n_days: Optional[int] = Field(
+        None, ge=1, le=90,
+        description="Required when recurrence_mode=since_completion.",
+    )
+    requires_proof: bool = Field(
+        False,
+        description=(
+            "Kid must attach a photo on completion; completion enters the "
+            "parent approval queue and points credit only on approval."
+        ),
+    )
     is_bonus: bool = False
     assignment_type: AssignmentType = AssignmentType.AUTO
     assigned_user_ids: Optional[List[UUID]] = Field(None, description="User UUIDs for FIXED or ROTATE assignment")
@@ -84,6 +104,11 @@ class TaskTemplateUpdate(BaseModel):
     points: Optional[int] = Field(None, ge=0, le=1000)
     effort_level: Optional[int] = Field(None, ge=1, le=3)
     interval_days: Optional[int] = Field(None, ge=1, le=7)
+    recurrence_mode: Optional[str] = Field(
+        None, pattern=r"^(weekly|since_completion)$"
+    )
+    recur_every_n_days: Optional[int] = Field(None, ge=1, le=90)
+    requires_proof: Optional[bool] = None
     is_bonus: Optional[bool] = None
     is_active: Optional[bool] = None
     assignment_type: Optional[AssignmentType] = None
@@ -110,6 +135,9 @@ class TaskTemplateResponse(FamilyEntityResponse):
     effort_level: int = 1
     effective_points: int = 0
     interval_days: int
+    recurrence_mode: str = "weekly"
+    recur_every_n_days: Optional[int] = None
+    requires_proof: bool = False
     is_bonus: bool
     is_active: bool
     created_by: Optional[UUID] = None

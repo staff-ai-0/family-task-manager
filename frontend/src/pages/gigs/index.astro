@@ -15,8 +15,12 @@ if (!userOk) {
 }
 if (user.role === "parent") return Astro.redirect("/parent/gigs");
 
-const { data: items } = await apiFetch<any[]>("/api/gigs/offerings", { token });
+const [{ data: items }, { data: myProposalsData }] = await Promise.all([
+    apiFetch<any[]>("/api/gigs/offerings", { token }),
+    apiFetch<any[]>("/api/gigs/offerings/proposals/mine", { token }),
+]);
 const offerings: any[] = items ?? [];
+const myProposals: any[] = Array.isArray(myProposalsData) ? myProposalsData : [];
 
 const flash = Astro.cookies.get("flash")?.value;
 if (flash) Astro.cookies.delete("flash", { path: "/" });
@@ -56,6 +60,13 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                     ? "Reclama gigs, complétalas con evidencia y gana dinero ($MXN)."
                     : "Claim gigs, complete them with proof, and earn cash ($MXN)."}
             </div>
+            <button
+                id="propose-gig-btn"
+                type="button"
+                class="mt-3 w-full py-2.5 rounded-xl bg-white text-violet-700 font-bold text-sm hover:bg-violet-50 active:scale-[.98] transition-all"
+            >
+                💡 {lang === "es" ? "Proponer una gig" : "Propose a gig"}
+            </button>
         </header>
             {flash && (
                 <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
@@ -66,6 +77,48 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                 <div class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                     {flashError}
                 </div>
+            )}
+
+            {myProposals.length > 0 && (
+                <section class="mb-6">
+                    <h2 class="text-sm font-bold text-brand-ink-soft uppercase tracking-wide mb-3 px-1">
+                        💡 {lang === "es" ? "Mis propuestas" : "My proposals"}
+                    </h2>
+                    <div class="space-y-3">
+                        {myProposals.map((p: any) => (
+                            <div class={`bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border ${p.status === "rejected" ? "border-red-200" : "border-amber-200"}`}>
+                                <div class="flex justify-between items-start gap-3">
+                                    <div class="min-w-0 flex-1">
+                                        <h3 class="font-bold text-brand-ink truncate">{p.title}</h3>
+                                        {p.description && (
+                                            <p class="text-brand-ink-soft text-xs mt-0.5 line-clamp-2">{p.description}</p>
+                                        )}
+                                    </div>
+                                    <div class="text-right flex-shrink-0">
+                                        <p class="text-lg font-extrabold text-emerald-600">${p.points}</p>
+                                        <p class="text-[10px] text-brand-ink-soft font-medium">MXN</p>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    {p.status === "pending" ? (
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                            ⏳ {lang === "es" ? "Esperando a tus papás" : "Waiting for your parents"}
+                                        </span>
+                                    ) : (
+                                        <div>
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                                ❌ {lang === "es" ? "No aprobada" : "Not approved"}
+                                            </span>
+                                            {p.review_notes && (
+                                                <p class="text-xs text-brand-ink-soft mt-1 italic">"{p.review_notes}"</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
             )}
 
             {offerings.length === 0 ? (
@@ -170,6 +223,48 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                     })}
                 </div>
             )}
+    <!-- Propose-a-gig modal (kid → parent review) -->
+    <div id="propose-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+        <div class="bg-brand-cream rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-brand-ink">
+                    💡 {lang === "es" ? "Proponer una gig" : "Propose a gig"}
+                </h2>
+                <button id="propose-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
+            </div>
+            <p class="text-xs text-brand-ink-soft mb-4">
+                {lang === "es"
+                    ? "Dile a tus papás qué trabajo quieres hacer y cuánto crees que vale. Ellos la revisan antes de publicarla."
+                    : "Tell your parents what job you want to do and what you think it's worth. They review it before it goes live."}
+            </p>
+            <form id="propose-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-brand-ink mb-1">{lang === "es" ? "¿Qué quieres hacer? *" : "What do you want to do? *"}</label>
+                    <input type="text" id="pf-title" required maxlength="200"
+                        class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-violet-400"
+                        placeholder={lang === "es" ? "Ej: Organizar el garage" : "e.g. Organize the garage"} />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-brand-ink mb-1">{lang === "es" ? "Detalles" : "Details"}</label>
+                    <textarea id="pf-description" rows={2} maxlength="1000"
+                        class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-violet-400"
+                        placeholder={lang === "es" ? "Opcional..." : "Optional..."} />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-brand-ink mb-1">{lang === "es" ? "¿Cuánto crees que vale? ($MXN) *" : "What's it worth? ($MXN) *"}</label>
+                    <input type="number" id="pf-points" required min="1" max="1000"
+                        class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-violet-400"
+                        placeholder="50" />
+                </div>
+                <div id="pf-error" class="hidden text-sm text-red-600"></div>
+                <button type="submit"
+                    class="w-full py-3 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-700 active:scale-[.98] transition-all"
+                >
+                    {lang === "es" ? "Enviar a mis papás" : "Send to my parents"}
+                </button>
+            </form>
+        </div>
+    </div>
 </PageLayout>
 
 <script>
@@ -196,6 +291,53 @@ function proofFormHTML(claimId: string): string {
 function awaitingHTML(): string {
     return `<div class="w-full py-2.5 px-4 bg-sky-100 text-sky-700 font-semibold rounded-xl text-center text-sm">${es ? "⏳ Pendiente de aprobación" : "⏳ Awaiting approval"}</div>`;
 }
+
+// ── Propose-a-gig modal (W4.4) ──────────────────────────────────────
+const proposeModal = document.getElementById("propose-modal");
+const proposeForm = document.getElementById("propose-form") as HTMLFormElement | null;
+const openPropose = () => proposeModal?.classList.remove("hidden");
+const closePropose = () => {
+    proposeModal?.classList.add("hidden");
+    proposeForm?.reset();
+    document.getElementById("pf-error")?.classList.add("hidden");
+};
+document.getElementById("propose-gig-btn")?.addEventListener("click", openPropose);
+document.getElementById("propose-close")?.addEventListener("click", closePropose);
+proposeModal?.addEventListener("click", (e) => { if (e.target === proposeModal) closePropose(); });
+
+proposeForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById("pf-error");
+    const btn = proposeForm.querySelector("button[type=submit]") as HTMLButtonElement;
+    const title = (document.getElementById("pf-title") as HTMLInputElement).value.trim();
+    const description = (document.getElementById("pf-description") as HTMLTextAreaElement).value.trim() || null;
+    const points = parseInt((document.getElementById("pf-points") as HTMLInputElement).value, 10);
+    if (!title || isNaN(points) || points < 1) return;
+    btn.disabled = true;
+    try {
+        const res = await fetch("/api/gigs/offerings/propose", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, description, points }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            if (errEl) {
+                errEl.textContent = err.detail ?? (es ? "No se pudo enviar" : "Could not submit");
+                errEl.classList.remove("hidden");
+            }
+            btn.disabled = false;
+            return;
+        }
+        closePropose();
+        showToast(es ? "¡Propuesta enviada a tus papás! 💡" : "Proposal sent to your parents! 💡", "success");
+        // Reload so the new proposal shows in "Mis propuestas".
+        setTimeout(() => window.location.reload(), 900);
+    } catch {
+        btn.disabled = false;
+        showToast(es ? "Error de conexión" : "Connection error", "error");
+    }
+});
 
 // Delegated so it also handles the proof form INJECTED after a claim (which
 // wouldn't have a per-element listener).

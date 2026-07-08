@@ -252,6 +252,7 @@ async def list_pending_approvals(
             assignment_id=r.id,
             template_id=r.template_id,
             template_title=r.template.title if r.template else "",
+            template_is_bonus=r.template.is_bonus if r.template else True,
             points=r.template.award_points_per_completer if r.template else 0,
             assigned_to=r.assigned_to,
             assigned_to_name=user_names.get(r.assigned_to, ""),
@@ -477,6 +478,7 @@ def _assignment_to_detail(assignment) -> dict:
         "template_points": template.points if template else 0,
         "template_effort_level": template.effort_level if template else 1,
         "template_is_bonus": template.is_bonus if template else False,
+        "template_requires_proof": bool(template.requires_proof) if template else False,
         "template_gig_mode": (template.gig_mode if template else "claim") or "claim",
         "template_collaboration_min_count": (
             template.collaboration_min_count if template else 2

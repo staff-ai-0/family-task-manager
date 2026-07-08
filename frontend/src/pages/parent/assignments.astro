@@ -88,6 +88,13 @@ for (const m of members) {
     memberNameMap[m.id] = m.name;
 }
 
+// Per-member display colors (P1-KIOSK) — same colors as kiosk/calendar/chat.
+const { data: colorsRaw } = await apiFetch<any[]>("/api/users/colors", { token });
+const memberColorMap: Record<string, string> = {};
+for (const c of Array.isArray(colorsRaw) ? colorsRaw : []) {
+    memberColorMap[c.user_id] = c.color;
+}
+
 // Stats
 const totalTasks = allAssignments.length;
 const completedTasks = allAssignments.filter((a: any) => a.status === "completed").length;
@@ -231,9 +238,12 @@ function isToday(d: Date): boolean {
 
                 return (
                     <div class="mb-6">
-                        <!-- Member header -->
+                        <!-- Member header (avatar tinted with the member's kiosk color) -->
                         <div class="flex items-center gap-3 mb-3">
-                            <div class="w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center text-sky-700 font-bold text-sm">
+                            <div
+                                class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-brand-ink"
+                                style={`background-color: ${memberColorMap[memberId] ?? "#4FB8E6"};`}
+                            >
                                 {memberName.charAt(0).toUpperCase()}
                             </div>
                             <div class="flex-1">

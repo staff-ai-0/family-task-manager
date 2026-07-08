@@ -4,7 +4,7 @@ PointTransaction Pydantic schemas
 Request and response models for point transaction operations.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
@@ -36,6 +36,22 @@ class ParentAdjustment(BaseModel):
     user_id: UUID
     points: int = Field(..., ge=-1000, le=1000)  # Limit adjustment range
     reason: str = Field(..., min_length=1, max_length=500)
+
+
+class QuickPointsAdjustment(BaseModel):
+    """1-tap parent award/deduct (W4.5). Reason optional — a localized
+    default ('Ajuste rápido' / 'Quick adjustment') is filled server-side."""
+
+    user_id: UUID
+    points: int = Field(..., ge=-1000, le=1000)
+    reason: Optional[str] = Field(None, max_length=500)
+
+    @field_validator("points")
+    @classmethod
+    def _nonzero(cls, v: int) -> int:
+        if v == 0:
+            raise ValueError("points must not be 0")
+        return v
 
 
 class PointTransfer(BaseModel):
