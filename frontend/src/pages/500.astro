@@ -1,0 +1,41 @@
+---
+/**
+ * Custom 500 — rendered by Astro when SSR throws an unhandled error
+ * (production builds only; the dev server shows the error overlay instead).
+ * Astro passes the thrown error as the `error` prop — never surface its
+ * details to users. Kept intentionally lean so it can't fail itself.
+ */
+import Layout from "../layouts/Layout.astro";
+import Logo from "../components/brand/Logo.astro";
+import Button from "../components/ui/Button.astro";
+
+interface Props {
+    error?: unknown;
+}
+
+const lang = Astro.cookies.get("lang")?.value ?? "es";
+const es = lang === "es";
+---
+
+<Layout title={es ? "Error del servidor — Family Task Manager" : "Server error — Family Task Manager"}>
+    <main class="min-h-screen bg-brand-cream flex flex-col items-center justify-center px-6 py-16 text-center">
+        <Logo size="sm" href="/" />
+        <p class="mt-10 font-display font-extrabold text-7xl md:text-8xl text-brand-coral leading-none num">500</p>
+        <h1 class="font-display text-3xl md:text-4xl mt-4 text-brand-ink">
+            {es ? "Algo salió mal" : "Something went wrong"}
+        </h1>
+        <p class="mt-3 text-brand-ink-soft font-sans font-medium max-w-md">
+            {es
+                ? "Tuvimos un problema de nuestro lado. Intenta de nuevo en unos minutos."
+                : "We hit a problem on our side. Please try again in a few minutes."}
+        </p>
+        <div class="mt-8 flex gap-3 flex-wrap justify-center">
+            <Button variant="primary" size="lg" href="/dashboard">{es ? "Ir a mi panel" : "Go to dashboard"}</Button>
+            <Button variant="ghost" size="lg" href="/">{es ? "Ir al inicio" : "Go home"}</Button>
+        </div>
+        <p class="mt-10 text-xs text-brand-ink-soft font-sans">
+            {es ? "Si el problema continúa, escríbenos a " : "If the problem persists, email us at "}
+            <a href="mailto:soporte@agent-ia.mx" class="underline font-bold hover:text-brand-coral-deep">soporte@agent-ia.mx</a>
+        </p>
+    </main>
+</Layout>

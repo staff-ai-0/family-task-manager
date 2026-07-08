@@ -4,7 +4,7 @@ import { apiFetch } from "../../../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = (Astro.cookies.get("lang")?.value ?? "en") as "en" | "es";
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
 
 const { data: user } = await apiFetch<any>("/api/auth/me", { token });
 if (!user) {

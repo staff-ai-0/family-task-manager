@@ -10,7 +10,7 @@ interface Props {
 	theme?: "light" | "dark" | "system";
 	uiMode?: "kid" | "teen" | "adult";
 }
-const lang = Astro.props.lang ?? Astro.cookies.get("lang")?.value ?? "en";
+const lang = Astro.props.lang ?? Astro.cookies.get("lang")?.value ?? "es";
 const {
 	title = "Family Task Manager",
 	description = t(lang, "meta_description") as string,
@@ -150,7 +150,7 @@ const bannerCopy = {
     var dismissed = parseInt(localStorage.getItem('ftm-install-dismissed') || '0', 10);
     if (dismissed && Date.now() - dismissed < 30 * 86400 * 1000) return;
 
-    var lang = (document.cookie.match(/(?:^|;\s*)lang=([^;]+)/) || [])[1] || 'en';
+    var lang = (document.cookie.match(/(?:^|;\s*)lang=([^;]+)/) || [])[1] || 'es';
     var isES = lang === 'es';
 
     function createBanner(type) {

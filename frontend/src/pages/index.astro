@@ -29,7 +29,7 @@ const es = lang === "es";
         </button>
       </form>
       <a href="/login" class="hidden md:inline-flex font-display font-extrabold text-sm text-brand-ink px-3 py-2 hover:text-brand-coral-deep">{es ? "Iniciar sesión" : "Sign in"}</a>
-      <Button variant="primary" size="sm" href="/login">{es ? "Comenzar gratis" : "Get started"}</Button>
+      <Button variant="primary" size="sm" href="/register">{es ? "Comenzar gratis" : "Get started"}</Button>
     </nav>
   </header>
 
@@ -47,7 +47,7 @@ const es = lang === "es";
             : "Gamified family app for parents of kids 6–17. Automated chores, redeemable points, and family budgeting — all in one place."}
         </p>
         <div class="mt-7 flex gap-3 flex-wrap">
-          <Button variant="primary" size="lg" href="/login">{es ? "Comenzar ahora →" : "Start now →"}</Button>
+          <Button variant="primary" size="lg" href="/register">{es ? "Comenzar ahora →" : "Start now →"}</Button>
           <Button variant="ghost" size="lg" href="#features">{es ? "Ver cómo funciona" : "See how it works"}</Button>
         </div>
       </div>
@@ -187,7 +187,7 @@ const es = lang === "es";
       </h2>
       <p class="mt-6 text-lg font-sans text-brand-ink font-medium">{es ? "Sin tarjeta. Sin configuraciones eternas. Listo en minutos." : "No credit card. No endless setup. Ready in minutes."}</p>
       <div class="mt-8 flex gap-3 justify-center flex-wrap">
-        <Button variant="primary" size="lg" href="/login" class="bg-brand-sun">{es ? "Comenzar gratis →" : "Get started →"}</Button>
+        <Button variant="primary" size="lg" href="/register" class="bg-brand-sun">{es ? "Comenzar gratis →" : "Get started →"}</Button>
         <Button variant="ghost" size="lg" href="/login">{es ? "Iniciar sesión" : "Sign in"}</Button>
       </div>
     </div>
@@ -197,6 +197,12 @@ const es = lang === "es";
   <footer class="bg-brand-ink text-brand-cream px-6 py-10">
     <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
       <Logo size="sm" tone="mono-cream" />
+      <nav class="flex gap-4 text-xs font-sans font-bold" aria-label={es ? "Legal" : "Legal"}>
+        <a href="/privacidad" class="text-brand-cream/80 hover:text-brand-sun transition">{es ? "Aviso de Privacidad" : "Privacy Notice"}</a>
+        <a href="/terminos" class="text-brand-cream/80 hover:text-brand-sun transition">{es ? "Términos" : "Terms"}</a>
+        <a href={es ? "/ayuda" : "/help"} class="text-brand-cream/80 hover:text-brand-sun transition">{es ? "Ayuda" : "Help"}</a>
+        <a href="mailto:soporte@agent-ia.mx" class="text-brand-cream/80 hover:text-brand-sun transition">{es ? "Soporte" : "Support"}</a>
+      </nav>
       <p class="font-sans text-xs text-brand-cream/70">family.agent-ia.mx · © 2026</p>
       <form method="POST" action="/api/lang" class="inline">
         <input type="hidden" name="lang" value={es ? "en" : "es"} />
