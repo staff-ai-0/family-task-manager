@@ -4,6 +4,7 @@ Family Pydantic schemas
 Request and response models for family-related operations.
 """
 
+from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator
@@ -44,11 +45,25 @@ class FamilyUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     is_active: Optional[bool] = None
     timezone: Optional[str] = Field(None, max_length=64)
+    # Parental opt-in for AI processing of kid-generated content (proof
+    # photos, family chat). Service stamps ai_processing_consent_at on change.
+    ai_processing_consent: Optional[bool] = None
 
     @field_validator("timezone")
     @classmethod
     def _check_tz(cls, v: Optional[str]) -> Optional[str]:
         return _validate_iana_tz(v)
+
+
+class FamilyDeleteRequest(BaseModel):
+    """Re-auth payload for permanent family deletion (parent only).
+
+    Password accounts must send ``password``. Google-only accounts (no
+    password hash) must send ``confirm_name`` matching the family name.
+    """
+
+    password: Optional[str] = None
+    confirm_name: Optional[str] = Field(None, max_length=100)
 
 
 # Response schemas
@@ -59,6 +74,10 @@ class FamilyResponse(EntityResponse):
     created_by: Optional[UUID] = None  # Optional for legacy data
     is_active: bool
     timezone: str = "UTC"
+    # AI opt-in state: consent_at is NULL until a parent decides either way
+    # (dashboard shows a one-time prompt banner while NULL).
+    ai_processing_consent: bool = False
+    ai_processing_consent_at: Optional[datetime] = None
 
 
 class FamilyWithMembers(FamilyResponse):

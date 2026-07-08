@@ -4,7 +4,9 @@ Family management routes
 Handles family CRUD operations, member management, and statistics.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from uuid import UUID
@@ -13,8 +15,11 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, verify_family_id, require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.services import FamilyService
+from app.services.family_deletion_service import FamilyDeletionService
+from app.services.family_export_service import FamilyExportService
 from app.schemas.family import (
     FamilyCreate,
+    FamilyDeleteRequest,
     FamilyUpdate,
     FamilyResponse,
     FamilyWithMembers,
@@ -66,6 +71,55 @@ async def get_my_family_members(
     return await FamilyService.get_family_members(
         db, to_uuid_required(current_user.family_id)
     )
+
+
+@router.get("/export")
+async def export_my_family(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download a ZIP with ALL of the caller's family data (parent only).
+
+    JSON dumps per domain + a re-importable budget backup. Uploaded images
+    are listed in a manifest, not bundled. Path is declared before
+    /{family_id} so 'export' isn't parsed as a UUID.
+    """
+    zip_bytes = await FamilyExportService.export_family(
+        db, to_uuid_required(current_user.family_id)
+    )
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="family-export-{stamp}.zip"',
+        },
+    )
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_my_family(
+    payload: FamilyDeleteRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently delete the caller's family and ALL its data (parent only).
+
+    Re-auth required: password accounts send ``password``; Google-only
+    accounts send ``confirm_name`` (the exact family name). Cancels any live
+    PayPal subscription first, removes uploaded files on disk, then cascades
+    the whole family out of the database. This is the account-deletion path
+    for the last parent (self-deletion via DELETE /api/users/{id} stays
+    blocked).
+    """
+    await FamilyDeletionService.delete_family(
+        db,
+        family_id=to_uuid_required(current_user.family_id),
+        requesting_user=current_user,
+        password=payload.password,
+        confirm_name=payload.confirm_name,
+    )
+    return None
 
 
 @router.get("/{family_id}", response_model=FamilyResponse)

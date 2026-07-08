@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -97,7 +97,19 @@ class FamilySubscription(Base):
         back_populates="subscriptions",
         foreign_keys=[plan_id],
     )
-    family: Mapped["Family"] = relationship("Family", backref="subscription")
+    # delete-orphan + passive_deletes: without it, deleting a Family whose
+    # subscription row is present would make the ORM NULL out family_id
+    # (NOT NULL violation) instead of letting the row be removed — broke
+    # self-serve family deletion (WS-DEL). The DB FK already has
+    # ON DELETE CASCADE. Same pattern as EmailVerificationToken.user.
+    family: Mapped["Family"] = relationship(
+        "Family",
+        backref=backref(
+            "subscription",
+            cascade="all, delete-orphan",
+            passive_deletes=True,
+        ),
+    )
 
 
 class UsageTracking(Base):
