@@ -23,6 +23,13 @@ const { data: family } = await apiFetch<any>("/api/families/me", { token });
 const { data: oversight } = await apiFetch<any>("/api/oversight/summary", { token });
 const kidCards: any[] = oversight?.members ?? [];
 
+// Payday surface: kids whose Family Bank payday fired in the last 2 days.
+const { data: bankFamily } = await apiFetch<any[]>("/api/bank/family", { token });
+const paidRecently = (Array.isArray(bankFamily) ? bankFamily : []).filter(
+    (k: any) => k.last_payday_at && Date.now() - new Date(k.last_payday_at).getTime() < 2 * 24 * 3600 * 1000,
+);
+const paidNames = paidRecently.map((k: any) => k.name).join(", ");
+
 // Pending approvals badge — BOTH sources (task/chore proofs AND gig-board claim proofs).
 const [taskPendingRes, gigPendingRes] = await Promise.all([
     apiFetch<any[]>("/api/task-assignments/pending-approvals", { token }),
@@ -38,6 +45,7 @@ interface OnboardingState {
     reward_created: boolean;
     points_awarded: boolean;
     dismissed: boolean;
+    flyer_scanned?: boolean; // optional extra step — derived, not part of all_done
     all_done: boolean;
 }
 let onboarding: OnboardingState | null = null;
@@ -85,6 +93,25 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
             <EnablePushButton lang={lang} />
         </div>
     </Fragment>
+            {paidRecently.length > 0 && (
+                <a
+                    href="/parent/settings/family-bank"
+                    class="mb-6 flex items-center gap-4 bg-brand-mint/20 border-2 border-brand-ink rounded-[var(--radius-card)] p-4 shadow-[var(--shadow-card)] hover:-translate-y-0.5 transition-transform"
+                >
+                    <span class="text-3xl">🏦</span>
+                    <div class="min-w-0 flex-1">
+                        <p class="font-display font-extrabold text-brand-ink leading-tight">
+                            {lang === "es" ? "Domingo de pago" : "Payday"}
+                        </p>
+                        <p class="text-sm text-brand-ink-soft mt-0.5">
+                            {lang === "es"
+                                ? `${paidNames} ${paidRecently.length === 1 ? "recibió" : "recibieron"} su pago del Banco Familiar.`
+                                : `${paidNames} ${paidRecently.length === 1 ? "got" : "got"} their Family Bank payday.`}
+                        </p>
+                    </div>
+                    <span class="text-brand-mint-deep font-bold flex-shrink-0">→</span>
+                </a>
+            )}
             {family && family.ai_processing_consent_at == null && (
                 <div id="ai-consent-banner" class="mb-6 bg-brand-sky/10 border border-brand-sky/30 rounded-2xl p-5 shadow-[var(--shadow-card)]">
                     <h2 class="font-bold text-brand-ink text-base mb-1">
@@ -141,6 +168,21 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                     >
                         <div class="bg-brand-coral h-2 rounded-full transition-all duration-500" style={`width: ${onbPct}%`}></div>
                     </div>
+                    {/* Age-preset starter packs (P1-W3): one tap seeds chores +
+                        gigs + rewards, completing two checklist steps at once. */}
+                    {!onboarding?.all_done && (
+                        <a
+                            href="/parent/starter-packs"
+                            class="mb-4 flex items-center justify-between gap-3 rounded-xl bg-brand-sky-deep/10 border border-brand-sky-deep/30 px-4 py-3 hover:bg-brand-sky-deep/20 transition-colors"
+                        >
+                            <span class="text-sm font-semibold text-brand-ink">
+                                📦 {lang === "es"
+                                    ? "Empieza en minutos con un paquete por edad"
+                                    : "Start in minutes with an age starter pack"}
+                            </span>
+                            <span class="text-brand-sky-deep font-bold">→</span>
+                        </a>
+                    )}
                     <ol class="space-y-2 text-sm">
                         <li class="flex items-center gap-3">
                             <span class={onboarding?.task_created ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.task_created ? "✅" : "◻"}</span>
@@ -169,6 +211,14 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                                 {t(lang, "pd_onb_approve")}
                             </span>
                             {!onboarding?.points_awarded && onboarding?.child_invited && <a href="/parent/approvals" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <span class={onboarding?.flyer_scanned ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.flyer_scanned ? "✅" : "◻"}</span>
+                            <span class={onboarding?.flyer_scanned ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
+                                📄 {t(lang, "pd_onb_flyer")}
+                            </span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-cream-deep text-brand-ink-soft">{t(lang, "pd_onb_optional")}</span>
+                            {!onboarding?.flyer_scanned && <a href="/calendar/scan" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
                         </li>
                     </ol>
                     {onboarding?.all_done && (

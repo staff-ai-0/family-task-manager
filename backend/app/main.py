@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
 from app.core.request_context import RequestIDLogFilter, RequestIDMiddleware
-from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm
+from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm, bank
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
 from app.api.routes import oversight, onboarding, sync
@@ -59,6 +59,11 @@ async def _overdue_sweep_loop() -> None:
                 flipped = await TaskAssignmentService.mark_overdue_all(session)
                 if flipped:
                     logger.info("Overdue sweep flipped %d assignment(s)", flipped)
+                # Interval recurrence (W4.2): spawn 'every N days since last
+                # completion' assignments that are now due.
+                spawned = await TaskAssignmentService.spawn_interval_assignments(session)
+                if spawned:
+                    logger.info("Interval sweep spawned %d assignment(s)", spawned)
                 resolved = await ConsequenceService.check_expired_all(session)
                 if resolved:
                     logger.info("Consequence sweep auto-resolved %d", resolved)
@@ -125,6 +130,21 @@ async def lifespan(app: FastAPI):
                 except Exception:
                     logger.exception("Jarvis schedule sweep failed")
 
+        async def _family_bank_payday_sweep():
+            # Family Bank payday (match → interest → allowance) across families,
+            # evaluated in family-local time. Idempotent per family-local week
+            # via last_payday_at, so a restart or duplicate tick never
+            # double-pays. Runs hourly; the service filters to the local payday
+            # weekday + hour>=8 window (spec §D4).
+            async with AsyncSessionLocal() as session:
+                try:
+                    from app.services.bank_service import BankService
+                    n = await BankService.run_payday_sweep(session)
+                    if n:
+                        logger.info("Family Bank payday sweep paid %d kid(s)", n)
+                except Exception:
+                    logger.exception("Family Bank payday sweep failed")
+
         async def _morning_reminder_sweep():
             # 'Tienes N tareas hoy' per member with pending chores due today.
             # Idempotent per local day (DB guard inside the service), so a
@@ -142,6 +162,7 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(_pet_decay_sweep, "cron", hour=8, minute=0, id="pet_decay_sweep")
         scheduler.add_job(_pup_snapshot_sweep, "cron", hour=23, minute=30, id="pup_snapshot_sweep")
         scheduler.add_job(_jarvis_schedule_sweep, "cron", minute="*/5", id="jarvis_sched_sweep")
+        scheduler.add_job(_family_bank_payday_sweep, "cron", minute=10, id="family_bank_payday")  # hourly
         scheduler.add_job(
             _morning_reminder_sweep,
             "cron",
@@ -293,6 +314,7 @@ app.include_router(gigs_router, prefix="/api/gigs", tags=["Gigs"])
 app.include_router(oversight.router, prefix="/api/oversight", tags=["Oversight"])
 app.include_router(sync.router, prefix="/api/sync", tags=["Sync (gone)"])
 app.include_router(cash.router, prefix="/api/cash", tags=["Cash"])
+app.include_router(bank.router, prefix="/api/bank", tags=["Family Bank"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions"])
 from app.api.routes import subscriptions_webhook  # noqa: E402
 app.include_router(

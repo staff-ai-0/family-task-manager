@@ -36,6 +36,9 @@ DEFAULT_FREE_LIMITS: dict[str, Any] = {
     "a2a_webhook": False,
     "item_trends": False,
     "fx_cross_charge": False,
+    # Family Bank automation (payday allowance, %-split, interest, match).
+    # Basic ledger + manual jar transfers stay free; only automation is gated.
+    "family_bank_automation": False,
 }
 
 # Maps feature name → limit key in the plan's limits dict
@@ -56,6 +59,8 @@ FEATURE_LIMIT_MAP: dict[str, str] = {
     "a2a_webhook": "a2a_webhook",
     "item_trends": "item_trends",
     "fx_cross_charge": "fx_cross_charge",
+    # Family Bank
+    "family_bank_automation": "family_bank_automation",
 }
 
 # Tier ordering for plan-rank comparisons. Used by lightweight gates
@@ -79,6 +84,8 @@ FEATURE_MIN_PLAN: dict[str, str] = {
     "a2a_webhook": "plus",
     "item_trends": "plus",
     "fx_cross_charge": "pro",
+    # Family Bank automation is a Plus+ upsell (basic ledger stays free).
+    "family_bank_automation": "plus",
 }
 
 
@@ -163,8 +170,16 @@ async def get_family_plan_by_id(db: AsyncSession, family_id) -> FamilyPlan:
             family_id=family_id,
         )
 
-    # 2. No active subscription — try to load the "free" plan from DB
-    free_query = select(SubscriptionPlan).where(SubscriptionPlan.name == "free")
+    # 2. No active subscription — try to load the "free" plan from DB.
+    #    Plan rows are unique per (name, currency); limits are identical
+    #    across a tier's currency rows, so any 'free' row works — pick
+    #    deterministically to stay robust if free ever gains currency rows.
+    free_query = (
+        select(SubscriptionPlan)
+        .where(SubscriptionPlan.name == "free")
+        .order_by(SubscriptionPlan.currency)
+        .limit(1)
+    )
     free_result = await db.execute(free_query)
     free_plan = free_result.scalar_one_or_none()
 

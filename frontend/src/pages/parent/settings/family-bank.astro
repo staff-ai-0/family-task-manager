@@ -1,0 +1,519 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import { apiFetch } from "../../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+const es = lang === "es";
+
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+const { data: kidsRaw } = await apiFetch<any[]>("/api/bank/family", { token });
+const kids: any[] = Array.isArray(kidsRaw) ? kidsRaw : [];
+
+// Entitlement: automation (allowance/split/interest/match) is Plus-gated. The
+// basic ledger (jar balances + manual transfers + settle Share + approval
+// toggle) stays free. /api/subscriptions/current returns the plan name at
+// plan.name for a paid sub and as flat plan_name on the free fallback dict.
+// Fail OPEN: only lock when we positively know the plan is free.
+const { data: subRaw } = await apiFetch<any>("/api/subscriptions/current", { token });
+const planName = (subRaw?.plan?.name ?? subRaw?.plan_name ?? "").toLowerCase();
+const automationLocked = planName === "free";
+
+// First-run "sell it" state: kids exist but none has any automation configured.
+const isDefault = (k: any) =>
+    (k.allowance_cents ?? 0) === 0 &&
+    (k.interest_rate_bps ?? 0) === 0 &&
+    (k.match_pct ?? 0) === 0 &&
+    (k.split_save_pct ?? 0) === 0 &&
+    (k.split_share_pct ?? 0) === 0;
+const nothingConfigured = kids.length > 0 && kids.every(isDefault);
+
+const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+const toPesos = (cents: number) => (cents / 100).toFixed(2);
+
+const weekdays = es
+    ? ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    : ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+---
+
+<PageLayout
+    title={es ? "Family Bank" : "Family Bank"}
+    headerClass="bg-gradient-to-br from-brand-mint-deep to-brand-mint"
+    dark
+    backClass="text-white/80 hover:text-white"
+    backHref="/parent/settings"
+    backLabel={es ? "Volver" : "Back"}
+    role={user.role}
+    active="parent"
+    lang={lang}
+>
+    <!-- First-run: sell the feature (the launch differentiator) -->
+    {nothingConfigured && (
+        <div class="mb-6 bg-brand-sun/20 border-2 border-brand-ink rounded-[var(--radius-card)] p-6 shadow-[var(--shadow-pop)]">
+            <h2 class="font-display text-2xl font-extrabold text-brand-ink mb-1">
+                🏦 {es ? "Convierte la mesada en una lección de dinero" : "Turn allowance into a money lesson"}
+            </h2>
+            <p class="text-sm text-brand-ink-soft mb-4">
+                {es
+                    ? "El Banco Familiar es un banco virtual: tú sigues siendo el banco, la app lleva la cuenta. Configura cada frasco por hijo."
+                    : "The Family Bank is a virtual bank: you're still the bank, the app keeps the ledger. Set it up per kid."}
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="bg-white/60 rounded-xl p-3 flex items-start gap-3">
+                    <span class="text-2xl">📅</span>
+                    <div>
+                        <p class="font-bold text-brand-ink text-sm">{es ? "Domingo de pago" : "Payday"}</p>
+                        <p class="text-xs text-brand-ink-soft">{es ? "Mesada automática cada semana, como un sueldo." : "Automatic weekly allowance, like a paycheck."}</p>
+                    </div>
+                </div>
+                <div class="bg-white/60 rounded-xl p-3 flex items-start gap-3">
+                    <span class="text-2xl">🐷</span>
+                    <div>
+                        <p class="font-bold text-brand-ink text-sm">{es ? "Frascos Gastar/Ahorrar/Compartir" : "Spend/Save/Share jars"}</p>
+                        <p class="text-xs text-brand-ink-soft">{es ? "Cada pago se reparte solo por porcentaje." : "Every payout auto-splits by percentage."}</p>
+                    </div>
+                </div>
+                <div class="bg-white/60 rounded-xl p-3 flex items-start gap-3">
+                    <span class="text-2xl">✨</span>
+                    <div>
+                        <p class="font-bold text-brand-ink text-sm">{es ? "Interés que tú pagas" : "Parent-paid interest"}</p>
+                        <p class="text-xs text-brand-ink-soft">{es ? "Premia el ahorro cada semana. El banco eres tú." : "Reward saving every week. You are the bank."}</p>
+                    </div>
+                </div>
+                <div class="bg-white/60 rounded-xl p-3 flex items-start gap-3">
+                    <span class="text-2xl">💪</span>
+                    <div>
+                        <p class="font-bold text-brand-ink text-sm">{es ? "Aportación de papás (match)" : "Parent match"}</p>
+                        <p class="text-xs text-brand-ink-soft">{es ? "Iguala lo que ahorra tu hijo, como un 401(k)." : "Match what your kid saves, like a 401(k)."}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )}
+
+    {automationLocked && (
+        <div class="mb-6 bg-brand-sun border-2 border-brand-ink rounded-[var(--radius-card)] shadow-[var(--shadow-card)] p-5 text-center">
+            <div class="text-3xl mb-2">🔒</div>
+            <h3 class="font-display text-lg font-extrabold text-brand-ink mb-1">
+                {es ? "La automatización es Premium" : "Automation is Premium"}
+            </h3>
+            <p class="text-sm text-brand-ink mb-3">
+                {es
+                    ? "Los frascos, transferencias y liquidar Compartir son gratis. La mesada automática, el reparto por %, el interés y el match requieren el plan Plus."
+                    : "Jars, transfers and settling Share are free. Automatic allowance, %-split, interest and match require the Plus plan."}
+            </p>
+            <a href="/parent/settings/subscription"
+               class="inline-block bg-brand-coral text-brand-ink border-2 border-brand-ink px-6 py-2 rounded-full text-sm font-extrabold font-display shadow-[var(--shadow-card)]">
+                {es ? "Ver Planes" : "View Plans"}
+            </a>
+        </div>
+    )}
+
+    {kids.length === 0 ? (
+        <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
+            <div class="text-4xl mb-3">👨‍👩‍👧‍👦</div>
+            <h3 class="font-bold text-brand-ink mb-1">{es ? "Aún no hay hijos en la familia" : "No kids in the family yet"}</h3>
+            <p class="text-brand-ink-soft text-sm mb-4">
+                {es ? "Invita a tus hijos para darles su Banco Familiar." : "Invite your kids to give them a Family Bank."}
+            </p>
+            <a href="/parent/members#invite" class="inline-block bg-brand-mint-deep text-white px-5 py-2 rounded-xl font-semibold text-sm shadow-[var(--shadow-card)]">
+                {es ? "Invitar a un hijo" : "Invite a kid"}
+            </a>
+        </div>
+    ) : (
+        <div class="space-y-6">
+            {kids.map((k: any) => {
+                const spend = k.spend_cents ?? 0;
+                const save = k.save_cents ?? 0;
+                const share = k.share_cents ?? 0;
+                const total = k.total_cents ?? (spend + save + share);
+                const interestPct = ((k.interest_rate_bps ?? 0) / 100).toString();
+                const matchCapPesos = toPesos(k.match_cap_cents ?? 0);
+                return (
+                    <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] overflow-hidden" data-kid-card data-kid-id={k.user_id} data-kid-name={k.name}>
+                        <!-- Kid header + jar balances -->
+                        <div class="bg-brand-cream-deep px-5 py-4 border-b-2 border-brand-ink">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full bg-brand-mint-deep text-white flex items-center justify-center font-bold">
+                                        {(k.name ?? "?").charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <p class="font-bold text-brand-ink">{k.name}</p>
+                                        <p class="text-xs text-brand-ink-soft">{es ? "Total: " : "Total: "}<span data-jar-balance="total">{fmt(total)}</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 text-center">
+                                <div class="bg-brand-coral/15 rounded-xl py-2">
+                                    <p class="text-[10px] font-bold uppercase text-brand-coral-deep">{es ? "Gastar" : "Spend"}</p>
+                                    <p class="font-extrabold text-brand-ink text-sm" data-jar-balance="spend">{fmt(spend)}</p>
+                                </div>
+                                <div class="bg-brand-mint/20 rounded-xl py-2">
+                                    <p class="text-[10px] font-bold uppercase text-brand-mint-deep">{es ? "Ahorrar" : "Save"}</p>
+                                    <p class="font-extrabold text-brand-ink text-sm" data-jar-balance="save">{fmt(save)}</p>
+                                </div>
+                                <div class="bg-brand-sun/25 rounded-xl py-2">
+                                    <p class="text-[10px] font-bold uppercase text-brand-sun-deep">{es ? "Compartir" : "Share"}</p>
+                                    <p class="font-extrabold text-brand-ink text-sm" data-jar-balance="share">{fmt(share)}</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-2 mt-3">
+                                <button type="button" data-kid-move
+                                    class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-ink text-white hover:opacity-90 transition-opacity">
+                                    {es ? "Mover dinero" : "Move money"}
+                                </button>
+                                <button type="button" data-kid-settle-share
+                                    class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-sun-deep text-white hover:opacity-90 transition-opacity">
+                                    {es ? "Liquidar Compartir" : "Settle Share"}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Automation config -->
+                        <div class="p-5 space-y-4" data-automation-body>
+                            {/* Weekly allowance */}
+                            <div>
+                                <label class="block text-sm font-bold text-brand-ink mb-1">
+                                    📅 {es ? "Domingo semanal" : "Weekly allowance"}
+                                </label>
+                                <div class="flex gap-2">
+                                    <div class="relative flex-1">
+                                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-brand-ink-soft text-sm">$</span>
+                                        <input type="number" min="0" step="0.01" inputmode="decimal" data-field="allowance"
+                                            value={toPesos(k.allowance_cents ?? 0)} disabled={automationLocked}
+                                            class="w-full rounded-xl border border-brand-ink/20 bg-white pl-7 pr-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep disabled:opacity-50 disabled:bg-brand-cream-deep" />
+                                    </div>
+                                    <select data-field="weekday" disabled={automationLocked}
+                                        class="rounded-xl border border-brand-ink/20 bg-white px-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep disabled:opacity-50 disabled:bg-brand-cream-deep">
+                                        {weekdays.map((d, i) => (
+                                            <option value={i} selected={(k.payday_weekday ?? 6) === i}>{d}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <p class="text-xs text-brand-ink-soft mt-1">{es ? "0 = sin mesada automática." : "0 = no automatic allowance."}</p>
+                            </div>
+
+                            {/* Split editor */}
+                            <div>
+                                <label class="block text-sm font-bold text-brand-ink mb-1">
+                                    🫙 {es ? "Reparto automático de cada pago" : "Auto-split of every payout"}
+                                </label>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <p class="text-[10px] font-bold uppercase text-brand-coral-deep text-center mb-1">{es ? "Gastar" : "Spend"}</p>
+                                        <input type="number" min="0" max="100" step="1" data-field="split_spend" data-split
+                                            value={k.split_spend_pct ?? 100} disabled={automationLocked}
+                                            class="w-full text-center rounded-xl border border-brand-ink/20 bg-white px-2 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-coral-deep disabled:opacity-50 disabled:bg-brand-cream-deep" />
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] font-bold uppercase text-brand-mint-deep text-center mb-1">{es ? "Ahorrar" : "Save"}</p>
+                                        <input type="number" min="0" max="100" step="1" data-field="split_save" data-split
+                                            value={k.split_save_pct ?? 0} disabled={automationLocked}
+                                            class="w-full text-center rounded-xl border border-brand-ink/20 bg-white px-2 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep disabled:opacity-50 disabled:bg-brand-cream-deep" />
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] font-bold uppercase text-brand-sun-deep text-center mb-1">{es ? "Compartir" : "Share"}</p>
+                                        <input type="number" min="0" max="100" step="1" data-field="split_share" data-split
+                                            value={k.split_share_pct ?? 0} disabled={automationLocked}
+                                            class="w-full text-center rounded-xl border border-brand-ink/20 bg-white px-2 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-sun-deep disabled:opacity-50 disabled:bg-brand-cream-deep" />
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <div class="flex h-2.5 rounded-full overflow-hidden bg-brand-cream-deep border border-brand-ink/10" data-split-bar>
+                                        <div class="bg-brand-coral h-full" data-split-bar-seg="spend" style={`width:${k.split_spend_pct ?? 100}%`}></div>
+                                        <div class="bg-brand-mint h-full" data-split-bar-seg="save" style={`width:${k.split_save_pct ?? 0}%`}></div>
+                                        <div class="bg-brand-sun h-full" data-split-bar-seg="share" style={`width:${k.split_share_pct ?? 0}%`}></div>
+                                    </div>
+                                    <p class="text-xs mt-1" data-split-sum>{es ? "Suma: 100%" : "Sum: 100%"}</p>
+                                </div>
+                            </div>
+
+                            {/* Interest */}
+                            <div>
+                                <label class="block text-sm font-bold text-brand-ink mb-1">
+                                    ✨ {es ? "Interés semanal (Ahorrar)" : "Weekly interest (Save)"}
+                                </label>
+                                <div class="relative">
+                                    <input type="number" min="0" max="100" step="0.5" inputmode="decimal" data-field="interest"
+                                        value={interestPct} disabled={automationLocked}
+                                        class="w-full rounded-xl border border-brand-ink/20 bg-white pl-3 pr-8 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep disabled:opacity-50 disabled:bg-brand-cream-deep" />
+                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-brand-ink-soft text-sm">%</span>
+                                </div>
+                                <p class="text-xs text-brand-ink-soft mt-1">{es ? "Tú pagas este interés — el banco eres tú." : "You pay this interest — you are the bank."}</p>
+                            </div>
+
+                            {/* Match */}
+                            <div>
+                                <label class="block text-sm font-bold text-brand-ink mb-1">
+                                    💪 {es ? "Aportación de papás (match)" : "Parent match"}
+                                </label>
+                                <div class="flex gap-2">
+                                    <div class="relative flex-1">
+                                        <input type="number" min="0" max="200" step="5" data-field="match"
+                                            value={k.match_pct ?? 0} disabled={automationLocked}
+                                            class="w-full rounded-xl border border-brand-ink/20 bg-white pl-3 pr-8 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep disabled:opacity-50 disabled:bg-brand-cream-deep" />
+                                        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-brand-ink-soft text-sm">%</span>
+                                    </div>
+                                    <div class="relative flex-1">
+                                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-brand-ink-soft text-sm">$</span>
+                                        <input type="number" min="0" step="0.01" inputmode="decimal" data-field="match_cap"
+                                            value={matchCapPesos} disabled={automationLocked}
+                                            placeholder={es ? "tope" : "cap"}
+                                            class="w-full rounded-xl border border-brand-ink/20 bg-white pl-7 pr-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep disabled:opacity-50 disabled:bg-brand-cream-deep" />
+                                    </div>
+                                </div>
+                                <p class="text-xs text-brand-ink-soft mt-1">{es ? "% de lo que ahorra tu hijo · tope $0 = sin límite." : "% of what your kid saves · cap $0 = unlimited."}</p>
+                            </div>
+
+                            {/* Approval toggle (NOT gated) */}
+                            <label class="flex items-center justify-between gap-3 bg-brand-cream-deep rounded-xl px-4 py-3 cursor-pointer">
+                                <span class="text-sm font-medium text-brand-ink">
+                                    {es ? "Retiros de Ahorrar requieren mi aprobación" : "Save withdrawals require my approval"}
+                                </span>
+                                <input type="checkbox" data-field="approval" checked={k.save_withdrawal_requires_approval ?? true}
+                                    class="h-5 w-5 accent-brand-mint-deep" />
+                            </label>
+
+                            <button type="button" data-kid-save disabled={automationLocked}
+                                class="w-full py-3 bg-brand-mint-deep text-white font-bold rounded-xl border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint active:scale-[.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                {es ? "Guardar automatización" : "Save automation"}
+                            </button>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    )}
+
+    <!-- Parent move / settle modal -->
+    <div id="pb-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+        <div class="bg-brand-cream rounded-t-3xl sm:rounded-[var(--radius-card)] w-full max-w-md p-6 border-2 border-brand-ink shadow-[var(--shadow-pop)]">
+            <div class="flex justify-between items-center mb-2">
+                <h2 id="pb-modal-title" class="text-lg font-bold text-brand-ink"></h2>
+                <button id="pb-modal-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
+            </div>
+            <p id="pb-modal-kid" class="text-xs text-brand-ink-soft mb-4"></p>
+            <div id="pb-jar-row" class="grid grid-cols-2 gap-2 mb-3">
+                <div>
+                    <label class="block text-xs font-medium text-brand-ink mb-1">{es ? "De" : "From"}</label>
+                    <select id="pb-from" class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink">
+                        <option value="spend">{es ? "Gastar" : "Spend"}</option>
+                        <option value="save">{es ? "Ahorrar" : "Save"}</option>
+                        <option value="share">{es ? "Compartir" : "Share"}</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-brand-ink mb-1">{es ? "A" : "To"}</label>
+                    <select id="pb-to" class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink">
+                        <option value="save">{es ? "Ahorrar" : "Save"}</option>
+                        <option value="spend">{es ? "Gastar" : "Spend"}</option>
+                        <option value="share">{es ? "Compartir" : "Share"}</option>
+                    </select>
+                </div>
+            </div>
+            <label class="block text-sm font-medium text-brand-ink mb-1">{es ? "Cantidad ($MXN)" : "Amount ($MXN)"}</label>
+            <input id="pb-amount" type="number" min="1" step="0.01" inputmode="decimal"
+                class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-lg text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep"
+                placeholder="0.00" />
+            <div id="pb-error" class="hidden text-sm text-red-600 mt-3"></div>
+            <button id="pb-submit" type="button"
+                class="w-full mt-4 py-3 bg-brand-mint-deep text-white font-bold rounded-xl border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint active:scale-[.99] transition-all">
+                {es ? "Confirmar" : "Confirm"}
+            </button>
+        </div>
+    </div>
+</PageLayout>
+
+<script>
+    import { mutate } from "../../../lib/mutate";
+    import { showToast } from "../../../lib/toast";
+
+    document.addEventListener("astro:page-load", () => {
+        const es = document.documentElement.lang === "es";
+        const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+        const toCents = (pesos: number) => Math.round(pesos * 100);
+
+        // ── Split editor: live sum + bar per card ────────────────────────
+        function refreshSplit(card: HTMLElement) {
+            const get = (f: string) => parseInt((card.querySelector(`[data-field="${f}"]`) as HTMLInputElement)?.value || "0", 10) || 0;
+            const spend = get("split_spend"), save = get("split_save"), share = get("split_share");
+            const sum = spend + save + share;
+            const bar = (seg: string, v: number) => {
+                const el = card.querySelector<HTMLElement>(`[data-split-bar-seg="${seg}"]`);
+                if (el) el.style.width = `${v}%`;
+            };
+            bar("spend", spend); bar("save", save); bar("share", share);
+            const sumEl = card.querySelector<HTMLElement>("[data-split-sum]");
+            if (sumEl) {
+                sumEl.textContent = (es ? "Suma: " : "Sum: ") + `${sum}%`;
+                sumEl.className = "text-xs mt-1 " + (sum === 100 ? "text-brand-mint-deep font-semibold" : "text-red-600 font-semibold");
+            }
+            return sum;
+        }
+
+        document.querySelectorAll<HTMLElement>("[data-kid-card]").forEach((card) => {
+            card.querySelectorAll<HTMLInputElement>("[data-split]").forEach((inp) => {
+                inp.addEventListener("input", () => refreshSplit(card));
+            });
+            refreshSplit(card);
+
+            // ── Approval toggle: immediate PUT (never gated) ─────────────
+            const approval = card.querySelector<HTMLInputElement>('[data-field="approval"]');
+            approval?.addEventListener("change", async () => {
+                const kidId = card.dataset.kidId!;
+                const res = await mutate(`/api/bank/settings/${kidId}`, {
+                    method: "PUT",
+                    body: { save_withdrawal_requires_approval: approval.checked },
+                    errorFallback: es ? "No se pudo guardar" : "Could not save",
+                });
+                if (res) showToast(es ? "Guardado" : "Saved", "success");
+                else approval.checked = !approval.checked;
+            });
+
+            // ── Save automation ─────────────────────────────────────────
+            const saveBtn = card.querySelector<HTMLButtonElement>("[data-kid-save]");
+            saveBtn?.addEventListener("click", async () => {
+                const kidId = card.dataset.kidId!;
+                const num = (f: string) => parseFloat((card.querySelector(`[data-field="${f}"]`) as HTMLInputElement)?.value || "0") || 0;
+                const int = (f: string) => parseInt((card.querySelector(`[data-field="${f}"]`) as HTMLInputElement)?.value || "0", 10) || 0;
+
+                const splitSpend = int("split_spend"), splitSave = int("split_save"), splitShare = int("split_share");
+                if (splitSpend + splitSave + splitShare !== 100) {
+                    showToast(es ? "Los porcentajes deben sumar 100%." : "Percentages must sum to 100%.", "error");
+                    return;
+                }
+                const payload = {
+                    allowance_cents: toCents(num("allowance")),
+                    payday_weekday: int("weekday"),
+                    split_spend_pct: splitSpend,
+                    split_save_pct: splitSave,
+                    split_share_pct: splitShare,
+                    interest_rate_bps: Math.round(num("interest") * 100),
+                    match_pct: int("match"),
+                    match_cap_cents: toCents(num("match_cap")),
+                };
+                saveBtn.disabled = true;
+                const res = await mutate(`/api/bank/settings/${kidId}`, {
+                    method: "PUT",
+                    body: payload,
+                    errorFallback: es ? "No se pudo guardar" : "Could not save",
+                });
+                saveBtn.disabled = false;
+                if (res) showToast(es ? "¡Automatización guardada! 🏦" : "Automation saved! 🏦", "success");
+            });
+        });
+
+        // ── Parent move / settle modal ───────────────────────────────────
+        const modal = document.getElementById("pb-modal");
+        if (!modal) return;
+        const titleEl = document.getElementById("pb-modal-title") as HTMLElement;
+        const kidEl = document.getElementById("pb-modal-kid") as HTMLElement;
+        const jarRow = document.getElementById("pb-jar-row") as HTMLElement;
+        const fromEl = document.getElementById("pb-from") as HTMLSelectElement;
+        const toEl = document.getElementById("pb-to") as HTMLSelectElement;
+        const amountEl = document.getElementById("pb-amount") as HTMLInputElement;
+        const errEl = document.getElementById("pb-error") as HTMLElement;
+        const submitBtn = document.getElementById("pb-submit") as HTMLButtonElement;
+
+        let mode: "transfer" | "settle-share" = "transfer";
+        let activeCard: HTMLElement | null = null;
+
+        function openModal(card: HTMLElement, m: "transfer" | "settle-share") {
+            activeCard = card;
+            mode = m;
+            const name = card.dataset.kidName || "";
+            kidEl.textContent = name;
+            amountEl.value = "";
+            errEl.classList.add("hidden");
+            submitBtn.disabled = false;
+            if (m === "transfer") {
+                titleEl.textContent = es ? "Mover dinero" : "Move money";
+                jarRow.classList.remove("hidden");
+                fromEl.value = "spend"; toEl.value = "save";
+            } else {
+                titleEl.textContent = es ? "Liquidar Compartir 💝" : "Settle Share 💝";
+                jarRow.classList.add("hidden");
+                const shareEl = card.querySelector<HTMLElement>('[data-jar-balance="share"]');
+                const shareCents = shareEl ? Math.round(parseFloat(shareEl.textContent!.replace(/[^0-9.]/g, "")) * 100) : 0;
+                amountEl.value = (shareCents / 100).toFixed(2);
+            }
+            modal!.classList.remove("hidden");
+            setTimeout(() => amountEl.focus(), 50);
+        }
+        function closeModal() { modal!.classList.add("hidden"); activeCard = null; }
+
+        document.querySelectorAll<HTMLElement>("[data-kid-move]").forEach((b) =>
+            b.addEventListener("click", () => openModal(b.closest("[data-kid-card]") as HTMLElement, "transfer")));
+        document.querySelectorAll<HTMLElement>("[data-kid-settle-share]").forEach((b) =>
+            b.addEventListener("click", () => openModal(b.closest("[data-kid-card]") as HTMLElement, "settle-share")));
+        document.getElementById("pb-modal-close")?.addEventListener("click", closeModal);
+        modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+        const setCardJar = (card: HTMLElement, jar: string, cents: number) => {
+            const el = card.querySelector<HTMLElement>(`[data-jar-balance="${jar}"]`);
+            if (el) el.textContent = fmt(cents);
+        };
+
+        submitBtn.addEventListener("click", async () => {
+            const card = activeCard;
+            const currentMode = mode;
+            if (!card) return;
+            const kidId = card.dataset.kidId!;
+            const pesos = parseFloat(amountEl.value);
+            if (isNaN(pesos) || pesos <= 0) {
+                errEl.textContent = es ? "Escribe una cantidad válida." : "Enter a valid amount.";
+                errEl.classList.remove("hidden");
+                return;
+            }
+            const cents = Math.round(pesos * 100);
+            submitBtn.disabled = true;
+
+            if (currentMode === "transfer") {
+                if (fromEl.value === toEl.value) {
+                    errEl.textContent = es ? "Elige frascos diferentes." : "Choose different jars.";
+                    errEl.classList.remove("hidden");
+                    submitBtn.disabled = false;
+                    return;
+                }
+                const res = await mutate("/api/bank/transfer", {
+                    body: { user_id: kidId, from_jar: fromEl.value, to_jar: toEl.value, amount_cents: cents },
+                    errorFallback: es ? "No se pudo mover el dinero" : "Could not move the money",
+                });
+                if (res) {
+                    const jb = await res.json().catch(() => null);
+                    if (jb) {
+                        setCardJar(card, "spend", jb.spend_cents);
+                        setCardJar(card, "save", jb.save_cents);
+                        setCardJar(card, "share", jb.share_cents);
+                        setCardJar(card, "total", jb.total_cents);
+                    }
+                    closeModal();
+                    showToast(es ? "Dinero movido 🎉" : "Money moved 🎉", "success");
+                } else { submitBtn.disabled = false; }
+            } else {
+                // Settle Share = payout debiting the share jar (existing cash endpoint).
+                const res = await mutate(`/api/cash/${kidId}/payout`, {
+                    body: { amount_cents: cents, jar: "share" },
+                    errorFallback: es ? "No se pudo liquidar" : "Could not settle",
+                });
+                if (res) {
+                    const pr = await res.json().catch(() => null);
+                    const shareEl = card.querySelector<HTMLElement>('[data-jar-balance="share"]');
+                    const cur = shareEl ? Math.round(parseFloat(shareEl.textContent!.replace(/[^0-9.]/g, "")) * 100) : 0;
+                    setCardJar(card, "share", Math.max(0, cur - cents));
+                    if (pr && typeof pr.new_balance_cents === "number") setCardJar(card, "total", pr.new_balance_cents);
+                    closeModal();
+                    showToast(es ? "Compartir liquidado 💝" : "Share settled 💝", "success");
+                } else { submitBtn.disabled = false; }
+            }
+        });
+    });
+</script>

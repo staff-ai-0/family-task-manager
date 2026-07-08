@@ -55,6 +55,7 @@ from app.models.onboarding_event import OnboardingEvent, ONBOARDING_EVENT_TYPES
 from app.models.jarvis_pending_action import JarvisPendingAction
 from app.models.jarvis_mcp_token import JarvisMcpToken
 from app.models.cash_transaction import CashTransaction, CashTransactionType
+from app.models.kid_bank import KidBankAccount
 
 __all__ = [
     "Base",
@@ -71,6 +72,7 @@ __all__ = [
     "PointTransaction",
     "CashTransaction",
     "CashTransactionType",
+    "KidBankAccount",
     "PasswordResetToken",
     "EmailVerificationToken",
     "FamilyInvitation",
