@@ -1,0 +1,446 @@
+<title>Family Task Manager — Launch Readiness &amp; Competitive Intel</title>
+<style>
+  :root {
+    --ground: #FFF8F0;
+    --ground-2: #F4E9D8;
+    --card: #FFFFFF;
+    --ink: #1F2937;
+    --ink-soft: #3B4252;
+    --ink-mute: #6B7280;
+    --line: #E5D9C8;
+    --accent: #2E9BCC;
+    --accent-soft: #DDF0FA;
+    --mint: #3DB689;
+    --mint-soft: #DFF5EC;
+    --crit: #D64545;
+    --crit-soft: #FBE4E4;
+    --high: #E96A45;
+    --high-soft: #FDEAE3;
+    --med: #E5A91F;
+    --med-soft: #FCF3DC;
+    --low: #8A94A6;
+    --low-soft: #EDF0F4;
+    --shadow: 4px 4px 0 #1F2937;
+    --shadow-pop: 6px 6px 0 #1F2937;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #151922;
+      --ground-2: #1D2330;
+      --card: #232B3A;
+      --ink: #F3EEE6;
+      --ink-soft: #D5CFC4;
+      --ink-mute: #97A0AF;
+      --line: #364154;
+      --accent: #4FB8E6;
+      --accent-soft: #1C3A4C;
+      --mint: #5DD4A8;
+      --mint-soft: #1B3A30;
+      --crit: #F07575;
+      --crit-soft: #46242A;
+      --high: #FF8A65;
+      --high-soft: #46302A;
+      --med: #FFC857;
+      --med-soft: #423723;
+      --low: #97A0AF;
+      --low-soft: #2A3140;
+      --shadow: 4px 4px 0 #0B0E14;
+      --shadow-pop: 6px 6px 0 #0B0E14;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #FFF8F0; --ground-2: #F4E9D8; --card: #FFFFFF;
+    --ink: #1F2937; --ink-soft: #3B4252; --ink-mute: #6B7280; --line: #E5D9C8;
+    --accent: #2E9BCC; --accent-soft: #DDF0FA;
+    --mint: #3DB689; --mint-soft: #DFF5EC;
+    --crit: #D64545; --crit-soft: #FBE4E4;
+    --high: #E96A45; --high-soft: #FDEAE3;
+    --med: #E5A91F; --med-soft: #FCF3DC;
+    --low: #8A94A6; --low-soft: #EDF0F4;
+    --shadow: 4px 4px 0 #1F2937; --shadow-pop: 6px 6px 0 #1F2937;
+  }
+  :root[data-theme="dark"] {
+    --ground: #151922; --ground-2: #1D2330; --card: #232B3A;
+    --ink: #F3EEE6; --ink-soft: #D5CFC4; --ink-mute: #97A0AF; --line: #364154;
+    --accent: #4FB8E6; --accent-soft: #1C3A4C;
+    --mint: #5DD4A8; --mint-soft: #1B3A30;
+    --crit: #F07575; --crit-soft: #46242A;
+    --high: #FF8A65; --high-soft: #46302A;
+    --med: #FFC857; --med-soft: #423723;
+    --low: #97A0AF; --low-soft: #2A3140;
+    --shadow: 4px 4px 0 #0B0E14; --shadow-pop: 6px 6px 0 #0B0E14;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 40px 20px 80px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1, h2, h3 {
+    font-family: "Avenir Next", "Avenir", "Segoe UI", system-ui, sans-serif;
+    line-height: 1.2;
+    text-wrap: balance;
+  }
+  h1 { font-size: 2rem; font-weight: 700; margin: 0 0 6px; }
+  h2 { font-size: 1.4rem; font-weight: 700; margin: 56px 0 8px; }
+  h3 { font-size: 1.05rem; font-weight: 600; margin: 24px 0 8px; }
+  p { max-width: 70ch; }
+  .sub { color: var(--ink-mute); font-size: 0.9rem; margin: 0 0 4px; }
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  code, .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.84em;
+    background: var(--ground-2);
+    padding: 1px 5px;
+    border-radius: 5px;
+  }
+  a { color: var(--accent); }
+
+  /* chips */
+  .chip {
+    display: inline-block;
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 2px 9px;
+    border-radius: 999px;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .c-crit { background: var(--crit-soft); color: var(--crit); }
+  .c-high { background: var(--high-soft); color: var(--high); }
+  .c-med  { background: var(--med-soft);  color: var(--med); }
+  .c-low  { background: var(--low-soft);  color: var(--low); }
+  .c-mint { background: var(--mint-soft); color: var(--mint); }
+  .c-sky  { background: var(--accent-soft); color: var(--accent); }
+  .c-ink  { background: var(--ground-2); color: var(--ink-soft); }
+
+  /* cards */
+  .card {
+    background: var(--card);
+    border: 2px solid var(--ink);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 18px 20px;
+  }
+  .stripe { border-left-width: 8px; }
+  .s-crit { border-left-color: var(--crit); }
+  .s-high { border-left-color: var(--high); }
+  .s-med  { border-left-color: var(--med); }
+  .s-mint { border-left-color: var(--mint); }
+  .s-sky  { border-left-color: var(--accent); }
+
+  .stack { display: flex; flex-direction: column; gap: 14px; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; }
+
+  .card h3 { margin: 0 0 4px; font-size: 1rem; }
+  .card p { margin: 6px 0 0; font-size: 0.92rem; color: var(--ink-soft); }
+  .card .why { font-size: 0.85rem; color: var(--ink-mute); }
+
+  /* verdict hero */
+  .verdict {
+    background: var(--card);
+    border: 2px solid var(--ink);
+    border-radius: 18px;
+    box-shadow: var(--shadow-pop);
+    padding: 26px 28px;
+    margin-top: 28px;
+  }
+  .verdict p { font-size: 1.02rem; margin: 10px 0 0; }
+  .verdict strong { color: var(--ink); }
+
+  /* scoreboard table */
+  .tablebox { overflow-x: auto; border: 2px solid var(--ink); border-radius: 14px; box-shadow: var(--shadow); background: var(--card); }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+  th {
+    font-size: 0.72rem; letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--ink-mute); background: var(--ground-2);
+  }
+  tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: center; font-variant-numeric: tabular-nums; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: baseline; }
+
+  .foot { margin-top: 60px; font-size: 0.82rem; color: var(--ink-mute); border-top: 2px solid var(--line); padding-top: 16px; }
+  .foot code { font-size: 0.82em; }
+
+  ul.tight { margin: 8px 0 0; padding-left: 20px; font-size: 0.92rem; color: var(--ink-soft); }
+  ul.tight li { margin: 4px 0; }
+  ul.tight li::marker { color: var(--accent); }
+
+  .phase-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0 0 6px; }
+  .phase-head h3 { margin: 0; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .card { transition: transform 120ms ease, box-shadow 120ms ease; }
+  }
+</style>
+
+<div class="wrap">
+  <span class="eyebrow">Audit · 2026-07-07</span>
+  <h1>Family Task Manager — Launch Readiness &amp; Competitive Intel</h1>
+  <p class="sub">44-agent sweep: 11 repo audit dimensions (critical/high claims adversarially re-verified in code and on the prod host) + 7 web-research lanes covering 28 competitor products. 71 verified findings, 112 competitor features assessed.</p>
+
+  <div class="verdict">
+    <span class="eyebrow">Verdict</span>
+    <p><strong>Engineering is ahead of the curve for this stage</strong> — tenant isolation, upload validation, webhook signatures, backups-on-a-timer, onboarding funnel, and bilingual UI all check out. What blocks a public launch is not code quality; it is three walls:</p>
+    <p><strong>1 · Legal is at zero</strong> for a kids' app (no privacy policy or aviso de privacidad, children self-register with no consent flow, kid photos/chat flow to LLMs undisclosed, no way to delete or export a family). <strong>2 · Billing punishes paying customers</strong> (one failed payment = instant silent downgrade with no recovery path; opening a checkout can clobber an active subscription). <strong>3 · There is no safety net</strong> (no CI, no rollback, no offsite backup, no uptime alerting, Sentry wired but off).</p>
+    <p><strong>The market news is very good:</strong> nobody serves Spanish-first LATAM, and nobody anywhere bundles chores + real money + budgeting + AI. The highest-ROI build is a "Family Bank" layer (payday + jars + parent-paid interest) — pure ledger math on tables you already have.</p>
+  </div>
+
+  <h2>Scoreboard</h2>
+  <p class="sub">Findings by dimension. Every critical/high survived an adversarial verify pass against the actual code (a few were re-scoped; corrections kept).</p>
+  <div class="tablebox">
+    <table>
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th class="num"><span class="dot" style="background:var(--crit)"></span>Crit</th>
+          <th class="num"><span class="dot" style="background:var(--high)"></span>High</th>
+          <th class="num"><span class="dot" style="background:var(--med)"></span>Med</th>
+          <th class="num"><span class="dot" style="background:var(--low)"></span>Low</th>
+          <th>One-line state</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Compliance / legal</td><td class="num">2</td><td class="num">2</td><td class="num">2</td><td class="num">1</td><td>Effectively zero for a kids' product</td></tr>
+        <tr><td>Billing / subscriptions</td><td class="num">1</td><td class="num">2</td><td class="num">2</td><td class="num">3</td><td>Webhooks solid; dunning path broken end-to-end</td></tr>
+        <tr><td>CI/CD / testing</td><td class="num">1</td><td class="num">2</td><td class="num">3</td><td class="num">1</td><td>1,096 tests exist; nothing ever runs them</td></tr>
+        <tr><td>Data safety</td><td class="num">1</td><td class="num">2</td><td class="num">2</td><td class="num">1</td><td>Daily dumps work; all copies on one disk</td></tr>
+        <tr><td>Observability / ops</td><td class="num">1</td><td class="num">1</td><td class="num">3</td><td class="num">2</td><td>Nobody gets paged; Sentry wired but off</td></tr>
+        <tr><td>Performance / scaling</td><td class="num">1</td><td class="num">0</td><td class="num">3</td><td class="num">3</td><td>One systemic defect; else good to ~300–500 families</td></tr>
+        <tr><td>Product completeness</td><td class="num">0</td><td class="num">2</td><td class="num">4</td><td class="num">2</td><td>Funnel healthy; deletion/support/admin missing</td></tr>
+        <tr><td>Mobile / PWA / push</td><td class="num">0</td><td class="num">2</td><td class="num">3</td><td class="num">1</td><td>Strong PWA base; core chore loop sends no push</td></tr>
+        <tr><td>Security</td><td class="num">0</td><td class="num">2</td><td class="num">1</td><td class="num">2</td><td>Prior fixes verified; rate limiting is the gap</td></tr>
+        <tr><td>i18n / accessibility</td><td class="num">0</td><td class="num">2</td><td class="num">2</td><td class="num">2</td><td>Bilingual everywhere, but ES/EN mix in pushes</td></tr>
+        <tr><td>Prior-audit delta</td><td class="num">0</td><td class="num">1</td><td class="num">2</td><td class="num">1</td><td>Tracks A–D mostly closed; A3 remnant lives on</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Part 1 · What blocks the launch</h2>
+
+  <h3>Legal — the hard wall <span class="chip c-crit">2 critical</span></h3>
+  <div class="stack">
+    <div class="card stripe s-crit">
+      <h3>No privacy policy, ToS, or aviso de privacidad anywhere <span class="chip c-crit">Critical</span> <span class="chip c-ink">Effort M</span></h3>
+      <p>Zero hits for privacy/términos/aviso across the frontend. LFPDPPP requires an aviso <em>before</em> collecting personal data; Google OAuth verification and PayPal live credentials also demand a published policy URL. Ship <code>/privacidad</code> + <code>/terminos</code> (ES/EN), link from register + footer, register the URL with Google and PayPal.</p>
+    </div>
+    <div class="card stripe s-crit">
+      <h3>Children self-register with their own email — no age gate, no parental consent <span class="chip c-crit">Critical</span> <span class="chip c-ink">Effort L</span></h3>
+      <p>Anyone with a family join code registers at a self-chosen role (defaults CHILD) with immediate token issuance (<code>auth.py:77-120</code>). No birthdate field exists, so age verification is impossible. Fix: parent-initiated child creation or parent approval of join-code signups, optional child email, recorded consent (timestamp + consenting parent).</p>
+    </div>
+    <div class="card stripe s-high">
+      <h3>No family deletion, no data export — ARCO/GDPR rights unfulfillable <span class="chip c-high">High</span> <span class="chip c-ink">Effort M</span></h3>
+      <p><code>FamilyService.delete_family</code> exists but has zero route callers; parents are explicitly blocked from deleting their own account; only budget data is exportable. Needs a parent-initiated cascade delete + whole-family export.</p>
+    </div>
+    <div class="card stripe s-high">
+      <h3>Kid photos and chat flow to third-party LLMs with zero disclosure <span class="chip c-high">High</span> <span class="chip c-ink">Effort S</span></h3>
+      <p>Task proof photos go to the vision model (default <strong>Gemini</strong>, per <code>config.py:193</code>); family chat is exposed to Jarvis via MCP. Disclose subprocessors in the aviso, gate AI-on-child-content behind a family-level parental opt-in, confirm zero-retention terms with providers.</p>
+    </div>
+  </div>
+
+  <h3>Billing — what breaks with the first real customer <span class="chip c-crit">1 critical</span></h3>
+  <div class="stack">
+    <div class="card stripe s-crit">
+      <h3>Payment failure = instant silent downgrade, no recovery, no email <span class="chip c-crit">Critical</span> <span class="chip c-ink">Effort M</span></h3>
+      <p>The "3-day grace period" exists only in a docstring: <code>payment_failed</code> status is excluded from <code>get_family_plan</code>, <code>past_due</code> has zero writers, <code>PAYMENT.SALE.COMPLETED</code> (successful retry) is unhandled, and no dunning email exists. Customer's card hiccups once → family drops to Free mid-month, silently, permanently.</p>
+    </div>
+    <div class="card stripe s-high">
+      <h3>/checkout clobbers an active subscription before payment <span class="chip c-high">High</span> <span class="chip c-ink">Effort M</span></h3>
+      <p>Opening (even abandoning) an upgrade checkout overwrites the active row with <code>status='pending'</code> and a new PayPal ID — paying customer downgraded, old PayPal sub orphaned and still billing (double-charge on completed upgrades).</p>
+    </div>
+    <div class="card stripe s-high">
+      <h3>No PayPal reconciliation; SUSPENDED/EXPIRED/refunds ignored; period_end never advances <span class="chip c-high">High</span> <span class="chip c-ink">Effort M</span></h3>
+      <p>Webhook handles 3 event types; one missed webhook = permanent state drift. Add a daily re-sync via <code>PayPalService.get_subscription</code> in the existing sweep.</p>
+    </div>
+    <div class="card stripe s-med">
+      <h3>Also: join-code registration bypasses the family-member plan limit · zero billing emails · USD-only pricing for a Mexico-first product · trial invisible to the app</h3>
+    </div>
+  </div>
+
+  <h3>Safety net — nothing catches you <span class="chip c-crit">3 critical</span></h3>
+  <div class="stack">
+    <div class="card stripe s-crit">
+      <h3>No CI of any kind <span class="chip c-crit">Critical</span> <span class="chip c-ink">Effort M</span></h3>
+      <p>1,096 backend test functions + 26 Playwright specs, executed by nothing. Deploy script runs zero tests before recreating the prod pod. Minimal fix: one GitHub Actions workflow — pytest w/ postgres+redis services, <code>astro build</code> + <code>astro check</code> (already installed, never invoked).</p>
+    </div>
+    <div class="card stripe s-crit">
+      <h3>No offsite backup — every copy lives on the disk it protects <span class="chip c-crit">Critical</span> <span class="chip c-ink">Effort S</span></h3>
+      <p>Daily 03:30 dumps verified live on 10.1.0.91, but on the same filesystem as the podman volumes (offsite push is a commented-out TODO in <code>backup-db.sh</code>). Uploads volume backed up nowhere. <code>restore-db.sh</code> defaults still point at the decommissioned GCP/Docker path; a restore drill has never been run. One <code>rclone</code> target + one drill closes the worst of it.</p>
+    </div>
+    <div class="card stripe s-crit">
+      <h3>No uptime monitoring or alerting <span class="chip c-crit">Critical</span> <span class="chip c-ink">Effort S</span></h3>
+      <p>The good <code>/ready</code> endpoint (DB+Redis checks) has no consumer. Prod down at 2am = discovered by a user. One external health check (Cloudflare / Uptime Kuma on another host) + Sentry DSN in prod .env (code path already wired, DSN confirmed empty on the host) ≈ an afternoon.</p>
+    </div>
+    <div class="card stripe s-high">
+      <h3>Deploy has no rollback <span class="chip c-high">High</span> <span class="chip c-ink">Effort M</span></h3>
+      <p>Untagged in-place image builds — if the new image fails health checks, prod is already down with nothing to fall back to. Tag builds with git SHA, keep previous tag, auto-revert on failed health check.</p>
+    </div>
+  </div>
+
+  <h3>Performance &amp; security — two systemic defects <span class="chip c-crit">1 critical</span></h3>
+  <div class="stack">
+    <div class="card stripe s-crit">
+      <h3>Sync OpenAI client blocks the event loop at 5 LLM call sites <span class="chip c-crit">Critical</span> <span class="chip c-ink">Effort S</span></h3>
+      <p>Jarvis (×2, in a tool loop up to 4 hops), calendar scanner, recipe importer, proof validator, category AI — all call the sync client inside <code>async def</code> on a 2-worker uvicorn. Two concurrent Jarvis chats freeze <em>every</em> request for up to 60s per hop; the app visibly degrades at tens of users. The fix already exists in the codebase: copy the <code>receipt_scanner</code> pattern (<code>run_in_threadpool</code> + timeout). Highest-leverage single fix in this report.</p>
+    </div>
+    <div class="card stripe s-high">
+      <h3>Rate limiting is spoofable + AI endpoints unmetered <span class="chip c-high">High ×2</span> <span class="chip c-ink">Effort S</span></h3>
+      <p>Uvicorn runs <code>--forwarded-allow-ips="*"</code>, so a rotated <code>X-Forwarded-For</code> defeats every limiter (login brute-force, scan spam). And Jarvis chat/stream + calendar scan have <em>no</em> rate limit or plan metering at all — any Free account can run unbounded LLM spend. Key limits on <code>CF-Connecting-IP</code>, enable Redis storage, meter Jarvis via existing <code>UsageTracking</code>.</p>
+    </div>
+    <div class="card stripe s-med">
+      <h3>Also: zero security headers (HSTS/CSP/XFO) · SameSite unset on auth cookies · check-methods is an account-enumeration oracle</h3>
+    </div>
+  </div>
+
+  <h3>Product &amp; polish gaps that face the customer</h3>
+  <div class="grid2">
+    <div class="card stripe s-high"><h3>No support channel <span class="chip c-ink">S</span></h3><p>No email, form, or contact anywhere — for a paid product. Add soporte@ to footer, help, billing pages.</p></div>
+    <div class="card stripe s-high"><h3>No operator admin <span class="chip c-ink">L</span></h3><p>Family lookup, subscription state, disable/delete — today it's raw psql on the prod box.</p></div>
+    <div class="card stripe s-high"><h3>Core chore loop sends no push <span class="chip c-ink">M</span></h3><p>No TASK_ASSIGNED type, no "chores due today" morning reminder — while gigs, chat, pet all push. Highest-value notification in a chores app.</p></div>
+    <div class="card stripe s-high"><h3>Notifications in random ES/EN mix <span class="chip c-ink">M</span></h3><p>9 services pass hardcoded literals; same kid gets both languages in one feed. Email service already has the <code>_t()</code> pattern — port it.</p></div>
+    <div class="card stripe s-med"><h3>Anonymous locale flip-flops <span class="chip c-ink">S</span></h3><p>Landing defaults ES, login defaults EN, zero Accept-Language handling. Centralize in middleware: cookie → header → <code>es</code>.</p></div>
+    <div class="card stripe s-med"><h3>Login page advertises credentials that don't exist <span class="chip c-ink">S</span></h3><p><code>parent@demo.com</code> was never seeded (it's <code>mom@demo.com</code>). Every prospect who tries the demo bounces.</p></div>
+    <div class="card stripe s-med"><h3>Email verification never enforced <span class="chip c-ink">S</span></h3><p>Flow exists; nothing reads the flag except resend. Gate email-triggering actions at minimum.</p></div>
+    <div class="card stripe s-med"><h3>Landing CTAs point at /login <span class="chip c-ink">S</span></h3><p>"Comenzar gratis" → login instead of /register. One-line conversion fix. Plus: no 404/500 pages; budget first-account dead-end (a new family's first budget action has no way to create an account outside buried Settings).</p></div>
+  </div>
+
+  <h2>Part 2 · Competitive intel — 28 products, 7 lanes</h2>
+
+  <div class="card stripe s-mint" style="margin-top:16px">
+    <h3>The white space is real, and it's yours <span class="chip c-mint">Positioning</span></h3>
+    <p>Every incumbent prices in USD; <strong>none publishes MXN pricing or serves Mexico</strong> (Greenlight/BusyKid/FamZoo/Acorns Early require US residency/SSN; Rooster is UK-only; the Spanish-native field is one solo-dev app with no money rails). And <strong>nobody in any market bundles chores + real money + full budgeting + AI</strong> — competitors are single-loop apps. LATAM fintech raised big in 2025 (Plata $250M, Klar $170M) but none targets family/kids money. The claim <em>"la app de tareas, domingo y presupuesto familiar hecha para México"</em> is uncontested.</p>
+  </div>
+
+  <h3>Steal list — ranked by leverage on what you already have</h3>
+  <div class="stack">
+    <div class="card stripe s-mint">
+      <h3>1 · "Family Bank" bundle <span class="chip c-mint">Adopt now</span> <span class="chip c-sky">Greenlight · BusyKid · FamZoo · Rooster</span></h3>
+      <p>The four features every raved-about money app shares, all pure ledger math on <code>cash_cents</code>/points: <strong>payday</strong> (chores accrue all week, kid gets "paid" on a set day — the #1 reason parents stay), <strong>Save/Share/Spend jars</strong> with % auto-split of every payout (the three-jar pedagogy that actually teaches habits), <strong>parent-paid interest</strong> on the Save jar (kids viscerally learn compounding — Greenlight's entire upsell axis), and <strong>parent match</strong> ("I match 50% of what you save" — 401k psychology). A cron + a few cash_transaction inserts. This is the launch differentiator.</p>
+    </div>
+    <div class="card stripe s-mint">
+      <h3>2 · Age-preset chore packs at onboarding <span class="chip c-mint">Adopt now</span> <span class="chip c-sky">BusyKid</span></h3>
+      <p>BusyKid's age-based preset chart ("set up in minutes") kills the cold-start problem — reviewers cite it constantly. Ship curated ES/MX template packs by age (or Jarvis generates them at family creation) pre-populating task templates + gig offerings with sensible point/MXN values. Same move fixes the empty-state cliff the product audit found. Include default Spanish rewards (tiempo de pantalla, salida al parque).</p>
+    </div>
+    <div class="card stripe s-mint">
+      <h3>3 · Task mechanics parents pay for <span class="chip c-mint">Adopt now</span> <span class="chip c-sky">Chorsee · S'moresUp · Sweepy · Modak · Thumsters</span></h3>
+      <ul class="tight">
+        <li><strong>Sibling rotation on task templates</strong> — the "why always me" killer; it's why people pay Chorsee even though theirs is buggy. Your gig board already has rotation modes; extend to chores.</li>
+        <li><strong>"X days since last completed" scheduling</strong> — Chorsee's angriest unmet request; real chores recur by elapsed time, not weekday.</li>
+        <li><strong>Photo proof + approval on tasks</strong> — you already built the whole pipeline for gigs (uploads, auth proxy, AI pre-screen). Extend to task assignments.</li>
+        <li><strong>Kid-proposed gigs</strong> — kid drafts an offering, parent approves the price. Kid agency; fits gig_offerings + HITL as-is.</li>
+        <li><strong>1-tap award/deduct with reason</strong> — capture spontaneous behavior ("helped his sister"); Thumsters takes 5 taps, beat them at 2. Or via Jarvis: "dale 5 puntos a Emma".</li>
+      </ul>
+    </div>
+    <div class="card stripe s-mint">
+      <h3>4 · Kiosk = the $630 Skylight, on a $150 tablet <span class="chip c-mint">Adopt now</span> <span class="chip c-sky">Skylight · Hearth</span></h3>
+      <p>Families pay $300–630 + $79/yr for a wall display; USD hardware pricing is prohibitive in Mexico. Your kiosk mode is 80% there. Polish into an always-on dashboard (week calendar + chores + meals + pet + leaderboard), add <strong>per-kid PIN switch</strong> (Chorsee's household-device model) and <strong>per-member colors everywhere</strong> (Hearth's most-loved detail). Market it: <em>"convierte tu tablet en un Skylight."</em> Also steal <strong>icon-based tap-through routines</strong> for pre-readers (morning/evening ordered checklists) — the single most-raved feature across both hardware products, and wiring routine completion to the pet makes yours the only one with a motivation layer.</p>
+    </div>
+    <div class="card stripe s-sky">
+      <h3>5 · Kid engagement loops <span class="chip c-sky">Joon · Habitica · Nipto · Thumsters</span> <span class="chip c-ink">Pet decision pending</span></h3>
+      <ul class="tight">
+        <li><strong>Quest-mode kid UI</strong> (Joon, 4.7★): kid never sees a chore list — only quests that feed the pet; instant coin-drop on completion (ADHD parents cite immediacy as why it works). Your kid_pet + roles + optimistic-mutate patterns make this mostly frontend work — but it expands the pet, which you've flagged as uncertain. Decide before building.</li>
+        <li><strong>Joon's failure mode is the warning</strong>: engagement decays weeks 4–8 once pet customization exhausts. Your two-currency economy (cash outlives cuteness for teens) + evolution stages are the countermeasures. ChoreMonster's orphaned audience went to Joon; your pet inherits the same appeal.</li>
+        <li><strong>Weekly Family Cup</strong> (Nipto's loved loop): 7-day season, fresh start every Monday, winner picks a reward. Kiosk is the perfect leaderboard.</li>
+        <li><strong>Family boss battle</strong> (Habitica's killer mechanic, defanged): weekly "Monstruo del Desorden" whose HP = the family's tasks; approvals deal damage. Cooperative, no anxiety-inducing HP loss.</li>
+        <li><strong>Kid-visible goal jar</strong> (Thumsters/Greenlight): kid earmarks points toward a chosen reward with a progress jar. Kids check their bank constantly.</li>
+        <li><strong>Star mode for ages 3–7</strong> (Rooster): stars-not-points skin; families start earlier, stay longer.</li>
+      </ul>
+    </div>
+    <div class="card stripe s-sky">
+      <h3>6 · Budget module upgrades <span class="chip c-sky">YNAB · Monarch · Copilot · Actual</span></h3>
+      <ul class="tight">
+        <li><strong>Kid envelopes</strong> — no budget app on earth gives kids their own envelopes fed by chores. YNAB Together (6 seats) is the closest and users rave; yours would be unique. This is the bridge between your two products.</li>
+        <li><strong>Month rollover + "cover overspending" flow</strong> — YNAB's behavioral core; your allocations lack it.</li>
+        <li><strong>Bill calendar + 30/60-day forecast</strong> — Monarch's most-praised UX; you have recurring txns + a family calendar, just project them.</li>
+        <li><strong>Learning categorization</strong> — Copilot's #1 raved feature; feed past corrections into the scanner prompt as few-shot, auto-suggest rules from repeats. Prompt work, not schema work.</li>
+        <li><strong>Recurring-charge detection</strong> — "caught a forgotten subscription" is quantifiable value; very MX-relevant.</li>
+        <li><strong>Don't build</strong>: bank aggregation (MX coverage poor — your receipt scanner + bank-email matcher IS the MX substitute), investment sync (Monarch's top complaint source), local-first (ship strong export instead).</li>
+      </ul>
+    </div>
+    <div class="card stripe s-sky">
+      <h3>7 · Packaging what's already built <span class="chip c-sky">Cozi Max · Skylight Sidekick · Monarch AI</span></h3>
+      <p>Three features competitors lead their marketing with, which you have and hide: <strong>AI flyer→calendar scan</strong> (Cozi Max's headline upsell; put a "escanea un aviso" button on kiosk + onboarding, tune on handwritten Spanish avisos escolares), <strong>AI meal planning</strong> (a Jarvis scheduled prompt — "plan dinners, add to shopping list" — is Cozi's whole Max tier), and <strong>Jarvis in budget pages</strong> (Monarch's marquee "AI Assistant" is a weaker version of what Jarvis+MCP already does — surface it with suggested Spanish money questions). Also: auto-post completions with proof photos into family chat with reactions (S'moresUp's "Campfire" liveliness, one event hook).</p>
+    </div>
+  </div>
+
+  <h3>Pricing — the category hands you the answer</h3>
+  <div class="tablebox">
+    <table>
+      <thead><tr><th>Product</th><th>Price (USD/mo eq.)</th><th>Signal</th></tr></thead>
+      <tbody>
+        <tr><td>Joon</td><td>$12.99</td><td>ADHD-premium outlier; #1 complaint is sticker shock</td></tr>
+        <tr><td>Greenlight</td><td>$5.99–24.98</td><td>No free tier = most-cited weakness; price-creep anger</td></tr>
+        <tr><td>S'moresUp</td><td>$7.99 (was $4.99)</td><td>60% hike → churn; users shoppable</td></tr>
+        <tr><td>BusyKid</td><td>$4 flat/family</td><td>Families with 3+ kids pick it on price alone</td></tr>
+        <tr><td>Cozi</td><td>$39–80/yr</td><td>Paywalled its free calendar → 2.1★ Trustpilot. The cautionary tale.</td></tr>
+        <tr><td>YNAB / Monarch / Copilot</td><td>$95–199/yr</td><td>Loud price fatigue; Actual is the free anchor</td></tr>
+        <tr><td><strong>You</strong></td><td><strong>Free real · Plus ~MX$79–99 · Pro ~MX$149–199</strong></td><td>Per-family, MXN-denominated, nobody else does either. Gate AI (your real cost), never the core organizer — Maple's model, the opposite of Cozi's.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Cross-cutting lessons from their 1-star reviews</h3>
+  <div class="grid2">
+    <div class="card stripe s-med"><h3>Reliability IS the feature</h3><p class="why">The #1 complaint across OurHome, Cozi, S'moresUp, FamilyWall, Nipto is sync bugs and notifications that never arrive. Breadth without reliability kills trust at 5M downloads. Your ops discipline is marketable.</p></div>
+    <div class="card stripe s-med"><h3>Billing honesty is a trust weapon</h3><p class="why">Greenlight billing after cancellation, BusyKid refusing transfers, Thumsters locking paid users out — money-handling failures dominate fintech reviews. Self-serve cancel + transparent billing differentiates (and your dunning fix is prerequisite).</p></div>
+    <div class="card stripe s-med"><h3>Fairness is the emotional trigger</h3><p class="why">Sweepy's effort-point gripes, Nipto's praised point-haggling: make point values negotiable ("propose new value", Jarvis arbitrates). Avoid shame mechanics — keep decay playful (pet), never punitive red bars.</p></div>
+    <div class="card stripe s-med"><h3>Verification beats trust</h3><p class="why">BusyKid kids self-approved fake chores for months. Your photo-proof + AI pre-screen + parent approval already beats the category — market it.</p></div>
+  </div>
+
+  <h3>Growth notes</h3>
+  <ul class="tight">
+    <li><strong>Spanish SEO is near-empty and cheap to win</strong> — "cuánto domingo dar por edad", "tareas para niños recompensas", "TDAH rutinas". Every US player runs a content machine; nobody does it in Spanish.</li>
+    <li><strong>Family-invite virality is intrinsic</strong> — make second-parent invite a first-run step; instrument it.</li>
+    <li><strong>Distribution is app-store-first</strong> — no web-first success found in the category. PWA now; a Capacitor wrap (remote-URL shell + FCM/APNs) is post-launch, pre-growth work.</li>
+    <li><strong>Joon proves clinical framing converts</strong> — Spanish content around rutinas/TDAH sustains premium pricing; unoccupied in LATAM. Later: B2B2C via Mexican banks (Greenlight distributes through 150+ banks now) and a colegio pilot program nobody has tried.</li>
+  </ul>
+
+  <h2>Part 3 · Suggested sequence</h2>
+  <div class="stack">
+    <div class="card stripe s-crit">
+      <div class="phase-head"><h3>P0 — Don't launch without</h3> <span class="chip c-ink">~2–3 weeks</span></div>
+      <ul class="tight">
+        <li>Legal: aviso de privacidad + ToS pages, consent checkbox, child-signup consent flow, family delete + export endpoints, AI disclosure/opt-in</li>
+        <li>Billing: grace period honored + SALE.COMPLETED recovery + dunning email; checkout guard; daily PayPal re-sync; join-code member-limit check</li>
+        <li>Safety net: offsite backup push + uploads tar + one restore drill; Sentry DSN set; external uptime check; minimal GitHub Actions CI; tagged images + rollback</li>
+        <li>Perf/sec: threadpool-wrap the 5 sync LLM sites; CF-Connecting-IP rate-limit key + Redis storage; meter Jarvis/calendar-scan; security headers</li>
+        <li>Customer floor: support email; task-assigned + morning-chores push; fix demo creds; locale middleware; notification i18n; CTAs → /register; 404/500 pages</li>
+      </ul>
+    </div>
+    <div class="card stripe s-mint">
+      <div class="phase-head"><h3>P1 — Launch differentiators</h3> <span class="chip c-ink">~3–4 weeks</span></div>
+      <ul class="tight">
+        <li>Family Bank: payday job + Save/Share/Spend jars + parent interest + match</li>
+        <li>Onboarding: age-preset ES/MX chore+gig+reward packs (Jarvis-generated); budget first-account empty state</li>
+        <li>Task mechanics: sibling rotation, interval-since-completion recurrence, photo proof on tasks, kid-proposed gigs, 1-tap points</li>
+        <li>Kid money: goal jar + kid envelopes in budget; star mode for little kids</li>
+        <li>Kiosk: per-kid PIN, member colors, leaderboard/routines panels; MXN PayPal plans + pricing page copy ("una membresía, toda la familia")</li>
+        <li>Packaging: scan-a-flyer + Jarvis meal-plan + Jarvis-in-budget surfaced in UI and landing copy</li>
+      </ul>
+    </div>
+    <div class="card stripe s-sky">
+      <div class="phase-head"><h3>P2 — Post-launch growth</h3> <span class="chip c-ink">ongoing</span></div>
+      <ul class="tight">
+        <li>Quest-mode kid UI + pet evolution stages — <strong>after the pet go/no-go decision</strong></li>
+        <li>Family Cup weekly season; family boss battle; completion posts into chat</li>
+        <li>Budget: rollover/overspend UX, bill calendar + forecast, learning categorization, recurring detection</li>
+        <li>Capacitor wrap for app stores; referral program; Spanish SEO content machine; routines library; TDAH content angle</li>
+        <li>Ops maturity: staging env, request IDs, metrics, thumbnails, composite indexes, Redis pub/sub for chat when concurrency demands</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="foot">
+    <p>Method: Workflow <code>wf_25d21dfa-c92</code> — 44 agents, 2.02M tokens, 562 tool calls, ~15 min. Audit lanes read the repo and the live prod host (10.1.0.91); every critical/high finding was independently re-verified by an adversarial agent (several re-scoped, none refuted). Research lanes: live web sources as of 2026-07-07, cited per group.</p>
+    <p>Full data: findings with file:line evidence in <code>scratchpad/audit-full.md</code>, competitor detail in <code>scratchpad/research-full.md</code>, raw JSON in the workflow journal. Prior audit baseline: <code>docs/audit/2026-06-04/</code>.</p>
+  </div>
+</div>
