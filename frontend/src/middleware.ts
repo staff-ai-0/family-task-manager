@@ -96,10 +96,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 ];
                 if (!devOrigins.includes(origin)) {
                     console.error(`CSRF violation in dev: origin ${origin} not in allowed list for ${path}`);
-                    return new Response(
+                    return withSecurityHeaders(new Response(
                         JSON.stringify({ detail: "CSRF validation failed" }),
                         { status: 403, headers: { "Content-Type": "application/json" } }
-                    );
+                    ));
                 }
             } else {
                 // In production, strictly enforce same-origin or allowed hosts
@@ -108,10 +108,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 
                 if (!allowedHosts.includes(originHost)) {
                     console.error(`CSRF violation: origin ${origin} (host: ${originHost}) does not match allowed hosts: ${allowedHosts.join(', ')}`);
-                    return new Response(
+                    return withSecurityHeaders(new Response(
                         JSON.stringify({ detail: "CSRF validation failed" }),
                         { status: 403, headers: { "Content-Type": "application/json" } }
-                    );
+                    ));
                 }
             }
         }
@@ -127,8 +127,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // defaults to "es", Mexico-first) and SET the cookie so every downstream
     // page resolves the same language instead of each page guessing its own
     // fallback. Attributes mirror /api/lang (not httpOnly — client scripts
-    // read document.cookie for lang).
-    if (!cookies.get("lang")?.value) {
+    // read document.cookie for lang). Only set on HTML page requests — API and
+    // proxy routes must not grow a Set-Cookie on every JSON/binary response
+    // (assets already returned early above).
+    const isPageRequest = !path.startsWith("/api/") && !path.startsWith("/uploads/");
+    if (isPageRequest && !cookies.get("lang")?.value) {
         const acceptLanguage = request.headers.get("accept-language") ?? "";
         let lang = "es";
         for (const part of acceptLanguage.split(",")) {
@@ -143,6 +146,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
             path: "/",
             maxAge: 60 * 60 * 24 * 365,
             sameSite: "lax",
+            secure: !import.meta.env.DEV, // match auth cookie flags
         });
     }
 
@@ -199,6 +203,16 @@ export const onRequest = defineMiddleware(async (context, next) => {
         return withSecurityHeaders(response);
     }
 
+    // Genuinely-unmatched page paths fall through to Astro's custom 404
+    // instead of bouncing anonymous visitors to /login. When no file-based
+    // route matches, Astro resolves the request to the /404 route, so
+    // routePattern is an authoritative "this is not a known page" signal —
+    // real protected pages (e.g. /dashboard) never match it and still hit
+    // the auth redirect below. API paths keep their JSON 401 contract.
+    if (!path.startsWith("/api/") && context.routePattern === "/404") {
+        return withSecurityHeaders(await next());
+    }
+
     // Check authentication for protected routes
     let accessToken = cookies.get("access_token")?.value;
     const refreshToken = cookies.get("refresh_token")?.value;
@@ -238,15 +252,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
         if (!path.startsWith("/api/")) {
             const response = redirect("/login", 302);
             for (const c of clearAuthCookies()) response.headers.append("Set-Cookie", c);
-            return response;
+            return withSecurityHeaders(response);
         }
         // Return 401 for API routes
         const headers = new Headers({ "Content-Type": "application/json" });
         for (const c of clearAuthCookies()) headers.append("Set-Cookie", c);
-        return new Response(
+        return withSecurityHeaders(new Response(
             JSON.stringify({ detail: "Unauthorized" }),
             { status: 401, headers }
-        );
+        ));
     }
 
     // Verify token is valid by checking with backend for API routes
@@ -272,18 +286,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
                     const { clearAuthCookies } = await import("./lib/auth-cookies");
                     const headers = new Headers({ "Content-Type": "application/json" });
                     for (const c of clearAuthCookies()) headers.append("Set-Cookie", c);
-                    return new Response(
+                    return withSecurityHeaders(new Response(
                         JSON.stringify({ detail: "Invalid or expired token" }),
                         { status: 401, headers }
-                    );
+                    ));
                 }
-                return new Response(
+                return withSecurityHeaders(new Response(
                     JSON.stringify({
                         detail: "Backend temporarily unavailable. Retry shortly.",
                         code: "backend_error",
                     }),
                     { status: 503, headers: { "Content-Type": "application/json" } }
-                );
+                ));
             }
 
             const user: User = await response.json();
@@ -309,13 +323,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
             // The token may be perfectly valid; the backend just isn't reachable.
             // Surface that clearly and DO NOT delete the cookie.
             console.error("Backend unreachable during auth check:", error);
-            return new Response(
+            return withSecurityHeaders(new Response(
                 JSON.stringify({
                     detail: "Backend temporarily unavailable. Retry shortly.",
                     code: "backend_unreachable",
                 }),
                 { status: 503, headers: { "Content-Type": "application/json" } }
-            );
+            ));
         }
     }
 

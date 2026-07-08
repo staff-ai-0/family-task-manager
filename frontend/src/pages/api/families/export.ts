@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { clientIpHeaders } from "../../../lib/client-ip";
 
 /**
  * Proxy for GET /api/families/export (parent only).
@@ -10,7 +11,7 @@ const apiUrl = () =>
     process.env.PUBLIC_API_BASE_URL ||
     "http://backend:8000";
 
-export const GET: APIRoute = async ({ cookies }) => {
+export const GET: APIRoute = async ({ cookies, request }) => {
     const token = cookies.get("access_token")?.value;
     if (!token) {
         return new Response(JSON.stringify({ detail: "Unauthorized" }), {
@@ -20,7 +21,7 @@ export const GET: APIRoute = async ({ cookies }) => {
     }
     try {
         const r = await fetch(`${apiUrl()}/api/families/export`, {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${token}`, ...clientIpHeaders(request) },
         });
         if (!r.ok) {
             return new Response(await r.text(), {

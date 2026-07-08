@@ -23,18 +23,6 @@ const cookieRole = Astro.cookies.get("ui_role")?.value;
 const resolvedUiMode = uiMode
 	?? (cookieRole === "teen" ? "teen" : cookieRole === "parent" ? "adult" : "kid");
 
-const bannerCopy = {
-  es: {
-    msg: "Por favor verifica tu correo electrónico para activar todas las funciones.",
-    resend: "Reenviar correo",
-    sent: "¡Enviado!",
-  },
-  en: {
-    msg: "Please verify your email address to unlock all features.",
-    resend: "Resend email",
-    sent: "Sent!",
-  },
-}[lang] ?? { msg: "", resend: "", sent: "" };
 ---
 
 <!doctype html>
@@ -56,30 +44,16 @@ const bannerCopy = {
 <body class="bg-brand-cream text-brand-ink antialiased" data-ui-mode={resolvedUiMode}>
     <ToastContainer />
 
-    <!-- Email verification banner -->
-    <div
-        id="verify-banner"
-        class="hidden w-full bg-brand-sun border-b-2 border-brand-ink px-4 py-2.5 text-sm text-brand-ink font-sans font-bold items-center justify-center gap-3"
-    >
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span>{bannerCopy.msg}</span>
-        <button
-            id="resend-verify-btn"
-            class="underline font-extrabold hover:text-brand-coral-deep transition-colors whitespace-nowrap"
-        >
-            {bannerCopy.resend}
-        </button>
-    </div>
+    <!-- Email verification prompts render per-page via VerifyEmailBanner.astro
+         (dashboard) — the old global #verify-banner strip lived here and
+         stacked on top of it, so it was removed. -->
 
     <div class="app-shell" transition:animate="fade">
         <slot />
     </div>
     <slot name="overlays" />
 
-    <script define:vars={{ sentLabel: bannerCopy.sent, resendLabel: bannerCopy.resend }}>
+    <script is:inline>
         // ClientRouter removed — dispatch astro:page-load once on initial load.
         // Must fire AFTER deferred/module page scripts have executed and
         // registered their listeners. Hoisted Astro scripts (any <script>
@@ -98,36 +72,6 @@ const bannerCopy = {
                 fire();
             }
         })();
-
-        document.addEventListener('astro:page-load', () => {
-            (async () => {
-                try {
-                    const res = await fetch("/api/auth/me-status");
-                    if (!res.ok) return;
-                    const { verified } = await res.json();
-                    if (!verified) {
-                        const banner = document.getElementById("verify-banner");
-                        if (banner) {
-                            banner.classList.remove("hidden");
-                            banner.classList.add("flex");
-                        }
-                    }
-                } catch { /* silently ignore */ }
-            })();
-
-            document.getElementById("resend-verify-btn")?.addEventListener("click", async (e) => {
-                const btn = e.target;
-                btn.disabled = true;
-                btn.textContent = "...";
-                try {
-                    await fetch("/api/auth/resend-verification", { method: "POST" });
-                    btn.textContent = sentLabel;
-                } catch {
-                    btn.textContent = resendLabel;
-                    btn.disabled = false;
-                }
-            });
-        });
     </script>
 
     <script is:inline>

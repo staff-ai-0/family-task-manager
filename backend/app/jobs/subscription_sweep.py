@@ -17,12 +17,15 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.subscription import FamilySubscription
-from app.services.subscription_state import GRACE_EXPIRED_STATUS
+from app.services.subscription_state import (
+    GRACE_EXPIRED_STATUS,
+    notify_subscription_ended,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -82,13 +85,41 @@ async def downgrade_grace_expired_subscriptions(db: AsyncSession) -> int:
         )
     if subs:
         await db.commit()
+    # Final "subscription ended" notice — dispatched only for rows that went
+    # through the payment_failed → grace_expired transition in THIS run (the
+    # WHERE clause above filters status='payment_failed'), so repeated sweep
+    # runs can never re-send it. Fire-and-forget, after the commit: an email
+    # failure never blocks or rolls back the downgrade.
+    for sub in subs:
+        await notify_subscription_ended(db, sub)
     return len(subs)
 
 
-# Local statuses worth reconciling against PayPal. Terminal local states
-# (cancelled / expired / grace_expired) and pre-payment rows (pending) are
-# skipped — webhooks or a new checkout own those.
-_RECONCILE_STATUSES = ("active", "past_due", "payment_failed")
+# Local statuses worth reconciling against PayPal — every status that a
+# missed webhook could leave stranded while PayPal still bills (or should be
+# billing). 'pending' catches a buyer who approved the checkout but whose
+# ACTIVATED webhook was missed and who never returned to /activate;
+# 'grace_expired' catches a recovery (successful retry charge) whose
+# PAYMENT.SALE.COMPLETED webhook was missed after the local downgrade.
+# Only 'cancelled' and 'expired' stay excluded: they are terminal by our own
+# action / PayPal's, and re-activating them here would fight the sweep's own
+# downgrade passes. Rows without a paypal_subscription_id (free families)
+# are excluded by the query below.
+_RECONCILE_ALWAYS_STATUSES = ("active", "past_due", "payment_failed")
+
+# 'pending' and 'grace_expired' are reconciled only while RECENT (age from
+# updated_at — the last real state change: checkout refresh bumps it for
+# pending, the grace-expiry downgrade bumps it for grace_expired). Without
+# an age cap, every abandoned checkout (APPROVAL_PENDING forever) and every
+# grace_expired row whose PayPal side sits SUSPENDED would be polled against
+# the PayPal API nightly, forever — the candidate set only grows over time.
+# The windows comfortably cover the real stranding scenarios: a missed
+# ACTIVATED webhook is caught the very next night, and PayPal's own dunning
+# retry schedule gives up well inside 60 days.
+_RECONCILE_MAX_AGE = {
+    "pending": timedelta(days=7),
+    GRACE_EXPIRED_STATUS: timedelta(days=60),
+}
 
 
 def _parse_paypal_time(value) -> datetime | None:
@@ -109,16 +140,25 @@ async def reconcile_with_paypal(db: AsyncSession) -> int:
     """
     from app.services.paypal_service import PayPalService
 
+    now = datetime.now(timezone.utc)
     query = select(FamilySubscription).where(
         and_(
-            FamilySubscription.status.in_(list(_RECONCILE_STATUSES)),
+            or_(
+                FamilySubscription.status.in_(list(_RECONCILE_ALWAYS_STATUSES)),
+                *[
+                    and_(
+                        FamilySubscription.status == status_,
+                        FamilySubscription.updated_at >= now - max_age,
+                    )
+                    for status_, max_age in _RECONCILE_MAX_AGE.items()
+                ],
+            ),
             FamilySubscription.paypal_subscription_id != None,  # noqa: E711
         )
     )
     subs = (await db.execute(query)).scalars().all()
 
     changed = 0
-    now = datetime.now(timezone.utc)
     for sub in subs:
         # Captured before any commit/rollback: a rollback expires ORM
         # attributes and re-loading them lazily in the except branch would
@@ -134,14 +174,44 @@ async def reconcile_with_paypal(db: AsyncSession) -> int:
 
             if remote_status == "ACTIVE":
                 if sub.status != "active":
-                    logger.warning(
-                        "Reconcile: sub %s local=%s but PayPal=ACTIVE — restoring",
-                        paypal_id, sub.status,
+                    # PayPal keeps a subscription ACTIVE while it retries a
+                    # failed payment itself (SUSPENDED only comes after its
+                    # retries are exhausted), so ACTIVE alone is NOT proof of
+                    # recovery for a row in dunning. Only treat it as
+                    # recovered when PayPal reports a next_billing_time
+                    # NEWER than our failure timestamp — a successful charge
+                    # advances it a full cycle past the failure, whereas
+                    # mid-retry it still points at the outstanding (failed)
+                    # billing date. Otherwise leave the grace clock running:
+                    # the PAYMENT.SALE.COMPLETED webhook or a later sweep
+                    # converges it once the retry actually succeeds.
+                    failure_at = sub.payment_failure_at
+                    if failure_at is not None and failure_at.tzinfo is None:
+                        failure_at = failure_at.replace(tzinfo=timezone.utc)
+                    mid_retry = (
+                        sub.status in ("payment_failed", GRACE_EXPIRED_STATUS)
+                        and failure_at is not None
+                        and (next_billing is None or next_billing <= failure_at)
                     )
-                    sub.status = "active"
-                    sub.payment_failure_at = None
-                    dirty = True
-                if next_billing is not None:
+                    if mid_retry:
+                        logger.info(
+                            "Reconcile: sub %s local=%s, PayPal=ACTIVE but no "
+                            "payment newer than failure at %s — leaving grace "
+                            "running",
+                            paypal_id, sub.status, failure_at,
+                        )
+                    else:
+                        logger.warning(
+                            "Reconcile: sub %s local=%s but PayPal=ACTIVE — restoring",
+                            paypal_id, sub.status,
+                        )
+                        sub.status = "active"
+                        sub.payment_failure_at = None
+                        sub.current_period_start = (
+                            sub.current_period_start or now
+                        )
+                        dirty = True
+                if sub.status == "active" and next_billing is not None:
                     local_end = sub.current_period_end
                     if local_end is not None and local_end.tzinfo is None:
                         local_end = local_end.replace(tzinfo=timezone.utc)
@@ -156,7 +226,11 @@ async def reconcile_with_paypal(db: AsyncSession) -> int:
                         sub.current_period_end = next_billing
                         dirty = True
             elif remote_status == "SUSPENDED":
-                if sub.status != "payment_failed":
+                # grace_expired stays grace_expired: the family is already
+                # downgraded and PayPal is not billing. Re-stamping
+                # payment_failed here would restart entitlement/dunning and
+                # flip-flop with the grace-expiry pass every night.
+                if sub.status not in ("payment_failed", GRACE_EXPIRED_STATUS):
                     logger.warning(
                         "Reconcile: sub %s local=%s but PayPal=SUSPENDED — dunning",
                         paypal_id, sub.status,

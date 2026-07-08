@@ -686,6 +686,132 @@ async def test_activate_promotes_staged_checkout_and_cancels_old(
 
 
 @pytest.mark.asyncio
+async def test_checkout_from_grace_expired_stages_pending(
+    client, auth_headers, db_session, test_family, plus_plan, pro_plan
+):
+    """Regression (whole-PR review, MAJOR 3): a re-checkout from
+    grace_expired must NOT overwrite paypal_subscription_id in place — the
+    old PayPal sub may still be retrying charges. It must be staged in the
+    pending_* columns so /activate cancels the old sub."""
+    pro_plan.paypal_plan_id_monthly = "P-PRO-MONTHLY"
+    await db_session.commit()
+
+    old = await _make_paid_sub(
+        db_session, test_family, plus_plan,
+        status="grace_expired", paypal_id="I-OLD-GRACE",
+        payment_failure_at=datetime.now(timezone.utc) - timedelta(days=30),
+    )
+
+    with patch(
+        "app.services.paypal_service.PayPalService.create_subscription",
+        return_value={
+            "subscription_id": "I-NEW-PRO",
+            "approval_url": "https://paypal.example/approve",
+            "status": "APPROVAL_PENDING",
+        },
+    ):
+        resp = await client.post(
+            "/api/subscriptions/checkout",
+            headers=auth_headers,
+            json={"plan_name": "pro", "billing_cycle": "monthly"},
+        )
+    assert resp.status_code == 200, resp.text
+
+    await db_session.refresh(old)
+    # Old (possibly still billing) PayPal sub id preserved, not clobbered.
+    assert old.paypal_subscription_id == "I-OLD-GRACE"
+    assert old.status == "grace_expired"
+    assert old.plan_id == plus_plan.id
+    # New checkout staged for /activate to promote (and cancel the old sub).
+    assert old.pending_plan_id == pro_plan.id
+    assert old.pending_billing_cycle == "monthly"
+    assert old.pending_paypal_subscription_id == "I-NEW-PRO"
+
+
+@pytest.mark.asyncio
+async def test_activate_from_grace_expired_cancels_old_paypal_sub(
+    client, auth_headers, db_session, test_family, plus_plan, pro_plan
+):
+    """The staged re-checkout from grace_expired goes live on /activate and
+    the superseded (still retrying) PayPal sub is cancelled."""
+    old = await _make_paid_sub(
+        db_session, test_family, plus_plan,
+        status="grace_expired", paypal_id="I-OLD-GRACE",
+        payment_failure_at=datetime.now(timezone.utc) - timedelta(days=30),
+    )
+    old.pending_plan_id = pro_plan.id
+    old.pending_billing_cycle = "monthly"
+    old.pending_paypal_subscription_id = "I-NEW-PRO"
+    await db_session.commit()
+
+    with patch(
+        "app.services.paypal_service.PayPalService.execute_subscription",
+        return_value={"status": "ACTIVE", "subscription_id": "I-NEW-PRO"},
+    ), patch(
+        "app.services.paypal_service.PayPalService.cancel_subscription",
+        return_value={"status": "cancelled", "subscription_id": "I-OLD-GRACE"},
+    ) as mock_cancel:
+        resp = await client.post(
+            "/api/subscriptions/activate",
+            headers=auth_headers,
+            json={"paypal_subscription_id": "I-NEW-PRO"},
+        )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "activated"
+
+    await db_session.refresh(old)
+    assert old.status == "active"
+    assert old.plan_id == pro_plan.id
+    assert old.paypal_subscription_id == "I-NEW-PRO"
+    assert old.payment_failure_at is None
+    assert old.pending_paypal_subscription_id is None
+    mock_cancel.assert_called_once()
+    assert mock_cancel.call_args[0][0] == "I-OLD-GRACE"
+
+
+@pytest.mark.asyncio
+async def test_activate_flags_review_when_supersede_cancel_fails(
+    client, auth_headers, db_session, test_family, plus_plan, pro_plan
+):
+    """Regression (whole-PR review, MAJOR 2): when cancelling the superseded
+    PayPal sub fails, the activation still succeeds but the row is flagged
+    needs_review with the old sub id in review_reason — a persistent trace of
+    the double-billing risk."""
+    live = await _make_paid_sub(
+        db_session, test_family, plus_plan,
+        status="active", paypal_id="I-LIVE-PLUS",
+        current_period_end=datetime.now(timezone.utc) + timedelta(days=20),
+    )
+    live.pending_plan_id = pro_plan.id
+    live.pending_billing_cycle = "monthly"
+    live.pending_paypal_subscription_id = "I-NEW-PRO"
+    await db_session.commit()
+
+    with patch(
+        "app.services.paypal_service.PayPalService.execute_subscription",
+        return_value={"status": "ACTIVE", "subscription_id": "I-NEW-PRO"},
+    ), patch(
+        "app.services.paypal_service.PayPalService.cancel_subscription",
+        side_effect=RuntimeError("paypal down"),
+    ):
+        resp = await client.post(
+            "/api/subscriptions/activate",
+            headers=auth_headers,
+            json={"paypal_subscription_id": "I-NEW-PRO"},
+        )
+    # Activation must NOT fail because of the cancel failure.
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "activated"
+
+    await db_session.refresh(live)
+    assert live.status == "active"
+    assert live.paypal_subscription_id == "I-NEW-PRO"
+    # Persistent operator trace of the un-cancelled old sub.
+    assert live.needs_review is True
+    assert "I-LIVE-PLUS" in (live.review_reason or "")
+
+
+@pytest.mark.asyncio
 async def test_join_code_register_rejected_at_member_cap(
     client, db_session, sample_family
 ):

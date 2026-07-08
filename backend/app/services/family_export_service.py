@@ -4,22 +4,33 @@ Whole-family data export (WS-DEL / compliance).
 Builds a ZIP of JSON dumps for every user-facing domain owned by ONE family:
 users (sans credentials), tasks, gigs, points/cash, rewards, consequences,
 budget (reusing the budget ExportService so that portion stays re-importable),
-calendar, meals, shopping, chat + DMs, pets, and notifications.
+calendar, meals, shopping, chat + DMs, pets, notifications, Jarvis (chat
+history, schedules, pending actions, MCP token metadata), kiosk devices,
+onboarding events, subscription/usage, and A2A webhook config.
 
 Uploaded images are NOT bundled — the archive carries a manifest of the file
 paths instead (see uploads_manifest.json + README.txt inside the ZIP).
 
 Multi-tenant: every query filters by the caller's family_id.
+
+Size guard: the ZIP is built fully in memory, so export_family refuses
+(HTTP 413) when a cheap pre-flight row count exceeds EXPORT_MAX_ROWS or the
+finished archive exceeds EXPORT_MAX_BYTES. Follow-up if real family data ever
+approaches these caps: rewrite as a streaming/chunked export instead of
+raising the limits.
 """
 
 import io
 import json
 import zipfile
 from datetime import datetime, timezone
+from functools import reduce
+from operator import add
 from typing import Any, Sequence
 from uuid import UUID
 
-from sqlalchemy import select
+from fastapi import HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -28,14 +39,22 @@ from app.models import (
     Consequence,
     DMMessage,
     DMThread,
+    FamilyA2AWebhook,
     FamilyChatMessage,
     FamilyChatReaction,
     FamilyInvitation,
+    FamilySubscription,
     GigClaim,
     GigOffering,
+    JarvisMcpToken,
+    JarvisMessage,
+    JarvisPendingAction,
+    JarvisSchedule,
     KidPet,
+    KioskDevice,
     MealPlanEntry,
     Notification,
+    OnboardingEvent,
     PointTransaction,
     PupScoreSnapshot,
     Recipe,
@@ -46,15 +65,25 @@ from app.models import (
     Task,
     TaskAssignment,
     TaskTemplate,
+    UsageTracking,
     User,
     UserRewardGoal,
 )
 from app.models.budget import (
+    BudgetAccount,
+    BudgetAllocation,
+    BudgetCategorizationRule,
+    BudgetCategory,
+    BudgetCategoryGroup,
     BudgetCustomReport,
+    BudgetGoal,
+    BudgetPayee,
     BudgetReceiptDraft,
+    BudgetRecurringTransaction,
     BudgetSavedFilter,
     BudgetTag,
     BudgetTransaction,
+    BudgetTransactionItem,
     BudgetTransactionTag,
 )
 from app.services.budget.export_service import ExportService, _model_to_dict
@@ -64,8 +93,112 @@ from app.services.family_service import FamilyService
 _USER_EXCLUDED_COLUMNS = {"password_hash", "token_version"}
 
 # invited_email belongs to a third party who may never have joined the family
-# — masked out of the compliance export.
-_INVITATION_EXCLUDED_COLUMNS = {"invited_email"}
+# — masked out of the compliance export. invitation_code is a live bearer
+# credential (valid 30 days, grants family membership) — never exported.
+_INVITATION_EXCLUDED_COLUMNS = {"invited_email", "invitation_code"}
+
+# Long-lived kiosk display credential — never exported.
+_KIOSK_EXCLUDED_COLUMNS = {"token"}
+
+# SHA-256 of the MCP bearer secret — credential material, never exported.
+_MCP_TOKEN_EXCLUDED_COLUMNS = {"token_hash"}
+
+# A2A webhook signing secret — credential material, never exported.
+_A2A_EXCLUDED_COLUMNS = {"secret"}
+
+# --- Size guard (the archive is built fully in memory) -----------------------
+# Pre-flight cap on the summed row count of the high-cardinality tables.
+EXPORT_MAX_ROWS = 250_000
+# Hard cap on the finished ZIP byte size.
+EXPORT_MAX_BYTES = 100 * 1024 * 1024  # 100 MiB
+
+_EXPORT_TOO_LARGE_DETAIL = (
+    "Family export is too large to generate as a single download. "
+    "Please contact support for an assisted export."
+)
+
+# High-cardinality family_id-bearing tables counted by the pre-flight guard.
+_PREFLIGHT_COUNT_MODELS = (
+    BudgetTransaction,
+    BudgetTransactionItem,
+    CalendarEvent,
+    CashTransaction,
+    FamilyChatMessage,
+    JarvisMessage,
+    Notification,
+    OnboardingEvent,
+    TaskAssignment,
+)
+
+# --- Coverage bookkeeping -----------------------------------------------------
+# Every family_id-bearing table must appear in exactly ONE of the two
+# collections below; tests/test_family_delete_export.py enforces this against
+# Base.metadata so a new family-scoped model cannot silently be left out of
+# the export.
+EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
+    model.__tablename__
+    for model in (
+        # exported directly by this service
+        User,
+        Task,
+        TaskTemplate,
+        TaskAssignment,
+        GigOffering,
+        GigClaim,
+        CashTransaction,
+        Reward,
+        RewardRedemption,
+        UserRewardGoal,
+        Consequence,
+        CalendarEvent,
+        Recipe,
+        MealPlanEntry,
+        ShoppingList,
+        FamilyChatMessage,
+        DMThread,
+        PupScoreSnapshot,
+        Notification,
+        FamilyInvitation,
+        JarvisMessage,
+        JarvisSchedule,
+        JarvisPendingAction,
+        JarvisMcpToken,
+        KioskDevice,
+        OnboardingEvent,
+        FamilySubscription,
+        UsageTracking,
+        FamilyA2AWebhook,
+        # exported via the re-importable budget backup (budget/budget_data.json)
+        BudgetAccount,
+        BudgetCategoryGroup,
+        BudgetCategory,
+        BudgetPayee,
+        BudgetTransaction,
+        BudgetAllocation,
+        BudgetCategorizationRule,
+        BudgetGoal,
+        BudgetRecurringTransaction,
+        # exported via budget/extras.json
+        BudgetSavedFilter,
+        BudgetTag,
+        BudgetCustomReport,
+        BudgetReceiptDraft,
+        BudgetTransactionItem,
+    )
+)
+
+# Deliberately excluded family_id-bearing tables → human-readable reason.
+# Mirrored in the ZIP README so the exclusions are visible to the user.
+EXCLUDED_FAMILY_TABLES: dict[str, str] = {
+    "a2a_webhook_deliveries": (
+        "internal webhook retry/delivery log; payloads duplicate budget "
+        "transactions already exported under budget/"
+    ),
+    "budget_sync_state": (
+        "legacy internal points<->budget sync bookkeeping (decommissioned "
+        "sync engine); contains no user-authored content"
+    ),
+}
 
 _README = """Family Task Manager — full family data export
 ==============================================
@@ -82,6 +215,43 @@ ES: Este archivo contiene todos los datos guardados de tu familia, agrupados
     uploads_manifest.json lista sus rutas de almacenamiento. La carpeta
     budget/ usa el mismo formato que el respaldo de presupuesto de la app y
     puede reimportarse desde los ajustes de presupuesto.
+
+Exclusions / Exclusiones
+------------------------
+
+EN: The following are deliberately NOT included:
+    - Credentials and secret material are never exported: password hashes,
+      kiosk device tokens, MCP token hashes, webhook signing secrets, push
+      notification device keys, and password-reset / email-verification
+      tokens. (Non-secret metadata such as kiosk device names or MCP token
+      labels IS included.)
+    - a2a_webhook_deliveries: internal webhook retry/delivery log — its
+      payloads duplicate budget transactions already exported under budget/.
+    - budget_sync_state: legacy internal sync bookkeeping with no
+      user-authored content.
+    - Invitation records are included, but the invited person's email address
+      is masked (it belongs to a third party) and the invitation code is
+      stripped (it is a live join credential).
+    Note: soft-deleted budget records (recycle bin) ARE included, in
+    budget/recycle_bin.json — the re-importable budget backup only contains
+    live records.
+
+ES: Lo siguiente NO se incluye deliberadamente:
+    - Las credenciales y material secreto nunca se exportan: hashes de
+      contraseñas, tokens de dispositivos kiosko, hashes de tokens MCP,
+      secretos de firma de webhooks, claves de notificaciones push y tokens
+      de restablecimiento/verificación. (Los metadatos no secretos, como el
+      nombre del kiosko o la etiqueta del token MCP, SÍ se incluyen.)
+    - a2a_webhook_deliveries: registro interno de reintentos de webhooks —
+      sus datos duplican transacciones ya exportadas en budget/.
+    - budget_sync_state: contabilidad interna heredada de sincronización,
+      sin contenido creado por el usuario.
+    - Las invitaciones se incluyen, pero el correo del invitado se enmascara
+      (pertenece a un tercero) y el código de invitación se elimina (es una
+      credencial de acceso vigente).
+    Nota: los registros de presupuesto borrados (papelera) SÍ se incluyen, en
+    budget/recycle_bin.json — el respaldo reimportable solo contiene
+    registros activos.
 """
 
 
@@ -96,8 +266,46 @@ def _dump(rows: Sequence[Any], exclude: set | None = None) -> list[dict]:
 class FamilyExportService:
     """Builds the whole-family export ZIP."""
 
+    @staticmethod
+    async def _estimated_row_count(db: AsyncSession, family_id: UUID) -> int:
+        """Cheap pre-flight estimate: summed COUNT(*) over the
+        high-cardinality tables, in one round trip."""
+        counts = [
+            select(func.count())
+            .select_from(model)
+            .where(model.family_id == family_id)
+            .scalar_subquery()
+            for model in _PREFLIGHT_COUNT_MODELS
+        ]
+        counts.append(
+            select(func.count())
+            .select_from(PointTransaction)
+            .join(User, PointTransaction.user_id == User.id)
+            .where(User.family_id == family_id)
+            .scalar_subquery()
+        )
+        counts.append(
+            select(func.count())
+            .select_from(DMMessage)
+            .join(DMThread, DMMessage.thread_id == DMThread.id)
+            .where(DMThread.family_id == family_id)
+            .scalar_subquery()
+        )
+        total = (await db.execute(select(reduce(add, counts)))).scalar()
+        return int(total or 0)
+
     @classmethod
     async def export_family(cls, db: AsyncSession, family_id: UUID) -> bytes:
+        # Size guard: the whole archive is materialized in memory. Refuse
+        # up-front when the family is clearly too large (streaming export is
+        # the follow-up if this ever fires for legitimate data volumes).
+        estimated_rows = await cls._estimated_row_count(db, family_id)
+        if estimated_rows > EXPORT_MAX_ROWS:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=_EXPORT_TOO_LARGE_DETAIL,
+            )
+
         family = await FamilyService.get_family(db, family_id)
 
         def fam(model):
@@ -157,6 +365,15 @@ class FamilyExportService:
         pup_snapshots = await _rows(db, fam(PupScoreSnapshot))
         notifications = await _rows(db, fam(Notification))
         invitations = await _rows(db, fam(FamilyInvitation))
+        jarvis_messages = await _rows(db, fam(JarvisMessage))
+        jarvis_schedules = await _rows(db, fam(JarvisSchedule))
+        jarvis_pending_actions = await _rows(db, fam(JarvisPendingAction))
+        jarvis_mcp_tokens = await _rows(db, fam(JarvisMcpToken))
+        kiosk_devices = await _rows(db, fam(KioskDevice))
+        onboarding_events = await _rows(db, fam(OnboardingEvent))
+        subscriptions = await _rows(db, fam(FamilySubscription))
+        usage_tracking = await _rows(db, fam(UsageTracking))
+        a2a_webhooks = await _rows(db, fam(FamilyA2AWebhook))
 
         # Budget extras not covered by the re-importable budget backup format.
         saved_filters = await _rows(db, fam(BudgetSavedFilter))
@@ -170,6 +387,24 @@ class FamilyExportService:
         )
         custom_reports = await _rows(db, fam(BudgetCustomReport))
         receipt_drafts = await _rows(db, fam(BudgetReceiptDraft))
+        txn_items = await _rows(db, fam(BudgetTransactionItem))
+
+        # Soft-deleted (recycle-bin) budget rows. The re-importable budget
+        # backup (budget/budget_data.json) filters deleted_at IS NULL, so
+        # without this dump recycle-bin data would silently vanish from a
+        # compliance export — and transaction_items above could reference
+        # transactions absent from the archive.
+        recycle_bin: dict[str, Any] = {}
+        for key, model in (
+            ("category_groups", BudgetCategoryGroup),
+            ("categories", BudgetCategory),
+            ("accounts", BudgetAccount),
+            ("transactions", BudgetTransaction),
+        ):
+            deleted_rows = await _rows(
+                db, fam(model).where(model.deleted_at.is_not(None))
+            )
+            recycle_bin[key] = _dump(deleted_rows)
 
         # Uploaded-image manifest (paths only; binaries are not bundled).
         manifest: list[dict] = []
@@ -235,13 +470,30 @@ class FamilyExportService:
             "invitations.json": _dump(
                 invitations, exclude=_INVITATION_EXCLUDED_COLUMNS
             ),
+            "jarvis/messages.json": _dump(jarvis_messages),
+            "jarvis/schedules.json": _dump(jarvis_schedules),
+            "jarvis/pending_actions.json": _dump(jarvis_pending_actions),
+            "jarvis/mcp_tokens.json": _dump(
+                jarvis_mcp_tokens, exclude=_MCP_TOKEN_EXCLUDED_COLUMNS
+            ),
+            "kiosk/devices.json": _dump(
+                kiosk_devices, exclude=_KIOSK_EXCLUDED_COLUMNS
+            ),
+            "onboarding_events.json": _dump(onboarding_events),
+            "subscription/subscription.json": _dump(subscriptions),
+            "subscription/usage_tracking.json": _dump(usage_tracking),
+            "a2a/webhook_config.json": _dump(
+                a2a_webhooks, exclude=_A2A_EXCLUDED_COLUMNS
+            ),
             "budget/extras.json": {
                 "saved_filters": _dump(saved_filters),
                 "tags": _dump(tags),
                 "transaction_tags": _dump(txn_tags),
                 "custom_reports": _dump(custom_reports),
                 "receipt_drafts": _dump(receipt_drafts),
+                "transaction_items": _dump(txn_items),
             },
+            "budget/recycle_bin.json": recycle_bin,
             "uploads_manifest.json": manifest,
         }
 
@@ -274,5 +526,13 @@ class FamilyExportService:
             with zipfile.ZipFile(io.BytesIO(budget_zip), "r") as inner:
                 for entry in inner.namelist():
                     zf.writestr(f"budget/{entry}", inner.read(entry))
-        buf.seek(0)
-        return buf.read()
+
+        data = buf.getvalue()
+        # Backstop for anything the row estimate missed (e.g. a few huge
+        # JSON/Text payloads): never ship an archive past the byte cap.
+        if len(data) > EXPORT_MAX_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=_EXPORT_TOO_LARGE_DETAIL,
+            )
+        return data

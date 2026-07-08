@@ -120,6 +120,26 @@ rollback_to_prev() { # retag :$PREV_TAG as the compose tag, then recreate the po
   recreate_stack
 }
 
+# ── SHA-tag pruning ────────────────────────────────────────────────────────
+# Every deploy adds a :<git-sha> tag per repo (plus pre-<ts> snapshots), and
+# without pruning they accumulate forever on the host. Keep the newest
+# $KEEP_TAGS beyond the protected ones (the compose tag, the tag being
+# deployed, and the rollback point are NEVER pruned). `podman rmi repo:tag`
+# only untags while other tags still reference the image, so the compose-tag
+# image itself is safe. Rootless podman only — never sudo (Rule 1).
+KEEP_TAGS="${KEEP_TAGS:-5}"
+prune_old_tags() {
+  local repo keep_re
+  keep_re="^(${COMPOSE_TAG}|${NEW_TAG}${PREV_TAG:+|${PREV_TAG}}|<none>)$"
+  for repo in "$BACKEND_REPO" "$FRONTEND_REPO"; do
+    [[ -n "$repo" ]] || continue
+    rssh "podman images --filter reference=$repo --format '{{.CreatedAt}}|{{.Tag}}' \
+      | sort -r | cut -d'|' -f2- | grep -vE '$keep_re' \
+      | tail -n +$((KEEP_TAGS + 1)) \
+      | while read -r t; do echo \"pruning $repo:\$t\"; podman rmi $repo:\$t || true; done" || true
+  done
+}
+
 db_schema_warning() {
   cat <<EOF
 
@@ -306,6 +326,8 @@ if [[ -n "$BACKEND_REPO" && -n "$FRONTEND_REPO" ]]; then
   rssh "podman tag $FRONTEND_REPO:$COMPOSE_TAG $FRONTEND_REPO:$NEW_TAG"
   write_state "$PREV_TAG" "$NEW_TAG"
   echo "tagged :$NEW_TAG; state → $STATE_FILE (PREV_TAG=${PREV_TAG:-<none>} NEW_TAG=$NEW_TAG)"
+  echo "pruning SHA tags beyond the newest $KEEP_TAGS (compose/new/rollback tags kept)"
+  prune_old_tags
 else
   echo "⚠️ could not determine compose image names — SHA tagging + rollback unavailable this run"
 fi
@@ -348,7 +370,12 @@ fi
 
 # ── Start (scoped pod recreate — see recreate_stack) ──────────────────────
 section "Start"
-recreate_stack
+# Guarded: under `set -e` an unguarded recreate_stack failure (e.g. `up`
+# erroring) would exit the script HERE, before the health-check/rollback
+# path below ever runs. Fall through instead — wait_healthy decides.
+if ! recreate_stack; then
+  echo "⚠️ recreate_stack reported an error — continuing to health check / rollback"
+fi
 
 section "Health"
 if ! wait_healthy; then

@@ -11,13 +11,55 @@ export const FALLBACK_API_BASE_URL = process.env.API_BASE_URL || process.env.PUB
 export interface ApiFetchOptions extends RequestInit {
     token?: string;
     baseUrl?: string;
+    /** UI language ("es"/"en") used to pick bilingual error copy. Falls back
+     *  to the lang cookie when running in the browser. */
+    lang?: string;
+}
+
+/**
+ * Normalize a FastAPI error `detail` payload to a human-readable string.
+ * Handles the three shapes the backend emits:
+ * - plain string
+ * - Pydantic validation errors (array of {loc, msg})
+ * - structured dicts like {error, message, message_es} (e.g. the 403
+ *   email_not_verified guard) — picks message_es/message by lang so the
+ *   bilingual copy shows instead of "[object Object]".
+ */
+export function normalizeErrorDetail(detail: unknown, lang?: string): string | null {
+    if (detail == null) return null;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+        return detail
+            .map((err: any) => `${err.loc?.join('.')}: ${err.msg}`)
+            .join(', ');
+    }
+    if (typeof detail === "object") {
+        const d = detail as Record<string, unknown>;
+        const message = lang === "es"
+            ? (d.message_es ?? d.message)
+            : (d.message ?? d.message_es);
+        if (typeof message === "string") return message;
+        if (typeof d.error === "string") return d.error;
+        try {
+            return JSON.stringify(detail);
+        } catch {
+            return String(detail);
+        }
+    }
+    return String(detail);
+}
+
+/** Read the lang cookie when running in a browser context (client scripts). */
+function langFromDocumentCookie(): string | undefined {
+    if (typeof document === "undefined") return undefined;
+    return (document.cookie.match(/(?:^|;\s*)lang=([^;]+)/) || [])[1];
 }
 
 export async function apiFetch<T = unknown>(
     path: string,
     options: ApiFetchOptions = {}
 ): Promise<ApiResponse<T>> {
-    const { token, baseUrl = FALLBACK_API_BASE_URL, ...rest } = options;
+    const { token, baseUrl = FALLBACK_API_BASE_URL, lang, ...rest } = options;
 
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -35,18 +77,10 @@ export async function apiFetch<T = unknown>(
         }
         const data = await res.json();
         if (!res.ok) {
-            // Handle Pydantic validation errors (array of objects)
-            let errorMessage = "An error occurred";
-            if (data?.detail) {
-                if (typeof data.detail === 'string') {
-                    errorMessage = data.detail;
-                } else if (Array.isArray(data.detail)) {
-                    // Pydantic validation errors
-                    errorMessage = data.detail
-                        .map((err: any) => `${err.loc?.join('.')}: ${err.msg}`)
-                        .join(', ');
-                }
-            }
+            // Normalize string / Pydantic-array / structured-dict details.
+            const errorMessage =
+                normalizeErrorDetail(data?.detail, lang ?? langFromDocumentCookie())
+                ?? "An error occurred";
             return {
                 data: null,
                 ok: false,

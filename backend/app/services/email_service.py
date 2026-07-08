@@ -256,6 +256,36 @@ _COPY = {
         "es": "Si no solicitaste esta cancelación, contáctanos de inmediato.",
         "en": "If you did not request this cancellation, contact us right away.",
     },
+
+    # ----- Billing: subscription ended (dunning grace elapsed) -----
+    "subend_subject": {
+        "es": "Tu suscripción ha terminado — Family Task Manager",
+        "en": "Your subscription has ended — Family Task Manager",
+    },
+    "subend_heading": {
+        "es": "Tu suscripción terminó",
+        "en": "Your subscription has ended",
+    },
+    "subend_body": {
+        "es": "Hola {name}, no pudimos cobrar tu plan <strong>{plan_name}</strong> y el período de gracia terminó, así que tu familia pasó al plan gratuito. Tus datos no se borran. Puedes volver a suscribirte cuando quieras:",
+        "en": "Hi {name}, we couldn't collect the payment for your <strong>{plan_name}</strong> plan and the grace period has ended, so your family has moved to the free plan. Your data is not deleted. You can re-subscribe anytime:",
+    },
+    "subend_btn": {
+        "es": "Volver a suscribirme",
+        "en": "Re-subscribe",
+    },
+    "subend_link_alt": {
+        "es": "O copia y pega este enlace en tu navegador:",
+        "en": "Or copy and paste this link into your browser:",
+    },
+    "subend_expiry": {
+        "es": "Si PayPal completa un cobro pendiente, tu plan se restaurará automáticamente.",
+        "en": "If PayPal completes an outstanding charge, your plan is restored automatically.",
+    },
+    "subend_ignore": {
+        "es": "Si preferías cancelar de todos modos, no necesitas hacer nada.",
+        "en": "If you meant to let it lapse, no action is needed.",
+    },
 }
 
 
@@ -744,6 +774,27 @@ class EmailService:
                     period_end, lang
                 ),
             },
+        )
+
+    @staticmethod
+    async def send_subscription_ended_email(
+        db: AsyncSession,
+        family_id,
+        *,
+        plan_name: str,
+    ) -> int:
+        """Final notice: dunning grace elapsed, family downgraded to free.
+
+        Sent exactly once per dunning cycle — the sweep dispatches it from
+        the one-shot payment_failed → grace_expired transition (see
+        subscription_state.notify_subscription_ended).
+        """
+        base = settings.email_link_base.rstrip("/")
+        return await EmailService._send_billing_email(
+            db, family_id,
+            key_prefix="subend",
+            btn_url=f"{base}/parent/settings/subscription",
+            body_vars={"plan_name": plan_name},
         )
 
     # ------------------------------------------------------------------

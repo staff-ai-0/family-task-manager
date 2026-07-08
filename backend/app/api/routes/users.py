@@ -214,12 +214,46 @@ async def reject_pending_member(
     Rejection DELETES the account (it never got in — nothing to keep).
     Only pending accounts can be rejected; established members go through
     the normal deactivate/delete endpoints instead.
+
+    Open (PENDING/OVERDUE) task assignments held by the rejected account
+    are deleted explicitly and the count is logged BEFORE the user row is
+    removed — the FK is ondelete=CASCADE, so without this the rows would
+    vanish silently. Pending members are excluded from the weekly shuffle,
+    so such rows only exist as legacy data from before the approval gate;
+    deleting (rather than reassigning) matches the cascade's end state
+    while making it observable. Parents can re-shuffle to redistribute
+    (the shuffle is idempotent for PENDING rows).
     """
+    import logging
+
+    from sqlalchemy import and_, delete as sql_delete
+
     from app.core.exceptions import ValidationException
+    from app.models.task_assignment import TaskAssignment, AssignmentStatus
     from app.models.user import APPROVAL_PENDING
 
     if user.approval_status != APPROVAL_PENDING:
         raise ValidationException("User is not pending approval")
+
+    result = await db.execute(
+        sql_delete(TaskAssignment).where(
+            and_(
+                TaskAssignment.assigned_to == user.id,
+                TaskAssignment.status.in_(
+                    [AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]
+                ),
+            )
+        )
+    )
+    removed = result.rowcount or 0
+    if removed:
+        logging.getLogger(__name__).info(
+            "reject_pending_member: removed %d open assignment(s) held by "
+            "rejected pending user %s (family %s) before account deletion",
+            removed,
+            user.id,
+            user.family_id,
+        )
 
     await AuthService.delete_user(db, user.id)
     return None

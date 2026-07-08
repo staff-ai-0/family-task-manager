@@ -14,8 +14,9 @@ import json
 import os
 import uuid
 import zipfile
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
+import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import select, func
@@ -25,21 +26,34 @@ from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash
 from app.models import (
     Family,
+    FamilyA2AWebhook,
     FamilyChatMessage,
     FamilyInvitation,
     GigClaim,
     GigOffering,
+    JarvisMcpToken,
+    JarvisMessage,
+    JarvisPendingAction,
+    JarvisSchedule,
+    KioskDevice,
     Notification,
+    OnboardingEvent,
     PointTransaction,
     Reward,
     RewardCategory,
     TaskAssignment,
     TaskTemplate,
     TransactionType,
+    UsageTracking,
     User,
     UserRole,
 )
-from app.models.budget import BudgetAccount, BudgetReceiptDraft, BudgetTransaction
+from app.models.budget import (
+    BudgetAccount,
+    BudgetReceiptDraft,
+    BudgetTransaction,
+    BudgetTransactionItem,
+)
 from app.models.subscription import FamilySubscription, SubscriptionPlan
 from app.models.task_template import AssignmentType
 from app.services.family_deletion_service import GIG_PROOFS_DIR, RECEIPT_DRAFTS_DIR
@@ -151,18 +165,31 @@ async def seeded(db_session: AsyncSession):
     # Scanned receipts live in GCS under <family_id>/<txn_id>.<ext> keys.
     gcs_path_a = f"{fam_a.id}/receipt-a.jpg"
     gcs_path_b = f"{fam_b.id}/receipt-b.jpg"
-    db_session.add_all([
-        BudgetTransaction(
-            family_id=fam_a.id, account_id=account_a.id,
-            date=date.today(), amount=-5000,
-            receipt_image_path=gcs_path_a,
-        ),
-        BudgetTransaction(
-            family_id=fam_b.id, account_id=account_b.id,
-            date=date.today(), amount=-7000,
-            receipt_image_path=gcs_path_b,
-        ),
-    ])
+    txn_a = BudgetTransaction(
+        family_id=fam_a.id, account_id=account_a.id,
+        date=date.today(), amount=-5000,
+        receipt_image_path=gcs_path_a,
+    )
+    txn_b = BudgetTransaction(
+        family_id=fam_b.id, account_id=account_b.id,
+        date=date.today(), amount=-7000,
+        receipt_image_path=gcs_path_b,
+    )
+    # Soft-deleted (recycle-bin) transaction: must appear in
+    # budget/recycle_bin.json but NOT in the re-importable backup.
+    txn_a_deleted = BudgetTransaction(
+        family_id=fam_a.id, account_id=account_a.id,
+        date=date.today(), amount=-999,
+        deleted_at=datetime.now(timezone.utc),
+    )
+    db_session.add_all([txn_a, txn_b, txn_a_deleted])
+    await db_session.flush()
+    db_session.add(
+        BudgetTransactionItem(
+            family_id=fam_a.id, transaction_id=txn_a.id,
+            name="Milk", normalized_name="milk", total_cents=2500,
+        )
+    )
     draft_a = BudgetReceiptDraft(
         family_id=fam_a.id, account_id=account_a.id,
         scanned_data={"total_amount": 12.5}, confidence=0.1,
@@ -180,6 +207,75 @@ async def seeded(db_session: AsyncSession):
             title="Alpha notification",
         ),
     ])
+
+    # Jarvis: chat history, schedule, pending HITL action, MCP token
+    db_session.add_all([
+        JarvisMessage(
+            family_id=fam_a.id, user_id=parent_a.id,
+            role="user", content="alpha jarvis question",
+        ),
+        JarvisMessage(
+            family_id=fam_b.id, user_id=parent_b.id,
+            role="user", content="beta jarvis question",
+        ),
+        JarvisSchedule(
+            family_id=fam_a.id, created_by=parent_a.id,
+            name="Alpha digest", prompt="daily summary",
+            cron_expr="0 8 * * *", channel="notification",
+        ),
+        JarvisPendingAction(
+            family_id=fam_a.id, user_id=parent_a.id,
+            tool_name="budget_account_delete", params={}, summary="Delete acct",
+            status="pending",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        ),
+        JarvisMcpToken(
+            family_id=fam_a.id, created_by=parent_a.id, label="cli token",
+            token_hash=uuid.uuid4().hex + uuid.uuid4().hex,
+            token_prefix="mcp_a1b2",
+        ),
+    ])
+
+    # Kiosk device (token is a credential — must be stripped from the export)
+    # + a family-B device to pin isolation of the kiosk export query.
+    db_session.add_all([
+        KioskDevice(
+            family_id=fam_a.id, name="Hallway tablet",
+            token=f"kiosk-{uuid.uuid4().hex}"[:64], created_by=parent_a.id,
+        ),
+        KioskDevice(
+            family_id=fam_b.id, name="Beta tablet",
+            token=f"kiosk-{uuid.uuid4().hex}"[:64], created_by=parent_b.id,
+        ),
+    ])
+
+    # Onboarding funnel events (one per family — isolation)
+    db_session.add_all([
+        OnboardingEvent(
+            user_id=child_a.id, family_id=fam_a.id,
+            event_type="tour_completed", step_index=5,
+        ),
+        OnboardingEvent(
+            user_id=parent_b.id, family_id=fam_b.id,
+            event_type="tour_skipped", step_index=0,
+        ),
+    ])
+
+    # A2A webhook config (signing secret must be stripped from the export)
+    db_session.add(
+        FamilyA2AWebhook(
+            family_id=fam_a.id, url="https://price-agent.example/hook",
+            secret="a2a-signing-secret", enabled=True,
+        )
+    )
+
+    # Metered usage
+    db_session.add(
+        UsageTracking(
+            family_id=fam_a.id, feature="receipt_scan",
+            period_start=date.today().replace(day=1), count=2,
+        )
+    )
 
     # Invitation (the one table with NO delete rule on its FKs)
     db_session.add(
@@ -276,11 +372,16 @@ class TestFamilyExport:
         assert "Alpha chores" in titles
         assert "Beta chores" not in titles
 
-        # budget: only family A's account
+        # budget: only family A's account; soft-deleted txn NOT in the backup
         budget = json.loads(zf.read("budget/budget_data.json"))
         acct_names = {a["name"] for a in budget["accounts"]}
         assert acct_names == {"Alpha Cash"}
         assert len(budget["transactions"]) == 1
+
+        # recycle bin: soft-deleted rows ARE in the compliance export
+        recycle = json.loads(zf.read("budget/recycle_bin.json"))
+        assert [t["amount"] for t in recycle["transactions"]] == [-999]
+        assert recycle["accounts"] == []
 
         # chat isolation
         messages = json.loads(zf.read("chat/messages.json"))
@@ -297,10 +398,11 @@ class TestFamilyExport:
         assert seeded["gcs_path_a"] in paths
         assert seeded["gcs_path_b"] not in paths
 
-        # invitations: third-party email addresses are masked out
+        # invitations: third-party email masked AND live join code stripped
         invitations = json.loads(zf.read("invitations.json"))
         assert len(invitations) == 1
         assert all("invited_email" not in i for i in invitations)
+        assert all("invitation_code" not in i for i in invitations)
 
         metadata = json.loads(zf.read("metadata.json"))
         assert metadata["family_id"] == str(seeded["fam_a"].id)
@@ -318,6 +420,155 @@ class TestFamilyExport:
     async def test_export_requires_auth(self, client: AsyncClient, seeded):
         r = await client.get("/api/families/export")
         assert r.status_code == 401
+
+    async def test_export_includes_jarvis_kiosk_onboarding_and_extras(
+        self, client: AsyncClient, seeded
+    ):
+        """Regression (whole-PR review): Jarvis history/schedules, kiosk
+        devices, onboarding events, subscription/usage, A2A config and budget
+        transaction items must all be in the export — with credential columns
+        stripped and other-family data absent."""
+        r = await client.get("/api/families/export", headers=_auth(seeded["parent_a"]))
+        assert r.status_code == 200, r.text
+
+        zf = zipfile.ZipFile(io.BytesIO(r.content))
+        names = set(zf.namelist())
+        expected = {
+            "jarvis/messages.json",
+            "jarvis/schedules.json",
+            "jarvis/pending_actions.json",
+            "jarvis/mcp_tokens.json",
+            "kiosk/devices.json",
+            "onboarding_events.json",
+            "subscription/subscription.json",
+            "subscription/usage_tracking.json",
+            "a2a/webhook_config.json",
+        }
+        assert expected <= names, f"missing: {expected - names}"
+
+        # Jarvis chat history: own family only
+        msgs = json.loads(zf.read("jarvis/messages.json"))
+        assert {m["content"] for m in msgs} == {"alpha jarvis question"}
+
+        scheds = json.loads(zf.read("jarvis/schedules.json"))
+        assert [s["name"] for s in scheds] == ["Alpha digest"]
+        assert scheds[0]["cron_expr"] == "0 8 * * *"
+
+        actions = json.loads(zf.read("jarvis/pending_actions.json"))
+        assert [a["tool_name"] for a in actions] == ["budget_account_delete"]
+
+        # MCP tokens: metadata only, hash stripped
+        tokens = json.loads(zf.read("jarvis/mcp_tokens.json"))
+        assert [t["label"] for t in tokens] == ["cli token"]
+        assert all("token_hash" not in t for t in tokens)
+        assert tokens[0]["token_prefix"] == "mcp_a1b2"
+
+        # Kiosk devices: name kept, credential token stripped, family B absent
+        kiosks = json.loads(zf.read("kiosk/devices.json"))
+        assert [k["name"] for k in kiosks] == ["Hallway tablet"]
+        assert all("token" not in k for k in kiosks)
+
+        # Onboarding events: family B's event absent
+        onboarding = json.loads(zf.read("onboarding_events.json"))
+        assert [e["event_type"] for e in onboarding] == ["tour_completed"]
+        assert onboarding[0]["step_index"] == 5
+
+        subs = json.loads(zf.read("subscription/subscription.json"))
+        assert len(subs) == 1
+        assert subs[0]["paypal_subscription_id"] == "I-TESTSUB123"
+
+        usage = json.loads(zf.read("subscription/usage_tracking.json"))
+        assert [(u["feature"], u["count"]) for u in usage] == [("receipt_scan", 2)]
+
+        # A2A webhook config: url kept, signing secret stripped
+        hooks = json.loads(zf.read("a2a/webhook_config.json"))
+        assert [h["url"] for h in hooks] == ["https://price-agent.example/hook"]
+        assert all("secret" not in h for h in hooks)
+
+        # Receipt line items ride along in budget/extras.json
+        extras = json.loads(zf.read("budget/extras.json"))
+        assert [i["name"] for i in extras["transaction_items"]] == ["Milk"]
+
+        # README documents the deliberate exclusions
+        readme = zf.read("README.txt").decode()
+        assert "a2a_webhook_deliveries" in readme
+        assert "budget_sync_state" in readme
+
+    def test_every_family_scoped_table_is_exported_or_excluded(self):
+        """Every family_id-bearing table must be covered by the export or be
+        a documented exclusion — a new family-scoped model that is neither
+        fails here instead of silently missing from the compliance export."""
+        from app.core.database import Base
+        from app.services.family_export_service import (
+            EXCLUDED_FAMILY_TABLES,
+            EXPORTED_FAMILY_TABLES,
+        )
+
+        family_tables = {
+            table.name
+            for table in Base.metadata.tables.values()
+            if "family_id" in table.columns
+        }
+        covered = EXPORTED_FAMILY_TABLES | set(EXCLUDED_FAMILY_TABLES)
+        missing = family_tables - covered
+        assert not missing, (
+            "family-scoped tables not covered by the family export — add them "
+            "to FamilyExportService or document them in EXCLUDED_FAMILY_TABLES: "
+            f"{sorted(missing)}"
+        )
+        stale = covered - family_tables
+        assert not stale, (
+            f"export coverage lists tables that do not exist: {sorted(stale)}"
+        )
+
+
+class TestExportRateLimit:
+    @pytest.fixture(autouse=True)
+    def _enable_rate_limiter(self):
+        """This class needs the limiter ON (conftest disables it elsewhere)."""
+        from app.core.rate_limiter import limiter
+
+        limiter.reset()
+        limiter.enabled = True
+        yield
+        limiter.enabled = False
+        limiter.reset()
+
+    async def test_export_burst_is_rate_limited(self, client: AsyncClient, seeded):
+        """Regression (whole-PR review): the in-memory ZIP build must be
+        behind a strict per-IP limit (3/hour) — the 4th call 429s."""
+        statuses = []
+        for _ in range(4):
+            r = await client.get(
+                "/api/families/export", headers=_auth(seeded["parent_a"])
+            )
+            statuses.append(r.status_code)
+        assert statuses[:3] == [200, 200, 200], statuses
+        assert statuses[3] == 429, statuses
+
+
+class TestExportSizeGuard:
+    async def test_row_cap_returns_413(
+        self, client: AsyncClient, seeded, monkeypatch
+    ):
+        """When the pre-flight row estimate exceeds the cap, the export is
+        refused BEFORE loading everything into memory."""
+        import app.services.family_export_service as fes
+
+        monkeypatch.setattr(fes, "EXPORT_MAX_ROWS", 0)
+        r = await client.get("/api/families/export", headers=_auth(seeded["parent_a"]))
+        assert r.status_code == 413, r.text
+        assert "too large" in r.json()["detail"]
+
+    async def test_byte_cap_returns_413(
+        self, client: AsyncClient, seeded, monkeypatch
+    ):
+        """Backstop: an archive past the byte cap is never shipped."""
+        import app.services.family_export_service as fes
+
+        monkeypatch.setattr(fes, "EXPORT_MAX_BYTES", 10)
+        r = await client.get("/api/families/export", headers=_auth(seeded["parent_a"]))
+        assert r.status_code == 413, r.text
 
 
 class TestFamilyDeletion:
@@ -561,6 +812,140 @@ class TestFamilyDeletion:
             "/api/families/me",
             headers=_auth(google_parent),
             json={"confirm_name": "  gamma family "},
+        )
+        assert r.status_code == 204, r.text
+        gone = (
+            await db_session.execute(select(Family).where(Family.id == fam.id))
+        ).scalar_one_or_none()
+        assert gone is None
+
+
+class TestDeletionPayPalCancel:
+    """Regression (whole-PR review, MAJOR 5): deletion must cancel the PayPal
+    agreement for ANY status that could still bill (grace_expired, suspended,
+    ...), and a cancel failure must be reported, never block deletion."""
+
+    async def _family_with_sub(self, db_session, *, status, paypal_id):
+        fam = Family(name=f"PayPal Cancel {uuid.uuid4().hex[:6]}")
+        db_session.add(fam)
+        await db_session.flush()
+        plan = SubscriptionPlan(
+            name=f"del-plan-{uuid.uuid4().hex[:8]}", display_name="P",
+            display_name_es="P", limits={},
+        )
+        db_session.add(plan)
+        await db_session.flush()
+        sub = FamilySubscription(
+            family_id=fam.id, plan_id=plan.id, billing_cycle="monthly",
+            status=status, paypal_subscription_id=paypal_id,
+        )
+        db_session.add(sub)
+        await db_session.commit()
+        return fam
+
+    async def test_grace_expired_sub_is_cancelled_at_paypal(
+        self, db_session: AsyncSession, monkeypatch
+    ):
+        from app.services.family_deletion_service import FamilyDeletionService
+
+        fam = await self._family_with_sub(
+            db_session, status="grace_expired", paypal_id="I-GRACE-DEL"
+        )
+        calls = []
+        monkeypatch.setattr(
+            "app.services.paypal_service.PayPalService.cancel_subscription",
+            lambda sub_id, reason="": calls.append(sub_id),
+        )
+        failed = await FamilyDeletionService._cancel_paypal_subscriptions(
+            db_session, fam.id
+        )
+        assert calls == ["I-GRACE-DEL"]
+        assert failed == []
+
+    async def test_suspended_sub_is_cancelled_at_paypal(
+        self, db_session: AsyncSession, monkeypatch
+    ):
+        from app.services.family_deletion_service import FamilyDeletionService
+
+        fam = await self._family_with_sub(
+            db_session, status="suspended", paypal_id="I-SUSP-DEL"
+        )
+        calls = []
+        monkeypatch.setattr(
+            "app.services.paypal_service.PayPalService.cancel_subscription",
+            lambda sub_id, reason="": calls.append(sub_id),
+        )
+        failed = await FamilyDeletionService._cancel_paypal_subscriptions(
+            db_session, fam.id
+        )
+        assert calls == ["I-SUSP-DEL"]
+        assert failed == []
+
+    async def test_locally_cancelled_sub_is_still_cancelled_at_paypal(
+        self, db_session: AsyncSession, monkeypatch
+    ):
+        """Regression (re-review, MINOR): local 'cancelled' can lie — /cancel
+        swallows a PayPal cancel failure with a warning and the sweep later
+        flips the row to 'cancelled' locally, so the agreement may still be
+        billing. Deletion must attempt the PayPal cancel unconditionally for
+        any row with a paypal_subscription_id (a cancel of a genuinely-dead
+        sub is a harmless best-effort failure in the audit trail)."""
+        from app.services.family_deletion_service import FamilyDeletionService
+
+        fam = await self._family_with_sub(
+            db_session, status="cancelled", paypal_id="I-ALREADY-CANCELLED"
+        )
+        calls = []
+        monkeypatch.setattr(
+            "app.services.paypal_service.PayPalService.cancel_subscription",
+            lambda sub_id, reason="": calls.append(sub_id),
+        )
+        failed = await FamilyDeletionService._cancel_paypal_subscriptions(
+            db_session, fam.id
+        )
+        assert calls == ["I-ALREADY-CANCELLED"]
+        assert failed == []
+
+    async def test_cancel_failure_is_reported_and_deletion_proceeds(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ):
+        """A PayPal outage during deletion: family still deleted (user right),
+        the failed id surfaces in the return for the operator audit line."""
+        from app.services.family_deletion_service import FamilyDeletionService
+
+        fam = await self._family_with_sub(
+            db_session, status="grace_expired", paypal_id="I-BOOM-DEL"
+        )
+
+        def _boom(sub_id, reason=""):
+            raise RuntimeError("paypal down")
+
+        monkeypatch.setattr(
+            "app.services.paypal_service.PayPalService.cancel_subscription",
+            _boom,
+        )
+        failed = await FamilyDeletionService._cancel_paypal_subscriptions(
+            db_session, fam.id
+        )
+        assert failed == ["I-BOOM-DEL"]
+
+        # End-to-end: deletion still completes despite the cancel failure.
+        parent = User(
+            email=f"paypal-boom-{uuid.uuid4().hex[:6]}@del.test",
+            password_hash=get_password_hash("password123"),
+            name="Boom Parent",
+            role=UserRole.PARENT,
+            family_id=fam.id,
+            email_verified=True,
+        )
+        db_session.add(parent)
+        await db_session.commit()
+
+        r = await client.request(
+            "DELETE",
+            "/api/families/me",
+            headers=_auth(parent),
+            json={"password": "password123"},
         )
         assert r.status_code == 204, r.text
         gone = (

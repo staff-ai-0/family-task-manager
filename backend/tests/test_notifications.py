@@ -414,3 +414,53 @@ class TestMorningReminderSweep:
 
         sent = await TaskAssignmentService.send_morning_reminders(db_session)
         assert sent == 0
+
+    async def test_pending_approval_member_not_reminded(
+        self, db_session, test_family, test_parent_user, test_child_user
+    ):
+        """A join-code signup awaiting parental approval is is_active=True
+        but cannot log in — the sweep must skip it even when it holds
+        due-today PENDING rows (legacy data from before the shuffle
+        approval gate). The approved sibling is still reminded."""
+        from app.models.task_assignment import AssignmentStatus
+        from app.models.user import APPROVAL_PENDING, User, UserRole
+        from app.services.task_assignment_service import TaskAssignmentService
+
+        pending = User(
+            email="pending-sweep@test.com",
+            name="Pending Kid",
+            role=UserRole.CHILD,
+            family_id=test_family.id,
+            approval_status=APPROVAL_PENDING,
+            points=0,
+        )
+        db_session.add(pending)
+        await db_session.commit()
+        await db_session.refresh(pending)
+
+        tmpl = await self._template(db_session, test_family, test_parent_user)
+        today = _family_today()
+        await _make_assignment(
+            db_session, test_family.id, tmpl.id, pending.id,
+            today, AssignmentStatus.PENDING,
+        )
+        await _make_assignment(
+            db_session, test_family.id, tmpl.id, test_child_user.id,
+            today, AssignmentStatus.PENDING,
+        )
+
+        sent = await TaskAssignmentService.send_morning_reminders(db_session)
+        assert sent == 1  # only the approved member
+
+        rows = (
+            (
+                await db_session.execute(
+                    select(Notification).where(
+                        Notification.type == NotificationType.TASK_DUE
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert {n.user_id for n in rows} == {test_child_user.id}

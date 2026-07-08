@@ -30,6 +30,14 @@ logger = logging.getLogger(__name__)
 # so the family resolves to the free plan.
 GRACE_EXPIRED_STATUS = "grace_expired"
 
+# How close to current_period_end a PAYMENT.SALE.COMPLETED on an ACTIVE sub
+# must land to count as a genuine renewal. The INITIAL activation charge
+# fires within minutes of activation — while the freshly-set period end is
+# still ~a full cycle away — so advancing on it would double-extend the
+# entitlement window (activation already set current_period_end). Genuine
+# renewals bill at (or within a couple of days of) the period boundary.
+RENEWAL_WINDOW = timedelta(days=3)
+
 
 def _cycle_delta(billing_cycle: Optional[str]) -> timedelta:
     """Length of one billing cycle."""
@@ -114,6 +122,32 @@ async def _notify_payment_failed(db: AsyncSession, sub: FamilySubscription) -> N
     except Exception:
         logger.warning(
             "payment-failed email dispatch failed (family %s)",
+            sub.family_id, exc_info=True,
+        )
+
+
+async def notify_subscription_ended(
+    db: AsyncSession, sub: FamilySubscription
+) -> None:
+    """Final 'subscription ended' notice — dunning grace elapsed, family
+    downgraded to the free plan.
+
+    Called by the sweep at the exact moment it stamps GRACE_EXPIRED_STATUS.
+    The sweep's WHERE clause (status='payment_failed') guarantees a row
+    passes through that transition exactly once, so repeated sweep runs can
+    never re-send this email (same one-shot-transition guard as dunning).
+    Fire-and-forget: an email failure never blocks the downgrade.
+    """
+    try:
+        from app.services.email_service import EmailService
+
+        plan_name = await _plan_display_name(db, sub)
+        await EmailService.send_subscription_ended_email(
+            db, sub.family_id, plan_name=plan_name
+        )
+    except Exception:
+        logger.warning(
+            "subscription-ended email dispatch failed (family %s)",
             sub.family_id, exc_info=True,
         )
 
@@ -204,16 +238,24 @@ async def apply_payment_completed(
       marker, and advance the period.
     - If the sub is active, this is a renewal: advance current_period_end
       by one billing cycle (it would otherwise stay frozen at
-      activation+30d forever).
+      activation+30d forever). The INITIAL activation charge also arrives
+      as PAYMENT.SALE.COMPLETED, but activation already set
+      current_period_end — so the advance only happens when the sale lands
+      near/after the current period end (see RENEWAL_WINDOW); otherwise the
+      event is treated as the already-accounted activation charge (or a
+      replay) and ignored.
 
     *period_end* overrides the computed next period end when the caller has
-    an authoritative value (e.g. billing_info.next_billing_time).
+    an authoritative value (e.g. billing_info.next_billing_time) — an
+    authoritative value bypasses the renewal-proximity guard (it is safe to
+    converge on PayPal's own next_billing_time at any point in the cycle).
     """
     sub = await _find(db, paypal_subscription_id)
     if sub is None:
         return None
 
     now = datetime.now(timezone.utc)
+    computed_period_end = period_end is None
     if period_end is None:
         # Anchor at the current period end when it is still in the future
         # (early retry), else at now (renewal / late recovery).
@@ -235,9 +277,22 @@ async def apply_payment_completed(
         return sub
 
     if sub.status == "active":
+        current = _aware(sub.current_period_end)
+        if computed_period_end and current is not None and (
+            now < current - RENEWAL_WINDOW
+        ):
+            # The paid-through date is still comfortably in the future:
+            # this sale is the INITIAL activation charge (activation just
+            # set current_period_end) or a replayed event. Advancing again
+            # would double-extend the entitlement window. Idempotent no-op.
+            logger.info(
+                "PAYMENT.SALE.COMPLETED for active sub %s well before period "
+                "end %s — treating as initial/duplicate charge, not advancing",
+                paypal_subscription_id, current,
+            )
+            return sub
         # Renewal — only ever move the period end forward (a replayed or
         # out-of-order sale event must not shrink the entitlement window).
-        current = _aware(sub.current_period_end)
         if current is None or period_end > current:
             sub.current_period_end = period_end
             await db.commit()

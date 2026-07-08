@@ -165,10 +165,33 @@ async def receive_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                             reason="Superseded by plan change",
                         )
                     except Exception:
-                        logger.warning(
-                            "Failed to cancel superseded PayPal sub %s",
-                            old_paypal_id, exc_info=True,
+                        # Best-effort — the promotion stands and the webhook
+                        # must still 200 — but a cancel failure means the
+                        # superseded agreement keeps charging, so it MUST
+                        # leave a persistent trace (same handling as the
+                        # /activate route's staged-promotion path).
+                        logger.error(
+                            "DOUBLE-BILLING RISK: failed to cancel superseded "
+                            "PayPal sub %s after staged promotion of %s — "
+                            "flagging for operator review",
+                            old_paypal_id, subscription_id, exc_info=True,
                         )
+                        try:
+                            await mark_for_review(
+                                db,
+                                paypal_subscription_id=subscription_id,
+                                reason=(
+                                    f"Cancel of superseded PayPal sub "
+                                    f"{old_paypal_id} failed — verify no "
+                                    "double billing"
+                                ),
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Could not flag subscription %s for review "
+                                "after cancel failure of %s",
+                                subscription_id, old_paypal_id,
+                            )
         elif event_type == "BILLING.SUBSCRIPTION.CANCELLED":
             await apply_cancelled(db, paypal_subscription_id=subscription_id)
         elif event_type in (

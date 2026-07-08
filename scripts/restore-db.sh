@@ -12,7 +12,9 @@
 #
 # DESTRUCTIVE: with --clean dumps this drops and recreates objects, replacing
 # current data; --uploads overwrites files in the receipt_uploads volume.
-# Requires a typed confirmation.
+# Requires a typed confirmation. The DB restore runs in a SINGLE transaction
+# (psql --single-transaction + ON_ERROR_STOP): a mid-stream failure rolls
+# back and leaves the current database unchanged.
 #
 # GCP rollback host (Docker CE — archival only, do NOT use for prod) override:
 #   COMPOSE_FILE=docker-compose.gcp.yml COMPOSE_CMD="sudo docker compose" \
@@ -150,9 +152,15 @@ if [[ -n "$DB_FILE" ]]; then
     else
         DECOMP=(cat "$DB_FILE")
     fi
+    # --single-transaction makes the restore atomic: backup-db.sh produces a
+    # plain pg_dump (--clean --if-exists, no BEGIN/COMMIT of its own), so the
+    # whole script — DROPs included — runs in one transaction and a mid-stream
+    # failure ROLLS BACK, leaving the current DB untouched instead of
+    # partially dropped. ON_ERROR_STOP aborts on the first error so the
+    # rollback actually fires.
     # shellcheck disable=SC2086
     "${DECOMP[@]}" | $COMPOSE_CMD --env-file .env -f "$COMPOSE_FILE" exec -T "$PG_SERVICE" \
-        psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+        psql --single-transaction -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
     echo "[restore-db] database restore complete"
 fi
 

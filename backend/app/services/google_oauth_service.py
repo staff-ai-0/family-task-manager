@@ -3,6 +3,7 @@ Google OAuth Service
 
 Handles Google OAuth authentication flow.
 """
+from fastapi import HTTPException, status as http_status
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,11 +16,71 @@ from app.models.user import UserRole
 from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token
 from app.core.exceptions import (
+    ForbiddenException,
     ValidationException,
     UnauthorizedException,
     NotFoundException,
 )
 from app.services.family_service import FamilyService
+
+
+class OAuthConsentRequiredError(ValidationException):
+    """New-family OAuth signup arrived without accept_terms=true.
+
+    Machine-readable so the documented native clients (iOS/Android client
+    IDs registered via GOOGLE_CLIENT_IDS) can render a Terms + Privacy
+    Notice consent screen and retry with accept_terms=true. The /api/oauth
+    route converts this into the structured body
+    ``{"error": "consent_required", "message", "message_es"}`` — the same
+    field shape as the ``email_not_verified`` contract in
+    ``app.core.dependencies.ensure_email_verified``.
+
+    Subclasses ValidationException so any caller that does not convert it
+    still degrades to the global 400 ``validation_error`` handler with the
+    bilingual string below (previous behavior).
+    """
+
+    code = "consent_required"
+    status_code = http_status.HTTP_400_BAD_REQUEST
+    message_en = (
+        "You must accept the Terms and the Privacy Notice to create "
+        "your account."
+    )
+    message_es = (
+        "Debes aceptar los Términos y el Aviso de Privacidad para "
+        "crear tu cuenta."
+    )
+
+    def __init__(self) -> None:
+        super().__init__(f"{self.message_es} / {self.message_en}")
+
+
+class OAuthApprovalPendingError(ForbiddenException):
+    """OAuth sign-in blocked: the account is PENDING parental approval.
+
+    Raised both when a join-code/family_id self-signup just created a
+    pending account (no tokens until a parent approves) and when an
+    existing pending user retries "Sign in with Google". The /api/oauth
+    route converts this into the structured body
+    ``{"error": "approval_pending", "message", "message_es"}`` so native
+    clients can show a wait-for-parent screen instead of a generic error.
+
+    Subclasses ForbiddenException so uncaught instances still degrade to
+    the global 403 ``forbidden`` handler with the language-appropriate
+    copy (previous behavior).
+    """
+
+    code = "approval_pending"
+    status_code = http_status.HTTP_403_FORBIDDEN
+
+    def __init__(self, preferred_lang: Optional[str] = None) -> None:
+        # Local import: auth_service imports models/schemas widely; keep
+        # this lazy like the other auth_service imports in this module.
+        from app.services.auth_service import pending_approval_message
+
+        self.message_en = pending_approval_message("en")
+        self.message_es = pending_approval_message("es")
+        super().__init__(pending_approval_message(preferred_lang))
 
 
 class GoogleOAuthService:
@@ -86,6 +147,49 @@ class GoogleOAuthService:
             raise UnauthorizedException(f"Invalid Google token: {str(e)}")
 
     @staticmethod
+    async def _ensure_member_capacity(db: AsyncSession, family_id) -> None:
+        """Enforce the plan's family_member cap for self-signups into an
+        EXISTING family.
+
+        Same check and error shape as the join branch of
+        POST /api/auth/register-family (auth.py) and the invitation path
+        (invitations.py): 403 with a plain-string detail. Bilingual copy
+        because this unauthenticated request carries no language
+        preference. A limit of -1 means unlimited.
+        """
+        from sqlalchemy import func as sa_func
+
+        from app.core.premium import DEFAULT_FREE_LIMITS, get_family_plan_by_id
+
+        plan = await get_family_plan_by_id(db, family_id)
+        limit_value = plan.limits.get("max_family_members")
+        if limit_value is None:
+            limit_value = DEFAULT_FREE_LIMITS.get("max_family_members", 4)
+        member_limit = int(limit_value)
+        if member_limit == -1:  # unlimited
+            return
+
+        member_count = (
+            await db.execute(
+                select(sa_func.count(User.id)).where(
+                    User.family_id == family_id,
+                    User.is_active == True,  # noqa: E712
+                )
+            )
+        ).scalar_one()
+        if member_count >= member_limit:
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"Esta familia alcanzó el límite de miembros de su plan "
+                    f"({member_limit}). Pide a un padre/madre que mejore el "
+                    f"plan para agregar más miembros. / This family has "
+                    f"reached its plan's member limit ({member_limit}). Ask "
+                    f"a parent to upgrade the plan to add more members."
+                ),
+            )
+
+    @staticmethod
     async def authenticate_or_create_user(
         db: AsyncSession,
         google_user_info: Dict[str, Any],
@@ -113,12 +217,18 @@ class GoogleOAuthService:
             Tuple of (User, access_token, refresh_token, is_new_user)
 
         Raises:
-            ForbiddenException: When the account is (or just became) PENDING
-                parental approval — join-code/family_id self-signups get NO
-                tokens until a parent approves from the members page. The
-                account IS created before this is raised.
-            ValidationException: New-family signup without accept_terms, or
-                an invalid join code.
+            OAuthApprovalPendingError (ForbiddenException subclass, 403,
+                code ``approval_pending``): the account is (or just became)
+                PENDING parental approval — join-code/family_id self-signups
+                get NO tokens until a parent approves from the members page.
+                The account IS created before this is raised.
+            OAuthConsentRequiredError (ValidationException subclass, 400,
+                code ``consent_required``): new-family signup without
+                accept_terms.
+            ValidationException: Invalid join code.
+            HTTPException (403): joining an existing family that is already
+                at its plan's family_member cap — same error shape as the
+                password join path (auth.py register-family).
         """
         google_id = google_user_info['google_id']
         email = google_user_info['email']
@@ -151,12 +261,8 @@ class GoogleOAuthService:
             # Pending join-code signups must not bypass parental approval by
             # signing in with Google using the same email.
             from app.models.user import APPROVAL_PENDING
-            from app.services.auth_service import pending_approval_message
-            from app.core.exceptions import ForbiddenException
             if getattr(user, "approval_status", None) == APPROVAL_PENDING:
-                raise ForbiddenException(
-                    pending_approval_message(user.preferred_lang)
-                )
+                raise OAuthApprovalPendingError(user.preferred_lang)
 
             access_token = create_access_token(
                 data={
@@ -193,14 +299,12 @@ class GoogleOAuthService:
         else:
             # Founding an account/family requires explicit consent to the
             # terms + privacy notice (LFPDPPP) — same rule as
-            # POST /api/auth/register-family. Bilingual because this
-            # unauthenticated request carries no language preference.
+            # POST /api/auth/register-family. Structured (code
+            # 'consent_required') so native clients can render a consent
+            # screen and retry; bilingual because this unauthenticated
+            # request carries no language preference.
             if not accept_terms:
-                raise ValidationException(
-                    "Debes aceptar los Términos y el Aviso de Privacidad "
-                    "para crear tu cuenta. / You must accept the Terms and "
-                    "the Privacy Notice to create your account."
-                )
+                raise OAuthConsentRequiredError()
 
             user_name = google_user_info.get('name', email.split('@')[0])
             family = Family(
@@ -210,6 +314,17 @@ class GoogleOAuthService:
             db.add(family)
             await db.flush()
             target_family_id = family.id
+
+        # Self-signups into an EXISTING family consume a family_member seat.
+        # Enforce the plan cap exactly like the password join path
+        # (auth.py register-family) and the invitation path (invitations.py)
+        # — without this, anyone holding the join code (or a leaked
+        # family_id) could grow the family past its plan limit via Google
+        # sign-up.
+        if join_code or family_id:
+            await GoogleOAuthService._ensure_member_capacity(
+                db, target_family_id
+            )
 
         # Role selection is deliberately narrow to prevent privilege escalation.
         # This route is UNAUTHENTICATED, so nothing in the payload is trusted:
@@ -282,11 +397,7 @@ class GoogleOAuthService:
         # was committed above on purpose; retrying "Sign in with Google"
         # lands in the existing-user pending block and gets the same 403.
         if user.approval_status == APPROVAL_PENDING:
-            from app.services.auth_service import (
-                AuthService,
-                pending_approval_message,
-            )
-            from app.core.exceptions import ForbiddenException
+            from app.services.auth_service import AuthService
 
             try:
                 await AuthService.notify_parents_of_pending_member(db, user)
@@ -296,9 +407,7 @@ class GoogleOAuthService:
                     "pending-member parent notification failed (OAuth signup)",
                     exc_info=True,
                 )
-            raise ForbiddenException(
-                pending_approval_message(user.preferred_lang)
-            )
+            raise OAuthApprovalPendingError(user.preferred_lang)
 
         # Create access + refresh tokens
         access_token = create_access_token(

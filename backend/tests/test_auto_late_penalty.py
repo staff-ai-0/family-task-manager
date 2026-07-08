@@ -154,3 +154,71 @@ class TestAutoLatePenalty:
             )
         ).scalars().all()
         assert len(rows) == 1
+
+    async def test_pending_member_flips_without_penalty_or_notification(
+        self, db_session, test_family
+    ):
+        """Legacy rows held by a join-code signup still awaiting parental
+        approval flip to OVERDUE (bookkeeping stays universal) but never
+        spawn a Consequence or a late-penalty notification — the account
+        cannot log in, so punishing it is pure noise."""
+        from app.models.notification import Notification
+        from app.models.user import APPROVAL_PENDING, User, UserRole
+
+        pending = User(
+            email="pending-penalty@test.com",
+            name="Pending Kid",
+            role=UserRole.CHILD,
+            family_id=test_family.id,
+            approval_status=APPROVAL_PENDING,
+            points=0,
+        )
+        db_session.add(pending)
+        await db_session.commit()
+        await db_session.refresh(pending)
+
+        a = await _make_overdue_assignment(
+            db_session,
+            test_family,
+            pending,
+            auto_late_penalty=True,
+            restriction="screen_time",
+            severity="medium",
+        )
+        flipped = await TaskAssignmentService.mark_overdue_all(db_session)
+        assert flipped == 1
+        await db_session.refresh(a)
+        assert a.status == AssignmentStatus.OVERDUE
+
+        rows = (await db_session.execute(select(Consequence))).scalars().all()
+        assert rows == []
+        notifs = (
+            await db_session.execute(
+                select(Notification).where(Notification.user_id == pending.id)
+            )
+        ).scalars().all()
+        assert notifs == []
+
+    async def test_inactive_member_flips_without_penalty(
+        self, db_session, test_family, test_child_user
+    ):
+        """Deactivated members are outside the pipeline too: the flip still
+        happens but no automatic Consequence is created."""
+        a = await _make_overdue_assignment(
+            db_session,
+            test_family,
+            test_child_user,
+            auto_late_penalty=True,
+            restriction="rewards",
+            severity="low",
+        )
+        test_child_user.is_active = False
+        await db_session.commit()
+
+        flipped = await TaskAssignmentService.mark_overdue_all(db_session)
+        assert flipped == 1
+        await db_session.refresh(a)
+        assert a.status == AssignmentStatus.OVERDUE
+
+        rows = (await db_session.execute(select(Consequence))).scalars().all()
+        assert rows == []

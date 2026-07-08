@@ -4,8 +4,10 @@ Self-serve whole-family deletion (WS-DEL / compliance).
 Flow (parent-only, re-authenticated):
  1. Re-auth: password accounts must re-enter their password; Google-only
     accounts (no password hash) must type the exact family name.
- 2. If a PayPal subscription is live (or a checkout is staged), cancel it at
-    PayPal first — best-effort, deletion proceeds even if PayPal errors.
+ 2. If the family has ANY PayPal subscription id (live, in dunning, or even
+    locally "terminal" — local status can lie when a /cancel PayPal call
+    failed) or a staged checkout, cancel it at PayPal first — best-effort,
+    deletion proceeds even if PayPal errors.
  3. Collect the family's uploaded files on disk (gig/task proofs, receipt
     drafts) AND its scanned-receipt object keys in GCS
     (BudgetTransaction.receipt_image_path) BEFORE the rows disappear, then
@@ -51,10 +53,6 @@ UPLOADS_ROOT = settings.UPLOADS_ROOT
 GIG_PROOFS_DIR = os.path.join(UPLOADS_ROOT, "gig-proofs")
 RECEIPT_DRAFTS_DIR = os.path.join(UPLOADS_ROOT, "receipt-drafts")
 
-# Subscription states whose PayPal billing agreement may still charge.
-_LIVE_SUBSCRIPTION_STATUSES = ("active", "past_due", "payment_failed", "pending")
-
-
 class FamilyDeletionService:
     """Orchestrates permanent deletion of a family and all its data."""
 
@@ -82,8 +80,22 @@ class FamilyDeletionService:
                 )
 
     @staticmethod
-    async def _cancel_paypal_subscriptions(db: AsyncSession, family_id: UUID) -> None:
-        """Cancel live + staged PayPal subscriptions at PayPal (best-effort)."""
+    async def _cancel_paypal_subscriptions(
+        db: AsyncSession, family_id: UUID
+    ) -> List[str]:
+        """Cancel every possibly-still-billing PayPal subscription (best-effort).
+
+        Cancels ANY paypal_subscription_id regardless of local status, plus
+        any staged checkout id. Local status is deliberately NOT trusted here:
+        /cancel swallows a PayPal cancel failure with a warning and the sweep
+        later flips the row to 'cancelled' locally, so a "terminal" local
+        status can hide a PayPal agreement that is still billing. Cancelling
+        an already-cancelled/expired sub at PayPal is a harmless best-effort
+        failure that lands in the existing failed-ids audit trail. Deletion
+        is a user right and must proceed even if PayPal errors — failures are
+        logged loudly and returned so the operator audit line records the ids
+        that may keep charging.
+        """
         sub = (
             await db.execute(
                 select(FamilySubscription).where(
@@ -92,17 +104,18 @@ class FamilyDeletionService:
             )
         ).scalar_one_or_none()
         if sub is None:
-            return
+            return []
 
         from app.services.paypal_service import PayPalService
 
         to_cancel = set()
-        if sub.paypal_subscription_id and sub.status in _LIVE_SUBSCRIPTION_STATUSES:
+        if sub.paypal_subscription_id:
             to_cancel.add(sub.paypal_subscription_id)
         # A staged upgrade/downgrade checkout holds its own PayPal id.
         if sub.pending_paypal_subscription_id:
             to_cancel.add(sub.pending_paypal_subscription_id)
 
+        failed: List[str] = []
         for paypal_id in to_cancel:
             try:
                 await asyncio.to_thread(
@@ -111,11 +124,14 @@ class FamilyDeletionService:
                     reason="Family account deleted",
                 )
             except Exception as exc:  # best-effort: deletion must proceed
-                logger.warning(
-                    "PayPal cancel failed during family deletion (%s): %s",
+                failed.append(paypal_id)
+                logger.error(
+                    "PayPal cancel failed during family deletion (%s) — the "
+                    "agreement may keep charging; operator follow-up needed: %s",
                     paypal_id,
                     exc,
                 )
+        return failed
 
     @staticmethod
     async def _collect_upload_paths(db: AsyncSession, family_id: UUID) -> List[str]:
@@ -248,7 +264,9 @@ class FamilyDeletionService:
             )
         ).scalar() or 0
 
-        await cls._cancel_paypal_subscriptions(db, family_id)
+        paypal_cancel_failures = await cls._cancel_paypal_subscriptions(
+            db, family_id
+        )
 
         upload_paths = await cls._collect_upload_paths(db, family_id)
         gcs_receipt_paths = await cls._collect_gcs_receipt_paths(db, family_id)
@@ -271,12 +289,17 @@ class FamilyDeletionService:
         )
 
         # Anonymized audit line: identifiers + counts only.
+        # paypal_cancel_failed lists PayPal subscription ids the deletion
+        # could NOT cancel — those agreements may keep charging and need
+        # manual operator follow-up at PayPal.
         logger.info(
             "family_deleted family_id=%s members=%d uploads_removed=%d "
-            "gcs_receipts_removed=%d requested_by_user_id=%s",
+            "gcs_receipts_removed=%d requested_by_user_id=%s "
+            "paypal_cancel_failed=%s",
             family_id,
             member_count,
             removed,
             gcs_removed,
             requester_id,
+            ",".join(paypal_cancel_failures) if paypal_cancel_failures else "-",
         )

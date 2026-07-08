@@ -197,6 +197,17 @@ async def create_checkout(
     # and promoted by /activate (or the ACTIVATED webhook) only after
     # payment confirmation, which also cancels the superseded PayPal sub.
     from app.core.premium import ENTITLED_STATUSES
+    from app.services.subscription_state import GRACE_EXPIRED_STATUS
+
+    # Statuses that are not a live entitlement anymore but whose PayPal-side
+    # agreement may STILL bill (grace_expired: PayPal keeps retrying the
+    # charge; suspended: PayPal can resume it). A re-checkout from these must
+    # go through the same staged pending_* path as live subs so /activate
+    # cancels the old PayPal subscription instead of silently orphaning it
+    # (permanent double billing). 'pending' (never approved), 'cancelled'
+    # (already cancelled at PayPal) and 'expired' (terminal at PayPal) stay
+    # on the in-place-refresh path.
+    _STILL_BILLABLE_STATUSES = (GRACE_EXPIRED_STATUS, "suspended")
 
     existing = await db.execute(
         select(FamilySubscription).where(
@@ -204,13 +215,20 @@ async def create_checkout(
         )
     )
     row = existing.scalar_one_or_none()
-    if row and row.status in ENTITLED_STATUSES:
+    if row and (
+        row.status in ENTITLED_STATUSES
+        or (
+            row.paypal_subscription_id
+            and row.status in _STILL_BILLABLE_STATUSES
+        )
+    ):
         row.pending_plan_id = plan.id
         row.pending_billing_cycle = request.billing_cycle
         row.pending_paypal_subscription_id = result["subscription_id"]
     elif row:
-        # Row exists but is not a live entitlement (pending / cancelled /
-        # expired / grace_expired) — safe to refresh in place.
+        # Row exists but is not a live entitlement and its PayPal agreement
+        # cannot bill anymore (pending / cancelled / expired, or no PayPal id
+        # at all) — safe to refresh in place.
         row.plan_id = plan.id
         row.billing_cycle = request.billing_cycle
         row.status = "pending"
@@ -257,6 +275,7 @@ async def activate_subscription(
 
     from app.services.subscription_state import (
         apply_activated,
+        mark_for_review,
         promote_pending_checkout,
     )
 
@@ -324,8 +343,10 @@ async def activate_subscription(
             period_end=period_end,
         )
         if sub is not None and old_paypal_id:
-            # Stop billing on the superseded subscription. Best-effort: the
-            # daily reconciliation sweep will surface any leftover.
+            # Stop billing on the superseded subscription. Best-effort — the
+            # activation must not fail — but a cancel failure means the old
+            # PayPal agreement keeps charging, so it MUST leave a persistent
+            # trace: flag the row for operator review.
             import logging
             try:
                 await asyncio.to_thread(
@@ -334,10 +355,28 @@ async def activate_subscription(
                     reason="Superseded by plan change",
                 )
             except Exception:
-                logging.getLogger(__name__).warning(
-                    "Failed to cancel superseded PayPal sub %s",
-                    old_paypal_id, exc_info=True,
+                logging.getLogger(__name__).error(
+                    "DOUBLE-BILLING RISK: failed to cancel superseded PayPal "
+                    "sub %s after plan change for family %s (new sub %s) — "
+                    "flagging for operator review",
+                    old_paypal_id, current_user.family_id,
+                    request.paypal_subscription_id, exc_info=True,
                 )
+                try:
+                    await mark_for_review(
+                        db,
+                        paypal_subscription_id=request.paypal_subscription_id,
+                        reason=(
+                            f"Cancel of superseded PayPal sub {old_paypal_id} "
+                            "failed — verify no double billing"
+                        ),
+                    )
+                except Exception:
+                    logging.getLogger(__name__).exception(
+                        "Could not flag subscription %s for review after "
+                        "cancel failure of %s",
+                        request.paypal_subscription_id, old_paypal_id,
+                    )
     else:
         sub = await apply_activated(
             db,

@@ -81,6 +81,22 @@ jobs:
         # and adds pytest/pytest-asyncio/pytest-cov (needed by pytest.ini addopts).
         run: pip install -r requirements-dev.txt
 
+      - name: Run migrations (alembic upgrade head + downgrade round-trip)
+        # Prod deploys run `alembic upgrade head` for real — CI must exercise
+        # the chain first so a broken migration fails here, not on the host.
+        # migrations/env.py reads DATABASE_URL and strips +asyncpg for its
+        # sync engine (psycopg2-binary comes from requirements.txt). The
+        # downgrade -1 / upgrade head round-trip exercises the NEWEST
+        # migration's downgrade path (the manual rollback documented in
+        # deploy-onprem.sh). Safe before pytest: tests/conftest.py drops and
+        # recreates every table except alembic_version at session start.
+        env:
+          DATABASE_URL: postgresql+asyncpg://familyapp:familyapp123@localhost:5432/familyapp_test
+        run: |
+          alembic upgrade head
+          alembic downgrade -1
+          alembic upgrade head
+
       - name: Run tests
         env:
           TEST_DATABASE_URL: postgresql+asyncpg://familyapp:familyapp123@localhost:5432/familyapp_test

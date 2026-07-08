@@ -6,13 +6,14 @@ Handles family CRUD operations, member management, and statistics.
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from uuid import UUID
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, verify_family_id, require_parent_role
+from app.core.rate_limiter import limiter
 from app.core.type_utils import to_uuid_required
 from app.services import FamilyService
 from app.services.family_deletion_service import FamilyDeletionService
@@ -29,6 +30,10 @@ from app.schemas.user import UserResponse
 from app.models import User
 
 router = APIRouter()
+
+# The full-family export loads every domain into memory and zips it — strict
+# per-IP limit so it cannot be used to hammer the DB / exhaust backend memory.
+EXPORT_RATE_LIMIT = "3/hour"
 
 
 @router.get("/me", response_model=FamilyWithMembers)
@@ -74,7 +79,9 @@ async def get_my_family_members(
 
 
 @router.get("/export")
+@limiter.limit(EXPORT_RATE_LIMIT)
 async def export_my_family(
+    request: Request,
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
@@ -83,6 +90,9 @@ async def export_my_family(
     JSON dumps per domain + a re-importable budget backup. Uploaded images
     are listed in a manifest, not bundled. Path is declared before
     /{family_id} so 'export' isn't parsed as a UUID.
+
+    Rate limited (EXPORT_RATE_LIMIT) and size guarded (413 past the caps in
+    family_export_service) because the archive is built fully in memory.
     """
     zip_bytes = await FamilyExportService.export_family(
         db, to_uuid_required(current_user.family_id)

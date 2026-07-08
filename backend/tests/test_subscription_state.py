@@ -9,6 +9,7 @@ from app.models.subscription import FamilySubscription, SubscriptionPlan
 from app.services.subscription_state import (
     apply_activated,
     apply_cancelled,
+    apply_payment_completed,
     apply_payment_failed,
 )
 
@@ -202,6 +203,114 @@ async def test_apply_activated_does_not_wipe_trial_end_at(
     await db_session.refresh(sub)
     # trial_end_at survived
     assert sub.trial_end_at == original_trial_end
+
+
+# ---------------------------------------------------------------------------
+# PAYMENT.SALE.COMPLETED period-advance idempotency (whole-PR review, MAJOR 1)
+# ---------------------------------------------------------------------------
+
+
+async def _make_active_sub(db, family, *, paypal_id, period_end):
+    plan = await _make_plan(db, "plus")
+    sub = FamilySubscription(
+        family_id=family.id,
+        plan_id=plan.id,
+        billing_cycle="monthly",
+        status="active",
+        paypal_subscription_id=paypal_id,
+        current_period_end=period_end,
+    )
+    db.add(sub)
+    await db.commit()
+    await db.refresh(sub)
+    return sub
+
+
+def _aware_end(sub):
+    end = sub.current_period_end
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    return end
+
+
+@pytest.mark.asyncio
+async def test_payment_completed_initial_charge_does_not_double_advance(
+    db_session, sample_family
+):
+    """Regression: the PAYMENT.SALE.COMPLETED for the INITIAL activation
+    charge must NOT advance current_period_end again — activation already set
+    it one full cycle out."""
+    activation_end = datetime.now(timezone.utc) + timedelta(days=30)
+    sub = await _make_active_sub(
+        db_session, sample_family,
+        paypal_id="I-INITIAL-SALE", period_end=activation_end,
+    )
+
+    result = await apply_payment_completed(db_session, "I-INITIAL-SALE")
+    assert result is not None
+    await db_session.refresh(sub)
+    assert abs((_aware_end(sub) - activation_end).total_seconds()) < 1
+    assert sub.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_payment_completed_renewal_advance_is_idempotent(
+    db_session, sample_family
+):
+    """A replayed renewal sale event must not advance the period twice: the
+    first apply (near period end) advances one cycle, the second is a no-op
+    because the new period end is now far in the future."""
+    old_end = datetime.now(timezone.utc) + timedelta(hours=1)
+    sub = await _make_active_sub(
+        db_session, sample_family,
+        paypal_id="I-RENEW-REPLAY", period_end=old_end,
+    )
+
+    await apply_payment_completed(db_session, "I-RENEW-REPLAY")
+    await db_session.refresh(sub)
+    end_after_first = _aware_end(sub)
+    assert end_after_first > old_end + timedelta(days=29)
+
+    await apply_payment_completed(db_session, "I-RENEW-REPLAY")
+    await db_session.refresh(sub)
+    assert _aware_end(sub) == end_after_first
+
+
+@pytest.mark.asyncio
+async def test_payment_completed_late_renewal_still_advances(
+    db_session, sample_family
+):
+    """A renewal sale landing after the period already lapsed (late webhook)
+    still advances the period from now."""
+    old_end = datetime.now(timezone.utc) - timedelta(days=1)
+    sub = await _make_active_sub(
+        db_session, sample_family,
+        paypal_id="I-RENEW-LATE", period_end=old_end,
+    )
+
+    await apply_payment_completed(db_session, "I-RENEW-LATE")
+    await db_session.refresh(sub)
+    assert _aware_end(sub) > datetime.now(timezone.utc) + timedelta(days=29)
+
+
+@pytest.mark.asyncio
+async def test_payment_completed_explicit_period_end_bypasses_window_guard(
+    db_session, sample_family
+):
+    """An authoritative period_end from the caller (PayPal's own
+    next_billing_time) is adopted even mid-cycle — forward-only."""
+    old_end = datetime.now(timezone.utc) + timedelta(days=30)
+    sub = await _make_active_sub(
+        db_session, sample_family,
+        paypal_id="I-AUTHORITATIVE", period_end=old_end,
+    )
+
+    authoritative = datetime.now(timezone.utc) + timedelta(days=45)
+    await apply_payment_completed(
+        db_session, "I-AUTHORITATIVE", period_end=authoritative
+    )
+    await db_session.refresh(sub)
+    assert abs((_aware_end(sub) - authoritative).total_seconds()) < 1
 
 
 async def _make_plan(db, name):

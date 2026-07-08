@@ -217,6 +217,77 @@ class TestJoinCodePendingApproval:
         assert r.status_code == 401
 
     @pytest.mark.asyncio
+    async def test_reject_removes_open_assignments_and_logs(
+        self, client, db_session, test_family, test_parent_user, caplog
+    ):
+        """Rejecting a pending member must not let its open chores vanish
+        silently through the assigned_to FK CASCADE: the route deletes the
+        PENDING/OVERDUE rows explicitly and logs the count. (Pending members
+        are excluded from the shuffle, so such rows are legacy data from
+        before the approval gate.)"""
+        import logging
+        from datetime import date, timedelta
+        from uuid import UUID
+
+        from app.models.task_assignment import AssignmentStatus, TaskAssignment
+        from app.models.task_template import TaskTemplate
+
+        code = await _join_code_for(db_session, test_family)
+        r = await _register_join(client, code, email="reject-chores@test.com")
+        assert r.status_code in (200, 201), r.text
+        pending_id = UUID(r.json()["user"]["id"])
+
+        tmpl = TaskTemplate(
+            title="Legacy chore",
+            points=0,
+            effort_level=1,
+            interval_days=1,
+            is_bonus=False,
+            family_id=test_family.id,
+            created_by=test_parent_user.id,
+        )
+        db_session.add(tmpl)
+        await db_session.flush()
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())
+        for a_status in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE):
+            db_session.add(TaskAssignment(
+                template_id=tmpl.id,
+                assigned_to=pending_id,
+                family_id=test_family.id,
+                status=a_status,
+                assigned_date=today,
+                week_of=monday,
+            ))
+        await db_session.commit()
+
+        token = await _parent_token(client)
+        with caplog.at_level(logging.INFO, logger="app.api.routes.users"):
+            r = await client.post(
+                f"/api/users/{pending_id}/reject",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert r.status_code == 204, r.text
+
+        # Account gone
+        gone = (await db_session.execute(
+            select(User).where(User.email == "reject-chores@test.com")
+        )).scalar_one_or_none()
+        assert gone is None
+
+        # No orphan assignment rows survive
+        left = (await db_session.execute(
+            select(TaskAssignment).where(TaskAssignment.assigned_to == pending_id)
+        )).scalars().all()
+        assert left == []
+
+        # The cleanup is observable, not a silent cascade
+        assert any(
+            "removed 2 open assignment(s)" in rec.getMessage()
+            for rec in caplog.records
+        )
+
+    @pytest.mark.asyncio
     async def test_child_cannot_approve(
         self, client, db_session, test_family, test_parent_user, test_child_user
     ):

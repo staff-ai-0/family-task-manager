@@ -14,7 +14,7 @@ from uuid import UUID
 
 from app.models.task_template import TaskTemplate, AssignmentType
 from app.models.task_assignment import TaskAssignment, AssignmentStatus, ApprovalStatus
-from app.models.user import User
+from app.models.user import User, APPROVAL_APPROVED
 from app.models.point_transaction import PointTransaction, TransactionType
 from app.core.exceptions import (
     NotFoundException,
@@ -50,6 +50,23 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         except Exception:
             tz = ZoneInfo("UTC")
         return datetime.now(tz).date()
+
+    @staticmethod
+    def _participating_member_clause():
+        """SQL filter for members who take part in the chore pipeline.
+
+        Shared by every member selection in this service (shuffle inputs,
+        notification sweeps). A member participates only when the account is
+        BOTH active AND parent-approved: join-code self-signups are created
+        with is_active=True but approval_status='pending' (they cannot log
+        in until a parent approves), so filtering on is_active alone would
+        hand weekly chores, morning reminders, and automatic late penalties
+        to an account that cannot even see them.
+        """
+        return and_(
+            User.is_active == True,  # noqa: E712
+            User.approval_status == APPROVAL_APPROVED,
+        )
 
     # ─── Shuffle Algorithm ───────────────────────────────────────────
 
@@ -91,7 +108,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     async def _load_shuffle_inputs(
         db: AsyncSession, family_id: UUID
     ) -> tuple[list[TaskTemplate], list[TaskTemplate], list[User]]:
-        """Fetch regular templates, bonus templates, and active members."""
+        """Fetch regular templates, bonus templates, and participating members
+        (active AND parent-approved — see _participating_member_clause)."""
         regular_query = select(TaskTemplate).where(
             and_(
                 TaskTemplate.family_id == family_id,
@@ -113,7 +131,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         members_query = select(User).where(
             and_(
                 User.family_id == family_id,
-                User.is_active == True,
+                TaskAssignmentService._participating_member_clause(),
             )
         )
         members = list((await db.execute(members_query)).scalars().all())
@@ -1492,7 +1510,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         for today, family_ids in date_to_families.items():
             # One query per unique date bucket instead of per family
             stale_q = (
-                select(TaskAssignment)
+                select(TaskAssignment, User.is_active, User.approval_status)
+                .join(User, User.id == TaskAssignment.assigned_to)
                 .options(selectinload(TaskAssignment.template))
                 .where(
                     and_(
@@ -1502,10 +1521,21 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     )
                 )
             )
-            stale = list((await db.execute(stale_q)).scalars().all())
-            for a in stale:
+            stale = (await db.execute(stale_q)).all()
+            for a, assignee_active, assignee_approval in stale:
+                # The status flip is plain bookkeeping and stays universal
+                # (keeps the sweep idempotent and avoids zombie PENDING
+                # rows), but the punitive side effects below only apply to
+                # participating members: an account that cannot log in —
+                # deactivated, or a join-code signup still pending parental
+                # approval — must never receive an automatic Consequence or
+                # a late-penalty notification.
                 a.status = AssignmentStatus.OVERDUE
                 a.updated_at = now_utc
+                if not (
+                    assignee_active and assignee_approval == APPROVAL_APPROVED
+                ):
+                    continue
                 tmpl = a.template
                 if tmpl is None or not tmpl.auto_late_penalty:
                     continue
@@ -1618,11 +1648,17 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                         TaskAssignment.family_id,
                         func.count(),
                     )
+                    # Only participating members (active + parent-approved)
+                    # get reminders — a pending join-code signup cannot log
+                    # in, so pushing "you have N chores" at it is noise at
+                    # best and a data leak at worst.
+                    .join(User, User.id == TaskAssignment.assigned_to)
                     .where(
                         and_(
                             TaskAssignment.family_id.in_(family_ids),
                             TaskAssignment.status == AssignmentStatus.PENDING,
                             TaskAssignment.assigned_date == today,
+                            TaskAssignmentService._participating_member_clause(),
                         )
                     )
                     .group_by(TaskAssignment.assigned_to, TaskAssignment.family_id)
