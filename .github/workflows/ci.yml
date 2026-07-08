@@ -1,0 +1,120 @@
+# Minimal CI — launch blocker WS-B (audit 2026-07-07, ci-cd-testing CRITICAL).
+#
+# Two jobs on every push/PR to main:
+#   backend  — pytest suite against postgres:15 + redis:7 services
+#   frontend — npm ci + astro check + astro build (both verified green locally
+#              on 2026-07-07 with the exact lockfile versions, so both block)
+#
+# Env notes (derived from backend/tests/conftest.py + backend/conftest.py):
+#   * TEST_DATABASE_URL — conftest defaults to localhost:5435 (the local dev
+#     test-db port mapping); in CI the postgres service is on 5432, so we set
+#     it explicitly.
+#   * DATABASE_URL — the app engine (app/core/database.py) is created at import
+#     time from this; tests/test_health_readiness.py pings it via /ready, so it
+#     must point at a reachable DB. We point it at the same CI test database.
+#   * REDIS_URL — tests/test_scheduler_lock.py and /ready need a LIVE redis.
+#   * JARVIS_MCP_HTTP_ENABLED is set by backend/conftest.py itself.
+#   * DEBUG defaults to true → rate limiter off, placeholder SECRET_KEY allowed.
+#   * Coverage gate (--cov-fail-under=70) comes from backend/pytest.ini addopts.
+#
+# UNVERIFIED-IN-CI: the backend suite was validated by file inspection only
+# (local test DB was shared with sibling agents at authoring time). First push
+# validates it for real; if a test turns out to need extra env, add it to the
+# pytest step's env block below.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: familyapp
+          POSTGRES_PASSWORD: familyapp123
+          POSTGRES_DB: familyapp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U familyapp -d familyapp_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        # requirements-dev.txt includes requirements.txt via its -r directive
+        # and adds pytest/pytest-asyncio/pytest-cov (needed by pytest.ini addopts).
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        env:
+          TEST_DATABASE_URL: postgresql+asyncpg://familyapp:familyapp123@localhost:5432/familyapp_test
+          DATABASE_URL: postgresql+asyncpg://familyapp:familyapp123@localhost:5432/familyapp_test
+          REDIS_URL: redis://localhost:6379/0
+          PYTHONPATH: .
+        run: pytest tests/
+
+  frontend:
+    name: Frontend (check + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      # Full-repo checkout is required: help.astro / ayuda.astro import
+      # markdown from the top-level docs/ tree during the build.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches frontend/Dockerfile (node:22-alpine).
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check (astro check)
+        # Green locally (0 errors / 0 warnings, hints only) — kept blocking.
+        run: npm run check
+
+      - name: Build
+        run: npm run build
