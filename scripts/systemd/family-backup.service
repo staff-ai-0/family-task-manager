@@ -1,5 +1,7 @@
+# LEGACY — GCP VM (decommissioned 2026-07-05). Rollback reference only.
+# Canonical prod backups run via family-onprem-backup.{service,timer}.
 [Unit]
-Description=Family Task Manager — daily PostgreSQL backup
+Description=Family Task Manager — daily PostgreSQL backup (LEGACY GCP)
 After=docker.service
 Requires=docker.service
 
@@ -8,4 +10,9 @@ Type=oneshot
 # Runs as root so `sudo docker compose` needs no interactive password and the
 # dump can be written under /home/jc/family-task-manager/backups/.
 WorkingDirectory=/home/jc/family-task-manager
+# backup-db.sh now defaults to the on-prem podman path — pin the GCP/Docker
+# path explicitly. No podman on the VM, so skip the uploads-volume archive.
+Environment=COMPOSE_FILE=docker-compose.gcp.yml
+Environment="COMPOSE_CMD=sudo docker compose"
+Environment=SKIP_UPLOADS=1
 ExecStart=/home/jc/family-task-manager/scripts/backup-db.sh
