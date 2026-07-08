@@ -166,6 +166,96 @@ _COPY = {
         "es": "📘 Ver guía para miembros →",
         "en": "📘 View members' guide →",
     },
+
+    # ----- Billing: payment-failed dunning -----
+    "payfail_subject": {
+        "es": "Problema con tu pago — Family Task Manager",
+        "en": "Payment problem — Family Task Manager",
+    },
+    "payfail_heading": {
+        "es": "No pudimos cobrar tu suscripción",
+        "en": "We couldn't charge your subscription",
+    },
+    "payfail_body": {
+        "es": "Hola {name}, el pago recurrente de tu plan <strong>{plan_name}</strong> falló. Conservarás tus beneficios hasta el <strong>{grace_deadline}</strong>; después de esa fecha tu familia pasará al plan gratuito. Actualiza tu método de pago en PayPal para evitar la interrupción:",
+        "en": "Hi {name}, the recurring payment for your <strong>{plan_name}</strong> plan failed. You'll keep your benefits until <strong>{grace_deadline}</strong>; after that date your family will move to the free plan. Update your payment method on PayPal to avoid the interruption:",
+    },
+    "payfail_btn": {
+        "es": "Actualizar pago en PayPal",
+        "en": "Update payment on PayPal",
+    },
+    "payfail_link_alt": {
+        "es": "O copia y pega este enlace en tu navegador:",
+        "en": "Or copy and paste this link into your browser:",
+    },
+    "payfail_expiry": {
+        "es": "PayPal reintentará el cobro automáticamente; en cuanto se complete, tu plan se restaurará solo.",
+        "en": "PayPal retries the charge automatically; as soon as it succeeds, your plan is restored automatically.",
+    },
+    "payfail_ignore": {
+        "es": "Si ya actualizaste tu método de pago, puedes ignorar este correo.",
+        "en": "If you already updated your payment method, you can ignore this email.",
+    },
+
+    # ----- Billing: subscription activated -----
+    "subact_subject": {
+        "es": "Suscripción activada — Family Task Manager",
+        "en": "Subscription activated — Family Task Manager",
+    },
+    "subact_heading": {
+        "es": "¡Tu suscripción está activa!",
+        "en": "Your subscription is active!",
+    },
+    "subact_body": {
+        "es": "Hola {name}, tu plan <strong>{plan_name}</strong> está activo. Ya tienes acceso a todas las funciones incluidas. ¡Gracias por apoyar a Family Task Manager!",
+        "en": "Hi {name}, your <strong>{plan_name}</strong> plan is now active. You have access to everything it includes. Thanks for supporting Family Task Manager!",
+    },
+    "subact_btn": {
+        "es": "Ver mi suscripción",
+        "en": "View my subscription",
+    },
+    "subact_link_alt": {
+        "es": "O copia y pega este enlace en tu navegador:",
+        "en": "Or copy and paste this link into your browser:",
+    },
+    "subact_expiry": {
+        "es": "PayPal te enviará el recibo de cada cargo por separado.",
+        "en": "PayPal sends a separate receipt for each charge.",
+    },
+    "subact_ignore": {
+        "es": "Si no reconoces esta suscripción, cancélala desde la app o contáctanos.",
+        "en": "If you don't recognize this subscription, cancel it from the app or contact us.",
+    },
+
+    # ----- Billing: subscription cancelled -----
+    "subcanc_subject": {
+        "es": "Suscripción cancelada — Family Task Manager",
+        "en": "Subscription cancelled — Family Task Manager",
+    },
+    "subcanc_heading": {
+        "es": "Tu suscripción fue cancelada",
+        "en": "Your subscription was cancelled",
+    },
+    "subcanc_body": {
+        "es": "Hola {name}, confirmamos la cancelación de tu plan <strong>{plan_name}</strong>. No habrá más cargos. Conservas los beneficios hasta el <strong>{period_end}</strong>; después tu familia pasará al plan gratuito (tus datos no se borran).",
+        "en": "Hi {name}, we've confirmed the cancellation of your <strong>{plan_name}</strong> plan. There will be no further charges. You keep your benefits until <strong>{period_end}</strong>; after that your family moves to the free plan (your data is not deleted).",
+    },
+    "subcanc_btn": {
+        "es": "Reactivar mi plan",
+        "en": "Reactivate my plan",
+    },
+    "subcanc_link_alt": {
+        "es": "O copia y pega este enlace en tu navegador:",
+        "en": "Or copy and paste this link into your browser:",
+    },
+    "subcanc_expiry": {
+        "es": "Puedes volver a suscribirte en cualquier momento desde Configuración → Suscripción.",
+        "en": "You can re-subscribe anytime from Settings → Subscription.",
+    },
+    "subcanc_ignore": {
+        "es": "Si no solicitaste esta cancelación, contáctanos de inmediato.",
+        "en": "If you did not request this cancellation, contact us right away.",
+    },
 }
 
 
@@ -508,6 +598,153 @@ class EmailService:
             except Exception as exc:
                 logger.warning(f"gig-pending email to {parent.email} failed: {exc}")
         return sent
+
+    # ------------------------------------------------------------------
+    # Billing lifecycle emails (dunning / activation / cancellation)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def _family_parents(db: AsyncSession, family_id) -> list:
+        """All active PARENT users in a family (billing email recipients)."""
+        from sqlalchemy import select
+        from app.models.user import User as UserModel, UserRole
+
+        return (await db.execute(
+            select(UserModel).where(
+                UserModel.family_id == family_id,
+                UserModel.role == UserRole.PARENT,
+                UserModel.is_active == True,  # noqa: E712
+            )
+        )).scalars().all()
+
+    @staticmethod
+    def _fmt_date(dt: Optional[datetime], lang: str) -> str:
+        """Human date for email copy, per locale."""
+        if dt is None:
+            return "—"
+        if lang == "es":
+            return dt.strftime("%d/%m/%Y")
+        return dt.strftime("%B %d, %Y")
+
+    @staticmethod
+    async def _send_billing_email(
+        db: AsyncSession,
+        family_id,
+        *,
+        key_prefix: str,
+        btn_url: str,
+        body_vars: dict,
+    ) -> int:
+        """Send one of the billing emails to every parent in the family.
+
+        *key_prefix* selects the _COPY group (payfail / subact / subcanc).
+        *body_vars* may contain per-lang callables (value = fn(lang)) for
+        locale-dependent substitutions like formatted dates.
+
+        Fire-and-forget by contract: individual failures are logged and
+        swallowed so billing state transitions never depend on SMTP.
+        """
+        sent = 0
+        try:
+            parents = await EmailService._family_parents(db, family_id)
+        except Exception:
+            logger.warning(
+                "billing email (%s): parent lookup failed for family %s",
+                key_prefix, family_id, exc_info=True,
+            )
+            return 0
+
+        for parent in parents:
+            lang = _welcome_lang(parent)
+            resolved = {
+                k: (v(lang) if callable(v) else v) for k, v in body_vars.items()
+            }
+            try:
+                html = _build_html(
+                    heading=_t(f"{key_prefix}_heading", lang),
+                    body=_t(f"{key_prefix}_body", lang).format(
+                        name=parent.name, **resolved
+                    ),
+                    btn_text=_t(f"{key_prefix}_btn", lang),
+                    btn_url=btn_url,
+                    link_label=_t(f"{key_prefix}_link_alt", lang),
+                    expiry_note=_t(f"{key_prefix}_expiry", lang),
+                    ignore_note=_t(f"{key_prefix}_ignore", lang),
+                )
+                ok = await EmailService._send(
+                    to=parent.email,
+                    subject=_t(f"{key_prefix}_subject", lang),
+                    html=html,
+                )
+                if ok:
+                    sent += 1
+            except Exception:
+                logger.warning(
+                    "billing email (%s) to %s failed",
+                    key_prefix, parent.email, exc_info=True,
+                )
+        return sent
+
+    @staticmethod
+    async def send_payment_failed_email(
+        db: AsyncSession,
+        family_id,
+        *,
+        plan_name: str,
+        grace_deadline: Optional[datetime],
+    ) -> int:
+        """Dunning notice: payment failed, grace deadline, PayPal update link."""
+        return await EmailService._send_billing_email(
+            db, family_id,
+            key_prefix="payfail",
+            # PayPal's "manage automatic payments" page — where the buyer
+            # updates the funding source behind the subscription.
+            btn_url="https://www.paypal.com/myaccount/autopay/",
+            body_vars={
+                "plan_name": plan_name,
+                "grace_deadline": lambda lang: EmailService._fmt_date(
+                    grace_deadline, lang
+                ),
+            },
+        )
+
+    @staticmethod
+    async def send_subscription_activated_email(
+        db: AsyncSession,
+        family_id,
+        *,
+        plan_name: str,
+    ) -> int:
+        """Confirmation that a subscription is active (new, upgraded, or recovered)."""
+        base = settings.email_link_base.rstrip("/")
+        return await EmailService._send_billing_email(
+            db, family_id,
+            key_prefix="subact",
+            btn_url=f"{base}/parent/settings/subscription",
+            body_vars={"plan_name": plan_name},
+        )
+
+    @staticmethod
+    async def send_subscription_cancelled_email(
+        db: AsyncSession,
+        family_id,
+        *,
+        plan_name: str,
+        period_end: Optional[datetime],
+    ) -> int:
+        """Confirmation of cancellation + benefits-until date."""
+        base = settings.email_link_base.rstrip("/")
+        return await EmailService._send_billing_email(
+            db, family_id,
+            key_prefix="subcanc",
+            btn_url=f"{base}/parent/settings/subscription",
+            body_vars={
+                "plan_name": plan_name,
+                "period_end": lambda lang: EmailService._fmt_date(
+                    period_end, lang
+                ),
+            },
+        )
 
     # ------------------------------------------------------------------
     # Email verification

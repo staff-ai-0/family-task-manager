@@ -1,15 +1,27 @@
 """
 Tests for subscription models, UsageService, and premium gating.
 """
+from unittest.mock import AsyncMock, patch
+
 import pytest
 import pytest_asyncio
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import HTTPException
 
 from app.models.subscription import SubscriptionPlan, FamilySubscription, UsageTracking
 from app.services.usage_service import UsageService
 from app.core.premium import get_family_plan, require_feature, FamilyPlan, DEFAULT_FREE_LIMITS
+
+
+@pytest.fixture(autouse=True)
+def _mute_email_transport():
+    """Billing state transitions dispatch emails; never hit SMTP in tests."""
+    with patch(
+        "app.services.email_service.EmailService._send",
+        new=AsyncMock(return_value=True),
+    ):
+        yield
 
 
 # ---------------------------------------------------------------------------
@@ -441,3 +453,300 @@ async def test_transaction_create_blocked_at_limit(
     )
     assert response.status_code == 403
     assert response.json()["detail"]["error"] == "upgrade_required"
+
+
+# ---------------------------------------------------------------------------
+# Billing robustness (WS-E): dunning grace, recovery, checkout guard,
+# join-code cap
+# ---------------------------------------------------------------------------
+
+
+async def _make_paid_sub(
+    db_session, family, plan, *, status="active", paypal_id="I-OLD-SUB",
+    payment_failure_at=None, current_period_end=None,
+):
+    sub = FamilySubscription(
+        family_id=family.id,
+        plan_id=plan.id,
+        billing_cycle="monthly",
+        status=status,
+        paypal_subscription_id=paypal_id,
+        payment_failure_at=payment_failure_at,
+        current_period_end=current_period_end,
+    )
+    db_session.add(sub)
+    await db_session.commit()
+    await db_session.refresh(sub)
+    return sub
+
+
+@pytest.mark.asyncio
+async def test_payment_failed_within_grace_keeps_plan(
+    db_session, test_family, test_parent_user, plus_plan
+):
+    """A payment_failed sub inside the grace window keeps paid entitlements."""
+    await _make_paid_sub(
+        db_session, test_family, plus_plan,
+        status="payment_failed",
+        payment_failure_at=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "plus"
+    assert plan.status == "payment_failed"
+    assert plan.limits["budget_reports"] is True
+
+
+@pytest.mark.asyncio
+async def test_payment_failed_after_grace_resolves_to_free(
+    db_session, test_family, test_parent_user, plus_plan
+):
+    """Once payment_failure_at + BILLING_GRACE_DAYS passes, the family is free
+    even before the sweep stamps the final status."""
+    from app.core.config import settings
+
+    await _make_paid_sub(
+        db_session, test_family, plus_plan,
+        status="payment_failed",
+        payment_failure_at=(
+            datetime.now(timezone.utc)
+            - timedelta(days=settings.BILLING_GRACE_DAYS + 2)
+        ),
+    )
+
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "free"
+
+
+@pytest.mark.asyncio
+async def test_sweep_downgrades_grace_expired_only(
+    db_session, test_family, sample_family, plus_plan
+):
+    """The sweep stamps grace_expired on subs past the window and leaves
+    in-grace subs untouched."""
+    from app.core.config import settings
+    from app.jobs.subscription_sweep import downgrade_grace_expired_subscriptions
+
+    expired = await _make_paid_sub(
+        db_session, test_family, plus_plan,
+        status="payment_failed", paypal_id="I-EXPIRED-GRACE",
+        payment_failure_at=(
+            datetime.now(timezone.utc)
+            - timedelta(days=settings.BILLING_GRACE_DAYS + 1)
+        ),
+    )
+    in_grace = await _make_paid_sub(
+        db_session, sample_family, plus_plan,
+        status="payment_failed", paypal_id="I-IN-GRACE",
+        payment_failure_at=datetime.now(timezone.utc) - timedelta(hours=6),
+    )
+
+    n = await downgrade_grace_expired_subscriptions(db_session)
+    assert n == 1
+    await db_session.refresh(expired)
+    await db_session.refresh(in_grace)
+    assert expired.status == "grace_expired"
+    assert in_grace.status == "payment_failed"
+
+
+@pytest.mark.asyncio
+async def test_payment_completed_recovers_failed_sub(
+    db_session, test_family, plus_plan
+):
+    """PAYMENT.SALE.COMPLETED on a payment_failed sub flips it back to active,
+    clears the failure marker and advances the period."""
+    from app.services.subscription_state import apply_payment_completed
+
+    sub = await _make_paid_sub(
+        db_session, test_family, plus_plan,
+        status="payment_failed", paypal_id="I-RECOVER",
+        payment_failure_at=datetime.now(timezone.utc) - timedelta(days=1),
+        current_period_end=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+
+    result = await apply_payment_completed(db_session, "I-RECOVER")
+    assert result is not None
+    await db_session.refresh(sub)
+    assert sub.status == "active"
+    assert sub.payment_failure_at is None
+    period_end = sub.current_period_end
+    if period_end.tzinfo is None:
+        period_end = period_end.replace(tzinfo=timezone.utc)
+    assert period_end > datetime.now(timezone.utc) + timedelta(days=25)
+
+
+@pytest.mark.asyncio
+async def test_payment_completed_advances_renewal_period_end(
+    db_session, test_family, plus_plan
+):
+    """A renewal payment on an ACTIVE sub advances current_period_end by one
+    cycle instead of leaving it frozen at activation+30d."""
+    from app.services.subscription_state import apply_payment_completed
+
+    old_end = datetime.now(timezone.utc) + timedelta(hours=2)
+    sub = await _make_paid_sub(
+        db_session, test_family, plus_plan,
+        status="active", paypal_id="I-RENEW",
+        current_period_end=old_end,
+    )
+
+    await apply_payment_completed(db_session, "I-RENEW")
+    await db_session.refresh(sub)
+    new_end = sub.current_period_end
+    if new_end.tzinfo is None:
+        new_end = new_end.replace(tzinfo=timezone.utc)
+    assert new_end > old_end + timedelta(days=29)
+
+
+@pytest.mark.asyncio
+async def test_checkout_does_not_clobber_active_subscription(
+    client, auth_headers, db_session, test_family, plus_plan, pro_plan
+):
+    """Starting an upgrade checkout must stage the new plan in pending_*
+    columns and leave the live (paying) subscription row untouched."""
+    pro_plan.paypal_plan_id_monthly = "P-PRO-MONTHLY"
+    await db_session.commit()
+
+    live = await _make_paid_sub(
+        db_session, test_family, plus_plan,
+        status="active", paypal_id="I-LIVE-PLUS",
+        current_period_end=datetime.now(timezone.utc) + timedelta(days=20),
+    )
+
+    with patch(
+        "app.services.paypal_service.PayPalService.create_subscription",
+        return_value={
+            "subscription_id": "I-NEW-PRO",
+            "approval_url": "https://paypal.example/approve",
+            "status": "APPROVAL_PENDING",
+        },
+    ):
+        resp = await client.post(
+            "/api/subscriptions/checkout",
+            headers=auth_headers,
+            json={"plan_name": "pro", "billing_cycle": "monthly"},
+        )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["paypal_subscription_id"] == "I-NEW-PRO"
+
+    await db_session.refresh(live)
+    # Live entitlement untouched — an abandoned checkout costs nothing.
+    assert live.status == "active"
+    assert live.plan_id == plus_plan.id
+    assert live.paypal_subscription_id == "I-LIVE-PLUS"
+    # New checkout staged for /activate to promote.
+    assert live.pending_plan_id == pro_plan.id
+    assert live.pending_billing_cycle == "monthly"
+    assert live.pending_paypal_subscription_id == "I-NEW-PRO"
+
+
+@pytest.mark.asyncio
+async def test_activate_promotes_staged_checkout_and_cancels_old(
+    client, auth_headers, db_session, test_family, plus_plan, pro_plan
+):
+    """/activate on a staged plan change swaps in the new plan and cancels
+    the superseded PayPal subscription."""
+    live = await _make_paid_sub(
+        db_session, test_family, plus_plan,
+        status="active", paypal_id="I-LIVE-PLUS",
+        current_period_end=datetime.now(timezone.utc) + timedelta(days=20),
+    )
+    live.pending_plan_id = pro_plan.id
+    live.pending_billing_cycle = "monthly"
+    live.pending_paypal_subscription_id = "I-NEW-PRO"
+    await db_session.commit()
+
+    with patch(
+        "app.services.paypal_service.PayPalService.execute_subscription",
+        return_value={"status": "ACTIVE", "subscription_id": "I-NEW-PRO"},
+    ), patch(
+        "app.services.paypal_service.PayPalService.cancel_subscription",
+        return_value={"status": "cancelled", "subscription_id": "I-LIVE-PLUS"},
+    ) as mock_cancel:
+        resp = await client.post(
+            "/api/subscriptions/activate",
+            headers=auth_headers,
+            json={"paypal_subscription_id": "I-NEW-PRO"},
+        )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "activated"
+    assert body["plan_name"] == "pro"
+
+    await db_session.refresh(live)
+    assert live.status == "active"
+    assert live.plan_id == pro_plan.id
+    assert live.paypal_subscription_id == "I-NEW-PRO"
+    assert live.pending_plan_id is None
+    assert live.pending_billing_cycle is None
+    assert live.pending_paypal_subscription_id is None
+    # Superseded PayPal sub cancelled — no double billing.
+    mock_cancel.assert_called_once()
+    assert mock_cancel.call_args[0][0] == "I-LIVE-PLUS"
+
+
+@pytest.mark.asyncio
+async def test_join_code_register_rejected_at_member_cap(
+    client, db_session, sample_family
+):
+    """Join-by-code must enforce the plan's family_member limit (free = 4)."""
+    from app.core.security import get_password_hash
+    from app.models.user import User, UserRole
+
+    for i in range(4):  # free plan default max_family_members = 4
+        db_session.add(User(
+            email=f"member{i}@cap-test.example.com",
+            password_hash=get_password_hash("password123"),
+            name=f"Member {i}",
+            role=UserRole.PARENT if i == 0 else UserRole.CHILD,
+            family_id=sample_family.id,
+            points=0,
+            is_active=True,
+        ))
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/auth/register-family",
+        json={
+            "email": "fifth@cap-test.example.com",
+            "password": "password123",
+            "name": "Fifth Member",
+            "family_code": "ABCDEF",
+            "preferred_lang": "en",
+        },
+    )
+    assert resp.status_code == 403
+    assert "member limit" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_join_code_register_allowed_under_cap(
+    client, db_session, sample_family
+):
+    """Under the cap, join-by-code still works."""
+    from app.core.security import get_password_hash
+    from app.models.user import User, UserRole
+
+    db_session.add(User(
+        email="solo-parent@cap-test.example.com",
+        password_hash=get_password_hash("password123"),
+        name="Solo Parent",
+        role=UserRole.PARENT,
+        family_id=sample_family.id,
+        points=0,
+        is_active=True,
+    ))
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/auth/register-family",
+        json={
+            "email": "second@cap-test.example.com",
+            "password": "password123",
+            "name": "Second Member",
+            "family_code": "ABCDEF",
+            "preferred_lang": "en",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["user"]["email"] == "second@cap-test.example.com"

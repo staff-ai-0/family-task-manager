@@ -37,8 +37,13 @@ class SubscriptionPlan(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    # Relationships
-    subscriptions: Mapped[list["FamilySubscription"]] = relationship("FamilySubscription", back_populates="plan")
+    # Relationships (explicit foreign_keys: family_subscriptions also carries
+    # pending_plan_id → subscription_plans for staged plan changes)
+    subscriptions: Mapped[list["FamilySubscription"]] = relationship(
+        "FamilySubscription",
+        back_populates="plan",
+        foreign_keys="FamilySubscription.plan_id",
+    )
 
 
 class FamilySubscription(Base):
@@ -64,11 +69,34 @@ class FamilySubscription(Base):
     payment_failure_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Staged checkout data. When a family with a live (active/past_due/
+    # payment_failed) subscription starts an upgrade/downgrade checkout, the
+    # new plan + PayPal subscription id are staged here instead of clobbering
+    # the live columns. /activate promotes them on payment confirmation and
+    # cancels the superseded PayPal subscription. An abandoned checkout
+    # leaves the paying subscription untouched.
+    pending_plan_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("subscription_plans.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    pending_billing_cycle: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    pending_paypal_subscription_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Operator-review flag set by conservative webhook handling (refunds/
+    # reversals) — no automatic downgrade, a human decides.
+    needs_review: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
+    review_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    # Relationships
-    plan: Mapped["SubscriptionPlan"] = relationship("SubscriptionPlan", back_populates="subscriptions")
+    # Relationships (plan follows plan_id — NOT the staged pending_plan_id)
+    plan: Mapped["SubscriptionPlan"] = relationship(
+        "SubscriptionPlan",
+        back_populates="subscriptions",
+        foreign_keys=[plan_id],
+    )
     family: Mapped["Family"] = relationship("Family", backref="subscription")
 
 

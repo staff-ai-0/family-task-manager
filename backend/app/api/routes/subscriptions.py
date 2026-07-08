@@ -52,21 +52,32 @@ async def get_current_subscription(
     current_user: User = Depends(require_parent_role),
 ):
     """Get the family's current subscription details."""
+    from app.core.premium import ENTITLED_STATUSES, _payment_failed_within_grace
+
     family_plan = await get_family_plan(db, current_user)
 
-    # Try to find the actual FamilySubscription record with plan eager-loaded
+    # Try to find the actual FamilySubscription record with plan eager-loaded.
+    # payment_failed is included while inside the dunning grace window so the
+    # UI can show the sub (and its payment problem) instead of "free".
     query = (
         select(FamilySubscription)
         .options(joinedload(FamilySubscription.plan))
         .where(
             and_(
                 FamilySubscription.family_id == current_user.family_id,
-                FamilySubscription.status.in_(["active", "past_due"]),
+                FamilySubscription.status.in_(list(ENTITLED_STATUSES)),
             )
         )
     )
     result = await db.execute(query)
     subscription = result.scalar_one_or_none()
+
+    if (
+        subscription
+        and subscription.status == "payment_failed"
+        and not _payment_failed_within_grace(subscription)
+    ):
+        subscription = None
 
     if subscription:
         return subscription
@@ -174,29 +185,48 @@ async def create_checkout(
             detail="Failed to create PayPal subscription",
         )
 
-    # Upsert pending FamilySubscription so /activate can resolve plan/cycle
-    # from paypal_subscription_id. The family_id column is unique — one
-    # FamilySubscription per family — so we either insert or refresh in place.
+    # Persist checkout state so /activate can resolve plan/cycle from
+    # paypal_subscription_id. The family_id column is unique — one
+    # FamilySubscription per family.
+    #
+    # CRITICAL guard: when the family already has a LIVE subscription
+    # (active / past_due / payment_failed-in-grace), we must NOT mutate the
+    # live row — an abandoned checkout would otherwise downgrade a paying
+    # customer to free and orphan their PayPal subscription (double
+    # billing). Instead the new checkout is STAGED in the pending_* columns
+    # and promoted by /activate (or the ACTIVATED webhook) only after
+    # payment confirmation, which also cancels the superseded PayPal sub.
+    from app.core.premium import ENTITLED_STATUSES
+
     existing = await db.execute(
         select(FamilySubscription).where(
             FamilySubscription.family_id == current_user.family_id
         )
     )
-    pending = existing.scalar_one_or_none()
-    if pending:
-        pending.plan_id = plan.id
-        pending.billing_cycle = request.billing_cycle
-        pending.status = "pending"
-        pending.paypal_subscription_id = result["subscription_id"]
+    row = existing.scalar_one_or_none()
+    if row and row.status in ENTITLED_STATUSES:
+        row.pending_plan_id = plan.id
+        row.pending_billing_cycle = request.billing_cycle
+        row.pending_paypal_subscription_id = result["subscription_id"]
+    elif row:
+        # Row exists but is not a live entitlement (pending / cancelled /
+        # expired / grace_expired) — safe to refresh in place.
+        row.plan_id = plan.id
+        row.billing_cycle = request.billing_cycle
+        row.status = "pending"
+        row.paypal_subscription_id = result["subscription_id"]
+        row.pending_plan_id = None
+        row.pending_billing_cycle = None
+        row.pending_paypal_subscription_id = None
     else:
-        pending = FamilySubscription(
+        row = FamilySubscription(
             family_id=current_user.family_id,
             plan_id=plan.id,
             billing_cycle=request.billing_cycle,
             status="pending",
             paypal_subscription_id=result["subscription_id"],
         )
-        db.add(pending)
+        db.add(row)
     await db.commit()
 
     return CheckoutResponse(
@@ -216,38 +246,54 @@ async def activate_subscription(
 
     PayPal redirects the buyer to /parent/settings/subscription/activate with
     ?subscription_id=I-XXXX. The activate page POSTs here. We look up the
-    pending FamilySubscription that /checkout persisted (keyed on
-    paypal_subscription_id), execute the billing agreement with PayPal, and
-    apply the ACTIVATED transition via subscription_state.
+    FamilySubscription that /checkout persisted — either a fresh pending row
+    (paypal_subscription_id) or a STAGED plan change on a live subscription
+    (pending_paypal_subscription_id) — confirm payment with PayPal, then
+    apply the ACTIVATED transition / promote the staged checkout. On a plan
+    change, the superseded PayPal subscription is cancelled at PayPal so the
+    customer is never double-billed.
     """
     from datetime import timedelta
 
-    from app.services.subscription_state import apply_activated
+    from app.services.subscription_state import (
+        apply_activated,
+        promote_pending_checkout,
+    )
 
     query = (
         select(FamilySubscription)
         .options(joinedload(FamilySubscription.plan))
         .where(
             and_(
-                FamilySubscription.paypal_subscription_id
-                == request.paypal_subscription_id,
                 FamilySubscription.family_id == current_user.family_id,
+                (
+                    FamilySubscription.paypal_subscription_id
+                    == request.paypal_subscription_id
+                )
+                | (
+                    FamilySubscription.pending_paypal_subscription_id
+                    == request.paypal_subscription_id
+                ),
             )
         )
     )
-    pending = (await db.execute(query)).scalar_one_or_none()
-    if pending is None:
+    row = (await db.execute(query)).scalar_one_or_none()
+    if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No pending subscription found for this PayPal subscription_id",
         )
 
-    if pending.status == "active":
+    is_staged_change = (
+        row.pending_paypal_subscription_id == request.paypal_subscription_id
+    )
+
+    if not is_staged_change and row.status == "active":
         # Idempotent re-entry — already activated (likely by webhook race)
         return {
             "status": "already_active",
-            "subscription_id": str(pending.id),
-            "plan_name": pending.plan.name if pending.plan else None,
+            "subscription_id": str(row.id),
+            "plan_name": row.plan.name if row.plan else None,
         }
 
     try:
@@ -264,22 +310,57 @@ async def activate_subscription(
             detail=f"Failed to execute PayPal agreement: {str(e)}",
         )
 
+    billing_cycle = (
+        row.pending_billing_cycle if is_staged_change else row.billing_cycle
+    ) or "monthly"
     period_end = datetime.now(timezone.utc) + (
-        timedelta(days=365)
-        if pending.billing_cycle == "annual"
-        else timedelta(days=30)
+        timedelta(days=365) if billing_cycle == "annual" else timedelta(days=30)
     )
-    sub = await apply_activated(
-        db,
-        paypal_subscription_id=request.paypal_subscription_id,
-        period_end=period_end,
-    )
+
+    if is_staged_change:
+        sub, old_paypal_id = await promote_pending_checkout(
+            db,
+            paypal_subscription_id=request.paypal_subscription_id,
+            period_end=period_end,
+        )
+        if sub is not None and old_paypal_id:
+            # Stop billing on the superseded subscription. Best-effort: the
+            # daily reconciliation sweep will surface any leftover.
+            import logging
+            try:
+                await asyncio.to_thread(
+                    PayPalService.cancel_subscription,
+                    old_paypal_id,
+                    reason="Superseded by plan change",
+                )
+            except Exception:
+                logging.getLogger(__name__).warning(
+                    "Failed to cancel superseded PayPal sub %s",
+                    old_paypal_id, exc_info=True,
+                )
+    else:
+        sub = await apply_activated(
+            db,
+            paypal_subscription_id=request.paypal_subscription_id,
+            period_end=period_end,
+        )
+
+    plan_name = None
+    if sub is not None:
+        plan_row = (
+            await db.execute(
+                select(SubscriptionPlan.name).where(
+                    SubscriptionPlan.id == sub.plan_id
+                )
+            )
+        ).scalar_one_or_none()
+        plan_name = plan_row
 
     return {
         "status": "activated",
         "subscription_id": str(sub.id) if sub else None,
         "paypal_subscription_id": request.paypal_subscription_id,
-        "plan_name": pending.plan.name if pending.plan else None,
+        "plan_name": plan_name,
     }
 
 

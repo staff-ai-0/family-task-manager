@@ -1,16 +1,28 @@
 """
-Daily subscription sweep — downgrade families whose
-cancel_at_period_end=True and current_period_end < now() to status='cancelled'.
+Daily subscription sweep. Three passes:
+
+1. downgrade_expired_subscriptions — cancel_at_period_end=True rows whose
+   current_period_end passed → status='cancelled'.
+2. downgrade_grace_expired_subscriptions — payment_failed rows whose dunning
+   grace window (payment_failure_at + BILLING_GRACE_DAYS) fully elapsed →
+   status='grace_expired' (explicit final status; resolves to the free plan).
+3. reconcile_with_paypal — for every locally-live subscription, fetch the
+   authoritative state from PayPal and converge local status +
+   current_period_end. Catches anything a missed webhook (24h retry window
+   expired during an outage) would otherwise leave drifted forever.
 
 Scheduled by APScheduler on app startup, fires daily at 03:00 UTC.
 """
+import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.subscription import FamilySubscription
+from app.services.subscription_state import GRACE_EXPIRED_STATUS
 
 
 logger = logging.getLogger(__name__)
@@ -38,6 +50,167 @@ async def downgrade_expired_subscriptions(db: AsyncSession) -> int:
     return len(subs)
 
 
+async def downgrade_grace_expired_subscriptions(db: AsyncSession) -> int:
+    """
+    Downgrade payment_failed subs whose dunning grace window has elapsed.
+
+    The grace window is payment_failure_at + settings.BILLING_GRACE_DAYS
+    (premium.get_family_plan keeps the family entitled inside it). After
+    expiry we stamp the explicit final status 'grace_expired' so the family
+    resolves to the free plan and the row records WHY it was downgraded.
+    A later successful PayPal retry (PAYMENT.SALE.COMPLETED) still restores
+    it via subscription_state.apply_payment_completed.
+
+    Returns count of rows updated.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        days=settings.BILLING_GRACE_DAYS
+    )
+    query = select(FamilySubscription).where(
+        and_(
+            FamilySubscription.status == "payment_failed",
+            FamilySubscription.payment_failure_at != None,  # noqa: E711
+            FamilySubscription.payment_failure_at < cutoff,
+        )
+    )
+    subs = (await db.execute(query)).scalars().all()
+    for sub in subs:
+        sub.status = GRACE_EXPIRED_STATUS
+        logger.info(
+            "Grace expired for family %s (failure at %s) — downgraded to free",
+            sub.family_id, sub.payment_failure_at,
+        )
+    if subs:
+        await db.commit()
+    return len(subs)
+
+
+# Local statuses worth reconciling against PayPal. Terminal local states
+# (cancelled / expired / grace_expired) and pre-payment rows (pending) are
+# skipped — webhooks or a new checkout own those.
+_RECONCILE_STATUSES = ("active", "past_due", "payment_failed")
+
+
+def _parse_paypal_time(value) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+async def reconcile_with_paypal(db: AsyncSession) -> int:
+    """
+    Converge each locally-live subscription with PayPal's view of it.
+
+    Per-sub try/except: one PayPal API failure (or one weird row) must not
+    kill the pass for everyone else. Returns the number of rows changed.
+    """
+    from app.services.paypal_service import PayPalService
+
+    query = select(FamilySubscription).where(
+        and_(
+            FamilySubscription.status.in_(list(_RECONCILE_STATUSES)),
+            FamilySubscription.paypal_subscription_id != None,  # noqa: E711
+        )
+    )
+    subs = (await db.execute(query)).scalars().all()
+
+    changed = 0
+    now = datetime.now(timezone.utc)
+    for sub in subs:
+        # Captured before any commit/rollback: a rollback expires ORM
+        # attributes and re-loading them lazily in the except branch would
+        # raise (async session, no greenlet context).
+        paypal_id = sub.paypal_subscription_id
+        try:
+            remote = await asyncio.to_thread(
+                PayPalService.get_subscription, paypal_id
+            )
+            remote_status = (remote.get("status") or "").upper()
+            next_billing = _parse_paypal_time(remote.get("next_billing_at"))
+            dirty = False
+
+            if remote_status == "ACTIVE":
+                if sub.status != "active":
+                    logger.warning(
+                        "Reconcile: sub %s local=%s but PayPal=ACTIVE — restoring",
+                        paypal_id, sub.status,
+                    )
+                    sub.status = "active"
+                    sub.payment_failure_at = None
+                    dirty = True
+                if next_billing is not None:
+                    local_end = sub.current_period_end
+                    if local_end is not None and local_end.tzinfo is None:
+                        local_end = local_end.replace(tzinfo=timezone.utc)
+                    if local_end is None or abs(
+                        (next_billing - local_end).total_seconds()
+                    ) > 60:
+                        logger.info(
+                            "Reconcile: sub %s period_end %s -> %s (PayPal)",
+                            paypal_id,
+                            sub.current_period_end, next_billing,
+                        )
+                        sub.current_period_end = next_billing
+                        dirty = True
+            elif remote_status == "SUSPENDED":
+                if sub.status != "payment_failed":
+                    logger.warning(
+                        "Reconcile: sub %s local=%s but PayPal=SUSPENDED — dunning",
+                        paypal_id, sub.status,
+                    )
+                    sub.status = "payment_failed"
+                    sub.payment_failure_at = sub.payment_failure_at or now
+                    dirty = True
+            elif remote_status == "CANCELLED":
+                if not sub.cancel_at_period_end:
+                    logger.warning(
+                        "Reconcile: sub %s local=%s but PayPal=CANCELLED — flagging",
+                        paypal_id, sub.status,
+                    )
+                    sub.cancel_at_period_end = True
+                    sub.cancelled_at = sub.cancelled_at or now
+                    dirty = True
+                # Benefits still run until current_period_end; pass 1 of the
+                # sweep downgrades once it passes. But if the period is
+                # already over, close it out now.
+                period_end = sub.current_period_end
+                if period_end is not None and period_end.tzinfo is None:
+                    period_end = period_end.replace(tzinfo=timezone.utc)
+                if (
+                    period_end is None or period_end < now
+                ) and sub.status != "cancelled":
+                    sub.status = "cancelled"
+                    dirty = True
+            elif remote_status == "EXPIRED":
+                if sub.status != "expired":
+                    logger.warning(
+                        "Reconcile: sub %s local=%s but PayPal=EXPIRED — downgrading",
+                        paypal_id, sub.status,
+                    )
+                    sub.status = "expired"
+                    dirty = True
+            else:
+                # APPROVAL_PENDING / APPROVED / unknown — nothing to converge.
+                logger.info(
+                    "Reconcile: sub %s PayPal status %s — no action",
+                    paypal_id, remote_status,
+                )
+
+            if dirty:
+                await db.commit()
+                changed += 1
+        except Exception:
+            # One failure must not kill the whole pass.
+            await db.rollback()
+            logger.exception(
+                "Reconcile failed for sub %s", paypal_id
+            )
+    return changed
+
+
 async def run_sweep():
     """Top-level entrypoint for the scheduled job. Creates its own session."""
     from app.core.database import AsyncSessionLocal
@@ -48,4 +221,23 @@ async def run_sweep():
             if n:
                 logger.info("Sweep downgraded %d expired subscriptions", n)
     except Exception:
-        logger.exception("Subscription sweep failed")
+        logger.exception("Subscription sweep (cancel-expiry pass) failed")
+
+    try:
+        async with AsyncSessionLocal() as db:
+            n = await downgrade_grace_expired_subscriptions(db)
+            if n:
+                logger.info("Sweep downgraded %d grace-expired subscriptions", n)
+    except Exception:
+        logger.exception("Subscription sweep (grace-expiry pass) failed")
+
+    if not settings.PAYPAL_CLIENT_ID:
+        logger.info("PayPal not configured — skipping reconciliation pass")
+        return
+    try:
+        async with AsyncSessionLocal() as db:
+            n = await reconcile_with_paypal(db)
+            if n:
+                logger.info("Sweep reconciled %d subscriptions with PayPal", n)
+    except Exception:
+        logger.exception("Subscription sweep (PayPal reconciliation) failed")

@@ -1,5 +1,6 @@
 """Tests for subscription_state pure transition logic."""
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import select
@@ -10,6 +11,16 @@ from app.services.subscription_state import (
     apply_cancelled,
     apply_payment_failed,
 )
+
+
+@pytest.fixture(autouse=True)
+def _mute_email_transport():
+    """State transitions dispatch billing emails; never hit SMTP in tests."""
+    with patch(
+        "app.services.email_service.EmailService._send",
+        new=AsyncMock(return_value=True),
+    ):
+        yield
 
 
 @pytest.mark.asyncio

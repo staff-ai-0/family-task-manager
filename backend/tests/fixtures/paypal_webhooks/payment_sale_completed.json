@@ -1,0 +1,16 @@
+{
+  "id": "WH-TEST-SALE-COMPLETED-001",
+  "event_type": "PAYMENT.SALE.COMPLETED",
+  "create_time": "2026-07-07T18:00:00Z",
+  "resource_type": "sale",
+  "summary": "Payment completed for subscription",
+  "resource": {
+    "id": "SALE-123456",
+    "state": "completed",
+    "billing_agreement_id": "I-WEBHOOK-SUB-123",
+    "amount": {
+      "total": "5.00",
+      "currency": "USD"
+    }
+  }
+}
