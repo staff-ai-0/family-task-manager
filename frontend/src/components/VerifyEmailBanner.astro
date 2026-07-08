@@ -1,0 +1,127 @@
+---
+/**
+ * Dismissible "verify your email" banner (WS-F1).
+ *
+ * Shown on the dashboard while the logged-in user's email is unverified.
+ * Outbound-email actions (family invitations) are 403-gated server-side on
+ * email_verified, so this banner is how the user learns to unblock them.
+ * Resend hits the existing proxy POST /api/auth/resend-verification.
+ * Dismissal is per-user via localStorage (no backend ack endpoint needed).
+ */
+interface Props {
+    lang: string;
+    show: boolean;
+    userId: string;
+}
+
+const { lang, show, userId } = Astro.props;
+
+const COPY = {
+    en: {
+        title: "Verify your email",
+        body: "Some actions (like inviting family members) stay locked until you confirm your email address. Check your inbox for the verification link.",
+        resend: "Resend email",
+        sent: "Verification email sent. Check your inbox.",
+        error: "Could not send the email. Try again in a minute.",
+        dismiss: "Dismiss",
+    },
+    es: {
+        title: "Verifica tu correo",
+        body: "Algunas acciones (como invitar a miembros de la familia) permanecen bloqueadas hasta que confirmes tu correo electrónico. Revisa tu bandeja de entrada para encontrar el enlace de verificación.",
+        resend: "Reenviar correo",
+        sent: "Correo de verificación enviado. Revisa tu bandeja de entrada.",
+        error: "No se pudo enviar el correo. Intenta de nuevo en un minuto.",
+        dismiss: "Descartar",
+    },
+} as const;
+
+const c = COPY[lang === "es" ? "es" : "en"];
+---
+
+{show && (
+    <div
+        id="verify-email-banner"
+        data-user-id={userId}
+        data-msg-sent={c.sent}
+        data-msg-error={c.error}
+        class="mx-4 mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-[var(--shadow-card)] hidden"
+        role="region"
+        aria-label={c.title}
+    >
+        <div class="flex items-start gap-3">
+            <div class="flex-shrink-0 mt-0.5">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+            </div>
+            <div class="flex-1">
+                <h3 class="font-semibold text-amber-900 mb-1">{c.title}</h3>
+                <p class="text-sm text-amber-800/90 mb-3">{c.body}</p>
+                <p id="verify-email-feedback" class="text-sm font-medium mb-3 hidden"></p>
+                <div class="flex flex-wrap gap-2">
+                    <button
+                        id="verify-email-resend"
+                        class="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
+                        type="button"
+                    >
+                        {c.resend}
+                    </button>
+                    <button
+                        id="verify-email-dismiss"
+                        class="px-4 py-2 bg-transparent text-amber-800 border border-amber-300 rounded-lg text-sm font-medium hover:bg-amber-100 transition-colors"
+                        type="button"
+                    >
+                        {c.dismiss}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+)}
+
+<script>
+    const banner = document.getElementById("verify-email-banner");
+    if (banner) {
+        const userId = banner.dataset.userId ?? "";
+        const dismissKey = `verify-email-dismissed:${userId}`;
+        // Server renders it hidden; only reveal when not previously dismissed
+        // (avoids a flash for users who already dismissed it).
+        let dismissed = false;
+        try {
+            dismissed = localStorage.getItem(dismissKey) === "1";
+        } catch { /* storage blocked — just show it */ }
+        if (!dismissed) banner.classList.remove("hidden");
+
+        document.getElementById("verify-email-dismiss")?.addEventListener("click", () => {
+            try {
+                localStorage.setItem(dismissKey, "1");
+            } catch { /* non-fatal */ }
+            banner.remove();
+        });
+
+        const resendBtn = document.getElementById("verify-email-resend");
+        const feedback = document.getElementById("verify-email-feedback");
+        resendBtn?.addEventListener("click", async () => {
+            resendBtn.setAttribute("disabled", "true");
+            try {
+                const r = await fetch("/api/auth/resend-verification", { method: "POST" });
+                if (feedback) {
+                    feedback.textContent = r.ok
+                        ? (banner.dataset.msgSent ?? "")
+                        : (banner.dataset.msgError ?? "");
+                    feedback.className = r.ok
+                        ? "text-sm font-medium mb-3 text-green-700"
+                        : "text-sm font-medium mb-3 text-red-700";
+                    feedback.classList.remove("hidden");
+                }
+                if (!r.ok) resendBtn.removeAttribute("disabled");
+            } catch {
+                if (feedback) {
+                    feedback.textContent = banner.dataset.msgError ?? "";
+                    feedback.className = "text-sm font-medium mb-3 text-red-700";
+                }
+                resendBtn.removeAttribute("disabled");
+            }
+        });
+    }
+</script>

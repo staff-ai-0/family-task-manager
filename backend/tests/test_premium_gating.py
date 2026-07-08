@@ -237,3 +237,108 @@ async def test_goals_list_blocked_on_free_plan(
     body = resp.json()
     assert body["detail"]["error"] == "upgrade_required"
     assert body["detail"]["feature"] == "budget_goals"
+
+
+# ---------------------------------------------------------------------------
+# WS-F1: AI endpoints (Jarvis chat/stream, calendar scanner) must be plan-gated
+# on ai_features — before this, any Free-tier parent had unbounded LLM spend.
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture
+async def plus_plan_with_ai(db_session, test_family):
+    """Plus plan with ai_features=True + an active subscription for test_family."""
+    from app.models.subscription import FamilySubscription
+
+    plan = SubscriptionPlan(
+        name="plus",
+        display_name="Plus",
+        display_name_es="Plus",
+        price_monthly_cents=9900,
+        price_annual_cents=99000,
+        limits={
+            "max_family_members": 8,
+            "max_budget_accounts": 10,
+            "max_budget_transactions_per_month": -1,
+            "max_recurring_transactions": 10,
+            "budget_reports": True,
+            "budget_goals": True,
+            "csv_import": True,
+            "max_receipt_scans_per_month": 50,
+            "ai_features": True,
+        },
+        sort_order=1,
+    )
+    db_session.add(plan)
+    await db_session.flush()
+    sub = FamilySubscription(
+        family_id=test_family.id,
+        plan_id=plan.id,
+        billing_cycle="monthly",
+        status="active",
+    )
+    db_session.add(sub)
+    await db_session.commit()
+    return plan
+
+
+@pytest.mark.asyncio
+async def test_jarvis_chat_blocked_for_free_plan(
+    client: AsyncClient, free_plan_no_ai, auth_headers
+):
+    """POST /api/jarvis/chat returns 403 upgrade_required on ai_features=False."""
+    resp = await client.post(
+        "/api/jarvis/chat", json={"message": "hola"}, headers=auth_headers
+    )
+    assert resp.status_code == 403, resp.text
+    body = resp.json()
+    assert body["detail"]["error"] == "upgrade_required"
+    assert body["detail"]["feature"] == "ai_features"
+
+
+@pytest.mark.asyncio
+async def test_jarvis_chat_stream_blocked_for_free_plan(
+    client: AsyncClient, free_plan_no_ai, auth_headers
+):
+    """POST /api/jarvis/chat-stream 403s BEFORE the SSE stream starts."""
+    resp = await client.post(
+        "/api/jarvis/chat-stream", json={"message": "hola"}, headers=auth_headers
+    )
+    assert resp.status_code == 403, resp.text
+    body = resp.json()
+    assert body["detail"]["error"] == "upgrade_required"
+    assert body["detail"]["feature"] == "ai_features"
+
+
+@pytest.mark.asyncio
+async def test_calendar_scan_document_blocked_for_free_plan(
+    client: AsyncClient, free_plan_no_ai, auth_headers
+):
+    """POST /api/calendar/scan-document 403s before touching the upload."""
+    resp = await client.post(
+        "/api/calendar/scan-document",
+        files={"file": ("flyer.jpg", b"fakeimg", "image/jpeg")},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 403, resp.text
+    body = resp.json()
+    assert body["detail"]["error"] == "upgrade_required"
+    assert body["detail"]["feature"] == "ai_features"
+
+
+@pytest.mark.asyncio
+async def test_jarvis_chat_passes_gate_on_plus_plan(
+    client: AsyncClient, plus_plan_with_ai, auth_headers, monkeypatch
+):
+    """With an active plus subscription (ai_features=True) the plan gate opens.
+
+    LITELLM_API_KEY is blanked so the service raises its 'not configured'
+    ValidationError → the route maps it to 502. Reaching 502 (not 403)
+    proves the request got PAST the premium gate.
+    """
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "LITELLM_API_KEY", "")
+    resp = await client.post(
+        "/api/jarvis/chat", json={"message": "hola"}, headers=auth_headers
+    )
+    assert resp.status_code == 502, resp.text

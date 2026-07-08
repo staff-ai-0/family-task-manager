@@ -74,7 +74,16 @@ services:
     networks:
       - backend
       - frontend
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips="*"
+    # SECURITY: no --forwarded-allow-ips="*". Cloudflare APPENDS the real IP to
+    # the client-supplied X-Forwarded-For list (it does not replace it), so
+    # trusting the whole chain let any client spoof request.client.host — and
+    # with it every IP-keyed rate limit — by rotating the leftmost XFF entry.
+    # With the flag omitted uvicorn only trusts proxy headers from 127.0.0.1
+    # (i.e. effectively never here), so request.client.host stays the
+    # unforgeable container-network peer. The rate limiter keys on
+    # CF-Connecting-IP instead (edge-set, spoof-proof through the tunnel) —
+    # see backend/app/core/rate_limiter.py.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:8000/health\", timeout=3).status==200 else 1)'"]
       interval: 30s

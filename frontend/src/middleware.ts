@@ -1,6 +1,49 @@
 import { defineMiddleware } from "astro:middleware";
 import type { User } from "./types/api";
 
+// ---------------------------------------------------------------------------
+// Security headers (WS-F1). Starter CSP notes:
+// - The browser talks to the backend ONLY through same-origin Astro proxy
+//   routes (/api/*, /uploads/*) — no page fetches api-family.agent-ia.mx
+//   directly — so connect-src stays 'self' plus accounts.google.com (Google
+//   Identity Services pings its own origin from the GSI client script).
+// - Astro emits inline <script> tags → script-src needs 'unsafe-inline'.
+// - Google Sign-In: script + iframe + stylesheet from accounts.google.com.
+// - Fonts: Google Fonts stylesheet (fonts.googleapis.com) + files (gstatic).
+// - img-src blob:/data: for camera-capture previews (receipt/proof upload).
+// - frame-ancestors 'none' + X-Frame-Options DENY: nothing embeds this app
+//   (the kiosk page is opened directly, never iframed).
+// CSP is only sent in production: dev needs Vite HMR websockets/eval, and
+// guarding it here keeps local DX untouched.
+const CSP = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://accounts.google.com",
+    "style-src 'self' 'unsafe-inline' https://accounts.google.com https://fonts.googleapis.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "img-src 'self' data: blob:",
+    "connect-src 'self' https://accounts.google.com",
+    "frame-src https://accounts.google.com",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+].join("; ");
+
+function withSecurityHeaders(response: Response): Response {
+    const h = response.headers;
+    h.set("X-Content-Type-Options", "nosniff");
+    h.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    if (!import.meta.env.DEV) {
+        h.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
+    // Page-level headers only make sense on HTML documents.
+    if ((h.get("content-type") ?? "").includes("text/html")) {
+        h.set("X-Frame-Options", "DENY");
+        if (!import.meta.env.DEV) h.set("Content-Security-Policy", CSP);
+    }
+    return response;
+}
+
 /**
  * Decode a JWT locally and decide whether it is expired (or unusable).
  * Refreshes 30s early to avoid edge races near the boundary.
@@ -76,7 +119,31 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
     // Always allow static assets (CSS, JS, images, fonts)
     if (path.startsWith("/_astro/") || path.startsWith("/favicon") || path.match(/\.(css|js|png|svg|ico|woff2?|ttf|otf)$/)) {
-        return next();
+        return withSecurityHeaders(await next());
+    }
+
+    // Anonymous-visitor locale: if no lang cookie exists yet, derive one from
+    // Accept-Language (first es*/en* tag wins; anything else — or no header —
+    // defaults to "es", Mexico-first) and SET the cookie so every downstream
+    // page resolves the same language instead of each page guessing its own
+    // fallback. Attributes mirror /api/lang (not httpOnly — client scripts
+    // read document.cookie for lang).
+    if (!cookies.get("lang")?.value) {
+        const acceptLanguage = request.headers.get("accept-language") ?? "";
+        let lang = "es";
+        for (const part of acceptLanguage.split(",")) {
+            const tag = part.split(";")[0].trim().toLowerCase();
+            if (tag.startsWith("es")) break; // lang already "es"
+            if (tag.startsWith("en")) {
+                lang = "en";
+                break;
+            }
+        }
+        cookies.set("lang", lang, {
+            path: "/",
+            maxAge: 60 * 60 * 24 * 365,
+            sameSite: "lax",
+        });
     }
 
     // Public routes that don't require authentication
@@ -90,6 +157,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/accept-invitation",
         "/help",   // English user guide — linked from welcome email
         "/ayuda",  // Spanish user guide — linked from welcome email
+        "/privacidad",  // Aviso de Privacidad (bilingual) — legal, must be public
+        "/terminos",    // Términos y Condiciones (bilingual) — legal, must be public
         "/api/auth/login",
         "/api/auth/refresh",  // BFF refresh route — callable even when the access token is dead
         "/api/auth/register",  // Frontend API route for registration (calls backend /api/auth/register-family)
@@ -127,7 +196,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 "unsafe-none"
             );
         }
-        return response;
+        return withSecurityHeaders(response);
     }
 
     // Check authentication for protected routes
@@ -256,5 +325,5 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (refreshedSetCookies) {
         for (const c of refreshedSetCookies) response.headers.append("Set-Cookie", c);
     }
-    return response;
+    return withSecurityHeaders(response);
 });

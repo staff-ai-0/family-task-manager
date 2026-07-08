@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { clientIpHeaders } from "../../../lib/client-ip";
 
 /**
  * POST /api/auth/check-methods
@@ -25,7 +26,7 @@ export const POST: APIRoute = async ({ request }) => {
 
         const response = await fetch(`${apiUrl}/api/auth/check-methods`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...clientIpHeaders(request) },
             body: JSON.stringify({ email }),
         });
 

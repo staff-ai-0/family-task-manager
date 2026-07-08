@@ -395,3 +395,105 @@ async def test_send_prefers_smtp_over_resend(monkeypatch):
     assert seen["to"] == "dest@example.com"
     # multipart/alternative with both a text and an html part
     assert "text/plain" in seen["parts"] and "text/html" in seen["parts"]
+
+
+# ---------------------------------------------------------------------------
+# WS-F1: email-verify gate — unverified accounts must not trigger outbound
+# email to third-party addresses (invitation send / resend).
+# ---------------------------------------------------------------------------
+
+import pytest_asyncio
+from datetime import datetime as _dt, timedelta as _td
+
+
+@pytest_asyncio.fixture
+async def unverified_parent(db_session: AsyncSession, test_family):
+    """A parent whose email is NOT verified (email_verified=False)."""
+    from app.models.user import UserRole
+    from app.core.security import get_password_hash
+
+    user = User(
+        email="unverified.parent@test.com",
+        password_hash=get_password_hash("password123"),
+        name="Unverified Parent",
+        role=UserRole.PARENT,
+        family_id=test_family.id,
+        email_verified=False,
+        points=0,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def unverified_auth_headers(client, unverified_parent) -> dict:
+    response = await client.post(
+        "/api/auth/login",
+        json={"email": "unverified.parent@test.com", "password": "password123"},
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.mark.asyncio
+async def test_send_invitation_blocked_when_email_unverified(
+    client, test_family, unverified_auth_headers
+):
+    """POST /send returns 403 email_not_verified with bilingual detail."""
+    response = await client.post(
+        "/api/invitations/send",
+        json={
+            "email": "newmember@example.com",
+            "family_id": str(test_family.id),
+        },
+        headers=unverified_auth_headers,
+    )
+    assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+    detail = response.json()["detail"]
+    assert detail["error"] == "email_not_verified"
+    assert detail["message"]  # EN copy present
+    assert detail["message_es"]  # ES copy present
+
+
+@pytest.mark.asyncio
+async def test_resend_invitation_blocked_when_email_unverified(
+    client, test_family, unverified_parent, unverified_auth_headers,
+    db_session: AsyncSession,
+):
+    """POST /{family_id}/{invitation_id}/resend is gated the same way."""
+    invitation = FamilyInvitation(
+        family_id=test_family.id,
+        invited_email="pending@example.com",
+        invited_by_user_id=unverified_parent.id,
+        invitation_code=FamilyInvitation.generate_code(),
+        expires_at=_dt.utcnow() + _td(days=30),
+    )
+    db_session.add(invitation)
+    await db_session.commit()
+    await db_session.refresh(invitation)
+
+    response = await client.post(
+        f"/api/invitations/{test_family.id}/{invitation.id}/resend",
+        headers=unverified_auth_headers,
+    )
+    assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+    detail = response.json()["detail"]
+    assert detail["error"] == "email_not_verified"
+
+
+@pytest.mark.asyncio
+async def test_send_invitation_allowed_when_email_verified(
+    client, test_family, test_parent_user, auth_headers
+):
+    """Sanity: verified parents (conftest default) are NOT blocked by the gate."""
+    response = await client.post(
+        "/api/invitations/send",
+        json={
+            "email": "verified.flow@example.com",
+            "family_id": str(test_family.id),
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == status.HTTP_201_CREATED, response.text

@@ -43,3 +43,23 @@ class TestHealthReadiness:
         r = await client.get("/ready")
         assert r.status_code == 503
         assert r.json()["database"] == "error"
+
+
+class TestSecurityHeaders:
+    """WS-F1: every API response carries baseline security headers."""
+
+    @pytest.mark.asyncio
+    async def test_security_headers_on_json_response(self, client: AsyncClient):
+        r = await client.get("/health")
+        assert r.headers["X-Content-Type-Options"] == "nosniff"
+        assert r.headers["X-Frame-Options"] == "DENY"
+        assert r.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+        assert "max-age=" in r.headers["Strict-Transport-Security"]
+
+    @pytest.mark.asyncio
+    async def test_security_headers_on_error_response(self, client: AsyncClient):
+        """Headers must also land on 4xx paths (middleware is outermost)."""
+        r = await client.get("/api/auth/me")  # unauthenticated → 401
+        assert r.status_code == 401
+        assert r.headers["X-Content-Type-Options"] == "nosniff"
+        assert r.headers["X-Frame-Options"] == "DENY"

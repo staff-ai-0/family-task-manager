@@ -63,6 +63,32 @@ def require_teen_or_parent(current_user: User = Depends(get_current_user)) -> Us
     return current_user
 
 
+def ensure_email_verified(user: User) -> None:
+    """Guard actions that trigger email to third-party addresses.
+
+    Unverified accounts must not be able to spray outbound mail (family
+    invitations, etc.) — that is the classic spam-signup vector and burns
+    sender reputation. Call inside a route AFTER role checks. Raises 403
+    with a structured, bilingual detail so the frontend can message it
+    (``error`` is the machine code; ``message``/``message_es`` the copy).
+    """
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "email_not_verified",
+                "message": (
+                    "Please verify your email address before inviting others. "
+                    "Check your inbox for the verification link or request a new one."
+                ),
+                "message_es": (
+                    "Verifica tu correo electrónico antes de invitar a otras personas. "
+                    "Revisa tu bandeja de entrada o solicita un nuevo enlace de verificación."
+                ),
+            },
+        )
+
+
 async def get_optional_user(
     request: Request, db: AsyncSession = Depends(get_db)
 ) -> Optional[User]:

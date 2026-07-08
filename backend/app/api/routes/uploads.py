@@ -77,4 +77,12 @@ async def serve_gig_proof(
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="Not found")
 
-    return FileResponse(path, headers={"Cache-Control": "private, max-age=300"})
+    return FileResponse(
+        path,
+        headers={
+            "Cache-Control": "private, max-age=300",
+            # User-uploaded bytes: never let the browser sniff a different
+            # (potentially active) content type out of an image response.
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
