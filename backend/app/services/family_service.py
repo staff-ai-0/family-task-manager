@@ -133,16 +133,39 @@ class FamilyService:
     ) -> Family:
         """Update family details"""
         family = await FamilyService.get_family(db, family_id)
-        
+
         # Update fields if provided
         update_fields = family_data.model_dump(exclude_unset=True)
         for field, value in update_fields.items():
             setattr(family, field, value)
-        
+
+        # AI opt-in decisions are timestamped so "never decided" (NULL) is
+        # distinguishable from an explicit opt-out — the parent dashboard
+        # shows a one-time prompt banner only while NULL.
+        if "ai_processing_consent" in update_fields:
+            family.ai_processing_consent_at = datetime.now(timezone.utc).replace(
+                tzinfo=None
+            )
+
         family.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.commit()
         await db.refresh(family)
         return family
+
+    @staticmethod
+    async def has_ai_processing_consent(db: AsyncSession, family_id: UUID) -> bool:
+        """True when a parent opted in to AI processing of kid-generated
+        content (gig proof photos, family chat reads by Jarvis/MCP).
+
+        Cheap scalar query — used inline by AI gate checks. Missing family or
+        unset value counts as no consent.
+        """
+        value = (
+            await db.execute(
+                select(Family.ai_processing_consent).where(Family.id == family_id)
+            )
+        ).scalar_one_or_none()
+        return bool(value)
 
     @staticmethod
     async def get_family_members(db: AsyncSession, family_id: UUID) -> List[User]:

@@ -27,6 +27,15 @@ class Family(Base):
     join_code = Column(String(10), unique=True, nullable=True, index=True)  # Short code for family invites
     is_active = Column(Boolean, default=True, nullable=False)
 
+    # Parental opt-in for AI processing of KID-generated content (gig proof
+    # photos, Jarvis/MCP reads of family chat). False = those AI paths are
+    # skipped (manual HITL flows instead). ai_processing_consent_at is stamped
+    # when a parent decides either way; NULL = never asked (dashboard prompts).
+    ai_processing_consent = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    ai_processing_consent_at = Column(DateTime, nullable=True)
+
     # Onboarding checklist — tracked per family, all False on creation.
     onboarding_child_invited = Column(Boolean, nullable=False, default=False, server_default="false")
     onboarding_task_created = Column(Boolean, nullable=False, default=False, server_default="false")
