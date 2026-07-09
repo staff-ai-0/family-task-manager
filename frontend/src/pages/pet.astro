@@ -1,6 +1,8 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
+import PetAvatar from "../components/pet/PetAvatar.astro";
 import { apiFetch } from "../lib/api";
+import { stageLabel, stageProgressPct, STAGE_XP_THRESHOLDS, MAX_STAGE, SPECIES_EMOJI } from "../lib/pet-art";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -8,10 +10,11 @@ const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
 
 let errorMsg = "";
 
+// Progressive-enhancement adopt flow (works without JS). Care actions and
+// cosmetics run client-side over the /api/pet proxy.
 if (Astro.request.method === "POST") {
     const data = await Astro.request.formData();
-    const action = data.get("action");
-    if (action === "create") {
+    if (data.get("action") === "create") {
         const name = String(data.get("name") || "").trim();
         const species = String(data.get("species") || "cat");
         if (name) {
@@ -22,215 +25,337 @@ if (Astro.request.method === "POST") {
             });
             if (!ok) errorMsg = error || "Error";
         }
-    } else if (action === "feed") {
-        await apiFetch("/api/pet/feed", { method: "POST", token });
-    } else if (action === "play") {
-        await apiFetch("/api/pet/play", { method: "POST", token });
-    } else if (action === "treat") {
-        const treatType = String(data.get("treat_type") || "");
-        if (treatType) {
-            const { ok, error } = await apiFetch("/api/pet/treat", {
-                method: "POST",
-                token,
-                body: JSON.stringify({ treat_type: treatType }),
-            });
-            if (!ok) errorMsg = error || "Error";
-        }
     }
     return Astro.redirect("/pet");
 }
 
-const { data: treatsRaw } = await apiFetch<any[]>("/api/pet/treats", { token });
-const treats: any[] = Array.isArray(treatsRaw) ? treatsRaw : [];
-
-const [{ data: user }, { data: petRaw }] = await Promise.all([
-    apiFetch<any>("/api/auth/me", { token }),
-    apiFetch<any>("/api/pet/", { token }),
-]);
-if (!user) {
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk || !user) {
     Astro.cookies.delete("access_token", { path: "/" });
     return Astro.redirect("/login");
 }
+const { data: petRaw } = await apiFetch<any>("/api/pet/", { token });
 const pet = petRaw;
 
-const speciesEmoji: Record<string, string> = {
-    cat: "🐱",
-    dog: "🐶",
-    dragon: "🐲",
-    fox: "🦊",
-    owl: "🦉",
-    bunny: "🐰",
-};
-
-function moodFace(p: any): string {
-    if (!p) return "🥚";
-    if (p.status_label === "starving") return "😫";
-    if (p.status_label === "sad") return "😞";
-    if (p.status_label === "happy") return "🤩";
-    return speciesEmoji[p.species] ?? "🐾";
+// Equipped cosmetics + points come from the cosmetics endpoint (which requires
+// a pet, so guard). Care-actions catalog drives the feed/wash/play buttons.
+let equipped: any[] = [];
+let points: number = user.points ?? 0;
+let careActions: any[] = [];
+if (pet) {
+    const [{ data: cos }, { data: care }] = await Promise.all([
+        apiFetch<any>("/api/pet/cosmetics", { token }),
+        apiFetch<any[]>("/api/pet/care-actions", { token }),
+    ]);
+    if (cos) {
+        points = cos.points ?? points;
+        equipped = (cos.cosmetics ?? [])
+            .filter((c: any) => c.equipped)
+            .map((c: any) => ({ key: c.key, slot: c.slot, icon: c.icon }));
+    }
+    careActions = Array.isArray(care) ? care : [];
 }
 
-const labels = {
+const stage = pet?.evolution_stage ?? 0;
+const nextStageXp = pet?.xp_to_next_stage ?? null; // cumulative threshold, or null at max
+const stagePct = pet ? stageProgressPct(pet.xp, stage) : 0;
+const xpToStage = pet && nextStageXp != null ? Math.max(0, nextStageXp - pet.xp) : 0;
+const levelPct = pet ? Math.min(100, Math.round((pet.xp / Math.max(1, pet.xp_to_next_level)) * 100)) : 0;
+
+const careIcon: Record<string, string> = { feed: "🍖", wash: "🛁", play: "🎾" };
+
+const L = {
     title: lang === "es" ? "Mi mascota" : "My pet",
     no_pet: lang === "es" ? "Aún no tienes mascota." : "No pet yet.",
+    adopt_hint: lang === "es" ? "Adopta una y aliméntala completando misiones." : "Adopt one and feed it by finishing quests.",
     pick_species: lang === "es" ? "Elige especie:" : "Pick species:",
     name_ph: lang === "es" ? "Nombre" : "Name",
     adopt: lang === "es" ? "Adoptar" : "Adopt",
-    feed: lang === "es" ? "Alimentar" : "Feed",
-    play: lang === "es" ? "Jugar" : "Play",
+    level: lang === "es" ? "Nivel" : "Level",
     mood: lang === "es" ? "Ánimo" : "Mood",
     hunger: lang === "es" ? "Hambre" : "Hunger",
-    level: lang === "es" ? "Nivel" : "Level",
-    xp: "XP",
+    evolution: lang === "es" ? "Evolución" : "Evolution",
+    to_next_stage: (n: number, s: string) =>
+        lang === "es" ? `${n} XP para evolucionar a ${s}` : `${n} XP to evolve into ${s}`,
+    max_stage: lang === "es" ? "¡Evolución máxima! 🌟" : "Max evolution! 🌟",
+    care_title: lang === "es" ? "Cuida a tu mascota" : "Care for your pet",
+    care_hint: lang === "es" ? "Cuesta puntos. Completa misiones para ganar más." : "Costs points. Finish quests to earn more.",
+    pts: lang === "es" ? "pts" : "pts",
+    not_hungry: lang === "es" ? "Sin hambre" : "Not hungry",
+    quests: lang === "es" ? "Modo Misiones" : "Quest Mode",
+    quests_sub: lang === "es" ? "Tus tareas de hoy alimentan a tu mascota" : "Today's tasks feed your pet",
+    shop: lang === "es" ? "Tienda" : "Shop",
+    shop_sub: lang === "es" ? "Sombreros, colores y más" : "Hats, colours & more",
+    stage_word: lang === "es" ? "Etapa" : "Stage",
 };
+
+const nextStageName = stage < MAX_STAGE ? stageLabel(stage + 1, lang) : "";
 ---
 
 <PageLayout
-    title={`🐾 ${labels.title}`}
+    title={`🐾 ${L.title}`}
     headerClass="bg-gradient-to-br from-pink-400 to-violet-500"
     dark
     role={user.role}
-    active="tasks"
+    active="pet"
     lang={lang}
     mainClass="flex-1 px-4 py-6 space-y-4"
-    containerClass="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep"
+    containerClass="w-full max-w-md md:max-w-2xl mx-auto bg-brand-cream-deep"
 >
-            {errorMsg && (
-                <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
-                    {errorMsg}
+    {errorMsg && (
+        <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">{errorMsg}</div>
+    )}
+
+    {!pet ? (
+        <form method="POST" class="bg-brand-cream rounded-[var(--radius-card)] p-6 border-2 border-brand-ink shadow-[var(--shadow-card)] space-y-3">
+            <input type="hidden" name="action" value="create" />
+            <p class="text-5xl text-center">🥚</p>
+            <p class="text-brand-ink font-display font-extrabold text-lg text-center">{L.no_pet}</p>
+            <p class="text-brand-ink-soft text-sm text-center">{L.adopt_hint}</p>
+            <input
+                type="text"
+                name="name"
+                required
+                maxlength="40"
+                placeholder={L.name_ph}
+                class="w-full px-3 py-2 rounded-lg border-2 border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
+            />
+            <div>
+                <p class="text-xs text-brand-ink-soft mb-2">{L.pick_species}</p>
+                <div class="grid grid-cols-3 gap-2">
+                    {(["cat", "dog", "dragon", "fox", "owl", "bunny"] as const).map((s, i) => (
+                        <label class="flex flex-col items-center gap-1 p-3 rounded-xl border-2 border-brand-ink/10 cursor-pointer hover:border-brand-ink has-[:checked]:border-brand-ink has-[:checked]:bg-brand-sun/15">
+                            <input type="radio" name="species" value={s} class="sr-only" checked={i === 0} />
+                            <span class="text-3xl">{SPECIES_EMOJI[s]}</span>
+                            <span class="text-xs capitalize">{s}</span>
+                        </label>
+                    ))}
                 </div>
-            )}
+            </div>
+            <button type="submit" class="w-full py-2.5 rounded-lg bg-brand-ink text-brand-cream font-bold hover:bg-brand-ink-soft shadow-[var(--shadow-card)]">
+                {L.adopt}
+            </button>
+        </form>
+    ) : (
+        <>
+            <!-- Evolution hero -->
+            <div class="bg-brand-cream rounded-[var(--radius-card)] p-6 border-2 border-brand-ink shadow-[var(--shadow-pop)] text-center">
+                <div class="flex justify-center mb-2">
+                    <PetAvatar species={pet.species} stage={stage} status={pet.status_label} equipped={equipped} size="xl" reactId="pet-hero-face" />
+                </div>
+                <p class="text-2xl font-display font-extrabold text-brand-ink">{pet.name}</p>
+                <p class="text-xs font-bold uppercase tracking-wider text-brand-ink-soft mt-1">
+                    {L.stage_word} {stage + 1}/{MAX_STAGE + 1} · {stageLabel(stage, lang)} · {L.level} <span data-pet-level>{pet.level}</span>
+                </p>
 
-            {!pet ? (
-                <form method="POST" class="bg-brand-cream rounded-2xl p-6 border border-brand-ink/10 shadow-[var(--shadow-card)] space-y-3">
-                    <input type="hidden" name="action" value="create" />
-                    <p class="text-brand-ink font-semibold">{labels.no_pet}</p>
-                    <input
-                        type="text"
-                        name="name"
-                        required
-                        maxlength="40"
-                        placeholder={labels.name_ph}
-                        class="w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none"
-                    />
-                    <div>
-                        <p class="text-xs text-brand-ink-soft mb-2">{labels.pick_species}</p>
-                        <div class="grid grid-cols-3 gap-2">
-                            {(["cat", "dog", "dragon", "fox", "owl", "bunny"] as const).map((s, i) => (
-                                <label class="flex flex-col items-center gap-1 p-3 rounded-xl border-2 border-brand-ink/10 cursor-pointer hover:border-brand-ink has-[:checked]:border-brand-ink has-[:checked]:bg-brand-sun/15">
-                                    <input type="radio" name="species" value={s} class="sr-only" checked={i === 0} />
-                                    <span class="text-3xl">{speciesEmoji[s]}</span>
-                                    <span class="text-xs capitalize">{s}</span>
-                                </label>
-                            ))}
-                        </div>
+                <!-- XP → next stage -->
+                <div class="mt-4 text-left">
+                    <div class="flex justify-between text-xs text-brand-ink-soft mb-1">
+                        <span>⭐ {L.evolution}</span>
+                        <span data-stage-remaining>
+                            {stage >= MAX_STAGE ? L.max_stage : L.to_next_stage(xpToStage, nextStageName)}
+                        </span>
                     </div>
-                    <button
-                        type="submit"
-                        class="w-full py-2.5 rounded-lg bg-brand-ink text-brand-cream font-semibold hover:bg-brand-ink-soft"
-                    >
-                        {labels.adopt}
-                    </button>
-                </form>
-            ) : (
-                <>
-                    <div class="bg-brand-cream rounded-2xl p-6 border border-brand-ink/10 shadow-[var(--shadow-card)] text-center">
-                        <p class="text-7xl">{moodFace(pet)}</p>
-                        <p class="text-xl font-bold text-brand-ink mt-2">{pet.name}</p>
-                        <p class="text-xs text-brand-ink-soft capitalize">
-                            {pet.species} · {labels.level} {pet.level}
-                        </p>
+                    <div class="h-3 bg-brand-cream-deep rounded-full overflow-hidden border border-brand-ink/10">
+                        <div data-stage-bar class="h-full bg-brand-sky-deep transition-all duration-500" style={`width: ${stagePct}%`}></div>
                     </div>
+                    <div class="mt-1.5 flex items-center gap-1" aria-hidden="true">
+                        {STAGE_XP_THRESHOLDS.map((_, i) => (
+                            <span class={`h-2 flex-1 rounded-full ${i <= stage ? "bg-brand-sun-deep" : "bg-brand-cream-deep"}`}></span>
+                        ))}
+                    </div>
+                </div>
+            </div>
 
-                    <div class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)] space-y-3">
-                        <div>
-                            <div class="flex justify-between text-xs text-brand-ink-soft mb-1">
-                                <span>😊 {labels.mood}</span>
-                                <span>{pet.mood}/100</span>
-                            </div>
-                            <div class="h-2 bg-brand-cream-deep rounded-full overflow-hidden">
-                                <div class="h-full bg-brand-mint-deep transition-all" style={`width: ${pet.mood}%`}></div>
-                            </div>
-                        </div>
-                        <div>
-                            <div class="flex justify-between text-xs text-brand-ink-soft mb-1">
-                                <span>🍖 {labels.hunger}</span>
-                                <span>{pet.hunger}/100</span>
-                            </div>
-                            <div class="h-2 bg-brand-cream-deep rounded-full overflow-hidden">
-                                <div class={`h-full transition-all ${pet.hunger > 70 ? "bg-brand-coral-deep" : pet.hunger > 40 ? "bg-brand-sun-deep" : "bg-brand-mint-deep"}`} style={`width: ${pet.hunger}%`}></div>
-                            </div>
-                        </div>
-                        <div>
-                            <div class="flex justify-between text-xs text-brand-ink-soft mb-1">
-                                <span>⭐ {labels.xp}</span>
-                                <span>{pet.xp} / {pet.xp_to_next_level}</span>
-                            </div>
-                            <div class="h-2 bg-brand-cream-deep rounded-full overflow-hidden">
-                                <div class="h-full bg-brand-sky-deep transition-all" style={`width: ${Math.min(100, (pet.xp / pet.xp_to_next_level) * 100)}%`}></div>
-                            </div>
-                        </div>
+            <!-- Mood + hunger meters -->
+            <div class="bg-brand-cream rounded-[var(--radius-card)] p-4 border-2 border-brand-ink shadow-[var(--shadow-card)] space-y-3">
+                <div>
+                    <div class="flex justify-between text-xs text-brand-ink-soft mb-1">
+                        <span>😊 {L.mood}</span>
+                        <span><span data-mood-val>{pet.mood}</span>/100</span>
                     </div>
+                    <div class="h-2.5 bg-brand-cream-deep rounded-full overflow-hidden">
+                        <div data-mood-bar class="h-full bg-brand-mint-deep transition-all duration-300" style={`width: ${pet.mood}%`}></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs text-brand-ink-soft mb-1">
+                        <span>🍖 {L.hunger}</span>
+                        <span><span data-hunger-val>{pet.hunger}</span>/100</span>
+                    </div>
+                    <div class="h-2.5 bg-brand-cream-deep rounded-full overflow-hidden">
+                        <div
+                            data-hunger-bar
+                            class={`h-full transition-all duration-300 ${pet.hunger > 70 ? "bg-brand-coral-deep" : pet.hunger > 40 ? "bg-brand-sun-deep" : "bg-brand-mint-deep"}`}
+                            style={`width: ${pet.hunger}%`}
+                        ></div>
+                    </div>
+                </div>
+            </div>
 
-                    <div class="grid grid-cols-2 gap-2">
-                        <form method="POST">
-                            <input type="hidden" name="action" value="feed" />
-                            <button type="submit" class="w-full py-3 rounded-xl bg-brand-mint-deep text-white font-bold hover:opacity-90 active:scale-95">
-                                🍖 {labels.feed}
+            <!-- Care actions -->
+            <section
+                class="bg-brand-cream rounded-[var(--radius-card)] p-4 border-2 border-brand-ink shadow-[var(--shadow-card)]"
+                data-care-root
+                data-points={points}
+                data-hunger={pet.hunger}
+            >
+                <div class="flex items-baseline justify-between mb-1">
+                    <h3 class="text-sm font-display font-extrabold text-brand-ink">{L.care_title}</h3>
+                    <span class="text-xs font-bold text-brand-sun-deep">
+                        <span data-points-val>{points}</span> {L.pts}
+                    </span>
+                </div>
+                <p class="text-[11px] text-brand-ink-soft mb-3">{L.care_hint}</p>
+                <div class="grid grid-cols-3 gap-2">
+                    {careActions.map((a: any) => {
+                        const label = a.label?.[lang] ?? a.action;
+                        return (
+                            <button
+                                type="button"
+                                data-care-btn
+                                data-action={a.action}
+                                data-cost={a.cost}
+                                data-hunger-delta={a.hunger}
+                                data-mood-delta={a.mood}
+                                data-requires-hunger={a.action === "feed" ? "1" : "0"}
+                                class="care-btn flex flex-col items-center gap-1 p-3 rounded-xl border-2 border-brand-ink bg-brand-cream-deep text-brand-ink font-bold shadow-[var(--shadow-card)] active:scale-95 transition-all disabled:opacity-40 disabled:shadow-none disabled:cursor-not-allowed"
+                            >
+                                <span class="text-2xl">{careIcon[a.action] ?? "✨"}</span>
+                                <span class="text-xs">{label}</span>
+                                <span class="text-[10px] font-bold text-brand-sun-deep">-{a.cost} {L.pts}</span>
                             </button>
-                        </form>
-                        <form method="POST">
-                            <input type="hidden" name="action" value="play" />
-                            <button type="submit" class="w-full py-3 rounded-xl bg-brand-sun-deep text-brand-ink font-bold hover:opacity-90 active:scale-95">
-                                🎾 {labels.play}
-                            </button>
-                        </form>
-                    </div>
+                        );
+                    })}
+                </div>
+            </section>
 
-                    <section class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)]">
-                        <h3 class="text-sm font-bold text-brand-ink mb-2">
-                            🛍️ {lang === "es" ? "Tienda de premios" : "Treat shop"}
-                            <span class="ml-2 text-xs font-normal text-brand-ink-soft">
-                                ({user.points} pts)
-                            </span>
-                        </h3>
-                        <div class="grid grid-cols-2 gap-2">
-                            {treats.map((t: any) => {
-                                const canAfford = user.points >= t.cost;
-                                return (
-                                    <form method="POST">
-                                        <input type="hidden" name="action" value="treat" />
-                                        <input type="hidden" name="treat_type" value={t.type} />
-                                        <button
-                                            type="submit"
-                                            disabled={!canAfford}
-                                            class={`w-full p-3 rounded-xl text-sm font-semibold transition-all text-left ${
-                                                canAfford
-                                                    ? "bg-brand-cream-deep hover:bg-brand-sun/15 text-brand-ink"
-                                                    : "bg-brand-cream-deep text-brand-ink-soft cursor-not-allowed opacity-60"
-                                            }`}
-                                        >
-                                            <p class="font-bold">{t.label}</p>
-                                            <p class="text-[10px] text-brand-ink-soft mt-0.5">
-                                                {t.hunger !== 0 && <span>🍖{t.hunger > 0 ? "+" : ""}{t.hunger} </span>}
-                                                {t.mood !== 0 && <span>😊+{t.mood} </span>}
-                                                {t.xp !== 0 && <span>⭐+{t.xp}</span>}
-                                            </p>
-                                            <p class="text-xs font-bold text-brand-sun-deep mt-1">
-                                                -{t.cost} pts
-                                            </p>
-                                        </button>
-                                    </form>
-                                );
-                            })}
-                        </div>
-                    </section>
+            <!-- Nav: quest mode + shop -->
+            <div class="grid grid-cols-2 gap-3">
+                <a href="/pet/quests" class="flex flex-col gap-1 p-4 rounded-[var(--radius-card)] border-2 border-brand-ink bg-brand-sky text-brand-ink shadow-[var(--shadow-card)] hover:-translate-y-0.5 transition-transform">
+                    <span class="text-2xl">🗺️</span>
+                    <span class="font-display font-extrabold text-sm">{L.quests}</span>
+                    <span class="text-[11px] text-brand-ink-soft leading-tight">{L.quests_sub}</span>
+                </a>
+                <a href="/pet/shop" class="flex flex-col gap-1 p-4 rounded-[var(--radius-card)] border-2 border-brand-ink bg-brand-sun text-brand-ink shadow-[var(--shadow-card)] hover:-translate-y-0.5 transition-transform">
+                    <span class="text-2xl">🛍️</span>
+                    <span class="font-display font-extrabold text-sm">{L.shop}</span>
+                    <span class="text-[11px] text-brand-ink-soft leading-tight">{L.shop_sub}</span>
+                </a>
+            </div>
 
-                    <p class="text-xs text-brand-ink-soft text-center">
-                        {lang === "es"
-                            ? "Completa tareas para subir el XP de tu mascota."
-                            : "Complete tasks to level up your pet."}
-                    </p>
-                </>
-            )}
+            <!-- Toast -->
+            <div data-pet-toast class="fixed left-1/2 -translate-x-1/2 bottom-24 z-50 hidden px-4 py-2 rounded-full bg-brand-ink text-brand-cream text-sm font-semibold shadow-[var(--shadow-card)]"></div>
+        </>
+    )}
 </PageLayout>
+
+<script>
+    import { petHeart } from "../lib/pet-fx";
+
+    function clamp(n: number) { return Math.max(0, Math.min(100, n)); }
+
+    function initPetCare() {
+        const root = document.querySelector<HTMLElement>("[data-care-root]");
+        if (!root) return;
+        const es = document.documentElement.lang === "es";
+
+        const pointsVal = document.querySelector<HTMLElement>("[data-points-val]");
+        const moodBar = document.querySelector<HTMLElement>("[data-mood-bar]");
+        const moodVal = document.querySelector<HTMLElement>("[data-mood-val]");
+        const hungerBar = document.querySelector<HTMLElement>("[data-hunger-bar]");
+        const hungerVal = document.querySelector<HTMLElement>("[data-hunger-val]");
+        const face = document.getElementById("pet-hero-face");
+        const toast = document.querySelector<HTMLElement>("[data-pet-toast]");
+        const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-care-btn]"));
+
+        let points = Number(root.dataset.points ?? "0");
+        let hunger = Number(root.dataset.hunger ?? "0");
+
+        function showToast(msg: string) {
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.classList.remove("hidden");
+            window.clearTimeout((toast as any)._t);
+            (toast as any)._t = window.setTimeout(() => toast.classList.add("hidden"), 2200);
+        }
+
+        function reprice() {
+            for (const b of buttons) {
+                const cost = Number(b.dataset.cost ?? "0");
+                const needsHunger = b.dataset.requiresHunger === "1";
+                b.disabled = points < cost || (needsHunger && hunger <= 0);
+            }
+        }
+        reprice();
+
+        function bounceFace() {
+            if (!face || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+            face.animate(
+                [
+                    { transform: "scale(1) rotate(0deg)" },
+                    { transform: "scale(1.25) rotate(-6deg)" },
+                    { transform: "scale(1) rotate(0deg)" },
+                ],
+                { duration: 500, easing: "ease-out" },
+            );
+        }
+
+        for (const btn of buttons) {
+            btn.addEventListener("click", async () => {
+                if (btn.disabled) return;
+                const action = btn.dataset.action!;
+                const cost = Number(btn.dataset.cost ?? "0");
+                const dHunger = Number(btn.dataset.hungerDelta ?? "0");
+                const dMood = Number(btn.dataset.moodDelta ?? "0");
+
+                // Optimistic update.
+                const prev = { points, hunger, mood: Number(moodVal?.textContent ?? "0") };
+                points -= cost;
+                hunger = clamp(hunger + dHunger);
+                const mood = clamp(prev.mood + dMood);
+                if (pointsVal) pointsVal.textContent = String(points);
+                if (moodVal) moodVal.textContent = String(mood);
+                if (moodBar) moodBar.style.width = `${mood}%`;
+                if (hungerVal) hungerVal.textContent = String(hunger);
+                if (hungerBar) hungerBar.style.width = `${hunger}%`;
+                reprice();
+                bounceFace();
+                if (face) petHeart(face, action === "play" ? "🎾" : action === "wash" ? "🫧" : "❤️");
+
+                try {
+                    const r = await fetch("/api/pet/care", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ action }),
+                    });
+                    if (!r.ok) {
+                        const d = await r.json().catch(() => ({}));
+                        throw new Error(d?.detail || (es ? "No se pudo" : "Could not complete"));
+                    }
+                    const petOut = await r.json();
+                    // Reconcile meters with the server truth.
+                    hunger = petOut.hunger;
+                    if (moodVal) moodVal.textContent = String(petOut.mood);
+                    if (moodBar) moodBar.style.width = `${petOut.mood}%`;
+                    if (hungerVal) hungerVal.textContent = String(petOut.hunger);
+                    if (hungerBar) hungerBar.style.width = `${petOut.hunger}%`;
+                    reprice();
+                } catch (err: any) {
+                    // Roll back.
+                    points = prev.points;
+                    hunger = prev.hunger;
+                    if (pointsVal) pointsVal.textContent = String(points);
+                    if (moodVal) moodVal.textContent = String(prev.mood);
+                    if (moodBar) moodBar.style.width = `${prev.mood}%`;
+                    if (hungerVal) hungerVal.textContent = String(prev.hunger);
+                    if (hungerBar) hungerBar.style.width = `${prev.hunger}%`;
+                    reprice();
+                    showToast(typeof err?.message === "string" ? err.message : (es ? "Error" : "Error"));
+                }
+            });
+        }
+    }
+
+    document.addEventListener("astro:page-load", initPetCare);
+</script>

@@ -5,8 +5,10 @@ import VerifyEmailBanner from "../components/VerifyEmailBanner.astro";
 import DifficultyChip from "../components/DifficultyChip.astro";
 import EnablePushButton from "../components/EnablePushButton.astro";
 import BossBattleBar from "../components/BossBattleBar.astro";
+import PetAvatar from "../components/pet/PetAvatar.astro";
 import { apiFetch } from "../lib/api";
 import { t } from "../lib/i18n";
+import { stageLabel } from "../lib/pet-art";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -70,9 +72,13 @@ let activeGoal: any = null;
 // Payday surface: the most recent "Domingo de pago" notification (last 3 days).
 // Backend localizes title/body to the kid's preferred_lang, so we render as-is.
 let recentPayday: any = null;
+// Virtual pet nudge (Quest Mode entry point). Best-effort — null just hides it.
+let pet: any = null;
 if (isKid) {
     const { data: goalData } = await apiFetch<any>("/api/rewards/goal", { token });
     activeGoal = goalData ?? null;
+    const { data: petData } = await apiFetch<any>("/api/pet/", { token });
+    pet = petData ?? null;
     const { data: notifData } = await apiFetch<any>("/api/notifications/?limit=20", { token });
     const notifItems: any[] = notifData?.items ?? [];
     const paydayCutoff = Date.now() - 3 * 24 * 3600 * 1000;
@@ -269,6 +275,30 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
             <a href="/family-cup" class="block mb-6">
                 <BossBattleBar boss={boss} lang={lang} />
             </a>
+
+            <!-- Virtual pet nudge → Quest Mode -->
+            {isKid && pet && (
+                <a
+                    href="/pet/quests"
+                    class="mb-6 flex items-center gap-4 bg-brand-cream rounded-[var(--radius-card)] p-4 border-2 border-brand-ink shadow-[var(--shadow-card)] hover:-translate-y-0.5 transition-transform"
+                >
+                    <PetAvatar species={pet.species} stage={pet.evolution_stage} status={pet.status_label} size="md" />
+                    <div class="flex-1 min-w-0">
+                        <p class="font-display font-extrabold text-brand-ink leading-tight truncate">{pet.name}</p>
+                        <p class="text-xs text-brand-ink-soft">
+                            {stageLabel(pet.evolution_stage, lang)} · {lang === "es" ? "Nivel" : "Level"} {pet.level}
+                        </p>
+                        <p class="text-sm font-semibold text-brand-sky-deep mt-0.5">
+                            {pet.status_label === "starving"
+                                ? (lang === "es" ? "🍖 ¡Tu mascota tiene hambre!" : "🍖 Your pet is hungry!")
+                                : pet.status_label === "sad"
+                                    ? (lang === "es" ? "😞 Tu mascota te extraña" : "😞 Your pet misses you")
+                                    : (lang === "es" ? "🗺️ Completa misiones para alimentarla" : "🗺️ Finish quests to feed it")}
+                        </p>
+                    </div>
+                    <span class="text-brand-sky-deep font-bold flex-shrink-0">→</span>
+                </a>
+            )}
 
             <!-- Today header + Progress bar -->
             <div class="mb-6" data-tour="today-tasks">

@@ -1,0 +1,85 @@
+---
+/**
+ * PetAvatar — renders a pet at its evolution stage with equipped cosmetics
+ * layered on top (hat / accessory / colour aura). Emoji + CSS only, no images.
+ *
+ * Used by the evolved pet page, quest mode, and the dashboard nudge so the pet
+ * looks identical everywhere. The base face carries [data-pet-face] so client
+ * scripts can bounce/react to it on a quest completion.
+ */
+import { petFace, COLOR_AURA } from "../../lib/pet-art";
+
+interface Equipped {
+    key?: string;
+    slot?: string;
+    icon?: string;
+}
+
+interface Props {
+    species: string;
+    stage: number;
+    status?: string;
+    equipped?: Equipped[];
+    size?: "sm" | "md" | "lg" | "xl";
+    reactId?: string;
+    class?: string;
+}
+
+const {
+    species,
+    stage,
+    status = "ok",
+    equipped = [],
+    size = "lg",
+    reactId,
+    class: extraClass = "",
+} = Astro.props;
+
+const base = petFace(status, species, stage);
+const hat = equipped.find((e) => e.slot === "hat");
+const accessory = equipped.find((e) => e.slot === "accessory");
+const color = equipped.find((e) => e.slot === "color");
+const aura = color?.key ? COLOR_AURA[color.key] : undefined;
+
+const BOX: Record<string, string> = { sm: "w-12 h-12", md: "w-20 h-20", lg: "w-32 h-32", xl: "w-44 h-44" };
+const FACE: Record<string, string> = { sm: "text-3xl", md: "text-5xl", lg: "text-7xl", xl: "text-8xl" };
+const CHIP: Record<string, string> = { sm: "text-sm", md: "text-lg", lg: "text-2xl", xl: "text-3xl" };
+const boxCls = BOX[size];
+const faceCls = FACE[size];
+const chipCls = CHIP[size];
+---
+
+<div class={`relative inline-flex items-center justify-center ${boxCls} ${extraClass}`}>
+    {/* colour-slot aura behind the pet */}
+    <span
+        class="absolute inset-0 rounded-full"
+        style={aura ? `background: ${aura};` : "background: radial-gradient(circle, rgba(255,200,87,0.28), rgba(255,200,87,0) 70%);"}
+        aria-hidden="true"
+    ></span>
+
+    {/* base pet art (bounces on quest completion) */}
+    <span id={reactId} data-pet-face class={`relative ${faceCls} leading-none select-none drop-shadow-[2px_2px_0_rgba(31,41,55,0.25)]`}>
+        {base}
+    </span>
+
+    {/* hat sits on top of the head */}
+    {hat?.icon && (
+        <span class={`absolute -top-1 left-1/2 -translate-x-1/2 ${chipCls} select-none`} aria-hidden="true">
+            {hat.icon}
+        </span>
+    )}
+
+    {/* accessory in the lower-right corner */}
+    {accessory?.icon && (
+        <span class={`absolute -bottom-1 -right-1 ${chipCls} select-none`} aria-hidden="true">
+            {accessory.icon}
+        </span>
+    )}
+
+    {/* colour chip badge (lower-left) so the equipped coat reads even without the aura */}
+    {color?.icon && (
+        <span class={`absolute -bottom-1 -left-1 ${size === "sm" ? "text-xs" : "text-base"} select-none`} aria-hidden="true">
+            {color.icon}
+        </span>
+    )}
+</div>
