@@ -30,6 +30,7 @@ class ChatMessageOut(BaseModel):
     id: UUID
     sender_id: Optional[UUID] = None
     body: str
+    image_url: Optional[str] = None
     created_at: datetime
     reactions: List[ReactionGroup] = []
 
@@ -65,6 +66,7 @@ async def list_messages(
             id=r.id,
             sender_id=r.sender_id,
             body=r.body,
+            image_url=r.image_url,
             created_at=r.created_at,
             reactions=[ReactionGroup(**g) for g in reactions.get(r.id, [])],
         )

@@ -1,0 +1,186 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import BossBattleBar from "../components/BossBattleBar.astro";
+import { apiFetch } from "../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk || !user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+const { data: cup } = await apiFetch<any>("/api/family-cup/", { token });
+const { data: history } = await apiFetch<any[]>("/api/family-cup/history?limit=8", { token });
+
+const boss = cup?.boss ?? null;
+const leaderboard: any[] = cup?.leaderboard ?? [];
+const pastSeasons: any[] = Array.isArray(history) ? history : [];
+const isParent = user.role === "parent";
+
+const maxPoints = Math.max(1, ...leaderboard.map((e: any) => Number(e.points) || 0));
+const medals = ["🥇", "🥈", "🥉"];
+
+function fmtWeek(iso: string): string {
+    if (!iso) return "";
+    const d = new Date(iso + "T00:00:00");
+    return d.toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
+        day: "numeric",
+        month: "short",
+    });
+}
+
+const L = {
+    title: lang === "es" ? "Copa Familiar" : "Family Cup",
+    subtitle:
+        lang === "es"
+            ? "La tabla de puntos de esta semana. Se reinicia cada lunes."
+            : "This week's points leaderboard. Resets every Monday.",
+    week_of: lang === "es" ? "Semana del" : "Week of",
+    pts: lang === "es" ? "pts" : "pts",
+    empty:
+        lang === "es"
+            ? "Aún no hay puntos esta semana. ¡Completa tareas para aparecer aquí!"
+            : "No points yet this week. Complete chores to show up here!",
+    winner: lang === "es" ? "Líder" : "Leader",
+    past: lang === "es" ? "Campeones anteriores" : "Past champions",
+    no_past: lang === "es" ? "Todavía no hay temporadas cerradas." : "No closed seasons yet.",
+    close: lang === "es" ? "Cerrar la semana" : "Close the week",
+    close_hint:
+        lang === "es"
+            ? "Guarda al campeón de la semana pasada en el historial."
+            : "Save last week's champion to the history.",
+    back: lang === "es" ? "Volver" : "Back",
+};
+---
+
+<PageLayout
+    title={L.title}
+    tone="sun"
+    role={user.role}
+    lang={lang}
+    active="tasks"
+    backHref="/dashboard"
+    backLabel={L.back}
+>
+    <div class="max-w-md md:max-w-3xl mx-auto w-full space-y-6">
+        <!-- Cooperative boss battle -->
+        <BossBattleBar boss={boss} lang={lang} />
+
+        <!-- Weekly leaderboard -->
+        <section class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] p-5">
+            <div class="flex items-baseline justify-between gap-3 mb-1 flex-wrap">
+                <h2 class="font-display font-extrabold text-brand-ink text-xl flex items-center gap-2">
+                    🏆 {L.title}
+                </h2>
+                {cup?.week_start && (
+                    <span class="text-xs font-semibold text-brand-ink-soft">
+                        {L.week_of} {fmtWeek(cup.week_start)}
+                    </span>
+                )}
+            </div>
+            <p class="text-sm text-brand-ink-soft mb-4">{L.subtitle}</p>
+
+            {leaderboard.length === 0 ? (
+                <p class="text-brand-ink-soft text-sm py-6 text-center">{L.empty}</p>
+            ) : (
+                <ul class="space-y-3">
+                    {leaderboard.map((e: any, i: number) => (
+                        <li
+                            class={`flex items-center gap-3 rounded-[var(--radius-pill)] p-2 pr-4 ${
+                                e.is_winner
+                                    ? "bg-brand-sun/30 border-2 border-brand-sun-deep"
+                                    : "bg-brand-cream-deep/60 border border-brand-ink/5"
+                            }`}
+                        >
+                            <span class="text-2xl w-10 text-center flex-shrink-0">
+                                {medals[i] ?? "🎖️"}
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-display font-extrabold text-brand-ink truncate">
+                                        {e.name}
+                                    </span>
+                                    {e.is_winner && (
+                                        <span class="text-[10px] font-bold uppercase tracking-wide bg-brand-sun-deep text-white rounded-full px-2 py-0.5 flex-shrink-0">
+                                            {L.winner}
+                                        </span>
+                                    )}
+                                </div>
+                                <div class="w-full bg-brand-cream-deep rounded-full h-2 mt-1 overflow-hidden">
+                                    <div
+                                        class={`h-2 rounded-full transition-all duration-500 ${
+                                            e.is_winner ? "bg-brand-sun-deep" : "bg-brand-sky"
+                                        }`}
+                                        style={`width: ${Math.max(4, Math.round(((Number(e.points) || 0) / maxPoints) * 100))}%`}
+                                    ></div>
+                                </div>
+                            </div>
+                            <span class="font-mono text-lg font-extrabold text-brand-ink w-16 text-right flex-shrink-0">
+                                {e.points}
+                                <span class="block text-[10px] font-normal text-brand-ink-soft">{L.pts}</span>
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
+
+        <!-- Past champions -->
+        <section class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] p-5">
+            <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                <h2 class="font-display font-extrabold text-brand-ink text-lg flex items-center gap-2">
+                    📜 {L.past}
+                </h2>
+                {isParent && (
+                    <button
+                        id="close-season-btn"
+                        type="button"
+                        class="text-xs font-bold bg-brand-ink text-brand-cream rounded-[var(--radius-pill)] px-3 py-1.5 active:scale-95 transition"
+                        title={L.close_hint}
+                    >
+                        {L.close}
+                    </button>
+                )}
+            </div>
+            {pastSeasons.length === 0 ? (
+                <p class="text-brand-ink-soft text-sm py-2">{L.no_past}</p>
+            ) : (
+                <ul class="divide-y divide-brand-ink/10">
+                    {pastSeasons.map((s: any) => (
+                        <li class="flex items-center justify-between gap-3 py-2">
+                            <span class="text-sm text-brand-ink-soft flex-shrink-0">
+                                {L.week_of} {fmtWeek(s.week_start)}
+                            </span>
+                            <span class="font-display font-bold text-brand-ink truncate flex-1 text-right">
+                                {s.winner_name ? `🏅 ${s.winner_name}` : "—"}
+                            </span>
+                            <span class="font-mono text-sm font-bold text-brand-ink-soft w-14 text-right flex-shrink-0">
+                                {s.winner_points} {L.pts}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
+    </div>
+</PageLayout>
+
+<script>
+    document.addEventListener("astro:page-load", () => {
+        const btn = document.getElementById("close-season-btn");
+        if (!btn) return;
+        btn.addEventListener("click", async () => {
+            (btn as HTMLButtonElement).disabled = true;
+            try {
+                await fetch("/api/family-cup/close-season", { method: "POST" });
+            } catch {
+                /* best-effort — reload reflects the persisted result either way */
+            }
+            window.location.reload();
+        });
+    });
+</script>

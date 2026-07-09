@@ -1,0 +1,86 @@
+---
+/**
+ * BossBattleBar — cooperative weekly boss HP bar (P2).
+ *
+ * Purely points/analytics driven (NOT pet-coupled): the boss's HP is the sum of
+ * the family's assigned mandatory task points for the week, and it depletes as
+ * chores get done/approved. Cooperative — a missed task never damages a member,
+ * so this is celebratory-only. Renders nothing when there's no active boss
+ * (no mandatory tasks assigned this week).
+ *
+ * Light/brand theme (dashboards + Family Cup page). The kiosk renders its own
+ * dark-theme variant inline.
+ */
+interface Boss {
+    key?: string;
+    name_es: string;
+    name_en: string;
+    emoji: string;
+    max_hp: number;
+    current_hp: number;
+    damage: number;
+    percent_defeated: number;
+    defeated: boolean;
+    active: boolean;
+}
+interface Props {
+    boss?: Boss | null;
+    lang?: "es" | "en";
+    class?: string;
+}
+const { boss, lang = "es", class: className = "" } = Astro.props;
+
+const name = boss ? (lang === "es" ? boss.name_es : boss.name_en) : "";
+const hpPct =
+    boss && boss.max_hp > 0
+        ? Math.max(0, Math.min(100, Math.round((boss.current_hp / boss.max_hp) * 100)))
+        : 0;
+
+const L = {
+    boss: lang === "es" ? "Jefe de la semana" : "This week's boss",
+    hp: lang === "es" ? "PS" : "HP",
+    defeated: lang === "es" ? "¡Derrotado! 🎉" : "Defeated! 🎉",
+    hint:
+        lang === "es"
+            ? "Terminen tareas en familia para vencerlo — nadie pierde puntos por fallar."
+            : "Beat it together by finishing chores — no one loses points for a miss.",
+    progress: lang === "es" ? "derrotado" : "defeated",
+};
+---
+
+{boss && boss.active && (
+    <div
+        class={`bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] p-5 ${className}`}
+        data-boss-key={boss.key}
+    >
+        <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
+            <h3 class="font-display font-extrabold text-brand-ink flex items-center gap-2 min-w-0">
+                <span class="text-2xl flex-shrink-0" aria-hidden="true">{boss.emoji}</span>
+                <span class="min-w-0">
+                    <span class="block text-[11px] font-semibold uppercase tracking-wide text-brand-ink-soft">
+                        {L.boss}
+                    </span>
+                    <span class="block leading-tight truncate">{name}</span>
+                </span>
+            </h3>
+            <span class="font-mono text-sm font-bold text-brand-ink-soft flex-shrink-0">
+                {boss.defeated ? L.defeated : `${boss.current_hp} / ${boss.max_hp} ${L.hp}`}
+            </span>
+        </div>
+        <div
+            class="w-full bg-brand-cream-deep rounded-full h-4 overflow-hidden border border-brand-ink/10"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow={boss.percent_defeated}
+        >
+            <div
+                class={`h-4 rounded-full transition-all duration-500 ${boss.defeated ? "bg-brand-mint" : "bg-brand-coral"}`}
+                style={`width: ${boss.defeated ? 0 : Math.max(4, hpPct)}%`}
+            ></div>
+        </div>
+        <p class="text-xs text-brand-ink-soft mt-2">
+            <span class="font-bold text-brand-coral-deep">{boss.percent_defeated}%</span> {L.progress} · {L.hint}
+        </p>
+    </div>
+)}

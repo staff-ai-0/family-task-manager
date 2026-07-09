@@ -1043,6 +1043,40 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 import logging
                 logging.getLogger(__name__).exception("fan_out_pending_gig push failed")
 
+        # Auto-post a completion card into family chat (Campfire liveliness) —
+        # but only when this completion actually credited points: a mandatory
+        # chore that completed silently, or a gig auto-approved just now.
+        # Proof-required chores + gigs still awaiting parent review post later,
+        # on approval (see approve_gig). Best-effort — never blocks the response.
+        _post_points = None
+        if template.is_bonus:
+            if auto_approved:
+                _post_points = pts
+        elif (
+            not template.requires_proof
+            and assignment.status == AssignmentStatus.COMPLETED
+        ):
+            _post_points = template.effective_points
+        if _post_points is not None:
+            try:
+                from app.services.family_chat_service import FamilyChatService
+                completer = await get_user_by_id(db, user_id)
+                await FamilyChatService.post_completion(
+                    db,
+                    family_id,
+                    user_name=completer.name,
+                    title=template.title,
+                    points=int(_post_points),
+                    is_bonus=bool(template.is_bonus),
+                    image_url=assignment.proof_image_url,
+                    sender_id=user_id,
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "auto-post completion to chat failed", exc_info=True
+                )
+
         return assignment
 
     @staticmethod
@@ -1409,6 +1443,30 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         await db.commit()
         await db.refresh(assignment)
+
+        # Auto-post the approved completion into family chat (with the proof
+        # photo when present) so parent approvals light up the shared thread.
+        # Only on approve — rejections don't celebrate. Best-effort; never
+        # blocks the approval response.
+        if approve:
+            try:
+                from app.services.family_chat_service import FamilyChatService
+                await FamilyChatService.post_completion(
+                    db,
+                    family_id,
+                    user_name=child.name,
+                    title=assignment.template.title,
+                    points=int(pts),
+                    is_bonus=is_bonus,
+                    image_url=assignment.proof_image_url,
+                    sender_id=assignment.assigned_to,
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "auto-post approved completion to chat failed", exc_info=True
+                )
+
         return assignment
 
     @staticmethod
@@ -1646,7 +1704,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         # Single query: all family IDs + timezones (no per-family round-trip)
         family_rows = (
-            await db.execute(select(Family.id, Family.timezone))
+            await db.execute(
+                select(Family.id, Family.timezone).where(Family.deleted_at.is_(None))
+            )
         ).all()
 
         now_utc = datetime.now(timezone.utc)
@@ -1994,7 +2054,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         from datetime import time as dt_time
 
         family_rows = (
-            await db.execute(select(Family.id, Family.timezone))
+            await db.execute(
+                select(Family.id, Family.timezone).where(Family.deleted_at.is_(None))
+            )
         ).all()
 
         # Group families by their local "today" (one query per date bucket).

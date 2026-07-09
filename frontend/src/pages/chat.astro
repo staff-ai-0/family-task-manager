@@ -136,6 +136,16 @@ const labels = {
                                     </p>
                                 )}
                                 <p class="whitespace-pre-wrap">{m.body}</p>
+                                {m.image_url && (
+                                    <a href={m.image_url} target="_blank" rel="noopener">
+                                        <img
+                                            src={m.image_url}
+                                            alt=""
+                                            loading="lazy"
+                                            class="mt-1 rounded-lg max-h-48 w-auto border border-brand-ink/10"
+                                        />
+                                    </a>
+                                )}
                                 <p class={`text-[10px] mt-1 ${mine ? "text-brand-cream/60" : "text-brand-ink-soft"}`}>
                                     {timeAgo(m.created_at)}
                                 </p>
@@ -233,6 +243,20 @@ const labels = {
             const timeP = mine ? ps[1] : ps[2];
             bodyP.textContent = msg.body;
             timeP.textContent = timeAgo(msg.created_at);
+            // Auto-posted completion cards carry the proof photo.
+            if (msg.image_url) {
+                const link = document.createElement("a");
+                link.href = msg.image_url;
+                link.target = "_blank";
+                link.rel = "noopener";
+                const img = document.createElement("img");
+                img.src = msg.image_url;
+                img.alt = "";
+                img.loading = "lazy";
+                img.className = "mt-1 rounded-lg max-h-48 w-auto border border-brand-ink/10";
+                link.appendChild(img);
+                timeP.parentElement.insertBefore(link, timeP);
+            }
             feed.appendChild(wrapper);
             feed.scrollTo({ top: feed.scrollHeight, behavior: "smooth" });
         }

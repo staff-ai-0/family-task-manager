@@ -4,6 +4,7 @@ import GigsIntroBanner from "../components/GigsIntroBanner.astro";
 import VerifyEmailBanner from "../components/VerifyEmailBanner.astro";
 import DifficultyChip from "../components/DifficultyChip.astro";
 import EnablePushButton from "../components/EnablePushButton.astro";
+import BossBattleBar from "../components/BossBattleBar.astro";
 import { apiFetch } from "../lib/api";
 import { t } from "../lib/i18n";
 
@@ -19,6 +20,11 @@ if (!userOk) {
 
 // Fetch daily progress (includes assignments with template details + gating status)
 const { data: progress } = await apiFetch<any>("/api/task-assignments/progress", { token });
+
+// Cooperative weekly boss battle (points/analytics based, no pet). Best-effort —
+// a null just hides the bar.
+const { data: familyCup } = await apiFetch<any>("/api/family-cup/", { token });
+const boss = familyCup?.boss ?? null;
 
 const requiredTotal = progress?.required_total ?? 0;
 const requiredCompleted = progress?.required_completed ?? 0;
@@ -258,6 +264,11 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     <span class="text-brand-mint-deep font-bold flex-shrink-0">→</span>
                 </a>
             )}
+
+            <!-- Cooperative weekly boss battle (Family Cup) -->
+            <a href="/family-cup" class="block mb-6">
+                <BossBattleBar boss={boss} lang={lang} />
+            </a>
 
             <!-- Today header + Progress bar -->
             <div class="mb-6" data-tour="today-tasks">
