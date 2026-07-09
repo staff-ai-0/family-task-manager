@@ -63,6 +63,9 @@ class UserResponse(EntityResponse):
     acknowledged_gigs_intro: bool = False
     completed_welcome_tour: bool = False
     gig_trust_streak: int = 0
+    # Star Mode (P2): per-kid "young kid" display toggle (parent-set). When true
+    # the kid dashboard + kiosk render POINTS as big stars and hide peso amounts.
+    star_mode: bool = False
     # Parental-approval state: 'approved' everywhere except join-code
     # self-signups, which start 'pending' until a parent approves.
     approval_status: str = "approved"

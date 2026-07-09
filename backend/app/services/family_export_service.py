@@ -52,6 +52,7 @@ from app.models import (
     JarvisSchedule,
     KidBankAccount,
     KidPet,
+    KidSavingsGoal,
     KioskDevice,
     MealPlanEntry,
     Notification,
@@ -148,6 +149,7 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
         GigClaim,
         CashTransaction,
         KidBankAccount,
+        KidSavingsGoal,
         Reward,
         RewardRedemption,
         UserRewardGoal,
@@ -328,6 +330,7 @@ class FamilyExportService:
         )
         cash = await _rows(db, fam(CashTransaction))
         bank_accounts = await _rows(db, fam(KidBankAccount))
+        savings_goals = await _rows(db, fam(KidSavingsGoal))
         rewards = await _rows(db, fam(Reward))
         redemptions = await _rows(db, fam(RewardRedemption))
         reward_goals = await _rows(db, fam(UserRewardGoal))
@@ -455,6 +458,7 @@ class FamilyExportService:
             "points/point_transactions.json": _dump(points),
             "points/cash_transactions.json": _dump(cash),
             "bank/kid_bank_accounts.json": _dump(bank_accounts),
+            "bank/savings_goals.json": _dump(savings_goals),
             "rewards/rewards.json": _dump(rewards),
             "rewards/redemptions.json": _dump(redemptions),
             "rewards/reward_goals.json": _dump(reward_goals),

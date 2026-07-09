@@ -5,6 +5,7 @@ Handles user profile operations and points management.
 """
 
 from fastapi import APIRouter, Depends, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from uuid import UUID
@@ -193,6 +194,35 @@ async def quick_adjust_points(
         )
 
     return transaction
+
+
+class StarModeUpdate(BaseModel):
+    """Toggle payload for a kid's Star Mode young-kid display."""
+
+    enabled: bool
+
+
+@router.put("/{user_id}/star-mode", response_model=UserResponse)
+async def update_star_mode(
+    body: StarModeUpdate,
+    user: User = Depends(get_family_user),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Toggle a kid's Star Mode (young-kid display), parent only.
+
+    Star Mode is pure presentation over the existing POINTS system: the kid
+    dashboard + kiosk render points as big stars and hide peso/cash amounts.
+    It is NOT a currency and never touches balances. CHILD/TEEN targets only.
+    """
+    from app.core.exceptions import ValidationException
+
+    if user.role == UserRole.PARENT:
+        raise ValidationException("Star Mode applies to CHILD/TEEN members only")
+    user.star_mode = body.enabled
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 @router.put("/{user_id}/deactivate", response_model=UserResponse)

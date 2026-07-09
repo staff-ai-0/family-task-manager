@@ -97,7 +97,7 @@ async def test_pipeline_creates_tx_with_items_and_fx(
         ],
     )
 
-    async def fake_scan(_b, _t, model=None):
+    async def fake_scan(_b, _t, model=None, category_hints=None):
         return fake_receipt
 
     monkeypatch.setattr(
@@ -153,7 +153,7 @@ async def test_pipeline_returns_dup_warning_without_committing(
         payee_name=payee.name,
     )
 
-    async def fake_scan(_b, _t, model=None):
+    async def fake_scan(_b, _t, model=None, category_hints=None):
         return fake_receipt
 
     monkeypatch.setattr(
@@ -209,7 +209,7 @@ async def test_force_true_bypasses_duplicate_guard(
         payee_name=payee.name,
     )
 
-    async def fake_scan(_b, _t, model=None):
+    async def fake_scan(_b, _t, model=None, category_hints=None):
         return fake_receipt
 
     monkeypatch.setattr(
@@ -246,7 +246,7 @@ async def test_pipeline_stores_fx_when_currencies_differ(
         card_last4=None,
     )
 
-    async def fake_scan(_b, _t, model=None):
+    async def fake_scan(_b, _t, model=None, category_hints=None):
         return fake_receipt
 
     monkeypatch.setattr(

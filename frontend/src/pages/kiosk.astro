@@ -287,12 +287,12 @@ const maxWeekPoints = Math.max(
                         ← {labels.back}
                     </button>
                 </div>
-                <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="grid grid-cols-2 gap-4 mb-6" id="kid-balances">
                     <div class="bg-white/5 rounded-2xl p-5 text-center">
                         <p class="text-4xl font-mono font-bold text-amber-300" id="kid-points">0</p>
-                        <p class="text-white/60 text-sm mt-1">⭐ {labels.points}</p>
+                        <p class="text-white/60 text-sm mt-1" id="kid-points-label">⭐ {labels.points}</p>
                     </div>
-                    <div class="bg-white/5 rounded-2xl p-5 text-center">
+                    <div class="bg-white/5 rounded-2xl p-5 text-center" id="kid-cash-card">
                         <p class="text-4xl font-mono font-bold text-emerald-300" id="kid-cash">$0</p>
                         <p class="text-white/60 text-sm mt-1">💰 {labels.cash}</p>
                     </div>
@@ -439,9 +439,31 @@ const maxWeekPoints = Math.max(
                 avatar.textContent = (view.name || "?").charAt(0).toUpperCase();
                 document.getElementById("kid-name").textContent = view.name;
                 document.getElementById("kid-name").style.color = view.color_hex;
-                document.getElementById("kid-points").textContent = String(view.points);
-                document.getElementById("kid-cash").textContent =
-                    "$" + (view.cash_cents / 100).toFixed(0) + " MXN";
+
+                // Star Mode (P2): render POINTS as stars + hide the peso amount for
+                // young kids. Reset both ways — the kiosk is shared across siblings
+                // who may differ, so a normal kid after a star kid must revert.
+                const starMode = !!view.star_mode;
+                const pointsEl = document.getElementById("kid-points");
+                const pointsLabel = document.getElementById("kid-points-label");
+                const cashCard = document.getElementById("kid-cash-card");
+                const balances = document.getElementById("kid-balances");
+                if (starMode) {
+                    const n = Math.max(0, view.points | 0);
+                    pointsEl.textContent = "⭐ " + n;
+                    if (pointsLabel) pointsLabel.textContent = (lang === "es" ? "estrellas" : "stars");
+                    cashCard?.classList.add("hidden");
+                    balances?.classList.remove("grid-cols-2");
+                    balances?.classList.add("grid-cols-1");
+                } else {
+                    pointsEl.textContent = String(view.points);
+                    if (pointsLabel) pointsLabel.textContent = "⭐ " + (lang === "es" ? "puntos" : "points");
+                    cashCard?.classList.remove("hidden");
+                    balances?.classList.add("grid-cols-2");
+                    balances?.classList.remove("grid-cols-1");
+                    document.getElementById("kid-cash").textContent =
+                        "$" + (view.cash_cents / 100).toFixed(0) + " MXN";
+                }
 
                 const list = document.getElementById("kid-chores");
                 const empty = document.getElementById("kid-no-chores");

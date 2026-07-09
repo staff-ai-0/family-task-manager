@@ -1120,3 +1120,157 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
 
         await db.commit()
         return {"carried": carried, "skipped": skipped}
+
+    # ------------------------------------------------------------------
+    # Cover overspending: move available between categories in one month
+    # ------------------------------------------------------------------
+
+    @classmethod
+    async def _get_expense_category_or_raise(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        category_id: UUID,
+    ) -> BudgetCategory:
+        """Fetch a non-income, non-deleted category scoped to the family.
+
+        Family scoping lives in the WHERE clause: a category_id belonging to
+        another family (or soft-deleted) yields no row → NotFoundException,
+        which is what keeps cover-overspending tenant-isolated. Income-group
+        categories have no envelope "available" to move, so they're rejected.
+        """
+        row = (
+            await db.execute(
+                select(BudgetCategory, BudgetCategoryGroup.is_income)
+                .join(BudgetCategoryGroup, BudgetCategory.group_id == BudgetCategoryGroup.id)
+                .where(
+                    and_(
+                        BudgetCategory.id == category_id,
+                        BudgetCategory.family_id == family_id,
+                        BudgetCategory.deleted_at.is_(None),
+                        BudgetCategoryGroup.deleted_at.is_(None),
+                    )
+                )
+            )
+        ).first()
+        if row is None:
+            raise NotFoundException(f"Category {category_id} not found")
+        category, is_income = row
+        if is_income:
+            raise ValidationError(
+                "Cover overspending only moves money between expense categories"
+            )
+        return category
+
+    @classmethod
+    async def cover_overspending(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        month: date,
+        overspent_category_id: UUID,
+        source_category_id: UUID,
+        amount: int | None = None,
+    ) -> dict:
+        """Move money from a source category's available into an overspent
+        category to cover its deficit, for a single month.
+
+        Mechanics (envelope budgeting): "available" is moved between categories
+        by shifting *budgeted* dollars within the SAME month — decrease the
+        source's budgeted_amount and increase the target's by the same
+        integer-cents amount. Because available = previous_balance + budgeted +
+        activity, both envelopes then shift 1:1: the overspent one rises toward
+        0 and the source falls. The month's Ready-to-Assign is unchanged (total
+        expense budgeted is conserved). The deficit read here already includes
+        any negative balance rolled over from prior months, so a carried
+        overspend can be covered too.
+
+        Rules (each raises ValidationError, → HTTP 400):
+        - source and target must differ
+        - both must be expense (non-income) categories in this family
+          (a foreign category_id → NotFoundException, → HTTP 404)
+        - target must actually be overspent (available < 0); deficit = -available
+        - amount defaults to the full deficit; if provided it must satisfy
+          0 < amount <= deficit (over-covering is rejected)
+        - the source's available must be >= amount — you can't move more money
+          than the source envelope holds ("can't over-move")
+
+        Returns the post-move state (available + budgeted) for both categories
+        plus the recomputed month-level ready_to_assign.
+        """
+        month = month.replace(day=1)
+
+        if overspent_category_id == source_category_id:
+            raise ValidationError("Source and target categories must be different")
+
+        # Month-lock guard, consistent with create()/update().
+        from app.services.budget.month_locking_service import MonthLockingService
+        await MonthLockingService.validate_month_not_closed(db, family_id, month)
+
+        # Family-scoped existence + expense-only checks (NotFound = isolation).
+        await cls._get_expense_category_or_raise(db, family_id, overspent_category_id)
+        await cls._get_expense_category_or_raise(db, family_id, source_category_id)
+
+        target_info = await cls.get_category_available_amount(
+            db, family_id, overspent_category_id, month
+        )
+        target_available = target_info["available"]
+        if target_available >= 0:
+            raise ValidationError("Category is not overspent — nothing to cover")
+        deficit = -target_available
+
+        if amount is None:
+            move = deficit
+        else:
+            move = int(amount)
+            if move <= 0:
+                raise ValidationError("Amount to move must be positive")
+            if move > deficit:
+                raise ValidationError(
+                    f"Cannot move more than the overspent amount ({deficit} cents)"
+                )
+
+        source_info = await cls.get_category_available_amount(
+            db, family_id, source_category_id, month
+        )
+        source_available = source_info["available"]
+        if source_available < move:
+            raise ValidationError(
+                "Source category does not have enough available "
+                f"({source_available} cents) to move {move} cents"
+            )
+
+        # Apply the move by shifting budgeted dollars in this month.
+        source_alloc = await cls.get_or_create_for_category_month(
+            db, family_id, source_category_id, month
+        )
+        target_alloc = await cls.get_or_create_for_category_month(
+            db, family_id, overspent_category_id, month
+        )
+        source_alloc.budgeted_amount -= move
+        target_alloc.budgeted_amount += move
+        await db.commit()
+
+        new_source = await cls.get_category_available_amount(
+            db, family_id, source_category_id, month
+        )
+        new_target = await cls.get_category_available_amount(
+            db, family_id, overspent_category_id, month
+        )
+        ready = await cls.compute_ready_to_assign(db, family_id, month)
+
+        return {
+            "month": month.isoformat(),
+            "amount_moved": move,
+            "source": {
+                "category_id": str(source_category_id),
+                "budgeted": new_source["budgeted"],
+                "available": new_source["available"],
+            },
+            "target": {
+                "category_id": str(overspent_category_id),
+                "budgeted": new_target["budgeted"],
+                "available": new_target["available"],
+            },
+            "ready_to_assign": ready,
+        }

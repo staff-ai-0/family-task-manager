@@ -304,6 +304,17 @@ export const translations = {
         fin_inline_placeholder: "0.00",
         fin_saving: "Saving...",
 
+        // Cover-overspending flow (P2 month rollover)
+        fin_cover_btn: "Cover",
+        fin_cover_deficit_label: "Overspent by",
+        fin_cover_source_label: "Cover from",
+        fin_cover_amount_label: "Amount to move",
+        fin_cover_confirm: "Cover overspending",
+        fin_cover_no_sources: "No category has money available to move.",
+        fin_cover_success: "Overspending covered",
+        fin_cover_error: "Could not cover overspending",
+        fin_carried_overspend_label: "carried overspend",
+
         // Budget hub
         fin_budget_home: "Budget Home",
         fin_budget_home_sub: "Track spending, assign money, and reconcile your family finances.",
@@ -803,6 +814,17 @@ export const translations = {
         fin_report_net_worth: "Patrimonio Neto",
         fin_inline_placeholder: "0.00",
         fin_saving: "Guardando...",
+
+        // Cover-overspending flow (P2 month rollover)
+        fin_cover_btn: "Cubrir",
+        fin_cover_deficit_label: "Sobregasto de",
+        fin_cover_source_label: "Cubrir desde",
+        fin_cover_amount_label: "Cantidad a mover",
+        fin_cover_confirm: "Cubrir sobregasto",
+        fin_cover_no_sources: "Ninguna categoría tiene dinero disponible para mover.",
+        fin_cover_success: "Sobregasto cubierto",
+        fin_cover_error: "No se pudo cubrir el sobregasto",
+        fin_carried_overspend_label: "sobregasto arrastrado",
 
         // Budget hub
         fin_budget_home: "Inicio de Presupuesto",

@@ -56,6 +56,7 @@ from app.models.jarvis_pending_action import JarvisPendingAction
 from app.models.jarvis_mcp_token import JarvisMcpToken
 from app.models.cash_transaction import CashTransaction, CashTransactionType
 from app.models.kid_bank import KidBankAccount
+from app.models.kid_savings_goal import KidSavingsGoal
 
 __all__ = [
     "Base",
@@ -73,6 +74,7 @@ __all__ = [
     "CashTransaction",
     "CashTransactionType",
     "KidBankAccount",
+    "KidSavingsGoal",
     "PasswordResetToken",
     "EmailVerificationToken",
     "FamilyInvitation",

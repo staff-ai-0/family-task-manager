@@ -100,6 +100,12 @@ class User(Base):
     # yet — enables future age gating (COPPA-style flows).
     birthdate = Column(Date, nullable=True)
 
+    # Star Mode (P2): per-kid "young kid" display toggle, parent-set. Pure
+    # presentation — skins the kid dashboard + kiosk view to render POINTS
+    # (privileges) as big stars and hide peso/cash amounts. Never a currency;
+    # no coupling to cash. Default off so nothing changes until a parent opts in.
+    star_mode = Column(Boolean, default=False, nullable=False, server_default="false")
+
     oauth_provider = Column(String(50), nullable=True)
     oauth_id = Column(String(255), nullable=True)
     

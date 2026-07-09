@@ -570,6 +570,21 @@ export async function getNetWorthReport(
 }
 
 /**
+ * Get cash-flow forecast + bill calendar.
+ *
+ * Projects active recurring transactions forward `horizonDays` (30/60/90) as
+ * upcoming items and returns a projected running-balance series plus per-account
+ * and total summaries (current balance + scheduled income - scheduled bills).
+ */
+export async function getCashFlowForecast(
+    token: string,
+    horizonDays: 30 | 60 | 90 = 30
+): Promise<ApiResponse<any>> {
+    const params = new URLSearchParams({ horizon_days: String(horizonDays) });
+    return apiFetch<any>(`/api/budget/reports/cash-flow-forecast?${params.toString()}`, { token });
+}
+
+/**
  * Get import history
  */
 export async function getImportLogs(token: string): Promise<ApiResponse<BudgetImportLog[]>> {

@@ -170,6 +170,10 @@ class ScannedReceipt:
     # v2 fields
     card_last4: Optional[str] = None
     iva_cents: Optional[int] = None
+    # P2 learning: category NAME guessed by the vision model when it was
+    # primed with the family's payee→category few-shot history. Resolved to a
+    # real category downstream; None when no few-shot context was supplied.
+    suggested_category: Optional[str] = None
 
 
 RECEIPT_PROMPT = """Analyze this receipt image and extract the following information. Return ONLY valid JSON, no markdown or explanation.
@@ -220,7 +224,10 @@ async def _get_family_model(family_id: UUID) -> str:
 
 
 async def scan_receipt(
-    image_bytes: bytes, media_type: str, model: Optional[str] = None
+    image_bytes: bytes,
+    media_type: str,
+    model: Optional[str] = None,
+    category_hints: Optional[str] = None,
 ) -> ScannedReceipt:
     """Extract transaction data from a receipt image via LiteLLM proxy.
 
@@ -276,6 +283,22 @@ async def scan_receipt(
 
     active_model = model or RECEIPT_MODEL
 
+    # P2 learning: when the caller supplies few-shot payee→category history,
+    # append it to the extraction prompt and ask the model to also return a
+    # "suggested_category" NAME drawn from that history. This primes the model
+    # with the household's established categorization habits so its guess
+    # matches (e.g. this family always files "HEB" under "Mandado").
+    prompt = RECEIPT_PROMPT
+    if category_hints:
+        prompt = (
+            RECEIPT_PROMPT
+            + "\n\n"
+            + category_hints
+            + '\n\nAlso include a top-level "suggested_category" field: the single '
+            "best category NAME for this purchase drawn from the history above, "
+            "or null if none clearly fits."
+        )
+
     # thinking_config disables Gemini 2.5 Flash's default reasoning mode,
     # which otherwise burns the 4096-token budget before emitting JSON.
     # Only send it for Gemini models — vLLM backends (qwen-vl, etc.) don't
@@ -301,7 +324,7 @@ async def scan_receipt(
                         "role": "user",
                         "content": [
                             {"type": "image_url", "image_url": {"url": data_uri}},
-                            {"type": "text", "text": RECEIPT_PROMPT},
+                            {"type": "text", "text": prompt},
                         ],
                     }
                 ],
@@ -383,6 +406,14 @@ async def scan_receipt(
     else:
         parsed_iva_cents = None
 
+    # Learned category hint (P2): only trust a non-empty string.
+    raw_suggested = data.get("suggested_category")
+    parsed_suggested = (
+        raw_suggested.strip()
+        if isinstance(raw_suggested, str) and raw_suggested.strip()
+        else None
+    )
+
     return ScannedReceipt(
         date=parsed_date,
         total_amount=parsed_total,
@@ -393,6 +424,7 @@ async def scan_receipt(
         confidence=data.get("confidence", 0.0),
         card_last4=parsed_card_last4,
         iva_cents=parsed_iva_cents,
+        suggested_category=parsed_suggested,
     )
 
 
@@ -491,8 +523,22 @@ async def scan_and_create_transaction(
     # (0) Resolve per-family model preference --------------------------------
     family_model = await _get_family_model(family_id)
 
+    # (0b) Learning few-shot: prime the vision prompt with this family's recent
+    # payee→category history so the model's category guess matches established
+    # household habits. Best-effort — a query failure must never block a scan.
+    category_hints: Optional[str] = None
+    try:
+        _pairs = await CategorizationRuleService.recent_payee_category_pairs(
+            db, family_id,
+        )
+        category_hints = CategorizationRuleService.format_category_fewshot(_pairs) or None
+    except Exception:
+        logger.exception("few-shot assembly failed for family %s", family_id)
+
     # (1) Vision extract -----------------------------------------------------
-    receipt = await scan_receipt(image_bytes, media_type, model=family_model)
+    receipt = await scan_receipt(
+        image_bytes, media_type, model=family_model, category_hints=category_hints,
+    )
 
     scanned_dict = {
         "date": receipt.date.isoformat() if receipt.date else None,
@@ -775,6 +821,17 @@ async def scan_and_create_transaction(
             header_cat = transfer_cat
     if not header_cat and payee_row is not None and payee_row.default_category_id:
         header_cat = payee_row.default_category_id
+    # Learned few-shot hint (P2): the vision model's category guess, made while
+    # primed with the family's payee→category history. Ranks above the generic
+    # AI fallback but below explicit rules / transfers / payee defaults. The
+    # isinstance guard keeps MagicMock-based test receipts (which don't set a
+    # real string here) out of this path.
+    if not header_cat and isinstance(getattr(receipt, "suggested_category", None), str):
+        learned_cat = await _resolve_category_by_name(
+            db, family_id, receipt.suggested_category,
+        )
+        if learned_cat is not None:
+            header_cat = learned_cat
     if not header_cat:
         from app.services.budget.category_ai_service import CategoryAIService
         try:
@@ -993,6 +1050,34 @@ async def _auto_check_shopping_items(
 # and readable. They share the same family-tenant assumptions as the
 # caller (every input is already scoped by family_id).
 # ---------------------------------------------------------------------------
+
+
+async def _resolve_category_by_name(
+    db: AsyncSession, family_id: UUID, name: Optional[str],
+) -> Optional[UUID]:
+    """Resolve a category NAME to its id within a family (case/trim-insensitive).
+
+    Used to turn the vision model's learned ``suggested_category`` string into a
+    real ``BudgetCategory.id``. Returns None when the name is blank or no active
+    category matches — so an unknown/hallucinated name simply falls through to
+    the AI fallback rather than mis-categorizing.
+    """
+    if not name or not name.strip():
+        return None
+    from sqlalchemy import func as _func
+    from app.models.budget import BudgetCategory
+
+    stmt = (
+        select(BudgetCategory)
+        .where(
+            BudgetCategory.family_id == family_id,
+            _func.lower(_func.trim(BudgetCategory.name)) == name.strip().lower(),
+            BudgetCategory.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    row = (await db.execute(stmt)).scalars().first()
+    return row.id if row else None
 
 
 async def _find_or_create_payee(

@@ -313,6 +313,51 @@ _COPY = {
         },
         "body": None,
     },
+    # ── Savings goals (P2 — CASH / Save jar) ────────────────────────
+    "savings_goal_request_parent": {
+        "type": NT.BANK_REQUEST,
+        "title": {
+            "es": "🎯 {kid} quiere una meta de ahorro",
+            "en": "🎯 {kid} wants a savings goal",
+        },
+        "body": {
+            "es": '"{goal}" — {amount}. Apruébala en el Banco Familiar.',
+            "en": '"{goal}" — {amount}. Approve it in Family Bank.',
+        },
+    },
+    "savings_goal_approved_kid": {
+        "type": NT.GOAL_REACHED,
+        "title": {
+            "es": "🎯 ¡Tu meta fue aprobada!",
+            "en": "🎯 Your goal was approved!",
+        },
+        "body": {
+            "es": 'Ya puedes ahorrar para "{goal}".',
+            "en": 'You can now save toward "{goal}".',
+        },
+    },
+    "savings_goal_reached_kid": {
+        "type": NT.GOAL_REACHED,
+        "title": {
+            "es": "🎉 ¡Lograste tu meta de ahorro!",
+            "en": "🎉 You reached your savings goal!",
+        },
+        "body": {
+            "es": 'Ya ahorraste {amount} para "{goal}". ¡Felicidades!',
+            "en": 'You saved {amount} for "{goal}". Congrats!',
+        },
+    },
+    "savings_goal_reached_parent": {
+        "type": NT.GOAL_REACHED,
+        "title": {
+            "es": "🎉 {kid} logró su meta de ahorro",
+            "en": "🎉 {kid} reached their savings goal",
+        },
+        "body": {
+            "es": '"{goal}" — {amount} ahorrados.',
+            "en": '"{goal}" — {amount} saved.',
+        },
+    },
     # ── Virtual pet ─────────────────────────────────────────────────
     "pet_starving": {
         "type": NT.PET_NEEDS_ATTENTION,

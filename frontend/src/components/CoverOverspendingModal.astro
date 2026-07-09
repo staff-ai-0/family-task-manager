@@ -1,0 +1,260 @@
+---
+/**
+ * CoverOverspendingModal Component
+ *
+ * P2 (YNAB behavioral core): the guided "cover overspending" flow. When an
+ * expense category is overspent (available < 0) the month view shows a red
+ * "Cover" pill on that row; clicking it opens this modal pre-targeting that
+ * category. The parent picks a source category (only categories with positive
+ * available money can donate) and an amount, and we POST to
+ * /api/budget/allocations/cover-overspending, which shifts budgeted cents from
+ * the source envelope into the overspent one (Ready-to-Assign is conserved).
+ *
+ * The source dropdown is populated CLIENT-SIDE by reading the already-rendered
+ * .category-row data attributes (data-category-id / -name / -available /
+ * -is-income), so no extra fetch or prop plumbing is needed — the rows carry the
+ * same available figures the server computed for the month view.
+ *
+ * Props:
+ * - lang: 'en' | 'es'
+ * - t: translation function
+ * - year, month: the month being viewed (for the required first-of-month body)
+ */
+
+interface Props {
+    lang: 'en' | 'es';
+    t: (lang: string, key: string) => string;
+    year: number;
+    month: number;
+}
+
+const { lang, t, year, month } = Astro.props;
+---
+
+<div id="cover-overspend-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+    <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] max-w-md w-full">
+        <div class="bg-red-600 text-white px-6 py-4 rounded-t-[var(--radius-card)]">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-bold">
+                    ⚠ {t(lang, 'fin_cover_overspending')}
+                </h2>
+                <button id="cover-overspend-close-btn" class="text-white hover:text-brand-cream transition" aria-label="Close">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="p-6 space-y-4">
+            <!-- Overspent category + deficit -->
+            <div class="bg-red-50 border border-red-200 rounded-xl p-4">
+                <p class="text-sm font-bold text-brand-ink mb-0.5" id="cover-overspend-cat-name"></p>
+                <p class="text-xs text-red-700 font-semibold uppercase tracking-wider">
+                    {t(lang, 'fin_cover_deficit_label')}
+                    <span class="text-lg ml-1 normal-case tracking-normal" id="cover-overspend-deficit-amt"></span>
+                </p>
+            </div>
+
+            <!-- No sources available -->
+            <div id="cover-overspend-no-sources" class="hidden bg-brand-cream-deep border border-brand-ink/15 rounded-lg p-3 text-brand-ink-soft text-sm">
+                {t(lang, 'fin_cover_no_sources')}
+            </div>
+
+            <!-- Source category + amount (hidden when no sources) -->
+            <div id="cover-overspend-fields" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-brand-ink mb-2" for="cover-overspend-source-select">
+                        {t(lang, 'fin_cover_source_label')}
+                    </label>
+                    <select id="cover-overspend-source-select" class="w-full px-3 py-2 border border-brand-ink/20 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-brand-ink mb-2" for="cover-overspend-amount-input">
+                        {t(lang, 'fin_cover_amount_label')}
+                    </label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-brand-ink-soft">$</span>
+                        <input
+                            type="number"
+                            id="cover-overspend-amount-input"
+                            step="0.01"
+                            min="0.01"
+                            placeholder="0.00"
+                            class="w-full pl-7 pr-4 py-2 border border-brand-ink/20 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error / success -->
+            <div id="cover-overspend-error" class="hidden bg-red-100 border border-red-200 rounded-lg p-3 text-red-700 text-sm"></div>
+            <div id="cover-overspend-success" class="hidden bg-brand-mint/20 border border-brand-mint rounded-lg p-3 text-brand-mint-deep text-sm">
+                {t(lang, 'fin_cover_success')}
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-3 pt-2">
+                <button id="cover-overspend-cancel-btn" class="flex-1 bg-brand-cream-deep text-brand-ink px-4 py-2 rounded-lg font-semibold hover:bg-brand-cream-deep transition text-sm">
+                    {lang === "es" ? "Cancelar" : "Cancel"}
+                </button>
+                <button id="cover-overspend-confirm-btn" class="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition text-sm disabled:opacity-50">
+                    {t(lang, 'fin_cover_confirm')}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script define:vars={{ lang, year, month }}>
+    document.addEventListener('astro:page-load', () => {
+        const modal = document.getElementById('cover-overspend-modal');
+        if (!modal) return;
+
+        const catNameEl = document.getElementById('cover-overspend-cat-name');
+        const deficitEl = document.getElementById('cover-overspend-deficit-amt');
+        const noSourcesEl = document.getElementById('cover-overspend-no-sources');
+        const fieldsEl = document.getElementById('cover-overspend-fields');
+        const sourceSelect = document.getElementById('cover-overspend-source-select');
+        const amountInput = document.getElementById('cover-overspend-amount-input');
+        const errorEl = document.getElementById('cover-overspend-error');
+        const successEl = document.getElementById('cover-overspend-success');
+        const confirmBtn = document.getElementById('cover-overspend-confirm-btn');
+        const cancelBtn = document.getElementById('cover-overspend-cancel-btn');
+        const closeBtn = document.getElementById('cover-overspend-close-btn');
+
+        // es-MX MXN, 0 fraction digits — mirrors formatCurrency (lib/api/budget.ts)
+        // so the dropdown amounts match the figures rendered on the page.
+        const _fmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const fmtCents = (cents) => _fmt.format((Number(cents) || 0) / 100);
+        const monthStr = `${year}-${String(month).padStart(2, '0')}-01`;
+
+        let overspentId = null;
+
+        function hideMsgs() {
+            errorEl?.classList.add('hidden');
+            successEl?.classList.add('hidden');
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+        }
+
+        // Read source candidates straight from the rendered month view rows:
+        // expense categories (data-is-income="0") with positive available money,
+        // excluding the overspent target itself.
+        function collectSources(excludeId) {
+            const rows = document.querySelectorAll('.category-row');
+            const sources = [];
+            rows.forEach((row) => {
+                const id = row.dataset.categoryId;
+                if (!id || id === excludeId) return;
+                if (row.dataset.isIncome === '1') return;
+                const available = Number(row.dataset.available) || 0;
+                if (available > 0) {
+                    sources.push({ id, name: row.dataset.categoryName || '', available });
+                }
+            });
+            // Most-available first so the obvious donor is at the top.
+            sources.sort((a, b) => b.available - a.available);
+            return sources;
+        }
+
+        function openCoverModal(id, name, deficitCents) {
+            overspentId = id;
+            hideMsgs();
+            if (catNameEl) catNameEl.textContent = name || '';
+            if (deficitEl) deficitEl.textContent = fmtCents(deficitCents);
+
+            const sources = collectSources(id);
+            if (sourceSelect) {
+                sourceSelect.innerHTML = '';
+                sources.forEach((s) => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = `${s.name} (${fmtCents(s.available)})`;
+                    sourceSelect.appendChild(opt);
+                });
+            }
+
+            if (sources.length === 0) {
+                noSourcesEl?.classList.remove('hidden');
+                fieldsEl?.classList.add('hidden');
+                if (confirmBtn) confirmBtn.disabled = true;
+            } else {
+                noSourcesEl?.classList.add('hidden');
+                fieldsEl?.classList.remove('hidden');
+                if (confirmBtn) confirmBtn.disabled = false;
+                // Default the move to the full deficit; the backend caps it to
+                // what the source actually holds and surfaces a clear error if
+                // the parent asks for more.
+                if (amountInput) amountInput.value = ((Number(deficitCents) || 0) / 100).toFixed(2);
+            }
+
+            modal.classList.remove('hidden');
+            amountInput?.focus();
+        }
+
+        cancelBtn?.addEventListener('click', closeModal);
+        closeBtn?.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+        });
+        [sourceSelect, amountInput].forEach((el) => el?.addEventListener('input', hideMsgs));
+
+        confirmBtn?.addEventListener('click', async () => {
+            hideMsgs();
+            const sourceId = sourceSelect?.value;
+            if (!sourceId) {
+                if (errorEl) {
+                    errorEl.textContent = lang === 'es'
+                        ? 'Selecciona una categoría de la cual mover dinero.'
+                        : 'Choose a category to move money from.';
+                    errorEl.classList.remove('hidden');
+                }
+                return;
+            }
+            // Amount is optional: a blank/invalid value covers the full deficit.
+            const raw = parseFloat(amountInput?.value || '');
+            const body = {
+                month: monthStr,
+                overspent_category_id: overspentId,
+                source_category_id: sourceId,
+            };
+            if (!isNaN(raw) && raw > 0) body.amount = Math.round(raw * 100);
+
+            confirmBtn.disabled = true;
+            try {
+                const res = await fetch('/api/budget/allocations/cover-overspending', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.detail || data.message || (lang === 'es' ? 'No se pudo cubrir el sobregasto' : 'Could not cover overspending'));
+                }
+                successEl?.classList.remove('hidden');
+                // Row budgeted/available are now stale — reload to resync.
+                setTimeout(() => window.location.reload(), 600);
+            } catch (err) {
+                if (errorEl) { errorEl.textContent = err.message; errorEl.classList.remove('hidden'); }
+                confirmBtn.disabled = false;
+            }
+        });
+
+        // Wire every row's red "Cover" pill to open this modal pre-targeting it.
+        document.querySelectorAll('.cover-overspend-btn').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openCoverModal(
+                    btn.dataset.categoryId,
+                    btn.dataset.categoryName,
+                    Number(btn.dataset.deficit) || 0,
+                );
+            });
+        });
+    });
+</script>

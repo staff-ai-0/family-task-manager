@@ -854,3 +854,194 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             "adjustment_amount": adjustment_amount,
             "adjustment_transaction_id": adjustment_id,
         }
+
+    # ------------------------------------------------------------------
+    # Recurring-charge detection (P2)
+    # ------------------------------------------------------------------
+    # Scan the family's transaction history for repeating
+    # (payee, ~amount, ~regular cadence) series — the forgotten streaming
+    # subscription, the monthly gym, rent — and surface them as candidates
+    # the parent can promote to a BudgetRecurringTransaction with one click.
+    # Pure history analysis: no new tables, no AI. Family-scoped.
+
+    # Cadence bands: (name, expected gap in days, tolerance in days). A series
+    # is classified by its average inter-charge gap; every gap must also fall
+    # inside a generous window (± 2× tolerance) so irregular one-off clusters
+    # are rejected rather than mislabeled.
+    _CADENCE_BANDS = (
+        ("weekly", 7, 2),
+        ("biweekly", 14, 3),
+        ("monthly", 30, 6),
+        ("yearly", 365, 25),
+    )
+
+    @classmethod
+    async def detect_recurring_candidates(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        *,
+        min_occurrences: int = 3,
+        amount_tolerance: float = 0.05,
+        lookback_days: int = 400,
+    ) -> List[dict]:
+        """Detect likely recurring charges from transaction history.
+
+        Groups a family's transactions by payee, clusters each payee's charges
+        by near-equal amount, and flags clusters that repeat on a regular
+        cadence (weekly / biweekly / monthly / yearly) with at least
+        ``min_occurrences`` charges. One-off or irregular spending is ignored.
+
+        Payees that already have an active recurring template are skipped so we
+        never suggest a duplicate.
+
+        Returns a list of candidate dicts sorted by number of occurrences:
+        ``{payee_id, payee_name, amount_cents, cadence, occurrences,
+        avg_interval_days, last_date, next_estimated_date, account_id,
+        category_id}``.
+        """
+        from collections import defaultdict
+        from datetime import timedelta
+        from app.models.budget import BudgetPayee, BudgetRecurringTransaction
+
+        # Payees already covered by an active recurring template → skip.
+        covered_q = select(BudgetRecurringTransaction.payee_id).where(
+            and_(
+                BudgetRecurringTransaction.family_id == family_id,
+                BudgetRecurringTransaction.is_active == True,  # noqa: E712
+                BudgetRecurringTransaction.payee_id.isnot(None),
+            )
+        )
+        covered = {
+            pid for pid in (await db.execute(covered_q)).scalars().all() if pid is not None
+        }
+
+        since = date.today() - timedelta(days=lookback_days)
+        txn_q = (
+            select(BudgetTransaction, BudgetPayee.name)
+            .join(BudgetPayee, BudgetTransaction.payee_id == BudgetPayee.id)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.payee_id.isnot(None),
+                    BudgetTransaction.deleted_at.is_(None),
+                    BudgetTransaction.is_parent == False,  # noqa: E712
+                    BudgetTransaction.date >= since,
+                )
+            )
+            .order_by(BudgetTransaction.payee_id, BudgetTransaction.date.asc())
+        )
+        rows = (await db.execute(txn_q)).all()
+
+        by_payee: dict = defaultdict(list)
+        for txn, payee_name in rows:
+            if txn.payee_id in covered:
+                continue
+            by_payee[(txn.payee_id, payee_name)].append(txn)
+
+        candidates: List[dict] = []
+        for (payee_id, payee_name), txns in by_payee.items():
+            if len(txns) < min_occurrences:
+                continue
+            for cluster in cls._cluster_by_amount(txns, amount_tolerance):
+                if len(cluster) < min_occurrences:
+                    continue
+                analysis = cls._analyze_cadence(cluster)
+                if analysis is None:
+                    continue
+                analysis["payee_id"] = payee_id
+                analysis["payee_name"] = payee_name
+                candidates.append(analysis)
+
+        candidates.sort(key=lambda c: c["occurrences"], reverse=True)
+        return candidates
+
+    @staticmethod
+    def _cluster_by_amount(txns: List, tolerance: float) -> List[List]:
+        """Greedily cluster transactions whose absolute amounts are near-equal.
+
+        Ordered ascending by |amount|; a new cluster starts whenever a charge
+        exceeds the cluster's smallest charge by more than ``tolerance`` (with a
+        100-cent floor so tiny charges still cluster). Subscription charges are
+        typically identical, so this reliably keeps a payee's Netflix charges
+        together while separating a one-off large purchase to the same payee.
+        """
+        ordered = sorted(txns, key=lambda t: abs(t.amount))
+        clusters: List[List] = []
+        current: List = []
+        ref: Optional[int] = None
+        for t in ordered:
+            amt = abs(t.amount)
+            if ref is None:
+                current = [t]
+                ref = amt
+                continue
+            tol = max(int(ref * tolerance), 100)
+            if amt - ref <= tol:
+                current.append(t)
+            else:
+                clusters.append(current)
+                current = [t]
+                ref = amt
+        if current:
+            clusters.append(current)
+        return clusters
+
+    @classmethod
+    def _analyze_cadence(cls, cluster: List) -> Optional[dict]:
+        """Classify a same-amount cluster's cadence, or None if irregular.
+
+        Returns the candidate payload (minus payee identity) when the cluster's
+        inter-charge gaps look like a regular weekly/biweekly/monthly/yearly
+        schedule; None otherwise.
+        """
+        import statistics
+        from collections import Counter
+        from datetime import timedelta
+
+        dates = sorted(t.date for t in cluster)
+        gaps = [
+            (dates[i] - dates[i - 1]).days for i in range(1, len(dates))
+        ]
+        gaps = [g for g in gaps if g > 0]
+        if len(gaps) < 2:
+            return None
+
+        avg = sum(gaps) / len(gaps)
+        cadence = center = tol = None
+        for name, expected, band in cls._CADENCE_BANDS:
+            if abs(avg - expected) <= band:
+                cadence, center, tol = name, expected, band
+                break
+        if cadence is None:
+            return None
+
+        # Regularity guard: reject clusters where any single gap is wildly off
+        # the cadence even though the average happens to land in-band.
+        window = tol * 2
+        if not all(center - window <= g <= center + window for g in gaps):
+            return None
+
+        amounts = [abs(t.amount) for t in cluster]
+        median_amt = int(round(statistics.median(amounts)))
+        expense_leaning = sum(1 for t in cluster if t.amount < 0) >= len(cluster) / 2
+        amount_cents = -median_amt if expense_leaning else median_amt
+
+        cat_counts = Counter(
+            t.category_id for t in cluster if t.category_id is not None
+        )
+        category_id = cat_counts.most_common(1)[0][0] if cat_counts else None
+
+        last_txn = max(cluster, key=lambda t: t.date)
+        next_estimated = last_txn.date + timedelta(days=int(round(avg)))
+
+        return {
+            "occurrences": len(cluster),
+            "amount_cents": amount_cents,
+            "cadence": cadence,
+            "avg_interval_days": round(avg, 1),
+            "last_date": last_txn.date,
+            "next_estimated_date": next_estimated,
+            "account_id": last_txn.account_id,
+            "category_id": category_id,
+        }

@@ -7,6 +7,7 @@ Analytics and reporting endpoints for budget data.
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date
+from typing import Optional
 from uuid import UUID
 
 from app.core.database import get_db
@@ -82,5 +83,27 @@ async def get_net_worth_report(
     report = await ReportService.get_net_worth(
         db, family_id, as_of_date
     )
-    
+
     return report
+
+
+@router.get("/cash-flow-forecast")
+async def get_cash_flow_forecast(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    horizon_days: int = Query(30, ge=1, le=365, description="Days to project forward (e.g. 30, 60, 90)"),
+    as_of_date: Optional[date] = Query(None, description="Project from this date (default: today)"),
+):
+    """Cash-flow forecast + bill calendar for the coming horizon.
+
+    Projects active recurring transactions forward as upcoming/expected items,
+    returns a projected running-balance series (current balance + scheduled
+    income − scheduled bills) per account and total, plus an ``upcoming`` list
+    ready to render as a bill calendar / list-by-date.
+    """
+    await require_feature("budget_reports", db, current_user)
+    family_id = to_uuid_required(current_user.family_id)
+
+    return await ReportService.get_cash_flow_forecast(
+        db, family_id, horizon_days=horizon_days, as_of_date=as_of_date
+    )

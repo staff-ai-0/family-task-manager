@@ -566,3 +566,167 @@ class CategorizationRuleService(BaseFamilyService[BudgetCategorizationRule]):
             for pid, pname, cnt in rows
             if pname.lower() not in excluded
         ]
+
+    # ------------------------------------------------------------------
+    # Learning categorization (P2)
+    # ------------------------------------------------------------------
+    # Two complementary mechanisms, both derived from the family's own
+    # categorized-transaction history — no new tables required:
+    #
+    #   (a) recent_payee_category_pairs / format_category_fewshot →
+    #       few-shot context that primes the receipt-scanner vision prompt
+    #       with "this family files HEB under Mandado" style hints so the
+    #       model's category guess matches the household's established habits.
+    #
+    #   (b) suggest_rules_from_history → once a payee has been assigned the
+    #       SAME category on N+ transactions (i.e. the user repeatedly makes
+    #       the same correction), propose a durable BudgetCategorizationRule
+    #       so the categorization becomes automatic going forward.
+    # ------------------------------------------------------------------
+
+    FEWSHOT_DEFAULT_LIMIT = 15
+
+    @classmethod
+    async def recent_payee_category_pairs(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        limit: int = FEWSHOT_DEFAULT_LIMIT,
+    ) -> List[dict]:
+        """Most-recently-used distinct (payee, category) pairs for a family.
+
+        Returns ``[{"payee": str, "category": str}, ...]`` ordered most-recent
+        first (by the latest ``updated_at`` of any transaction in the pair).
+        Used to assemble few-shot context for the receipt-scanner prompt so
+        the model inherits the household's established categorization habits.
+
+        Family-scoped: only this family's categorized, non-deleted, non-split
+        transactions contribute.
+        """
+        from app.models.budget import BudgetPayee
+
+        q = (
+            select(
+                BudgetPayee.name,
+                BudgetCategory.name,
+                func.max(BudgetTransaction.updated_at).label("last_used"),
+            )
+            .join(BudgetPayee, BudgetTransaction.payee_id == BudgetPayee.id)
+            .join(BudgetCategory, BudgetTransaction.category_id == BudgetCategory.id)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.payee_id.isnot(None),
+                    BudgetTransaction.category_id.isnot(None),
+                    BudgetTransaction.deleted_at.is_(None),
+                    BudgetTransaction.is_parent.is_(False),
+                )
+            )
+            .group_by(BudgetPayee.name, BudgetCategory.name)
+            .order_by(func.max(BudgetTransaction.updated_at).desc())
+            .limit(limit)
+        )
+        rows = (await db.execute(q)).all()
+        return [{"payee": payee_name, "category": cat_name} for payee_name, cat_name, _ in rows]
+
+    @staticmethod
+    def format_category_fewshot(pairs: List[dict]) -> str:
+        """Render payee→category pairs as a prompt-ready hint block.
+
+        Returns an empty string when there is no history, so callers can
+        treat "no learned context" and "feature off" identically.
+        """
+        if not pairs:
+            return ""
+        lines = [
+            "Known merchant→category history for this family "
+            "(use as a hint when guessing the category):"
+        ]
+        for p in pairs:
+            payee = (p.get("payee") or "").strip()
+            category = (p.get("category") or "").strip()
+            if payee and category:
+                lines.append(f"- {payee} → {category}")
+        # If every pair was blank we degrade to no hint rather than a header
+        # with no examples.
+        return "\n".join(lines) if len(lines) > 1 else ""
+
+    @classmethod
+    async def suggest_rules_from_history(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        min_count: int = 2,
+    ) -> List[dict]:
+        """Propose payee→category rules from repeated identical categorizations.
+
+        For each payee whose transactions land in the SAME category at least
+        ``min_count`` times (the dominant category is chosen when a payee spans
+        several), and which has no existing exact payee rule, emit a suggestion:
+        ``{payee_id, payee_name, category_id, category_name, match_count}``.
+
+        This is the "learn from repeated corrections" half of P2 — after the
+        parent recategorizes payee X → category Y a couple of times, we surface
+        a one-click rule so it never needs correcting again. Family-scoped.
+        """
+        from app.models.budget import BudgetPayee
+
+        agg_q = (
+            select(
+                BudgetPayee.id,
+                BudgetPayee.name,
+                BudgetCategory.id,
+                BudgetCategory.name,
+                func.count(BudgetTransaction.id).label("cnt"),
+            )
+            .join(BudgetPayee, BudgetTransaction.payee_id == BudgetPayee.id)
+            .join(BudgetCategory, BudgetTransaction.category_id == BudgetCategory.id)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.payee_id.isnot(None),
+                    BudgetTransaction.category_id.isnot(None),
+                    BudgetTransaction.deleted_at.is_(None),
+                    BudgetTransaction.is_parent.is_(False),
+                )
+            )
+            .group_by(
+                BudgetPayee.id, BudgetPayee.name, BudgetCategory.id, BudgetCategory.name
+            )
+            .having(func.count(BudgetTransaction.id) >= min_count)
+        )
+        rows = (await db.execute(agg_q)).all()
+
+        # Payees that already have an exact payee rule are already automated —
+        # don't nag the user to create a rule they effectively have.
+        rule_q = select(BudgetCategorizationRule.pattern).where(
+            and_(
+                BudgetCategorizationRule.family_id == family_id,
+                BudgetCategorizationRule.rule_type == "exact",
+                BudgetCategorizationRule.match_field == "payee",
+            )
+        )
+        excluded = {p.lower() for p in (await db.execute(rule_q)).scalars().all()}
+
+        # Collapse to one suggestion per payee — its dominant category.
+        best: dict = {}
+        for pid, pname, cid, cname, cnt in rows:
+            if pname.lower() in excluded:
+                continue
+            current = best.get(pid)
+            if (
+                current is None
+                or cnt > current["match_count"]
+                or (cnt == current["match_count"] and cname < current["category_name"])
+            ):
+                best[pid] = {
+                    "payee_id": pid,
+                    "payee_name": pname,
+                    "category_id": cid,
+                    "category_name": cname,
+                    "match_count": cnt,
+                }
+
+        suggestions = list(best.values())
+        suggestions.sort(key=lambda r: r["match_count"], reverse=True)
+        return suggestions
