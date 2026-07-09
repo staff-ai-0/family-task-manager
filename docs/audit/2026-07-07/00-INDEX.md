@@ -55,13 +55,14 @@ Highest-ROI build = "Family Bank" (payday + jars + parent interest/match) on exi
 - [x] Pricing: MXN PayPal plans (Plus MX$99, Pro MX$199, per-family); pricing page copy ✅ (migration mxn_plan_currency_w6; operator must run setup_paypal_plans.py against live PayPal)
 - [x] Packaging: scan-a-flyer entry points; Jarvis weekly meal-plan scheduled prompt; Jarvis surfaced in budget pages ✅
 
-### P2 — Post-launch growth
-- [ ] Kid money leftovers from P1: dedicated goal-jar UI, kid budget-envelopes, ages 3-7 star mode
+### P2 — Post-launch growth — partial in PR #94 (branch feat/launch-p2; suite 1582 green; NOT merged/deployed)
+- [x] Kid money: dedicated goal-jar UI (Save-jar backed) + ages 3-7 star mode ✅ (kid budget-envelopes still open — below)
+- [x] Budget: month rollover + cover-overspend flow; bill calendar + 30/60d forecast; learning categorization (corrections as few-shot); recurring-charge detection ✅ (migration savings_goal_star_mode)
+- [ ] Kid budget-envelopes (per-kid budget accounts fed by allowance/gigs) — still open
 - [ ] Quest-mode kid UI + pet evolution stages — BLOCKED on pet go/no-go decision (memory: feedback_virtual_pet_uncertain; research strongly supports — Joon evidence in 02, decays wk 4-8 without progression ladder)
 - [ ] Family Cup weekly leaderboard season; cooperative family boss battle; completions auto-post to chat
-- [ ] Budget: month rollover + cover-overspend flow; bill calendar + 30/60d forecast; learning categorization (corrections as few-shot); recurring-charge detection
 - [ ] Capacitor wrap (remote-URL shell + FCM/APNs) for app stores; referral program; Spanish SEO content ("cuánto domingo dar por edad"); routines library (icon tap-through); TDAH content angle
-- [ ] Ops maturity: staging env; request-ID middleware; metrics; image thumbnails; composite (family_id, date) indexes; Redis pub/sub for chat SSE; soft-delete for Family/User; 6h backup cadence
+- [ ] Ops maturity: staging env; metrics; image thumbnails; composite (family_id, date) indexes; Redis pub/sub for chat SSE; soft-delete for Family/User; 6h backup cadence (request-ID middleware DONE in P0)
 
 ### Explicit don't-build (research-backed)
 Card issuance / bank aggregation at launch (MX coverage poor, category's #1 complaint source);
