@@ -79,12 +79,22 @@ class TaskAssignmentWithDetails(TaskAssignmentResponse):
     approval_notes: Optional[str] = None
 
 
+class SkippedTemplate(BaseModel):
+    """A template the shuffle could not expand (surfaced, never silent)."""
+
+    template_id: UUID
+    title: str
+    reason: str
+
+
 class ShuffleResponse(BaseModel):
     """Response from shuffle operation"""
 
     week_of: date
     assignments_created: int
     assignments: List[TaskAssignmentResponse]
+    # Optional + defaulted so strict mobile decoders are unaffected.
+    skipped_templates: List[SkippedTemplate] = []
 
 
 class ShufflePreviewMemberTotal(BaseModel):
@@ -110,6 +120,7 @@ class ShufflePreviewResponse(BaseModel):
     week_of: date
     totals_by_member: List[ShufflePreviewMemberTotal]
     assignments: List[ShufflePreviewItem]
+    skipped_templates: List[SkippedTemplate] = []
 
 
 class DailyProgressResponse(BaseModel):

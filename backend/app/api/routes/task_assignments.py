@@ -47,7 +47,7 @@ async def shuffle_tasks(
     Generate weekly task assignments by shuffling templates (parent only).
     Deletes existing PENDING assignments for the target week and creates new ones.
     """
-    assignments = await TaskAssignmentService.shuffle_tasks(
+    assignments, skipped = await TaskAssignmentService.shuffle_tasks_detailed(
         db,
         family_id=to_uuid_required(current_user.family_id),
         week_of=request.week_of,
@@ -59,6 +59,7 @@ async def shuffle_tasks(
         week_of=week_of,
         assignments_created=len(assignments),
         assignments=assignments,
+        skipped_templates=skipped,
     )
 
 
@@ -487,7 +488,9 @@ def _assignment_to_detail(assignment) -> dict:
         "template_description": template.description if template else None,
         "template_title_es": template.title_es if template else None,
         "template_description_es": template.description_es if template else None,
-        "template_points": template.points if template else 0,
+        # Effective (effort-multiplied) points — what will actually be
+        # awarded; showing raw base points made the credit look wrong.
+        "template_points": template.effective_points if template else 0,
         "template_effort_level": template.effort_level if template else 1,
         "template_is_bonus": template.is_bonus if template else False,
         "template_requires_proof": bool(template.requires_proof) if template else False,

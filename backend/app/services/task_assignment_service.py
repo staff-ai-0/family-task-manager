@@ -76,18 +76,29 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         return d - timedelta(days=d.weekday())
 
     @staticmethod
-    def _expand_dates(week_monday: date, interval_days: int) -> List[date]:
+    def _expand_dates(
+        week_monday: date,
+        interval_days: int,
+        days_of_week: Optional[List[int]] = None,
+    ) -> List[date]:
         """
-        Expand a template into specific dates for the week based on interval_days.
-        
+        Expand a template into specific dates for the week.
+
+        days_of_week (Mon=0..Sun=6), when set, wins: exactly those weekdays.
+        Otherwise the interval pattern:
         interval_days=1 -> [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
         interval_days=7 -> [Any single day] (Handled by shuffle_tasks now)
         Others -> Fixed pattern starting Mon
         """
+        if days_of_week:
+            return [
+                week_monday + timedelta(days=d)
+                for d in sorted({int(d) for d in days_of_week if 0 <= int(d) <= 6})
+            ]
         dates = []
         current = week_monday
         week_end = week_monday + timedelta(days=6)  # Sunday
-        
+
         # Standard rigid expansion
         while current <= week_end:
             dates.append(current)
@@ -95,10 +106,17 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         return dates
 
     @staticmethod
-    def _resolve_week_monday(week_of: Optional[date]) -> date:
-        """Pick the target week's Monday. Sundays bump to next week."""
+    def _resolve_week_monday(
+        week_of: Optional[date], today: Optional[date] = None
+    ) -> date:
+        """Pick the target week's Monday. Sundays bump to next week.
+
+        ``today`` is the family-local date (falls back to server date) — using
+        the server-UTC date made a Saturday-night shuffle in Mexico target the
+        NEXT week (it was already Sunday in UTC).
+        """
         if week_of is None:
-            today = date.today()
+            today = today or date.today()
             if today.weekday() == 6:  # Sunday → next week
                 return today + timedelta(days=1)
             return TaskAssignmentService._get_monday(today)
@@ -190,11 +208,15 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         return carry
 
     @staticmethod
-    def _occurrences_per_week(interval_days: int) -> int:
-        """Number of dates _expand_dates yields for a week (depends only on
-        the interval): 1→7, 2→4, 3→3, 4→2, 5→2, 6→2, 7→1."""
+    def _occurrences_per_week(
+        interval_days: int, days_of_week: Optional[List[int]] = None
+    ) -> int:
+        """Number of dates _expand_dates yields for a week: len(days_of_week)
+        when set, else by interval: 1→7, 2→4, 3→3, 4→2, 5→2, 6→2, 7→1."""
         anchor = date(2026, 1, 5)  # any Monday
-        return len(TaskAssignmentService._expand_dates(anchor, max(1, interval_days)))
+        return len(TaskAssignmentService._expand_dates(
+            anchor, max(1, interval_days), days_of_week
+        ))
 
     @staticmethod
     def _rotation_start_for_week(template: TaskTemplate, week_monday: date) -> int:
@@ -219,7 +241,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             return 0
         if template.rotation_week_of == week_monday:
             occurrences = TaskAssignmentService._occurrences_per_week(
-                template.interval_days or 1
+                template.interval_days or 1,
+                getattr(template, "days_of_week", None),
             )
             return max(0, int(template.rotation_cursor or 0) - occurrences)
         return int(template.rotation_cursor or 0)
@@ -248,12 +271,15 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         members: list[User],
         member_carry: Optional[dict[UUID, int]] = None,
         rotation_starts: Optional[dict[UUID, int]] = None,
-    ) -> tuple[list[TaskAssignment], dict[UUID, int]]:
+    ) -> tuple[list[TaskAssignment], dict[UUID, int], list[dict]]:
         """
         Pure builder — produces TaskAssignment instances WITHOUT db.add/commit.
         Caller decides whether to persist.
 
-        Returns (assignments, totals_per_member) where totals exclude carry.
+        Returns (assignments, totals_per_member, skipped) where totals exclude
+        carry and skipped lists templates that could not be expanded
+        ({template_id, title, reason}) — silent skips are how 8 of 9 prod
+        templates once generated nothing while the API reported success.
         """
         if not members:
             raise ValidationException("No active family members found")
@@ -273,6 +299,14 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         regular_templates = sorted(regular_templates, key=lambda t: t.points, reverse=True)
         rotation_starts = rotation_starts or {}
         assignments: list[TaskAssignment] = []
+        skipped: list[dict] = []
+        # Deterministic tiebreak rank from the seeded shuffle above.
+        member_rank = {m.id: i for i, m in enumerate(members)}
+        # Stable fallback order for ROTATE templates without a member list:
+        # sorted by id (NOT the rng-shuffled order) so the persisted
+        # rotation_cursor keeps meaning the same sequence across weeks.
+        def _stable(pool: list[User]) -> list[User]:
+            return sorted(pool, key=lambda m: str(m.id))
 
         def _new_assignment(template_id: UUID, user_id: UUID, d: date) -> TaskAssignment:
             return TaskAssignment(
@@ -295,6 +329,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         for template in regular_templates:
             eligible_members = members
 
+            # Role filter — applies to AUTO and to the ROTATE null-list
+            # fallback. An EXPLICIT member list (FIXED/ROTATE) is
+            # authoritative and is resolved below regardless of roles: the
+            # parent picked those people by name.
             allowed = template.allowed_roles or None
             if allowed:
                 allowed_lower = {r.lower() for r in allowed}
@@ -303,30 +341,56 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     if (m.role.value if hasattr(m.role, "value") else str(m.role)).lower()
                     in allowed_lower
                 ]
-                if not eligible_members:
-                    continue
 
             if template.assignment_type == AssignmentType.FIXED:
-                if not template.assigned_user_ids:
+                explicit = [
+                    m for m in members
+                    if str(m.id) in (template.assigned_user_ids or [])
+                ]
+                if not explicit:
+                    # No sane fallback for FIXED (whom would it pin?) —
+                    # report instead of silently generating nothing.
+                    skipped.append({
+                        "template_id": template.id,
+                        "title": template.title,
+                        "reason": "fixed template has no valid members",
+                    })
                     continue
-                eligible_members = [m for m in members if str(m.id) in template.assigned_user_ids]
-                if not eligible_members:
-                    continue
+                eligible_members = explicit
             elif template.assignment_type == AssignmentType.ROTATE:
-                if not template.assigned_user_ids:
-                    continue
                 # assigned_user_ids order (stable), not shuffled member order
-                eligible_members = TaskAssignmentService._rotation_eligible(
+                explicit = TaskAssignmentService._rotation_eligible(
                     template, members
                 )
-                if not eligible_members:
-                    continue
+                if explicit:
+                    eligible_members = explicit
+                else:
+                    # Null/empty/stale member list → rotate over ALL
+                    # participating members (role-filtered, stable order).
+                    # This was the 8-of-9-templates-dead prod bug.
+                    eligible_members = _stable(eligible_members)
+                    if not eligible_members:
+                        skipped.append({
+                            "template_id": template.id,
+                            "title": template.title,
+                            "reason": "no members match allowed_roles",
+                        })
+                        continue
+            elif not eligible_members:
+                # AUTO with a role filter that excludes everyone.
+                skipped.append({
+                    "template_id": template.id,
+                    "title": template.title,
+                    "reason": "no members match allowed_roles",
+                })
+                continue
 
-            if template.interval_days == 7:
+            if template.interval_days == 7 and not getattr(template, "days_of_week", None):
                 task_dates = week_dates
             else:
                 task_dates = TaskAssignmentService._expand_dates(
-                    week_monday, template.interval_days
+                    week_monday, template.interval_days,
+                    getattr(template, "days_of_week", None),
                 )
 
             if template.assignment_type == AssignmentType.FIXED:
@@ -342,7 +406,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 # so the rotation continues across weeks and is identical on
                 # a same-week re-shuffle.
                 rotate_dates = TaskAssignmentService._expand_dates(
-                    week_monday, template.interval_days
+                    week_monday, template.interval_days,
+                    getattr(template, "days_of_week", None),
                 )
                 start = rotation_starts.get(template.id, 0)
                 for i, d in enumerate(rotate_dates):
@@ -351,7 +416,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     _credit(chosen.id, d, template.points)
 
             else:  # AUTO
-                if template.interval_days == 7:
+                if template.interval_days == 7 and not getattr(template, "days_of_week", None):
                     # Pick (member, day) slot with min (day-load + cross-week bias)
                     candidates = [
                         (member_load[m.id][d.isoformat()] + _bias(m.id), m, d)
@@ -365,45 +430,31 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     )
                     _credit(best_member.id, best_date, template.points)
 
-                elif template.interval_days == 1:
-                    for d in week_dates:
-                        d_str = d.isoformat()
-                        day_candidates = [
-                            (member_load[m.id][d_str] + _bias(m.id), m)
-                            for m in eligible_members
-                        ]
-                        rng.shuffle(day_candidates)
-                        _, best_member = min(day_candidates, key=lambda x: x[0])
-                        assignments.append(
-                            _new_assignment(template.id, best_member.id, d)
-                        )
-                        _credit(best_member.id, d, template.points)
-
                 else:
-                    dates = task_dates
-                    candidates = []
-                    for m in eligible_members:
-                        max_impact = 0
-                        cum = 0
-                        for d in dates:
-                            load = member_load[m.id][d.isoformat()]
-                            if load > max_impact:
-                                max_impact = load
-                            cum += load
-                        candidates.append(
-                            (cum + _bias(m.id), max_impact, m)
-                        )
-                    rng.shuffle(candidates)
-                    _, _, best_member = min(candidates, key=lambda x: (x[0], x[1]))
-                    for d in dates:
+                    # Repeating AUTO chores (daily / every N days): rotate
+                    # PEOPLE across the occurrences instead of dumping every
+                    # instance on the lowest-carry member. The old per-day
+                    # greedy minimized total points, so a member with low
+                    # 2-week carry became a sink and got the SAME chore all
+                    # week ("assigns me sweep all days" — the prod complaint).
+                    # Order once by (bias, seeded rank) then round-robin: the
+                    # under-loaded member leads (points still balance out) but
+                    # everyone takes turns within the week.
+                    order = sorted(
+                        eligible_members,
+                        key=lambda m: (_bias(m.id), member_rank[m.id]),
+                    )
+                    for i, d in enumerate(task_dates):
+                        chosen = order[i % len(order)]
                         assignments.append(
-                            _new_assignment(template.id, best_member.id, d)
+                            _new_assignment(template.id, chosen.id, d)
                         )
-                        _credit(best_member.id, d, template.points)
+                        _credit(chosen.id, d, template.points)
 
         for template in bonus_templates:
             dates = TaskAssignmentService._expand_dates(
-                week_monday, template.interval_days
+                week_monday, template.interval_days,
+                getattr(template, "days_of_week", None),
             )
 
             # Filter eligible members by allowed_roles + assigned_user_ids.
@@ -420,6 +471,11 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 target_ids = set(template.assigned_user_ids)
                 eligible = [m for m in eligible if str(m.id) in target_ids]
             if not eligible:
+                skipped.append({
+                    "template_id": template.id,
+                    "title": template.title,
+                    "reason": "no eligible members for this gig",
+                })
                 continue
 
             mode = getattr(template, "gig_mode", "claim") or "claim"
@@ -438,21 +494,53 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     for member in eligible:
                         assignments.append(_new_assignment(template.id, member.id, d))
 
-        return assignments, totals
+        return assignments, totals, skipped
 
     @staticmethod
     async def shuffle_tasks(
         db: AsyncSession,
         family_id: UUID,
         week_of: Optional[date] = None,
+        today: Optional[date] = None,
     ) -> List[TaskAssignment]:
+        """Back-compat wrapper around shuffle_tasks_detailed — see there."""
+        assignments, _skipped = await TaskAssignmentService.shuffle_tasks_detailed(
+            db, family_id, week_of=week_of, today=today
+        )
+        return assignments
+
+    @staticmethod
+    async def shuffle_tasks_detailed(
+        db: AsyncSession,
+        family_id: UUID,
+        week_of: Optional[date] = None,
+        today: Optional[date] = None,
+    ) -> tuple[List[TaskAssignment], list[dict]]:
         """
         Generate weekly task assignments by shuffling templates across family members.
 
         Deterministic per (family_id, week_monday): same input → same output.
         Idempotent for PENDING (re-shuffle replaces only PENDING rows).
+
+        ``today`` (family-local date; resolved from the family timezone when
+        None) drives three guards:
+        - a week that already fully ended is rejected (it would only mint
+          instantly-overdue rows + auto late penalties);
+        - a mid-week shuffle never creates rows for days already past;
+        - occurrences whose (template, date) — or (template, date, member)
+          for gigs — already exists as a surviving non-PENDING row are NOT
+          regenerated (a completed chore must not get a pending twin).
+
+        Returns (assignments, skipped_templates).
         """
-        week_monday = TaskAssignmentService._resolve_week_monday(week_of)
+        if today is None:
+            today = await TaskAssignmentService._family_local_today(db, family_id)
+        week_monday = TaskAssignmentService._resolve_week_monday(week_of, today)
+
+        if week_monday + timedelta(days=6) < today:
+            raise ValidationException(
+                "Cannot shuffle a week that has already ended"
+            )
 
         regular_templates, bonus_templates, members = (
             await TaskAssignmentService._load_shuffle_inputs(db, family_id)
@@ -495,7 +583,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         )
         await db.execute(delete_stmt)
 
-        assignments, _ = TaskAssignmentService._compute_assignments(
+        assignments, _totals, skipped = TaskAssignmentService._compute_assignments(
             rng,
             family_id,
             week_monday,
@@ -506,26 +594,90 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             rotation_starts=rotation_starts,
         )
 
+        # Guard 1 — mid-week: drop occurrences for days already past. The
+        # rotation cursor still counts the full week's positions (kept
+        # deterministic), only the materialization is skipped.
+        if today > week_monday:
+            assignments = [a for a in assignments if a.assigned_date >= today]
+
+        # Guard 2 — survivors: rows that outlived the PENDING delete
+        # (completed / claimed / overdue / cancelled) already occupy their
+        # occurrence slot. Regenerating them duplicated completed chores and
+        # re-opened parent-cancelled ones. Regular templates own one slot per
+        # (template, date); gig rows are per-member.
+        survivor_rows = (await db.execute(
+            select(
+                TaskAssignment.template_id,
+                TaskAssignment.assigned_date,
+                TaskAssignment.assigned_to,
+            ).where(
+                and_(
+                    TaskAssignment.family_id == family_id,
+                    TaskAssignment.week_of == week_monday,
+                )
+            )
+        )).all()
+        if survivor_rows:
+            is_bonus_by_id = {
+                t.id: t.is_bonus for t in (regular_templates + bonus_templates)
+            }
+            taken_regular = {
+                (tid, d) for tid, d, _uid in survivor_rows
+                if not is_bonus_by_id.get(tid, False)
+            }
+            taken_bonus = {(tid, d, uid) for tid, d, uid in survivor_rows}
+            assignments = [
+                a for a in assignments
+                if (
+                    (a.template_id, a.assigned_date, a.assigned_to)
+                    not in taken_bonus
+                    if is_bonus_by_id.get(a.template_id, False)
+                    else (a.template_id, a.assigned_date) not in taken_regular
+                )
+            ]
+
+        # Real intra-day deadline (end of the local day) so the API's
+        # is_overdue field means something — due_date was previously never
+        # written anywhere.
+        tz = await TaskAssignmentService._family_tz(db, family_id)
+        from datetime import time as dt_time
+        for a in assignments:
+            a.due_date = datetime.combine(
+                a.assigned_date, dt_time(23, 59, 59), tzinfo=tz
+            ).astimezone(timezone.utc)
+
         # Persist the rotation state actually used for this week so the next
         # shuffle continues the round-robin instead of restarting at 0.
         # rotation_cursor stores the NEXT start (start used + occurrences
         # generated NOW, with the interval as it was at shuffle time), so a
         # later interval change can't corrupt the continuation offset.
+        # Templates the shuffle SKIPPED must not advance — that drifted the
+        # persisted cursor on dead templates.
+        skipped_ids = {s["template_id"] for s in skipped}
         for t in regular_templates:
-            if t.id in rotation_starts:
+            if t.id in rotation_starts and t.id not in skipped_ids:
                 t.rotation_week_of = week_monday
                 t.rotation_cursor = rotation_starts[
                     t.id
                 ] + TaskAssignmentService._occurrences_per_week(
-                    t.interval_days or 1
+                    t.interval_days or 1,
+                    getattr(t, "days_of_week", None),
                 )
 
         for a in assignments:
             db.add(a)
 
         await db.commit()
-        for a in assignments:
-            await db.refresh(a)
+        # Single re-select (with template eagerly loaded) instead of one
+        # round-trip per row — a full-family shuffle used to issue N refreshes.
+        if assignments:
+            ids = [a.id for a in assignments]
+            assignments = list((await db.execute(
+                select(TaskAssignment)
+                .options(selectinload(TaskAssignment.template))
+                .where(TaskAssignment.id.in_(ids))
+                .order_by(TaskAssignment.assigned_date, TaskAssignment.created_at)
+            )).scalars().all())
 
         # TASK_ASSIGNED: one localized notification (+ push) per assignee,
         # aggregated so a weekly shuffle never spams a device per-row.
@@ -551,19 +703,92 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "task-assigned notification fan-out failed"
             )
 
-        return assignments
+        return assignments, skipped
+
+    @staticmethod
+    async def auto_shuffle_all(db: AsyncSession) -> int:
+        """Sweep across ALL families: generate the CURRENT week for families
+        that already use the weekly shuffle but haven't generated it yet.
+
+        Opt-in by evidence: only families with at least one historical
+        assignment (any week before the current one) qualify — a family that
+        never shuffled is never surprised by auto-generated chores. Idempotent
+        per week: families with ANY assignment row in the current week are
+        skipped, so this can run hourly (and self-heals a Monday the backend
+        spent down). Returns number of assignments created.
+
+        Intended for the background scheduler (leader-only).
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Families with at least one active weekly-mode template.
+        weekly_only = func.coalesce(
+            TaskTemplate.recurrence_mode, "weekly"
+        ) != "since_completion"
+        family_ids = [
+            fid for (fid,) in (await db.execute(
+                select(TaskTemplate.family_id).where(
+                    and_(TaskTemplate.is_active == True, weekly_only)  # noqa: E712
+                ).distinct()
+            )).all()
+        ]
+
+        created_total = 0
+        for fid in family_ids:
+            try:
+                today = await TaskAssignmentService._family_local_today(db, fid)
+                week_monday = TaskAssignmentService._resolve_week_monday(
+                    None, today
+                )
+                counts = (await db.execute(
+                    select(
+                        func.count().filter(
+                            TaskAssignment.week_of == week_monday
+                        ),
+                        func.count().filter(
+                            TaskAssignment.week_of < week_monday
+                        ),
+                    ).select_from(TaskAssignment).where(
+                        TaskAssignment.family_id == fid
+                    )
+                )).one()
+                current_week_rows, historical_rows = int(counts[0]), int(counts[1])
+                if current_week_rows > 0:  # already generated — idempotent
+                    continue
+                if historical_rows == 0:  # never used the shuffle — opt-out
+                    continue
+                assignments, _skipped = (
+                    await TaskAssignmentService.shuffle_tasks_detailed(
+                        db, fid, week_of=week_monday, today=today
+                    )
+                )
+                created_total += len(assignments)
+                if assignments:
+                    logger.info(
+                        "auto-shuffle generated %d assignment(s) for family %s",
+                        len(assignments), fid,
+                    )
+            except Exception:
+                logger.exception("auto-shuffle failed for family %s", fid)
+        return created_total
 
     @staticmethod
     async def preview_shuffle(
         db: AsyncSession,
         family_id: UUID,
         week_of: Optional[date] = None,
+        today: Optional[date] = None,
     ) -> dict:
         """
         Dry-run shuffle — no DB writes. Returns the proposed assignment plan plus
         per-member point totals (current week) and cross-week carry used for bias.
+        Mirrors shuffle_tasks_detailed's date guards so what you preview is what
+        a real shuffle would create.
         """
-        week_monday = TaskAssignmentService._resolve_week_monday(week_of)
+        if today is None:
+            today = await TaskAssignmentService._family_local_today(db, family_id)
+        week_monday = TaskAssignmentService._resolve_week_monday(week_of, today)
 
         regular_templates, bonus_templates, members = (
             await TaskAssignmentService._load_shuffle_inputs(db, family_id)
@@ -580,7 +805,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             for t in regular_templates
             if t.assignment_type == AssignmentType.ROTATE
         }
-        assignments, totals = TaskAssignmentService._compute_assignments(
+        assignments, totals, skipped = TaskAssignmentService._compute_assignments(
             rng,
             family_id,
             week_monday,
@@ -590,6 +815,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             member_carry=carry,
             rotation_starts=rotation_starts,
         )
+        if today > week_monday:
+            assignments = [a for a in assignments if a.assigned_date >= today]
 
         # Build lightweight detail dicts (no DB IDs since not persisted)
         member_by_id = {m.id: m for m in members}
@@ -622,6 +849,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 for m in members
             ],
             "assignments": items,
+            "skipped_templates": skipped,
         }
 
     # ─── Assignment Queries ──────────────────────────────────────────
@@ -828,8 +1056,33 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "Only the assigned user can complete this assignment"
             )
 
+        # Future-dated occurrences cannot be completed early — otherwise a kid
+        # can bank the entire week's points Monday morning without the chores
+        # actually happening on their days.
+        local_today = await TaskAssignmentService._family_local_today(
+            db, family_id
+        )
+        if assignment.assigned_date > local_today:
+            raise ValidationException(
+                "Esta tarea es para un día futuro — complétala ese día / "
+                "This task is scheduled for a future day — complete it then"
+            )
+
         template = assignment.template
         auto_approved = False
+
+        # Competition gigs are first-CLAIM-wins: completing straight from
+        # PENDING would bypass the claim race and let several kids get paid
+        # for the same gig.
+        if (
+            template.is_bonus
+            and (template.gig_mode or "claim") == "competition"
+            and assignment.status == AssignmentStatus.PENDING
+        ):
+            raise ValidationException(
+                "Reclama esta tarea primero — el primero en reclamar gana / "
+                "Claim this gig first — first to claim wins"
+            )
 
         if template.is_bonus:
             # Gig path
@@ -896,6 +1149,21 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                             f"Auto-approved via AI photo check "
                             f"(score {validation.score:.2f}): {validation.explanation}"
                         )
+
+            # Auto-approval consumes the SAME monthly gig cap as a parent
+            # approval — without this check the trust-streak/AI path let
+            # families blow straight past the plan limit. At the cap the gig
+            # falls back to the manual parent queue (no error).
+            if auto_approved:
+                from app.core.premium import get_family_plan
+                from app.services.usage_service import UsageService
+                plan = await get_family_plan(db, child)
+                cap = int(plan.limits.get("max_gigs_per_month", 3))
+                incremented = await UsageService.try_increment_within_limit(
+                    db, family_id, "gig_completion", cap, amount=1,
+                )
+                if incremented is None:
+                    auto_approved = False
 
             if auto_approved:
                 assignment.approval_status = ApprovalStatus.APPROVED
@@ -1499,7 +1767,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "template_id": r.template_id,
                 "title": r.template.title,
                 "title_es": r.template.title_es,
-                "points": r.template.points,
+                # What the kid will actually earn (effort multiplier applied)
+                # — showing raw base points made the award look "wrong".
+                "points": r.template.effective_points,
                 "is_bonus": is_bonus,
                 "status": r.status.value,
                 "approval_status": r.approval_status.value if r.approval_status else "none",
@@ -1548,7 +1818,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
           through complete_assignment() so points are awarded correctly.
         """
         assignment = await TaskAssignmentService.get_assignment(
-            db, assignment_id, family_id
+            db, assignment_id, family_id, for_update=True
         )
 
         if status is not None and status not in (
@@ -1572,9 +1842,43 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             assignment.week_of = TaskAssignmentService._get_monday(assigned_date)
 
         if status is not None:
+            template = assignment.template
+            reopening_completed = (
+                assignment.status == AssignmentStatus.COMPLETED
+                and status in (AssignmentStatus.PENDING, AssignmentStatus.CANCELLED)
+            )
+            if reopening_completed and template is not None:
+                if template.is_bonus and assignment.approval_status == ApprovalStatus.APPROVED:
+                    # Approved gigs credited points AND advanced the trust
+                    # streak — unwinding all of that via a blind PATCH is a
+                    # bookkeeping trap. Route parents to the decide flow.
+                    raise ValidationException(
+                        "This gig was already approved and paid out — it "
+                        "cannot be re-opened or cancelled from here."
+                    )
+                if not template.is_bonus and assignment.approval_status in (
+                    ApprovalStatus.NONE, ApprovalStatus.APPROVED
+                ):
+                    # Mandatory chores credited effective_points at completion
+                    # (or approval). Reviving/cancelling must claw those back,
+                    # otherwise revive + re-complete double-credits.
+                    from app.services.points_service import PointsService
+                    await PointsService.award_assignment_completion(
+                        db,
+                        assignment.assigned_to,
+                        assignment.id,
+                        -template.effective_points,
+                    )
             assignment.status = status
             if status == AssignmentStatus.PENDING:
                 assignment.completed_at = None
+            if reopening_completed and template is not None and not template.is_bonus:
+                # Proof-required chores re-enter the queue on the next
+                # completion; clear the stale decision trail.
+                assignment.approval_status = ApprovalStatus.NONE
+                assignment.approved_by = None
+                assignment.approved_at = None
+                assignment.approval_notes = None
 
         await db.commit()
         # Re-fetch with template + user eagerly loaded
@@ -1642,16 +1946,21 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     # ─── Overdue Check ───────────────────────────────────────────────
 
     @staticmethod
-    async def _family_local_today(db: AsyncSession, family_id: UUID) -> date:
-        """Today's date in the family's timezone (fallback UTC)."""
+    async def _family_tz(db: AsyncSession, family_id: UUID):
+        """The family's ZoneInfo (fallback UTC)."""
         from zoneinfo import ZoneInfo
         from app.models.family import Family
         family = await db.get(Family, family_id)
         tz_name = (family.timezone if family and family.timezone else None) or "UTC"
         try:
-            tz = ZoneInfo(tz_name)
+            return ZoneInfo(tz_name)
         except Exception:
-            tz = ZoneInfo("UTC")
+            return ZoneInfo("UTC")
+
+    @staticmethod
+    async def _family_local_today(db: AsyncSession, family_id: UUID) -> date:
+        """Today's date in the family's timezone (fallback UTC)."""
+        tz = await TaskAssignmentService._family_tz(db, family_id)
         return datetime.now(tz).date()
 
     @staticmethod
@@ -1956,7 +2265,15 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     in allowed_lower
                 ]
             if tmpl.assignment_type in (AssignmentType.FIXED, AssignmentType.ROTATE):
-                eligible = TaskAssignmentService._rotation_eligible(tmpl, members)
+                explicit = TaskAssignmentService._rotation_eligible(tmpl, members)
+                if explicit:
+                    eligible = explicit
+                elif tmpl.assignment_type == AssignmentType.ROTATE:
+                    # Null/stale member list → rotate over the role-filtered
+                    # pool (same fallback as the weekly shuffle).
+                    eligible = sorted(eligible, key=lambda m: str(m.id))
+                else:
+                    eligible = []  # FIXED without members has no fallback
             else:
                 eligible = sorted(eligible, key=lambda m: str(m.id))
             if not eligible:
@@ -1971,12 +2288,16 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 chosen = eligible[cursor % len(eligible)]
                 tmpl.rotation_cursor = cursor + 1
 
+            from datetime import time as dt_time
             row = TaskAssignment(
                 template_id=tmpl.id,
                 assigned_to=chosen.id,
                 family_id=family_id,
                 status=AssignmentStatus.PENDING,
                 assigned_date=today,
+                due_date=datetime.combine(
+                    today, dt_time(23, 59, 59), tzinfo=tz
+                ).astimezone(timezone.utc),
                 week_of=TaskAssignmentService._get_monday(today),
             )
             db.add(row)

@@ -122,6 +122,11 @@ class TaskTemplate(Base):
     # Scheduling: how often per week (1=daily, 3=every 3 days, 7=weekly)
     interval_days = Column(Integer, nullable=False, default=1)
 
+    # Optional explicit weekdays (Mon=0..Sun=6). When set, the weekly
+    # expansion lands on exactly these days and interval_days is ignored —
+    # lets a parent say "Mon/Wed/Fri" instead of the rigid every-N pattern.
+    days_of_week = Column(JSONB, nullable=True)
+
     # Recurrence mode (W4.2). 'weekly' = classic weekday expansion above;
     # 'since_completion' = spawn a fresh assignment recur_every_n_days days
     # after the last completion (excluded from the weekly shuffle).
@@ -172,7 +177,6 @@ class TaskTemplate(Base):
 
     # Classification
     is_bonus = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False, index=True)
 
     # Ownership

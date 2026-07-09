@@ -1168,7 +1168,7 @@ class TestCompositeIndexes:
                     "SELECT indexname, indexdef FROM pg_indexes WHERE indexname "
                     "IN ('ix_budget_transactions_family_date', "
                     "'ix_family_chat_messages_family_created', "
-                    "'ix_task_assignments_family_due')"
+                    "'ix_task_assignments_family_assigned')"
                 )
             )
         ).all()
@@ -1176,7 +1176,7 @@ class TestCompositeIndexes:
         assert set(by_name) == {
             "ix_budget_transactions_family_date",
             "ix_family_chat_messages_family_created",
-            "ix_task_assignments_family_due",
+            "ix_task_assignments_family_assigned",
         }
         # The budget composite honours the DESC ordering on date.
         assert "date DESC" in by_name["ix_budget_transactions_family_date"]
