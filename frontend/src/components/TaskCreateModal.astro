@@ -16,7 +16,12 @@ interface Props {
 
 const { lang, token, memberList } = Astro.props;
 
-const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_days: 1 };
+const customPreset = { emoji: "✏️", title: "", title_es: "", effort_level: 1, interval_days: 1 };
+
+// Weekday chips: Mon=0 .. Sun=6 (backend convention)
+const dowLabels = lang === "es"
+    ? ["L", "M", "X", "J", "V", "S", "D"]
+    : ["M", "T", "W", "T", "F", "S", "S"];
 ---
 
 <!-- Backdrop -->
@@ -80,7 +85,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                             data-preset={JSON.stringify(p)}
                         >
                             <div class="text-2xl mb-1.5">{p.emoji}</div>
-                            <p class="text-xs font-semibold text-brand-ink leading-snug line-clamp-2">{p.title}</p>
+                            <p class="text-xs font-semibold text-brand-ink leading-snug line-clamp-2">{lang === "es" && p.title_es ? p.title_es : p.title}</p>
                             <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                 <span class={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
                                     p.effort_level === 3 ? "bg-brand-coral/15 text-brand-coral-deep" :
@@ -188,6 +193,27 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                             {lang === "es" ? "días después de completarla" : "days after it's completed"}
                         </span>
                     </div>
+                    <!-- Weekday picker (optional exact days, Mon=0..Sun=6) -->
+                    <div id="tcm-dow-wrap" class="mt-3">
+                        <p class="text-[11px] font-medium text-brand-ink-soft mb-1.5">
+                            {lang === "es" ? "Días exactos (opcional)" : "Exact days (optional)"}
+                        </p>
+                        <div class="flex gap-1.5" data-dowgroup>
+                            {dowLabels.map((d, i) => (
+                                <button
+                                    type="button"
+                                    class="tcm-dow h-8 w-8 text-xs font-bold rounded-full border-2 border-transparent bg-brand-cream-deep text-brand-ink-soft transition-colors"
+                                    data-dow={i}
+                                    aria-pressed="false"
+                                >{d}</button>
+                            ))}
+                        </div>
+                        <p id="tcm-dow-note" class="hidden text-[11px] text-brand-ink-soft mt-1.5">
+                            {lang === "es"
+                                ? "La tarea caerá exactamente en esos días cada semana."
+                                : "The task will land exactly on those days each week."}
+                        </p>
+                    </div>
                 </div>
 
                 <!-- 4. Assign To chips -->
@@ -207,6 +233,9 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                         </button>
                     </div>
 
+                    <!-- One-line explainer that follows the selected chip -->
+                    <p id="tcm-assign-hint" class="text-[11px] text-brand-ink-soft mt-1.5 px-1"></p>
+
                     <!-- Member checkboxes (revealed for fixed/rotate) -->
                     <div id="tcm-members" class="hidden mt-3 space-y-2 p-3 bg-brand-cream-deep rounded-xl border border-brand-ink/10">
                         {memberList.map((member) => (
@@ -221,6 +250,16 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                                 <span class="text-xs text-brand-ink-soft">{member.role.toLowerCase()}</span>
                             </label>
                         ))}
+                        <p id="tcm-rotate-hint" class="hidden text-[11px] text-brand-ink-soft px-2 pt-1">
+                            {lang === "es"
+                                ? "Sin selección = rota entre todos"
+                                : "No selection = rotates among everyone"}
+                        </p>
+                        <p id="tcm-fixed-error" class="hidden text-[11px] text-red-600 px-2 pt-1">
+                            {lang === "es"
+                                ? "Para asignación fija selecciona al menos un miembro."
+                                : "Fixed assignment needs at least one member selected."}
+                        </p>
                     </div>
                 </div>
 
@@ -368,8 +407,9 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
     </div>
 </div>
 
-<script define:vars={{ token }}>
+<script define:vars={{ token, lang }}>
 (function initTaskCreateModal() {
+    const isEs = lang === "es";
     const backdrop = document.getElementById("tcm-backdrop");
     const modal = document.getElementById("tcm-modal");
     const step1 = document.getElementById("tcm-step-1");
@@ -395,12 +435,74 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
     const descTA = document.getElementById("tcm-desc");
     const membersDiv = document.getElementById("tcm-members");
     const errorDiv = document.getElementById("tcm-error");
+    const assignHint = document.getElementById("tcm-assign-hint");
+    const rotateHint = document.getElementById("tcm-rotate-hint");
+    const fixedError = document.getElementById("tcm-fixed-error");
+    const dowWrap = document.getElementById("tcm-dow-wrap");
+    const dowNote = document.getElementById("tcm-dow-note");
     const submitBtnOriginalText = submitBtn?.textContent ?? "";
 
     if (!backdrop || !modal) return;
 
     // ----- Chip state -----
     const chipState = { effort: "1", interval: "1", assignment: "auto" };
+
+    // ----- Weekday picker state (Mon=0 .. Sun=6) -----
+    const dowState = new Set();
+
+    function selectedDows() {
+        return Array.from(dowState).map(Number).sort((a, b) => a - b);
+    }
+
+    function refreshDowStyles() {
+        modal.querySelectorAll(".tcm-dow").forEach((btn) => {
+            const active = dowState.has(String(btn.dataset.dow));
+            btn.classList.toggle("bg-brand-sky-deep", active);
+            btn.classList.toggle("text-white", active);
+            btn.classList.toggle("border-brand-sky-deep", active);
+            btn.classList.toggle("bg-brand-cream-deep", !active);
+            btn.classList.toggle("text-brand-ink-soft", !active);
+            btn.classList.toggle("border-transparent", !active);
+            btn.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+        if (dowNote) dowNote.classList.toggle("hidden", dowState.size === 0);
+    }
+
+    modal.querySelectorAll(".tcm-dow").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const d = String(btn.dataset.dow);
+            if (dowState.has(d)) dowState.delete(d);
+            else dowState.add(d);
+            refreshDowStyles();
+        });
+    });
+
+    // ----- Assignment chip explainer + rotate hint -----
+    const assignHints = {
+        auto: isEs ? "Se reparte automáticamente balanceando puntos" : "Balanced automatically by points",
+        fixed: isEs ? "Siempre la(s) misma(s) persona(s)" : "Always the same person(s)",
+        rotate: isEs ? "Se turnan" : "They take turns",
+    };
+
+    function checkedMemberCount() {
+        return modal.querySelectorAll(".tcm-member-cb:checked").length;
+    }
+
+    function refreshAssignmentHints() {
+        if (assignHint) assignHint.textContent = assignHints[chipState.assignment] ?? "";
+        if (rotateHint) {
+            rotateHint.classList.toggle(
+                "hidden",
+                !(chipState.assignment === "rotate" && checkedMemberCount() === 0),
+            );
+        }
+        if (fixedError && chipState.assignment !== "fixed") fixedError.classList.add("hidden");
+        if (fixedError && checkedMemberCount() > 0) fixedError.classList.add("hidden");
+    }
+
+    modal.querySelectorAll(".tcm-member-cb").forEach((cb) => {
+        cb.addEventListener("change", refreshAssignmentHints);
+    });
 
     function activateChip(group, value) {
         chipState[group] = String(value);
@@ -424,10 +526,20 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                 membersDiv.classList.add("hidden");
             }
         }
+        if (group === "assignment") refreshAssignmentHints();
 
         // Show/hide the N-days input for the 'after done' recurrence mode
         if (group === "interval" && intervalNWrap) {
             intervalNWrap.classList.toggle("hidden", String(value) !== "interval");
+        }
+        // Weekday picker only applies to weekly-expansion modes, not 'after done'
+        if (group === "interval" && dowWrap) {
+            const hideDow = String(value) === "interval";
+            dowWrap.classList.toggle("hidden", hideDow);
+            if (hideDow) {
+                dowState.clear();
+                refreshDowStyles();
+            }
         }
     }
 
@@ -485,9 +597,13 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         if (intervalNInput) intervalNInput.value = "3";
         if (intervalNWrap) intervalNWrap.classList.add("hidden");
         if (errorDiv) { errorDiv.textContent = ""; errorDiv.classList.add("hidden"); }
+        if (fixedError) fixedError.classList.add("hidden");
         if (membersDiv) membersDiv.classList.add("hidden");
         modal.querySelectorAll(".tcm-member-cb").forEach((cb) => { cb.checked = false; });
         modal.querySelectorAll(".tcm-role-cb").forEach((cb) => { cb.checked = false; });
+        dowState.clear();
+        refreshDowStyles();
+        if (dowWrap) dowWrap.classList.remove("hidden");
         // Reset chips to defaults
         activateChip("effort", "1");
         activateChip("interval", "1");
@@ -528,7 +644,8 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             try {
                 const preset = JSON.parse(card.dataset.preset || "{}");
                 const title = (preset.title || "").toLowerCase();
-                card.style.display = title.includes(q) ? "" : "none";
+                const titleEs = (preset.title_es || "").toLowerCase();
+                card.style.display = (title.includes(q) || titleEs.includes(q)) ? "" : "none";
             } catch (_) {
                 card.style.display = "";
             }
@@ -540,7 +657,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         card.addEventListener("click", () => {
             try {
                 const preset = JSON.parse(card.dataset.preset || "{}");
-                if (nameInput) nameInput.value = preset.title || "";
+                if (nameInput) nameInput.value = (isEs && preset.title_es ? preset.title_es : preset.title) || "";
                 if (pointsInput) pointsInput.value = String(preset.points ?? 10);
                 activateChip("effort", String(preset.effort_level || "1"));
                 activateChip("interval", String(preset.interval_days || "1"));
@@ -569,6 +686,16 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         const assignedUserIds = Array.from(modal.querySelectorAll(".tcm-member-cb:checked")).map((cb) => cb.value);
         const allowedRoles = Array.from(modal.querySelectorAll(".tcm-role-cb:checked")).map((cb) => cb.value);
 
+        // FIXED requires at least one member (backend now 422s otherwise).
+        // ROTATE with none checked is valid: rotates among everyone.
+        if (chipState.assignment === "fixed" && assignedUserIds.length === 0) {
+            if (fixedError) fixedError.classList.remove("hidden");
+            showError(isEs
+                ? "Para asignación fija selecciona al menos un miembro."
+                : "Fixed assignment needs at least one member selected.");
+            return;
+        }
+
         const points = parseInt(pointsInput?.value, 10);
         if (isNaN(points) || points < 1) {
             showError(document.documentElement.lang === "es"
@@ -592,6 +719,10 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             }
         }
 
+        // Weekday picker (Mon=0..Sun=6): when set, weekly expansion lands
+        // exactly on those days and interval_days is ignored by the backend.
+        const daysOfWeek = isIntervalMode ? [] : selectedDows();
+
         const payload = {
             title,
             description,
@@ -602,6 +733,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             interval_days: isIntervalMode ? 7 : parseInt(chipState.interval, 10),
             recurrence_mode: isIntervalMode ? "since_completion" : "weekly",
             recur_every_n_days: recurEveryN,
+            days_of_week: daysOfWeek.length > 0 ? daysOfWeek : null,
             requires_proof: proofChk?.checked || false,
             is_bonus: isBonus,
             blocks_rewards: blocksRewards,
@@ -693,12 +825,17 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             const container = document.getElementById("template-list-container");
             if (!container) return;
 
-            if (!Array.isArray(templates) || templates.length === 0) {
-                container.innerHTML = `<p class="text-brand-ink-soft text-sm text-center py-6">No tasks yet.</p>`;
+            // This page lists mandatory chores only — gigs/bonus live in /parent/gigs.
+            const chores = (Array.isArray(templates) ? templates : []).filter((t) => !t.is_bonus);
+
+            if (chores.length === 0) {
+                container.innerHTML = `<p class="text-brand-ink-soft text-sm text-center py-6">${
+                    isEs ? "Ninguna tarea todavía." : "No tasks yet."
+                }</p>`;
                 return;
             }
 
-            container.innerHTML = templates.map(renderTemplateCard).join("");
+            container.innerHTML = chores.map(renderTemplateCard).join("");
         } catch (_) { /* silent — leave stale list */ }
     }
 
@@ -722,29 +859,33 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             ? `<span class="ml-1 text-brand-ink-soft font-normal">(${pts} × ${effortLevel === 3 ? "2" : "1.5"})</span>`
             : "";
 
-        const freqMap = { 1: "Daily", 3: "Every 3 days", 7: "Weekly" };
+        const freqMap = isEs
+            ? { 1: "Diaria", 3: "Cada 3d", 7: "Semanal" }
+            : { 1: "Daily", 3: "Every 3d", 7: "Weekly" };
         const freqLabel = tmpl.recurrence_mode === "since_completion"
-            ? `Every ${tmpl.recur_every_n_days || 1}d after done`
-            : (freqMap[tmpl.interval_days] || `Every ${tmpl.interval_days} days`);
+            ? (isEs ? `c/${tmpl.recur_every_n_days || 1}d al terminar` : `every ${tmpl.recur_every_n_days || 1}d after done`)
+            : (freqMap[tmpl.interval_days] || (isEs ? `Cada ${tmpl.interval_days}d` : `Every ${tmpl.interval_days}d`));
         const proofBadge = tmpl.requires_proof
-            ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-sky/15 text-brand-sky-deep">📸 Photo</span>`
+            ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-sky/15 text-brand-sky-deep">📸 ${isEs ? "Foto" : "Photo"}</span>`
             : "";
 
         const esMissingBadge = !tmpl.title_es
-            ? `<span class="inline-block ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title="Translation missing">ES missing</span>`
+            ? `<span class="inline-block ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title="${isEs ? "Falta traduccion" : "Translation missing"}">${isEs ? "Falta ES" : "ES missing"}</span>`
             : "";
 
         const bonusBadgeClass = isBonus
             ? "bg-brand-sun/20 text-brand-sun-deep"
             : "bg-brand-sky/15 text-brand-sky-deep";
-        const bonusBadgeText = isBonus ? "Bonus" : "Regular";
+        const bonusBadgeText = isBonus
+            ? "Bonus"
+            : (isEs ? "Obligatoria" : "Required");
 
         const assignmentBadge = (tmpl.assignment_type && tmpl.assignment_type !== "auto")
-            ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full ${tmpl.assignment_type === "fixed" ? "bg-brand-coral/15 text-brand-coral-deep" : "bg-brand-mint/20 text-brand-mint-deep"}">${tmpl.assignment_type === "fixed" ? "📌 Fixed" : "🔄 Rotate"}</span>`
+            ? `<span class="text-xs font-medium px-2 py-0.5 rounded-full ${tmpl.assignment_type === "fixed" ? "bg-brand-coral/15 text-brand-coral-deep" : "bg-brand-mint/20 text-brand-mint-deep"}">${tmpl.assignment_type === "fixed" ? (isEs ? "📌 Fijo" : "📌 Fixed") : (isEs ? "🔄 Rotación" : "🔄 Rotate")}</span>`
             : "";
 
         const inactiveBadge = !isActive
-            ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">Inactive</span>`
+            ? `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">${isEs ? "Inactiva" : "Inactive"}</span>`
             : "";
 
         const descriptionHtml = tmpl.description
@@ -781,7 +922,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
             <form method="POST">
                 <input type="hidden" name="action" value="toggle" />
                 <input type="hidden" name="template_id" value="${escapeHtml(tmpl.id)}" />
-                <button type="submit" title="${isActive ? "Deactivate" : "Activate"}"
+                <button type="submit" title="${isActive ? (isEs ? "Desactivar" : "Deactivate") : (isEs ? "Activar" : "Activate")}"
                     class="h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${toggleClass}">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">${toggleIcon}</svg>
                 </button>
@@ -796,7 +937,7 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
                 <input type="hidden" name="action" value="delete" />
                 <input type="hidden" name="template_id" value="${escapeHtml(tmpl.id)}" />
                 <button type="submit"
-                    onclick="return confirm('Delete this task template?')"
+                    onclick="return confirm('${isEs ? "Eliminar esta plantilla y todas sus asignaciones?" : "Delete this template and all its assignments?"}')"
                     class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-red-100 text-brand-ink-soft hover:text-red-500 flex items-center justify-center transition-colors">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

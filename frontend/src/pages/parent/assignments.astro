@@ -50,19 +50,22 @@ const nextWeek = formatDateISO(addDays(weekMonday, 7));
 const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i));
 const dayKeys = ["pac_day_mon", "pac_day_tue", "pac_day_wed", "pac_day_thu", "pac_day_fri", "pac_day_sat", "pac_day_sun"] as const;
 
-// Fetch family members
-const { data: family } = await apiFetch<any>("/api/families/me", { token });
-const members: any[] = family?.members ?? [];
-
 // Member filter
 const memberFilter = url.searchParams.get("member") ?? "all";
 
-// Fetch assignments for the week
+// Assignments URL for the week
 let apiUrl = `/api/task-assignments/week?week_of=${formatDateISO(weekMonday)}`;
 if (memberFilter !== "all") {
     apiUrl += `&user_id=${memberFilter}`;
 }
-const { data: assignments } = await apiFetch<any[]>(apiUrl, { token });
+
+// Family members + week assignments + member colors are independent — fetch in parallel
+const [{ data: family }, { data: assignments }, { data: colorsRaw }] = await Promise.all([
+    apiFetch<any>("/api/families/me", { token }),
+    apiFetch<any[]>(apiUrl, { token }),
+    apiFetch<any[]>("/api/users/colors", { token }),
+]);
+const members: any[] = family?.members ?? [];
 const allAssignments: any[] = assignments ?? [];
 
 // Group assignments by member -> date
@@ -89,7 +92,6 @@ for (const m of members) {
 }
 
 // Per-member display colors (P1-KIOSK) — same colors as kiosk/calendar/chat.
-const { data: colorsRaw } = await apiFetch<any[]>("/api/users/colors", { token });
 const memberColorMap: Record<string, string> = {};
 for (const c of Array.isArray(colorsRaw) ? colorsRaw : []) {
     memberColorMap[c.user_id] = c.color;
@@ -114,7 +116,10 @@ function formatShortDate(d: Date): string {
 
 const weekRange = `${formatShortDate(weekMonday)} - ${formatShortDate(weekSunday)}`;
 
-// Check if a day is today
+// Check if a day is today — SERVER GUESS ONLY (toISOString = UTC, so this
+// drifts to tomorrow every evening in Mexico). A client-side script re-applies
+// the highlight after load using the browser's local date; the elements below
+// carry data-day + data-today-kind for that correction.
 function isToday(d: Date): boolean {
     return formatDateISO(d) === formatDateISO(today);
 }
@@ -258,17 +263,25 @@ function isToday(d: Date): boolean {
                         <div class="hidden md:grid grid-cols-7 gap-1">
                             {/* Day headers */}
                             {dayKeys.map((dayKey, i) => (
-                                <div class:list={[
-                                    "text-center text-xs font-semibold py-1.5 rounded-t-lg",
-                                    isToday(weekDays[i])
-                                        ? "bg-sky-600 text-white"
-                                        : "bg-brand-cream-deep text-brand-ink-soft",
-                                ]}>
+                                <div
+                                    data-day={formatDateISO(weekDays[i])}
+                                    data-today-kind="head"
+                                    class:list={[
+                                        "text-center text-xs font-semibold py-1.5 rounded-t-lg",
+                                        isToday(weekDays[i])
+                                            ? "bg-sky-600 text-white"
+                                            : "bg-brand-cream-deep text-brand-ink-soft",
+                                    ]}
+                                >
                                     <div>{t(lang, dayKey)}</div>
-                                    <div class:list={[
-                                        "text-xs font-normal mt-0.5",
-                                        isToday(weekDays[i]) ? "text-sky-100" : "text-brand-ink-soft",
-                                    ]}>
+                                    <div
+                                        data-day={formatDateISO(weekDays[i])}
+                                        data-today-kind="headnum"
+                                        class:list={[
+                                            "text-xs font-normal mt-0.5",
+                                            isToday(weekDays[i]) ? "text-sky-100" : "text-brand-ink-soft",
+                                        ]}
+                                    >
                                         {weekDays[i].getDate()}
                                     </div>
                                 </div>
@@ -281,12 +294,15 @@ function isToday(d: Date): boolean {
                                 const todayHighlight = isToday(day);
 
                                 return (
-                                    <div class:list={[
-                                        "min-h-16 p-0.5 rounded-b-lg border",
-                                        todayHighlight
-                                            ? "bg-sky-50 border-sky-200"
-                                            : "bg-brand-cream border-brand-ink/10",
-                                    ]}>
+                                    <div
+                                        data-day={dateStr}
+                                        data-today-kind="cell"
+                                        class:list={[
+                                            "min-h-16 p-0.5 rounded-b-lg border",
+                                            todayHighlight
+                                                ? "bg-sky-50 border-sky-200"
+                                                : "bg-brand-cream border-brand-ink/10",
+                                        ]}>
                                         {dayTasks.length === 0 && (
                                             <div class="h-full flex items-center justify-center">
                                                 <span class="text-brand-ink-soft text-xs">-</span>
@@ -362,19 +378,30 @@ function isToday(d: Date): boolean {
                                 const todayHighlight = isToday(day);
 
                                 return (
-                                    <div class:list={[
-                                        "rounded-lg border overflow-hidden",
-                                        todayHighlight ? "border-sky-300" : "border-brand-ink/10",
-                                    ]}>
-                                        <div class:list={[
-                                            "px-3 py-1.5 flex items-center justify-between text-xs font-semibold",
-                                            todayHighlight ? "bg-sky-600 text-white" : "bg-brand-cream-deep text-brand-ink-soft",
-                                        ]}>
+                                    <div
+                                        data-day={dateStr}
+                                        data-today-kind="mrow"
+                                        class:list={[
+                                            "rounded-lg border overflow-hidden",
+                                            todayHighlight ? "border-sky-300" : "border-brand-ink/10",
+                                        ]}
+                                    >
+                                        <div
+                                            data-day={dateStr}
+                                            data-today-kind="mhead"
+                                            class:list={[
+                                                "px-3 py-1.5 flex items-center justify-between text-xs font-semibold",
+                                                todayHighlight ? "bg-sky-600 text-white" : "bg-brand-cream-deep text-brand-ink-soft",
+                                            ]}
+                                        >
                                             <span>{t(lang, dayKeys[idx])} · {day.getDate()}</span>
-                                            <span class:list={[
-                                                "text-[10px] font-normal",
-                                                todayHighlight ? "text-sky-100" : "text-brand-ink-soft",
-                                            ]}>
+                                            <span
+                                                data-day={dateStr}
+                                                data-today-kind="mcount"
+                                                class:list={[
+                                                    "text-[10px] font-normal",
+                                                    todayHighlight ? "text-sky-100" : "text-brand-ink-soft",
+                                                ]}>
                                                 {dayTasks.length === 0
                                                     ? "—"
                                                     : (t(lang, "pac_total_tasks") as Function)(dayTasks.length)}
@@ -522,6 +549,32 @@ function isToday(d: Date): boolean {
     </div>
 
     <script>
+        // Re-apply the "today" highlight using the BROWSER'S local date.
+        // The server renders a UTC-based guess (toISOString), which flips the
+        // highlight to tomorrow every evening in Mexico; this corrects it.
+        document.addEventListener("astro:page-load", () => {
+            const now = new Date();
+            const pad = (n: number) => String(n).padStart(2, "0");
+            const localToday = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+            const KINDS: Record<string, { on: string[]; off: string[] }> = {
+                head:    { on: ["bg-sky-600", "text-white"],   off: ["bg-brand-cream-deep", "text-brand-ink-soft"] },
+                headnum: { on: ["text-sky-100"],               off: ["text-brand-ink-soft"] },
+                cell:    { on: ["bg-sky-50", "border-sky-200"], off: ["bg-brand-cream", "border-brand-ink/10"] },
+                mrow:    { on: ["border-sky-300"],             off: ["border-brand-ink/10"] },
+                mhead:   { on: ["bg-sky-600", "text-white"],   off: ["bg-brand-cream-deep", "text-brand-ink-soft"] },
+                mcount:  { on: ["text-sky-100"],               off: ["text-brand-ink-soft"] },
+            };
+
+            document.querySelectorAll<HTMLElement>("[data-today-kind]").forEach((el) => {
+                const kind = KINDS[el.dataset.todayKind ?? ""];
+                if (!kind) return;
+                const isTodayLocal = el.dataset.day === localToday;
+                el.classList.remove(...(isTodayLocal ? kind.off : kind.on));
+                el.classList.add(...(isTodayLocal ? kind.on : kind.off));
+            });
+        });
+
         document.addEventListener("astro:page-load", () => {
             const modal = document.getElementById("assignment-edit-modal");
             const form = document.getElementById("assignment-edit-form") as HTMLFormElement | null;

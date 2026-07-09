@@ -155,11 +155,36 @@ class AuthService:
 
     @staticmethod
     async def deactivate_user(db: AsyncSession, user_id: UUID) -> User:
-        """Deactivate a user account"""
+        """Deactivate a user account.
+
+        Open task assignments (pending/claimed/overdue) are cancelled in the
+        same transaction — a deactivated member can never complete them, and
+        leaving them alive rots the parent week grid with ghost rows that the
+        sweep keeps flipping OVERDUE.
+        """
+        from sqlalchemy import update as sql_update
+        from app.models.task_assignment import (
+            AssignmentStatus,
+            TaskAssignment,
+        )
+
         user = await AuthService.get_user_by_id(db, user_id)
         user.is_active = False
         user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        
+
+        await db.execute(
+            sql_update(TaskAssignment)
+            .where(
+                TaskAssignment.assigned_to == user_id,
+                TaskAssignment.status.in_([
+                    AssignmentStatus.PENDING,
+                    AssignmentStatus.CLAIMED,
+                    AssignmentStatus.OVERDUE,
+                ]),
+            )
+            .values(status=AssignmentStatus.CANCELLED)
+        )
+
         await db.commit()
         await db.refresh(user)
         return user

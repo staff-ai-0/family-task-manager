@@ -49,9 +49,10 @@ class TemplateAdapter(ServiceAdapter):
         from app.services.task_template_service import TaskTemplateService
 
         is_bonus = bool(data.get("is_bonus", False))
+        # Mandatory chores DO carry points since the two-currency change
+        # (privilege points on completion) — the old zero-out rule here
+        # silently discarded whatever Jarvis was asked to set.
         points = int(data.get("points", 0))
-        if not is_bonus:
-            points = 0  # mandatory chores never award points
         payload = TaskTemplateCreate(
             title=str(data["title"])[:200],
             points=points,

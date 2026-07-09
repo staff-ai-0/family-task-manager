@@ -237,6 +237,10 @@ class KidView(BaseModel):
     chores: List[KidChore]
     chores_done: int
     gigs_open: int
+    # Prior-day mandatory chores still open (PENDING/OVERDUE). They keep
+    # bonus/gigs locked, so hiding them made the kiosk celebrate "No chores
+    # today!" while the kid was actually blocked.
+    overdue_chores: List[KidChore] = []
     # Star Mode (P2): when true the kiosk renders points as big stars and hides
     # the peso/cash amount for this (young) kid. Pure presentation over points.
     star_mode: bool = False
@@ -310,11 +314,31 @@ async def pin_view(
         KidChore(
             title=a.template.title if a.template else "",
             title_es=a.template.title_es if a.template else None,
-            points=int(a.template.points) if a.template else 0,
+            # Effective (effort-multiplied) points — what completing actually
+            # awards, matching the other kid-facing endpoints.
+            points=int(a.template.effective_points) if a.template else 0,
             is_done=(a.status == AssignmentStatus.COMPLETED),
             is_bonus=bool(a.template.is_bonus) if a.template else False,
         )
         for a in assignments
+    ]
+
+    # Prior-day mandatory blockers (same query the dashboard's "Atrasadas"
+    # section uses) — without them the kiosk shows "No chores today! 🎉"
+    # while gigs are actually locked.
+    from app.services.task_assignment_service import TaskAssignmentService
+    overdue_assignments = await TaskAssignmentService.list_open_mandatory_before(
+        db, member.id, family_id, today_local
+    )
+    overdue_chores = [
+        KidChore(
+            title=a.template.title if a.template else "",
+            title_es=a.template.title_es if a.template else None,
+            points=int(a.template.effective_points) if a.template else 0,
+            is_done=False,
+            is_bonus=False,
+        )
+        for a in overdue_assignments
     ]
 
     # Gigs THIS member could actually claim right now (display-only):
@@ -372,6 +396,7 @@ async def pin_view(
         chores=chores,
         chores_done=sum(1 for c in chores if c.is_done),
         gigs_open=int(gigs_open),
+        overdue_chores=overdue_chores,
         star_mode=bool(getattr(member, "star_mode", False)),
     )
 

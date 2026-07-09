@@ -177,6 +177,19 @@ async def lifespan(app: FastAPI):
                 except Exception:
                     logger.exception("Morning reminder sweep failed")
 
+        async def _auto_shuffle_sweep():
+            # Weekly auto-shuffle: families that already use the shuffle get
+            # the new week generated without a parent having to remember the
+            # button. Idempotent per week (service-level guards); hourly so a
+            # Monday spent down self-heals.
+            async with AsyncSessionLocal() as session:
+                try:
+                    n = await TaskAssignmentService.auto_shuffle_all(session)
+                    if n:
+                        logger.info("Auto-shuffle sweep created %d assignment(s)", n)
+                except Exception:
+                    logger.exception("Auto-shuffle sweep failed")
+
         scheduler = AsyncIOScheduler()
         scheduler.add_job(run_sweep, "cron", hour=3, minute=0, id="subscription_sweep")
         scheduler.add_job(_pet_decay_sweep, "cron", hour=8, minute=0, id="pet_decay_sweep")
@@ -184,6 +197,7 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(_jarvis_schedule_sweep, "cron", minute="*/5", id="jarvis_sched_sweep")
         scheduler.add_job(_family_bank_payday_sweep, "cron", minute=10, id="family_bank_payday")  # hourly
         scheduler.add_job(_family_purge_sweep, "cron", hour=4, minute=0, id="family_purge_sweep")  # daily
+        scheduler.add_job(_auto_shuffle_sweep, "cron", minute=25, id="auto_shuffle_sweep")  # hourly
         scheduler.add_job(
             _morning_reminder_sweep,
             "cron",

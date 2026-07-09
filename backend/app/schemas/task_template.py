@@ -4,7 +4,7 @@ TaskTemplate Pydantic schemas
 Request and response models for task template operations.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List
 from uuid import UUID
 
@@ -28,6 +28,13 @@ class TaskTemplateBase(BaseModel):
         description="Difficulty 1=easy (×1.0), 2=medium (×1.5), 3=hard (×2.0). Multiplies points on gig award.",
     )
     interval_days: int = Field(1, ge=1, le=7, description="1=daily, 3=every 3 days, 7=weekly")
+    days_of_week: Optional[List[int]] = Field(
+        None,
+        description=(
+            "Explicit weekdays (Mon=0..Sun=6). When set, the weekly expansion "
+            "lands on exactly these days and interval_days is ignored."
+        ),
+    )
     recurrence_mode: str = Field(
         "weekly",
         pattern=r"^(weekly|since_completion)$",
@@ -82,6 +89,30 @@ class TaskTemplateBase(BaseModel):
         description="When gig_mode=collaboration, minimum completers before points split.",
     )
 
+    @model_validator(mode="after")
+    def _normalize_days_of_week(self):
+        if self.days_of_week is not None:
+            days = sorted({int(d) for d in self.days_of_week})
+            if not days:
+                self.days_of_week = None
+            elif days[0] < 0 or days[-1] > 6:
+                raise ValueError("days_of_week values must be 0 (Mon) .. 6 (Sun)")
+            else:
+                self.days_of_week = days
+        return self
+
+    @model_validator(mode="after")
+    def _fixed_requires_members(self):
+        """FIXED pins occurrences to specific people — without a member list
+        the shuffle has nobody to pin to and silently generated nothing.
+        (ROTATE without a list is fine: it falls back to all members.)"""
+        if self.assignment_type == AssignmentType.FIXED and not self.assigned_user_ids:
+            raise ValueError(
+                "A fixed task needs at least one assigned member "
+                "(assigned_user_ids)"
+            )
+        return self
+
 
 # Request schemas
 class TaskTemplateCreate(TaskTemplateBase):
@@ -104,6 +135,7 @@ class TaskTemplateUpdate(BaseModel):
     points: Optional[int] = Field(None, ge=0, le=1000)
     effort_level: Optional[int] = Field(None, ge=1, le=3)
     interval_days: Optional[int] = Field(None, ge=1, le=7)
+    days_of_week: Optional[List[int]] = None
     recurrence_mode: Optional[str] = Field(
         None, pattern=r"^(weekly|since_completion)$"
     )
@@ -135,6 +167,7 @@ class TaskTemplateResponse(FamilyEntityResponse):
     effort_level: int = 1
     effective_points: int = 0
     interval_days: int
+    days_of_week: Optional[List[int]] = None
     recurrence_mode: str = "weekly"
     recur_every_n_days: Optional[int] = None
     requires_proof: bool = False

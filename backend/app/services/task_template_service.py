@@ -51,6 +51,25 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
             data.recurrence_mode, data.recur_every_n_days
         )
 
+        # Duplicate guard: an ACTIVE template with the same title in this
+        # family doubles the chore in every future shuffle (prod once had two
+        # live 'Wash Dishes'). Case-insensitive; inactive titles are reusable.
+        dup = (await db.execute(
+            select(TaskTemplate.id).where(
+                and_(
+                    TaskTemplate.family_id == family_id,
+                    TaskTemplate.is_active == True,  # noqa: E712
+                    func.lower(TaskTemplate.title) == data.title.strip().lower(),
+                )
+            ).limit(1)
+        )).scalar_one_or_none()
+        if dup is not None:
+            raise ValidationException(
+                f"Ya existe una tarea activa llamada '{data.title}' — edítala o "
+                f"desactívala primero / An active task named '{data.title}' "
+                "already exists — edit or deactivate it first"
+            )
+
         title_es = data.title_es
         description_es = data.description_es
 
@@ -82,6 +101,7 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
             points=data.points,
             effort_level=data.effort_level,
             interval_days=data.interval_days,
+            days_of_week=data.days_of_week,
             recurrence_mode=data.recurrence_mode,
             recur_every_n_days=(
                 data.recur_every_n_days
@@ -206,6 +226,21 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
             update_fields["assigned_user_ids"] = (
                 [str(u) for u in uids] if uids else None
             )
+
+        # Validate the RESULTING assignment configuration: FIXED without a
+        # member list has no possible assignee and the shuffle would skip it.
+        if "assignment_type" in update_fields or "assigned_user_ids" in update_fields:
+            current = await TaskTemplateService.get_by_id(db, template_id, family_id)
+            final_type = update_fields.get("assignment_type", current.assignment_type)
+            final_type = getattr(final_type, "value", final_type)
+            final_ids = update_fields.get(
+                "assigned_user_ids", current.assigned_user_ids
+            )
+            if str(final_type).lower() == "fixed" and not final_ids:
+                raise ValidationException(
+                    "Una tarea fija necesita al menos un miembro asignado / "
+                    "A fixed task needs at least one assigned member"
+                )
 
         return await TaskTemplateService.update_by_id(
             db, template_id, family_id, update_fields

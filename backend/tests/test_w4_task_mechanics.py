@@ -10,7 +10,7 @@ Covers:
 """
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -336,9 +336,15 @@ class TestIntervalRecurrence:
             )
             assert len(created) == 1
             picks.append(str(created[0].assigned_to))
-            await TaskAssignmentService.complete_assignment(
-                db_session, created[0].id, test_family.id, created[0].assigned_to
-            )
+            # Flip status directly: this test exercises ROTATION, and the
+            # completion API now (correctly) rejects future-dated rows while
+            # wall-clock completed_at would skew the next-due anchor.
+            row = created[0]
+            row.status = AssignmentStatus.COMPLETED
+            row.completed_at = datetime.combine(
+                d + timedelta(days=i), datetime.min.time()
+            ).replace(hour=12)
+            await db_session.commit()
 
         expected = [str(kids[i % 2].id) for i in range(4)]
         assert picks == expected

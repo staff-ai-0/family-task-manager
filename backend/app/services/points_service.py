@@ -25,6 +25,21 @@ class PointsService:
     """Service for point-related operations"""
 
     @staticmethod
+    async def _get_user_locked(db: AsyncSession, user_id: UUID) -> User:
+        """Load the user row under SELECT ... FOR UPDATE.
+
+        Every award path does read-modify-write on user.points; without a row
+        lock two concurrent awards read the same balance and one credit is
+        lost. All award/deduct helpers below go through this.
+        """
+        user = (await db.execute(
+            select(User).where(User.id == user_id).with_for_update()
+        )).scalar_one_or_none()
+        if user is None:
+            raise NotFoundException("User not found")
+        return user
+
+    @staticmethod
     async def get_user_balance(db: AsyncSession, user_id: UUID) -> int:
         """Get current point balance for a user"""
         user = await get_user_by_id(db, user_id)
@@ -49,8 +64,8 @@ class PointsService:
         Returns:
             Created PointTransaction
         """
-        # Get user
-        user = await get_user_by_id(db, user_id)
+        # Get user (row-locked: concurrent awards must serialize)
+        user = await PointsService._get_user_locked(db, user_id)
 
         # Create transaction
         transaction = PointTransaction.create_task_completion(
@@ -82,7 +97,7 @@ class PointsService:
         `points` may be negative — used to claw back over-awarded points when a
         collaboration gig is re-split among more completers.
         """
-        user = await get_user_by_id(db, user_id)
+        user = await PointsService._get_user_locked(db, user_id)
         transaction = PointTransaction.create_gig_approval(
             user_id=user_id,
             assignment_id=assignment_id,
@@ -106,7 +121,7 @@ class PointsService:
         Caller commits. Mirrors award_gig_points (no commit) so it composes
         inside complete_assignment's single transaction.
         """
-        user = await get_user_by_id(db, user_id)
+        user = await PointsService._get_user_locked(db, user_id)
         transaction = PointTransaction.create_assignment_completion(
             user_id=user_id,
             assignment_id=assignment_id,
@@ -143,8 +158,8 @@ class PointsService:
         Raises:
             ValidationException: If user has insufficient points
         """
-        # Get user
-        user = await get_user_by_id(db, user_id)
+        # Get user (row-locked: deduction races with concurrent awards)
+        user = await PointsService._get_user_locked(db, user_id)
 
         # Check if user has enough points
         if user.points < points_cost:

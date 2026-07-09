@@ -47,10 +47,11 @@ class TestExecuteTool:
         assert len(rows) == 1
         assert rows[0].effort_level == 2
 
-    async def test_create_task_template_mandatory_forces_zero_points(
+    async def test_create_task_template_mandatory_keeps_points(
         self, db_session, test_family, test_parent_user
     ):
-        # Mandatory + points=20 must be clamped to 0 by the adapter.
+        # Two-currency economy: mandatory chores DO carry privilege points —
+        # the old adapter clamp silently zeroed them.
         result = await JarvisService._execute_tool(
             db_session,
             test_family.id,
@@ -59,7 +60,7 @@ class TestExecuteTool:
             {"title": "Make bed", "is_bonus": False, "points": 20},
         )
         assert result["ok"] is True
-        assert result["data"]["points"] == 0
+        assert result["data"]["points"] == 20
 
     async def test_create_calendar_event(
         self, db_session, test_family, test_parent_user

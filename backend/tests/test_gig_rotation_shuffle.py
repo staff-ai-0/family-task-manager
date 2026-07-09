@@ -47,7 +47,7 @@ class TestRotationGigShuffle:
 
         rng = random.Random("seed")
         week_monday = date(2026, 6, 1)  # a Monday
-        assignments, _ = TaskAssignmentService._compute_assignments(
+        assignments, _, _ = TaskAssignmentService._compute_assignments(
             rng,
             test_family.id,
             week_monday,
@@ -76,7 +76,7 @@ class TestRotationGigShuffle:
         picks = []
         for w in range(6):
             week_monday = date(2026, 6, 1) + timedelta(weeks=w)
-            assignments, _ = TaskAssignmentService._compute_assignments(
+            assignments, _, _ = TaskAssignmentService._compute_assignments(
                 rng,
                 test_family.id,
                 week_monday,
@@ -104,7 +104,7 @@ class TestRotationGigShuffle:
 
         rng = random.Random("seed")
         week_monday = date(2026, 6, 1)
-        assignments, _ = TaskAssignmentService._compute_assignments(
+        assignments, _, _ = TaskAssignmentService._compute_assignments(
             rng,
             test_family.id,
             week_monday,

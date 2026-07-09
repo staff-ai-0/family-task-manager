@@ -52,10 +52,11 @@ class TaskAssignment(Base):
     __tablename__ = "task_assignments"
 
     # Hot path: due/overdue sweeps + kid due-today lists filter family_id and
-    # then range/order on due_date. Composite (family_id, due_date) serves both.
-    # Mirrors the ops migration.
+    # then range/order on assigned_date (due_date is only the optional
+    # intra-day deadline — the old (family_id, due_date) index sat on a column
+    # nothing queried). Mirrors the task_forensic_fixes migration.
     __table_args__ = (
-        Index("ix_task_assignments_family_due", "family_id", "due_date"),
+        Index("ix_task_assignments_family_assigned", "family_id", "assigned_date"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)

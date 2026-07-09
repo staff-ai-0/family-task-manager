@@ -63,7 +63,9 @@ async def test_execute_tool_roundtrips_through_mcp(db_session, family, parent_us
 
 
 @pytest.mark.anyio
-async def test_execute_tool_mandatory_clamps_points(db_session, family, parent_user):
+async def test_execute_tool_mandatory_keeps_points(db_session, family, parent_user):
+    """Two-currency economy: mandatory chores DO carry privilege points —
+    the old clamp silently zeroed whatever Jarvis was asked to set."""
     from app.services.jarvis_service import JarvisService
 
     result = await JarvisService._execute_tool(
@@ -72,4 +74,4 @@ async def test_execute_tool_mandatory_clamps_points(db_session, family, parent_u
         {"title": "Make bed", "is_bonus": False, "points": 20},
     )
     assert result["ok"] is True
-    assert result["data"]["points"] == 0
+    assert result["data"]["points"] == 20

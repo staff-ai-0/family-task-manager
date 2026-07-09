@@ -63,6 +63,17 @@ async def _create_extra_user(
     return user
 
 
+
+def _this_monday():
+    """Pin shuffles to the week start so daily templates expand all 7 days
+    regardless of which weekday the suite runs on (mid-week shuffles now
+    skip past dates by design)."""
+    from datetime import date as _d, timedelta as _td
+    today = _d.today()
+    if today.weekday() == 6:
+        return today + _td(days=1)
+    return today - _td(days=today.weekday())
+
 # ─── Shuffle Tests ───────────────────────────────────────────────────
 
 class TestShuffle:
@@ -74,22 +85,11 @@ class TestShuffle:
             title="Daily Task", interval_days=1
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         # Daily task = 7 instances, distributed among 2 members
         assert len(assignments) >= 7
 
-    @pytest.mark.xfail(
-        reason=(
-            "Daily-task load balancer evaluates each day independently and "
-            "breaks ties via random.shuffle, so cross-day balance is "
-            "stochastic. With 7 days at zero load the RNG, not the "
-            "algorithm, decides distribution — most runs land 4/3 or 3/4 "
-            "but a real fraction land 5/2 or worse. Tighten this test once "
-            "the balancer tracks cumulative member load across the week."
-        ),
-        strict=False,
-    )
     async def test_shuffle_distributes_evenly(
         self, db_session, test_family, test_parent_user, test_child_user,
     ):
@@ -98,7 +98,7 @@ class TestShuffle:
             title="Daily Task", interval_days=1
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         regular = [a for a in assignments if a.status == AssignmentStatus.PENDING]
         parent_count = sum(1 for a in regular if a.assigned_to == test_parent_user.id)
@@ -114,7 +114,7 @@ class TestShuffle:
             title="Weekly Task", interval_days=7
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         # Weekly = 1 instance only (just Monday)
         regular = [a for a in assignments]
@@ -128,7 +128,7 @@ class TestShuffle:
             title="Bonus Daily", interval_days=1, is_bonus=True
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         # Bonus daily = 7 days * 2 members = 14 assignments
         assert len(assignments) == 14
@@ -145,10 +145,10 @@ class TestShuffle:
             title="Daily Task", interval_days=1
         )
         first = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         second = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         # Re-shuffle deletes PENDING and recreates: should have same count
         assert len(first) == len(second)
@@ -175,7 +175,7 @@ class TestShuffle:
             title="Task", interval_days=7
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         for a in assignments:
             assert a.week_of.weekday() == 0  # Monday
@@ -196,7 +196,7 @@ class TestShuffle:
             title="Daily Task", interval_days=1
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         assert assignments  # the approved member still gets the whole week
         assert all(a.assigned_to == test_parent_user.id for a in assignments)
@@ -219,7 +219,7 @@ class TestShuffle:
             title="Daily Task", interval_days=1
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         assignees = {a.assigned_to for a in assignments}
         assert pending.id not in assignees
@@ -259,7 +259,7 @@ class TestAssignmentQueries:
             title="Task", interval_days=7
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         fetched = await TaskAssignmentService.get_assignment(
             db_session, assignments[0].id, test_family.id
@@ -283,7 +283,7 @@ class TestAssignmentQueries:
             title="Daily", interval_days=1
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
 
         # Anchor to the week shuffle actually populated. It assigns to the
@@ -303,7 +303,7 @@ class TestAssignmentQueries:
             title="Daily", interval_days=1
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
 
         in_week = assignments[0].week_of
@@ -321,7 +321,7 @@ class TestAssignmentQueries:
             title="Daily", interval_days=1
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
 
         # Query a date shuffle actually populated (not date.today(), which is
@@ -345,12 +345,16 @@ class TestCompletion:
             title="Task", interval_days=7, points=50
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         # Find the assignment for whichever member it was assigned to
         a = assignments[0]
         initial_points = 0
         await db_session.refresh(a)
+        # Weekly slots can land on a future weekday; future-dated completions
+        # are blocked, so pull the row to today first.
+        a.assigned_date = date.today()
+        await db_session.commit()
 
         # Get the user this was assigned to
         user_id = a.assigned_to
@@ -376,10 +380,12 @@ class TestCompletion:
             title="Task", interval_days=7
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         a = assignments[0]
         user_id = a.assigned_to
+        a.assigned_date = date.today()  # avoid the future-date completion guard
+        await db_session.commit()
 
         await TaskAssignmentService.complete_assignment(
             db_session, a.id, test_family.id, user_id
@@ -397,7 +403,7 @@ class TestCompletion:
             title="Task", interval_days=7
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
         a = assignments[0]
         # Try completing with a different user than assigned
@@ -426,7 +432,7 @@ class TestBonusGating:
             title="Bonus Only", interval_days=7, is_bonus=True, points=30
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id
+            db_session, test_family.id, today=_this_monday()
         )
 
         # Find bonus assignment for child
