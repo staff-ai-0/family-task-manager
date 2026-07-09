@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
+from app.core.metrics import record_llm_call
 from app.mcp.confirm import is_destructive, summarize
 from app.mcp.context import McpContext, use_context
 from app.mcp.openai_bridge import mcp_tools_to_openai
@@ -307,6 +308,7 @@ class JarvisService:
                 # all other requests share it). This call is NOT stream=True —
                 # the SSE framing is produced by this generator, so a plain
                 # threadpool offload preserves event ordering exactly.
+                record_llm_call()  # best-effort outbound-LLM counter
                 completion = await run_in_threadpool(
                     lambda: client.chat.completions.create(
                         model=effective_model,
@@ -488,6 +490,7 @@ class JarvisService:
             try:
                 # Sync client — offload to a worker thread per hop so the
                 # event loop stays free; client timeout bounds the wait.
+                record_llm_call()  # best-effort outbound-LLM counter
                 completion = await run_in_threadpool(
                     lambda: client.chat.completions.create(
                         model=effective_model,

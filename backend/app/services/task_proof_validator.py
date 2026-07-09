@@ -19,6 +19,7 @@ from fastapi.concurrency import run_in_threadpool
 from openai import OpenAI
 
 from app.core.config import settings
+from app.core.metrics import record_llm_call
 from app.services.budget.receipt_scanner_service import LLM_TIMEOUT, RECEIPT_MODEL
 
 
@@ -115,6 +116,7 @@ async def validate_proof_photo(
     try:
         # Sync OpenAI client (blocking I/O) — offload to a worker thread so a
         # slow provider can't stall the async event loop.
+        record_llm_call()  # best-effort outbound-LLM counter
         completion = await run_in_threadpool(
             lambda: client.chat.completions.create(
                 model=RECEIPT_MODEL,

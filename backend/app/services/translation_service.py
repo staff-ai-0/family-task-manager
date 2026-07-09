@@ -9,6 +9,7 @@ import logging
 import httpx
 
 from app.core.config import settings
+from app.core.metrics import record_llm_call
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ class TranslationService:
         }
 
         async with httpx.AsyncClient(timeout=30.0) as client:
+            record_llm_call()  # best-effort outbound-LLM counter
             response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
