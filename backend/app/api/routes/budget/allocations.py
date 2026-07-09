@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.services.budget.allocation_service import AllocationService
-from app.schemas.budget import AllocationCreate, AllocationUpdate, AllocationResponse, SetAllocationResponse, AutoFillRequest, AutoFillResponse
+from app.schemas.budget import AllocationCreate, AllocationUpdate, AllocationResponse, SetAllocationResponse, AutoFillRequest, AutoFillResponse, CoverOverspendingRequest, CoverOverspendingResponse
 from app.models import User
 
 router = APIRouter()
@@ -125,6 +125,31 @@ async def set_category_budget(
     resp = SetAllocationResponse.model_validate(allocation)
     resp.ready_to_assign = ready
     return resp
+
+
+@router.post("/cover-overspending", response_model=CoverOverspendingResponse)
+async def cover_overspending(
+    data: CoverOverspendingRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cover an overspent category by moving money from another category's
+    available balance within the same month (parent only).
+
+    Moves integer cents by shifting budgeted dollars between the two envelopes,
+    so the overspent category rises toward zero and the source falls. Rejects
+    over-covering (more than the deficit) and over-moving (more than the source
+    holds). Returns both categories' new state plus the month's Ready-to-Assign.
+    """
+    result = await AllocationService.cover_overspending(
+        db,
+        family_id=to_uuid_required(current_user.family_id),
+        month=data.month.replace(day=1),
+        overspent_category_id=data.overspent_category_id,
+        source_category_id=data.source_category_id,
+        amount=data.amount,
+    )
+    return CoverOverspendingResponse(**result)
 
 
 @router.post("/auto-fill", response_model=AutoFillResponse)

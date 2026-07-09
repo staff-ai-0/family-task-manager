@@ -10,6 +10,7 @@ import BudgetMonthNav from "@components/BudgetMonthNav.astro";
 import MonthSummaryBar from "@components/MonthSummaryBar.astro";
 import BudgetCategoryGroup from "@components/BudgetCategoryGroup.astro";
 import AssignFundsModal from "@components/AssignFundsModal.astro";
+import CoverOverspendingModal from "@components/CoverOverspendingModal.astro";
 import FABButton from "@components/FABButton.astro";
 import FABModal from "@components/FABModal.astro";
 import { apiFetch } from "@lib/api";
@@ -254,6 +255,16 @@ const jarvisQuestions: string[] =
             lang={lang}
             t={t}
             formatCurrency={formatCurrency}
+            year={year}
+            month={month}
+        />
+
+        <!-- Cover-overspending modal (P2) — opened by each overspent row's red
+             "Cover" pill; moves available money from another category to cover
+             the deficit within this month. -->
+        <CoverOverspendingModal
+            lang={lang}
+            t={t}
             year={year}
             month={month}
         />

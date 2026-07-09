@@ -104,7 +104,7 @@ const groupBorderColor = isIncome ? 'border-brand-mint' : 'border-brand-ink/10';
             const isGoalOver = goal && goal.goal_type === 'spending_limit' && Math.abs(category.activity) > goalTarget;
             
             return (
-                <div 
+                <div
                     class="px-4 py-3 hover:bg-brand-cream-deep transition category-row"
                     data-category-id={category.id}
                     data-category-name={category.name}
@@ -112,6 +112,7 @@ const groupBorderColor = isIncome ? 'border-brand-mint' : 'border-brand-ink/10';
                     data-activity={category.activity}
                     data-available={category.available}
                     data-previous-balance={category.previous_balance || 0}
+                    data-is-income={isIncome ? "1" : "0"}
                 >
                     <!-- Row top: name | available -->
                     <div class="flex items-center justify-between mb-1">
@@ -142,10 +143,17 @@ const groupBorderColor = isIncome ? 'border-brand-mint' : 'border-brand-ink/10';
                         )}
                     </div>
 
-                    {/* Previous balance row */}
+                    {/* Rollover carry — positive leftover (mint) or a negative
+                        overspend carried from a prior month (red). Surfaces the
+                        month-rollover behaviour right on the category row. */}
                     {(category.previous_balance ?? 0) > 0 && (
                         <div class="text-xs text-brand-mint-deep font-semibold mb-1">
                             {formatCurrency(category.previous_balance ?? 0)} {t(lang, 'fin_prev_balance_label')}
+                        </div>
+                    )}
+                    {(category.previous_balance ?? 0) < 0 && (
+                        <div class="text-xs text-red-600 font-semibold mb-1">
+                            {formatCurrency(category.previous_balance ?? 0)} {t(lang, 'fin_carried_overspend_label')}
                         </div>
                     )}
 
@@ -164,6 +172,21 @@ const groupBorderColor = isIncome ? 'border-brand-mint' : 'border-brand-ink/10';
                                     </svg>
                                     {lang === "es" ? "Asignar" : "Assign"}
                                 </button>
+                                {/* Cover-overspending pill — only when the
+                                    category is overspent (available < 0). Opens
+                                    the guided move-money flow with this category
+                                    pre-selected as the one to cover. */}
+                                {isOverBudget && (
+                                    <button
+                                        class="cover-overspend-btn inline-flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 font-semibold rounded-full px-2.5 py-0.5 transition text-xs border border-red-200"
+                                        data-category-id={category.id}
+                                        data-category-name={category.name}
+                                        data-deficit={Math.abs(category.available)}
+                                        title={t(lang, 'fin_cover_overspending')}
+                                    >
+                                        ⚠ {t(lang, 'fin_cover_btn')}
+                                    </button>
+                                )}
                                 <span class="text-brand-ink-soft">
                                     {formatCurrency(category.budgeted)} {t(lang, 'fin_budgeted_label')}
                                 </span>

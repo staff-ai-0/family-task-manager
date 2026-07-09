@@ -388,6 +388,44 @@ class SetAllocationResponse(AllocationResponse):
     ready_to_assign: int = 0
 
 
+class CoverOverspendingRequest(BaseModel):
+    """Cover an overspent category by moving money from another category's
+    available balance within the same month."""
+    month: DateType = Field(..., description="Budget month (first day of month)")
+    overspent_category_id: UUID = Field(..., description="The overspent category to cover")
+    source_category_id: UUID = Field(..., description="Category to pull available money from")
+    amount: Optional[int] = Field(
+        None,
+        gt=0,
+        description="Amount in cents to move; defaults to the full deficit when omitted",
+    )
+
+    @field_validator('month')
+    @classmethod
+    def validate_month(cls, v):
+        """Ensure month is the first day of the month"""
+        if v.day != 1:
+            raise ValueError('month must be the first day of the month')
+        return v
+
+
+class CoverOverspendCategoryState(BaseModel):
+    """Post-move state for one category involved in a cover-overspending move."""
+    category_id: UUID
+    budgeted: int
+    available: int
+
+
+class CoverOverspendingResponse(BaseModel):
+    """Result of a cover-overspending move: how much moved, the new state of
+    both categories, and the recomputed month-level Ready-to-Assign."""
+    month: DateType
+    amount_moved: int
+    source: CoverOverspendCategoryState
+    target: CoverOverspendCategoryState
+    ready_to_assign: int
+
+
 # ============================================================================
 # COMPLEX/COMPOSITE SCHEMAS
 # ============================================================================
