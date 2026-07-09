@@ -310,12 +310,6 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         skipped: list[dict] = []
         # Deterministic tiebreak rank from the seeded shuffle above.
         member_rank = {m.id: i for i, m in enumerate(members)}
-        # Stable fallback order for ROTATE templates without a member list:
-        # sorted by id (NOT the rng-shuffled order) so the persisted
-        # rotation_cursor keeps meaning the same sequence across weeks.
-        def _stable(pool: list[User]) -> list[User]:
-            return sorted(pool, key=lambda m: str(m.id))
-
         def _material(dates: list[date]) -> list[date]:
             """Only days that can still be acted on (today onward)."""
             if today is None or today <= week_monday:
@@ -342,6 +336,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
         for template in regular_templates:
             eligible_members = members
+            positional_rotation = False
 
             # Role filter — applies to AUTO and to the ROTATE null-list
             # fallback. An EXPLICIT member list (FIXED/ROTATE) is
@@ -378,11 +373,18 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 )
                 if explicit:
                     eligible_members = explicit
+                    positional_rotation = True
                 else:
-                    # Null/empty/stale member list → rotate over ALL
-                    # participating members (role-filtered, stable order).
-                    # This was the 8-of-9-templates-dead prod bug.
-                    eligible_members = _stable(eligible_members)
+                    # Null/empty/stale member list → "take turns" over ALL
+                    # participating members (role-filtered), via the AUTO
+                    # load balancer below rather than blind positional
+                    # rotation: positional starts collide across templates
+                    # (however staggered) and can park the SAME member's
+                    # turn on a dropped past day in every chore at once
+                    # (prod: Ariana got 2 chores while Mayra had 7). The
+                    # balancer takes turns AND compensates across templates
+                    # and weeks (carry). This also fixes the original
+                    # 8-of-9-templates-dead silent-skip bug.
                     if not eligible_members:
                         skipped.append({
                             "template_id": template.id,
@@ -413,31 +415,21 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     assignments.append(_new_assignment(template.id, fixed_user.id, d))
                     _credit(fixed_user.id, d, template.points)
 
-            elif template.assignment_type == AssignmentType.ROTATE:
-                # ONE occurrence per recurrence date (weekly → exactly one,
-                # not one per weekday) — duplicates here were the Chorsee
-                # failure mode. Start offset comes from the persisted cursor
-                # so the rotation continues across weeks and is identical on
-                # a same-week re-shuffle.
+            elif positional_rotation:
+                # Parent-picked list: positional round-robin in the parent's
+                # order. ONE occurrence per recurrence date (weekly → exactly
+                # one, not one per weekday) — duplicates here were the
+                # Chorsee failure mode. Start offset comes from the persisted
+                # cursor so the rotation continues across weeks and is
+                # identical on a same-week re-shuffle.
                 rotate_dates = TaskAssignmentService._expand_dates(
                     week_monday, template.interval_days,
                     getattr(template, "days_of_week", None),
                 )
                 start = rotation_starts.get(template.id, 0)
-                # Fallback rotations (no parent-picked list) get a stable
-                # per-template offset: with a shared start of 0 and the same
-                # member order, the SAME member held position 0 (Monday) of
-                # EVERY template — one person lost their turn in all chores
-                # at once whenever Monday was already past. Parent-picked
-                # lists keep the parent's ordering untouched.
-                stagger = (
-                    template.id.int % 7
-                    if not (template.assigned_user_ids or [])
-                    else 0
-                )
                 for i, d in enumerate(rotate_dates):
                     chosen = eligible_members[
-                        (stagger + start + i) % len(eligible_members)
+                        (start + i) % len(eligible_members)
                     ]
                     if today is not None and today > week_monday and d < today:
                         continue  # position consumed, row not materialized
@@ -597,6 +589,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             t.id: TaskAssignmentService._rotation_start_for_week(t, week_monday)
             for t in regular_templates
             if t.assignment_type == AssignmentType.ROTATE
+            and (t.assigned_user_ids or [])
         }
 
         # Delete existing PENDING rows for this week (preserves completed/
@@ -838,6 +831,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             t.id: TaskAssignmentService._rotation_start_for_week(t, week_monday)
             for t in regular_templates
             if t.assignment_type == AssignmentType.ROTATE
+            and (t.assigned_user_ids or [])
         }
         assignments, totals, skipped = TaskAssignmentService._compute_assignments(
             rng,

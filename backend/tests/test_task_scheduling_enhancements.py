@@ -102,12 +102,16 @@ class TestMidweekBalance:
                 f"{listed.get(member['user_id'], 0)}"
             )
 
-    async def test_stagger_spreads_rotation_starts_across_templates(
+    async def test_listless_rotation_balances_across_templates(
         self, db_session, test_family, test_parent_user, test_child_user
     ):
-        """Three every-3-days chores mid-week (only Thu+Sun remain): without
-        per-template stagger every template hands Thu/Sun to the SAME two
-        members and the third gets nothing."""
+        """Three every-3-days chores mid-week (only Thu+Sun remain): a
+        rotation WITHOUT a parent-picked list must load-balance across
+        templates — positional rotation (even id-staggered) can park the
+        same member's turn on the dropped Monday in every template at once
+        (prod: Ariana ended with 2 chores while Mayra had 7). Template ids
+        are crafted to COLLIDE under any id-based stagger, so only genuine
+        cross-template balancing passes."""
         from uuid import UUID as _UUID
         from app.models.task_template import TaskTemplate
 
@@ -116,8 +120,8 @@ class TestMidweekBalance:
         )
         monday = _week_monday()
         thursday = monday + timedelta(days=3)
-        # Crafted ids: int % 7 == 0, 1, 2 → deterministic distinct offsets.
-        for k in range(3):
+        # ids 0, 7, 14: identical under any (id % 7)-style stagger.
+        for k in (0, 7, 14):
             db_session.add(TaskTemplate(
                 id=_UUID(int=k),
                 title=f"Every3 #{k}", points=10, interval_days=3,
