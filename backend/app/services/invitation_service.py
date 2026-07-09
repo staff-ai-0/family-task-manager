@@ -7,7 +7,7 @@ Handles invitation creation, acceptance, and email notifications.
 from uuid import UUID
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.models.invitation import FamilyInvitation, InvitationStatus
 from app.models.user import User, UserRole
@@ -18,6 +18,39 @@ from app.services.email_service import EmailService
 
 class InvitationService:
     """Service for managing family invitations"""
+
+    @staticmethod
+    async def find_pending_for_email(
+        db: AsyncSession, email: str
+    ) -> "FamilyInvitation | None":
+        """Return the newest still-valid PENDING invitation for an email.
+
+        Case-insensitive on ``invited_email``. Used by the signup paths
+        (Google OAuth + register-family) so a person who was invited by
+        email joins the inviter's family instead of minting a new one when
+        they sign up without clicking the emailed accept link.
+
+        Returns None if there is no pending invitation, or the newest one is
+        expired.
+        """
+        invitations = (await db.execute(
+            select(FamilyInvitation).where(
+                func.lower(FamilyInvitation.invited_email) == email.lower(),
+                FamilyInvitation.status == InvitationStatus.PENDING,
+            ).order_by(FamilyInvitation.created_at.desc())
+        )).scalars().all()
+        for invitation in invitations:
+            if invitation.is_valid():
+                return invitation
+        return None
+
+    @staticmethod
+    def mark_accepted(invitation: "FamilyInvitation", user) -> None:
+        """Stamp an invitation as accepted by ``user`` (shared by all accept
+        paths — token accept, OAuth invite-join, register invite-join)."""
+        invitation.status = InvitationStatus.ACCEPTED
+        invitation.accepted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        invitation.accepted_by_user_id = user.id
 
     @staticmethod
     async def send_invitation(
@@ -148,26 +181,39 @@ class InvitationService:
             
             user.family_id = invitation.family_id
         else:
-            # Create new user. Invitation-created accounts are parent-vetted
-            # by construction (a parent sent the invite), so approval_status
-            # stays at its 'approved' default.
-            user = User(
-                email=invitation.invited_email,
-                name=user_name,
-                password_hash=get_password_hash(user_password),
-                role=invitation.role,  # Use role specified in invitation
-                family_id=invitation.family_id,
-                points=0,
-                is_active=True,
-                birthdate=birthdate,
-            )
-            db.add(user)
-            await db.flush()
+            # An invitee who already has an account (e.g. registered
+            # independently, creating their own family) must be MOVED into
+            # the inviter's family — not INSERTed again, which would violate
+            # the unique-email constraint and 400 the accept. Reconcile by
+            # email before falling back to creating a fresh account.
+            existing = (await db.execute(
+                select(User).where(
+                    func.lower(User.email) == invitation.invited_email.lower()
+                )
+            )).scalar_one_or_none()
+
+            if existing is not None:
+                existing.family_id = invitation.family_id
+                user = existing
+            else:
+                # Create new user. Invitation-created accounts are
+                # parent-vetted by construction (a parent sent the invite),
+                # so approval_status stays at its 'approved' default.
+                user = User(
+                    email=invitation.invited_email,
+                    name=user_name,
+                    password_hash=get_password_hash(user_password),
+                    role=invitation.role,  # Use role specified in invitation
+                    family_id=invitation.family_id,
+                    points=0,
+                    is_active=True,
+                    birthdate=birthdate,
+                )
+                db.add(user)
+                await db.flush()
 
         # Mark invitation as accepted
-        invitation.status = InvitationStatus.ACCEPTED
-        invitation.accepted_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        invitation.accepted_by_user_id = user.id
+        InvitationService.mark_accepted(invitation, user)
         await db.flush()
 
         return invitation, user

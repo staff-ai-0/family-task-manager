@@ -280,8 +280,12 @@ class GoogleOAuthService:
             return user, access_token, refresh_token, False
         
         # New user - determine which family to join
+        from app.services.invitation_service import InvitationService
+
         target_family_id = None
-        
+        family = None
+        pending_invite = None
+
         # Priority 1: Join code (join existing family)
         if join_code:
             family = await FamilyService.get_family_by_join_code(db, join_code)
@@ -299,7 +303,19 @@ class GoogleOAuthService:
                 raise NotFoundException("Family not found")
             
             target_family_id = family.id
-        
+
+        # Priority 2.5: honor a pending email invitation for this address.
+        # A parent invited them by email; join THAT family instead of
+        # minting a brand-new one (the bug this guards against). Invitations
+        # are parent-initiated, so the account is APPROVED with tokens issued
+        # immediately — no consent gate (same as the other join paths).
+        elif (
+            pending_invite := await InvitationService.find_pending_for_email(
+                db, email
+            )
+        ) is not None:
+            target_family_id = pending_invite.family_id
+
         # Priority 3: Auto-create a new family
         else:
             # Founding an account/family requires explicit consent to the
@@ -346,6 +362,9 @@ class GoogleOAuthService:
             new_role = UserRole(role) if role in ("teen", "child") else UserRole.CHILD
         elif family_id:
             new_role = UserRole.CHILD
+        elif pending_invite is not None:
+            # Trust the role a parent set on the invitation (server-side).
+            new_role = pending_invite.role
         else:
             new_role = UserRole.PARENT
 
@@ -391,6 +410,10 @@ class GoogleOAuthService:
         # Set created_by on family if we just created it
         if not family_id and not join_code and family:
             family.created_by = user.id
+
+        # Consume the invitation that steered this signup into an existing family.
+        if pending_invite is not None:
+            InvitationService.mark_accepted(pending_invite, user)
 
         await db.commit()
         await db.refresh(user)
