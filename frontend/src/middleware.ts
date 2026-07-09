@@ -163,6 +163,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/ayuda",  // Spanish user guide — linked from welcome email
         "/privacidad",  // Aviso de Privacidad (bilingual) — legal, must be public
         "/terminos",    // Términos y Condiciones (bilingual) — legal, must be public
+        "/sitemap.xml", // SEO — crawlable without auth
+        "/robots.txt",  // SEO — crawlable without auth
         "/api/auth/login",
         "/api/auth/refresh",  // BFF refresh route — callable even when the access token is dead
         "/api/auth/register",  // Frontend API route for registration (calls backend /api/auth/register-family)
