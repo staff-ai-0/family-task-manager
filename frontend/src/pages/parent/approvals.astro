@@ -121,7 +121,8 @@ const fmtDate = (d: string) =>
                                 </p>
                                 {row.proof_image_url && (
                                     <a href={row.proof_image_url} target="_blank" rel="noopener noreferrer" class="block mb-3">
-                                        <img src={row.proof_image_url} alt={lang === "es" ? "Foto de prueba" : "Proof image"}
+                                        <img src={`${row.proof_image_url}?size=thumb`} alt={lang === "es" ? "Foto de prueba" : "Proof image"}
+                                            loading="lazy"
                                             class="max-w-full max-h-48 rounded-lg border border-brand-ink/20 object-cover" />
                                     </a>
                                 )}
@@ -190,7 +191,8 @@ const fmtDate = (d: string) =>
                                 </p>
                                 {claim.proof_image_url && (
                                     <a href={claim.proof_image_url} target="_blank" rel="noopener noreferrer" class="block mb-3">
-                                        <img src={claim.proof_image_url} alt={lang === "es" ? "Foto de prueba" : "Proof image"}
+                                        <img src={`${claim.proof_image_url}?size=thumb`} alt={lang === "es" ? "Foto de prueba" : "Proof image"}
+                                            loading="lazy"
                                             class="max-w-full max-h-48 rounded-lg border border-brand-ink/20 object-cover" />
                                     </a>
                                 )}

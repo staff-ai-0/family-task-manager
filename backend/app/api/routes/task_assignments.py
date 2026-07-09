@@ -197,7 +197,10 @@ async def upload_gig_proof(
     import uuid as _uuid
     import os as _os
 
+    from starlette.concurrency import run_in_threadpool
+
     from app.core.config import settings
+    from app.core.thumbnails import make_webp_thumbnail, thumb_filename
     from app.core.upload_validation import (
         read_upload_capped,
         assert_allowed_type,
@@ -220,6 +223,15 @@ async def upload_gig_proof(
     dest = _os.path.join(dest_dir, fname)
     with open(dest, "wb") as fh:
         fh.write(body)
+
+    # Generate a ~200px WebP thumbnail alongside the original so list/approval
+    # views load fast. CPU-bound → run off the event loop. A malformed image
+    # yields None; we simply skip the thumb and the serving route falls back to
+    # the full image.
+    thumb = await run_in_threadpool(make_webp_thumbnail, body)
+    if thumb:
+        with open(_os.path.join(dest_dir, thumb_filename(fname)), "wb") as fh:
+            fh.write(thumb)
 
     return {"proof_image_url": f"/uploads/gig-proofs/{fname}"}
 

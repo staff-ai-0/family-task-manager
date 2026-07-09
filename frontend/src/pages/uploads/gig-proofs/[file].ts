@@ -11,7 +11,7 @@ import type { APIRoute } from "astro";
  * token. The backend route is itself authenticated and family-scoped, so the
  * image is never served without both the cookie here and ownership there.
  */
-export const GET: APIRoute = async ({ params, cookies }) => {
+export const GET: APIRoute = async ({ params, cookies, request }) => {
     const token = cookies.get("access_token")?.value;
     if (!token) {
         return new Response("Unauthorized", { status: 401 });
@@ -26,7 +26,11 @@ export const GET: APIRoute = async ({ params, cookies }) => {
         process.env.PUBLIC_API_BASE_URL ||
         "http://backend:8000";
 
-    const r = await fetch(`${apiUrl}/uploads/gig-proofs/${file}`, {
+    // Forward ?size=thumb (and any other query) so the backend can serve the
+    // small WebP thumbnail for list/approval views.
+    const search = new URL(request.url).search;
+
+    const r = await fetch(`${apiUrl}/uploads/gig-proofs/${file}${search}`, {
         headers: { Authorization: `Bearer ${token}` },
     });
     if (!r.ok) {
@@ -37,7 +41,10 @@ export const GET: APIRoute = async ({ params, cookies }) => {
         status: 200,
         headers: {
             "Content-Type": r.headers.get("content-type") || "application/octet-stream",
-            "Cache-Control": "private, max-age=300",
+            // UUID-named files are immutable — mirror the backend's long cache.
+            "Cache-Control":
+                r.headers.get("cache-control") ||
+                "private, max-age=31536000, immutable",
         },
     });
 };
