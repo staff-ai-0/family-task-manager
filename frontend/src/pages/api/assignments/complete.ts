@@ -38,8 +38,39 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         const headers = new Headers({ Location: "/dashboard" });
 
         if (!response.ok) {
-            const error = await response.json();
-            headers.append("Set-Cookie", `flash_error=${encodeURIComponent(error.detail || "Cannot complete task")}; Path=/`);
+            // Kid-facing page: never surface the raw backend `detail` (English,
+            // technical). Map known 4xx cases to friendly bilingual copy.
+            const es = (cookies.get("lang")?.value ?? "es") === "es";
+            const error = await response.json().catch(() => ({}) as any);
+            const detail = typeof error?.detail === "string" ? error.detail : "";
+            let msg: string;
+            if (detail.includes(" / ")) {
+                // Backend already ships bilingual "es / en" copy — pick a side.
+                const [esPart, enPart] = detail.split(" / ");
+                msg = es ? esPart : (enPart ?? esPart);
+            } else if (/cannot be completed/i.test(detail) && /completed/i.test(detail)) {
+                // Double-tap: the first tap already succeeded.
+                msg = es
+                    ? "¡Esa tarea ya estaba registrada! Tus puntos ya cuentan."
+                    : "That task was already saved! Your points are already counted.";
+            } else if (/mandatory/i.test(detail)) {
+                msg = es
+                    ? "Primero termina tus tareas obligatorias (incluye las atrasadas)."
+                    : "Finish your required chores first (including overdue ones).";
+            } else if (/proof text/i.test(detail)) {
+                msg = es
+                    ? "Cuéntanos qué hiciste para enviar este gig."
+                    : "Tell us what you did to submit this gig.";
+            } else if (response.status >= 400 && response.status < 500) {
+                msg = es
+                    ? "No se pudo guardar la tarea. Intenta de nuevo."
+                    : "Couldn't save the task. Please try again.";
+            } else {
+                msg = es
+                    ? "Algo salió mal. Intenta de nuevo en un momento."
+                    : "Something went wrong. Please try again in a moment.";
+            }
+            headers.append("Set-Cookie", `flash_error=${encodeURIComponent(msg)}; Path=/`);
         } else {
             // Success flash drives the dashboard's confetti + points pulse
             // ([data-flash-success]) — without it the kid's most frequent

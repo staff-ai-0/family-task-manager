@@ -14,18 +14,20 @@ const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
 
-const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+// /auth/me, daily progress (assignments + gating status) and the family-cup
+// boss are independent — fetch in parallel instead of serially.
+const [{ data: user, ok: userOk }, { data: progress }, { data: familyCup }] = await Promise.all([
+    apiFetch<any>("/api/auth/me", { token }),
+    apiFetch<any>("/api/task-assignments/progress", { token }),
+    apiFetch<any>("/api/family-cup/", { token }),
+]);
 if (!userOk) {
     Astro.cookies.delete("access_token", { path: "/" });
     return Astro.redirect("/login");
 }
 
-// Fetch daily progress (includes assignments with template details + gating status)
-const { data: progress } = await apiFetch<any>("/api/task-assignments/progress", { token });
-
 // Cooperative weekly boss battle (points/analytics based, no pet). Best-effort —
 // a null just hides the bar.
-const { data: familyCup } = await apiFetch<any>("/api/family-cup/", { token });
 const boss = familyCup?.boss ?? null;
 
 const requiredTotal = progress?.required_total ?? 0;
@@ -37,6 +39,35 @@ const assignments: any[] = progress?.assignments ?? [];
 // Prior-day mandatory tasks that went OVERDUE — invisible before, but still
 // blocking bonus/gigs. Surface them so the kid can finish and unlock.
 const overdueAssignments: any[] = progress?.overdue_assignments ?? [];
+
+// Group overdue by template: N missed copies of the same daily chore collapse
+// into ONE card with a ×N badge + the oldest date, instead of a wall of
+// identical cards. Completing the card completes the OLDEST instance first
+// (same per-instance endpoint — we just pick the oldest id).
+const overdueByTemplate = new Map<string, any[]>();
+for (const a of overdueAssignments) {
+    const key = String(a.template_id ?? a.template_title);
+    if (!overdueByTemplate.has(key)) overdueByTemplate.set(key, []);
+    overdueByTemplate.get(key)!.push(a);
+}
+const overdueGroups = [...overdueByTemplate.values()].map((items) => {
+    const sorted = [...items].sort((x: any, y: any) =>
+        String(x.due_date ?? x.assigned_date ?? "").localeCompare(String(y.due_date ?? y.assigned_date ?? "")),
+    );
+    return { oldest: sorted[0], count: sorted.length };
+});
+
+function fmtShortDate(iso: string | null | undefined): string {
+    if (!iso) return "";
+    const s = String(iso);
+    const d = new Date(s.includes("T") ? s : `${s}T00:00:00`);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+    });
+}
 
 const requiredAssignments = assignments.filter((a: any) => !a.template_is_bonus);
 const bonusAssignments = assignments.filter((a: any) => a.template_is_bonus);
@@ -54,7 +85,12 @@ const completedBonus = bonusAssignments.filter(
     (a: any) => a.status === "completed" && a.approval_status !== "pending"
 );
 
-const allDone = requiredCompleted >= requiredTotal && bonusCompleted >= bonusTotal && (requiredTotal + bonusTotal) > 0;
+// Only celebrate when required-today AND overdue blockers are ALL clear —
+// otherwise "All done!" renders while overdue chores still lock bonus/gigs.
+const todayCleared = requiredCompleted >= requiredTotal && bonusCompleted >= bonusTotal && (requiredTotal + bonusTotal) > 0;
+const allDone = todayCleared && overdueAssignments.length === 0;
+// Today is clear but overdue blockers remain → nudge at the overdue section.
+const doneButOverdue = todayCleared && overdueAssignments.length > 0;
 const noTasks = requiredTotal === 0 && bonusTotal === 0;
 
 const progressPercent = requiredTotal > 0 ? Math.round((requiredCompleted / requiredTotal) * 100) : 100;
@@ -74,17 +110,44 @@ let activeGoal: any = null;
 let recentPayday: any = null;
 // Virtual pet nudge (Quest Mode entry point). Best-effort — null just hides it.
 let pet: any = null;
+// Gigs submitted on PRIOR days that are still awaiting a parent decision (or
+// were just rejected) vanish from today's progress payload — surface them.
+let recentSubmittedGigs: any[] = [];
 if (isKid) {
-    const { data: goalData } = await apiFetch<any>("/api/rewards/goal", { token });
+    // Anchor the /week fetch on YESTERDAY so a gig submitted yesterday is
+    // found even when today is Monday (yesterday = previous week).
+    const todayStr = String(progress?.date ?? new Date().toISOString().slice(0, 10));
+    const yesterday = new Date(`${todayStr}T00:00:00`);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = [
+        yesterday.getFullYear(),
+        String(yesterday.getMonth() + 1).padStart(2, "0"),
+        String(yesterday.getDate()).padStart(2, "0"),
+    ].join("-");
+    // These four are independent of each other — parallelize.
+    const [{ data: goalData }, { data: petData }, { data: notifData }, { data: weekDone }] = await Promise.all([
+        apiFetch<any>("/api/rewards/goal", { token }),
+        apiFetch<any>("/api/pet/", { token }),
+        apiFetch<any>("/api/notifications/?limit=20", { token }),
+        apiFetch<any>(
+            `/api/task-assignments/week?week_of=${yesterdayStr}&status=completed&user_id=${user.id}`,
+            { token },
+        ),
+    ]);
     activeGoal = goalData ?? null;
-    const { data: petData } = await apiFetch<any>("/api/pet/", { token });
     pet = petData ?? null;
-    const { data: notifData } = await apiFetch<any>("/api/notifications/?limit=20", { token });
     const notifItems: any[] = notifData?.items ?? [];
     const paydayCutoff = Date.now() - 3 * 24 * 3600 * 1000;
     recentPayday = notifItems.find(
         (n: any) => n.type === "payday" && new Date(n.created_at).getTime() >= paydayCutoff,
     ) ?? null;
+    recentSubmittedGigs = (Array.isArray(weekDone) ? weekDone : []).filter(
+        (a: any) =>
+            a.template_is_bonus &&
+            String(a.assigned_date) < todayStr &&
+            (a.approval_status === "pending" ||
+                (a.approval_status === "rejected" && String(a.assigned_date) >= yesterdayStr)),
+    );
 }
 
 const flash = Astro.cookies.get("flash")?.value;
@@ -196,9 +259,13 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     ></div>
                                 </div>
                                 <p class="text-xs text-brand-cream mt-0.5">
-                                    {lang === "es"
-                                        ? `${activeGoal.pts_to_go} pts para lograrlo`
-                                        : `${activeGoal.pts_to_go} pts to go`}
+                                    {starMode
+                                        ? (lang === "es"
+                                            ? `${activeGoal.pts_to_go} ⭐ para lograrlo`
+                                            : `${activeGoal.pts_to_go} ⭐ to go`)
+                                        : (lang === "es"
+                                            ? `${activeGoal.pts_to_go} pts para lograrlo`
+                                            : `${activeGoal.pts_to_go} pts to go`)}
                                 </p>
                             </div>
                         </a>
@@ -347,9 +414,24 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 </div>
             )}
 
+            <!-- Today cleared but overdue blockers remain: nudge, don't celebrate -->
+            {doneButOverdue && !noTasks && (
+                <a href="#overdue-section" class="block bg-brand-sun/20 rounded-2xl p-6 text-center border border-brand-sun shadow-[var(--shadow-card)] mb-6 hover:bg-brand-sun/30 transition-colors">
+                    <span class="text-3xl">⏰</span>
+                    <h3 class="text-lg font-bold text-brand-ink mt-2">
+                        {lang === "es" ? "Aún tienes tareas atrasadas" : "You still have overdue chores"}
+                    </h3>
+                    <p class="text-brand-ink-soft mt-1 text-sm">
+                        {lang === "es"
+                            ? "Termínalas para desbloquear bonus y gigs ↓"
+                            : "Finish them to unlock bonus tasks and gigs ↓"}
+                    </p>
+                </a>
+            )}
+
             <!-- Overdue (Atrasadas) — prior-day mandatory tasks that block bonus/gigs -->
-            {overdueAssignments.length > 0 && (
-                <div class="mb-8">
+            {overdueGroups.length > 0 && (
+                <div class="mb-8" id="overdue-section">
                     <div class="flex items-center gap-2 mb-3 px-1">
                         <span class="text-lg">⏰</span>
                         <h3 class="text-lg font-bold text-red-600">
@@ -362,18 +444,28 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                             : "Finish these to unlock bonus tasks and gigs."}
                     </p>
                     <div class="space-y-3">
-                        {overdueAssignments.map((a: any) => (
+                        {overdueGroups.map(({ oldest: a, count }: any) => (
                             <div class="bg-red-50 rounded-2xl p-5 shadow-[var(--shadow-card)] border border-red-200 flex justify-between items-center">
                                 <div class="pr-4 flex-1">
-                                    <h3 class="font-bold text-brand-ink text-lg mb-1">
-                                        {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
+                                    <h3 class="font-bold text-brand-ink text-lg mb-1 flex items-center gap-2 flex-wrap">
+                                        <span>{lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}</span>
+                                        {count > 1 && (
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-extrabold bg-red-600 text-white">
+                                                ×{count}
+                                            </span>
+                                        )}
                                     </h3>
                                     <p class="text-brand-ink-soft text-sm line-clamp-2">
                                         {(lang === "es" && a.template_description_es ? a.template_description_es : a.template_description) || "--"}
                                     </p>
                                     <div class="flex items-center gap-2 mt-3 flex-wrap">
                                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-                                            {lang === "es" ? "Vencida" : "Past due"}
+                                            {lang === "es"
+                                                ? `desde ${fmtShortDate(a.due_date ?? a.assigned_date)}`
+                                                : `since ${fmtShortDate(a.due_date ?? a.assigned_date)}`}
+                                        </span>
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-brand-sky/20 text-brand-sky-deep">
+                                            {starMode ? `+${a.template_points} ⭐` : `+${a.template_points} pts`}
                                         </span>
                                         <DifficultyChip level={a.template_effort_level ?? 1} lang={lang} />
                                     </div>
@@ -419,6 +511,9 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                         {(lang === "es" && a.template_description_es ? a.template_description_es : a.template_description) || "--"}
                                     </p>
                                     <div class="flex items-center gap-2 mt-3 flex-wrap">
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-sky/20 text-brand-sky-deep">
+                                            {starMode ? `+${a.template_points} ⭐` : `+${a.template_points} pts`}
+                                        </span>
                                         <DifficultyChip level={a.template_effort_level ?? 1} lang={lang} />
                                     </div>
                                 </div>
@@ -465,7 +560,9 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                             <p class="text-xs text-brand-ink-soft">
                                                 {a.approval_status === "pending"
                                                     ? (lang === "es" ? "⏳ Esperando aprobación de la foto" : "⏳ Awaiting photo approval")
-                                                    : t(lang, "dashboard_earned")(a.template_points)}
+                                                    : (starMode
+                                                        ? `+${a.template_points} ⭐`
+                                                        : t(lang, "dashboard_earned")(a.template_points))}
                                             </p>
                                         </div>
                                     </div>
@@ -473,6 +570,46 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                             </div>
                         </details>
                     )}
+                </div>
+            )}
+
+            <!-- Prior-day gigs still awaiting a parent decision (or just rejected).
+                 Today's pending gigs already render inside the bonus section; these
+                 would otherwise vanish from the kid's view entirely. -->
+            {recentSubmittedGigs.length > 0 && (
+                <div class="mb-8">
+                    <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider px-1 mb-2">
+                        {lang === "es" ? "Esperando aprobación" : "Awaiting approval"}
+                    </p>
+                    <div class="space-y-2">
+                        {recentSubmittedGigs.map((a: any) => {
+                            const rejected = a.approval_status === "rejected";
+                            return (
+                                <div class:list={[
+                                    "rounded-2xl px-5 py-3 border flex items-center gap-4",
+                                    rejected ? "bg-red-50 border-red-200" : "bg-brand-cream/80 border-brand-sun",
+                                ]}>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="font-medium text-brand-ink truncate">
+                                            {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
+                                        </p>
+                                        <p class="text-xs text-brand-ink-soft">
+                                            {fmtShortDate(a.assigned_date)}
+                                            {!rejected && (lang === "es" ? " · Un padre la revisará pronto" : " · A parent will review soon")}
+                                        </p>
+                                    </div>
+                                    <span class:list={[
+                                        "text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0",
+                                        rejected ? "bg-red-100 text-red-700" : "bg-brand-sun/20 text-brand-sun-deep",
+                                    ]}>
+                                        {rejected
+                                            ? (lang === "es" ? "Rechazada" : "Rejected")
+                                            : (lang === "es" ? "Pendiente" : "Pending")}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
 
@@ -532,7 +669,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                             </p>
                                             <div class="flex items-center gap-2 mt-3">
                                                 <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-sun/20 text-brand-sun-deep">
-                                                    +{a.template_points} pts
+                                                    {starMode ? `+${a.template_points} ⭐` : `+${a.template_points} pts`}
                                                 </span>
                                             </div>
                                         </div>
@@ -573,7 +710,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                                     {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
                                                 </p>
                                                 <p class="text-xs text-brand-ink-soft">
-                                                    {lang === "es" ? "Un padre la revisará pronto" : "A parent will review soon"} · +{a.template_points} pts
+                                                    {lang === "es" ? "Un padre la revisará pronto" : "A parent will review soon"} · +{a.template_points} {starMode ? "⭐" : "pts"}
                                                 </p>
                                             </div>
                                             <span class="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-sun/20 text-brand-sun-deep">
@@ -627,7 +764,9 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                                         <p class="text-xs text-brand-ink-soft">
                                                             {rejected
                                                                 ? (lang === "es" ? "Rechazada" : "Rejected")
-                                                                : t(lang, "dashboard_earned")(a.template_points)}
+                                                                : (starMode
+                                                                    ? `+${a.template_points} ⭐`
+                                                                    : t(lang, "dashboard_earned")(a.template_points))}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -755,12 +894,37 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
             // Track which form opened the modal so we can submit it on confirm.
             let pendingForm: HTMLFormElement | null = null;
 
+            // In-flight guard: disable the Complete button + swap it for a
+            // "Guardando… / Saving…" spinner pill so a double-tap can't fire
+            // the request twice (the second one used to surface a raw English
+            // backend error right after the success).
+            function markInFlight(form: HTMLFormElement) {
+                form.dataset.inflight = "1";
+                const btn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+                if (!btn) return;
+                const es = document.documentElement.lang === "es";
+                btn.disabled = true;
+                btn.className =
+                    "h-12 px-4 rounded-full bg-brand-cream-deep text-brand-ink-soft flex items-center gap-2 flex-shrink-0 shadow-[var(--shadow-card)] text-sm font-semibold cursor-wait";
+                btn.innerHTML =
+                    '<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>' +
+                    (es ? "Guardando…" : "Saving…");
+            }
+
             document.querySelectorAll<HTMLFormElement>("form[data-complete-form]").forEach((f) => {
                 f.addEventListener("submit", (ev) => {
+                    if (f.dataset.inflight === "1") {
+                        ev.preventDefault();
+                        return;
+                    }
                     const isBonus = f.dataset.isBonus === "1";
                     const requiresProof = f.dataset.requiresProof === "1";
-                    // mandatory WITHOUT photo proof: submit normally
-                    if (!isBonus && !requiresProof) return;
+                    // mandatory WITHOUT photo proof: submit normally (locked
+                    // against re-submission while the redirect is in flight)
+                    if (!isBonus && !requiresProof) {
+                        markInFlight(f);
+                        return;
+                    }
                     ev.preventDefault();
                     pendingForm = f;
                     textarea.value = "";
@@ -841,6 +1005,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 const submittingForm = pendingForm;
                 pendingForm = null;
                 modal.close();
+                markInFlight(submittingForm);
                 // submit() bypasses our submit listener, avoiding a re-trigger of the modal.
                 submittingForm.submit();
             });

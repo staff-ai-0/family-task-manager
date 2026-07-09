@@ -49,6 +49,15 @@ if (Astro.request.method === "POST") {
         assignment_type: assignmentType,
         assigned_user_ids: assignedUserIds.length > 0 ? assignedUserIds : null,
         allowed_roles: allowedRoles.length > 0 ? allowedRoles : null,
+        days_of_week: (() => {
+            // Explicit weekdays (Mon=0..Sun=6); empty selection = null =
+            // classic interval pattern.
+            const days = data
+                .getAll("days_of_week[]")
+                .map((d) => Number(d))
+                .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6);
+            return days.length > 0 ? days : null;
+        })(),
     };
 
     const { ok, error } = await apiFetch(`/api/task-templates/${id}`, {
@@ -205,7 +214,43 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                         </select>
                     </div>
                 </div>
-                
+
+                <!-- Explicit weekdays (Mon=0..Sun=6). When any is checked the
+                     weekly expansion lands on exactly those days and the
+                     frequency above is ignored. -->
+                <div class="pt-2">
+                    <label class="text-sm font-medium text-brand-ink mb-1 block">
+                        {lang === "es" ? "Días específicos (opcional)" : "Specific days (optional)"}
+                    </label>
+                    <div class="flex gap-1.5 flex-wrap">
+                        {(lang === "es"
+                            ? ["L", "M", "X", "J", "V", "S", "D"]
+                            : ["M", "T", "W", "T", "F", "S", "S"]
+                        ).map((label, i) => {
+                            const checked = Array.isArray(tmpl.days_of_week) && tmpl.days_of_week.includes(i);
+                            return (
+                                <label class="cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        name="days_of_week[]"
+                                        value={i}
+                                        checked={checked}
+                                        class="peer sr-only"
+                                    />
+                                    <span class="inline-flex w-9 h-9 items-center justify-center rounded-full border border-brand-ink/20 text-xs font-semibold text-brand-ink bg-brand-cream peer-checked:bg-brand-sky-deep peer-checked:text-white peer-checked:border-brand-sky-deep select-none">
+                                        {label}
+                                    </span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                    <p class="text-xs text-brand-ink-soft mt-1">
+                        {lang === "es"
+                            ? "Si marcas días, la tarea cae exactamente en esos días y la frecuencia de arriba se ignora."
+                            : "If you pick days, the task lands exactly on those days and the frequency above is ignored."}
+                    </p>
+                </div>
+
                 <!-- Recurrence mode (W4.2): weekly presets vs 'every N days after done' -->
                 <div class="pt-2 border-t border-brand-ink/10">
                     <label class="text-sm font-medium text-brand-ink mb-1 block">

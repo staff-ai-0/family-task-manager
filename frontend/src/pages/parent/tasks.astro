@@ -21,6 +21,8 @@ if (user.role !== "parent") return Astro.redirect("/dashboard");
 let successMsg = "";
 let errorMsg = "";
 
+// PRG (Post-Redirect-Get): every successful POST redirects back with
+// ?ok=<action> so a browser refresh can never re-execute a delete/shuffle.
 if (Astro.request.method === "POST") {
     const data = await Astro.request.formData();
     const action = data.get("action");
@@ -31,11 +33,8 @@ if (Astro.request.method === "POST") {
             method: "DELETE",
             token,
         });
-        if (ok) {
-            successMsg = t(lang, "pt_deleted");
-        } else {
-            errorMsg = error || "Error";
-        }
+        if (ok) return Astro.redirect(Astro.url.pathname + "?ok=deleted");
+        errorMsg = error || "Error";
     }
 
     if (action === "toggle") {
@@ -44,11 +43,8 @@ if (Astro.request.method === "POST") {
             method: "PATCH",
             token,
         });
-        if (ok) {
-            successMsg = t(lang, "pt_toggled") as string;
-        } else {
-            errorMsg = error || "Error";
-        }
+        if (ok) return Astro.redirect(Astro.url.pathname + "?ok=toggled");
+        errorMsg = error || "Error";
     }
 
     if (action === "shuffle") {
@@ -58,11 +54,48 @@ if (Astro.request.method === "POST") {
             body: JSON.stringify({}),
         });
         if (ok && shuffleResult) {
-            successMsg = t(lang, "shuffle_success")(shuffleResult.assignments_created);
-        } else {
-            errorMsg = error || t(lang, "shuffle_error");
+            const params = new URLSearchParams({
+                ok: "shuffle",
+                created: String(shuffleResult.assignments_created ?? 0),
+            });
+            const skipped = (Array.isArray(shuffleResult.skipped_templates) ? shuffleResult.skipped_templates : [])
+                .slice(0, 20)
+                .map((s: any) => ({ t: s.title, r: s.reason }));
+            if (skipped.length > 0) params.set("skipped", JSON.stringify(skipped));
+            return Astro.redirect(`${Astro.url.pathname}?${params.toString()}`);
         }
+        errorMsg = error || t(lang, "shuffle_error");
     }
+}
+
+// Flash messages from the PRG query params
+const okParam = Astro.url.searchParams.get("ok");
+const shuffleDone = okParam === "shuffle";
+let shuffleSkipped: Array<{ t: string; r: string }> = [];
+if (okParam === "deleted") {
+    successMsg = t(lang, "pt_deleted") as string;
+} else if (okParam === "toggled") {
+    successMsg = t(lang, "pt_toggled") as string;
+} else if (shuffleDone) {
+    const created = parseInt(Astro.url.searchParams.get("created") ?? "0", 10) || 0;
+    successMsg = (t(lang, "shuffle_success") as Function)(created);
+    try {
+        const raw = JSON.parse(Astro.url.searchParams.get("skipped") ?? "[]");
+        if (Array.isArray(raw)) {
+            shuffleSkipped = raw.filter((s: any) => s && typeof s.t === "string" && typeof s.r === "string");
+        }
+    } catch (_) { /* malformed param — ignore */ }
+}
+
+// Known backend skip reasons, localized (fallback: raw reason)
+function skipReasonLabel(reason: string): string {
+    if (lang !== "es") return reason;
+    const map: Record<string, string> = {
+        "fixed template has no valid members": "asignación fija sin miembros válidos",
+        "no members match allowed_roles": "ningún miembro cumple los roles permitidos",
+        "no eligible members for this gig": "sin miembros elegibles para este gig",
+    };
+    return map[reason] ?? reason;
 }
 
 const [{ data: templates }, { data: weekAssignments }, { data: familyMembers }] = await Promise.all([
@@ -74,6 +107,21 @@ const [{ data: templates }, { data: weekAssignments }, { data: familyMembers }] 
 const templateList: any[] = (Array.isArray(templates) ? templates : []).filter((t: any) => !t.is_bonus);
 const assignmentList: any[] = Array.isArray(weekAssignments) ? weekAssignments : [];
 const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
+
+// Post-shuffle inline summary: who got how many chores/points this week.
+// Computed from the freshly-fetched week assignments (post-redirect = post-shuffle state).
+type ShuffleMemberStat = { name: string; count: number; points: number };
+let shuffleMemberStats: ShuffleMemberStat[] = [];
+if (shuffleDone) {
+    const byName: Record<string, ShuffleMemberStat> = {};
+    for (const a of assignmentList) {
+        const name = a.assigned_user_name || a.assigned_to;
+        if (!byName[name]) byName[name] = { name, count: 0, points: 0 };
+        byName[name].count += 1;
+        byName[name].points += a.template_points ?? 0;
+    }
+    shuffleMemberStats = Object.values(byName);
+}
 
 // Group assignments by user
 const assignmentsByUser: Record<string, any[]> = {};
@@ -125,6 +173,41 @@ function freqLabel(tmpl: any): string {
                 </div>
             )}
 
+            <!-- Post-shuffle result: per-member counts + skipped templates -->
+            {shuffleDone && shuffleMemberStats.length > 0 && (
+                <section class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                    <h2 class="text-sm font-bold text-brand-ink mb-2">
+                        {lang === "es" ? "Resultado del shuffle esta semana" : "This week's shuffle result"}
+                    </h2>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {shuffleMemberStats.map((m) => (
+                            <div class="bg-brand-cream-deep rounded-lg p-3 border border-brand-ink/10">
+                                <p class="text-sm font-semibold text-brand-ink">{m.name}</p>
+                                <p class="text-xs text-brand-ink-soft">
+                                    {lang === "es"
+                                        ? `${m.count} ${m.count === 1 ? "tarea" : "tareas"} · ${m.points} pts`
+                                        : `${m.count} ${m.count === 1 ? "chore" : "chores"} · ${m.points} pts`}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+            {shuffleDone && shuffleSkipped.length > 0 && (
+                <div class="p-3 bg-amber-50 border border-amber-300 text-amber-800 text-sm rounded-xl">
+                    <p class="font-semibold mb-1">
+                        ⚠️ {lang === "es" ? "No se pudieron programar:" : "Could not be scheduled:"}
+                    </p>
+                    <ul class="list-disc list-inside space-y-0.5">
+                        {shuffleSkipped.map((s) => (
+                            <li>
+                                <span class="font-medium">{s.t}</span> — {skipReasonLabel(s.r)}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
             <!-- Shuffle Section -->
             <section class="bg-brand-sun/20 rounded-[var(--radius-card)] p-5 shadow-[var(--shadow-card)] border-2 border-brand-ink">
                 <div class="flex items-center justify-between mb-2">
@@ -140,6 +223,12 @@ function freqLabel(tmpl: any): string {
                         data-t-empty={t(lang, "shuffle_preview_empty")}
                         data-t-carry={t(lang, "shuffle_preview_carry")}
                         data-t-total={t(lang, "shuffle_preview_total")}
+                        data-t-skipped-intro={lang === "es" ? "No se pudieron programar:" : "Could not be scheduled:"}
+                        data-t-reasons={JSON.stringify(lang === "es" ? {
+                            "fixed template has no valid members": "asignación fija sin miembros válidos",
+                            "no members match allowed_roles": "ningún miembro cumple los roles permitidos",
+                            "no eligible members for this gig": "sin miembros elegibles para este gig",
+                        } : {})}
                         class="press flex-1 py-2.5 bg-brand-cream border-2 border-brand-ink hover:bg-brand-sun/30 text-brand-ink font-extrabold text-sm rounded-full transition-colors shadow-[var(--shadow-card)] flex items-center justify-center gap-2"
                     >
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -193,7 +282,7 @@ function freqLabel(tmpl: any): string {
                                                 {tmpl.title}
                                                 {!tmpl.title_es && (
                                                     <span class="inline-block ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200" title={t(lang, "translation_missing")}>
-                                                        ES missing
+                                                        {lang === "es" ? "Falta ES" : "ES missing"}
                                                     </span>
                                                 )}
                                             </h3>
@@ -218,7 +307,9 @@ function freqLabel(tmpl: any): string {
                                                         ? 'bg-brand-coral/15 text-brand-coral-deep' 
                                                         : 'bg-brand-mint/20 text-brand-mint-deep'
                                                 }`}>
-                                                    {tmpl.assignment_type === 'fixed' ? '📌 Fixed' : '🔄 Rotate'}
+                                                    {tmpl.assignment_type === 'fixed'
+                                                        ? (lang === "es" ? '📌 Fijo' : '📌 Fixed')
+                                                        : (lang === "es" ? '🔄 Rotación' : '🔄 Rotate')}
                                                 </span>
                                             )}
                                             {!tmpl.is_active && (
@@ -299,6 +390,7 @@ function freqLabel(tmpl: any): string {
             </div>
             <div class="flex-1 overflow-y-auto p-5 space-y-4">
                 <div id="preview-status" class="text-sm text-brand-ink-soft text-center py-4 hidden"></div>
+                <div id="preview-skipped" class="hidden p-3 bg-amber-50 border border-amber-300 text-amber-800 text-sm rounded-xl"></div>
                 <div id="preview-totals" class="grid grid-cols-2 md:grid-cols-3 gap-2"></div>
                 <div id="preview-plan" class="space-y-2"></div>
             </div>
@@ -318,27 +410,22 @@ function freqLabel(tmpl: any): string {
 
     <script>
         document.addEventListener('astro:page-load', () => {
-        (window as any).toggleUserSelection = function(assignmentType: string) {
-            const container = document.getElementById('user_selection_container');
-            if (container) {
-                if (assignmentType === 'fixed' || assignmentType === 'rotate') {
-                    container.classList.remove('hidden');
-                } else {
-                    container.classList.add('hidden');
-                }
-            }
-        };
-
         const previewBtn = document.getElementById("btn-shuffle-preview");
         const modal = document.getElementById("preview-modal");
         const closeBtn = document.getElementById("preview-close");
         const cancelBtn = document.getElementById("preview-cancel");
         const weekEl = document.getElementById("preview-week");
         const statusEl = document.getElementById("preview-status");
+        const skippedEl = document.getElementById("preview-skipped");
         const totalsEl = document.getElementById("preview-totals");
         const planEl = document.getElementById("preview-plan");
 
         if (!previewBtn || !modal) return;
+
+        const isEs = document.documentElement.lang === "es";
+
+        let reasonMap: Record<string, string> = {};
+        try { reasonMap = JSON.parse(previewBtn.dataset.tReasons ?? "{}"); } catch (_) { /* ignore */ }
 
         const t = {
             loading: previewBtn.dataset.tLoading ?? "Computing...",
@@ -346,7 +433,11 @@ function freqLabel(tmpl: any): string {
             empty: previewBtn.dataset.tEmpty ?? "No assignments.",
             carry: previewBtn.dataset.tCarry ?? "carry",
             total: previewBtn.dataset.tTotal ?? "this week",
+            skippedIntro: previewBtn.dataset.tSkippedIntro ?? "Could not be scheduled:",
         };
+
+        const escapeHtml = (s: unknown) => String(s ?? "")
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
         const close = () => modal.classList.add("hidden");
         closeBtn?.addEventListener("click", close);
@@ -358,6 +449,7 @@ function freqLabel(tmpl: any): string {
             if (totalsEl) totalsEl.innerHTML = "";
             if (planEl) planEl.innerHTML = "";
             if (weekEl) weekEl.textContent = "";
+            if (skippedEl) { skippedEl.innerHTML = ""; skippedEl.classList.add("hidden"); }
             if (statusEl) {
                 statusEl.textContent = t.loading;
                 statusEl.classList.remove("hidden", "text-red-600");
@@ -371,11 +463,23 @@ function freqLabel(tmpl: any): string {
                 if (statusEl) statusEl.classList.add("hidden");
                 if (weekEl) weekEl.textContent = data.week_of ?? "";
 
+                // Skipped templates — amber warning, never silent
+                const skipped = data.skipped_templates || [];
+                if (skippedEl && skipped.length > 0) {
+                    skippedEl.innerHTML = `
+                        <p class="font-semibold mb-1">⚠️ ${escapeHtml(t.skippedIntro)}</p>
+                        <ul class="list-disc list-inside space-y-0.5">
+                            ${skipped.map((s: any) => `
+                                <li><span class="font-medium">${escapeHtml(s.title)}</span> — ${escapeHtml(reasonMap[s.reason] ?? s.reason)}</li>`).join("")}
+                        </ul>`;
+                    skippedEl.classList.remove("hidden");
+                }
+
                 if (totalsEl) {
                     totalsEl.innerHTML = (data.totals_by_member || [])
                         .map((m: any) => `
                             <div class="bg-brand-cream-deep rounded-lg p-3 border border-brand-ink/10">
-                                <p class="text-sm font-semibold text-brand-ink">${m.user_name}</p>
+                                <p class="text-sm font-semibold text-brand-ink">${escapeHtml(m.user_name)}</p>
                                 <p class="text-xs text-brand-ink-soft">${m.points_this_week} pts ${t.total} · ${m.points_carry} ${t.carry}</p>
                             </div>`)
                         .join("");
@@ -395,11 +499,11 @@ function freqLabel(tmpl: any): string {
                         }
                         planEl.innerHTML = Object.entries(byUser).map(([name, list]) => `
                             <div class="bg-brand-cream border border-brand-ink/10 rounded-lg p-3">
-                                <p class="text-sm font-bold text-brand-ink mb-2">${name}</p>
+                                <p class="text-sm font-bold text-brand-ink mb-2">${escapeHtml(name)}</p>
                                 <ul class="space-y-1">
                                     ${list.map((a: any) => `
                                         <li class="flex justify-between text-xs">
-                                            <span class="text-brand-ink truncate">${a.assigned_date} · ${a.template_title}${a.template_is_bonus ? " ⭐" : ""}</span>
+                                            <span class="text-brand-ink truncate">${a.assigned_date} · ${escapeHtml((isEs && a.template_title_es) ? a.template_title_es : a.template_title)}${a.template_is_bonus ? " ⭐" : ""}</span>
                                             <span class="text-brand-sun-deep font-semibold ml-2 flex-shrink-0">+${a.template_points}</span>
                                         </li>`).join("")}
                                 </ul>

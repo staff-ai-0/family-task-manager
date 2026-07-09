@@ -59,6 +59,8 @@ const labels = {
     hello: lang === "es" ? "¡Hola" : "Hi",
     my_chores: lang === "es" ? "Mis tareas de hoy" : "My chores today",
     no_chores: lang === "es" ? "¡Sin tareas hoy! 🎉" : "No chores today! 🎉",
+    overdue: lang === "es" ? "Atrasadas" : "Overdue",
+    overdue_hint: lang === "es" ? "Termina estas para desbloquear gigs" : "Finish these to unlock gigs",
     points: lang === "es" ? "puntos" : "points",
     cash: lang === "es" ? "ahorros" : "savings",
     gigs_open_1: lang === "es" ? "gig disponible en el tablero" : "gig open on the board",
@@ -324,6 +326,11 @@ const maxWeekPoints = Math.max(
                         <p class="text-white/60 text-sm mt-1">💰 {labels.cash}</p>
                     </div>
                 </div>
+                <div id="kid-overdue-card" class="hidden bg-rose-500/10 border border-rose-400/40 rounded-2xl p-5 mb-4">
+                    <h3 class="text-lg font-semibold mb-1 text-rose-300">⏰ {labels.overdue}</h3>
+                    <p class="text-white/50 text-xs">{labels.overdue_hint}</p>
+                    <ul id="kid-overdue" class="space-y-2 mt-3"></ul>
+                </div>
                 <div class="bg-white/5 rounded-2xl p-5 mb-4">
                     <h3 class="text-lg font-semibold mb-1 text-emerald-300">✅ {labels.my_chores} <span id="kid-chores-count" class="text-white/50 text-sm font-normal"></span></h3>
                     <ul id="kid-chores" class="space-y-2 mt-3"></ul>
@@ -492,35 +499,50 @@ const maxWeekPoints = Math.max(
                         "$" + (view.cash_cents / 100).toFixed(0) + " MXN";
                 }
 
+                // Shared row builder for today's chores + overdue blockers.
+                // Star Mode: points render as stars here too, not just the
+                // header balance — raw "+N" numbers must not leak on cards.
+                function choreRow(c, isOverdue) {
+                    const li = document.createElement("li");
+                    li.className = "flex items-center gap-3 text-lg" + (c.is_done ? " opacity-50" : "");
+                    const check = document.createElement("span");
+                    check.className = "w-6 h-6 rounded border-2 flex-shrink-0 flex items-center justify-center text-sm " +
+                        (c.is_done
+                            ? "bg-emerald-400 border-emerald-400 text-slate-900"
+                            : (isOverdue ? "border-rose-400/70 text-rose-300" : "border-white/30"));
+                    check.textContent = c.is_done ? "✓" : (isOverdue ? "!" : "");
+                    const title = document.createElement("span");
+                    title.className = "flex-1" + (c.is_done ? " line-through" : "");
+                    title.textContent =
+                        (c.is_bonus ? "⭐ " : "") +
+                        ((lang === "es" && c.title_es) ? c.title_es : c.title);
+                    const pts = document.createElement("span");
+                    pts.className = (isOverdue ? "text-rose-300" : "text-amber-300") + " font-mono text-sm";
+                    pts.textContent = c.points > 0
+                        ? (starMode ? `+${c.points} ⭐` : `+${c.points}`)
+                        : "";
+                    li.append(check, title, pts);
+                    return li;
+                }
+
+                // Overdue blockers (prior-day mandatory chores that lock gigs).
+                const overdueCard = document.getElementById("kid-overdue-card");
+                const overdueList = document.getElementById("kid-overdue");
+                const overdue = Array.isArray(view.overdue_chores) ? view.overdue_chores : [];
+                overdueList.innerHTML = "";
+                overdueCard.classList.toggle("hidden", overdue.length === 0);
+                for (const c of overdue) overdueList.appendChild(choreRow(c, true));
+
                 const list = document.getElementById("kid-chores");
                 const empty = document.getElementById("kid-no-chores");
                 list.innerHTML = "";
                 const chores = Array.isArray(view.chores) ? view.chores : [];
                 document.getElementById("kid-chores-count").textContent =
                     chores.length ? `(${view.chores_done} ${labels.done_of} ${chores.length})` : "";
-                if (chores.length === 0) {
-                    empty.classList.remove("hidden");
-                } else {
-                    empty.classList.add("hidden");
-                    for (const c of chores) {
-                        const li = document.createElement("li");
-                        li.className = "flex items-center gap-3 text-lg" + (c.is_done ? " opacity-50" : "");
-                        const check = document.createElement("span");
-                        check.className = "w-6 h-6 rounded border-2 flex-shrink-0 flex items-center justify-center text-sm " +
-                            (c.is_done ? "bg-emerald-400 border-emerald-400 text-slate-900" : "border-white/30");
-                        check.textContent = c.is_done ? "✓" : "";
-                        const title = document.createElement("span");
-                        title.className = "flex-1" + (c.is_done ? " line-through" : "");
-                        title.textContent =
-                            (c.is_bonus ? "⭐ " : "") +
-                            ((lang === "es" && c.title_es) ? c.title_es : c.title);
-                        const pts = document.createElement("span");
-                        pts.className = "text-amber-300 font-mono text-sm";
-                        pts.textContent = c.points > 0 ? `+${c.points}` : "";
-                        li.append(check, title, pts);
-                        list.appendChild(li);
-                    }
-                }
+                // Only celebrate "No chores today!" when overdue blockers are
+                // clear too — otherwise it lies while gigs are locked.
+                empty.classList.toggle("hidden", !(chores.length === 0 && overdue.length === 0));
+                for (const c of chores) list.appendChild(choreRow(c, false));
 
                 const gigs = document.getElementById("kid-gigs");
                 gigs.textContent = view.gigs_open > 0
