@@ -163,6 +163,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
         "/ayuda",  // Spanish user guide — linked from welcome email
         "/privacidad",  // Aviso de Privacidad (bilingual) — legal, must be public
         "/terminos",    // Términos y Condiciones (bilingual) — legal, must be public
+        "/tdah",        // TDAH/rutinas content landing — marketing, must be crawlable
+        "/rutinas",     // ES keyword alias → 301s to /tdah (still needs to be public)
         "/sitemap.xml", // SEO — crawlable without auth
         "/robots.txt",  // SEO — crawlable without auth
         "/api/auth/login",

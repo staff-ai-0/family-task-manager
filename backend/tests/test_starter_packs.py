@@ -3,7 +3,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import func, select
 
-from app.data.starter_packs import AGE_BANDS, STARTER_PACKS
+from app.data.starter_packs import AGE_BANDS, PACK_KEYS, STARTER_PACKS, THEMED_PACKS
 from app.core.exceptions import ValidationException
 from app.models.gig import GigCategory, GigOffering
 from app.models.reward import Reward, RewardCategory
@@ -15,8 +15,12 @@ from app.services.starter_pack_service import StarterPackService
 
 # ── Static data sanity ───────────────────────────────────────────────────────
 
-def test_all_age_bands_present():
-    assert set(STARTER_PACKS.keys()) == set(AGE_BANDS)
+def test_all_pack_keys_present():
+    # The catalog is the age presets plus the themed packs, and PACK_KEYS is
+    # exactly their union (guards against a pack key drifting out of one list).
+    assert set(STARTER_PACKS.keys()) == set(PACK_KEYS)
+    assert set(PACK_KEYS) == set(AGE_BANDS) | set(THEMED_PACKS)
+    assert "tdah" in THEMED_PACKS and "tdah" not in AGE_BANDS
 
 
 def test_pack_sizes_per_band():
@@ -62,6 +66,34 @@ def test_list_packs_shape():
     packs = StarterPackService.list_packs().packs
     assert [p.age_band for p in packs] == list(STARTER_PACKS.keys())
     assert all(p.label_es and p.label_en for p in packs)
+
+
+def test_tdah_pack_is_well_formed():
+    """The themed TDAH pack ships in the catalog, is ES-first, routine-shaped,
+    and honors the two-currency guard (points → privileges, never cash)."""
+    pack = STARTER_PACKS["tdah"]
+    # Present in the list with bilingual labels + tagline.
+    assert pack["label_es"] and pack["label_en"]
+    assert pack["tagline_es"] and pack["tagline_en"]
+    # Same size contract as the age bands (picker/apply need no special-casing).
+    assert 8 <= len(pack["chores"]) <= 10
+    assert 4 <= len(pack["gigs"]) <= 6
+    assert len(pack["rewards"]) == 6
+    # Every item is model-valid and every id is namespaced under the pack.
+    for chore in pack["chores"]:
+        assert chore["id"].startswith("tdah.chore.")
+        assert chore["title_es"] and chore["title_en"]
+        assert chore["points"] > 0 and 1 <= chore["interval_days"] <= 7
+    for gig in pack["gigs"]:
+        assert gig["id"].startswith("tdah.gig.")
+        GigCategory(gig["category"])  # raises on invalid
+        assert gig["points"] > 0 and 1 <= gig["difficulty"] <= 3
+    for reward in pack["rewards"]:
+        assert reward["id"].startswith("tdah.reward.")
+        # Two-currency: routine rewards are privileges/treats, never money.
+        assert reward["category"] != "money"
+        RewardCategory(reward["category"])  # raises on invalid
+        assert reward["points_cost"] > 0
 
 
 # ── Service: apply ───────────────────────────────────────────────────────────
@@ -117,6 +149,34 @@ async def test_apply_is_idempotent(db_session, test_family, test_parent_user):
     assert second.skipped.rewards == first.created.rewards
     # No duplicate rows
     pack = STARTER_PACKS["9-12"]
+    assert await _count(db_session, TaskTemplate, test_family.id) == len(pack["chores"])
+    assert await _count(db_session, GigOffering, test_family.id) == len(pack["gigs"])
+    assert await _count(db_session, Reward, test_family.id) == len(pack["rewards"])
+
+
+@pytest.mark.asyncio
+async def test_apply_tdah_pack_creates_then_reapplies_idempotently(
+    db_session, test_family, test_parent_user
+):
+    """The themed TDAH pack applies through the same flow as the age bands and
+    a re-apply creates nothing new (idempotent by title)."""
+    pack = STARTER_PACKS["tdah"]
+    req = StarterPackApplyRequest(age_band="tdah")
+    first = await StarterPackService.apply(
+        db_session, test_family.id, test_parent_user.id, req
+    )
+    assert first.created.chores == len(pack["chores"])
+    assert first.created.gigs == len(pack["gigs"])
+    assert first.created.rewards == len(pack["rewards"])
+
+    second = await StarterPackService.apply(
+        db_session, test_family.id, test_parent_user.id, req
+    )
+    assert second.created.chores == second.created.gigs == second.created.rewards == 0
+    assert second.skipped.chores == first.created.chores
+    assert second.skipped.gigs == first.created.gigs
+    assert second.skipped.rewards == first.created.rewards
+    # No duplicate rows after the second apply.
     assert await _count(db_session, TaskTemplate, test_family.id) == len(pack["chores"])
     assert await _count(db_session, GigOffering, test_family.id) == len(pack["gigs"])
     assert await _count(db_session, Reward, test_family.id) == len(pack["rewards"])

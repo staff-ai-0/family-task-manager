@@ -1,9 +1,21 @@
-"""Age-preset starter packs (P1-W3) — curated ES/MX chore, gig and reward seeds.
+"""Age-preset + themed starter packs (P1-W3) — curated ES/MX chore, gig and
+reward seeds.
 
 Static and deterministic on purpose (BusyKid's age-preset chart is the
 competitive reference: parents get a sensible board "in minutes" with zero
 LLM cost/latency). A future enhancement can let Jarvis generate CUSTOM packs,
 but the default onboarding path must never depend on an AI call.
+
+Two kinds of pack live in the same catalog and flow through the identical
+apply endpoint (band = dict key):
+- AGE_BANDS   — the four age presets ("3-5" … "13+").
+- THEMED_PACKS — need-based presets that cut across ages. First one: "tdah",
+  a calming, routine-first pack for neurodivergent kids (the Spanish-language
+  "rutinas / TDAH" angle documented in docs/SEO_ASO.md §2.4 is an unoccupied,
+  high-empathy LATAM niche — Joon proves clinical/ADHD framing converts and
+  retains parents). It intentionally matches the same shape/size contract as
+  the age bands so the picker UI and the apply/idempotency logic need zero
+  special-casing.
 
 Two-currency economy rules (docs/superpowers/specs/2026-06-30):
 - "chores"  → TaskTemplate rows (is_bonus=False) that earn POINTS.
@@ -24,6 +36,12 @@ gig board converts effort to cash.
 """
 
 AGE_BANDS = ("3-5", "6-8", "9-12", "13+")
+
+# Need-based packs that cut across ages (applied through the same endpoint).
+THEMED_PACKS = ("tdah",)
+
+# Every valid band key the apply endpoint accepts (age presets + themed).
+PACK_KEYS = AGE_BANDS + THEMED_PACKS
 
 STARTER_PACKS: dict = {
     "3-5": {
@@ -152,6 +170,43 @@ STARTER_PACKS: dict = {
             {"id": "13+.reward.desvelo", "title_es": "Noche de desvelo el fin de semana", "title_en": "Weekend late night", "points_cost": 50, "category": "privileges", "icon": "🌙", "requires_approval": False},
             {"id": "13+.reward.musica", "title_es": "Elegir la música del coche una semana", "title_en": "Pick the car music for a week", "points_cost": 25, "category": "privileges", "icon": "🎵", "requires_approval": False},
             {"id": "13+.reward.cine-amigo", "title_es": "Ir al cine con un amigo", "title_en": "Movies with a friend", "points_cost": 90, "category": "activities", "icon": "🎬", "requires_approval": True},
+        ],
+    },
+    # ── Themed: TDAH / rutinas (neurodivergent-friendly) ─────────────────────
+    # Calm, visual, small-and-frequent-win routines. Chores earn POINTS (the
+    # dopamine loop that pairs with the pet), gigs are gentle structured extra
+    # jobs, rewards lean on privileges/sensory/1-on-1 time — never cash. Copy is
+    # ES-first (docs/SEO_ASO.md §2.4: "rutinas para niños con TDAH").
+    "tdah": {
+        "label_es": "TDAH y rutinas",
+        "label_en": "ADHD & routines",
+        "tagline_es": "Rutinas visuales y calmadas, con logros pequeños y frecuentes",
+        "tagline_en": "Calm, visual routines with small, frequent wins",
+        "chores": [
+            {"id": "tdah.chore.rutina-manana", "title_es": "Rutina de la mañana: vestirse, desayunar y dientes", "title_en": "Morning routine: dress, breakfast and teeth", "points": 6, "interval_days": 1},
+            {"id": "tdah.chore.mochila-noche", "title_es": "Preparar la mochila la noche anterior", "title_en": "Pack your backpack the night before", "points": 5, "interval_days": 1},
+            {"id": "tdah.chore.ropa-lista", "title_es": "Dejar lista la ropa de mañana", "title_en": "Lay out tomorrow's clothes", "points": 4, "interval_days": 1},
+            {"id": "tdah.chore.tablero-visual", "title_es": "Marcar tus tareas en el tablero visual", "title_en": "Check off your tasks on the visual board", "points": 4, "interval_days": 1},
+            {"id": "tdah.chore.escritorio-tarea", "title_es": "Despejar el escritorio antes de la tarea", "title_en": "Clear your desk before homework", "points": 5, "interval_days": 1},
+            {"id": "tdah.chore.descanso-movimiento", "title_es": "Tomar un descanso de movimiento de 5 minutos", "title_en": "Take a 5-minute movement break", "points": 3, "interval_days": 1},
+            {"id": "tdah.chore.rutina-noche", "title_es": "Rutina de la noche: guardar pantallas, pijama y cuento", "title_en": "Evening wind-down: screens away, pajamas, story", "points": 6, "interval_days": 1},
+            {"id": "tdah.chore.una-cosa", "title_es": "Guardar una cosa antes de sacar otra", "title_en": "Put one thing away before taking out another", "points": 3, "interval_days": 1},
+            {"id": "tdah.chore.plan-semana", "title_es": "Armar el plan visual de la semana con un adulto", "title_en": "Build the weekly visual plan with an adult", "points": 8, "interval_days": 7},
+        ],
+        "gigs": [
+            {"id": "tdah.gig.cajon-pasos", "title_es": "Ordenar un cajón siguiendo una lista de pasos", "title_en": "Organize a drawer with a step-by-step checklist", "points": 20, "difficulty": 1, "category": "chores"},
+            {"id": "tdah.gig.cartel-rutina", "title_es": "Crear un cartel de rutina para el refri", "title_en": "Make a routine poster for the fridge", "points": 25, "difficulty": 2, "category": "creative"},
+            {"id": "tdah.gig.etiquetar-cajas", "title_es": "Etiquetar cajas o repisas para organizar", "title_en": "Label bins or shelves to stay organized", "points": 25, "difficulty": 2, "category": "creative"},
+            {"id": "tdah.gig.regar-recordatorio", "title_es": "Regar las plantas siguiendo un recordatorio", "title_en": "Water the plants on a reminder", "points": 15, "difficulty": 1, "category": "outdoor"},
+            {"id": "tdah.gig.loncheras-semana", "title_es": "Preparar las loncheras de la semana", "title_en": "Prep the week's lunchboxes", "points": 30, "difficulty": 2, "category": "chores"},
+        ],
+        "rewards": [
+            {"id": "tdah.reward.tiempo-juego", "title_es": "20 minutos extra de tu juego favorito", "title_en": "20 extra minutes of your favorite game", "points_cost": 20, "category": "screen_time", "icon": "🎮", "requires_approval": False},
+            {"id": "tdah.reward.tiempo-1a1", "title_es": "Tiempo especial 1 a 1 con mamá o papá", "title_en": "Special 1-on-1 time with mom or dad", "points_cost": 25, "category": "activities", "icon": "💛", "requires_approval": False},
+            {"id": "tdah.reward.musica-coche", "title_es": "Elegir la música del coche", "title_en": "Pick the car music", "points_cost": 15, "category": "privileges", "icon": "🎵", "requires_approval": False},
+            {"id": "tdah.reward.caja-sensorial", "title_es": "Caja sensorial sorpresa (fidget o plastilina)", "title_en": "Surprise sensory box (fidget or putty)", "points_cost": 30, "category": "toys", "icon": "🧩", "requires_approval": True},
+            {"id": "tdah.reward.pelicula-pijama", "title_es": "Noche de película en pijama", "title_en": "Movie night in pajamas", "points_cost": 35, "category": "activities", "icon": "🎬", "requires_approval": True},
+            {"id": "tdah.reward.comodin-tarea", "title_es": "Comodín para saltarte una tarea", "title_en": "A wildcard to skip one chore", "points_cost": 40, "category": "privileges", "icon": "🃏", "requires_approval": True},
         ],
     },
 }
