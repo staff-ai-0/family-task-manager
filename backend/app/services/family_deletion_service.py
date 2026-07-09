@@ -1,36 +1,50 @@
 """
-Self-serve whole-family deletion (WS-DEL / compliance).
+Self-serve whole-family deletion (WS-DEL / compliance) — two-phase soft delete.
 
-Flow (parent-only, re-authenticated):
+Phase 1 — SOFT delete (``delete_family``, parent-only, re-authenticated),
+synchronous with the DELETE /api/families/me request:
  1. Re-auth: password accounts must re-enter their password; Google-only
     accounts (no password hash) must type the exact family name.
  2. If the family has ANY PayPal subscription id (live, in dunning, or even
     locally "terminal" — local status can lie when a /cancel PayPal call
-    failed) or a staged checkout, cancel it at PayPal first — best-effort,
-    deletion proceeds even if PayPal errors.
- 3. Collect the family's uploaded files on disk (gig/task proofs, receipt
+    failed) or a staged checkout, cancel it at PayPal now — best-effort,
+    deletion proceeds even if PayPal errors — so nothing keeps billing during
+    the grace window.
+ 3. Stamp ``families.deleted_at`` and every member's ``users.deleted_at``, and
+    bump each member's ``token_version``. The account is now closed: auth 401s
+    every member (get_current_user re-reads the user each request; the
+    token_version bump kills outstanding refresh tokens). No separate Redis
+    session store exists. NO data is deleted — every row survives so the
+    compliance export taken beforehand stays valid and a mistaken deletion is
+    recoverable until the purge.
+ 4. Uploaded files on disk + GCS receipt blobs are deliberately NOT touched
+    here — that cleanup happens at purge time.
+
+Phase 2 — HARD purge (``purge_expired`` → ``_hard_purge_family``), run by the
+daily purge sweep (scheduler leader only) once ``deleted_at`` is older than
+``PURGE_RETENTION_DAYS``:
+ 5. Collect the family's uploaded files on disk (gig/task proofs, receipt
     drafts) AND its scanned-receipt object keys in GCS
     (BudgetTransaction.receipt_image_path) BEFORE the rows disappear, then
-    remove them after the DB delete. GCS removal is best-effort like the
-    PayPal step — an unset bucket or a GCS error never blocks deletion.
- 4. Delete the family row. ORM cascade (Family.members et al.) removes users
+    remove them after the DB delete. GCS removal is best-effort — an unset
+    bucket or a GCS error never blocks the purge.
+ 6. Delete the family row. ORM cascade (Family.members et al.) removes users
     and their owned rows; DB-level ON DELETE CASCADE covers the rest.
     family_invitations is the one table with NO delete rule on its FKs
     (families + users), so it is deleted explicitly first.
- 5. Sessions: JWTs die with the user rows — get_current_user re-reads the
-    user on every request, so deleted users 401 immediately (no separate
-    Redis session store exists).
 
-An anonymized audit line (UUIDs + counts only, no names/emails) is logged.
+Anonymized audit lines (UUIDs + counts only, no names/emails) are logged for
+both phases.
 """
 
 import asyncio
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -54,7 +68,12 @@ GIG_PROOFS_DIR = os.path.join(UPLOADS_ROOT, "gig-proofs")
 RECEIPT_DRAFTS_DIR = os.path.join(UPLOADS_ROOT, "receipt-drafts")
 
 class FamilyDeletionService:
-    """Orchestrates permanent deletion of a family and all its data."""
+    """Orchestrates soft-delete + eventual hard purge of a family's data."""
+
+    # Grace window between soft delete (deleted_at stamped) and the hard purge.
+    # Data is fully retained for this many days so a mistaken account closure is
+    # recoverable and the compliance export stays valid.
+    PURGE_RETENTION_DAYS = 30
 
     @staticmethod
     def verify_reauth(
@@ -250,11 +269,24 @@ class FamilyDeletionService:
         password: Optional[str] = None,
         confirm_name: Optional[str] = None,
     ) -> None:
-        """Permanently delete the caller's family and every row it owns."""
+        """Soft-delete the caller's family (Phase 1).
+
+        Stamps ``deleted_at`` on the family + every member, bumps each member's
+        ``token_version`` (kills refresh tokens), and cancels PayPal so nothing
+        keeps billing. NO data is removed and NO files are touched — every row
+        survives ``PURGE_RETENTION_DAYS`` so the compliance export stays valid
+        and a mistaken closure is recoverable. The daily purge sweep does the
+        actual hard delete once the grace window elapses.
+        """
         family = await FamilyService.get_family(db, family_id)
         cls.verify_reauth(requesting_user, family, password, confirm_name)
 
-        # Capture audit facts before the rows (incl. requesting_user) vanish.
+        # Idempotent: a retried / double-submitted DELETE is a no-op once the
+        # family is already closed (don't re-cancel PayPal or re-bump tokens).
+        if family.deleted_at is not None:
+            return
+
+        # Capture audit facts.
         requester_id = requesting_user.id
         member_count = (
             await db.execute(
@@ -264,9 +296,89 @@ class FamilyDeletionService:
             )
         ).scalar() or 0
 
+        # Cancel PayPal NOW (best-effort) so no agreement keeps billing during
+        # the grace window. Uploads/GCS cleanup is deferred to purge time.
         paypal_cancel_failures = await cls._cancel_paypal_subscriptions(
             db, family_id
         )
+
+        now = datetime.now(timezone.utc)
+        family.deleted_at = now
+        # Close + invalidate every member in one statement: deleted_at 401s
+        # access tokens on the next request (get_current_user), the
+        # token_version bump invalidates outstanding refresh tokens.
+        await db.execute(
+            update(User)
+            .where(User.family_id == family_id)
+            .values(deleted_at=now, token_version=User.token_version + 1)
+        )
+        await db.commit()
+
+        # Anonymized audit line: identifiers + counts only.
+        # paypal_cancel_failed lists PayPal subscription ids the soft delete
+        # could NOT cancel — those agreements may keep charging and need
+        # manual operator follow-up at PayPal.
+        logger.info(
+            "family_soft_deleted family_id=%s members=%d requested_by_user_id=%s "
+            "paypal_cancel_failed=%s purge_after_days=%d",
+            family_id,
+            member_count,
+            requester_id,
+            ",".join(paypal_cancel_failures) if paypal_cancel_failures else "-",
+            cls.PURGE_RETENTION_DAYS,
+        )
+
+    @classmethod
+    async def purge_expired(
+        cls,
+        db: AsyncSession,
+        *,
+        retention_days: Optional[int] = None,
+    ) -> int:
+        """Hard-purge every family soft-deleted longer than the grace window.
+
+        Phase 2 — invoked by the daily purge sweep (scheduler leader only).
+        Each family is purged in isolation: a single failure is logged and
+        rolled back without aborting the rest of the batch. Returns the number
+        of families hard-deleted.
+        """
+        days = cls.PURGE_RETENTION_DAYS if retention_days is None else retention_days
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+        family_ids = (
+            await db.execute(
+                select(Family.id).where(
+                    Family.deleted_at.is_not(None),
+                    Family.deleted_at < cutoff,
+                )
+            )
+        ).scalars().all()
+
+        purged = 0
+        for fid in family_ids:
+            try:
+                await cls._hard_purge_family(db, fid)
+                purged += 1
+            except Exception:
+                logger.exception("Family purge failed for family_id=%s", fid)
+                await db.rollback()
+        return purged
+
+    @classmethod
+    async def _hard_purge_family(cls, db: AsyncSession, family_id: UUID) -> None:
+        """Hard-delete a (soft-deleted) family and everything it owns.
+
+        Removes on-disk uploads + GCS receipt blobs, then cascades the whole
+        family out of the database. PayPal was already cancelled at soft-delete
+        time, so it is NOT re-attempted here.
+        """
+        member_count = (
+            await db.execute(
+                select(func.count())
+                .select_from(User)
+                .where(User.family_id == family_id)
+            )
+        ).scalar() or 0
 
         upload_paths = await cls._collect_upload_paths(db, family_id)
         gcs_receipt_paths = await cls._collect_gcs_receipt_paths(db, family_id)
@@ -288,18 +400,11 @@ class FamilyDeletionService:
             cls._delete_gcs_receipts, gcs_receipt_paths
         )
 
-        # Anonymized audit line: identifiers + counts only.
-        # paypal_cancel_failed lists PayPal subscription ids the deletion
-        # could NOT cancel — those agreements may keep charging and need
-        # manual operator follow-up at PayPal.
         logger.info(
-            "family_deleted family_id=%s members=%d uploads_removed=%d "
-            "gcs_receipts_removed=%d requested_by_user_id=%s "
-            "paypal_cancel_failed=%s",
+            "family_purged family_id=%s members=%d uploads_removed=%d "
+            "gcs_receipts_removed=%d",
             family_id,
             member_count,
             removed,
             gcs_removed,
-            requester_id,
-            ",".join(paypal_cancel_failures) if paypal_cancel_failures else "-",
         )

@@ -258,6 +258,11 @@ class GoogleOAuthService:
             if not user.is_active:
                 raise UnauthorizedException("Account is deactivated")
 
+            # Soft-deleted (family closed) accounts cannot sign in with Google
+            # either, even while their rows survive the purge grace window.
+            if user.deleted_at is not None:
+                raise UnauthorizedException("Account closed")
+
             # Pending join-code signups must not bypass parental approval by
             # signing in with Google using the same email.
             from app.models.user import APPROVAL_PENDING

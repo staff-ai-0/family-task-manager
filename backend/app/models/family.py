@@ -45,7 +45,16 @@ class Family(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
+    # Soft-delete tombstone (self-serve account deletion). Set when a parent
+    # closes the whole family; the row + all family data is retained for a
+    # grace window (FamilyDeletionService.PURGE_RETENTION_DAYS) and only then
+    # hard-purged by the daily purge sweep. A non-null value means the account
+    # is closed — auth treats every member as gone (401 'account closed'), and
+    # the family is excluded from join-by-code lookups. Indexed so the purge
+    # sweep's `WHERE deleted_at < cutoff` is a cheap range scan.
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+
     # Relationships
     # delete-orphan so deleting a family cascades to its members (users have a
     # NOT NULL family_id and cannot be orphaned); each user in turn cascades to

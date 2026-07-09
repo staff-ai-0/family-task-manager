@@ -113,14 +113,16 @@ async def delete_my_family(
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Permanently delete the caller's family and ALL its data (parent only).
+    """Close the caller's family — soft delete (parent only).
 
     Re-auth required: password accounts send ``password``; Google-only
     accounts send ``confirm_name`` (the exact family name). Cancels any live
-    PayPal subscription first, removes uploaded files on disk, then cascades
-    the whole family out of the database. This is the account-deletion path
-    for the last parent (self-deletion via DELETE /api/users/{id} stays
-    blocked).
+    PayPal subscription, stamps ``deleted_at`` on the family + every member,
+    and invalidates their sessions — auth 401s ('account closed') immediately.
+    Data is retained for a 30-day grace window (so the export taken beforehand
+    stays valid and a mistake is recoverable) and hard-purged by the daily
+    purge sweep afterwards. This is the account-deletion path for the last
+    parent (self-deletion via DELETE /api/users/{id} stays blocked).
     """
     await FamilyDeletionService.delete_family(
         db,

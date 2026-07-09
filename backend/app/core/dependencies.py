@@ -40,6 +40,18 @@ async def get_current_user(
     if not user.is_active:
         raise credentials_exception
 
+    # Soft-deleted (family closed): treat the account as gone on every request,
+    # even while its rows survive the 30-day purge grace window. Setting
+    # families.deleted_at also stamps every member's users.deleted_at, so this
+    # single-column check on the already-loaded user covers a closed family too
+    # (no extra family query on the hot path).
+    if user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account closed",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user
 
 
@@ -103,6 +115,10 @@ async def get_optional_user(
         # Get user from database
         result = await db.execute(select(User).filter(User.id == user_id))
         user = result.scalar_one_or_none()
+        # A soft-deleted (closed) account must not resolve from an SSR session
+        # cookie either — treat it as anonymous.
+        if user is not None and user.deleted_at is not None:
+            return None
         return user
     except Exception:
         return None

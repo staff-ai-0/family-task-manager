@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
 from app.core.request_context import RequestIDLogFilter, RequestIDMiddleware
-from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm, bank
+from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm, bank, family_cup
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
 from app.api.routes import oversight, onboarding, sync
@@ -145,6 +145,26 @@ async def lifespan(app: FastAPI):
                 except Exception:
                     logger.exception("Family Bank payday sweep failed")
 
+        async def _family_purge_sweep():
+            # Hard-delete families soft-deleted longer than the grace window
+            # (FamilyDeletionService.PURGE_RETENTION_DAYS). Self-serve family
+            # deletion only stamps deleted_at + cancels PayPal synchronously;
+            # this sweep does the actual cascade delete + uploads/GCS cleanup.
+            # Leader-only (this whole block runs on the elected leader). Each
+            # family is purged in isolation so one failure never blocks the rest.
+            async with AsyncSessionLocal() as session:
+                try:
+                    from app.services.family_deletion_service import (
+                        FamilyDeletionService,
+                    )
+                    n = await FamilyDeletionService.purge_expired(session)
+                    if n:
+                        logger.info(
+                            "Family purge sweep hard-deleted %d family(ies)", n
+                        )
+                except Exception:
+                    logger.exception("Family purge sweep failed")
+
         async def _morning_reminder_sweep():
             # 'Tienes N tareas hoy' per member with pending chores due today.
             # Idempotent per local day (DB guard inside the service), so a
@@ -163,6 +183,7 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(_pup_snapshot_sweep, "cron", hour=23, minute=30, id="pup_snapshot_sweep")
         scheduler.add_job(_jarvis_schedule_sweep, "cron", minute="*/5", id="jarvis_sched_sweep")
         scheduler.add_job(_family_bank_payday_sweep, "cron", minute=10, id="family_bank_payday")  # hourly
+        scheduler.add_job(_family_purge_sweep, "cron", hour=4, minute=0, id="family_purge_sweep")  # daily
         scheduler.add_job(
             _morning_reminder_sweep,
             "cron",
@@ -329,6 +350,7 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["Not
 app.include_router(kiosk.router, prefix="/api/kiosk", tags=["Kiosk"])
 app.include_router(pet.router, prefix="/api/pet", tags=["Pet"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
+app.include_router(family_cup.router, prefix="/api/family-cup", tags=["Family Cup"])
 app.include_router(jarvis.router, prefix="/api/jarvis", tags=["Jarvis"])
 app.include_router(meals.router, prefix="/api/meals", tags=["Meals"])
 app.include_router(family_chat.router, prefix="/api/chat", tags=["Chat"])
@@ -336,6 +358,10 @@ app.include_router(jarvis_schedules.router, prefix="/api/jarvis/schedules", tags
 app.include_router(dm.router, prefix="/api/dm", tags=["DM"])
 from app.api.routes.internal import a2a_retry as _internal_a2a  # noqa: E402
 app.include_router(_internal_a2a.router, prefix="/api/internal", tags=["internal"])
+# Prometheus scrape target at the conventional root path /metrics (token-guarded,
+# reuses INTERNAL_API_TOKEN). No prefix — Prometheus defaults to GET /metrics.
+from app.api.routes.internal import metrics as _internal_metrics  # noqa: E402
+app.include_router(_internal_metrics.router, tags=["internal"])
 
 # Family-scoped MCP server over streamable-HTTP at /mcp, behind per-family
 # bearer auth (see app.mcp.http). Each request authenticates its own token,

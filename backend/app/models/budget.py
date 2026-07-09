@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, Boolean, CHAR, Date, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CHAR, Date, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -162,9 +162,20 @@ class BudgetPayee(Base):
 
 class BudgetTransaction(Base):
     """Income and expense transactions."""
-    
+
     __tablename__ = "budget_transactions"
-    
+
+    # Hot path: transaction list is always `WHERE family_id = ? ORDER BY date
+    # DESC`. Composite (family_id, date DESC) lets Postgres filter + sort in a
+    # single index scan. Declared here to mirror the ops migration.
+    __table_args__ = (
+        Index(
+            "ix_budget_transactions_family_date",
+            "family_id",
+            text("date DESC"),
+        ),
+    )
+
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
     account_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_accounts.id", ondelete="CASCADE"), nullable=False, index=True)

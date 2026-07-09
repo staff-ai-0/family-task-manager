@@ -177,7 +177,13 @@ class PetService:
         from app.models.user import User
         from sqlalchemy import select as sa_select
 
-        rows = (await db.execute(sa_select(KidPet))).scalars().all()
+        # Skip pets in soft-deleted (closed) families — soft delete stamps
+        # deleted_at on every member user, so filter on the owner.
+        rows = (await db.execute(
+            sa_select(KidPet)
+            .join(User, User.id == KidPet.user_id)
+            .where(User.deleted_at.is_(None))
+        )).scalars().all()
         notified = 0
         for pet in rows:
             before_label = pet.status_label

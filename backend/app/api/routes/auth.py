@@ -120,7 +120,10 @@ async def register_family(
         # Join existing family by code
         family_code = data.family_code.strip().upper()
         family = (await db.execute(
-            select(Family).where(Family.join_code == family_code)
+            select(Family).where(
+                Family.join_code == family_code,
+                Family.deleted_at.is_(None),
+            )
         )).scalar_one_or_none()
         
         if not family:
@@ -334,7 +337,14 @@ async def refresh_tokens(
     ver = payload.get("ver")
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
-    if user is None or ver != user.token_version:
+    # A soft-deleted (closed) account must not mint fresh tokens. The soft-delete
+    # bumps token_version so `ver != user.token_version` already trips here; the
+    # explicit deleted_at check is belt-and-suspenders.
+    if (
+        user is None
+        or ver != user.token_version
+        or user.deleted_at is not None
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token is no longer valid",
@@ -523,7 +533,7 @@ async def forgot_password(
     """Send a password reset email. Always returns 200 to avoid user enumeration."""
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
-    if user and user.is_active:
+    if user and user.is_active and user.deleted_at is None:
         await EmailService.send_password_reset_email(
             db, user, base_url=settings.email_link_base
         )

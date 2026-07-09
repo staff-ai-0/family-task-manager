@@ -102,6 +102,11 @@ class AuthService:
         if not user.is_active:
             raise UnauthorizedException("Account is deactivated")
 
+        # Soft-deleted (family closed): the account is gone even though its rows
+        # survive the purge grace window. Same 401 as a deactivated account.
+        if user.deleted_at is not None:
+            raise UnauthorizedException("Account closed")
+
         # Join-code self-signups cannot log in until a parent approves.
         if getattr(user, "approval_status", APPROVAL_APPROVED) == APPROVAL_PENDING:
             raise ForbiddenException(
