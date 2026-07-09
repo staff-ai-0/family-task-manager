@@ -38,6 +38,16 @@ const nothingConfigured = kids.length > 0 && kids.every(isDefault);
 const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const toPesos = (cents: number) => (cents / 100).toFixed(2);
 
+// Savings goals (P2) per kid, keyed by user_id (pending/active only).
+const { data: goalsRaw } = await apiFetch<any[]>("/api/bank/goals/family", { token });
+const goalMap: Record<string, any> = {};
+(Array.isArray(goalsRaw) ? goalsRaw : []).forEach((g: any) => { goalMap[g.user_id] = g; });
+
+// Star Mode per kid — from the members list (UserResponse carries star_mode).
+const { data: membersRaw } = await apiFetch<any[]>("/api/families/members", { token });
+const starMap: Record<string, boolean> = {};
+(Array.isArray(membersRaw) ? membersRaw : []).forEach((m: any) => { starMap[m.id] = !!m.star_mode; });
+
 const weekdays = es
     ? ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     : ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -136,6 +146,8 @@ const weekdays = es
                 const total = k.total_cents ?? (spend + save + share);
                 const interestPct = ((k.interest_rate_bps ?? 0) / 100).toString();
                 const matchCapPesos = toPesos(k.match_cap_cents ?? 0);
+                const goal = goalMap[k.user_id];
+                const starOn = starMap[k.user_id] ?? false;
                 return (
                     <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] overflow-hidden" data-kid-card data-kid-id={k.user_id} data-kid-name={k.name}>
                         <!-- Kid header + jar balances -->
@@ -175,6 +187,63 @@ const weekdays = es
                                     {es ? "Liquidar Compartir" : "Settle Share"}
                                 </button>
                             </div>
+                        </div>
+
+                        <!-- Savings goal + Star Mode (P2 — free, not gated) -->
+                        <div class="px-5 py-4 border-b-2 border-brand-ink/10 space-y-3">
+                            {/* Savings goal */}
+                            {goal ? (
+                                <div data-goal-block data-goal-id={goal.id} data-goal-user={k.user_id}>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <p class="text-sm font-bold text-brand-ink">
+                                            🎯 {goal.emoji ?? "🎯"} {goal.name}
+                                        </p>
+                                        <div class="flex items-center gap-2">
+                                            {goal.pending_approval && (
+                                                <button type="button" data-goal-approve
+                                                    class="text-xs font-bold px-3 py-1 rounded-lg bg-brand-mint-deep text-white hover:opacity-90 transition-opacity">
+                                                    {es ? "Aprobar" : "Approve"}
+                                                </button>
+                                            )}
+                                            <button type="button" data-goal-clear
+                                                class="text-xs font-semibold text-brand-ink-soft hover:text-red-600 transition-colors">
+                                                {es ? "Quitar" : "Remove"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {goal.pending_approval && (
+                                        <p class="text-xs bg-brand-sun/25 text-brand-sun-deep font-semibold rounded-lg px-2 py-1 mb-1.5 inline-block">
+                                            ⏳ {es ? "Propuesta por tu hijo — pendiente" : "Proposed by your kid — pending"}
+                                        </p>
+                                    )}
+                                    <div class="flex h-3 rounded-full overflow-hidden bg-brand-cream-deep border border-brand-ink/10 mb-1">
+                                        <div class="bg-brand-mint-deep h-full" style={`width:${goal.progress_pct}%`}></div>
+                                    </div>
+                                    <p class="text-xs text-brand-ink-soft">
+                                        {fmt(goal.saved_cents)} / {fmt(goal.target_cents)} ·{" "}
+                                        {goal.reached
+                                            ? (es ? "¡lograda! 🎉" : "reached! 🎉")
+                                            : (es ? `faltan ${fmt(goal.remaining_cents)}` : `${fmt(goal.remaining_cents)} to go`)}
+                                    </p>
+                                </div>
+                            ) : (
+                                <button type="button" data-goal-set data-kid-user={k.user_id} data-kid-name={k.name}
+                                    class="w-full text-left flex items-center gap-2 text-sm font-semibold text-brand-mint-deep hover:text-brand-ink transition-colors">
+                                    🎯 {es ? "Ponerle una meta de ahorro" : "Set a savings goal"}
+                                </button>
+                            )}
+
+                            {/* Star Mode (young-kid display over POINTS) */}
+                            <label class="flex items-center justify-between gap-3 bg-brand-sun/15 rounded-xl px-4 py-2.5 cursor-pointer">
+                                <span class="text-sm font-medium text-brand-ink">
+                                    ⭐ {es ? "Modo estrellas (para peques)" : "Star Mode (for little kids)"}
+                                    <span class="block text-xs text-brand-ink-soft font-normal">
+                                        {es ? "Muestra puntos como estrellas y oculta el dinero" : "Shows points as stars, hides money"}
+                                    </span>
+                                </span>
+                                <input type="checkbox" data-star-mode data-kid-user={k.user_id} checked={starOn}
+                                    class="h-5 w-5 accent-brand-sun-deep" />
+                            </label>
                         </div>
 
                         <!-- Automation config -->
@@ -327,6 +396,30 @@ const weekdays = es
             <button id="pb-submit" type="button"
                 class="w-full mt-4 py-3 bg-brand-mint-deep text-white font-bold rounded-xl border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint active:scale-[.99] transition-all">
                 {es ? "Confirmar" : "Confirm"}
+            </button>
+        </div>
+    </div>
+
+    <!-- Parent: set a savings goal for a kid -->
+    <div id="goal-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+        <div class="bg-brand-cream rounded-t-3xl sm:rounded-[var(--radius-card)] w-full max-w-md p-6 border-2 border-brand-ink shadow-[var(--shadow-pop)]">
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="text-lg font-bold text-brand-ink">🎯 {es ? "Meta de ahorro" : "Savings goal"}</h2>
+                <button id="goal-modal-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
+            </div>
+            <p id="goal-modal-kid" class="text-xs text-brand-ink-soft mb-4"></p>
+            <label class="block text-sm font-medium text-brand-ink mb-1">{es ? "¿Para qué ahorra?" : "Saving for what?"}</label>
+            <input id="goal-name" type="text" maxlength="80"
+                class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-base text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep"
+                placeholder={es ? "Ej: una bici" : "e.g. a bike"} />
+            <label class="block text-sm font-medium text-brand-ink mb-1 mt-4">{es ? "Meta ($MXN)" : "Target ($MXN)"}</label>
+            <input id="goal-amount" type="number" min="1" step="1" inputmode="decimal"
+                class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-lg text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep"
+                placeholder="0.00" />
+            <div id="goal-error" class="hidden text-sm text-red-600 mt-3"></div>
+            <button id="goal-submit" type="button"
+                class="w-full mt-4 py-3 bg-brand-mint-deep text-white font-bold rounded-xl border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint active:scale-[.99] transition-all">
+                {es ? "Crear meta" : "Create goal"}
             </button>
         </div>
     </div>
@@ -513,6 +606,126 @@ const weekdays = es
                     closeModal();
                     showToast(es ? "Compartir liquidado 💝" : "Share settled 💝", "success");
                 } else { submitBtn.disabled = false; }
+            }
+        });
+    });
+</script>
+
+<script>
+    import { mutate } from "../../../lib/mutate";
+    import { showToast } from "../../../lib/toast";
+
+    // Star Mode toggle + savings-goal set/approve/clear (parent).
+    document.addEventListener("astro:page-load", () => {
+        const es = document.documentElement.lang === "es";
+
+        // ── Star Mode per kid ────────────────────────────────────────────
+        document.querySelectorAll<HTMLInputElement>("[data-star-mode]").forEach((cb) => {
+            cb.addEventListener("change", async () => {
+                const kidId = cb.dataset.kidUser!;
+                const res = await mutate(`/api/users/${kidId}/star-mode`, {
+                    method: "PUT",
+                    body: { enabled: cb.checked },
+                    errorFallback: es ? "No se pudo guardar" : "Could not save",
+                });
+                if (res) {
+                    showToast(
+                        cb.checked
+                            ? (es ? "Modo estrellas activado ⭐" : "Star Mode on ⭐")
+                            : (es ? "Modo estrellas desactivado" : "Star Mode off"),
+                        "success",
+                    );
+                } else {
+                    cb.checked = !cb.checked;
+                }
+            });
+        });
+
+        // ── Approve a pending goal ───────────────────────────────────────
+        document.querySelectorAll<HTMLElement>("[data-goal-approve]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                const block = btn.closest("[data-goal-block]") as HTMLElement;
+                const id = block?.dataset.goalId;
+                if (!id) return;
+                const res = await mutate(`/api/bank/goals/${id}/approve`, {
+                    errorFallback: es ? "No se pudo aprobar" : "Could not approve",
+                });
+                if (res) {
+                    showToast(es ? "Meta aprobada 🎯" : "Goal approved 🎯", "success");
+                    setTimeout(() => window.location.reload(), 500);
+                }
+            });
+        });
+
+        // ── Clear / remove a goal ────────────────────────────────────────
+        document.querySelectorAll<HTMLElement>("[data-goal-clear]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                const block = btn.closest("[data-goal-block]") as HTMLElement;
+                const id = block?.dataset.goalId;
+                if (!id) return;
+                if (!confirm(es ? "¿Quitar esta meta?" : "Remove this goal?")) return;
+                const res = await mutate(`/api/bank/goals/${id}`, {
+                    method: "DELETE",
+                    errorFallback: es ? "No se pudo quitar" : "Could not remove",
+                });
+                if (res) {
+                    showToast(es ? "Meta quitada" : "Goal removed", "success");
+                    setTimeout(() => window.location.reload(), 500);
+                }
+            });
+        });
+
+        // ── Set a goal for a kid (modal) ─────────────────────────────────
+        const goalModal = document.getElementById("goal-modal");
+        if (!goalModal) return;
+        const gName = document.getElementById("goal-name") as HTMLInputElement;
+        const gAmount = document.getElementById("goal-amount") as HTMLInputElement;
+        const gKid = document.getElementById("goal-modal-kid") as HTMLElement;
+        const gErr = document.getElementById("goal-error") as HTMLElement;
+        const gSubmit = document.getElementById("goal-submit") as HTMLButtonElement;
+        let targetKid = "";
+
+        function openGoal(userId: string, name: string) {
+            targetKid = userId;
+            gName.value = "";
+            gAmount.value = "";
+            gErr.classList.add("hidden");
+            gSubmit.disabled = false;
+            gKid.textContent = name;
+            goalModal!.classList.remove("hidden");
+            setTimeout(() => gName.focus(), 50);
+        }
+        function closeGoal() { goalModal!.classList.add("hidden"); targetKid = ""; }
+
+        document.querySelectorAll<HTMLElement>("[data-goal-set]").forEach((btn) => {
+            btn.addEventListener("click", () => openGoal(btn.dataset.kidUser!, btn.dataset.kidName || ""));
+        });
+        document.getElementById("goal-modal-close")?.addEventListener("click", closeGoal);
+        goalModal.addEventListener("click", (e) => { if (e.target === goalModal) closeGoal(); });
+
+        gSubmit.addEventListener("click", async () => {
+            const name = gName.value.trim();
+            const pesos = parseFloat(gAmount.value);
+            if (!name) {
+                gErr.textContent = es ? "Escribe la meta." : "Write the goal.";
+                gErr.classList.remove("hidden");
+                return;
+            }
+            if (isNaN(pesos) || pesos <= 0) {
+                gErr.textContent = es ? "Escribe un monto válido." : "Enter a valid amount.";
+                gErr.classList.remove("hidden");
+                return;
+            }
+            gSubmit.disabled = true;
+            const res = await mutate("/api/bank/goals", {
+                body: { user_id: targetKid, name, target_cents: Math.round(pesos * 100) },
+                errorFallback: es ? "No se pudo crear la meta" : "Could not create the goal",
+            });
+            if (res) {
+                showToast(es ? "Meta creada 🎯" : "Goal created 🎯", "success");
+                setTimeout(() => window.location.reload(), 500);
+            } else {
+                gSubmit.disabled = false;
             }
         });
     });

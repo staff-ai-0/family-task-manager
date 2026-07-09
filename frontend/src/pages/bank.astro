@@ -17,6 +17,19 @@ if (user.role === "parent") return Astro.redirect("/parent/settings/family-bank"
 
 const { data: bank, ok: bankOk } = await apiFetch<any>("/api/bank/me", { token });
 
+// Savings goal (P2) — tracked against the Save jar. null = kid has no goal.
+const { data: goal } = await apiFetch<any>("/api/bank/goals/me", { token });
+const hasGoal = !!goal;
+const goalId = goal?.id ?? "";
+const goalName = goal?.name ?? "";
+const goalEmoji = goal?.emoji || "🎯";
+const goalTarget = goal?.target_cents ?? 0;
+const goalSaved = goal?.saved_cents ?? 0;
+const goalPct = goal?.progress_pct ?? 0;
+const goalRemaining = goal?.remaining_cents ?? 0;
+const goalReached = goal?.reached ?? false;
+const goalPending = goal?.pending_approval ?? false;
+
 const spend = bank?.spend_cents ?? 0;
 const save = bank?.save_cents ?? 0;
 const share = bank?.share_cents ?? 0;
@@ -101,6 +114,59 @@ function countdownText(): string {
             <p class="text-xs font-bold uppercase tracking-wide text-brand-sun-deep">{es ? "Compartir" : "Share"}</p>
             <p class="text-2xl font-extrabold text-brand-ink mt-1" data-jar-balance="share">{fmt(share)}</p>
         </div>
+    </section>
+
+    <!-- Savings goal (Ahorrar jar) -->
+    <section class="mb-6" data-goal-section>
+        {hasGoal ? (
+            <div class="bg-brand-mint/15 border-2 border-brand-ink rounded-[var(--radius-card)] p-5 shadow-[var(--shadow-card)]" data-goal-card data-goal-id={goalId} data-goal-name={goalName} data-goal-target={goalTarget}>
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-3xl">{goalEmoji}</span>
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wide text-brand-mint-deep">{es ? "Mi meta de ahorro" : "My savings goal"}</p>
+                            <p class="font-display font-extrabold text-brand-ink text-lg leading-tight">{goalName}</p>
+                        </div>
+                    </div>
+                    <button type="button" data-goal-cancel class="text-xs font-semibold text-brand-ink-soft hover:text-red-600 transition-colors">
+                        {es ? "Cambiar" : "Change"}
+                    </button>
+                </div>
+                {goalPending && (
+                    <p class="text-xs bg-brand-sun/25 text-brand-sun-deep font-semibold rounded-lg px-3 py-1.5 mb-3 inline-block">
+                        ⏳ {es ? "Esperando que tus papás la aprueben" : "Waiting for your parents to approve"}
+                    </p>
+                )}
+                <div class="flex h-4 rounded-full overflow-hidden bg-brand-cream-deep border border-brand-ink/10 mb-1.5">
+                    <div class="bg-brand-mint-deep h-full transition-all" style={`width:${goalPct}%`} data-goal-bar></div>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="font-bold text-brand-ink" data-goal-saved>{fmt(goalSaved)} / {fmt(goalTarget)}</span>
+                    <span class="font-semibold text-brand-mint-deep" data-goal-pct>{goalPct}%</span>
+                </div>
+                {goalReached ? (
+                    <div class="mt-3 bg-brand-sun/25 border-2 border-brand-ink rounded-xl px-3 py-2.5 text-center" data-goal-celebrate>
+                        <p class="font-display font-extrabold text-brand-ink">🎉 {es ? "¡Meta alcanzada!" : "Goal reached!"}</p>
+                        <p class="text-xs text-brand-ink-soft">
+                            {es ? `Ya ahorraste para ${goalName}.` : `You saved up for ${goalName}.`}
+                        </p>
+                    </div>
+                ) : (
+                    <p class="text-sm text-brand-ink-soft mt-2" data-goal-remaining>
+                        {es ? `Te faltan ${fmt(goalRemaining)} 🐷` : `${fmt(goalRemaining)} to go 🐷`}
+                    </p>
+                )}
+            </div>
+        ) : (
+            <button type="button" data-goal-new
+                class="w-full press flex items-center gap-3 bg-brand-mint/15 border-2 border-dashed border-brand-ink/40 rounded-[var(--radius-card)] px-4 py-4 text-left hover:bg-brand-mint/25 transition-colors">
+                <span class="text-3xl">🎯</span>
+                <div>
+                    <p class="font-display font-extrabold text-brand-ink">{es ? "Ponte una meta de ahorro" : "Set a savings goal"}</p>
+                    <p class="text-xs text-brand-ink-soft">{es ? "Ahorra en tu frasco Ahorrar para algo que quieras." : "Save in your Save jar for something you want."}</p>
+                </div>
+            </button>
+        )}
     </section>
 
     <!-- Payday countdown + boosts -->
@@ -204,6 +270,38 @@ function countdownText(): string {
             <button id="bank-modal-submit" type="button"
                 class="press w-full mt-4 py-3 bg-brand-mint-deep text-white font-bold rounded-xl border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint active:scale-[.99] transition-all">
                 {es ? "Confirmar" : "Confirm"}
+            </button>
+        </div>
+    </div>
+
+    <!-- Savings-goal create modal -->
+    <div id="goal-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+        <div class="bg-brand-cream rounded-t-3xl sm:rounded-[var(--radius-card)] w-full max-w-md p-6 border-2 border-brand-ink shadow-[var(--shadow-pop)]">
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="text-lg font-bold text-brand-ink">🎯 {es ? "Mi meta de ahorro" : "My savings goal"}</h2>
+                <button id="goal-modal-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
+            </div>
+            <p class="text-xs text-brand-ink-soft mb-4">
+                {es ? "Elige algo para ahorrar. Tus papás la aprobarán." : "Pick something to save for. Your parents will approve it."}
+            </p>
+            <label class="block text-sm font-medium text-brand-ink mb-1">{es ? "¿Qué quieres?" : "What do you want?"}</label>
+            <input id="goal-name" type="text" maxlength="80"
+                class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-base text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep"
+                placeholder={es ? "Ej: una bici" : "e.g. a bike"} />
+            <div class="flex gap-1.5 mt-2 flex-wrap" id="goal-emoji-row">
+                {["🎯","🚲","🎮","📱","⚽","🎨","📚","🧸"].map((e) => (
+                    <button type="button" data-goal-emoji={e}
+                        class="text-xl w-9 h-9 rounded-lg border border-brand-ink/20 bg-white hover:bg-brand-mint/20 transition-colors">{e}</button>
+                ))}
+            </div>
+            <label class="block text-sm font-medium text-brand-ink mb-1 mt-4">{es ? "¿Cuánto cuesta? ($MXN)" : "How much? ($MXN)"}</label>
+            <input id="goal-amount" type="number" min="1" step="1" inputmode="decimal"
+                class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-lg text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep"
+                placeholder="0.00" />
+            <div id="goal-error" class="hidden text-sm text-red-600 mt-3"></div>
+            <button id="goal-submit" type="button"
+                class="press w-full mt-4 py-3 bg-brand-mint-deep text-white font-bold rounded-xl border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint active:scale-[.99] transition-all">
+                {es ? "Guardar mi meta" : "Save my goal"}
             </button>
         </div>
     </div>
@@ -354,6 +452,93 @@ function countdownText(): string {
                 } else {
                     submitBtn.disabled = false;
                 }
+            }
+        });
+    });
+</script>
+
+<script>
+    import { mutate } from "../lib/mutate";
+    import { showToast } from "../lib/toast";
+
+    // Savings-goal card: propose a goal (kid → pending) + change (cancel).
+    document.addEventListener("astro:page-load", () => {
+        const goalModal = document.getElementById("goal-modal");
+        if (!goalModal) return;
+        const es = document.documentElement.lang === "es";
+
+        const nameEl = document.getElementById("goal-name") as HTMLInputElement;
+        const amountEl = document.getElementById("goal-amount") as HTMLInputElement;
+        const errEl = document.getElementById("goal-error") as HTMLElement;
+        const submitBtn = document.getElementById("goal-submit") as HTMLButtonElement;
+        let selectedEmoji = "🎯";
+
+        function openGoal() {
+            nameEl.value = "";
+            amountEl.value = "";
+            errEl.classList.add("hidden");
+            submitBtn.disabled = false;
+            selectedEmoji = "🎯";
+            highlightEmoji();
+            goalModal!.classList.remove("hidden");
+            setTimeout(() => nameEl.focus(), 50);
+        }
+        function closeGoal() { goalModal!.classList.add("hidden"); }
+
+        function highlightEmoji() {
+            document.querySelectorAll<HTMLElement>("[data-goal-emoji]").forEach((b) => {
+                b.classList.toggle("ring-2", b.dataset.goalEmoji === selectedEmoji);
+                b.classList.toggle("ring-brand-mint-deep", b.dataset.goalEmoji === selectedEmoji);
+            });
+        }
+
+        document.querySelectorAll<HTMLElement>("[data-goal-emoji]").forEach((b) => {
+            b.addEventListener("click", () => { selectedEmoji = b.dataset.goalEmoji || "🎯"; highlightEmoji(); });
+        });
+
+        document.querySelector<HTMLElement>("[data-goal-new]")?.addEventListener("click", openGoal);
+        document.getElementById("goal-modal-close")?.addEventListener("click", closeGoal);
+        goalModal.addEventListener("click", (e) => { if (e.target === goalModal) closeGoal(); });
+
+        submitBtn.addEventListener("click", async () => {
+            const name = nameEl.value.trim();
+            const pesos = parseFloat(amountEl.value);
+            if (!name) {
+                errEl.textContent = es ? "Escribe qué quieres." : "Write what you want.";
+                errEl.classList.remove("hidden");
+                return;
+            }
+            if (isNaN(pesos) || pesos <= 0) {
+                errEl.textContent = es ? "Escribe cuánto cuesta." : "Enter how much it costs.";
+                errEl.classList.remove("hidden");
+                return;
+            }
+            submitBtn.disabled = true;
+            const res = await mutate("/api/bank/goals", {
+                body: { name, target_cents: Math.round(pesos * 100), emoji: selectedEmoji },
+                errorFallback: es ? "No se pudo guardar la meta" : "Could not save the goal",
+            });
+            if (res) {
+                showToast(es ? "¡Meta enviada a tus papás! 🎯" : "Goal sent to your parents! 🎯", "success");
+                setTimeout(() => window.location.reload(), 600);
+            } else {
+                submitBtn.disabled = false;
+            }
+        });
+
+        // Change / cancel the current goal.
+        document.querySelector<HTMLElement>("[data-goal-cancel]")?.addEventListener("click", async () => {
+            const card = document.querySelector<HTMLElement>("[data-goal-card]");
+            const id = card?.dataset.goalId;
+            if (!id) return;
+            if (!confirm(es ? "¿Cambiar tu meta? Se borrará la actual." : "Change your goal? This clears the current one.")) return;
+            const res = await mutate(`/api/bank/goals/${id}`, {
+                method: "DELETE",
+                errorFallback: es ? "No se pudo cambiar" : "Could not change",
+            });
+            if (res) {
+                showToast(es ? "Meta borrada" : "Goal cleared", "success");
+                setTimeout(() => window.location.reload(), 500);
             }
         });
     });

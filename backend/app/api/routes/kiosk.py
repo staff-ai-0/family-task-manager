@@ -237,6 +237,9 @@ class KidView(BaseModel):
     chores: List[KidChore]
     chores_done: int
     gigs_open: int
+    # Star Mode (P2): when true the kiosk renders points as big stars and hides
+    # the peso/cash amount for this (young) kid. Pure presentation over points.
+    star_mode: bool = False
 
 
 @router.post("/pin-view", response_model=KidView)
@@ -367,6 +370,7 @@ async def pin_view(
         chores=chores,
         chores_done=sum(1 for c in chores if c.is_done),
         gigs_open=int(gigs_open),
+        star_mode=bool(getattr(member, "star_mode", False)),
     )
 
 

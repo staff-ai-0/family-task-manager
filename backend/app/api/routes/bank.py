@@ -6,7 +6,7 @@ via require_feature and re-checked credit-time by CashService (spec §10). All
 queries are multi-tenant: kid endpoints act on current_user; parent endpoints
 verify the target kid shares the parent's family_id.
 """
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -27,8 +27,10 @@ from app.schemas.bank import (
     PayoutRequestBody,
     SaveWithdrawalRequest,
 )
+from app.schemas.savings_goal import SavingsGoalCreate, SavingsGoalProgress
 from app.services.bank_service import BankService
 from app.services.base_service import verify_user_in_family
+from app.services.savings_goal_service import SavingsGoalService
 
 router = APIRouter()
 
@@ -182,3 +184,96 @@ async def request_payout(
         amount = acct.spend_cents
     n = await BankService.request_payout(db, current_user, amount)
     return BankRequestResponse(success=True, notified_parents=n)
+
+
+# ── Savings goals (P2 — CASH ledger, Save jar) ──────────────────────────────
+#
+# A kid saves toward ONE named goal, tracked against their Save jar. Free basic
+# feature (no premium gate) — it's a presentation layer over the existing Family
+# Bank cash balance, with zero coupling to points. Parents set/approve goals.
+
+
+@router.get("/goals/me", response_model=Optional[SavingsGoalProgress])
+async def my_goal(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The kid's own active/pending savings goal + live progress (null if none).
+
+    Fires the one-time 'goal reached' celebration when the Save jar first crosses
+    target. Parents have no personal goal → always null."""
+    if current_user.role == UserRole.PARENT:
+        return None
+    goal = await SavingsGoalService.get_active(db, current_user, notify=True)
+    return SavingsGoalProgress(**goal) if goal else None
+
+
+@router.get("/goals/family", response_model=List[SavingsGoalProgress])
+async def family_goals(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parent view: every kid's open savings goal + progress."""
+    rows = await SavingsGoalService.get_family(db, current_user)
+    return [SavingsGoalProgress(**r) for r in rows]
+
+
+@router.post("/goals", response_model=SavingsGoalProgress, status_code=201)
+async def create_goal(
+    body: SavingsGoalCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a savings goal. A PARENT sets one for a kid (body.user_id, created
+    active). A KID proposes one for themselves (created pending until approved)."""
+    if current_user.role == UserRole.PARENT:
+        if body.user_id is None:
+            raise HTTPException(
+                status_code=422, detail="user_id is required when a parent sets a goal"
+            )
+        kid = await verify_user_in_family(
+            db, body.user_id, to_uuid_required(current_user.family_id)
+        )
+        if kid.role not in (UserRole.CHILD, UserRole.TEEN):
+            raise HTTPException(
+                status_code=400, detail="Savings goals apply to CHILD/TEEN members only"
+            )
+    else:
+        if current_user.role not in (UserRole.CHILD, UserRole.TEEN):
+            raise HTTPException(status_code=403, detail="Only kids have a savings goal")
+        if body.user_id is not None and body.user_id != to_uuid_required(current_user.id):
+            raise HTTPException(
+                status_code=403, detail="Kids can only set their own goal"
+            )
+        kid = current_user
+    result = await SavingsGoalService.create_goal(
+        db,
+        current_user,
+        kid=kid,
+        name=body.name,
+        target_cents=body.target_cents,
+        emoji=body.emoji,
+    )
+    return SavingsGoalProgress(**result)
+
+
+@router.post("/goals/{goal_id}/approve", response_model=SavingsGoalProgress)
+async def approve_goal(
+    goal_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parent approves a kid's pending goal (pending → active)."""
+    result = await SavingsGoalService.approve_goal(db, current_user, goal_id)
+    return SavingsGoalProgress(**result)
+
+
+@router.delete("/goals/{goal_id}", status_code=204)
+async def cancel_goal(
+    goal_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel a goal. A kid may cancel only their own; a parent any kid's."""
+    await SavingsGoalService.cancel_goal(db, current_user, goal_id)
+    return None
