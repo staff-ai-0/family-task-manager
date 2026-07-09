@@ -189,7 +189,7 @@ async def test_free_user_currency_mismatch_routes_to_drafts(
         raw_text="",
     )
 
-    async def fake_scan(_b, _t, model=None):
+    async def fake_scan(_b, _t, model=None, category_hints=None):
         return fake_receipt
 
     monkeypatch.setattr(

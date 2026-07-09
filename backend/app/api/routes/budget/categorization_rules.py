@@ -5,6 +5,7 @@ CRUD endpoints for automatic transaction categorization rules.
 """
 
 from fastapi import APIRouter, Depends, status, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from uuid import UUID
@@ -22,6 +23,19 @@ from app.schemas.budget import (
 from app.models import User
 
 router = APIRouter()
+
+
+class RuleSuggestion(BaseModel):
+    """A learned payee→category rule proposal derived from repeated corrections."""
+    payee_id: UUID
+    payee_name: str
+    category_id: UUID
+    category_name: str
+    match_count: int
+
+
+class RuleSuggestionsResponse(BaseModel):
+    suggestions: List[RuleSuggestion]
 
 
 @router.get("/", response_model=List[CategorizationRuleResponse])
@@ -79,6 +93,29 @@ async def suggest_category(
         rule_id=None,  # We could look up the matching rule if needed
         confidence="medium",
     )
+
+
+@router.get("/rule-suggestions", response_model=RuleSuggestionsResponse)
+async def list_rule_suggestions(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+    min_count: int = Query(
+        2, ge=2, le=50,
+        description="Minimum repeated categorizations before a rule is suggested",
+    ),
+):
+    """Suggest categorization rules learned from repeated corrections (parent only).
+
+    When a payee has been filed under the same category ``min_count`` or more
+    times and no exact payee rule exists yet, we propose creating one so the
+    categorization becomes automatic. Declared before ``/{rule_id}`` so the
+    literal path wins over the UUID path parameter.
+    """
+    family_id = to_uuid_required(current_user.family_id)
+    suggestions = await CategorizationRuleService.suggest_rules_from_history(
+        db, family_id, min_count=min_count,
+    )
+    return RuleSuggestionsResponse(suggestions=suggestions)
 
 
 @router.get("/{rule_id}", response_model=CategorizationRuleResponse)
