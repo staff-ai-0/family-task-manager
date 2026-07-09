@@ -251,7 +251,9 @@ class AnalyticsService:
     @staticmethod
     async def write_all_snapshots(db: AsyncSession) -> int:
         """Iterate every family and upsert today's snapshot. For the cron."""
-        rows = (await db.execute(select(Family.id))).scalars().all()
+        rows = (await db.execute(
+            select(Family.id).where(Family.deleted_at.is_(None))
+        )).scalars().all()
         for fid in rows:
             try:
                 await AnalyticsService.write_snapshot(db, fid)

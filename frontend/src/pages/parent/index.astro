@@ -3,6 +3,7 @@ import PageLayout from "@components/ui/PageLayout.astro";
 import GigsIntroBanner from "../../components/GigsIntroBanner.astro";
 import EnablePushButton from "../../components/EnablePushButton.astro";
 import TourReplayButton from "../../components/TourReplayButton.astro";
+import BossBattleBar from "../../components/BossBattleBar.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 
@@ -18,6 +19,11 @@ if (!user) {
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 const { data: family } = await apiFetch<any>("/api/families/me", { token });
+
+// Cooperative weekly boss battle (Family Cup) — points/analytics based, no pet.
+// Best-effort — a null just hides the bar.
+const { data: familyCup } = await apiFetch<any>("/api/family-cup/", { token });
+const boss = familyCup?.boss ?? null;
 
 // Oversight summary for per-kid cards.
 const { data: oversight } = await apiFetch<any>("/api/oversight/summary", { token });
@@ -93,6 +99,9 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
             <EnablePushButton lang={lang} />
         </div>
     </Fragment>
+            <a href="/family-cup" class="block mb-6">
+                <BossBattleBar boss={boss} lang={lang} />
+            </a>
             {paidRecently.length > 0 && (
                 <a
                     href="/parent/settings/family-bank"

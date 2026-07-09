@@ -20,6 +20,8 @@ type Section = {
 const meta = es
     ? {
           title: "Términos y Condiciones — Family Task Manager",
+          description:
+              "Términos y Condiciones de Family Task Manager: descripción del servicio, cuentas y roles familiares, suscripciones y facturación, uso aceptable y responsabilidades.",
           kicker: "Legal",
           h1: "Términos y Condiciones",
           version: "v1 — 7 de julio de 2026",
@@ -30,6 +32,8 @@ const meta = es
       }
     : {
           title: "Terms of Service — Family Task Manager",
+          description:
+              "Family Task Manager's Terms of Service: service description, family accounts and roles, subscriptions and billing, acceptable use, and responsibilities.",
           kicker: "Legal",
           h1: "Terms of Service",
           version: "v1 — July 7, 2026",
@@ -211,7 +215,7 @@ const sections: Section[] = es
 ---
 
 <!-- DRAFT — pending legal review -->
-<Layout title={meta.title}>
+<Layout title={meta.title} description={meta.description} lang={lang} ogType="article">
     <!-- TOP BAR -->
     <header class="sticky top-0 z-50 bg-brand-cream border-b-2 border-brand-ink px-6 py-3 flex items-center gap-4">
         <Logo size="sm" href="/" />

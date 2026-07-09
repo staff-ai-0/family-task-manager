@@ -449,6 +449,23 @@ async def test_sweep_skips_wrong_weekday(db):
 
 
 @pytest.mark.asyncio
+async def test_sweep_skips_soft_deleted_family(db):
+    """Regression: a soft-deleted (closed) family must not be paid allowance
+    during the 30-day grace window (ops-safety review finding #1)."""
+    tz_name, weekday = _tz_daytime()
+    fam = await _mk_family(db, tz=tz_name)
+    await _entitle_plus(db, fam)
+    kid = await _mk_kid(db, fam, cash=0)
+    await _set_config(db, kid, allowance_cents=10000, payday_weekday=weekday)
+    fam.deleted_at = datetime.now(timezone.utc)
+    await db.commit()
+    n = await BankService.run_payday_sweep(db)
+    assert n == 0
+    await db.refresh(kid)
+    assert kid.cash_cents == 0
+
+
+@pytest.mark.asyncio
 async def test_sweep_free_family_skipped(db):
     tz_name, weekday = _tz_daytime()
     fam = await _mk_family(db, tz=tz_name)  # no subscription → free

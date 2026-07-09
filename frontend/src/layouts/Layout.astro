@@ -9,6 +9,18 @@ interface Props {
 	lang?: string;
 	theme?: "light" | "dark" | "system";
 	uiMode?: "kid" | "teen" | "adult";
+	/** SEO: canonical URL override (defaults to the current request URL). */
+	canonical?: string;
+	/** SEO: social-share image path (defaults to /og.png). */
+	ogImage?: string;
+	/** SEO: Open Graph type (defaults to "website"). */
+	ogType?: string;
+	/** SEO: emit noindex,nofollow for utility/thin pages. */
+	noindex?: boolean;
+	/** SEO: JSON-LD structured-data object(s). */
+	jsonLd?: Record<string, unknown> | Record<string, unknown>[];
+	/** SEO: per-language canonical alternates for hreflang (path or absolute URL). */
+	alternates?: { es?: string; en?: string };
 }
 const lang = Astro.props.lang ?? Astro.cookies.get("lang")?.value ?? "es";
 const {
@@ -16,6 +28,12 @@ const {
 	description = t(lang, "meta_description") as string,
 	theme = "system",
 	uiMode,
+	canonical,
+	ogImage,
+	ogType,
+	noindex,
+	jsonLd,
+	alternates,
 } = Astro.props;
 
 // Derive UI mode from role cookie if not explicitly passed.
@@ -28,7 +46,17 @@ const resolvedUiMode = uiMode
 <!doctype html>
 <html lang={lang} data-theme={theme === "dark" ? "dark" : undefined}>
 	<head>
-		<Head title={title} description={description} lang={lang} />
+		<Head
+			title={title}
+			description={description}
+			lang={lang}
+			canonical={canonical}
+			ogImage={ogImage}
+			ogType={ogType}
+			noindex={noindex}
+			jsonLd={jsonLd}
+			alternates={alternates}
+		/>
 		{theme === "system" && (
 			<script is:inline>
 				try {

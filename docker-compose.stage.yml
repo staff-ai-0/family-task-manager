@@ -1,92 +1,100 @@
-# Family Task Manager - Staging Docker Compose
-# =============================================
-# Infrastructure services only (Database, Redis, Actual Budget Server)
-# Application services (Backend, Frontend, Finance API) run via PM2
+# Family Task Manager — Staging OVERRIDE
+# =============================================================================
+# This is a REAL compose override layered ON TOP of docker-compose.yml. It does
+# NOT redefine the stack — it inherits every service, image and build from the
+# base file and only changes what must differ so a staging stack can run on the
+# SAME host as local dev without colliding: project name, container names, host
+# ports, and (via the project name) isolated volumes + network.
+#
+# There is NO Actual Budget server and NO PM2 here — the budget system is native
+# PostgreSQL (Actual was decommissioned in Phase 10) and the app runs as normal
+# containers, not under a process manager. The previous contents of this file
+# were stale fiction referencing both; this replaces them.
+#
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
+#   # Bring staging up (base + this override; project name comes from `name:`)
+#   docker compose -f docker-compose.yml -f docker-compose.stage.yml up -d
+#   # (podman:) podman compose -f docker-compose.yml -f docker-compose.stage.yml up -d
+#
+#   docker compose -f docker-compose.yml -f docker-compose.stage.yml ps
+#   docker compose -f docker-compose.yml -f docker-compose.stage.yml down
+#
+# Because `name: family-stage` sets a distinct compose project, its volumes and
+# default network are automatically namespaced (family-stage_postgres_data,
+# family-stage_default, …) — fully isolated from the local-dev project. Container
+# names and host ports are NOT project-namespaced, so we override those below.
+#
+# Staging URLs (host ports, all offset from dev to avoid clashes):
+#   Frontend  http://localhost:3013   Backend   http://localhost:8013/docs
+#   Postgres  localhost:5443          Test DB   localhost:5445   Redis  localhost:6390
+#
+# Put staging secrets in `.env.stage` and pass `--env-file .env.stage` if you
+# want them separate from the dev `.env`.
+# =============================================================================
+
+name: family-stage
 
 services:
-  # PostgreSQL Database
   db:
-    image: postgres:15-alpine
-    container_name: family_app_db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-familyapp}
-      POSTGRES_USER: ${POSTGRES_USER:-familyapp}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-familyapp123}
+    container_name: family_stage_db
     ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-familyapp}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - app_network
+      - "${STAGE_DB_PORT:-5443}:5432"
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-  # Redis Cache
+  test_db:
+    container_name: family_stage_test_db
+    ports:
+      - "${STAGE_TEST_DB_PORT:-5445}:5432"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   redis:
-    image: redis:7-alpine
-    container_name: family_app_redis
-    restart: unless-stopped
+    container_name: family_stage_redis
     ports:
-      - "6380:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - app_network
+      - "${STAGE_REDIS_PORT:-6390}:6379"
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-  # Actual Budget Server (personal finance management)
-  actual-server:
-    image: actualbudget/actual-server:latest
-    container_name: family_actual_budget
-    restart: unless-stopped
+  backend:
+    container_name: family_stage_backend
     ports:
-      - "5006:5006"
-    volumes:
-      - actual_budget_data:/data
+      - "${STAGE_BACKEND_PORT:-8013}:8000"
     environment:
-      - ACTUAL_PORT=5006
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5006/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    networks:
-      - app_network
+      # Point CORS + email links at the staging frontend host port. Internal
+      # service DNS (db/redis/backend) is unchanged — each compose project gets
+      # its own bridge network, so `db`/`redis` still resolve within staging.
+      ALLOWED_ORIGINS: http://localhost:3013,http://localhost:8013
+      DEBUG: ${DEBUG:-true}
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-volumes:
-  postgres_data:
-    name: family_stage_postgres_data
-  redis_data:
-    name: family_stage_redis_data
-  actual_budget_data:
-    name: family_stage_actual_data
-
-networks:
-  app_network:
-    name: family_stage_network
-    driver: bridge
+  frontend:
+    container_name: family_stage_frontend
+    ports:
+      - "${STAGE_FRONTEND_PORT:-3013}:3000"
+    environment:
+      # SSR → backend stays on the internal network alias.
+      API_BASE_URL: http://backend:8000
+      # Browser-facing base must hit the staging backend host port.
+      PUBLIC_API_BASE_URL: http://localhost:8013
+      PORT: 3000
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

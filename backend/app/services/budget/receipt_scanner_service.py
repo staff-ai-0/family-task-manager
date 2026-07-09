@@ -36,6 +36,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
+from app.core.metrics import record_llm_call
 
 # Hard ceiling for any single LiteLLM/vision request. A hung or slow provider
 # must never block the event loop indefinitely.
@@ -314,6 +315,7 @@ async def scan_receipt(
         # The OpenAI client is synchronous (blocking I/O). Offload to a worker
         # thread so a slow provider can't stall the async event loop; the
         # client-level timeout above bounds the wait.
+        record_llm_call()  # best-effort outbound-LLM counter
         completion = await run_in_threadpool(
             lambda: client.chat.completions.create(
                 model=active_model,

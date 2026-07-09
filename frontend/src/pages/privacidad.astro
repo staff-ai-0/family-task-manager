@@ -20,6 +20,8 @@ type Section = {
 const meta = es
     ? {
           title: "Aviso de Privacidad — Family Task Manager",
+          description:
+              "Aviso de Privacidad de Family Task Manager conforme a la LFPDPPP: qué datos personales recabamos de las familias, cómo los usamos y protegemos, y cómo ejercer tus derechos ARCO.",
           kicker: "Legal",
           h1: "Aviso de Privacidad",
           version: "v1 — 7 de julio de 2026",
@@ -31,6 +33,8 @@ const meta = es
       }
     : {
           title: "Privacy Notice — Family Task Manager",
+          description:
+              "Family Task Manager's Privacy Notice under Mexico's LFPDPPP: what personal data we collect from families, how we use and protect it, and how to exercise your ARCO rights.",
           kicker: "Legal",
           h1: "Privacy Notice",
           version: "v1 — July 7, 2026",
@@ -268,7 +272,7 @@ const sections: Section[] = es
 
 <!-- DRAFT — pending legal review -->
 <!-- TODO (legal): fill in Agent-IA razón social + domicilio in section 1 before launch. -->
-<Layout title={meta.title}>
+<Layout title={meta.title} description={meta.description} lang={lang} ogType="article">
     <!-- TOP BAR -->
     <header class="sticky top-0 z-50 bg-brand-cream border-b-2 border-brand-ink px-6 py-3 flex items-center gap-4">
         <Logo size="sm" href="/" />

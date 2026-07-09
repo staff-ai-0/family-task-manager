@@ -1,6 +1,5 @@
 """DM service (W9.3 + W11B SSE)."""
 
-import asyncio
 import json
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -18,8 +17,11 @@ from app.models.dm import DMMessage, DMThread
 from app.models.user import User
 
 
+# SSE tuning — see family_chat_service for the full rationale.
 STREAM_WINDOW_SECONDS = 30
-STREAM_POLL_SECONDS = 2.0
+PUBSUB_WAIT_SECONDS = 1.0
+FALLBACK_POLL_SECONDS = 15.0
+HEARTBEAT_SECONDS = 10.0
 
 
 class DMService:
@@ -96,18 +98,27 @@ class DMService:
     ):
         """SSE generator — same pattern as family chat. Verifies participant.
 
-        Uses a FRESH short-lived session per poll (not a request-scoped
+        Delivery is event-driven: ``post_message`` PUBLISHes to a thread-scoped
+        Redis channel and this generator wakes on that signal, then re-reads the
+        DB (source of truth). A bounded fallback poll every
+        ``FALLBACK_POLL_SECONDS`` still fires so a dropped publish can't lose a
+        message; if Redis is unreachable the stream degrades to pure polling.
+
+        Uses a FRESH short-lived session per DB read (not a request-scoped
         Depends(get_db) session) so a long-lived SSE connection never pins a
         pooled DB connection idle-in-transaction (pool exhaustion → 502s).
         """
+        import time as _time
+
+        from app.core import message_bus
         from app.core.database import AsyncSessionLocal
 
         async with AsyncSessionLocal() as s:
             await DMService._get_thread_for_user(s, thread_id, user_id, family_id)
         cursor = after_ts or datetime.now(timezone.utc)
-        elapsed = 0.0
-        last_heartbeat = 0.0
-        while elapsed < STREAM_WINDOW_SECONDS:
+
+        async def _drain():
+            nonlocal cursor
             async with AsyncSessionLocal() as s:
                 q = (
                     select(DMMessage)
@@ -121,6 +132,7 @@ class DMService:
                     .limit(50)
                 )
                 rows = list((await s.execute(q)).scalars().all())
+            chunks = []
             for m in rows:
                 payload = {
                     "id": str(m.id),
@@ -129,14 +141,34 @@ class DMService:
                     "body": m.body,
                     "created_at": m.created_at.isoformat(),
                 }
-                yield "event: message\ndata: " + json.dumps(payload) + "\n\n"
+                chunks.append(
+                    "event: message\ndata: " + json.dumps(payload) + "\n\n"
+                )
                 cursor = m.created_at
-            await asyncio.sleep(STREAM_POLL_SECONDS)
-            elapsed += STREAM_POLL_SECONDS
-            last_heartbeat += STREAM_POLL_SECONDS
-            if last_heartbeat >= 10:
-                last_heartbeat = 0
-                yield ": heartbeat\n\n"
+            return chunks
+
+        # Cover the reconnect gap before waiting.
+        for chunk in await _drain():
+            yield chunk
+
+        channel = message_bus.dm_channel(thread_id)
+        pubsub = await message_bus.subscribe(channel)
+        try:
+            start = _time.monotonic()
+            last_poll = start
+            last_heartbeat = start
+            while (_time.monotonic() - start) < STREAM_WINDOW_SECONDS:
+                woke = await message_bus.wait_for_event(pubsub, PUBSUB_WAIT_SECONDS)
+                now = _time.monotonic()
+                if woke or (now - last_poll) >= FALLBACK_POLL_SECONDS:
+                    last_poll = now
+                    for chunk in await _drain():
+                        yield chunk
+                if (now - last_heartbeat) >= HEARTBEAT_SECONDS:
+                    last_heartbeat = now
+                    yield ": heartbeat\n\n"
+        finally:
+            await message_bus.close_pubsub(pubsub, channel)
         yield "event: done\ndata: {}\n\n"
 
     @staticmethod
@@ -178,6 +210,19 @@ class DMService:
         t.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(m)
+
+        # Wake any live SSE stream for this thread (best-effort signal).
+        from app.core import message_bus
+        await message_bus.publish(
+            message_bus.dm_channel(thread_id),
+            {
+                "id": str(m.id),
+                "thread_id": str(thread_id),
+                "sender_id": str(user_id) if user_id else None,
+                "body": m.body,
+                "created_at": m.created_at.isoformat(),
+            },
+        )
 
         # Notify other participants
         try:

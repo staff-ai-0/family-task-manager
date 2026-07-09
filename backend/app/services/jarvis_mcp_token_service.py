@@ -13,6 +13,7 @@ from uuid import UUID
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.family import Family
 from app.models.jarvis_mcp_token import JarvisMcpToken
 
 
@@ -55,10 +56,15 @@ class TokenService:
         Updates ``last_used_at`` on a valid hit.
         """
         token_hash = _hash(secret)
+        # Join Family and require it not soft-deleted — fail closed on a
+        # closed account during the 30-day grace window.
         result = await db.execute(
-            select(JarvisMcpToken).where(
+            select(JarvisMcpToken)
+            .join(Family, Family.id == JarvisMcpToken.family_id)
+            .where(
                 JarvisMcpToken.token_hash == token_hash,
                 JarvisMcpToken.revoked_at.is_(None),
+                Family.deleted_at.is_(None),
             )
         )
         row = result.scalar_one_or_none()

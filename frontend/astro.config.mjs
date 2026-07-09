@@ -34,6 +34,9 @@ function remarkMermaid() {
 // https://astro.build/config
 export default defineConfig({
   output: 'server',
+  // Canonical production origin — enables absolute URLs for SEO (canonical,
+  // hreflang, Open Graph, sitemap). Mirrors lib/seo.ts SITE_URL.
+  site: 'https://family.agent-ia.mx',
   markdown: {
     remarkPlugins: [remarkMermaid],
   },

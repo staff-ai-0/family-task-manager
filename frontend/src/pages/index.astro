@@ -6,6 +6,7 @@ import Button from "../components/ui/Button.astro";
 import Card from "../components/ui/Card.astro";
 import Badge from "../components/ui/Badge.astro";
 import RoleBadge from "../components/ui/RoleBadge.astro";
+import { seoFor, organizationJsonLd, softwareAppJsonLd } from "../lib/seo";
 
 const lang = Astro.cookies.get("lang")?.value ?? "es";
 
@@ -14,9 +15,11 @@ if (Astro.cookies.has("access_token")) {
 }
 
 const es = lang === "es";
+const seo = seoFor("/", lang)!;
+const landingJsonLd = [organizationJsonLd(), softwareAppJsonLd(lang)];
 ---
 
-<Layout title={es ? "Family Task Manager — Tareas, premios y presupuesto en familia" : "Family Task Manager — Chores, rewards, budget — together"}>
+<Layout title={seo.title} description={seo.description} lang={lang} jsonLd={landingJsonLd}>
 
   <!-- TOP BAR -->
   <header class="sticky top-0 z-50 bg-brand-cream border-b-2 border-brand-ink px-6 py-3 flex items-center gap-4">

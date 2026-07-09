@@ -1,6 +1,5 @@
 """Family chat service (W8.1 + W8.3)."""
 
-import asyncio
 import json
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -14,10 +13,18 @@ from app.models.family_chat import FamilyChatMessage
 from app.models.user import User
 
 
-# SSE tuning. Total stream lifetime per HTTP request; client reconnects
-# after. Poll interval determines latency on new messages.
+# SSE tuning. Total stream lifetime per HTTP request; client reconnects after.
 STREAM_WINDOW_SECONDS = 30
-STREAM_POLL_SECONDS = 2.0
+# Loop tick: how long each Redis pub/sub read blocks before we re-check the
+# heartbeat/fallback/deadline cadence. Cheap local socket read, not a DB query.
+PUBSUB_WAIT_SECONDS = 1.0
+# Safety net: re-read the DB at least this often even with no publish, so a
+# dropped pub/sub signal can't silently lose a message. Well under the reconnect
+# window, and each reconnect also re-drains — so worst-case miss latency is
+# bounded by this, not by the stream window.
+FALLBACK_POLL_SECONDS = 15.0
+# Comment-line keepalive so proxies don't idle-close the stream.
+HEARTBEAT_SECONDS = 10.0
 
 
 class FamilyChatService:
@@ -163,11 +170,112 @@ class FamilyChatService:
         await db.commit()
         await db.refresh(msg)
 
+        # Wake any live SSE stream for this family (best-effort). Payload is only
+        # a signal — subscribers re-read the DB — but we send the full row so it
+        # stays useful for future direct-consume callers.
+        from app.core import message_bus
+        await message_bus.publish(
+            message_bus.chat_channel(family_id),
+            {
+                "id": str(msg.id),
+                "sender_id": str(sender_id) if sender_id else None,
+                "body": msg.body,
+                "created_at": msg.created_at.isoformat(),
+            },
+        )
+
         # Notify everyone in the family except the sender.
         await FamilyChatService._fanout_notification(
             db, family_id, sender_id, body
         )
         return msg
+
+    @staticmethod
+    async def post_event_message(
+        db: AsyncSession,
+        family_id: UUID,
+        body: str,
+        *,
+        sender_id: Optional[UUID] = None,
+        image_url: Optional[str] = None,
+    ) -> Optional[FamilyChatMessage]:
+        """Post a system/activity card (a task or gig completion) into the family
+        thread and wake the live SSE stream — the "Campfire" liveliness hook.
+
+        Unlike ``post_message`` this deliberately does NOT fan out a per-recipient
+        notification: completions are frequent, so they animate the shared chat
+        without spamming everyone's notification bell. Reactions already work on
+        any family_chat row by id, so the card is reaction-ready. ``image_url``
+        carries the proof photo when the completion has one.
+
+        Best-effort: any failure is swallowed (and the session rolled back) so a
+        chat hiccup can never break the task-approval flow that calls it. MUST be
+        invoked only after the caller has committed its own work — this method
+        commits the new message row on its own.
+        """
+        try:
+            body = (body or "").strip()
+            if not body:
+                return None
+            msg = FamilyChatMessage(
+                family_id=family_id,
+                sender_id=sender_id,
+                body=body[:2000],
+                image_url=image_url,
+            )
+            db.add(msg)
+            await db.commit()
+            await db.refresh(msg)
+
+            from app.core import message_bus
+            await message_bus.publish(
+                message_bus.chat_channel(family_id),
+                {
+                    "id": str(msg.id),
+                    "sender_id": str(sender_id) if sender_id else None,
+                    "body": msg.body,
+                    "image_url": msg.image_url,
+                    "created_at": msg.created_at.isoformat(),
+                },
+            )
+            return msg
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "post_event_message failed (family %s)", family_id
+            )
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+            return None
+
+    @staticmethod
+    async def post_completion(
+        db: AsyncSession,
+        family_id: UUID,
+        *,
+        user_name: str,
+        title: str,
+        points: int,
+        is_bonus: bool = False,
+        image_url: Optional[str] = None,
+        sender_id: Optional[UUID] = None,
+    ) -> Optional[FamilyChatMessage]:
+        """Auto-post a celebratory completion card into family chat (Spanish-first
+        to match the app default). Used by the task-approval flow so approved
+        chores/gigs light up the shared thread with the proof photo attached."""
+        emoji = "\U0001F389" if is_bonus else "✅"  # 🎉 gig / ✅ chore
+        kind = "la gig" if is_bonus else "la tarea"
+        pts_txt = f" (+{points} pts)" if points else ""
+        body = f"{emoji} {user_name} completó {kind} «{title}»{pts_txt}"
+        return await FamilyChatService.post_event_message(
+            db,
+            family_id,
+            body,
+            sender_id=sender_id,
+            image_url=image_url,
+        )
 
     @staticmethod
     async def unread_count(
@@ -212,18 +320,32 @@ class FamilyChatService:
         ``STREAM_WINDOW_SECONDS`` so the client reconnects. Heartbeats
         every ~10s so proxies don't time out.
 
-        Uses a FRESH short-lived session per poll (not a request-scoped
+        Delivery is event-driven: ``post_message`` PUBLISHes to a family-scoped
+        Redis channel and this generator wakes on that signal, then re-reads the
+        DB (source of truth) so ordering + dedup stay identical to the old poll.
+        A bounded fallback poll every ``FALLBACK_POLL_SECONDS`` still fires so a
+        dropped publish can't lose a message, and if Redis is unreachable the
+        stream degrades to pure polling.
+
+        Uses a FRESH short-lived session per DB read (not a request-scoped
         Depends(get_db) session): the pooled connection must NOT be held across
-        the sleep window, or every open chat tab pins a connection
+        the wait window, or every open chat tab pins a connection
         ``idle in transaction`` and the pool (size 30) exhausts → app-wide 502s.
         """
+        import time as _time
+
+        from app.core import message_bus
         from app.core.database import AsyncSessionLocal
 
         cursor = after_ts or datetime.now(timezone.utc)
-        elapsed = 0.0
-        last_heartbeat = 0.0
 
-        while elapsed < STREAM_WINDOW_SECONDS:
+        async def _drain():
+            """Yield SSE chunks for every message after ``cursor``, advancing it.
+
+            Owns and closes its own short-lived session so no pooled connection
+            is held across the wait window between drains.
+            """
+            nonlocal cursor
             async with AsyncSessionLocal() as s:
                 q = (
                     select(FamilyChatMessage)
@@ -237,23 +359,45 @@ class FamilyChatService:
                     .limit(50)
                 )
                 rows = list((await s.execute(q)).scalars().all())
-            # session closed here — connection returned to the pool before we sleep
+            # session closed here — connection back to the pool before we wait
+            chunks = []
             for m in rows:
                 payload = {
                     "id": str(m.id),
                     "sender_id": str(m.sender_id) if m.sender_id else None,
                     "body": m.body,
+                    "image_url": m.image_url,
                     "created_at": m.created_at.isoformat(),
                 }
-                yield "event: message\ndata: " + json.dumps(payload) + "\n\n"
+                chunks.append(
+                    "event: message\ndata: " + json.dumps(payload) + "\n\n"
+                )
                 cursor = m.created_at
+            return chunks
 
-            await asyncio.sleep(STREAM_POLL_SECONDS)
-            elapsed += STREAM_POLL_SECONDS
-            last_heartbeat += STREAM_POLL_SECONDS
-            if last_heartbeat >= 10:
-                last_heartbeat = 0
-                yield ": heartbeat\n\n"
+        # Drain anything already newer than the cursor before we start waiting —
+        # covers the reconnect gap between successive stream windows.
+        for chunk in await _drain():
+            yield chunk
+
+        channel = message_bus.chat_channel(family_id)
+        pubsub = await message_bus.subscribe(channel)
+        try:
+            start = _time.monotonic()
+            last_poll = start
+            last_heartbeat = start
+            while (_time.monotonic() - start) < STREAM_WINDOW_SECONDS:
+                woke = await message_bus.wait_for_event(pubsub, PUBSUB_WAIT_SECONDS)
+                now = _time.monotonic()
+                if woke or (now - last_poll) >= FALLBACK_POLL_SECONDS:
+                    last_poll = now
+                    for chunk in await _drain():
+                        yield chunk
+                if (now - last_heartbeat) >= HEARTBEAT_SECONDS:
+                    last_heartbeat = now
+                    yield ": heartbeat\n\n"
+        finally:
+            await message_bus.close_pubsub(pubsub, channel)
 
         yield "event: done\ndata: {}\n\n"
 

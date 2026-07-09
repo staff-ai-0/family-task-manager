@@ -111,6 +111,7 @@ class FamilyService:
             select(Family).where(
                 Family.join_code == join_code.upper().strip(),
                 Family.is_active == True,
+                Family.deleted_at.is_(None),  # never join a closing family
             )
         )).scalar_one_or_none()
         return family

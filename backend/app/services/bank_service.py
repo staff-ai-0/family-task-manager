@@ -445,7 +445,9 @@ class BankService:
         """
         from app.core.premium import get_family_plan_by_id
 
-        families = (await db.execute(select(Family.id, Family.timezone))).all()
+        families = (await db.execute(
+            select(Family.id, Family.timezone).where(Family.deleted_at.is_(None))
+        )).all()
         paid = 0
         for fid, tz_name in families:
             tz = _safe_zoneinfo(tz_name)

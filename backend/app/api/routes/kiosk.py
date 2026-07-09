@@ -283,6 +283,8 @@ async def pin_view(
     # Today's chores for this member (family timezone).
     from app.models.family import Family
     family = await db.get(Family, family_id)
+    if family is not None and family.deleted_at is not None:
+        raise HTTPException(status_code=401, detail="Account closed")
     tz_name = (family.timezone if family and family.timezone else None) or "UTC"
     from zoneinfo import ZoneInfo
     try:
@@ -414,6 +416,22 @@ class KioskShoppingList(BaseModel):
     pending: int
 
 
+class KioskBoss(BaseModel):
+    # Cooperative weekly boss battle (see FamilyCupService.boss_battle).
+    # Display-only — derived from assigned mandatory task points; never
+    # punishes a member. Rendered as an HP progress bar on the wall display.
+    key: str
+    name_es: str
+    name_en: str
+    emoji: str
+    max_hp: int
+    current_hp: int
+    damage: int
+    percent_defeated: int
+    defeated: bool
+    active: bool
+
+
 class KioskSnapshot(BaseModel):
     family_name: str
     now_utc: datetime
@@ -425,6 +443,8 @@ class KioskSnapshot(BaseModel):
     # Weekly points leaderboard (Mon 00:00 family-tz → now). Display-only —
     # positive point_transactions summed per member; no new economy.
     leaderboard: List[KioskLeaderboardEntry]
+    # Cooperative weekly boss battle for the same week.
+    boss: KioskBoss
     week_start: date
 
 
@@ -444,6 +464,8 @@ async def snapshot(
     family_id = device.family_id
     from app.models.family import Family
     family = await db.get(Family, family_id)
+    if family is not None and family.deleted_at is not None:
+        raise HTTPException(status_code=401, detail="Account closed")
     fam_name = family.name if family else ""
 
     # Today/tomorrow window in family timezone
@@ -616,6 +638,10 @@ async def snapshot(
                 KioskShoppingList(name=l.name, pending=pending.get(l.id, 0))
             )
 
+    # Cooperative weekly boss battle (same family-local week as the leaderboard).
+    from app.services.family_cup_service import FamilyCupService
+    boss_data = await FamilyCupService.boss_battle(db, family_id)
+
     await db.commit()
 
     return KioskSnapshot(
@@ -627,5 +653,17 @@ async def snapshot(
         events_tomorrow=events_tomorrow,
         shopping=shopping_out,
         leaderboard=leaderboard,
+        boss=KioskBoss(
+            key=boss_data["key"],
+            name_es=boss_data["name_es"],
+            name_en=boss_data["name_en"],
+            emoji=boss_data["emoji"],
+            max_hp=boss_data["max_hp"],
+            current_hp=boss_data["current_hp"],
+            damage=boss_data["damage"],
+            percent_defeated=boss_data["percent_defeated"],
+            defeated=boss_data["defeated"],
+            active=boss_data["active"],
+        ),
         week_start=week_start_local,
     )

@@ -114,7 +114,14 @@ class User(Base):
 
     # Family chat read receipt (W8.5). Null = never visited chat.
     chat_last_read_at = Column(DateTime(timezone=True), nullable=True)
-    
+
+    # Soft-delete tombstone — stamped together with families.deleted_at when a
+    # parent closes the whole family. Non-null = account closed: get_current_user
+    # + login/OAuth/refresh 401 immediately (belt-and-suspenders alongside the
+    # token_version bump that kills outstanding refresh tokens). Hard-purged with
+    # the family after the grace window. Not indexed — always reached by user PK.
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+
     # Relationships
     family = relationship("Family", back_populates="members")
     # Legacy task relationships (to be removed after migration)

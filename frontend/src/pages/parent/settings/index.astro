@@ -26,6 +26,8 @@ const labels = {
         family_desc: "Timezone and family-wide preferences",
         family_bank: "Family Bank",
         family_bank_desc: "Allowance, jars, interest & match per kid",
+        envelopes: "Kids' envelopes",
+        envelopes_desc: "Each kid's Spend/Save/Share balances",
         kiosk: "Wall displays",
         kiosk_desc: "Echo Show, iPad, Fire TV",
         analytics: "Analytics",
@@ -42,6 +44,8 @@ const labels = {
         family_desc: "Zona horaria y preferencias de la familia",
         family_bank: "Banco Familiar",
         family_bank_desc: "Mesada, frascos, interés y match por hijo",
+        envelopes: "Sobres de mis hijos",
+        envelopes_desc: "Saldos Gastar/Ahorrar/Compartir por hijo",
         kiosk: "Pantallas de pared",
         kiosk_desc: "Echo Show, iPad, Fire TV",
         analytics: "Anal\u00edtica",
@@ -58,6 +62,8 @@ const labels = {
     family_desc: "Timezone and family-wide preferences",
     family_bank: "Family Bank",
     family_bank_desc: "Allowance, jars, interest & match per kid",
+    envelopes: "Kids' envelopes",
+    envelopes_desc: "Each kid's Spend/Save/Share balances",
     kiosk: "Wall displays",
     kiosk_desc: "Echo Show, iPad, Fire TV",
     analytics: "Analytics",
@@ -145,6 +151,22 @@ const labels = {
             <div>
                 <p class="font-bold text-brand-ink">{labels.family_bank}</p>
                 <p class="text-xs text-brand-ink-soft">{labels.family_bank_desc}</p>
+            </div>
+            <svg class="w-5 h-5 text-brand-ink-soft ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+        </a>
+
+        <a
+            href="/parent/settings/envelopes"
+            class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] hover:border-brand-mint-deep transition-all flex items-center gap-4"
+        >
+            <div class="w-12 h-12 rounded-xl bg-brand-mint/20 flex items-center justify-center flex-shrink-0">
+                <span class="text-2xl">✉️</span>
+            </div>
+            <div>
+                <p class="font-bold text-brand-ink">{labels.envelopes}</p>
+                <p class="text-xs text-brand-ink-soft">{labels.envelopes_desc}</p>
             </div>
             <svg class="w-5 h-5 text-brand-ink-soft ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />

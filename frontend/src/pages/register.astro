@@ -1,14 +1,16 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import { seoFor } from "../lib/seo";
 
 if (Astro.cookies.has("access_token")) {
     return Astro.redirect("/dashboard");
 }
 
 const lang = Astro.cookies.get("lang")?.value ?? "es";
+const seo = seoFor("/register", lang)!;
 ---
 
-<Layout title={lang === "es" ? "Crear cuenta - Family Task Manager" : "Create account - Family Task Manager"}>
+<Layout title={seo.title} description={seo.description} lang={lang}>
     <main class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
         <div class="w-full max-w-5xl">
             <div class="bg-brand-cream rounded-3xl shadow-[var(--shadow-stamp)] overflow-hidden">

@@ -15,6 +15,7 @@ from sqlalchemy import (
     Date,
     Float,
     ForeignKey,
+    Index,
     Text,
     Enum as SQLEnum,
 )
@@ -49,6 +50,13 @@ class TaskAssignment(Base):
     """Specific task instance assigned to a user for a given date"""
 
     __tablename__ = "task_assignments"
+
+    # Hot path: due/overdue sweeps + kid due-today lists filter family_id and
+    # then range/order on due_date. Composite (family_id, due_date) serves both.
+    # Mirrors the ops migration.
+    __table_args__ = (
+        Index("ix_task_assignments_family_due", "family_id", "due_date"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
 

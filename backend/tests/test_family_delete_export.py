@@ -19,7 +19,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -618,19 +618,20 @@ class TestFamilyDeletion:
         )
         assert r.status_code == 403
 
-    async def test_delete_family_removes_everything_and_cancels_paypal(
+    async def test_soft_delete_closes_family_cancels_paypal_preserves_data(
         self, client: AsyncClient, db_session: AsyncSession, seeded, monkeypatch
     ):
+        """Self-serve deletion is a SOFT close: deleted_at stamped on the family
+        + every member, sessions invalidated (token 401s), PayPal cancelled, but
+        ALL data (and uploaded files) preserved for the 30-day grace window."""
         calls = []
         monkeypatch.setattr(
             "app.services.paypal_service.PayPalService.cancel_subscription",
             lambda sub_id, reason="": calls.append(sub_id),
         )
-        # No GCS bucket configured (on-prem shape): blob deletion is skipped
-        # and family deletion must still complete.
-        monkeypatch.setattr(settings, "GCS_RECEIPT_BUCKET", "")
 
-        # Real proof files on disk that must be removed with the family.
+        # Real proof files on disk that must SURVIVE the soft delete (cleanup is
+        # deferred to purge time).
         os.makedirs(GIG_PROOFS_DIR, exist_ok=True)
         os.makedirs(RECEIPT_DRAFTS_DIR, exist_ok=True)
         proof_path = os.path.join(GIG_PROOFS_DIR, seeded["proof_name"])
@@ -639,130 +640,75 @@ class TestFamilyDeletion:
             with open(p, "wb") as f:
                 f.write(b"fake-image-bytes")
 
-        r = await client.request(
-            "DELETE",
-            "/api/families/me",
-            headers=_auth(seeded["parent_a"]),
-            json={"password": "password123"},
-        )
-        assert r.status_code == 204, r.text
-
         fam_a_id, fam_b_id = seeded["fam_a"].id, seeded["fam_b"].id
 
-        # Family row gone
-        fam = (
-            await db_session.execute(select(Family).where(Family.id == fam_a_id))
-        ).scalar_one_or_none()
-        assert fam is None
+        r = await client.request(
+            "DELETE",
+            "/api/families/me",
+            headers=_auth(seeded["parent_a"]),
+            json={"password": "password123"},
+        )
+        assert r.status_code == 204, r.text
 
-        # All family-scoped rows gone
-        assert await _count(db_session, User, fam_a_id) == 0
-        assert await _count(db_session, TaskTemplate, fam_a_id) == 0
-        assert await _count(db_session, TaskAssignment, fam_a_id) == 0
-        assert await _count(db_session, GigOffering, fam_a_id) == 0
-        assert await _count(db_session, GigClaim, fam_a_id) == 0
-        assert await _count(db_session, Reward, fam_a_id) == 0
-        assert await _count(db_session, BudgetAccount, fam_a_id) == 0
-        assert await _count(db_session, BudgetTransaction, fam_a_id) == 0
-        assert await _count(db_session, BudgetReceiptDraft, fam_a_id) == 0
-        assert await _count(db_session, FamilyChatMessage, fam_a_id) == 0
-        assert await _count(db_session, Notification, fam_a_id) == 0
-        assert await _count(db_session, FamilyInvitation, fam_a_id) == 0
-        assert await _count(db_session, FamilySubscription, fam_a_id) == 0
-
-        # User-scoped rows gone too (point transactions have no family_id)
-        pt_count = (
+        # Family row still present, but tombstoned.
+        fam_deleted_at = (
             await db_session.execute(
-                select(func.count())
-                .select_from(PointTransaction)
-                .join(User, PointTransaction.user_id == User.id)
-                .where(User.family_id == fam_a_id)
+                select(Family.deleted_at).where(Family.id == fam_a_id)
             )
-        ).scalar()
-        assert pt_count == 0
+        ).scalar_one_or_none()
+        assert fam_deleted_at is not None
 
-        # PayPal cancelled exactly once with the live subscription id
+        # Every member closed (deleted_at set) + refresh tokens invalidated
+        # (token_version bumped from the seeded default of 0).
+        member_rows = (
+            await db_session.execute(
+                select(User.deleted_at, User.token_version).where(
+                    User.family_id == fam_a_id
+                )
+            )
+        ).all()
+        assert len(member_rows) == 2
+        assert all(row.deleted_at is not None for row in member_rows)
+        assert all(row.token_version >= 1 for row in member_rows)
+
+        # Data PRESERVED (nothing cascaded yet).
+        assert await _count(db_session, User, fam_a_id) == 2
+        assert await _count(db_session, TaskTemplate, fam_a_id) == 1
+        assert await _count(db_session, BudgetTransaction, fam_a_id) == 2
+        assert await _count(db_session, FamilyChatMessage, fam_a_id) == 1
+        assert await _count(db_session, FamilyInvitation, fam_a_id) == 1
+        assert await _count(db_session, FamilySubscription, fam_a_id) == 1
+
+        # PayPal cancelled exactly once so nothing bills during the window.
         assert calls == ["I-TESTSUB123"]
 
-        # Upload files removed from disk
-        assert not os.path.exists(proof_path)
-        assert not os.path.exists(draft_path)
+        # Upload files STILL on disk (removed only at purge).
+        assert os.path.exists(proof_path)
+        assert os.path.exists(draft_path)
 
-        # Other family untouched
+        # Other family untouched.
         assert await _count(db_session, User, fam_b_id) == 1
-        assert await _count(db_session, TaskTemplate, fam_b_id) == 1
-        assert await _count(db_session, BudgetAccount, fam_b_id) == 1
-        assert await _count(db_session, BudgetTransaction, fam_b_id) == 1
-        assert await _count(db_session, FamilyChatMessage, fam_b_id) == 1
 
-        # The deleted parent's token no longer authenticates
+        # The closed parent's access token no longer authenticates.
         r2 = await client.get("/api/families/me", headers=_auth(seeded["parent_a"]))
         assert r2.status_code == 401
+        assert r2.json()["detail"] == "Account closed"
 
-    async def test_delete_family_removes_gcs_receipt_images(
-        self, client: AsyncClient, db_session: AsyncSession, seeded, monkeypatch
-    ):
-        """Scanned receipt blobs in GCS are deleted with the family."""
-        monkeypatch.setattr(
-            "app.services.paypal_service.PayPalService.cancel_subscription",
-            lambda *a, **k: None,
-        )
-        monkeypatch.setattr(settings, "GCS_RECEIPT_BUCKET", "test-receipts-bucket")
-        deleted_blobs: list[str] = []
-        monkeypatch.setattr(
-            "app.services.storage.gcs_receipt_service.GCSReceiptStorage.delete",
-            lambda path: deleted_blobs.append(path),
-        )
-
-        r = await client.request(
+        # A second DELETE is an idempotent no-op — but the token is already
+        # dead, so it 401s at the auth layer (not a re-cancel of PayPal).
+        r3 = await client.request(
             "DELETE",
             "/api/families/me",
             headers=_auth(seeded["parent_a"]),
             json={"password": "password123"},
         )
-        assert r.status_code == 204, r.text
+        assert r3.status_code == 401
+        assert calls == ["I-TESTSUB123"]  # never re-cancelled
 
-        # Family A's blob deleted; family B's untouched.
-        assert deleted_blobs == [seeded["gcs_path_a"]]
-
-        fam = (
-            await db_session.execute(
-                select(Family).where(Family.id == seeded["fam_a"].id)
-            )
-        ).scalar_one_or_none()
-        assert fam is None
-
-    async def test_delete_family_proceeds_when_gcs_delete_fails(
-        self, client: AsyncClient, db_session: AsyncSession, seeded, monkeypatch
-    ):
-        """A GCS error never blocks deletion (best-effort, like PayPal)."""
-        monkeypatch.setattr(
-            "app.services.paypal_service.PayPalService.cancel_subscription",
-            lambda *a, **k: None,
-        )
-        monkeypatch.setattr(settings, "GCS_RECEIPT_BUCKET", "test-receipts-bucket")
-
-        def _boom(path):
-            raise RuntimeError("GCS unavailable")
-
-        monkeypatch.setattr(
-            "app.services.storage.gcs_receipt_service.GCSReceiptStorage.delete",
-            _boom,
-        )
-
-        r = await client.request(
-            "DELETE",
-            "/api/families/me",
-            headers=_auth(seeded["parent_a"]),
-            json={"password": "password123"},
-        )
-        assert r.status_code == 204, r.text
-        fam = (
-            await db_session.execute(
-                select(Family).where(Family.id == seeded["fam_a"].id)
-            )
-        ).scalar_one_or_none()
-        assert fam is None
+        # Cleanup the on-disk proof files this test wrote.
+        for p in (proof_path, draft_path):
+            if os.path.exists(p):
+                os.remove(p)
 
     async def test_google_only_account_requires_family_name(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
@@ -806,7 +752,7 @@ class TestFamilyDeletion:
         )
         assert r.status_code == 400
 
-        # Correct name (case/whitespace tolerant) → deleted
+        # Correct name (case/whitespace tolerant) → soft-closed
         r = await client.request(
             "DELETE",
             "/api/families/me",
@@ -814,10 +760,12 @@ class TestFamilyDeletion:
             json={"confirm_name": "  gamma family "},
         )
         assert r.status_code == 204, r.text
-        gone = (
-            await db_session.execute(select(Family).where(Family.id == fam.id))
+        closed_at = (
+            await db_session.execute(
+                select(Family.deleted_at).where(Family.id == fam.id)
+            )
         ).scalar_one_or_none()
-        assert gone is None
+        assert closed_at is not None
 
 
 class TestDeletionPayPalCancel:
@@ -948,7 +896,288 @@ class TestDeletionPayPalCancel:
             json={"password": "password123"},
         )
         assert r.status_code == 204, r.text
-        gone = (
-            await db_session.execute(select(Family).where(Family.id == fam.id))
+        # Soft-closed despite the PayPal cancel failure (user right; the failed
+        # id is surfaced in the audit line for operator follow-up).
+        closed_at = (
+            await db_session.execute(
+                select(Family.deleted_at).where(Family.id == fam.id)
+            )
         ).scalar_one_or_none()
-        assert gone is None
+        assert closed_at is not None
+
+
+async def _soft_delete(client, parent) -> None:
+    """Drive the self-serve soft-delete endpoint for a password parent."""
+    r = await client.request(
+        "DELETE",
+        "/api/families/me",
+        headers=_auth(parent),
+        json={"password": "password123"},
+    )
+    assert r.status_code == 204, r.text
+
+
+async def _backdate_deletion(db_session, family_id, *, days) -> None:
+    """Move a soft-deleted family's tombstone `days` into the past so the
+    purge sweep's retention-window check sees it as expired (or not)."""
+    old = datetime.now(timezone.utc) - timedelta(days=days)
+    await db_session.execute(
+        update(Family).where(Family.id == family_id).values(deleted_at=old)
+    )
+    await db_session.commit()
+
+
+class TestFamilyPurge:
+    """Phase 2: the daily purge sweep hard-deletes families past the window."""
+
+    async def test_purge_after_window_hard_deletes_everything(
+        self, client: AsyncClient, db_session: AsyncSession, seeded, monkeypatch
+    ):
+        from app.services.family_deletion_service import FamilyDeletionService
+
+        monkeypatch.setattr(
+            "app.services.paypal_service.PayPalService.cancel_subscription",
+            lambda *a, **k: None,
+        )
+        monkeypatch.setattr(settings, "GCS_RECEIPT_BUCKET", "")
+
+        fam_a_id, fam_b_id = seeded["fam_a"].id, seeded["fam_b"].id
+
+        # Real proof files that the PURGE (not the soft delete) must remove.
+        os.makedirs(GIG_PROOFS_DIR, exist_ok=True)
+        os.makedirs(RECEIPT_DRAFTS_DIR, exist_ok=True)
+        proof_path = os.path.join(GIG_PROOFS_DIR, seeded["proof_name"])
+        draft_path = os.path.join(RECEIPT_DRAFTS_DIR, f"{seeded['draft_a_id']}.jpg")
+        for p in (proof_path, draft_path):
+            with open(p, "wb") as f:
+                f.write(b"fake-image-bytes")
+
+        await _soft_delete(client, seeded["parent_a"])
+        # Files still present immediately after soft delete.
+        assert os.path.exists(proof_path)
+        # Age the tombstone past the 30-day window.
+        await _backdate_deletion(db_session, fam_a_id, days=31)
+
+        purged = await FamilyDeletionService.purge_expired(db_session)
+        assert purged == 1
+
+        # Family + all rows now hard-deleted.
+        fam_id = (
+            await db_session.execute(select(Family.id).where(Family.id == fam_a_id))
+        ).scalar_one_or_none()
+        assert fam_id is None
+        assert await _count(db_session, User, fam_a_id) == 0
+        assert await _count(db_session, TaskTemplate, fam_a_id) == 0
+        assert await _count(db_session, BudgetTransaction, fam_a_id) == 0
+        assert await _count(db_session, FamilyChatMessage, fam_a_id) == 0
+        assert await _count(db_session, FamilyInvitation, fam_a_id) == 0
+        assert await _count(db_session, FamilySubscription, fam_a_id) == 0
+
+        pt_count = (
+            await db_session.execute(
+                select(func.count())
+                .select_from(PointTransaction)
+                .join(User, PointTransaction.user_id == User.id)
+                .where(User.family_id == fam_a_id)
+            )
+        ).scalar()
+        assert pt_count == 0
+
+        # Upload files removed at purge time.
+        assert not os.path.exists(proof_path)
+        assert not os.path.exists(draft_path)
+
+        # Other family completely untouched.
+        assert await _count(db_session, User, fam_b_id) == 1
+        assert await _count(db_session, BudgetTransaction, fam_b_id) == 1
+
+    async def test_purge_respects_retention_window(
+        self, client: AsyncClient, db_session: AsyncSession, seeded, monkeypatch
+    ):
+        """A family closed only 5 days ago is preserved (inside the window)."""
+        from app.services.family_deletion_service import FamilyDeletionService
+
+        monkeypatch.setattr(
+            "app.services.paypal_service.PayPalService.cancel_subscription",
+            lambda *a, **k: None,
+        )
+        fam_a_id = seeded["fam_a"].id
+        await _soft_delete(client, seeded["parent_a"])
+        await _backdate_deletion(db_session, fam_a_id, days=5)
+
+        purged = await FamilyDeletionService.purge_expired(db_session)
+        assert purged == 0
+        # Still present, still tombstoned, data intact.
+        assert await _count(db_session, User, fam_a_id) == 2
+        assert await _count(db_session, BudgetTransaction, fam_a_id) == 2
+
+    async def test_purge_ignores_live_families(
+        self, db_session: AsyncSession, seeded
+    ):
+        """A never-deleted family is never touched by the sweep."""
+        from app.services.family_deletion_service import FamilyDeletionService
+
+        purged = await FamilyDeletionService.purge_expired(db_session)
+        assert purged == 0
+        assert await _count(db_session, User, seeded["fam_a"].id) == 2
+
+    async def test_purge_removes_gcs_receipt_images(
+        self, client: AsyncClient, db_session: AsyncSession, seeded, monkeypatch
+    ):
+        """Scanned receipt blobs in GCS are deleted at purge time."""
+        from app.services.family_deletion_service import FamilyDeletionService
+
+        monkeypatch.setattr(
+            "app.services.paypal_service.PayPalService.cancel_subscription",
+            lambda *a, **k: None,
+        )
+        monkeypatch.setattr(settings, "GCS_RECEIPT_BUCKET", "test-receipts-bucket")
+        deleted_blobs: list[str] = []
+        monkeypatch.setattr(
+            "app.services.storage.gcs_receipt_service.GCSReceiptStorage.delete",
+            lambda path: deleted_blobs.append(path),
+        )
+
+        await _soft_delete(client, seeded["parent_a"])
+        await _backdate_deletion(db_session, seeded["fam_a"].id, days=31)
+        purged = await FamilyDeletionService.purge_expired(db_session)
+        assert purged == 1
+        assert deleted_blobs == [seeded["gcs_path_a"]]
+
+    async def test_purge_proceeds_when_gcs_delete_fails(
+        self, client: AsyncClient, db_session: AsyncSession, seeded, monkeypatch
+    ):
+        """A GCS error never blocks the purge (best-effort, like PayPal)."""
+        from app.services.family_deletion_service import FamilyDeletionService
+
+        monkeypatch.setattr(
+            "app.services.paypal_service.PayPalService.cancel_subscription",
+            lambda *a, **k: None,
+        )
+        monkeypatch.setattr(settings, "GCS_RECEIPT_BUCKET", "test-receipts-bucket")
+
+        def _boom(path):
+            raise RuntimeError("GCS unavailable")
+
+        monkeypatch.setattr(
+            "app.services.storage.gcs_receipt_service.GCSReceiptStorage.delete",
+            _boom,
+        )
+
+        await _soft_delete(client, seeded["parent_a"])
+        await _backdate_deletion(db_session, seeded["fam_a"].id, days=31)
+        purged = await FamilyDeletionService.purge_expired(db_session)
+        assert purged == 1
+        assert await _count(db_session, User, seeded["fam_a"].id) == 0
+
+
+class TestSoftDeleteAuth:
+    """A closed account is 401'd on every auth surface."""
+
+    async def test_soft_deleted_user_login_returns_401(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """Password login of a tombstoned account 401s at the auth layer.
+
+        Uses a valid-domain email (the seeded '@del.test' addresses are
+        rejected by EmailStr before reaching the auth logic)."""
+        fam = Family(name="Closed Login Family")
+        db_session.add(fam)
+        await db_session.flush()
+        parent = User(
+            email="login-closed@softdel.com",
+            password_hash=get_password_hash("password123"),
+            name="Closed Parent",
+            role=UserRole.PARENT,
+            family_id=fam.id,
+            email_verified=True,
+        )
+        db_session.add(parent)
+        await db_session.commit()
+
+        # Valid credentials work before closure.
+        ok = await client.post(
+            "/api/auth/login",
+            json={"email": "login-closed@softdel.com", "password": "password123"},
+        )
+        assert ok.status_code == 200, ok.text
+
+        # Tombstone the account, then the same credentials 401.
+        await db_session.execute(
+            update(User)
+            .where(User.id == parent.id)
+            .values(deleted_at=datetime.now(timezone.utc))
+        )
+        await db_session.commit()
+
+        r = await client.post(
+            "/api/auth/login",
+            json={"email": "login-closed@softdel.com", "password": "password123"},
+        )
+        assert r.status_code == 401
+        assert r.json()["message"] == "Account closed"
+
+    async def test_soft_deleted_user_token_401s_on_protected_route(
+        self, client: AsyncClient, seeded, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.services.paypal_service.PayPalService.cancel_subscription",
+            lambda *a, **k: None,
+        )
+        # A pre-issued access token (still cryptographically valid) is rejected.
+        child_token = _auth(seeded["child_a"])
+        await _soft_delete(client, seeded["parent_a"])
+        r = await client.get("/api/families/me", headers=child_token)
+        assert r.status_code == 401
+        assert r.json()["detail"] == "Account closed"
+
+
+class TestExportBeforeDelete:
+    async def test_export_works_before_delete_then_token_dies(
+        self, client: AsyncClient, seeded, monkeypatch
+    ):
+        """The compliance export must be obtainable BEFORE closing the account;
+        afterwards the parent's token is dead so it can no longer be pulled."""
+        monkeypatch.setattr(
+            "app.services.paypal_service.PayPalService.cancel_subscription",
+            lambda *a, **k: None,
+        )
+        before = await client.get(
+            "/api/families/export", headers=_auth(seeded["parent_a"])
+        )
+        assert before.status_code == 200
+        assert before.headers["content-type"] == "application/zip"
+
+        await _soft_delete(client, seeded["parent_a"])
+
+        after = await client.get(
+            "/api/families/export", headers=_auth(seeded["parent_a"])
+        )
+        assert after.status_code == 401
+
+
+class TestCompositeIndexes:
+    """The ops audit composite indexes exist in the built schema."""
+
+    async def test_ops_composite_indexes_exist(self, db_session: AsyncSession):
+        from sqlalchemy import text as sa_text
+
+        rows = (
+            await db_session.execute(
+                sa_text(
+                    "SELECT indexname, indexdef FROM pg_indexes WHERE indexname "
+                    "IN ('ix_budget_transactions_family_date', "
+                    "'ix_family_chat_messages_family_created', "
+                    "'ix_task_assignments_family_due')"
+                )
+            )
+        ).all()
+        by_name = {name: definition for name, definition in rows}
+        assert set(by_name) == {
+            "ix_budget_transactions_family_date",
+            "ix_family_chat_messages_family_created",
+            "ix_task_assignments_family_due",
+        }
+        # The budget composite honours the DESC ordering on date.
+        assert "date DESC" in by_name["ix_budget_transactions_family_date"]
+        assert "family_id" in by_name["ix_budget_transactions_family_date"]

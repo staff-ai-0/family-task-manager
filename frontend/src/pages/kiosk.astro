@@ -40,6 +40,11 @@ const labels = {
     pending: lang === "es" ? "pendientes" : "pending",
     leaderboard: lang === "es" ? "Tabla de la semana" : "This week's leaderboard",
     week_points: lang === "es" ? "pts esta semana" : "pts this week",
+    boss_title: lang === "es" ? "Jefe de la semana" : "This week's boss",
+    boss_defeated: lang === "es" ? "¡Derrotado! 🎉" : "Defeated! 🎉",
+    boss_hint: lang === "es" ? "Completen tareas para vencerlo juntos" : "Beat it together by finishing chores",
+    defeated_word: lang === "es" ? "derrotado" : "defeated",
+    hp: lang === "es" ? "PS" : "HP",
     tap_avatar: lang === "es" ? "Toca tu foto para ver tus tareas" : "Tap your avatar to see your chores",
     scan_flyer: lang === "es" ? "Escanear un aviso" : "Scan a flyer",
     parent_corner: lang === "es" ? "Rincón de papás" : "Parent corner",
@@ -178,6 +183,28 @@ const maxWeekPoints = Math.max(
                     </ul>
                 )}
             </section>
+
+            {data.boss && data.boss.active && (
+                <section class="col-span-full bg-white/5 rounded-xl p-4">
+                    <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                        <h2 class="text-xl font-semibold text-rose-300">
+                            {data.boss.emoji} {labels.boss_title}: <span class="text-white">{lang === "es" ? data.boss.name_es : data.boss.name_en}</span>
+                        </h2>
+                        <span class="font-mono text-lg font-bold text-white/70">
+                            {data.boss.defeated ? labels.boss_defeated : `${data.boss.current_hp} / ${data.boss.max_hp} ${labels.hp}`}
+                        </span>
+                    </div>
+                    <div class="w-full bg-white/10 rounded-full h-7 overflow-hidden border border-white/10">
+                        <div
+                            class="h-7 rounded-full transition-all"
+                            style={`width: ${data.boss.defeated ? 0 : Math.max(4, Math.round((data.boss.current_hp / data.boss.max_hp) * 100))}%; background-color: ${data.boss.defeated ? "#5DD4A8" : "#FF8A65"};`}
+                        ></div>
+                    </div>
+                    <p class="text-white/50 text-xs mt-2">
+                        <span class="font-bold text-rose-300">{data.boss.percent_defeated}%</span> {labels.defeated_word} · {labels.boss_hint}
+                    </p>
+                </section>
+            )}
 
             <section class="col-span-full bg-white/5 rounded-xl p-4 overflow-auto">
                 <h2 class="text-xl font-semibold mb-3 text-amber-300">🏆 {labels.leaderboard}</h2>

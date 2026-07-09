@@ -44,6 +44,7 @@ from app.models.kiosk_device import KioskDevice
 from app.models.kid_pet import KidPet
 from app.models.jarvis_message import JarvisMessage
 from app.models.pup_snapshot import PupScoreSnapshot
+from app.models.family_cup import FamilyCupSeason
 from app.models.meal import Recipe, MealPlanEntry
 from app.models.family_chat import FamilyChatMessage
 from app.models.family_chat_reaction import FamilyChatReaction
@@ -110,6 +111,8 @@ __all__ = [
     "JarvisMessage",
     # Analytics snapshots
     "PupScoreSnapshot",
+    # Family Cup seasons
+    "FamilyCupSeason",
     # Meals
     "Recipe",
     "MealPlanEntry",

@@ -202,6 +202,10 @@ EXCLUDED_FAMILY_TABLES: dict[str, str] = {
         "legacy internal points<->budget sync bookkeeping (decommissioned "
         "sync engine); contains no user-authored content"
     ),
+    "family_cup_seasons": (
+        "derived weekly leaderboard/boss-battle history; fully reconstructable "
+        "from the point_transactions already exported under points/"
+    ),
 }
 
 _README = """Family Task Manager — full family data export
@@ -233,6 +237,8 @@ EN: The following are deliberately NOT included:
       payloads duplicate budget transactions already exported under budget/.
     - budget_sync_state: legacy internal sync bookkeeping with no
       user-authored content.
+    - family_cup_seasons: derived weekly leaderboard/boss history,
+      reconstructable from the exported points/ ledger.
     - Invitation records are included, but the invited person's email address
       is masked (it belongs to a third party) and the invitation code is
       stripped (it is a live join credential).
@@ -250,6 +256,8 @@ ES: Lo siguiente NO se incluye deliberadamente:
       sus datos duplican transacciones ya exportadas en budget/.
     - budget_sync_state: contabilidad interna heredada de sincronización,
       sin contenido creado por el usuario.
+    - family_cup_seasons: historial semanal derivado del marcador/jefe,
+      reconstruible desde el libro de puntos exportado en points/.
     - Las invitaciones se incluyen, pero el correo del invitado se enmascara
       (pertenece a un tercero) y el código de invitación se elimina (es una
       credencial de acceso vigente).

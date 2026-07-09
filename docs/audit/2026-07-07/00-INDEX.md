@@ -58,11 +58,13 @@ Highest-ROI build = "Family Bank" (payday + jars + parent interest/match) on exi
 ### P2 — Post-launch growth — partial in PR #94 (branch feat/launch-p2; suite 1582 green; NOT merged/deployed)
 - [x] Kid money: dedicated goal-jar UI (Save-jar backed) + ages 3-7 star mode ✅ (kid budget-envelopes still open — below)
 - [x] Budget: month rollover + cover-overspend flow; bill calendar + 30/60d forecast; learning categorization (corrections as few-shot); recurring-charge detection ✅ (migration savings_goal_star_mode)
-- [ ] Kid budget-envelopes (per-kid budget accounts fed by allowance/gigs) — still open
+### P2 backlog — CODE-COMPLETE in PR #95 (branch feat/p2-backlog; NOT merged/deployed)
+- [x] Kid budget-envelopes ✅ (read-only projection over Family Bank jars, cash-only)
+- [x] Family Cup weekly leaderboard + cooperative boss battle + completions auto-post to chat ✅ (points-only, no pet; migration family_cup_boss_battle)
+- [x] Capacitor scaffold + app-store runbook ✅ (native build = operator: Mac/Xcode/device/accounts) · Spanish-first SEO (meta/OG/sitemap/robots/JSON-LD + ASO doc) ✅
+- [x] Ops maturity: composite (family_id,date) indexes; Redis pub/sub for chat SSE; soft-delete Family/User + 30d purge; metrics endpoint + LLM counters; real staging compose ✅ (migration ops_indexes_soft_delete)
+- [ ] Still open: image thumbnails (skipped — Pillow not available, needs a dep decision); referral program; routines library (icon tap-through); TDAH content angle; 6h backup cadence (operator/config)
 - [ ] Quest-mode kid UI + pet evolution stages — BLOCKED on pet go/no-go decision (memory: feedback_virtual_pet_uncertain; research strongly supports — Joon evidence in 02, decays wk 4-8 without progression ladder)
-- [ ] Family Cup weekly leaderboard season; cooperative family boss battle; completions auto-post to chat
-- [ ] Capacitor wrap (remote-URL shell + FCM/APNs) for app stores; referral program; Spanish SEO content ("cuánto domingo dar por edad"); routines library (icon tap-through); TDAH content angle
-- [ ] Ops maturity: staging env; metrics; image thumbnails; composite (family_id, date) indexes; Redis pub/sub for chat SSE; soft-delete for Family/User; 6h backup cadence (request-ID middleware DONE in P0)
 
 ### Explicit don't-build (research-backed)
 Card issuance / bank aggregation at launch (MX coverage poor, category's #1 complaint source);

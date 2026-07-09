@@ -176,3 +176,20 @@ services/actual-budget/
 # Tech-debt cleanup 2026-06-04
 *.zip
 .playwright-mcp/
+
+# =============================================================================
+# Capacitor (native app-store wrap — see docs/CAPACITOR.md)
+# Native projects + build artifacts are generated on a Mac and never committed
+# to this CI-built tree. The committed scaffold is only frontend/capacitor.config.ts.
+# =============================================================================
+frontend/ios/
+frontend/android/
+frontend/www/
+frontend/.capacitor/
+ios/
+android/
+*.ipa
+*.apk
+*.aab
+*.keystore
+!frontend/public/*.png
