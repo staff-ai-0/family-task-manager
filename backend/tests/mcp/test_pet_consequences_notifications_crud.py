@@ -49,6 +49,12 @@ async def test_pet_list_get_feed_interact(db_session, family, user):
     await db_session.refresh(pet)
     pet_id = str(pet.id)
 
+    # Care actions (feed / interact) now spend the owner's POINTS (the
+    # privileges currency) — seed a balance so this smoke test can exercise
+    # them. See the 2026-07-09 pet quest/evolution care economy.
+    user.points = 50
+    await db_session.commit()
+
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=user.id, role="PARENT", db=db_session)
     async with use_context(ctx):

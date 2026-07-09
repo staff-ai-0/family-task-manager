@@ -375,6 +375,28 @@ _COPY = {
             "en": "Play or feed them to cheer them up.",
         },
     },
+    "pet_level_up": {
+        "type": NT.PET_LEVEL_UP,
+        "title": {
+            "es": "⭐ ¡{pet} subió a nivel {level}!",
+            "en": "⭐ {pet} leveled up to level {level}!",
+        },
+        "body": {
+            "es": "Sigue completando tareas para que crezca.",
+            "en": "Keep completing chores to help them grow.",
+        },
+    },
+    "pet_evolved": {
+        "type": NT.PET_EVOLVED,
+        "title": {
+            "es": "✨ ¡{pet} evolucionó!",
+            "en": "✨ {pet} evolved!",
+        },
+        "body": {
+            "es": "Ahora es {stage}. Se desbloquearon nuevos accesorios.",
+            "en": "Now a {stage}. New accessories unlocked.",
+        },
+    },
 }
 
 
