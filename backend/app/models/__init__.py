@@ -59,6 +59,8 @@ from app.models.jarvis_mcp_token import JarvisMcpToken
 from app.models.cash_transaction import CashTransaction, CashTransactionType
 from app.models.kid_bank import KidBankAccount
 from app.models.kid_savings_goal import KidSavingsGoal
+from app.models.referral import Referral
+from app.models.routine import Routine, RoutineStep, RoutineProgress
 
 __all__ = [
     "Base",
@@ -77,6 +79,10 @@ __all__ = [
     "CashTransactionType",
     "KidBankAccount",
     "KidSavingsGoal",
+    "Referral",
+    "Routine",
+    "RoutineStep",
+    "RoutineProgress",
     "PasswordResetToken",
     "EmailVerificationToken",
     "FamilyInvitation",

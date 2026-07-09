@@ -251,6 +251,37 @@ async def register_family(
     await db.commit()
     await db.refresh(user)
 
+    # Referral reward: a brand-new family that founded via ?ref=CODE is the
+    # REFERRED party. Record the referral and grant BOTH families a 30-day
+    # Plus credit (internal — no PayPal). Best-effort: never break signup.
+    # Only for the new-family path (join-by-code accounts join an existing
+    # family, they don't found one, so they can't be referred).
+    if not data.family_code and data.ref:
+        try:
+            from app.services.referral_service import ReferralService
+
+            referrer = await ReferralService.get_family_by_referral_code(
+                db, data.ref
+            )
+            if referrer is not None:
+                await ReferralService.record_referral_and_reward(
+                    db,
+                    referrer_family_id=referrer.id,
+                    referred_family_id=family.id,
+                )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "referral record/reward failed for new family %s (ref=%s)",
+                family.id, data.ref, exc_info=True,
+            )
+            # Ensure a failed referral never leaves a broken session for the
+            # rest of registration (email send, token issue).
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
     # Onboarding hook: advance child_invited when joining an existing family
     if data.family_code:
         try:

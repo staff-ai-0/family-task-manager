@@ -1176,10 +1176,23 @@ async def _route_to_drafts(
     # Persist the image so the review queue can render it. Failures here
     # are non-fatal — the draft row still exists for review.
     try:
+        from starlette.concurrency import run_in_threadpool
+
+        from app.core.thumbnails import make_webp_thumbnail, thumb_filename
+
         os.makedirs(RECEIPT_UPLOADS_DIR, exist_ok=True)
-        img_path = os.path.join(RECEIPT_UPLOADS_DIR, f"{draft.id}.jpg")
+        img_name = f"{draft.id}.jpg"
+        img_path = os.path.join(RECEIPT_UPLOADS_DIR, img_name)
         with open(img_path, "wb") as f:
             f.write(image_bytes)
+        # ~200px WebP thumb alongside the original so the review queue loads
+        # fast; failures are non-fatal (queue falls back to the full image).
+        thumb = await run_in_threadpool(make_webp_thumbnail, image_bytes)
+        if thumb:
+            with open(
+                os.path.join(RECEIPT_UPLOADS_DIR, thumb_filename(img_name)), "wb"
+            ) as f:
+                f.write(thumb)
         draft.image_url = f"/api/budget/receipt-drafts/{draft.id}/image"
         await db.commit()
     except Exception:

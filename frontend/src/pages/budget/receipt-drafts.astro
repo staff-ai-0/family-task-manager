@@ -149,15 +149,22 @@ const l = {
                                 </span>
                             </div>
 
-                            <!-- Receipt image -->
+                            <!-- Receipt image (thumbnail inline; click opens the full image) -->
                             {draft.image_url && (
                                 <div class="px-5 pt-4">
-                                    <img
-                                        src={`/api/budget/receipt-drafts/${draft.id}/image`}
-                                        alt="Receipt"
-                                        class="w-full max-h-72 object-contain rounded-lg bg-brand-cream-deep"
-                                        loading="lazy"
-                                    />
+                                    <a
+                                        href={`/api/budget/receipt-drafts/${draft.id}/image`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="block"
+                                    >
+                                        <img
+                                            src={`/api/budget/receipt-drafts/${draft.id}/image?size=thumb`}
+                                            alt="Receipt"
+                                            class="w-full max-h-72 object-contain rounded-lg bg-brand-cream-deep"
+                                            loading="lazy"
+                                        />
+                                    </a>
                                 </div>
                             )}
 

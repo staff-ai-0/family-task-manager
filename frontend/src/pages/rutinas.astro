@@ -1,0 +1,9 @@
+---
+/**
+ * /rutinas — Spanish keyword alias that permanently redirects to the canonical
+ * /tdah landing page. Kept as a real route (not just a sitemap entry) so typed
+ * or externally-linked "/rutinas" URLs resolve instead of 404-ing. Only /tdah
+ * is listed in the sitemap, so search engines index a single canonical URL.
+ */
+return Astro.redirect("/tdah", 301);
+---

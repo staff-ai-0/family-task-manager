@@ -57,6 +57,11 @@ openai>=1.50.0
 # Linux x86_64 so there's no poppler or other system dependency.
 pymupdf>=1.24.0
 
+# Image processing — generates ~200px WebP thumbnails for uploaded gig/task
+# proof + receipt-draft images at upload time (app/core/thumbnails.py). Ships
+# prebuilt wheels for Linux x86_64 and aarch64, so no system libs needed.
+Pillow==12.3.0
+
 # Scheduler
 apscheduler==3.10.4
 

@@ -140,6 +140,10 @@ class RegisterFamilyRequest(BaseModel):
     accept_terms: bool = False
     # Optional birthdate for CHILD/TEEN join-code signups (future age gating).
     birthdate: Optional[date] = None
+    # Optional referral code (from ?ref=CODE on the register page). Only
+    # honored when FOUNDING a new family — the new family becomes the
+    # referred party and both families get a 30-day Plus credit.
+    ref: Optional[str] = Field(None, min_length=1, max_length=16)
 
 
 class RegisterFamilyResponse(BaseModel):

@@ -1,9 +1,9 @@
 # scripts/systemd/family-onprem-backup.timer
 [Unit]
-Description=Run the on-prem Family Task Manager DB backup daily
+Description=Run the on-prem Family Task Manager DB backup every 6h
 
 [Timer]
-OnCalendar=*-*-* 03:30:00
+OnCalendar=00/6:00:00
 Persistent=true
 
 [Install]

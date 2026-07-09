@@ -1,0 +1,361 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import { apiFetch } from "../../lib/api";
+
+/**
+ * /parent/routines — parent authoring for icon tap-through routines.
+ *
+ * Create routines (name ES/EN, icon, time-of-day, assign to a kid or the whole
+ * family, POINTS reward + optional kiosk color), then build their ordered
+ * steps. Kids run them from /routines. Reward is POINTS (privileges) — never
+ * cash (two-currency rule). Mutations go through the /api/routines proxy.
+ */
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+const { data: family } = await apiFetch<any>("/api/families/me", { token });
+const members: any[] = (family?.members ?? []).filter(
+    (m: any) => m.role !== "parent" && m.approval_status !== "pending",
+);
+const { data: routines } = await apiFetch<any[]>("/api/routines/", { token });
+const list: any[] = Array.isArray(routines) ? routines : [];
+
+const nameFor = (id: string) => members.find((m) => m.id === id)?.name ?? id;
+
+const TOD: Record<string, string> = {
+    morning: lang === "es" ? "Mañana" : "Morning",
+    evening: lang === "es" ? "Noche" : "Evening",
+    custom: lang === "es" ? "Cuando quieras" : "Anytime",
+};
+
+const QUICK_ICONS = ["🌅", "🌙", "🪥", "🚿", "👕", "🍽️", "🎒", "📚", "🧦", "🧸", "🛏️", "🧹"];
+
+const L = {
+    title: lang === "es" ? "Rutinas" : "Routines",
+    subtitle: lang === "es"
+        ? "Arma rutinas de iconos que los peques completan tocando."
+        : "Build icon routines your little ones tap through.",
+    new_routine: lang === "es" ? "Nueva rutina" : "New routine",
+    name_en: lang === "es" ? "Nombre (inglés)" : "Name (English)",
+    name_es: lang === "es" ? "Nombre (español)" : "Name (Spanish)",
+    icon: lang === "es" ? "Icono" : "Icon",
+    when: lang === "es" ? "Momento" : "Time of day",
+    assign: lang === "es" ? "Para" : "For",
+    family_all: lang === "es" ? "Toda la familia" : "Whole family",
+    points: lang === "es" ? "Puntos al completar" : "Points on completion",
+    color: lang === "es" ? "Color (opcional)" : "Color (optional)",
+    steps: lang === "es" ? "Pasos" : "Steps",
+    step_label_en: lang === "es" ? "Paso (inglés)" : "Step (English)",
+    step_label_es: lang === "es" ? "Paso (español)" : "Step (Spanish)",
+    add_step: lang === "es" ? "Agregar paso" : "Add step",
+    create: lang === "es" ? "Crear rutina" : "Create routine",
+    save: lang === "es" ? "Guardar" : "Save",
+    del: lang === "es" ? "Eliminar" : "Delete",
+    del_routine: lang === "es" ? "Eliminar rutina" : "Delete routine",
+    active: lang === "es" ? "Activa" : "Active",
+    inactive: lang === "es" ? "Pausada" : "Paused",
+    no_routines: lang === "es" ? "Aún no hay rutinas." : "No routines yet.",
+    no_steps: lang === "es" ? "Sin pasos todavía." : "No steps yet.",
+    confirm_del: lang === "es" ? "¿Eliminar esta rutina?" : "Delete this routine?",
+    points_note: lang === "es"
+        ? "Se otorgan PUNTOS (privilegios) — nunca dinero."
+        : "Awards POINTS (privileges) — never cash.",
+    kid_link: lang === "es" ? "Ver como niño" : "Kid view",
+    err: lang === "es" ? "Error. Intenta de nuevo." : "Error. Try again.",
+};
+---
+
+<PageLayout
+    title={`⛅ ${L.title}`}
+    headerClass="bg-gradient-to-br from-brand-sky to-brand-mint"
+    dark
+    role={user.role}
+    active="parent"
+    lang={lang}
+    backHref="/parent"
+    mainClass="flex-1 px-4 py-6 space-y-6"
+    containerClass="w-full max-w-md md:max-w-3xl mx-auto bg-brand-cream-deep"
+>
+    <div slot="header-extra">
+        <p class="text-sm/relaxed opacity-90">{L.subtitle}</p>
+    </div>
+
+    <div id="routines-toast" class="fixed left-1/2 -translate-x-1/2 bottom-24 z-[60] hidden px-4 py-2 rounded-full bg-brand-ink text-brand-cream text-sm font-semibold shadow-[var(--shadow-card)]"></div>
+
+    <!-- Create form -->
+    <section class="bg-brand-cream rounded-[var(--radius-card)] p-5 border-2 border-brand-ink shadow-[var(--shadow-card)] space-y-3">
+        <h2 class="font-display font-extrabold text-brand-ink flex items-center gap-2">
+            <span>➕</span> {L.new_routine}
+        </h2>
+        <form id="create-form" class="space-y-3">
+            <div class="grid grid-cols-2 gap-2">
+                <label class="block">
+                    <span class="text-xs text-brand-ink-soft">{L.name_en}</span>
+                    <input name="name" required maxlength="120" class="w-full mt-1 px-3 py-2 rounded-lg border-2 border-brand-ink/20 text-sm outline-none focus:ring-2 focus:ring-brand-sky-deep" />
+                </label>
+                <label class="block">
+                    <span class="text-xs text-brand-ink-soft">{L.name_es}</span>
+                    <input name="name_es" maxlength="120" class="w-full mt-1 px-3 py-2 rounded-lg border-2 border-brand-ink/20 text-sm outline-none focus:ring-2 focus:ring-brand-sky-deep" />
+                </label>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <label class="block">
+                    <span class="text-xs text-brand-ink-soft">{L.icon}</span>
+                    <input name="icon" value="🌅" maxlength="2" class="icon-input w-full mt-1 px-3 py-2 rounded-lg border-2 border-brand-ink/20 text-lg text-center outline-none focus:ring-2 focus:ring-brand-sky-deep" />
+                </label>
+                <label class="block">
+                    <span class="text-xs text-brand-ink-soft">{L.when}</span>
+                    <select name="time_of_day" class="w-full mt-1 px-3 py-2 rounded-lg border-2 border-brand-ink/20 text-sm bg-white outline-none focus:ring-2 focus:ring-brand-sky-deep">
+                        <option value="morning">{TOD.morning}</option>
+                        <option value="evening">{TOD.evening}</option>
+                        <option value="custom">{TOD.custom}</option>
+                    </select>
+                </label>
+            </div>
+            <div class="flex flex-wrap gap-1">
+                {QUICK_ICONS.map((e) => (
+                    <button type="button" class="quick-icon w-9 h-9 rounded-lg border-2 border-brand-ink/15 text-lg hover:border-brand-ink" data-emoji={e}>{e}</button>
+                ))}
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <label class="block">
+                    <span class="text-xs text-brand-ink-soft">{L.assign}</span>
+                    <select name="assigned_user_id" class="w-full mt-1 px-3 py-2 rounded-lg border-2 border-brand-ink/20 text-sm bg-white outline-none focus:ring-2 focus:ring-brand-sky-deep">
+                        <option value="">{L.family_all}</option>
+                        {members.map((m) => (
+                            <option value={m.id}>{m.name}</option>
+                        ))}
+                    </select>
+                </label>
+                <label class="block">
+                    <span class="text-xs text-brand-ink-soft">{L.points}</span>
+                    <input name="points_reward" type="number" min="0" max="1000" value="10" class="w-full mt-1 px-3 py-2 rounded-lg border-2 border-brand-ink/20 text-sm outline-none focus:ring-2 focus:ring-brand-sky-deep" />
+                </label>
+            </div>
+            <label class="block">
+                <span class="text-xs text-brand-ink-soft">{L.color}</span>
+                <input name="color" type="color" value="#4FB8E6" class="w-16 h-9 mt-1 rounded-lg border-2 border-brand-ink/20 bg-white" />
+            </label>
+
+            <div class="pt-1">
+                <p class="text-xs font-bold text-brand-ink-soft mb-1">{L.steps}</p>
+                <div id="step-rows" class="space-y-2"></div>
+                <button type="button" id="add-step-row" class="mt-2 text-sm font-bold text-brand-sky-deep">+ {L.add_step}</button>
+            </div>
+
+            <p class="text-[11px] text-brand-ink-soft">⭐ {L.points_note}</p>
+            <button type="submit" class="w-full py-2.5 rounded-lg bg-brand-ink text-brand-cream font-bold shadow-[var(--shadow-card)] hover:bg-brand-ink-soft">
+                {L.create}
+            </button>
+        </form>
+    </section>
+
+    <!-- Existing routines -->
+    <section class="space-y-4">
+        {list.length === 0 ? (
+            <p class="text-center text-brand-ink-soft text-sm py-4">{L.no_routines}</p>
+        ) : (
+            list.map((r) => (
+                <div class="routine-card bg-brand-cream rounded-[var(--radius-card)] p-4 border-2 border-brand-ink shadow-[var(--shadow-card)] space-y-3" data-id={r.id}>
+                    <div class="flex items-start gap-3">
+                        <span class="w-12 h-12 flex items-center justify-center text-2xl rounded-full border-2 border-brand-ink" style={`background-color: ${(r.color || "#4FB8E6")}22;`}>{r.icon}</span>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-display font-extrabold text-brand-ink leading-tight">
+                                {lang === "es" ? r.name_es || r.name : r.name}
+                            </p>
+                            <p class="text-xs text-brand-ink-soft">
+                                {TOD[r.time_of_day]} · {r.assigned_user_id ? nameFor(r.assigned_user_id) : L.family_all} · ⭐ {r.points_reward}
+                            </p>
+                        </div>
+                        <div class="flex flex-col items-end gap-1">
+                            <button type="button" class="toggle-active text-xs font-bold px-2 py-1 rounded-full border-2 border-brand-ink" data-id={r.id} data-active={r.is_active ? "1" : "0"} style={r.is_active ? "background:#5DD4A8;" : ""}>
+                                {r.is_active ? L.active : L.inactive}
+                            </button>
+                            <button type="button" class="del-routine text-xs font-bold text-brand-coral-deep" data-id={r.id}>{L.del_routine}</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <p class="text-xs font-bold text-brand-ink-soft mb-1">{L.steps}</p>
+                        {r.steps.length === 0 ? (
+                            <p class="text-xs text-brand-ink-soft/70">{L.no_steps}</p>
+                        ) : (
+                            <ul class="space-y-1">
+                                {r.steps.map((s: any, i: number) => (
+                                    <li class="flex items-center gap-2 text-sm">
+                                        <span class="w-6 text-center text-brand-ink-soft">{i + 1}</span>
+                                        <span class="text-lg">{s.icon}</span>
+                                        <span class="flex-1 truncate">{lang === "es" ? s.label_es || s.label : s.label}</span>
+                                        <button type="button" class="del-step text-brand-coral-deep font-bold" data-rid={r.id} data-sid={s.id} aria-label={L.del}>×</button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        <form class="add-step-form flex items-center gap-2 mt-2" data-rid={r.id}>
+                            <input name="icon" value="✅" maxlength="2" class="icon-input w-11 px-1 py-1.5 rounded-lg border-2 border-brand-ink/20 text-center text-lg outline-none" />
+                            <input name="label" required placeholder={L.step_label_en} maxlength="120" class="flex-1 px-2 py-1.5 rounded-lg border-2 border-brand-ink/20 text-sm outline-none" />
+                            <input name="label_es" placeholder={L.step_label_es} maxlength="120" class="flex-1 px-2 py-1.5 rounded-lg border-2 border-brand-ink/20 text-sm outline-none" />
+                            <button type="submit" class="text-sm font-bold text-brand-sky-deep whitespace-nowrap">+ {L.add_step}</button>
+                        </form>
+                    </div>
+                </div>
+            ))
+        )}
+    </section>
+
+    <a href="/routines" class="block text-center text-sm font-bold text-brand-sky-deep">→ {L.kid_link}</a>
+</PageLayout>
+
+<script define:vars={{ L }}>
+    function initParentRoutines() {
+        const form = document.getElementById("create-form");
+        if (!form) return;
+        const toast = document.getElementById("routines-toast");
+
+        function showToast(msg) {
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.classList.remove("hidden");
+            clearTimeout(toast._t);
+            toast._t = setTimeout(() => toast.classList.add("hidden"), 2400);
+        }
+
+        async function api(path, opts) {
+            const res = await fetch(path, {
+                headers: { "Content-Type": "application/json" },
+                ...opts,
+            });
+            if (!res.ok) throw new Error("http " + res.status);
+            return res;
+        }
+
+        // Quick-icon buttons fill the create form's icon input.
+        const iconInput = form.querySelector('input[name="icon"]');
+        document.querySelectorAll(".quick-icon").forEach((b) => {
+            b.addEventListener("click", () => {
+                if (iconInput) iconInput.value = b.dataset.emoji;
+            });
+        });
+
+        // Dynamic step rows in the create form.
+        const stepRows = document.getElementById("step-rows");
+        function addStepRow(icon) {
+            const row = document.createElement("div");
+            row.className = "step-row flex items-center gap-2";
+            row.innerHTML =
+                '<input name="s_icon" value="' + (icon || "✅") + '" maxlength="2" class="w-11 px-1 py-1.5 rounded-lg border-2 border-brand-ink/20 text-center text-lg outline-none" />' +
+                '<input name="s_label" placeholder="' + L.step_label_en + '" maxlength="120" class="flex-1 px-2 py-1.5 rounded-lg border-2 border-brand-ink/20 text-sm outline-none" />' +
+                '<input name="s_label_es" placeholder="' + L.step_label_es + '" maxlength="120" class="flex-1 px-2 py-1.5 rounded-lg border-2 border-brand-ink/20 text-sm outline-none" />' +
+                '<button type="button" class="rm-step text-brand-coral-deep font-bold px-1">×</button>';
+            row.querySelector(".rm-step").addEventListener("click", () => row.remove());
+            stepRows.appendChild(row);
+        }
+        addStepRow();
+        document.getElementById("add-step-row").addEventListener("click", () => addStepRow());
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const fd = new FormData(form);
+            const steps = [];
+            stepRows.querySelectorAll(".step-row").forEach((row) => {
+                const label = row.querySelector('[name="s_label"]').value.trim();
+                if (!label) return;
+                steps.push({
+                    label,
+                    label_es: row.querySelector('[name="s_label_es"]').value.trim() || null,
+                    icon: row.querySelector('[name="s_icon"]').value.trim() || "✅",
+                });
+            });
+            const body = {
+                name: String(fd.get("name") || "").trim(),
+                name_es: String(fd.get("name_es") || "").trim() || null,
+                icon: String(fd.get("icon") || "🌅").trim() || "🌅",
+                time_of_day: fd.get("time_of_day"),
+                assigned_user_id: fd.get("assigned_user_id") || null,
+                points_reward: Number(fd.get("points_reward") || 0),
+                color: fd.get("color") || null,
+                steps,
+            };
+            try {
+                await api("/api/routines/", { method: "POST", body: JSON.stringify(body) });
+                location.reload();
+            } catch {
+                showToast(L.err);
+            }
+        });
+
+        // Existing-routine actions.
+        document.querySelectorAll(".toggle-active").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                const active = btn.dataset.active === "1";
+                try {
+                    await api("/api/routines/" + btn.dataset.id, {
+                        method: "PUT",
+                        body: JSON.stringify({ is_active: !active }),
+                    });
+                    location.reload();
+                } catch {
+                    showToast(L.err);
+                }
+            });
+        });
+
+        document.querySelectorAll(".del-routine").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                if (!confirm(L.confirm_del)) return;
+                try {
+                    await api("/api/routines/" + btn.dataset.id, { method: "DELETE" });
+                    location.reload();
+                } catch {
+                    showToast(L.err);
+                }
+            });
+        });
+
+        document.querySelectorAll(".del-step").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                try {
+                    await api("/api/routines/" + btn.dataset.rid + "/steps/" + btn.dataset.sid, {
+                        method: "DELETE",
+                    });
+                    location.reload();
+                } catch {
+                    showToast(L.err);
+                }
+            });
+        });
+
+        document.querySelectorAll(".add-step-form").forEach((f) => {
+            f.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const label = f.querySelector('[name="label"]').value.trim();
+                if (!label) return;
+                const body = {
+                    label,
+                    label_es: f.querySelector('[name="label_es"]').value.trim() || null,
+                    icon: f.querySelector('[name="icon"]').value.trim() || "✅",
+                };
+                try {
+                    await api("/api/routines/" + f.dataset.rid + "/steps", {
+                        method: "POST",
+                        body: JSON.stringify(body),
+                    });
+                    location.reload();
+                } catch {
+                    showToast(L.err);
+                }
+            });
+        });
+    }
+
+    document.addEventListener("astro:page-load", initParentRoutines);
+</script>

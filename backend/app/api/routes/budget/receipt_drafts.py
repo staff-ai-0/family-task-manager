@@ -6,14 +6,15 @@ Parents list, approve, or reject low-confidence receipt scans.
 
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from app.core.database import get_db
 from app.core.dependencies import require_parent_role
+from app.core.thumbnails import thumb_filename
 from app.core.type_utils import to_uuid_required
 from app.services.budget.receipt_draft_service import ReceiptDraftService
 from app.services.budget.receipt_scanner_service import RECEIPT_UPLOADS_DIR
@@ -49,19 +50,45 @@ async def pending_drafts_count(
 @router.get("/{draft_id}/image")
 async def get_receipt_draft_image(
     draft_id: UUID,
+    size: Optional[str] = Query(
+        None,
+        description="Pass `thumb` for the ~200px WebP thumbnail (falls back to "
+        "the full image if none exists).",
+    ),
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Serve the stored receipt image for a draft (parent only)."""
+    """Serve the stored receipt image for a draft (parent only).
+
+    Family scoping runs through ReceiptDraftService.get_by_id, so `?size=thumb`
+    is authorized identically to the full image.
+    """
     draft = await ReceiptDraftService.get_by_id(
         db, draft_id, to_uuid_required(current_user.family_id)
     )
     if not draft.image_url:
         raise HTTPException(status_code=404, detail="No image stored for this draft")
+
+    # UUID-named files are immutable → cache aggressively (still private/auth-gated).
+    immutable_cache = "private, max-age=31536000, immutable"
+
+    if size == "thumb":
+        thumb_path = os.path.join(RECEIPT_UPLOADS_DIR, thumb_filename(f"{draft_id}.jpg"))
+        if os.path.exists(thumb_path):
+            return FileResponse(
+                thumb_path,
+                media_type="image/webp",
+                headers={"Cache-Control": immutable_cache},
+            )
+
     img_path = os.path.join(RECEIPT_UPLOADS_DIR, f"{draft_id}.jpg")
     if not os.path.exists(img_path):
         raise HTTPException(status_code=404, detail="Image file not found")
-    return FileResponse(img_path, media_type="image/jpeg")
+    return FileResponse(
+        img_path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": immutable_cache},
+    )
 
 
 @router.get("/{draft_id}", response_model=ReceiptDraftResponse)

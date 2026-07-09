@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.config import settings
+from app.models.family import Family
 from app.models.subscription import FamilySubscription, SubscriptionPlan
 from app.models.user import User
 from app.services.usage_service import UsageService
@@ -131,6 +132,35 @@ def _payment_failed_within_grace(sub: FamilySubscription) -> bool:
     return datetime.now(timezone.utc) <= deadline
 
 
+async def _plus_floor_plan(db: AsyncSession, family_id) -> FamilyPlan | None:
+    """The Plus ``FamilyPlan`` used as an active-referral-credit floor.
+
+    Any active 'plus' plan row works (limits are identical across a tier's
+    currency rows); pick deterministically. Returns None if no active 'plus'
+    plan is configured — in which case the caller falls back to free (the
+    credit timestamp harmlessly resolves to Plus once a plan exists).
+    """
+    plus = (
+        await db.execute(
+            select(SubscriptionPlan)
+            .where(
+                SubscriptionPlan.name == "plus",
+                SubscriptionPlan.is_active == True,  # noqa: E712
+            )
+            .order_by(SubscriptionPlan.currency)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if plus is None:
+        return None
+    return FamilyPlan(
+        name=plus.name,
+        limits=plus.limits or {},
+        status="active",
+        family_id=family_id,
+    )
+
+
 async def get_family_plan_by_id(db: AsyncSession, family_id) -> FamilyPlan:
     """
     Resolve the active plan for a family by id.
@@ -160,15 +190,44 @@ async def get_family_plan_by_id(db: AsyncSession, family_id) -> FamilyPlan:
         # Grace expired but the sweep hasn't run yet — treat as free now.
         subscription = None
 
+    resolved: FamilyPlan | None = None
     if subscription and subscription.plan:
         plan = subscription.plan
-        return FamilyPlan(
+        resolved = FamilyPlan(
             name=plan.name,
             limits=plan.limits or {},
             status=subscription.status,
             billing_cycle=subscription.billing_cycle,
             family_id=family_id,
         )
+
+    # 1b. Referral credit floor. An active internal referral credit
+    #     (families.referral_bonus_until in the future) entitles the family to
+    #     at least Plus, independent of any paid sub. It lives on the family
+    #     row so the daily PayPal reconcile sweep never touches it — the credit
+    #     cannot be silently erased. A higher paid tier (Pro) always wins.
+    bonus_until = (
+        await db.execute(
+            select(Family.referral_bonus_until).where(Family.id == family_id)
+        )
+    ).scalar_one_or_none()
+    if bonus_until is not None and bonus_until.tzinfo is None:
+        bonus_until = bonus_until.replace(tzinfo=timezone.utc)
+    bonus_active = (
+        bonus_until is not None and bonus_until > datetime.now(timezone.utc)
+    )
+
+    if resolved is not None:
+        if bonus_active and PLAN_ORDER.get(resolved.name, 0) < PLAN_ORDER["plus"]:
+            floor = await _plus_floor_plan(db, family_id)
+            if floor is not None:
+                return floor
+        return resolved
+
+    if bonus_active:
+        floor = await _plus_floor_plan(db, family_id)
+        if floor is not None:
+            return floor
 
     # 2. No active subscription — try to load the "free" plan from DB.
     #    Plan rows are unique per (name, currency); limits are identical

@@ -10,7 +10,7 @@ import { clientIpHeaders } from "../../../lib/client-ip";
 export const POST: APIRoute = async ({ request, cookies }) => {
     try {
         const body = await request.json();
-        const { family_name, family_code, name, email, password, preferred_lang, role, accept_terms, birthdate } = body;
+        const { family_name, family_code, name, email, password, preferred_lang, role, accept_terms, birthdate, ref } = body;
         // Carry the UI language into the account so the welcome email + first
         // login render in the user's language. Fall back to the lang cookie.
         const lang = preferred_lang === "es" || preferred_lang === "en"
@@ -54,6 +54,12 @@ export const POST: APIRoute = async ({ request, cookies }) => {
             }
         } else {
             registerBody.family_name = family_name;
+            // Referral code only applies when FOUNDING a new family. The
+            // backend records the referral + grants both families a 30-day
+            // Plus credit; an unknown code is ignored (never breaks signup).
+            if (typeof ref === "string" && ref.trim()) {
+                registerBody.ref = ref.trim().toUpperCase();
+            }
         }
 
         const response = await fetch(`${apiUrl}/api/auth/register-family`, {

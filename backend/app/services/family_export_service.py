@@ -54,6 +54,9 @@ from app.models import (
     KidPet,
     KidSavingsGoal,
     KioskDevice,
+    Routine,
+    RoutineProgress,
+    RoutineStep,
     MealPlanEntry,
     Notification,
     OnboardingEvent,
@@ -150,6 +153,7 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
         CashTransaction,
         KidBankAccount,
         KidSavingsGoal,
+        Routine,
         Reward,
         RewardRedemption,
         UserRewardGoal,
@@ -339,6 +343,16 @@ class FamilyExportService:
         cash = await _rows(db, fam(CashTransaction))
         bank_accounts = await _rows(db, fam(KidBankAccount))
         savings_goals = await _rows(db, fam(KidSavingsGoal))
+        routines = await _rows(db, fam(Routine))
+        _routine_ids = [r.id for r in routines]
+        routine_steps = (
+            await _rows(db, select(RoutineStep).where(RoutineStep.routine_id.in_(_routine_ids)))
+            if _routine_ids else []
+        )
+        routine_progress = (
+            await _rows(db, select(RoutineProgress).where(RoutineProgress.routine_id.in_(_routine_ids)))
+            if _routine_ids else []
+        )
         rewards = await _rows(db, fam(Reward))
         redemptions = await _rows(db, fam(RewardRedemption))
         reward_goals = await _rows(db, fam(UserRewardGoal))
@@ -467,6 +481,9 @@ class FamilyExportService:
             "points/cash_transactions.json": _dump(cash),
             "bank/kid_bank_accounts.json": _dump(bank_accounts),
             "bank/savings_goals.json": _dump(savings_goals),
+            "routines/routines.json": _dump(routines),
+            "routines/steps.json": _dump(routine_steps),
+            "routines/progress.json": _dump(routine_progress),
             "rewards/rewards.json": _dump(rewards),
             "rewards/redemptions.json": _dump(redemptions),
             "rewards/reward_goals.json": _dump(reward_goals),
