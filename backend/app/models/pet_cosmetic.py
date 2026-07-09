@@ -11,7 +11,11 @@ the acting user's own pet, so isolation is structural.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 from sqlalchemy import (
     Boolean,
@@ -44,5 +48,5 @@ class PetCosmetic(Base):
     # At most one equipped cosmetic per slot per pet (enforced in the service).
     equipped = Column(Boolean, nullable=False, default=False, server_default="false")
     acquired_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+        DateTime(timezone=True), default=_utcnow, nullable=False
     )

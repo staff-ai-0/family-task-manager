@@ -331,7 +331,7 @@ const nextStageName = stage < MAX_STAGE ? stageLabel(stage + 1, lang) : "";
                     });
                     if (!r.ok) {
                         const d = await r.json().catch(() => ({}));
-                        throw new Error(d?.detail || (es ? "No se pudo" : "Could not complete"));
+                        throw new Error(d?.message ?? d?.detail ?? (es ? "No se pudo" : "Could not complete"));
                     }
                     const petOut = await r.json();
                     // Reconcile meters with the server truth.

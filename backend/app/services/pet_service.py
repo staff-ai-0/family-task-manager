@@ -10,6 +10,7 @@ from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
@@ -141,11 +142,20 @@ class PetService:
         folds into the caller's transaction.
         """
         from app.models.point_transaction import PointTransaction, TransactionType
-        from app.services.base_service import get_user_by_id
+
+        from app.models.user import User
 
         if cost <= 0:
             return
-        user = await get_user_by_id(db, user_id)
+        # Lock the user row so two concurrent spends can't both pass the balance
+        # check and double-spend / drive points negative.
+        user = (
+            await db.execute(
+                select(User).where(User.id == user_id).with_for_update()
+            )
+        ).scalar_one_or_none()
+        if user is None:
+            raise NotFoundException("User not found")
         if user.points < cost:
             raise ValidationException(f"Need {cost} pts, have {user.points}")
         before = user.points
@@ -207,7 +217,9 @@ class PetService:
         treat = TREATS[treat_type]
 
         user = (
-            await db.execute(sa_select(User).where(User.id == user_id))
+            await db.execute(
+                sa_select(User).where(User.id == user_id).with_for_update()
+            )
         ).scalar_one_or_none()
         if user is None:
             raise NotFoundException("User not found")
@@ -234,6 +246,8 @@ class PetService:
         pet.hunger = _clamp(pet.hunger + treat["hunger"])
         pet.mood = _clamp(pet.mood + treat["mood"])
         pet.xp = max(0, pet.xp + treat["xp"])
+        # Keep the cached evolution_stage in sync — a treat can cross a threshold.
+        PetService._sync_progression(pet)
 
         await db.commit()
         await db.refresh(pet)
@@ -526,7 +540,13 @@ class PetService:
             pet_id=pet.id, cosmetic_key=cosmetic_key, equipped=False
         )
         db.add(rec)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            # Concurrent duplicate buy — the unique constraint rolled this txn
+            # back (including its point spend), so surface a clean error.
+            await db.rollback()
+            raise ValidationException("You already own this cosmetic")
         await db.refresh(rec)
         return rec
 

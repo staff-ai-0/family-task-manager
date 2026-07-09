@@ -325,7 +325,7 @@ const L = {
                     });
                     if (!r.ok) {
                         const d = await r.json().catch(() => ({}));
-                        throw new Error(d?.detail || (es ? "No se pudo completar" : "Could not complete"));
+                        throw new Error(d?.message ?? d?.detail ?? (es ? "No se pudo completar" : "Could not complete"));
                     }
                     // Success — feed the pet + celebrate, then collapse the card.
                     gainXp(reward);

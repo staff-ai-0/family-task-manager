@@ -123,7 +123,7 @@ const L = {
                                     data-slot={c.slot}
                                     data-icon={c.icon}
                                     data-price={c.price}
-                                    data-min-stage-name={c.min_stage_name}
+                                    data-min-stage-name={stageLabel(c.min_stage, lang)}
                                     data-owned={c.owned ? "1" : "0"}
                                     data-equipped={c.equipped ? "1" : "0"}
                                     data-unlocked={c.unlocked ? "1" : "0"}
@@ -133,7 +133,7 @@ const L = {
                                     <p class="text-xs font-bold text-brand-sun-deep">{c.price} {L.pts}</p>
                                     <div data-cos-actions class="w-full mt-1"></div>
                                     {!c.unlocked && (
-                                        <span class="absolute top-2 right-2 text-xs" title={L.unlock_at(c.min_stage_name)}>🔒</span>
+                                        <span class="absolute top-2 right-2 text-xs" title={L.unlock_at(stageLabel(c.min_stage, lang))}>🔒</span>
                                     )}
                                 </article>
                             ))}
@@ -262,7 +262,7 @@ const L = {
             });
             if (!r.ok) {
                 const d = await r.json().catch(() => ({}));
-                throw new Error(d?.detail || (es ? "No se pudo" : "Could not complete"));
+                throw new Error(d?.message ?? d?.detail ?? (es ? "No se pudo" : "Could not complete"));
             }
             return r.json();
         }
