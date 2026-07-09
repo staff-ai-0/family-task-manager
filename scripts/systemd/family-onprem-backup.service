@@ -9,6 +9,7 @@ Type=oneshot
 WorkingDirectory=/home/jc/family-task-manager
 Environment="COMPOSE_CMD=podman compose"
 Environment=COMPOSE_FILE=docker-compose.onprem.yml
+Environment=RETENTION_DAYS=30
 # ── Offsite push (audit 2026-07-07: backups must not live only on this disk) ──
 # 1. Install rclone (sudo dnf install -y rclone) and configure a remote AS
 #    USER jc (no sudo): rclone config   — see scripts/systemd/README.md.
