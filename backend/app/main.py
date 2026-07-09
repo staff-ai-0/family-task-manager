@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
 from app.core.request_context import RequestIDLogFilter, RequestIDMiddleware
-from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm, bank, family_cup
+from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm, bank, family_cup, referrals, routines
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
 from app.api.routes import oversight, onboarding, sync
@@ -337,6 +337,7 @@ app.include_router(sync.router, prefix="/api/sync", tags=["Sync (gone)"])
 app.include_router(cash.router, prefix="/api/cash", tags=["Cash"])
 app.include_router(bank.router, prefix="/api/bank", tags=["Family Bank"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions"])
+app.include_router(referrals.router, prefix="/api/referrals", tags=["Referrals"])
 from app.api.routes import subscriptions_webhook  # noqa: E402
 app.include_router(
     subscriptions_webhook.router,
@@ -349,6 +350,7 @@ app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(kiosk.router, prefix="/api/kiosk", tags=["Kiosk"])
 app.include_router(pet.router, prefix="/api/pet", tags=["Pet"])
+app.include_router(routines.router, prefix="/api/routines", tags=["Routines"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(family_cup.router, prefix="/api/family-cup", tags=["Family Cup"])
 app.include_router(jarvis.router, prefix="/api/jarvis", tags=["Jarvis"])

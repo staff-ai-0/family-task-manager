@@ -1,0 +1,311 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import { apiFetch } from "../lib/api";
+
+/**
+ * /routines — kid runner for icon tap-through routines (pre-readers).
+ *
+ * Big-icon, no-reading-needed, kiosk-friendly: a young kid taps each step of a
+ * routine one by one; finishing every step awards POINTS (privileges — never
+ * cash) and feeds the pet. Per-kid color accents the tiles + runner. Works on a
+ * wall tablet (large tap targets, high contrast) as well as a phone.
+ *
+ * Data + mutations go through the /api/routines proxy (cookie → bearer).
+ */
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk || !user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+const { data: today } = await apiFetch<any>("/api/routines/today", { token });
+const routines: any[] = today?.routines ?? [];
+const kidColor: string = today?.color ?? "#4FB8E6";
+
+const nm = (r: any) => (lang === "es" ? r.name_es || r.name : r.name);
+
+const TOD_LABEL: Record<string, { es: string; en: string; icon: string }> = {
+    morning: { es: "Mañana", en: "Morning", icon: "🌅" },
+    evening: { es: "Noche", en: "Evening", icon: "🌙" },
+    custom: { es: "Cuando quieras", en: "Anytime", icon: "⭐" },
+};
+const order = ["morning", "evening", "custom"];
+const groups = order
+    .map((tod) => ({ tod, items: routines.filter((r) => r.time_of_day === tod) }))
+    .filter((g) => g.items.length > 0);
+
+const L = {
+    title: lang === "es" ? "Mis rutinas" : "My routines",
+    empty: lang === "es" ? "Aún no tienes rutinas." : "No routines yet.",
+    empty_sub: lang === "es"
+        ? "Pídele a papá o mamá que te arme una."
+        : "Ask a parent to set one up for you.",
+    done_of: lang === "es" ? "de" : "of",
+    steps: lang === "es" ? "pasos" : "steps",
+    completed: lang === "es" ? "¡Completada!" : "Done!",
+    start: lang === "es" ? "Empezar" : "Start",
+    redo: lang === "es" ? "Repasar" : "Review",
+    next: lang === "es" ? "¡Listo!" : "Done!",
+    tap_done: lang === "es" ? "Toca cuando lo termines" : "Tap when you finish it",
+    close: lang === "es" ? "Cerrar" : "Close",
+    finish_title: lang === "es" ? "¡Rutina completa!" : "Routine complete!",
+    points_won: (n: number) => (lang === "es" ? `+${n} puntos` : `+${n} points`),
+    pet_fed: lang === "es" ? "🐾 ¡Alimentaste a tu mascota!" : "🐾 You fed your pet!",
+    err: lang === "es" ? "Algo salió mal. Intenta de nuevo." : "Something went wrong. Try again.",
+};
+---
+
+<PageLayout
+    title={`⛅ ${L.title}`}
+    headerClass="bg-gradient-to-br from-brand-sky to-brand-mint"
+    dark
+    role={user.role}
+    lang={lang}
+    mainClass="flex-1 px-4 py-6 space-y-6"
+    containerClass="w-full max-w-md md:max-w-2xl mx-auto bg-brand-cream-deep"
+>
+    {routines.length === 0 ? (
+        <div class="bg-brand-cream rounded-[var(--radius-card)] p-8 border-2 border-brand-ink shadow-[var(--shadow-card)] text-center space-y-2">
+            <p class="text-6xl">🗒️</p>
+            <p class="font-display font-extrabold text-lg text-brand-ink">{L.empty}</p>
+            <p class="text-brand-ink-soft text-sm">{L.empty_sub}</p>
+        </div>
+    ) : (
+        groups.map((g) => (
+            <section class="space-y-3">
+                <h2 class="font-display font-extrabold text-brand-ink flex items-center gap-2">
+                    <span class="text-xl">{TOD_LABEL[g.tod].icon}</span>
+                    <span>{lang === "es" ? TOD_LABEL[g.tod].es : TOD_LABEL[g.tod].en}</span>
+                </h2>
+                <div class="grid grid-cols-2 gap-3">
+                    {g.items.map((r) => {
+                        const color = r.color || kidColor;
+                        return (
+                            <button
+                                type="button"
+                                class="routine-tile group flex flex-col items-center gap-2 p-5 rounded-[var(--radius-card)] border-2 border-brand-ink bg-brand-cream shadow-[var(--shadow-card)] active:scale-95 transition-transform text-center"
+                                data-routine-id={r.id}
+                                style={`--kc: ${color};`}
+                            >
+                                <span
+                                    class="w-16 h-16 flex items-center justify-center text-4xl rounded-full border-2 border-brand-ink"
+                                    style={`background-color: ${color}22;`}
+                                >
+                                    {r.icon}
+                                </span>
+                                <span class="font-display font-extrabold text-brand-ink leading-tight">{nm(r)}</span>
+                                {r.completed ? (
+                                    <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-brand-mint text-brand-ink border border-brand-ink">
+                                        ✓ {L.completed}
+                                    </span>
+                                ) : (
+                                    <span class="flex items-center gap-1" aria-hidden="true">
+                                        {r.steps.map((s: any) => (
+                                            <span
+                                                class={`w-2.5 h-2.5 rounded-full border border-brand-ink ${s.done ? "" : "bg-transparent"}`}
+                                                style={s.done ? `background-color: ${color};` : ""}
+                                            ></span>
+                                        ))}
+                                    </span>
+                                )}
+                                <span class="text-[11px] text-brand-ink-soft">
+                                    {r.steps_done}/{r.total_steps} {L.steps}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </section>
+        ))
+    )}
+
+    <!-- Full-screen step runner (kiosk-friendly overlay) -->
+    <div
+        id="runner"
+        class="hidden fixed inset-0 z-50 flex-col items-center justify-center p-6 text-center"
+        style="display: none; background: var(--bg);"
+    >
+        <button id="runner-close" type="button" class="absolute top-4 right-4 w-11 h-11 rounded-full border-2 border-brand-ink bg-brand-cream text-brand-ink text-xl font-bold shadow-[var(--shadow-card)]">×</button>
+
+        <div id="runner-step" class="w-full max-w-sm space-y-6">
+            <div id="runner-dots" class="flex items-center justify-center gap-2"></div>
+            <div
+                id="runner-icon"
+                class="mx-auto w-40 h-40 flex items-center justify-center rounded-full border-4 border-brand-ink shadow-[var(--shadow-pop)]"
+                style="font-size: 5rem;"
+            ></div>
+            <p id="runner-label" class="font-display font-extrabold text-2xl text-brand-ink"></p>
+            <p class="text-brand-ink-soft text-sm">{L.tap_done}</p>
+            <button
+                id="runner-done"
+                type="button"
+                class="w-full py-5 rounded-[var(--radius-card)] border-2 border-brand-ink text-brand-ink font-display font-extrabold text-xl shadow-[var(--shadow-card)] active:scale-95 transition-transform"
+            >
+                ✓ {L.next}
+            </button>
+        </div>
+
+        <div id="runner-finish" class="hidden w-full max-w-sm space-y-4">
+            <p class="text-7xl">🎉</p>
+            <p class="font-display font-extrabold text-3xl text-brand-ink">{L.finish_title}</p>
+            <p id="runner-points" class="font-display font-extrabold text-2xl text-brand-sun-deep"></p>
+            <p id="runner-pet" class="text-brand-ink-soft"></p>
+            <button
+                id="runner-finish-close"
+                type="button"
+                class="w-full py-4 rounded-[var(--radius-card)] border-2 border-brand-ink bg-brand-mint text-brand-ink font-display font-extrabold text-lg shadow-[var(--shadow-card)]"
+            >
+                {L.close}
+            </button>
+        </div>
+    </div>
+
+    <div id="routines-toast" class="fixed left-1/2 -translate-x-1/2 bottom-24 z-[60] hidden px-4 py-2 rounded-full bg-brand-ink text-brand-cream text-sm font-semibold shadow-[var(--shadow-card)]"></div>
+</PageLayout>
+
+<script define:vars={{ routines, lang, kidColor, L }}>
+    function initRoutines() {
+        const runner = document.getElementById("runner");
+        if (!runner) return;
+
+        const byId = new Map(routines.map((r) => [r.id, r]));
+        const stepView = document.getElementById("runner-step");
+        const finishView = document.getElementById("runner-finish");
+        const dotsEl = document.getElementById("runner-dots");
+        const iconEl = document.getElementById("runner-icon");
+        const labelEl = document.getElementById("runner-label");
+        const doneBtn = document.getElementById("runner-done");
+        const pointsEl = document.getElementById("runner-points");
+        const petEl = document.getElementById("runner-pet");
+        const toast = document.getElementById("routines-toast");
+
+        let active = null;   // active routine object
+        let idx = 0;         // current step index
+        let busy = false;
+
+        const lbl = (s) => (lang === "es" ? s.label_es || s.label : s.label);
+
+        function showToast(msg) {
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.classList.remove("hidden");
+            clearTimeout(toast._t);
+            toast._t = setTimeout(() => toast.classList.add("hidden"), 2400);
+        }
+
+        function firstUndone(r) {
+            const i = r.steps.findIndex((s) => !s.done);
+            return i === -1 ? r.steps.length : i;
+        }
+
+        function open(routine) {
+            active = routine;
+            const color = routine.color || kidColor;
+            runner.style.setProperty("--kc", color);
+            iconEl.style.backgroundColor = color + "22";
+            doneBtn.style.backgroundColor = color;
+            idx = firstUndone(routine);
+            finishView.classList.add("hidden");
+            stepView.classList.remove("hidden");
+            runner.classList.remove("hidden");
+            runner.style.display = "flex";
+            if (idx >= routine.steps.length) {
+                showFinish(false, 0, false);
+            } else {
+                renderStep();
+            }
+        }
+
+        function close() {
+            runner.classList.add("hidden");
+            runner.style.display = "none";
+            active = null;
+        }
+
+        function renderStep() {
+            const step = active.steps[idx];
+            if (!step) return;
+            iconEl.textContent = step.icon || "✅";
+            labelEl.textContent = lbl(step);
+            dotsEl.innerHTML = "";
+            const color = active.color || kidColor;
+            active.steps.forEach((s, i) => {
+                const d = document.createElement("span");
+                d.className = "w-3 h-3 rounded-full border-2 border-brand-ink";
+                d.style.backgroundColor = i < idx || s.done ? color : "transparent";
+                dotsEl.appendChild(d);
+            });
+        }
+
+        function showFinish(rewardGranted, points, petFed) {
+            stepView.classList.add("hidden");
+            finishView.classList.remove("hidden");
+            pointsEl.textContent = rewardGranted && points > 0 ? L.points_won(points) : "";
+            petEl.textContent = petFed ? L.pet_fed : "";
+        }
+
+        async function completeCurrent() {
+            if (!active || busy) return;
+            const step = active.steps[idx];
+            if (!step) return;
+            busy = true;
+            doneBtn.disabled = true;
+            try {
+                const res = await fetch(
+                    `/api/routines/${active.id}/steps/${step.id}/complete`,
+                    { method: "POST", headers: { "Content-Type": "application/json" } },
+                );
+                if (!res.ok) throw new Error("http " + res.status);
+                const data = await res.json();
+                // Sync local state from the server truth.
+                step.done = true;
+                active.steps_done = data.steps_done;
+                active.completed = data.completed;
+                updateTile(active);
+                idx = firstUndone(active);
+                if (active.completed) {
+                    showFinish(!!data.reward_granted, data.points_awarded || 0, true);
+                } else {
+                    renderStep();
+                }
+            } catch (e) {
+                showToast(L.err);
+            } finally {
+                busy = false;
+                doneBtn.disabled = false;
+            }
+        }
+
+        function updateTile(routine) {
+            const tile = document.querySelector(`.routine-tile[data-routine-id="${routine.id}"]`);
+            if (!tile) return;
+            const color = routine.color || kidColor;
+            const dots = tile.querySelectorAll("[aria-hidden] span");
+            routine.steps.forEach((s, i) => {
+                const el = dots[i];
+                if (el) el.style.backgroundColor = s.done ? color : "";
+            });
+        }
+
+        document.querySelectorAll(".routine-tile").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const r = byId.get(btn.dataset.routineId);
+                if (r) open(r);
+            });
+        });
+        doneBtn.addEventListener("click", completeCurrent);
+        document.getElementById("runner-close").addEventListener("click", close);
+        document.getElementById("runner-finish-close").addEventListener("click", () => {
+            close();
+            // Refresh so completed tiles show their ✓ badge on return.
+            location.reload();
+        });
+    }
+
+    document.addEventListener("astro:page-load", initRoutines);
+</script>

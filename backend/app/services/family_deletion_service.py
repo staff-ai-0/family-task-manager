@@ -177,9 +177,14 @@ class FamilyDeletionService:
                 )
             )
         ).scalars().all()
+        from app.core.thumbnails import thumb_filename
+
         for url in [*proof_urls, *claim_urls]:
             if url and url.startswith("/uploads/gig-proofs/"):
-                paths.append(os.path.join(GIG_PROOFS_DIR, os.path.basename(url)))
+                base = os.path.basename(url)
+                paths.append(os.path.join(GIG_PROOFS_DIR, base))
+                # Also remove the generated thumbnail sibling, if any.
+                paths.append(os.path.join(GIG_PROOFS_DIR, thumb_filename(base)))
 
         draft_ids = (
             await db.execute(
@@ -191,6 +196,9 @@ class FamilyDeletionService:
         ).scalars().all()
         for draft_id in draft_ids:
             paths.append(os.path.join(RECEIPT_DRAFTS_DIR, f"{draft_id}.jpg"))
+            paths.append(
+                os.path.join(RECEIPT_DRAFTS_DIR, thumb_filename(f"{draft_id}.jpg"))
+            )
 
         return paths
 
