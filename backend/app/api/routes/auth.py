@@ -17,6 +17,7 @@ from app.core.security import hash_password
 from app.core.type_utils import to_uuid_required
 from app.services import AuthService
 from app.services.email_service import EmailService
+from app.services.invitation_service import InvitationService
 from app.schemas.user import (
     UserCreate,
     UserLogin,
@@ -116,6 +117,7 @@ async def register_family(
     )
 
     # Determine which family to use
+    pending_invite = None
     if data.family_code:
         # Join existing family by code
         family_code = data.family_code.strip().upper()
@@ -182,33 +184,50 @@ async def register_family(
                     detail=detail,
                 )
     else:
-        # Create new family
-        if not data.family_name:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Provide either a family_code or family_name.",
-            )
-
-        # Founding an account requires explicit consent to the terms +
-        # privacy notice (LFPDPPP). Reject when absent/false.
-        if not data.accept_terms:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "Debes aceptar los Términos y el Aviso de Privacidad "
-                    "para crear tu cuenta."
-                    if lang == "es"
-                    else "You must accept the Terms and the Privacy Notice "
-                    "to create your account."
-                ),
-            )
-
-        family = Family(
-            name=data.family_name,
-            join_code=generate_join_code(),
+        # No family_code — honor a pending email invitation for this address
+        # before requiring a family_name / founding a new family. A parent
+        # invited them by email; join THAT family instead of creating a
+        # separate one (guards the invitation-bypass bug).
+        pending_invite = await InvitationService.find_pending_for_email(
+            db, data.email
         )
-        db.add(family)
-        await db.flush()  # get family.id before creating user
+        if pending_invite is not None:
+            family = (await db.execute(
+                select(Family).where(Family.id == pending_invite.family_id)
+            )).scalar_one_or_none()
+            if not family:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Invitation family not found.",
+                )
+        else:
+            # Create new family
+            if not data.family_name:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Provide either a family_code or family_name.",
+                )
+
+            # Founding an account requires explicit consent to the terms +
+            # privacy notice (LFPDPPP). Reject when absent/false.
+            if not data.accept_terms:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Debes aceptar los Términos y el Aviso de Privacidad "
+                        "para crear tu cuenta."
+                        if lang == "es"
+                        else "You must accept the Terms and the Privacy Notice "
+                        "to create your account."
+                    ),
+                )
+
+            family = Family(
+                name=data.family_name,
+                join_code=generate_join_code(),
+            )
+            db.add(family)
+            await db.flush()  # get family.id before creating user
 
     # Founders are PARENT. Join-by-code defaults to CHILD and is capped at
     # TEEN — PARENT can only be granted via email invitation or by founding
@@ -216,6 +235,9 @@ async def register_family(
     if data.family_code:
         requested = UR(data.role) if data.role else UR.CHILD
         new_role = requested if requested in (UR.CHILD, UR.TEEN) else UR.CHILD
+    elif pending_invite is not None:
+        # Trust the role the parent set on the invitation (server-side).
+        new_role = pending_invite.role
     else:
         new_role = UR.PARENT
 
@@ -244,10 +266,15 @@ async def register_family(
     db.add(user)
     await db.flush()
 
-    # If we created a new family, set created_by
-    if not data.family_code:
+    # If we created a new family, set created_by. NOT for the invite-join
+    # path — that family already exists and has its own founder.
+    if not data.family_code and pending_invite is None:
         family.created_by = user.id
-    
+
+    # Consume the invitation that steered this signup into an existing family.
+    if pending_invite is not None:
+        InvitationService.mark_accepted(pending_invite, user)
+
     await db.commit()
     await db.refresh(user)
 
@@ -256,7 +283,7 @@ async def register_family(
     # Plus credit (internal — no PayPal). Best-effort: never break signup.
     # Only for the new-family path (join-by-code accounts join an existing
     # family, they don't found one, so they can't be referred).
-    if not data.family_code and data.ref:
+    if not data.family_code and pending_invite is None and data.ref:
         try:
             from app.services.referral_service import ReferralService
 
