@@ -271,10 +271,18 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         members: list[User],
         member_carry: Optional[dict[UUID, int]] = None,
         rotation_starts: Optional[dict[UUID, int]] = None,
+        today: Optional[date] = None,
     ) -> tuple[list[TaskAssignment], dict[UUID, int], list[dict]]:
         """
         Pure builder — produces TaskAssignment instances WITHOUT db.add/commit.
         Caller decides whether to persist.
+
+        ``today`` (family-local) makes a MID-WEEK build honest: occurrences on
+        already-past days are never materialized NOR credited to totals —
+        previously the preview header counted phantom past-day chores while
+        the listed plan didn't (prod: "Ariana 90 pts" vs 2 listed chores).
+        Rotation POSITIONS still consume the full-week expansion so the
+        persisted cursor stays deterministic across same-week re-shuffles.
 
         Returns (assignments, totals_per_member, skipped) where totals exclude
         carry and skipped lists templates that could not be expanded
@@ -307,6 +315,12 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         # rotation_cursor keeps meaning the same sequence across weeks.
         def _stable(pool: list[User]) -> list[User]:
             return sorted(pool, key=lambda m: str(m.id))
+
+        def _material(dates: list[date]) -> list[date]:
+            """Only days that can still be acted on (today onward)."""
+            if today is None or today <= week_monday:
+                return dates
+            return [d for d in dates if d >= today]
 
         def _new_assignment(template_id: UUID, user_id: UUID, d: date) -> TaskAssignment:
             return TaskAssignment(
@@ -395,7 +409,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
 
             if template.assignment_type == AssignmentType.FIXED:
                 fixed_user = eligible_members[0]
-                for d in task_dates:
+                for d in _material(task_dates):
                     assignments.append(_new_assignment(template.id, fixed_user.id, d))
                     _credit(fixed_user.id, d, template.points)
 
@@ -410,18 +424,43 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     getattr(template, "days_of_week", None),
                 )
                 start = rotation_starts.get(template.id, 0)
+                # Fallback rotations (no parent-picked list) get a stable
+                # per-template offset: with a shared start of 0 and the same
+                # member order, the SAME member held position 0 (Monday) of
+                # EVERY template — one person lost their turn in all chores
+                # at once whenever Monday was already past. Parent-picked
+                # lists keep the parent's ordering untouched.
+                stagger = (
+                    template.id.int % 7
+                    if not (template.assigned_user_ids or [])
+                    else 0
+                )
                 for i, d in enumerate(rotate_dates):
-                    chosen = eligible_members[(start + i) % len(eligible_members)]
+                    chosen = eligible_members[
+                        (stagger + start + i) % len(eligible_members)
+                    ]
+                    if today is not None and today > week_monday and d < today:
+                        continue  # position consumed, row not materialized
                     assignments.append(_new_assignment(template.id, chosen.id, d))
                     _credit(chosen.id, d, template.points)
 
             else:  # AUTO
                 if template.interval_days == 7 and not getattr(template, "days_of_week", None):
                     # Pick (member, day) slot with min (day-load + cross-week bias)
+                    # — among REMAINING days only; picking a past day used to
+                    # silently drop the chore for the whole week.
+                    weekly_days = _material(week_dates)
+                    if not weekly_days:
+                        skipped.append({
+                            "template_id": template.id,
+                            "title": template.title,
+                            "reason": "no remaining days this week",
+                        })
+                        continue
                     candidates = [
                         (member_load[m.id][d.isoformat()] + _bias(m.id), m, d)
                         for m in eligible_members
-                        for d in week_dates
+                        for d in weekly_days
                     ]
                     rng.shuffle(candidates)
                     _, best_member, best_date = min(candidates, key=lambda x: x[0])
@@ -444,7 +483,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                         eligible_members,
                         key=lambda m: (_bias(m.id), member_rank[m.id]),
                     )
-                    for i, d in enumerate(task_dates):
+                    for i, d in enumerate(_material(task_dates)):
                         chosen = order[i % len(order)]
                         assignments.append(
                             _new_assignment(template.id, chosen.id, d)
@@ -452,10 +491,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                         _credit(chosen.id, d, template.points)
 
         for template in bonus_templates:
-            dates = TaskAssignmentService._expand_dates(
+            dates = _material(TaskAssignmentService._expand_dates(
                 week_monday, template.interval_days,
                 getattr(template, "days_of_week", None),
-            )
+            ))
 
             # Filter eligible members by allowed_roles + assigned_user_ids.
             eligible = list(members)
@@ -592,15 +631,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             members,
             member_carry=carry,
             rotation_starts=rotation_starts,
+            today=today,
         )
 
-        # Guard 1 — mid-week: drop occurrences for days already past. The
-        # rotation cursor still counts the full week's positions (kept
-        # deterministic), only the materialization is skipped.
-        if today > week_monday:
-            assignments = [a for a in assignments if a.assigned_date >= today]
-
-        # Guard 2 — survivors: rows that outlived the PENDING delete
+        # Guard — survivors: rows that outlived the PENDING delete
         # (completed / claimed / overdue / cancelled) already occupy their
         # occurrence slot. Regenerating them duplicated completed chores and
         # re-opened parent-cancelled ones. Regular templates own one slot per
@@ -814,9 +848,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             members,
             member_carry=carry,
             rotation_starts=rotation_starts,
+            today=today,
         )
-        if today > week_monday:
-            assignments = [a for a in assignments if a.assigned_date >= today]
 
         # Build lightweight detail dicts (no DB IDs since not persisted)
         member_by_id = {m.id: m for m in members}

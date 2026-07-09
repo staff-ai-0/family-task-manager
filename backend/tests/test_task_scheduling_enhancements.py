@@ -61,6 +61,101 @@ class TestDaysOfWeek:
         }
 
 
+class TestMidweekBalance:
+    """Mid-week shuffles must stay honest and balanced.
+
+    Prod report (2026-07-09 screenshot): preview header said Ariana had
+    90 pts while her listed plan showed 2 chores (20 pts) — totals counted
+    full-week occurrences whose days were already past. And because every
+    rotation started at position 0 with the same member order, the SAME
+    member always held the Monday slot of every template, so a mid-week
+    shuffle dropped that member's turn in ALL of them at once.
+    """
+
+    async def test_preview_totals_match_listed_plan(
+        self, db_session, test_family, test_parent_user, test_child_user
+    ):
+        monday = _week_monday()
+        thursday = monday + timedelta(days=3)
+        await _template(
+            db_session, test_family.id, test_parent_user.id,
+            title="Daily Rot", assignment_type=AssignmentType.ROTATE,
+            interval_days=1, points=10,
+        )
+        await _template(
+            db_session, test_family.id, test_parent_user.id,
+            title="Every3 Rot", assignment_type=AssignmentType.ROTATE,
+            interval_days=3, points=10,
+        )
+        preview = await TaskAssignmentService.preview_shuffle(
+            db_session, test_family.id, week_of=monday, today=thursday
+        )
+        listed: dict = {}
+        for item in preview["assignments"]:
+            listed[item["assigned_to"]] = (
+                listed.get(item["assigned_to"], 0) + item["template_points"]
+            )
+        for member in preview["totals_by_member"]:
+            assert member["points_this_week"] == listed.get(member["user_id"], 0), (
+                f"{member['user_name']}: header says "
+                f"{member['points_this_week']} but plan lists "
+                f"{listed.get(member['user_id'], 0)}"
+            )
+
+    async def test_stagger_spreads_rotation_starts_across_templates(
+        self, db_session, test_family, test_parent_user, test_child_user
+    ):
+        """Three every-3-days chores mid-week (only Thu+Sun remain): without
+        per-template stagger every template hands Thu/Sun to the SAME two
+        members and the third gets nothing."""
+        from uuid import UUID as _UUID
+        from app.models.task_template import TaskTemplate
+
+        teen = await _extra_user(
+            db_session, test_family.id, "teen-stagger@test.com",
+        )
+        monday = _week_monday()
+        thursday = monday + timedelta(days=3)
+        # Crafted ids: int % 7 == 0, 1, 2 → deterministic distinct offsets.
+        for k in range(3):
+            db_session.add(TaskTemplate(
+                id=_UUID(int=k),
+                title=f"Every3 #{k}", points=10, interval_days=3,
+                assignment_type=AssignmentType.ROTATE, assigned_user_ids=None,
+                family_id=test_family.id, created_by=test_parent_user.id,
+                is_bonus=False,
+            ))
+        await db_session.commit()
+
+        assignments = await TaskAssignmentService.shuffle_tasks(
+            db_session, test_family.id, week_of=monday, today=thursday
+        )
+        assert len(assignments) == 6  # 3 templates × (Thu, Sun)
+        counts = {}
+        for a in assignments:
+            counts[a.assigned_to] = counts.get(a.assigned_to, 0) + 1
+        assert sorted(counts.values()) == [2, 2, 2], (
+            f"unbalanced mid-week rotation: {counts}"
+        )
+
+    async def test_auto_weekly_slot_never_lands_on_past_day(
+        self, db_session, test_family, test_parent_user, test_child_user
+    ):
+        """The weekly AUTO single-slot pick must choose among REMAINING days
+        mid-week — picking a past day silently dropped the chore entirely."""
+        monday = _week_monday()
+        saturday = monday + timedelta(days=5)
+        await _template(
+            db_session, test_family.id, test_parent_user.id,
+            title="Weekly Auto", interval_days=7, points=10,
+        )
+        assignments = await TaskAssignmentService.shuffle_tasks(
+            db_session, test_family.id, week_of=monday, today=saturday
+        )
+        assert len(assignments) == 1
+        assert assignments[0].assigned_date >= saturday
+
+
 class TestAutoShuffle:
     async def test_auto_shuffle_generates_for_returning_family(
         self, db_session, test_family, test_parent_user, test_child_user
