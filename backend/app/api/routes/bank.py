@@ -27,9 +27,11 @@ from app.schemas.bank import (
     PayoutRequestBody,
     SaveWithdrawalRequest,
 )
+from app.schemas.envelope import KidEnvelopesView
 from app.schemas.savings_goal import SavingsGoalCreate, SavingsGoalProgress
 from app.services.bank_service import BankService
 from app.services.base_service import verify_user_in_family
+from app.services.envelope_service import EnvelopeService
 from app.services.savings_goal_service import SavingsGoalService
 
 router = APIRouter()
@@ -84,6 +86,66 @@ async def family_bank(
     """Parent view: every kid's jar balances + settings summary."""
     rows = await BankService.get_family_bank(db, current_user)
     return [KidBankView(**r) for r in rows]
+
+
+# ── Kid budget-envelopes (thin projection over jars + savings goal) ──────────
+#
+# A read-only "envelopes" view of each kid's Family Bank jars (Spend/Save/Share)
+# fed by chores/gigs cash, plus their named savings goal overlaid on Save. Free
+# (no premium gate — it projects the free ledger). Family-scoped: a kid sees
+# ONLY their own envelopes; a parent sees every kid's. NOTE: the static routes
+# (/envelopes/me, /envelopes/family) MUST precede /envelopes/{user_id} so
+# "me"/"family" are not parsed as a UUID path param.
+
+
+@router.get("/envelopes/me", response_model=KidEnvelopesView)
+async def my_envelopes(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The kid's own budget envelopes (their three jars + savings goal)."""
+    if current_user.role == UserRole.PARENT:
+        raise HTTPException(
+            status_code=400,
+            detail="Parents view kids' envelopes via GET /api/bank/envelopes/family",
+        )
+    view = await EnvelopeService.get_kid_envelopes(db, current_user)
+    return KidEnvelopesView(**view)
+
+
+@router.get("/envelopes/family", response_model=List[KidEnvelopesView])
+async def family_envelopes(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parent overview: every kid's envelopes in the parent's family."""
+    rows = await EnvelopeService.get_family_envelopes(db, current_user)
+    return [KidEnvelopesView(**r) for r in rows]
+
+
+@router.get("/envelopes/{user_id}", response_model=KidEnvelopesView)
+async def kid_envelopes(
+    user_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """A specific kid's envelopes. Parent: any kid in-family (404 otherwise).
+    Kid: only their own (403 on a sibling / anyone else)."""
+    fam = to_uuid_required(current_user.family_id)
+    if current_user.role == UserRole.PARENT:
+        kid = await verify_user_in_family(db, user_id, fam)  # 404 if outside family
+    else:
+        if user_id != to_uuid_required(current_user.id):
+            raise HTTPException(
+                status_code=403, detail="Kids can only see their own envelopes"
+            )
+        kid = current_user
+    if kid.role not in (UserRole.CHILD, UserRole.TEEN):
+        raise HTTPException(
+            status_code=400, detail="Envelopes apply to CHILD/TEEN members only"
+        )
+    view = await EnvelopeService.get_kid_envelopes(db, kid)
+    return KidEnvelopesView(**view)
 
 
 @router.put("/settings/{user_id}", response_model=KidBankView)

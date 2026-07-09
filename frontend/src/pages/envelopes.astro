@@ -1,0 +1,170 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import { apiFetch } from "../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+const es = lang === "es";
+
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+// Parents have no envelopes of their own — send them to the family overview.
+if (user.role === "parent") return Astro.redirect("/parent/settings/envelopes");
+
+const { data: view, ok: viewOk } = await apiFetch<any>("/api/bank/envelopes/me", { token });
+
+const total = view?.total_cents ?? 0;
+const envelopes: any[] = Array.isArray(view?.envelopes) ? view.envelopes : [];
+const byKey: Record<string, any> = {};
+envelopes.forEach((e: any) => { byKey[e.key] = e; });
+
+const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+// Per-jar presentation (emoji + brand color + bilingual label + copy).
+const META: Record<string, { emoji: string; label: string; blurb: string; bg: string; accent: string; bar: string }> = {
+    spend: {
+        emoji: "🛍️",
+        label: es ? "Gastar" : "Spend",
+        blurb: es ? "Dinero listo para usar." : "Money ready to use.",
+        bg: "bg-brand-coral/15",
+        accent: "text-brand-coral-deep",
+        bar: "bg-brand-coral",
+    },
+    save: {
+        emoji: "🐷",
+        label: es ? "Ahorrar" : "Save",
+        blurb: es ? "Para tus metas." : "For your goals.",
+        bg: "bg-brand-mint/20",
+        accent: "text-brand-mint-deep",
+        bar: "bg-brand-mint-deep",
+    },
+    share: {
+        emoji: "💝",
+        label: es ? "Compartir" : "Share",
+        blurb: es ? "Para dar a otros." : "To give to others.",
+        bg: "bg-brand-sun/25",
+        accent: "text-brand-sun-deep",
+        bar: "bg-brand-sun-deep",
+    },
+};
+const ORDER = ["spend", "save", "share"];
+---
+
+<PageLayout title={es ? "Mis sobres" : "My envelopes"} role={user.role} active="tasks" lang={lang}>
+    <header slot="header" class="bg-gradient-to-br from-brand-mint-deep to-brand-mint text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <p class="text-white/80 text-sm font-medium">{es ? "Mis sobres" : "My envelopes"}</p>
+                <h1 class="text-2xl font-bold">✉️ {user.name}</h1>
+            </div>
+            <a href="/bank" class="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-white/30 transition-colors">
+                {es ? "Mi Banco" : "My Bank"}
+            </a>
+        </div>
+        <div class="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3">
+            <p class="text-white/80 text-xs font-semibold uppercase tracking-wider mb-0.5">
+                {es ? "Total en mis sobres" : "Total in my envelopes"}
+            </p>
+            <p class="text-3xl font-extrabold tracking-tight">
+                {fmt(total)}<span class="text-base font-semibold"> MXN</span>
+            </p>
+        </div>
+    </header>
+
+    {!viewOk && (
+        <div class="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+            {es ? "No pudimos cargar tus sobres. Intenta de nuevo." : "Could not load your envelopes. Please try again."}
+        </div>
+    )}
+
+    <p class="text-sm text-brand-ink-soft px-1 mb-4">
+        {es
+            ? "Tus sobres se llenan con el dinero que ganas en chambas y gigs. Muévelo desde Mi Banco."
+            : "Your envelopes fill up with the money you earn from chores and gigs. Move it from My Bank."}
+    </p>
+
+    <!-- Envelope cards -->
+    <section class="space-y-4">
+        {ORDER.filter((k) => byKey[k]).map((k) => {
+            const env = byKey[k];
+            const m = META[k];
+            const goal = env.goal;
+            return (
+                <div class={`${m.bg} border-2 border-brand-ink rounded-[var(--radius-card)] p-5 shadow-[var(--shadow-card)]`}>
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <span class="text-4xl">{m.emoji}</span>
+                            <div>
+                                <p class={`text-xs font-bold uppercase tracking-wide ${m.accent}`}>{m.label}</p>
+                                <p class="text-2xl font-extrabold text-brand-ink leading-tight">{fmt(env.balance_cents)}</p>
+                                <p class="text-xs text-brand-ink-soft">{m.blurb}</p>
+                            </div>
+                        </div>
+                        <span class="text-xs font-semibold text-brand-ink-soft bg-white/50 rounded-full px-2.5 py-1">
+                            {env.pct_of_total}% {es ? "del total" : "of total"}
+                        </span>
+                    </div>
+
+                    <!-- Share-of-total bar -->
+                    <div class="flex h-2.5 rounded-full overflow-hidden bg-white/50 border border-brand-ink/10">
+                        <div class={`${m.bar} h-full transition-all`} style={`width:${env.pct_of_total}%`}></div>
+                    </div>
+
+                    {/* Savings-goal overlay (Save envelope only) */}
+                    {goal && (
+                        <div class="mt-4 bg-white/60 border-2 border-brand-ink rounded-xl p-4">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="text-2xl">{goal.emoji || "🎯"}</span>
+                                <div>
+                                    <p class="text-xs font-bold uppercase tracking-wide text-brand-mint-deep">
+                                        {es ? "Mi meta de ahorro" : "My savings goal"}
+                                    </p>
+                                    <p class="font-display font-extrabold text-brand-ink leading-tight">{goal.name}</p>
+                                </div>
+                            </div>
+                            {goal.pending_approval && (
+                                <p class="text-xs bg-brand-sun/25 text-brand-sun-deep font-semibold rounded-lg px-3 py-1.5 mb-2 inline-block">
+                                    ⏳ {es ? "Esperando aprobación de tus papás" : "Waiting for your parents' approval"}
+                                </p>
+                            )}
+                            <div class="flex h-3 rounded-full overflow-hidden bg-brand-cream-deep border border-brand-ink/10 mb-1.5">
+                                <div class="bg-brand-mint-deep h-full transition-all" style={`width:${goal.progress_pct}%`}></div>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="font-bold text-brand-ink">{fmt(goal.saved_cents)} / {fmt(goal.target_cents)}</span>
+                                <span class="font-semibold text-brand-mint-deep">{goal.progress_pct}%</span>
+                            </div>
+                            {goal.reached ? (
+                                <p class="text-sm font-display font-extrabold text-brand-ink mt-2">🎉 {es ? "¡Meta alcanzada!" : "Goal reached!"}</p>
+                            ) : (
+                                <p class="text-sm text-brand-ink-soft mt-2">
+                                    {es ? `Te faltan ${fmt(goal.remaining_cents)} 🐷` : `${fmt(goal.remaining_cents)} to go 🐷`}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Prompt to set a goal on the Save envelope when none exists */}
+                    {k === "save" && !goal && (
+                        <a href="/bank" class="mt-4 flex items-center gap-2 text-sm font-semibold text-brand-mint-deep hover:text-brand-ink transition-colors">
+                            🎯 {es ? "Ponte una meta de ahorro en Mi Banco" : "Set a savings goal in My Bank"}
+                        </a>
+                    )}
+                </div>
+            );
+        })}
+    </section>
+
+    <div class="mt-6 flex gap-3">
+        <a href="/bank" class="flex-1 text-center press bg-brand-mint-deep text-white font-bold rounded-[var(--radius-card)] px-4 py-3 border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint transition-colors">
+            {es ? "Mover mi dinero 🏦" : "Move my money 🏦"}
+        </a>
+        <a href="/dashboard" class="flex-1 text-center press bg-brand-cream text-brand-ink font-bold rounded-[var(--radius-card)] px-4 py-3 border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-cream-deep transition-colors">
+            {es ? "Inicio" : "Home"}
+        </a>
+    </div>
+</PageLayout>

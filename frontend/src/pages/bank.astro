@@ -72,9 +72,14 @@ function countdownText(): string {
                 <p class="text-white/80 text-sm font-medium">{es ? "Mi Banco" : "My Bank"}</p>
                 <h1 class="text-2xl font-bold">🏦 {user.name}</h1>
             </div>
-            <a href="/dashboard" class="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-white/30 transition-colors">
-                {es ? "Inicio" : "Home"}
-            </a>
+            <div class="flex gap-2">
+                <a href="/envelopes" class="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-white/30 transition-colors">
+                    {es ? "Mis sobres" : "My envelopes"}
+                </a>
+                <a href="/dashboard" class="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-white/30 transition-colors">
+                    {es ? "Inicio" : "Home"}
+                </a>
+            </div>
         </div>
         <div class="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3">
             <p class="text-white/80 text-xs font-semibold uppercase tracking-wider mb-0.5">
