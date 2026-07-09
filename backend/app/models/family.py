@@ -25,6 +25,19 @@ class Family(Base):
     timezone = Column(String(64), nullable=False, default="UTC", server_default="UTC")
     created_by = Column(UUID(as_uuid=True), nullable=True)  # Nullable during creation, set after user created
     join_code = Column(String(10), unique=True, nullable=True, index=True)  # Short code for family invites
+    # Stable public referral code for the give-a-month/get-a-month growth
+    # loop. Distinct from join_code (kids join with join_code; this one is
+    # shared publicly as https://…/register?ref=CODE). Nullable + generated
+    # on demand (ReferralService.get_or_create_referral_code); existing rows
+    # were backfilled by the referral_program migration.
+    referral_code = Column(String(16), unique=True, nullable=True, index=True)
+    # Internal referral credit expiry (give-a-month/get-a-month). While this
+    # is in the future, premium.get_family_plan floors the family at Plus,
+    # independent of any paid subscription. It lives HERE — on the family row,
+    # NOT on the subscription's current_period_end — precisely so the nightly
+    # PayPal reconcile sweep (which overwrites current_period_end from
+    # PayPal's next_billing_at) can never erase the reward. NULL = no credit.
+    referral_bonus_until = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Parental opt-in for AI processing of KID-generated content (gig proof

@@ -1,0 +1,213 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import { apiFetch } from "../../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+const { data: referral } = await apiFetch<any>("/api/referrals/me", { token });
+const code: string = referral?.code ?? "";
+const shareLink: string = referral?.share_link ?? "";
+const joinedCount: number = referral?.joined_count ?? 0;
+const rewardDays: number = referral?.reward_days ?? 30;
+
+const labels = {
+    en: {
+        title: "Invite & earn",
+        back: "Settings",
+        subtitle: "Share your link. When a family signs up with your code, you BOTH get a free month of Plus.",
+        your_code: "Your referral code",
+        share_link: "Your invite link",
+        copy: "Copy",
+        copied: "Copied!",
+        copy_code: "Copy code",
+        share: "Share",
+        joined_one: "family has joined with your code",
+        joined_many: "families have joined with your code",
+        reward_note: `Each successful referral adds ${rewardDays} days of Plus to both families.`,
+        how_title: "How it works",
+        how_1: "Share your invite link with another family.",
+        how_2: "They create their family account using your code.",
+        how_3: `You both get ${rewardDays} days of Plus — free, no card needed.`,
+        unavailable: "Referral link is not available right now. Please try again later.",
+    },
+    es: {
+        title: "Invita y gana",
+        back: "Configuración",
+        subtitle: "Comparte tu enlace. Cuando una familia se registra con tu código, ¡ambos reciben un mes de Plus gratis!",
+        your_code: "Tu código de referido",
+        share_link: "Tu enlace de invitación",
+        copy: "Copiar",
+        copied: "¡Copiado!",
+        copy_code: "Copiar código",
+        share: "Compartir",
+        joined_one: "familia se ha unido con tu código",
+        joined_many: "familias se han unido con tu código",
+        reward_note: `Cada referido exitoso suma ${rewardDays} días de Plus a ambas familias.`,
+        how_title: "Cómo funciona",
+        how_1: "Comparte tu enlace de invitación con otra familia.",
+        how_2: "Ellos crean su cuenta familiar usando tu código.",
+        how_3: `Ambos reciben ${rewardDays} días de Plus — gratis, sin tarjeta.`,
+        unavailable: "El enlace de invitación no está disponible por ahora. Intenta más tarde.",
+    },
+}[lang]!;
+
+const shareTitle = lang === "es"
+    ? "Únete a Family Task Manager"
+    : "Join Family Task Manager";
+const shareText = lang === "es"
+    ? `¡Te invito a organizar las tareas y finanzas de tu familia! Usa mi código ${code} y ambos recibimos un mes de Plus gratis.`
+    : `Come organize your family's chores and finances with me! Use my code ${code} and we both get a free month of Plus.`;
+---
+
+<PageLayout
+    title={labels.title}
+    headerClass="bg-gradient-to-br from-amber-500 to-orange-500"
+    dark
+    backClass="text-amber-100 hover:text-white"
+    backHref="/parent/settings"
+    backLabel={labels.back}
+    role={user.role}
+    active="parent"
+    lang={lang}
+>
+    <p class="text-sm text-brand-ink-soft mb-6">{labels.subtitle}</p>
+
+    {code ? (
+        <div class="space-y-6">
+            <div class="bg-gradient-to-br from-brand-sun/20 to-amber-100 border border-brand-sun rounded-2xl p-5 flex items-center gap-4">
+                <span class="text-4xl leading-none">🎁</span>
+                <div>
+                    <p class="text-2xl font-black text-brand-ink">{joinedCount}</p>
+                    <p class="text-sm text-brand-ink-soft">
+                        {joinedCount === 1 ? labels.joined_one : labels.joined_many}
+                    </p>
+                </div>
+            </div>
+
+            <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5">
+                <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wide mb-2">{labels.your_code}</p>
+                <div class="flex items-center gap-3">
+                    <code id="referral-code" class="flex-1 text-2xl font-black font-mono tracking-widest text-brand-coral-deep bg-brand-cream-deep border border-brand-ink/10 rounded-xl px-4 py-3 text-center">{code}</code>
+                    <button
+                        id="copy-code-btn"
+                        type="button"
+                        class="shrink-0 bg-brand-ink/5 hover:bg-brand-ink/10 text-brand-ink font-semibold text-sm px-4 py-3 rounded-xl transition-colors"
+                    >
+                        {labels.copy_code}
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5">
+                <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wide mb-2">{labels.share_link}</p>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <input
+                        id="share-link"
+                        type="text"
+                        readonly
+                        value={shareLink}
+                        class="flex-1 min-w-0 border border-brand-ink/20 rounded-lg px-3 py-2 text-sm font-mono text-brand-ink bg-brand-cream-deep focus:outline-none focus:border-brand-coral"
+                    />
+                    <div class="flex gap-2">
+                        <button
+                            id="copy-link-btn"
+                            type="button"
+                            class="flex-1 sm:flex-none bg-brand-coral hover:bg-brand-coral-deep text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+                        >
+                            {labels.copy}
+                        </button>
+                        <button
+                            id="share-btn"
+                            type="button"
+                            class="hidden flex-1 sm:flex-none bg-brand-ink/5 hover:bg-brand-ink/10 text-brand-ink font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+                        >
+                            {labels.share}
+                        </button>
+                    </div>
+                </div>
+                <p class="text-xs text-brand-ink-soft mt-3">{labels.reward_note}</p>
+            </div>
+
+            <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5">
+                <h2 class="font-bold text-brand-ink mb-3">{labels.how_title}</h2>
+                <ol class="space-y-2 text-sm text-brand-ink-soft">
+                    <li class="flex gap-3"><span class="shrink-0 w-6 h-6 rounded-full bg-brand-sun/30 text-brand-ink font-bold text-xs flex items-center justify-center">1</span>{labels.how_1}</li>
+                    <li class="flex gap-3"><span class="shrink-0 w-6 h-6 rounded-full bg-brand-sun/30 text-brand-ink font-bold text-xs flex items-center justify-center">2</span>{labels.how_2}</li>
+                    <li class="flex gap-3"><span class="shrink-0 w-6 h-6 rounded-full bg-brand-sun/30 text-brand-ink font-bold text-xs flex items-center justify-center">3</span>{labels.how_3}</li>
+                </ol>
+            </div>
+        </div>
+    ) : (
+        <div class="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm">
+            {labels.unavailable}
+        </div>
+    )}
+</PageLayout>
+
+<script
+    is:inline
+    define:vars={{
+        copyLabel: labels.copy,
+        copiedLabel: labels.copied,
+        copyCodeLabel: labels.copy_code,
+        shareTitle,
+        shareText,
+        shareLink,
+    }}
+>
+    document.addEventListener("astro:page-load", () => {
+        const copyLinkBtn = document.getElementById("copy-link-btn");
+        const copyCodeBtn = document.getElementById("copy-code-btn");
+        const shareBtn = document.getElementById("share-btn");
+        const shareInput = document.getElementById("share-link");
+        const codeEl = document.getElementById("referral-code");
+
+        async function copyText(text, btn, revertLabel) {
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch {
+                // Fallback for browsers without the async clipboard API.
+                if (shareInput) {
+                    shareInput.focus();
+                    shareInput.select();
+                    try { document.execCommand("copy"); } catch { /* noop */ }
+                }
+            }
+            if (btn) {
+                const original = revertLabel;
+                btn.textContent = copiedLabel;
+                setTimeout(() => { btn.textContent = original; }, 2000);
+            }
+        }
+
+        copyLinkBtn?.addEventListener("click", () => {
+            copyText(shareInput?.value ?? shareLink, copyLinkBtn, copyLabel);
+        });
+        copyCodeBtn?.addEventListener("click", () => {
+            copyText((codeEl?.textContent ?? "").trim(), copyCodeBtn, copyCodeLabel);
+        });
+
+        // Native share sheet where supported (mobile) — reveal the button.
+        if (navigator.share && shareBtn) {
+            shareBtn.classList.remove("hidden");
+            shareBtn.addEventListener("click", async () => {
+                try {
+                    await navigator.share({
+                        title: shareTitle,
+                        text: shareText,
+                        url: shareInput?.value ?? shareLink,
+                    });
+                } catch { /* user cancelled */ }
+            });
+        }
+    });
+</script>
