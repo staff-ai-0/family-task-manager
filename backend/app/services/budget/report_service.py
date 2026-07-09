@@ -7,7 +7,7 @@ Business logic for budget reports and analytics.
 from datetime import date, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, case, or_
-from typing import Dict, List
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from app.models.budget import (
@@ -704,4 +704,291 @@ class ReportService:
                 "actual": total_actual,
                 "variance": total_budgeted - total_actual,
             },
+        }
+
+    # ------------------------------------------------------------------
+    # Cash-flow forecast + bill calendar
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _project_occurrences(
+        cls,
+        template,
+        window_start: date,
+        window_end: date,
+        max_occurrences: int = 400,
+    ) -> List[date]:
+        """Project a recurring template's occurrence dates within a window.
+
+        Iterates on the RAW (weekend-unadjusted) occurrence sequence for a
+        strictly-monotonic cursor — feeding a weekend-adjusted date back into
+        the calculator can stall (e.g. a daily 'before' rule that keeps
+        snapping Saturday back to Friday). Each raw hit is then weekend-adjusted
+        for its displayed date. Occurrences already posted (on/before
+        ``last_generated_date``) are skipped so they aren't double-counted
+        against the current balance. ``after_n`` templates are capped at their
+        remaining occurrence budget.
+        """
+        from app.services.budget.recurring_transaction_service import (
+            RecurringTransactionService as _RTS,
+        )
+
+        # Never project occurrences the template has already posted.
+        lower_bound = window_start
+        if template.last_generated_date is not None:
+            gen_next = template.last_generated_date + timedelta(days=1)
+            if gen_next > lower_bound:
+                lower_bound = gen_next
+
+        # Respect after_n: only project the remaining occurrence budget.
+        remaining: Optional[int] = None
+        if template.end_mode == "after_n" and template.occurrence_limit is not None:
+            remaining = max(0, template.occurrence_limit - template.occurrence_count)
+            if remaining == 0:
+                return []
+
+        def _next_raw(from_d: date) -> Optional[date]:
+            return _RTS._calculate_next_occurrence(
+                template.start_date,
+                template.recurrence_type,
+                template.recurrence_interval,
+                template.recurrence_pattern,
+                template.end_date,
+                from_date=from_d,
+                end_mode="never",  # limit enforced here, not inside the calc
+                weekend_behavior="none",
+            )
+
+        # First raw occurrence on/after lower_bound.
+        cursor = _next_raw(lower_bound - timedelta(days=1))
+
+        occurrences: List[date] = []
+        iterations = 0
+        while (
+            cursor is not None
+            and cursor <= window_end
+            and iterations < max_occurrences
+        ):
+            if cursor >= lower_bound:
+                occurrences.append(
+                    _RTS._adjust_weekend(cursor, template.weekend_behavior)
+                )
+                if remaining is not None and len(occurrences) >= remaining:
+                    break
+            nxt = _next_raw(cursor)
+            if nxt is None or nxt <= cursor:
+                break
+            cursor = nxt
+            iterations += 1
+
+        return occurrences
+
+    @classmethod
+    async def get_cash_flow_forecast(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        horizon_days: int = 30,
+        as_of_date: Optional[date] = None,
+    ) -> Dict:
+        """Project on-budget cash forward over the next ``horizon_days``.
+
+        Builds three things from the family's active recurring templates:
+        1. An ``upcoming`` bill/income calendar — every projected occurrence in
+           the horizon, sorted by date, ready to render as a list-by-date.
+        2. A projected running-balance ``series`` (total across accounts):
+           current balance, then each occurrence applied in date order.
+        3. Per-account and total summaries: starting balance + scheduled income
+           − scheduled bills = projected balance.
+
+        Only on-budget, non-closed accounts (real spendable cash) are included,
+        and only templates whose account is in that set are projected. All cents
+        values are ints so a Decimal never serializes as a JSON string.
+        Family-scoped throughout.
+        """
+        from app.services.budget.account_service import AccountService
+        from app.services.budget.recurring_transaction_service import (
+            RecurringTransactionService,
+        )
+
+        if as_of_date is None:
+            as_of_date = date.today()
+        # Clamp to a sane range so a bad query param can't cost unbounded work.
+        horizon_days = max(1, min(int(horizon_days), 365))
+        window_start = as_of_date
+        window_end = as_of_date + timedelta(days=horizon_days)
+
+        accounts = await AccountService.list_budget_accounts(
+            db, family_id, include_closed=False
+        )
+
+        if not accounts:
+            return {
+                "as_of_date": as_of_date.isoformat(),
+                "horizon_days": horizon_days,
+                "start_date": window_start.isoformat(),
+                "end_date": window_end.isoformat(),
+                "currency": "MXN",
+                "starting_balance": 0,
+                "scheduled_income": 0,
+                "scheduled_expense": 0,
+                "projected_balance": 0,
+                "projected_low": 0,
+                "accounts": [],
+                "upcoming": [],
+                "series": [
+                    {"date": window_start.isoformat(), "balance": 0},
+                    {"date": window_end.isoformat(), "balance": 0},
+                ],
+            }
+
+        currency = accounts[0].currency or "MXN"
+        account_ids = [a.id for a in accounts]
+        account_by_id = {a.id: a for a in accounts}
+
+        balances = await AccountService.get_balances_for_accounts(
+            db, account_ids, family_id, as_of_date
+        )
+
+        # Per-account running tallies keyed by account id.
+        acct_start = {aid: int(balances.get(aid, {}).get("balance", 0)) for aid in account_ids}
+        acct_income = {aid: 0 for aid in account_ids}
+        acct_expense = {aid: 0 for aid in account_ids}
+
+        templates = await RecurringTransactionService.list_by_family_filtered(
+            db, family_id, active_only=True
+        )
+        templates = [t for t in templates if t.account_id in account_by_id]
+
+        # Batch-resolve payee + category display names (avoid lazy-load / N+1).
+        payee_ids = {t.payee_id for t in templates if t.payee_id}
+        category_ids = {t.category_id for t in templates if t.category_id}
+        payee_names: Dict[UUID, str] = {}
+        category_names: Dict[UUID, str] = {}
+        if payee_ids:
+            from app.models.budget import BudgetPayee
+            rows = (
+                await db.execute(
+                    select(BudgetPayee.id, BudgetPayee.name).where(
+                        and_(
+                            BudgetPayee.family_id == family_id,
+                            BudgetPayee.id.in_(payee_ids),
+                        )
+                    )
+                )
+            ).all()
+            payee_names = {r[0]: r[1] for r in rows}
+        if category_ids:
+            rows = (
+                await db.execute(
+                    select(BudgetCategory.id, BudgetCategory.name).where(
+                        and_(
+                            BudgetCategory.family_id == family_id,
+                            BudgetCategory.id.in_(category_ids),
+                        )
+                    )
+                )
+            ).all()
+            category_names = {r[0]: r[1] for r in rows}
+
+        upcoming: List[Dict] = []
+        for template in templates:
+            for occ_date in cls._project_occurrences(template, window_start, window_end):
+                amount = int(template.amount)
+                acct = account_by_id[template.account_id]
+                if amount >= 0:
+                    acct_income[template.account_id] += amount
+                else:
+                    acct_expense[template.account_id] += -amount
+                upcoming.append({
+                    "date": occ_date.isoformat(),
+                    "recurring_id": str(template.id),
+                    "name": template.name,
+                    "amount": amount,
+                    "amount_currency": amount / 100,
+                    "is_income": amount >= 0,
+                    "account_id": str(template.account_id),
+                    "account_name": acct.name,
+                    "category_id": str(template.category_id) if template.category_id else None,
+                    "category_name": category_names.get(template.category_id),
+                    "payee_id": str(template.payee_id) if template.payee_id else None,
+                    "payee_name": payee_names.get(template.payee_id),
+                })
+
+        # Stable ordering: by date, income before expense on the same day, then name.
+        upcoming.sort(key=lambda i: (i["date"], 0 if i["is_income"] else 1, i["name"]))
+
+        # Per-account summary rows.
+        account_rows: List[Dict] = []
+        for aid in account_ids:
+            acct = account_by_id[aid]
+            start = acct_start[aid]
+            income = acct_income[aid]
+            expense = acct_expense[aid]
+            projected = start + income - expense
+            account_rows.append({
+                "account_id": str(aid),
+                "account_name": acct.name,
+                "account_type": acct.type,
+                "starting_balance": start,
+                "starting_balance_currency": start / 100,
+                "scheduled_income": income,
+                "scheduled_expense": expense,
+                "projected_balance": projected,
+                "projected_balance_currency": projected / 100,
+            })
+
+        starting_total = sum(acct_start.values())
+        income_total = sum(acct_income.values())
+        expense_total = sum(acct_expense.values())
+        projected_total = starting_total + income_total - expense_total
+
+        # Total projected running-balance series: one point per active date,
+        # each holding the end-of-day balance. Endpoints anchor the horizon.
+        running = starting_total
+        series: List[Dict] = [{
+            "date": window_start.isoformat(),
+            "balance": running,
+            "balance_currency": running / 100,
+        }]
+        projected_low = starting_total
+        for item in upcoming:
+            running += item["amount"]
+            projected_low = min(projected_low, running)
+            if series and series[-1]["date"] == item["date"]:
+                series[-1]["balance"] = running
+                series[-1]["balance_currency"] = running / 100
+            else:
+                series.append({
+                    "date": item["date"],
+                    "balance": running,
+                    "balance_currency": running / 100,
+                })
+        end_iso = window_end.isoformat()
+        if series[-1]["date"] != end_iso:
+            series.append({
+                "date": end_iso,
+                "balance": running,
+                "balance_currency": running / 100,
+            })
+
+        return {
+            "as_of_date": as_of_date.isoformat(),
+            "horizon_days": horizon_days,
+            "start_date": window_start.isoformat(),
+            "end_date": window_end.isoformat(),
+            "currency": currency,
+            "starting_balance": starting_total,
+            "starting_balance_currency": starting_total / 100,
+            "scheduled_income": income_total,
+            "scheduled_income_currency": income_total / 100,
+            "scheduled_expense": expense_total,
+            "scheduled_expense_currency": expense_total / 100,
+            "projected_balance": projected_total,
+            "projected_balance_currency": projected_total / 100,
+            "projected_low": projected_low,
+            "projected_low_currency": projected_low / 100,
+            "accounts": account_rows,
+            "upcoming": upcoming,
+            "series": series,
         }

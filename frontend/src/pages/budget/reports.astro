@@ -16,9 +16,11 @@ import {
     getSpendingReport,
     getIncomeVsExpenseReport,
     getNetWorthReport,
+    getCashFlowForecast,
     getCategoryGroups,
     formatCurrency,
     getMonthName,
+    formatDate,
 } from "@lib/api/budget";
 import { t } from "@lib/i18n";
 
@@ -38,9 +40,13 @@ if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 // --- Query params ---
 const tab = (Astro.url.searchParams.get("tab") || "spending") as
-    "spending" | "cashflow" | "networth" | "analysis";
+    "spending" | "cashflow" | "networth" | "forecast" | "analysis";
 const period = (Astro.url.searchParams.get("period") || "3m") as
     "1m" | "3m" | "6m" | "1y";
+
+// Forecast horizon is independent of the spending/cashflow period selector.
+const horizonRaw = parseInt(Astro.url.searchParams.get("horizon") || "30", 10);
+const horizon = ([30, 60, 90].includes(horizonRaw) ? horizonRaw : 30) as 30 | 60 | 90;
 
 // --- Date range from period ---
 const now = new Date();
@@ -50,10 +56,11 @@ const startDate = startD.toISOString().split("T")[0].slice(0, 7) + "-01";
 const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
 // --- Fetch ALL reports in parallel ---
-const [spendingRes, cashflowRes, networthRes, accountsRes, groupsRes, draftsCountRes] = await Promise.all([
+const [spendingRes, cashflowRes, networthRes, forecastRes, accountsRes, groupsRes, draftsCountRes] = await Promise.all([
     getSpendingReport(token, startDate, endDate, "category"),
     getIncomeVsExpenseReport(token, startDate, endDate, "month"),
     getNetWorthReport(token),
+    getCashFlowForecast(token, horizon),
     apiFetch<any[]>("/api/budget/accounts/", { token }),
     getCategoryGroups(token),
     apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token }),
@@ -70,6 +77,21 @@ const totalExpense = cashflowItems.reduce((s: number, i: any) => s + Math.abs(i.
 
 const networth = networthRes.data || { net_worth: 0, total_assets: 0, total_liabilities: 0, accounts: [] };
 const nwAccounts: any[] = networth.accounts || [];
+
+// --- Forecast: group upcoming items by date for a bill-calendar list ---
+const forecast = forecastRes.data || {
+    starting_balance: 0, projected_balance: 0, projected_low: 0,
+    scheduled_income: 0, scheduled_expense: 0, upcoming: [], accounts: [],
+};
+const forecastUpcoming: any[] = forecast.upcoming || [];
+const forecastAccounts: any[] = forecast.accounts || [];
+const forecastNet = (forecast.scheduled_income || 0) - (forecast.scheduled_expense || 0);
+const forecastByDate: { date: string; items: any[] }[] = [];
+for (const item of forecastUpcoming) {
+    const last = forecastByDate[forecastByDate.length - 1];
+    if (last && last.date === item.date) last.items.push(item);
+    else forecastByDate.push({ date: item.date, items: [item] });
+}
 
 const accounts: any[] = accountsRes.data || [];
 const allGroups: any[] = groupsRes.data || [];
@@ -226,6 +248,143 @@ const reportsLocked = planName === "free";
             </div>
         </div>
 
+        <!-- ==================== FORECAST ==================== -->
+        <div id="report-forecast" class={tab !== "forecast" ? "hidden" : ""}>
+            <div class="px-4 pb-6">
+                <!-- Horizon selector: 30 / 60 / 90 days -->
+                <div class="flex items-center justify-center gap-2 mt-2 mb-3">
+                    {[30, 60, 90].map((h) => (
+                        <button
+                            type="button"
+                            class={`horizon-btn px-3 py-1 rounded-full text-xs font-bold transition-colors ${
+                                horizon === h
+                                    ? "bg-brand-sky-deep text-white"
+                                    : "bg-brand-cream-deep text-brand-ink-soft"
+                            }`}
+                            data-horizon={h}
+                        >
+                            {h} {es ? "días" : "days"}
+                        </button>
+                    ))}
+                </div>
+
+                <!-- Projected balance hero -->
+                <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] p-5 text-center">
+                    <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider mb-1">
+                        {es ? `Saldo proyectado (${horizon} días)` : `Projected balance (${horizon} days)`}
+                    </p>
+                    <p class={`text-4xl font-extrabold tracking-tight ${forecast.projected_balance >= 0 ? 'text-brand-mint-deep' : 'text-red-600'}`}>
+                        {formatCurrency(forecast.projected_balance)}
+                    </p>
+                    <p class="text-xs text-brand-ink-soft mt-1">
+                        {es ? "Saldo actual" : "Current balance"}: <span class="font-semibold text-brand-ink">{formatCurrency(forecast.starting_balance)}</span>
+                    </p>
+                    {forecast.projected_low < 0 && (
+                        <p class="mt-2 text-xs font-semibold text-red-600">
+                            {es
+                                ? `Advertencia: el saldo llega a ${formatCurrency(forecast.projected_low)}`
+                                : `Heads up: balance dips to ${formatCurrency(forecast.projected_low)}`}
+                        </p>
+                    )}
+                </div>
+
+                <!-- Income / expense summary -->
+                <div class="grid grid-cols-3 gap-2 mt-3">
+                    <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] p-3 text-center">
+                        <p class="text-[10px] font-semibold text-brand-ink-soft uppercase tracking-wide">{es ? "Ingresos" : "Income"}</p>
+                        <p class="text-sm font-bold text-brand-mint-deep mt-0.5">+{formatCurrency(forecast.scheduled_income)}</p>
+                    </div>
+                    <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] p-3 text-center">
+                        <p class="text-[10px] font-semibold text-brand-ink-soft uppercase tracking-wide">{es ? "Gastos" : "Bills"}</p>
+                        <p class="text-sm font-bold text-red-600 mt-0.5">-{formatCurrency(forecast.scheduled_expense)}</p>
+                    </div>
+                    <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] p-3 text-center">
+                        <p class="text-[10px] font-semibold text-brand-ink-soft uppercase tracking-wide">{es ? "Neto" : "Net"}</p>
+                        <p class={`text-sm font-bold mt-0.5 ${forecastNet >= 0 ? 'text-brand-mint-deep' : 'text-red-600'}`}>
+                            {forecastNet >= 0 ? '+' : ''}{formatCurrency(forecastNet)}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Bill calendar: upcoming items grouped by date -->
+                <h3 class="text-sm font-bold text-brand-ink mt-5 mb-2">
+                    {es ? "Próximos movimientos" : "Upcoming items"}
+                </h3>
+                {forecastByDate.length === 0 ? (
+                    <div class="bg-brand-cream-deep border border-brand-ink/10 rounded-xl p-8 text-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-brand-ink-soft mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <p class="text-brand-ink-soft font-medium">
+                            {es ? "Sin pagos recurrentes en este periodo" : "No recurring items in this window"}
+                        </p>
+                        <p class="text-sm text-brand-ink-soft mt-1">
+                            {es ? "Agrega transacciones recurrentes para ver el pronóstico." : "Add recurring transactions to see the forecast."}
+                        </p>
+                    </div>
+                ) : (
+                    <div class="space-y-3">
+                        {forecastByDate.map((group) => (
+                            <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
+                                <div class="px-4 py-2 bg-brand-cream-deep/60 border-b border-brand-ink/10">
+                                    <span class="text-xs font-bold text-brand-ink capitalize">{formatDate(group.date, lang)}</span>
+                                </div>
+                                <div class="divide-y divide-brand-ink/10">
+                                    {group.items.map((item: any) => (
+                                        <div class="px-4 py-2.5 flex items-center justify-between">
+                                            <div class="flex items-center gap-2.5 min-w-0">
+                                                <div class={`w-2 h-2 rounded-full shrink-0 ${item.is_income ? 'bg-brand-mint-deep' : 'bg-red-500'}`}></div>
+                                                <div class="min-w-0">
+                                                    <p class="text-sm font-medium text-brand-ink truncate">{item.name}</p>
+                                                    <p class="text-xs text-brand-ink-soft truncate">
+                                                        {item.category_name || item.payee_name || item.account_name}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span class={`text-sm font-bold shrink-0 ${item.is_income ? 'text-brand-mint-deep' : 'text-red-600'}`}>
+                                                {item.is_income ? '+' : ''}{formatCurrency(item.amount)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                <!-- Per-account projection -->
+                {forecastAccounts.length > 0 && (
+                    <>
+                        <h3 class="text-sm font-bold text-brand-ink mt-5 mb-2">
+                            {es ? "Por cuenta" : "By account"}
+                        </h3>
+                        <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
+                            <div class="divide-y divide-brand-ink/10">
+                                {forecastAccounts.map((acct: any) => (
+                                    <div class="px-4 py-3">
+                                        <div class="flex items-center justify-between mb-0.5">
+                                            <span class="text-sm font-medium text-brand-ink truncate max-w-[55%]">{acct.account_name}</span>
+                                            <span class={`text-sm font-bold ${acct.projected_balance >= 0 ? 'text-brand-ink' : 'text-red-600'}`}>
+                                                {formatCurrency(acct.projected_balance)}
+                                            </span>
+                                        </div>
+                                        <div class="flex items-center justify-between text-xs text-brand-ink-soft">
+                                            <span>{es ? "Actual" : "Now"}: {formatCurrency(acct.starting_balance)}</span>
+                                            <span>
+                                                <span class="text-brand-mint-deep">+{formatCurrency(acct.scheduled_income)}</span>
+                                                {" / "}
+                                                <span class="text-red-600">-{formatCurrency(acct.scheduled_expense)}</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+
         <!-- ==================== NET WORTH ==================== -->
         <div id="report-networth" class={tab !== "networth" ? "hidden" : ""}>
             <div class="px-4 pb-6">
@@ -320,7 +479,7 @@ function initReportTabs() {
             history.replaceState(null, "", url.toString());
 
             // Toggle sections
-            ["spending", "cashflow", "networth", "analysis"].forEach(s => {
+            ["spending", "cashflow", "forecast", "networth", "analysis"].forEach(s => {
                 document.getElementById("report-" + s)?.classList.toggle("hidden", s !== id);
             });
 
@@ -333,6 +492,17 @@ function initReportTabs() {
                 btn.classList.toggle("bg-brand-cream-deep", !isActive);
                 btn.classList.toggle("text-brand-ink-soft", !isActive);
             });
+        });
+    });
+
+    // Forecast horizon switching (reloads to refetch, keeps the forecast tab)
+    document.querySelectorAll(".horizon-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const el = btn as HTMLElement;
+            const url = new URL(window.location.href);
+            url.searchParams.set("tab", "forecast");
+            url.searchParams.set("horizon", el.dataset.horizon || "30");
+            window.location.href = url.toString();
         });
     });
 

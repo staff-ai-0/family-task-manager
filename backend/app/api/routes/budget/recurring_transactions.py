@@ -5,6 +5,7 @@ CRUD endpoints for recurring/scheduled transactions.
 """
 
 from fastapi import APIRouter, Depends, status, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from uuid import UUID
@@ -16,6 +17,7 @@ from app.core.type_utils import to_uuid_required
 from app.core.premium import require_feature
 from app.services.usage_service import UsageService
 from app.services.budget.recurring_transaction_service import RecurringTransactionService
+from app.services.budget.transaction_service import TransactionService
 from app.schemas.budget import (
     RecurringTransactionCreate,
     RecurringTransactionUpdate,
@@ -25,6 +27,24 @@ from app.schemas.budget import (
 from app.models import User
 
 router = APIRouter()
+
+
+class RecurringCandidate(BaseModel):
+    """A detected recurring-charge series the user can promote to a template."""
+    payee_id: UUID
+    payee_name: str
+    amount_cents: int
+    cadence: str
+    occurrences: int
+    avg_interval_days: float
+    last_date: date
+    next_estimated_date: date
+    account_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
+
+
+class RecurringCandidatesResponse(BaseModel):
+    candidates: List[RecurringCandidate]
 
 
 @router.get("/", response_model=List[RecurringTransactionResponse])
@@ -68,6 +88,30 @@ async def create_recurring_transaction(
     )
     await UsageService.increment(db, current_user.family_id, "recurring_transaction")
     return template
+
+
+@router.get("/detect-candidates", response_model=RecurringCandidatesResponse)
+async def detect_recurring_candidates(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+    min_occurrences: int = Query(
+        3, ge=2, le=24,
+        description="Minimum repeating charges before a series is suggested",
+    ),
+):
+    """Detect likely recurring charges from transaction history (parent only).
+
+    Scans the family's transactions for repeating (payee, ~amount, ~regular
+    cadence) series — forgotten subscriptions, monthly bills — and returns
+    them as candidates the user can confirm into a recurring template. Payees
+    already covered by an active template are excluded. Declared before
+    ``/{recurring_id}`` so the literal path wins over the UUID path parameter.
+    """
+    family_id = to_uuid_required(current_user.family_id)
+    candidates = await TransactionService.detect_recurring_candidates(
+        db, family_id, min_occurrences=min_occurrences,
+    )
+    return RecurringCandidatesResponse(candidates=candidates)
 
 
 @router.get("/{recurring_id}", response_model=RecurringTransactionResponse)
