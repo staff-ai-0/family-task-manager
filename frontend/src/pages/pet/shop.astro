@@ -1,0 +1,311 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import { apiFetch } from "../../lib/api";
+import { petFace, COLOR_AURA, stageLabel } from "../../lib/pet-art";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk || !user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+const { data: pet } = await apiFetch<any>("/api/pet/", { token });
+
+let cosmetics: any[] = [];
+let points: number = user.points ?? 0;
+let evoStage = 0;
+if (pet) {
+    const { data: cos } = await apiFetch<any>("/api/pet/cosmetics", { token });
+    if (cos) {
+        cosmetics = cos.cosmetics ?? [];
+        points = cos.points ?? points;
+        evoStage = cos.evolution_stage ?? pet.evolution_stage ?? 0;
+    }
+}
+
+// Group by slot for a clean "progression ladder" layout.
+const SLOTS: { key: string; es: string; en: string; icon: string }[] = [
+    { key: "hat", es: "Sombreros", en: "Hats", icon: "🎩" },
+    { key: "color", es: "Colores", en: "Colours", icon: "🎨" },
+    { key: "accessory", es: "Accesorios", en: "Accessories", icon: "✨" },
+];
+const bySlot = (slot: string) =>
+    cosmetics.filter((c) => c.slot === slot).sort((a, b) => a.min_stage - b.min_stage);
+
+// Currently-equipped, for the live preview.
+const equipped = cosmetics.filter((c) => c.equipped);
+const eqHat = equipped.find((c) => c.slot === "hat");
+const eqAccessory = equipped.find((c) => c.slot === "accessory");
+const eqColor = equipped.find((c) => c.slot === "color");
+const baseFace = pet ? petFace(pet.status_label, pet.species, pet.evolution_stage) : "🥚";
+const initialAura = eqColor?.key ? COLOR_AURA[eqColor.key] : "";
+
+const L = {
+    title: lang === "es" ? "Tienda de mascota" : "Pet shop",
+    subtitle: lang === "es" ? "Gasta puntos para vestir a tu mascota. Desbloquea más al evolucionar." : "Spend points to dress up your pet. Unlock more as it evolves.",
+    no_pet: lang === "es" ? "Adopta una mascota para comprar cosméticos" : "Adopt a pet to buy cosmetics",
+    adopt: lang === "es" ? "Adoptar mascota →" : "Adopt a pet →",
+    pts: lang === "es" ? "pts" : "pts",
+    stage_word: lang === "es" ? "Etapa" : "Stage",
+    buy: lang === "es" ? "Comprar" : "Buy",
+    equip: lang === "es" ? "Equipar" : "Equip",
+    unequip: lang === "es" ? "Quitar" : "Unequip",
+    equipped: lang === "es" ? "Equipado" : "Equipped",
+    owned: lang === "es" ? "Comprado" : "Owned",
+    need_pts: (n: number) => (lang === "es" ? `Faltan ${n} pts` : `Need ${n} pts`),
+    unlock_at: (s: string) => (lang === "es" ? `Se desbloquea en etapa ${s}` : `Unlocks at ${s} stage`),
+    empty: lang === "es" ? "—" : "—",
+};
+---
+
+<PageLayout
+    title={`🛍️ ${L.title}`}
+    headerClass="bg-gradient-to-br from-brand-sun to-brand-coral"
+    dark
+    role={user.role}
+    active="pet"
+    lang={lang}
+    backHref="/pet"
+    mainClass="flex-1 px-4 py-6 space-y-5"
+    containerClass="w-full max-w-md md:max-w-2xl mx-auto bg-brand-cream-deep"
+>
+    {!pet ? (
+        <div class="bg-brand-cream rounded-[var(--radius-card)] p-6 border-2 border-brand-ink shadow-[var(--shadow-card)] text-center space-y-2">
+            <p class="text-5xl">🥚</p>
+            <p class="text-brand-ink font-semibold">{L.no_pet}</p>
+            <a href="/pet" class="inline-block mt-1 font-bold text-brand-sky-deep">{L.adopt}</a>
+        </div>
+    ) : (
+        <>
+            <!-- Live preview + points -->
+            <div class="bg-brand-cream rounded-[var(--radius-card)] p-5 border-2 border-brand-ink shadow-[var(--shadow-pop)] flex items-center gap-4">
+                <div id="shop-preview" class="relative inline-flex items-center justify-center w-28 h-28 flex-shrink-0">
+                    <span
+                        id="shop-preview-aura"
+                        class="absolute inset-0 rounded-full"
+                        style={initialAura ? `background: ${initialAura};` : "background: radial-gradient(circle, rgba(255,200,87,0.28), rgba(255,200,87,0) 70%);"}
+                        aria-hidden="true"
+                    ></span>
+                    <span id="shop-preview-face" class="relative text-6xl leading-none drop-shadow-[2px_2px_0_rgba(31,41,55,0.25)]">{baseFace}</span>
+                    <span id="shop-slot-hat" class="absolute -top-1 left-1/2 -translate-x-1/2 text-xl" aria-hidden="true">{eqHat?.icon ?? ""}</span>
+                    <span id="shop-slot-accessory" class="absolute -bottom-1 -right-1 text-xl" aria-hidden="true">{eqAccessory?.icon ?? ""}</span>
+                    <span id="shop-slot-color" class="absolute -bottom-1 -left-1 text-base" aria-hidden="true">{eqColor?.icon ?? ""}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="font-display font-extrabold text-lg text-brand-ink truncate">{pet.name}</p>
+                    <p class="text-[11px] font-bold uppercase tracking-wider text-brand-ink-soft">
+                        {L.stage_word} {evoStage + 1} · {stageLabel(evoStage, lang)}
+                    </p>
+                    <p class="mt-2 inline-flex items-center gap-1 text-sm font-bold text-brand-sun-deep bg-brand-sun/15 px-3 py-1 rounded-full border border-brand-sun-deep/20">
+                        💰 <span data-shop-points>{points}</span> {L.pts}
+                    </p>
+                </div>
+            </div>
+
+            <p class="text-sm text-brand-ink-soft px-1">{L.subtitle}</p>
+
+            {SLOTS.map((slot) => {
+                const items = bySlot(slot.key);
+                if (items.length === 0) return null;
+                return (
+                    <section class="space-y-3">
+                        <h3 class="text-lg font-display font-extrabold text-brand-ink px-1">{slot.icon} {lang === "es" ? slot.es : slot.en}</h3>
+                        <div class="grid grid-cols-2 gap-3">
+                            {items.map((c) => (
+                                <article
+                                    class="cos-card relative bg-brand-cream rounded-[var(--radius-card)] p-4 border-2 border-brand-ink shadow-[var(--shadow-card)] flex flex-col items-center text-center gap-1"
+                                    data-cos-card
+                                    data-key={c.key}
+                                    data-slot={c.slot}
+                                    data-icon={c.icon}
+                                    data-price={c.price}
+                                    data-min-stage-name={stageLabel(c.min_stage, lang)}
+                                    data-owned={c.owned ? "1" : "0"}
+                                    data-equipped={c.equipped ? "1" : "0"}
+                                    data-unlocked={c.unlocked ? "1" : "0"}
+                                >
+                                    <span class={`text-4xl ${c.unlocked ? "" : "grayscale opacity-40"}`}>{c.icon}</span>
+                                    <p class="text-sm font-bold text-brand-ink leading-tight">{lang === "es" ? c.name.es : c.name.en}</p>
+                                    <p class="text-xs font-bold text-brand-sun-deep">{c.price} {L.pts}</p>
+                                    <div data-cos-actions class="w-full mt-1"></div>
+                                    {!c.unlocked && (
+                                        <span class="absolute top-2 right-2 text-xs" title={L.unlock_at(stageLabel(c.min_stage, lang))}>🔒</span>
+                                    )}
+                                </article>
+                            ))}
+                        </div>
+                    </section>
+                );
+            })}
+
+            <!-- Toast -->
+            <div data-shop-toast class="fixed left-1/2 -translate-x-1/2 bottom-24 z-50 hidden px-4 py-2 rounded-full bg-brand-ink text-brand-cream text-sm font-semibold shadow-[var(--shadow-card)]"></div>
+        </>
+    )}
+</PageLayout>
+
+<script>
+    import { petHeart } from "../../lib/pet-fx";
+    import { COLOR_AURA } from "../../lib/pet-art";
+
+    function initShop() {
+        const es = document.documentElement.lang === "es";
+        const cards = Array.from(document.querySelectorAll<HTMLElement>("[data-cos-card]"));
+        if (cards.length === 0) return;
+
+        const pointsEl = document.querySelector<HTMLElement>("[data-shop-points]");
+        const toast = document.querySelector<HTMLElement>("[data-shop-toast]");
+        const preview = document.getElementById("shop-preview");
+        const slotEls: Record<string, HTMLElement | null> = {
+            hat: document.getElementById("shop-slot-hat"),
+            accessory: document.getElementById("shop-slot-accessory"),
+            color: document.getElementById("shop-slot-color"),
+        };
+        const auraEl = document.getElementById("shop-preview-aura");
+        let points = Number(pointsEl?.textContent ?? "0");
+
+        const T = {
+            buy: es ? "Comprar" : "Buy",
+            equip: es ? "Equipar" : "Equip",
+            unequip: es ? "Quitar" : "Unequip",
+            equipped: es ? "Equipado" : "Equipped",
+            need: (n: number) => (es ? `Faltan ${n} pts` : `Need ${n} pts`),
+            unlock: (s: string) => (es ? `Etapa ${s}` : `${s} stage`),
+        };
+
+        function showToast(msg: string) {
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.classList.remove("hidden");
+            window.clearTimeout((toast as any)._t);
+            (toast as any)._t = window.setTimeout(() => toast.classList.add("hidden"), 2400);
+        }
+
+        function setPoints(n: number) {
+            points = n;
+            if (pointsEl) pointsEl.textContent = String(n);
+        }
+
+        function updatePreview(slot: string, icon: string, key: string | null) {
+            const el = slotEls[slot];
+            if (el) el.textContent = icon;
+            if (slot === "color" && auraEl) {
+                const aura = key ? COLOR_AURA[key] : "";
+                auraEl.style.background = aura || "radial-gradient(circle, rgba(255,200,87,0.28), rgba(255,200,87,0) 70%)";
+            }
+        }
+
+        function renderCard(card: HTMLElement) {
+            const actions = card.querySelector<HTMLElement>("[data-cos-actions]");
+            if (!actions) return;
+            const owned = card.dataset.owned === "1";
+            const equipped = card.dataset.equipped === "1";
+            const unlocked = card.dataset.unlocked === "1";
+            const price = Number(card.dataset.price ?? "0");
+            const minStageName = card.dataset.minStageName ?? "";
+
+            actions.innerHTML = "";
+            if (!unlocked) {
+                const pill = document.createElement("span");
+                pill.className = "block text-[11px] font-semibold text-brand-ink-soft";
+                pill.textContent = "🔒 " + T.unlock(minStageName);
+                actions.appendChild(pill);
+                return;
+            }
+            if (!owned) {
+                const btn = document.createElement("button");
+                const affordable = points >= price;
+                btn.type = "button";
+                btn.dataset.act = "buy";
+                btn.disabled = !affordable;
+                btn.className = "w-full py-1.5 rounded-lg font-bold text-xs border-2 border-brand-ink shadow-[2px_2px_0_var(--color-brand-ink)] active:scale-95 transition-all " +
+                    (affordable ? "bg-brand-sun-deep text-white" : "bg-brand-cream-deep text-brand-ink-soft opacity-60 shadow-none cursor-not-allowed");
+                btn.textContent = affordable ? T.buy : T.need(price - points);
+                actions.appendChild(btn);
+                return;
+            }
+            if (equipped) {
+                const wrap = document.createElement("div");
+                wrap.className = "w-full space-y-1";
+                const pill = document.createElement("span");
+                pill.className = "block text-[11px] font-bold text-brand-mint-deep";
+                pill.textContent = "✓ " + T.equipped;
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.dataset.act = "unequip";
+                btn.className = "w-full py-1.5 rounded-lg font-bold text-xs border-2 border-brand-ink bg-brand-cream-deep text-brand-ink active:scale-95 transition-all";
+                btn.textContent = T.unequip;
+                wrap.append(pill, btn);
+                actions.appendChild(wrap);
+                return;
+            }
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.dataset.act = "equip";
+            btn.className = "w-full py-1.5 rounded-lg font-bold text-xs border-2 border-brand-ink bg-brand-mint-deep text-white shadow-[2px_2px_0_var(--color-brand-ink)] active:scale-95 transition-all";
+            btn.textContent = T.equip;
+            actions.appendChild(btn);
+        }
+
+        function renderAll() { cards.forEach(renderCard); }
+        renderAll();
+
+        async function post(path: string, key: string): Promise<any> {
+            const r = await fetch(path, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ cosmetic_key: key }),
+            });
+            if (!r.ok) {
+                const d = await r.json().catch(() => ({}));
+                throw new Error(d?.message ?? d?.detail ?? (es ? "No se pudo" : "Could not complete"));
+            }
+            return r.json();
+        }
+
+        for (const card of cards) {
+            card.querySelector<HTMLElement>("[data-cos-actions]")!.addEventListener("click", async (ev) => {
+                const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>("button[data-act]");
+                if (!btn || btn.disabled) return;
+                const act = btn.dataset.act!;
+                const key = card.dataset.key!;
+                const slot = card.dataset.slot!;
+                const icon = card.dataset.icon ?? "";
+                const price = Number(card.dataset.price ?? "0");
+                btn.disabled = true;
+
+                try {
+                    if (act === "buy") {
+                        await post("/api/pet/cosmetics/buy", key);
+                        setPoints(points - price);
+                        card.dataset.owned = "1";
+                        if (preview) petHeart(preview, "🛍️");
+                        renderAll(); // affordability of other cards may change
+                    } else if (act === "equip") {
+                        const res = await post("/api/pet/cosmetics/equip", key);
+                        // One equipped per slot: clear siblings client-side.
+                        cards.forEach((c) => { if (c !== card && c.dataset.slot === slot) c.dataset.equipped = "0"; });
+                        card.dataset.equipped = res?.equipped === false ? "0" : "1";
+                        updatePreview(slot, icon, key);
+                        if (preview) petHeart(preview, "✨");
+                        renderAll();
+                    } else if (act === "unequip") {
+                        await post("/api/pet/cosmetics/unequip", key);
+                        card.dataset.equipped = "0";
+                        updatePreview(slot, "", null);
+                        renderAll();
+                    }
+                } catch (err: any) {
+                    renderCard(card); // restore button state
+                    showToast(typeof err?.message === "string" ? err.message : (es ? "Error" : "Error"));
+                }
+            });
+        }
+    }
+
+    document.addEventListener("astro:page-load", initShop);
+</script>

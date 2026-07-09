@@ -1498,6 +1498,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "id": r.id,
                 "template_id": r.template_id,
                 "title": r.template.title,
+                "title_es": r.template.title_es,
                 "points": r.template.points,
                 "is_bonus": is_bonus,
                 "status": r.status.value,

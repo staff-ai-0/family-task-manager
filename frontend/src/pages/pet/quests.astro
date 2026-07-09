@@ -1,0 +1,359 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import PetAvatar from "../../components/pet/PetAvatar.astro";
+import { apiFetch } from "../../lib/api";
+import { stageLabel, stageProgressPct, MAX_STAGE } from "../../lib/pet-art";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+
+const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
+if (!userOk || !user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+
+const { data: view } = await apiFetch<any>("/api/pet/quest-view", { token });
+const pet = view?.pet ?? null;
+const quests: any[] = Array.isArray(view?.quests) ? view.quests : [];
+
+const stage = pet?.evolution_stage ?? 0;
+const stagePct = pet ? stageProgressPct(pet.xp, stage) : 0;
+const nextStageXp = pet?.xp_to_next_stage ?? null;
+const xpToStage = pet && nextStageXp != null ? Math.max(0, nextStageXp - pet.xp) : 0;
+const nextStageName = stage < MAX_STAGE ? stageLabel(stage + 1, lang) : "";
+
+// Buckets: active (do now) · epic (gigs → need proof, done on the tasks page) ·
+// locked · done.
+// Spanish-first: prefer the localized task title when present.
+const qt = (q: any) => (lang === "es" && q.title_es ? q.title_es : q.title);
+const active = quests.filter((q) => !q.done && !q.is_locked && !q.is_bonus);
+const epic = quests.filter((q) => !q.done && !q.is_locked && q.is_bonus);
+const locked = quests.filter((q) => !q.done && q.is_locked);
+const done = quests.filter((q) => q.done);
+const totalActionable = active.length + epic.length + locked.length;
+
+const L = {
+    title: lang === "es" ? "Misiones" : "Quests",
+    subtitle: lang === "es" ? "Completa misiones para alimentar y hacer evolucionar a tu mascota" : "Finish quests to feed and evolve your pet",
+    no_pet: lang === "es" ? "Adopta una mascota para empezar tus misiones" : "Adopt a pet to start your quests",
+    adopt: lang === "es" ? "Adoptar mascota →" : "Adopt a pet →",
+    all_done: lang === "es" ? "¡Todas las misiones completadas! 🎉" : "All quests complete! 🎉",
+    all_done_sub: lang === "es" ? "Tu mascota está feliz y bien alimentada." : "Your pet is happy and well fed.",
+    none: lang === "es" ? "No hay misiones para hoy." : "No quests for today.",
+    todays: lang === "es" ? "Misiones de hoy" : "Today's quests",
+    epic: lang === "es" ? "Misiones épicas" : "Epic quests",
+    epic_hint: lang === "es" ? "Necesitan una foto — termínalas en tus tareas" : "Need a photo — finish them on your tasks",
+    locked: lang === "es" ? "Bloqueadas" : "Locked",
+    locked_hint: lang === "es" ? "Termina las misiones de hoy para desbloquear" : "Finish today's quests to unlock",
+    done_h: lang === "es" ? "Completadas" : "Completed",
+    complete: lang === "es" ? "¡Completar!" : "Complete!",
+    go_tasks: lang === "es" ? "Ir a tareas →" : "Go to tasks →",
+    xp: "XP",
+    pts: lang === "es" ? "pts" : "pts",
+    level: lang === "es" ? "Nivel" : "Level",
+    to_next_stage: (n: number, s: string) => (lang === "es" ? `${n} XP para evolucionar a ${s}` : `${n} XP to evolve into ${s}`),
+    max_stage: lang === "es" ? "¡Evolución máxima! 🌟" : "Max evolution! 🌟",
+    feeding: lang === "es" ? "¡+{xp} XP! Tu mascota está feliz" : "+{xp} XP! Your pet is happy",
+    evolved: lang === "es" ? "¡Tu mascota evolucionó! 🌟" : "Your pet evolved! 🌟",
+};
+
+// A single quest card (progressive-enhancement free — button wired client-side).
+---
+
+<PageLayout
+    title={`🗺️ ${L.title}`}
+    headerClass="bg-gradient-to-br from-violet-500 to-brand-sky-deep"
+    dark
+    role={user.role}
+    active="pet"
+    lang={lang}
+    backHref="/pet"
+    mainClass="flex-1 px-4 py-6 space-y-5"
+    containerClass="w-full max-w-md md:max-w-2xl mx-auto bg-brand-cream-deep"
+>
+    <!-- Pet + XP hero -->
+    {pet ? (
+        <div
+            class="bg-brand-cream rounded-[var(--radius-card)] p-5 border-2 border-brand-ink shadow-[var(--shadow-pop)] flex items-center gap-4"
+            data-quest-hero
+            data-xp={pet.xp}
+            data-stage={stage}
+            data-species={pet.species}
+            data-status={pet.status_label}
+        >
+            <PetAvatar species={pet.species} stage={stage} status={pet.status_label} equipped={pet.equipped_cosmetics ?? []} size="lg" reactId="quest-pet-face" />
+            <div class="flex-1 min-w-0">
+                <p class="font-display font-extrabold text-lg text-brand-ink truncate">{pet.name}</p>
+                <p class="text-[11px] font-bold uppercase tracking-wider text-brand-ink-soft">
+                    {stageLabel(stage, lang)} · {L.level} <span data-hero-level>{pet.level}</span>
+                </p>
+                <div class="mt-2">
+                    <div class="flex justify-between text-[11px] text-brand-ink-soft mb-1">
+                        <span>⭐ {L.xp}</span>
+                        <span data-hero-remaining>
+                            {stage >= MAX_STAGE ? L.max_stage : L.to_next_stage(xpToStage, nextStageName)}
+                        </span>
+                    </div>
+                    <div class="h-3 bg-brand-cream-deep rounded-full overflow-hidden border border-brand-ink/10">
+                        <div data-hero-bar class="h-full bg-brand-sky-deep transition-all duration-700" style={`width: ${stagePct}%`}></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    ) : (
+        <div class="bg-brand-cream rounded-[var(--radius-card)] p-6 border-2 border-brand-ink shadow-[var(--shadow-card)] text-center space-y-2">
+            <p class="text-5xl">🥚</p>
+            <p class="text-brand-ink font-semibold">{L.no_pet}</p>
+            <a href="/pet" class="inline-block mt-1 font-bold text-brand-sky-deep">{L.adopt}</a>
+        </div>
+    )}
+
+    <p class="text-sm text-brand-ink-soft px-1">{L.subtitle}</p>
+
+    {totalActionable === 0 && done.length > 0 && (
+        <div class="bg-brand-mint/20 rounded-[var(--radius-card)] p-6 text-center border-2 border-brand-ink shadow-[var(--shadow-card)]">
+            <p class="text-4xl mb-2">🎉</p>
+            <h3 class="font-display font-extrabold text-brand-ink">{L.all_done}</h3>
+            <p class="text-brand-ink-soft text-sm mt-1">{L.all_done_sub}</p>
+        </div>
+    )}
+
+    {quests.length === 0 && (
+        <div class="bg-brand-cream rounded-[var(--radius-card)] p-6 text-center border-2 border-brand-ink/10">
+            <p class="text-brand-ink-soft text-sm">{L.none}</p>
+        </div>
+    )}
+
+    <!-- Active quests (complete inline) -->
+    {active.length > 0 && (
+        <section class="space-y-3">
+            <h3 class="text-lg font-display font-extrabold text-brand-ink px-1">🗺️ {L.todays}</h3>
+            {active.map((q) => (
+                <article
+                    class="quest-card bg-brand-cream rounded-[var(--radius-card)] p-4 border-2 border-brand-ink shadow-[var(--shadow-card)] flex items-center gap-4"
+                    data-quest-card
+                    data-assignment-id={q.assignment_id}
+                    data-xp-reward={q.pet_xp_reward}
+                >
+                    <div class="flex-1 min-w-0">
+                        <p class="font-bold text-brand-ink leading-tight">{qt(q)}</p>
+                        <div class="flex items-center gap-2 mt-2 flex-wrap">
+                            <span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-brand-sky/25 text-brand-sky-deep border border-brand-sky-deep/30">
+                                ⭐ +{q.pet_xp_reward} {L.xp}
+                            </span>
+                            {q.points > 0 && (
+                                <span class="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-sun/20 text-brand-sun-deep">
+                                    +{q.points} {L.pts}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        data-quest-complete
+                        class="quest-go flex-shrink-0 px-4 py-3 rounded-xl bg-brand-mint-deep text-white font-bold shadow-[var(--shadow-card)] active:scale-95 transition-all disabled:opacity-50"
+                    >
+                        {L.complete}
+                    </button>
+                </article>
+            ))}
+        </section>
+    )}
+
+    <!-- Epic quests (gigs — need proof, complete on the tasks page) -->
+    {epic.length > 0 && (
+        <section class="space-y-3">
+            <h3 class="text-lg font-display font-extrabold text-brand-sun-deep px-1">⚔️ {L.epic}</h3>
+            <p class="text-xs text-brand-ink-soft px-1 -mt-2">{L.epic_hint}</p>
+            {epic.map((q) => (
+                <a
+                    href="/dashboard"
+                    class="block bg-brand-cream rounded-[var(--radius-card)] p-4 border-2 border-brand-sun shadow-[var(--shadow-card)] flex items-center gap-4 hover:-translate-y-0.5 transition-transform"
+                >
+                    <span class="text-2xl flex-shrink-0">⚔️</span>
+                    <div class="flex-1 min-w-0">
+                        <p class="font-bold text-brand-ink leading-tight">{qt(q)}</p>
+                        <div class="flex items-center gap-2 mt-2 flex-wrap">
+                            <span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-brand-sky/25 text-brand-sky-deep border border-brand-sky-deep/30">
+                                ⭐ +{q.pet_xp_reward} {L.xp}
+                            </span>
+                            {q.points > 0 && (
+                                <span class="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-sun/20 text-brand-sun-deep">
+                                    +{q.points} {L.pts}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <span class="text-brand-sun-deep font-bold flex-shrink-0 text-sm">{L.go_tasks}</span>
+                </a>
+            ))}
+        </section>
+    )}
+
+    <!-- Locked quests -->
+    {locked.length > 0 && (
+        <section class="space-y-2">
+            <h3 class="text-sm font-bold text-brand-ink-soft px-1">🔒 {L.locked}</h3>
+            <p class="text-xs text-brand-ink-soft px-1">{L.locked_hint}</p>
+            {locked.map((q) => (
+                <div class="bg-brand-cream/60 rounded-[var(--radius-card)] px-4 py-3 border-2 border-brand-ink/10 flex items-center gap-3 opacity-70">
+                    <span class="text-xl flex-shrink-0">🔒</span>
+                    <p class="flex-1 min-w-0 font-medium text-brand-ink-soft truncate">{qt(q)}</p>
+                    <span class="text-xs font-bold text-brand-sky-deep flex-shrink-0">⭐ +{q.pet_xp_reward}</span>
+                </div>
+            ))}
+        </section>
+    )}
+
+    <!-- Completed quests -->
+    {done.length > 0 && (
+        <details class="group">
+            <summary class="flex justify-between items-center px-1 mb-2 cursor-pointer list-none">
+                <span class="text-sm font-bold text-brand-ink-soft">✅ {L.done_h}</span>
+                <span class="text-xs text-brand-ink-soft">{done.length}</span>
+            </summary>
+            <div class="space-y-2">
+                {done.map((q) => (
+                    <div class="bg-brand-cream/60 rounded-[var(--radius-card)] px-4 py-3 border border-brand-ink/10 flex items-center gap-3 opacity-70">
+                        <span class="h-7 w-7 rounded-full bg-brand-mint/20 flex items-center justify-center flex-shrink-0">
+                            <svg class="h-4 w-4 text-brand-mint-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                        </span>
+                        <p class="flex-1 min-w-0 font-medium text-brand-ink-soft line-through truncate">{qt(q)}</p>
+                    </div>
+                ))}
+            </div>
+        </details>
+    )}
+
+    <!-- Toast -->
+    <div data-quest-toast class="fixed left-1/2 -translate-x-1/2 bottom-24 z-50 hidden px-4 py-2 rounded-full bg-brand-ink text-brand-cream text-sm font-semibold shadow-[var(--shadow-card)]"></div>
+</PageLayout>
+
+<script>
+    import { petHeart, celebrate } from "../../lib/pet-fx";
+    import { stageProgressPct, stageLabel, MAX_STAGE, STAGE_XP_THRESHOLDS, SPECIES_EMOJI } from "../../lib/pet-art";
+
+    function levelForXp(xp: number): number {
+        return Math.floor(Math.sqrt(Math.max(0, xp) / 100));
+    }
+
+    function initQuests() {
+        const hero = document.querySelector<HTMLElement>("[data-quest-hero]");
+        const toast = document.querySelector<HTMLElement>("[data-quest-toast]");
+        const es = document.documentElement.lang === "es";
+
+        function showToast(msg: string) {
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.classList.remove("hidden");
+            window.clearTimeout((toast as any)._t);
+            (toast as any)._t = window.setTimeout(() => toast.classList.add("hidden"), 2400);
+        }
+
+        // Live pet XP state (drives the hero bar as quests are completed).
+        let xp = hero ? Number(hero.dataset.xp ?? "0") : 0;
+        let stage = hero ? Number(hero.dataset.stage ?? "0") : 0;
+        const species = hero?.dataset.species ?? "cat";
+
+        const bar = document.querySelector<HTMLElement>("[data-hero-bar]");
+        const remaining = document.querySelector<HTMLElement>("[data-hero-remaining]");
+        const levelEl = document.querySelector<HTMLElement>("[data-hero-level]");
+        const face = document.getElementById("quest-pet-face");
+
+        function renderHero(evolvedTo: number | null) {
+            if (bar) bar.style.width = `${stageProgressPct(xp, stage)}%`;
+            if (levelEl) levelEl.textContent = String(levelForXp(xp));
+            if (remaining) {
+                if (stage >= MAX_STAGE) {
+                    remaining.textContent = es ? "¡Evolución máxima! 🌟" : "Max evolution! 🌟";
+                } else {
+                    const toGo = Math.max(0, STAGE_XP_THRESHOLDS[stage + 1] - xp);
+                    const nextName = stageLabel(stage + 1, es ? "es" : "en");
+                    remaining.textContent = es ? `${toGo} XP para evolucionar a ${nextName}` : `${toGo} XP to evolve into ${nextName}`;
+                }
+            }
+            // Egg → hatched: swap the face art when the pet leaves stage 0.
+            if (evolvedTo != null && evolvedTo >= 1 && face) {
+                face.textContent = SPECIES_EMOJI[species] ?? "🐾";
+            }
+        }
+
+        function gainXp(amount: number) {
+            const before = stage;
+            xp += amount;
+            let after = 0;
+            for (let i = 0; i < STAGE_XP_THRESHOLDS.length; i++) {
+                if (xp >= STAGE_XP_THRESHOLDS[i]) after = i;
+            }
+            stage = after;
+            const evolved = after > before;
+            renderHero(evolved ? after : null);
+            if (face && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+                face.animate(
+                    [
+                        { transform: "scale(1) rotate(0deg)" },
+                        { transform: "scale(1.3) rotate(-8deg)" },
+                        { transform: "scale(1) rotate(0deg)" },
+                    ],
+                    { duration: 600, easing: "ease-out" },
+                );
+            }
+            if (face) petHeart(face, "⭐");
+            if (evolved) {
+                celebrate();
+                showToast(es ? "¡Tu mascota evolucionó! 🌟" : "Your pet evolved! 🌟");
+            }
+        }
+
+        document.querySelectorAll<HTMLElement>("[data-quest-card]").forEach((card) => {
+            const btn = card.querySelector<HTMLButtonElement>("[data-quest-complete]");
+            if (!btn) return;
+            btn.addEventListener("click", async () => {
+                if (btn.disabled) return;
+                const id = card.dataset.assignmentId!;
+                const reward = Number(card.dataset.xpReward ?? "0");
+                btn.disabled = true;
+                btn.textContent = "…";
+
+                try {
+                    const r = await fetch(`/api/task-assignments/${id}/complete`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ proof_text: null, proof_image_url: null }),
+                    });
+                    if (!r.ok) {
+                        const d = await r.json().catch(() => ({}));
+                        throw new Error(d?.message ?? d?.detail ?? (es ? "No se pudo completar" : "Could not complete"));
+                    }
+                    // Success — feed the pet + celebrate, then collapse the card.
+                    gainXp(reward);
+                    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) celebrate();
+                    card.animate(
+                        [{ opacity: 1, transform: "scale(1)" }, { opacity: 0.4, transform: "scale(0.97)" }],
+                        { duration: 400, easing: "ease-out", fill: "forwards" },
+                    );
+                    card.style.pointerEvents = "none";
+                    // Replace the button with a done tick.
+                    btn.textContent = "✓";
+                    btn.classList.add("bg-brand-mint-deep");
+                } catch (err: any) {
+                    // Proof-required chores can't complete inline — hand off to
+                    // the tasks page where the proof modal lives.
+                    btn.disabled = false;
+                    btn.textContent = es ? "¡Completar!" : "Complete!";
+                    const msg = typeof err?.message === "string" ? err.message : "";
+                    if (/proof|foto|photo/i.test(msg)) {
+                        showToast(es ? "Esta misión necesita una foto — abriendo tareas…" : "This quest needs a photo — opening tasks…");
+                        setTimeout(() => { window.location.href = "/dashboard"; }, 1400);
+                    } else {
+                        showToast(msg || (es ? "Error" : "Error"));
+                    }
+                }
+            });
+        });
+    }
+
+    document.addEventListener("astro:page-load", initQuests);
+</script>

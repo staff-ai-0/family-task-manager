@@ -42,6 +42,7 @@ from app.models.calendar_event import CalendarEvent
 from app.models.notification import Notification, NotificationType
 from app.models.kiosk_device import KioskDevice
 from app.models.kid_pet import KidPet
+from app.models.pet_cosmetic import PetCosmetic
 from app.models.jarvis_message import JarvisMessage
 from app.models.pup_snapshot import PupScoreSnapshot
 from app.models.family_cup import FamilyCupSeason
@@ -107,6 +108,7 @@ __all__ = [
     "KioskDevice",
     # Virtual pet
     "KidPet",
+    "PetCosmetic",
     # Jarvis copilot
     "JarvisMessage",
     # Analytics snapshots

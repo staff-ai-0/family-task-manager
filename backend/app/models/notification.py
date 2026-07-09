@@ -26,6 +26,8 @@ class NotificationType:
     CALENDAR_EVENT_ADDED = "calendar_event_added"
     SHOPPING_ITEM_ADDED = "shopping_item_added"
     PET_NEEDS_ATTENTION = "pet_needs_attention"
+    PET_LEVEL_UP = "pet_level_up"
+    PET_EVOLVED = "pet_evolved"
     GOAL_REACHED = "goal_reached"
     MEMBER_PENDING_APPROVAL = "member_pending_approval"
     MEMBER_APPROVED = "member_approved"
