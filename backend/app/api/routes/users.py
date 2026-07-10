@@ -402,19 +402,41 @@ async def reject_pending_member(
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
+    confirm: str = "",
     user: User = Depends(get_family_user),
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Permanently delete a user account (parent only)
-    
-    This will cascade delete all related records (tasks, points, etc.).
+    """Permanently delete a user account (parent only).
+
+    Cascade-deletes all related records (tasks, points, history). Because
+    this is irreversible — a real kid account was once lost to a single
+    misclick and had to be restored from a DB backup — it is double-gated:
+
+    1. The member must ALREADY be deactivated (deactivating is reversible,
+       so the destructive step can never be the first click).
+    2. ``confirm`` must match the member's name exactly (typed confirmation).
+
     Parents cannot delete themselves.
     """
+    from app.core.exceptions import ValidationException
+
     # Prevent parents from deleting themselves
     if user.id == current_user.id:
-        from app.core.exceptions import ValidationException
         raise ValidationException("Cannot delete your own account")
-    
+
+    if user.is_active:
+        raise ValidationException(
+            "Primero desactiva la cuenta — borrar es permanente / "
+            "Deactivate the account first — deletion is permanent"
+        )
+
+    if confirm.strip() != (user.name or "").strip():
+        raise ValidationException(
+            f"Escribe el nombre exacto ('{user.name}') para confirmar el "
+            f"borrado permanente / Type the exact name ('{user.name}') to "
+            "confirm permanent deletion"
+        )
+
     await AuthService.delete_user(db, user.id)
     return None
