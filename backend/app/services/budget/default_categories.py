@@ -14,12 +14,27 @@ budget page load.
 import logging
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.budget import BudgetCategory, BudgetCategoryGroup
 
 logger = logging.getLogger(__name__)
+
+
+async def _acquire_family_seed_lock(db: AsyncSession, family_id: UUID) -> None:
+    """Serialize catalog seeding per family with a pg advisory xact lock.
+
+    The lazy seed runs on two concurrent endpoints (month view + group list —
+    the budget page fires both in one Promise.all), so the plain
+    read-check-then-insert guard raced and double-seeded the ENTIRE default
+    tree (prod ended with 24 groups / 88 categories, every one duplicated).
+    The lock is transaction-scoped: released automatically at commit/rollback.
+    """
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 7))"),
+        {"key": f"budget-seed:{family_id}"},
+    )
 
 # (group_name, is_income, is_transfer, [category names])
 DEFAULT_CATEGORY_TREE: list[tuple[str, bool, bool, list[str]]] = [
@@ -56,7 +71,11 @@ async def seed_default_categories(db: AsyncSession, family_id: UUID) -> int:
     Idempotent — returns 0 (and writes nothing) when the family already has at
     least one non-deleted category group. Returns the number of categories
     created otherwise. Commits its own transaction.
+
+    Concurrency-safe: the existence check only counts AFTER the per-family
+    advisory lock is held, so two racing first-loads can never both seed.
     """
+    await _acquire_family_seed_lock(db, family_id)
     existing = await db.scalar(
         select(func.count())
         .select_from(BudgetCategoryGroup)
@@ -99,7 +118,11 @@ async def ensure_transfer_group(db: AsyncSession, family_id: UUID) -> int:
     Idempotent top-up for families seeded before transfer support existed.
     Returns the number of categories created (0 if the group already exists).
     Commits its own transaction.
+
+    Same advisory lock as the main seed — this path raced identically (the
+    demo family got two "Transferencias" groups 153µs apart).
     """
+    await _acquire_family_seed_lock(db, family_id)
     existing = await db.scalar(
         select(func.count())
         .select_from(BudgetCategoryGroup)

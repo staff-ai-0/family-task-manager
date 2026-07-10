@@ -261,10 +261,11 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
         category_id: UUID,
         month: date,
         amount: int,
+        mode: str = "set",
     ) -> BudgetAllocation:
         """
-        Set budget amount for a category in a specific month.
-        Creates allocation if it doesn't exist, updates if it does.
+        Set or add to the budget amount for a category in a specific month.
+        Creates the allocation if it doesn't exist.
 
         Args:
             db: Database session
@@ -272,6 +273,10 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
             category_id: Category ID
             month: Month (first day)
             amount: Budget amount in cents
+            mode: "set" replaces the allocation (default, the API's original
+                contract); "add" increments it — the Assign Funds modal
+                assigns money ON TOP of what's already budgeted (it used to
+                silently replace, wiping the previous allocation).
 
         Returns:
             Updated or created allocation
@@ -280,7 +285,10 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
             db, family_id, category_id, month
         )
 
-        allocation.budgeted_amount = amount
+        if mode == "add":
+            allocation.budgeted_amount = (allocation.budgeted_amount or 0) + amount
+        else:
+            allocation.budgeted_amount = amount
         await db.commit()
         await db.refresh(allocation)
         return allocation

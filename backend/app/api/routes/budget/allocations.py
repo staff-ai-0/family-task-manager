@@ -106,6 +106,12 @@ async def set_category_budget(
     category_id: UUID = Body(...),
     month: date = Body(...),
     amount: int = Body(..., description="Amount in cents"),
+    mode: str = Body(
+        "set",
+        pattern="^(set|add)$",
+        description="set = replace the allocation; add = increment it "
+        "(assigning money on top of what's already budgeted)",
+    ),
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
@@ -119,7 +125,8 @@ async def set_category_budget(
     # ready-to-assign / month-view queries always key off the same date.
     month = month.replace(day=1)
     allocation = await AllocationService.set_category_budget(
-        db, family_id=family_id, category_id=category_id, month=month, amount=amount,
+        db, family_id=family_id, category_id=category_id, month=month,
+        amount=amount, mode=mode,
     )
     ready = await AllocationService.compute_ready_to_assign(db, family_id, month)
     resp = SetAllocationResponse.model_validate(allocation)
