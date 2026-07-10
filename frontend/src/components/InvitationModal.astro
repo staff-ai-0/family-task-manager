@@ -100,11 +100,17 @@ const {
                         <option value="parent">
                             {lang === "es" ? "Padre/Madre (Parent)" : "Parent"}
                         </option>
+                        <option value="teen">
+                            {lang === "es" ? "Adolescente (Teen)" : "Teen"}
+                        </option>
+                        <option value="child">
+                            {lang === "es" ? "Niño/Niña (Child)" : "Child"}
+                        </option>
                     </select>
                     <p class="text-xs text-brand-ink-soft mt-1">
                         {lang === "es"
-                            ? "Las invitaciones por correo son solo para adultos (18+). Para agregar niños o adolescentes, comparte el código de familia."
-                            : "Email invitations are for adults (18+) only. To add children or teens, share the family code instead."}
+                            ? "La persona invitada entra con el rol que elijas. Alternativa rápida para niños: comparte el código de familia."
+                            : "The invitee joins with the role you pick. Quick alternative for kids: share the family code."}
                     </p>
                 </div>
                 <button
