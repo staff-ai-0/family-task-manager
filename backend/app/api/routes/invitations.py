@@ -150,13 +150,12 @@ async def accept_invitation(
             birthdate=request_data.birthdate,
         )
         
-        # Validate that only PARENT role can accept invitations
-        if user.role.value.lower() != "parent":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only parents or adults (18+) can accept family invitations. Please contact a family administrator."
-            )
-        
+        # Any role can accept: the invitation was sent BY a parent, so the
+        # account is parent-vetted by construction — same trust level as a
+        # parent creating a kid account directly via POST /register. (The
+        # old adults-only gate forced kids through the join-code flow and
+        # made the invite modal's single 'Parent' option redundant.)
+
         # Create access + refresh tokens
         access_token = create_access_token(
             data={

@@ -576,7 +576,7 @@ if (!joinCodeOk && joinCodeError) {
       </section>
 
   <!-- Invitation Modal -->
-  <InvitationModal familyId={user.family_id} familyName={user.family?.name || "Family"} lang={lang} />
+  <InvitationModal familyId={user.family_id} familyName={family?.name || user.family?.name || "Family"} lang={lang} />
 
   <script>
     import { showToast } from '../../lib/toast';

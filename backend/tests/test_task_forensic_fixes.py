@@ -558,3 +558,44 @@ class TestTemplateGuards:
             db_session, test_child_user.id, test_family.id
         )
         assert rows and rows[0]["points"] == 20
+
+
+class TestKidEmailInvites:
+    """Email invitations are parent-sent (parent-vetted by construction) —
+    the adults-only accept gate was redundant with the join-code flow and
+    forced kids through a separate path. Teen/child invites now work
+    end-to-end."""
+
+    async def test_teen_invite_accept_creates_teen(
+        self, client, db_session, test_family, test_parent_user
+    ):
+        from datetime import datetime, timedelta, timezone as _tz
+        from app.models.invitation import FamilyInvitation, InvitationStatus
+
+        inv = FamilyInvitation(
+            family_id=test_family.id,
+            invited_email="teen-invite@test.com",
+            invited_by_user_id=test_parent_user.id,
+            invitation_code=FamilyInvitation.generate_code(),
+            status=InvitationStatus.PENDING,
+            role=UserRole.TEEN,
+            expires_at=datetime.now(_tz.utc).replace(tzinfo=None)
+            + timedelta(days=30),
+        )
+        db_session.add(inv)
+        await db_session.commit()
+
+        r = await client.post("/api/invitations/accept", json={
+            "invitation_code": inv.invitation_code,
+            "name": "Invited Teen",
+            "password": "password123",
+            "birthdate": "2012-05-01",
+        })
+        assert r.status_code == 200, r.text
+
+        joined = (await db_session.execute(
+            select(User).where(User.email == "teen-invite@test.com")
+        )).scalar_one()
+        assert joined.role == UserRole.TEEN
+        assert joined.family_id == test_family.id
+        assert joined.approval_status == "approved"  # parent-vetted
