@@ -92,6 +92,11 @@ const {
                         class="w-full pl-7 pr-4 py-2 border border-brand-ink/20 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep focus:border-brand-sky-deep"
                     />
                 </div>
+                <p class="text-[11px] text-brand-ink-soft mt-1">
+                    {lang === "es"
+                        ? "Se SUMARÁ a lo ya presupuestado en la categoría."
+                        : "Will be ADDED to what's already budgeted in the category."}
+                </p>
             </div>
 
             <!-- Quick Preset Amounts -->
@@ -225,7 +230,7 @@ const {
             const res = await fetch('/api/budget/allocations/set', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ category_id: categoryId, month: monthStr, amount: amountCents })
+                body: JSON.stringify({ category_id: categoryId, month: monthStr, amount: amountCents, mode: 'add' })
             });
 
             if (!res.ok) {

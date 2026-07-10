@@ -133,6 +133,64 @@ const frequencyLabel = (freq: string) => {
             )}
         </SettingsAccordion>
 
+        <!-- CATEGORIES -->
+        <SettingsAccordion id="categories" title={es ? "Categorías" : "Categories"} icon="🏷️">
+            <div class="flex justify-end mb-3">
+                <button onclick="promptNewGroup()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                    + {es ? "Nuevo grupo" : "New group"}
+                </button>
+            </div>
+            {groups.length === 0 ? (
+                <p class="text-sm text-brand-ink-soft text-center py-4">{es ? "No hay categorías" : "No categories yet"}</p>
+            ) : (
+                <div class="space-y-4">
+                    {groups.map((g: any) => (
+                        <div class="border border-brand-ink/10 rounded-xl overflow-hidden">
+                            <div class={`flex items-center justify-between px-3 py-2 ${g.is_income ? "bg-brand-mint/15" : "bg-brand-cream-deep"}`}>
+                                <span class={`text-sm font-bold ${g.hidden ? "line-through text-brand-ink-soft" : "text-brand-ink"}`}>
+                                    {g.name}{g.is_income ? " 💰" : ""}
+                                </span>
+                                <div class="flex items-center gap-2 text-xs">
+                                    <button onclick={`promptRenameGroup('${g.id}','${(g.name||"").replace(/'/g,"\'")}')`}
+                                        class="text-brand-ink-soft hover:text-brand-sky-deep underline">{es ? "Renombrar" : "Rename"}</button>
+                                    <button onclick={`toggleGroupHidden('${g.id}',${g.hidden ? "false" : "true"})`}
+                                        class="text-brand-ink-soft hover:text-brand-sky-deep underline">
+                                        {g.hidden ? (es ? "Mostrar" : "Unhide") : (es ? "Ocultar" : "Hide")}
+                                    </button>
+                                    <button onclick={`promptAddCategory('${g.id}','${(g.name||"").replace(/'/g,"\'")}')`}
+                                        class="text-brand-ink-soft hover:text-brand-sky-deep underline">+ {es ? "Categoría" : "Category"}</button>
+                                    <button onclick={`confirmDeleteGroup('${g.id}','${(g.name||"").replace(/'/g,"\'")}')`}
+                                        class="text-brand-ink-soft hover:text-red-600 underline">{es ? "Eliminar" : "Delete"}</button>
+                                </div>
+                            </div>
+                            <div class="divide-y divide-brand-ink/10">
+                                {(g.categories || []).map((c: any) => (
+                                    <div class="flex items-center justify-between px-3 py-2">
+                                        <span class={`text-sm ${c.hidden ? "line-through text-brand-ink-soft" : "text-brand-ink"}`}>{c.name}</span>
+                                        <div class="flex items-center gap-2 text-xs">
+                                            <button onclick={`promptRenameCategory('${c.id}','${(c.name||"").replace(/'/g,"\'")}')`}
+                                                class="text-brand-ink-soft hover:text-brand-sky-deep underline">{es ? "Renombrar" : "Rename"}</button>
+                                            <button onclick={`toggleCategoryHidden('${c.id}',${c.hidden ? "false" : "true"})`}
+                                                class="text-brand-ink-soft hover:text-brand-sky-deep underline">
+                                                {c.hidden ? (es ? "Mostrar" : "Unhide") : (es ? "Ocultar" : "Hide")}
+                                            </button>
+                                            <button onclick={`confirmDeleteCategory('${c.id}','${(c.name||"").replace(/'/g,"\'")}')`}
+                                                class="text-brand-ink-soft hover:text-red-600 underline">{es ? "Eliminar" : "Delete"}</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+            <p class="text-xs text-brand-ink-soft mt-3">
+                {es
+                    ? "Eliminar manda a la Papelera (restaurable). Ocultar solo la esconde de las listas."
+                    : "Delete moves to the Recycle Bin (restorable). Hide only removes it from pickers."}
+            </p>
+        </SettingsAccordion>
+
         <!-- PAYEES -->
         <SettingsAccordion id="payees" title={es ? "Beneficiarios" : "Payees"} icon="👤">
             <div class="flex justify-end mb-3">
@@ -685,6 +743,91 @@ window.openPayeeModal = function(p) {
             setTimeout(() => location.reload(), 800);
         } catch(e) { showModalError(e.message); }
     });
+};
+
+// ─── CATEGORIES CRUD ─────────────────────────────────────────────────────────
+window.promptNewGroup = async function() {
+    const name = prompt(es ? "Nombre del nuevo grupo:" : "New group name:");
+    if (!name || !name.trim()) return;
+    try {
+        await apiCall("/api/budget/categories/groups", "POST", { name: name.trim() });
+        showToast(es ? "Grupo creado" : "Group created");
+        setTimeout(() => location.reload(), 600);
+    } catch(e) { showToast(e.message, "error"); }
+};
+
+window.promptRenameGroup = async function(id, current) {
+    const name = prompt(es ? "Nuevo nombre del grupo:" : "New group name:", current);
+    if (!name || !name.trim() || name.trim() === current) return;
+    try {
+        await apiCall(`/api/budget/categories/groups/${id}`, "PUT", { name: name.trim() });
+        showToast(es ? "Renombrado" : "Renamed");
+        setTimeout(() => location.reload(), 600);
+    } catch(e) { showToast(e.message, "error"); }
+};
+
+window.toggleGroupHidden = async function(id, hide) {
+    try {
+        await apiCall(`/api/budget/categories/groups/${id}/${hide === true || hide === "true" ? "archive" : "unarchive"}`, "POST");
+        setTimeout(() => location.reload(), 400);
+    } catch(e) { showToast(e.message, "error"); }
+};
+
+window.confirmDeleteGroup = function(id, name) {
+    openConfirm(
+        es
+            ? `¿Eliminar el grupo "${name}" y sus categorías? Va a la Papelera (restaurable).`
+            : `Delete group "${name}" and its categories? Goes to the Recycle Bin (restorable).`,
+        async () => {
+            try {
+                await apiCall(`/api/budget/categories/groups/${id}`, "DELETE");
+                showToast(es ? "Eliminado" : "Deleted");
+                setTimeout(() => location.reload(), 800);
+            } catch(e) { showToast(e.message, "error"); }
+        }
+    );
+};
+
+window.promptAddCategory = async function(groupId, groupName) {
+    const name = prompt((es ? "Nueva categoría en " : "New category in ") + groupName + ":");
+    if (!name || !name.trim()) return;
+    try {
+        await apiCall("/api/budget/categories/", "POST", { group_id: groupId, name: name.trim() });
+        showToast(es ? "Categoría creada" : "Category created");
+        setTimeout(() => location.reload(), 600);
+    } catch(e) { showToast(e.message, "error"); }
+};
+
+window.promptRenameCategory = async function(id, current) {
+    const name = prompt(es ? "Nuevo nombre:" : "New name:", current);
+    if (!name || !name.trim() || name.trim() === current) return;
+    try {
+        await apiCall(`/api/budget/categories/${id}`, "PUT", { name: name.trim() });
+        showToast(es ? "Renombrada" : "Renamed");
+        setTimeout(() => location.reload(), 600);
+    } catch(e) { showToast(e.message, "error"); }
+};
+
+window.toggleCategoryHidden = async function(id, hide) {
+    try {
+        await apiCall(`/api/budget/categories/${id}/${hide === true || hide === "true" ? "archive" : "unarchive"}`, "POST");
+        setTimeout(() => location.reload(), 400);
+    } catch(e) { showToast(e.message, "error"); }
+};
+
+window.confirmDeleteCategory = function(id, name) {
+    openConfirm(
+        es
+            ? `¿Eliminar la categoría "${name}"? Sus transacciones quedan sin categoría; va a la Papelera.`
+            : `Delete category "${name}"? Its transactions become uncategorized; goes to the Recycle Bin.`,
+        async () => {
+            try {
+                await apiCall(`/api/budget/categories/${id}`, "DELETE");
+                showToast(es ? "Eliminada" : "Deleted");
+                setTimeout(() => location.reload(), 800);
+            } catch(e) { showToast(e.message, "error"); }
+        }
+    );
 };
 
 window.confirmDeletePayee = function(id, name) {

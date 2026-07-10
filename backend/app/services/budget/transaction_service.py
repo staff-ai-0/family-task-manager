@@ -177,6 +177,46 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         return await cls.update_by_id(db, transaction_id, family_id, update_data)
 
     @classmethod
+    async def list_family_dated(
+        cls,
+        db: AsyncSession,
+        family_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> List[BudgetTransaction]:
+        """List a family's transactions inside an optional date window.
+
+        The no-filter branch of GET /transactions used the generic
+        list_by_family and silently DROPPED start/end dates — the page said
+        "Showing Jul 1 — Jul 31" while listing (and summing) every month.
+        """
+        query = (
+            select(BudgetTransaction)
+            .where(
+                and_(
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.deleted_at.is_(None),
+                )
+            )
+            .order_by(
+                BudgetTransaction.date.desc(),
+                BudgetTransaction.created_at.desc(),
+            )
+        )
+        if start_date:
+            query = query.where(BudgetTransaction.date >= start_date)
+        if end_date:
+            query = query.where(BudgetTransaction.date <= end_date)
+        if limit:
+            query = query.limit(limit)
+        if offset:
+            query = query.offset(offset)
+        result = await db.execute(query)
+        return list(result.scalars().all())
+
+    @classmethod
     async def list_by_account(
         cls,
         db: AsyncSession,

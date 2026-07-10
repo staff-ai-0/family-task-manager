@@ -68,7 +68,20 @@ const [spendingRes, cashflowRes, networthRes, forecastRes, accountsRes, groupsRe
 const pendingDraftsCount = draftsCountRes.data?.count ?? 0;
 
 // --- Extract data ---
-const spendingItems: any[] = spendingRes.data?.items || [];
+// API shape: {categories:[{category_name, group_name, amount(cents; income
+// rows positive, spending negative), ...}]}. The page previously read
+// data.items[].total — a field the endpoint never returned — so the
+// Spending tab always said "No data" even with months of transactions.
+// Keep only spending rows (negative amounts, non-income groups).
+const spendingItems: any[] = (spendingRes.data?.categories || [])
+    .filter((c: any) => (c.amount ?? 0) < 0)
+    .map((c: any) => ({
+        name: c.category_name
+            ? `${c.category_name}${c.group_name ? ` · ${c.group_name}` : ""}`
+            : c.group_name,
+        total: c.amount,
+    }))
+    .sort((a: any, b: any) => Math.abs(b.total) - Math.abs(a.total));
 const totalSpent = spendingItems.reduce((s: number, i: any) => s + Math.abs(i.total), 0);
 
 const cashflowItems: any[] = cashflowRes.data?.items || [];
