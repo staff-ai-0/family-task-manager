@@ -149,6 +149,58 @@ class FamilyChatService:
         return rows
 
     @staticmethod
+    async def _get_family_message(
+        db: AsyncSession, message_id: UUID, family_id: UUID
+    ) -> FamilyChatMessage:
+        """Message by id, scoped to the family (404 outside it)."""
+        from app.core.exceptions import NotFoundException
+
+        row = (await db.execute(
+            select(FamilyChatMessage).where(
+                FamilyChatMessage.id == message_id,
+                FamilyChatMessage.family_id == family_id,
+            )
+        )).scalar_one_or_none()
+        if row is None:
+            raise NotFoundException("Message not found")
+        return row
+
+    @staticmethod
+    async def edit_message(
+        db: AsyncSession,
+        message_id: UUID,
+        family_id: UUID,
+        body: str,
+    ) -> FamilyChatMessage:
+        """Parent moderation: rewrite a message's body (stamps edited_at).
+
+        Role enforcement lives at the route (require_parent_role); this
+        service call only guarantees family scoping.
+        """
+        body = (body or "").strip()
+        if not body:
+            raise ValidationException("Empty message")
+        msg = await FamilyChatService._get_family_message(
+            db, message_id, family_id
+        )
+        msg.body = body
+        msg.edited_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(msg)
+        return msg
+
+    @staticmethod
+    async def delete_message(
+        db: AsyncSession, message_id: UUID, family_id: UUID
+    ) -> None:
+        """Parent moderation: remove a message (reactions cascade)."""
+        msg = await FamilyChatService._get_family_message(
+            db, message_id, family_id
+        )
+        await db.delete(msg)
+        await db.commit()
+
+    @staticmethod
     async def post_message(
         db: AsyncSession,
         family_id: UUID,

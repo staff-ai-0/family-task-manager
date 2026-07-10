@@ -135,7 +135,7 @@ const labels = {
                                         {name}
                                     </p>
                                 )}
-                                <p class="whitespace-pre-wrap">{m.body}</p>
+                                <p class="whitespace-pre-wrap" data-msg-body>{m.body}</p>
                                 {m.image_url && (
                                     <a href={m.image_url} target="_blank" rel="noopener">
                                         <img
@@ -148,7 +148,22 @@ const labels = {
                                 )}
                                 <p class={`text-[10px] mt-1 ${mine ? "text-brand-cream/60" : "text-brand-ink-soft"}`}>
                                     {timeAgo(m.created_at)}
+                                    <span data-edited-mark class={m.edited_at ? "" : "hidden"}>
+                                        {" · "}{lang === "es" ? "(editado)" : "(edited)"}
+                                    </span>
                                 </p>
+                                {user.role === "parent" && (
+                                    <div class="mt-1 flex gap-2 opacity-30 hover:opacity-100 transition-opacity text-[10px]">
+                                        <button type="button" data-mod-edit={m.id}
+                                            class={`underline ${mine ? "text-brand-cream/80" : "text-brand-ink-soft"}`}>
+                                            {lang === "es" ? "Editar" : "Edit"}
+                                        </button>
+                                        <button type="button" data-mod-delete={m.id}
+                                            class="underline text-red-400">
+                                            {lang === "es" ? "Borrar" : "Delete"}
+                                        </button>
+                                    </div>
+                                )}
                                 <div data-reaction-chips class="flex flex-wrap gap-1 mt-1 empty:mt-0">
                                     {reactions.map((r: any) => (
                                         <button
@@ -199,7 +214,7 @@ const labels = {
     </form>
 </ChatShell>
 
-<script define:vars={{ currentUserId: user.id, memberMap: Object.fromEntries(memberLookup), memberColors: Object.fromEntries(memberColorLookup), lang }}>
+<script define:vars={{ currentUserId: user.id, currentRole: user.role, memberMap: Object.fromEntries(memberLookup), memberColors: Object.fromEntries(memberColorLookup), lang }}>
     document.addEventListener("astro:page-load", () => {
         const feed = document.getElementById("chat-feed");
         if (!feed) return;
@@ -242,7 +257,19 @@ const labels = {
             const bodyP = mine ? ps[0] : ps[1];
             const timeP = mine ? ps[1] : ps[2];
             bodyP.textContent = msg.body;
+            bodyP.setAttribute("data-msg-body", "");
             timeP.textContent = timeAgo(msg.created_at);
+            // Parity with SSR bubbles: id anchor (moderation/reactions) +
+            // parent-only moderation buttons on live-streamed messages.
+            wrapper.setAttribute("data-msg-id", msg.id);
+            if (currentRole === "parent") {
+                const mod = document.createElement("div");
+                mod.className = "mt-1 flex gap-2 opacity-30 hover:opacity-100 transition-opacity text-[10px]";
+                const isEs = document.documentElement.lang !== "en";
+                mod.innerHTML = `<button type="button" data-mod-edit="${msg.id}" class="underline ${mine ? "text-brand-cream/80" : "text-brand-ink-soft"}">${isEs ? "Editar" : "Edit"}</button>`
+                    + `<button type="button" data-mod-delete="${msg.id}" class="underline text-red-400">${isEs ? "Borrar" : "Delete"}</button>`;
+                timeP.parentElement.appendChild(mod);
+            }
             // Auto-posted completion cards carry the proof photo.
             if (msg.image_url) {
                 const link = document.createElement("a");
@@ -355,6 +382,47 @@ const labels = {
         // One in-flight request per (message, emoji) — rapid double-taps would
         // otherwise overlap apply/revert and leave a phantom chip + dup toasts.
         const inFlight = new Set<string>();
+
+        // Parent moderation: edit / delete any message. Buttons only render
+        // for parents (SSR); the backend re-enforces the role either way.
+        feed.addEventListener("click", async (ev) => {
+            const t = ev.target;
+            const el = t instanceof Element ? t : null;
+            const editBtn = el?.closest<HTMLElement>("[data-mod-edit]");
+            const delBtn = el?.closest<HTMLElement>("[data-mod-delete]");
+            if (!editBtn && !delBtn) return;
+            const isEs = document.documentElement.lang !== "en";
+            const wrapper = (editBtn ?? delBtn)!.closest<HTMLElement>("[data-msg-id]");
+            const msgId = editBtn?.dataset.modEdit || delBtn?.dataset.modDelete;
+            if (!wrapper || !msgId) return;
+
+            if (editBtn) {
+                const bodyEl = wrapper.querySelector<HTMLElement>("[data-msg-body]");
+                const current = bodyEl?.textContent ?? "";
+                const next = prompt(isEs ? "Editar mensaje:" : "Edit message:", current);
+                if (next === null || !next.trim() || next.trim() === current) return;
+                const res = await fetch(`/api/chat/${msgId}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ body: next.trim() }),
+                });
+                if (res.ok) {
+                    if (bodyEl) bodyEl.textContent = next.trim();
+                    wrapper.querySelector("[data-edited-mark]")?.classList.remove("hidden");
+                } else {
+                    alert(isEs ? "No se pudo editar el mensaje." : "Could not edit the message.");
+                }
+                return;
+            }
+
+            if (!confirm(isEs ? "¿Borrar este mensaje para toda la familia?" : "Delete this message for the whole family?")) return;
+            const res = await fetch(`/api/chat/${msgId}`, { method: "DELETE" });
+            if (res.ok) {
+                wrapper.remove();
+            } else {
+                alert(isEs ? "No se pudo borrar el mensaje." : "Could not delete the message.");
+            }
+        });
 
         feed.addEventListener("click", async (ev) => {
             const target = ev.target;
