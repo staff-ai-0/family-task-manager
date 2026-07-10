@@ -190,6 +190,20 @@ async def lifespan(app: FastAPI):
                 except Exception:
                     logger.exception("Auto-shuffle sweep failed")
 
+        async def _recurring_post_sweep():
+            # Auto-post due recurring BUDGET transactions (Actual-Budget
+            # schedule parity) — idempotent: posting advances next_due_date.
+            async with AsyncSessionLocal() as session:
+                try:
+                    from app.services.budget.recurring_transaction_service import (
+                        RecurringTransactionService,
+                    )
+                    n = await RecurringTransactionService.post_all_due_all_families(session)
+                    if n:
+                        logger.info("Recurring post sweep created %d transaction(s)", n)
+                except Exception:
+                    logger.exception("Recurring post sweep failed")
+
         scheduler = AsyncIOScheduler()
         scheduler.add_job(run_sweep, "cron", hour=3, minute=0, id="subscription_sweep")
         scheduler.add_job(_pet_decay_sweep, "cron", hour=8, minute=0, id="pet_decay_sweep")
@@ -198,6 +212,7 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(_family_bank_payday_sweep, "cron", minute=10, id="family_bank_payday")  # hourly
         scheduler.add_job(_family_purge_sweep, "cron", hour=4, minute=0, id="family_purge_sweep")  # daily
         scheduler.add_job(_auto_shuffle_sweep, "cron", minute=25, id="auto_shuffle_sweep")  # hourly
+        scheduler.add_job(_recurring_post_sweep, "cron", minute=40, id="recurring_post_sweep")  # hourly
         scheduler.add_job(
             _morning_reminder_sweep,
             "cron",
