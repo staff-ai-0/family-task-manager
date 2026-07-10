@@ -251,7 +251,9 @@ class TestUserDeletion:
     async def test_parent_can_delete_child(
         self, client: AsyncClient, test_parent_user, test_child_user
     ):
-        """Test that parent can delete a child user"""
+        """Parent can permanently delete a child — via the gated flow:
+        deactivate first, then delete with typed-name confirmation (a
+        one-click hard delete once destroyed a real account)."""
         # Login as parent
         login_response = await client.post(
             "/api/auth/login",
@@ -259,12 +261,24 @@ class TestUserDeletion:
         )
         token = login_response.json()["access_token"]
 
-        # Delete child user
+        # One-click delete is refused (member still active, no confirmation)
         response = await client.delete(
             f"/api/users/{test_child_user.id}",
             headers={"Authorization": f"Bearer {token}"},
         )
+        assert response.status_code == 400
 
+        # Gated flow: deactivate, then delete with typed confirmation
+        response = await client.put(
+            f"/api/users/{test_child_user.id}/deactivate",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+
+        response = await client.delete(
+            f"/api/users/{test_child_user.id}?confirm=Test%20Child",
+            headers={"Authorization": f"Bearer {token}"},
+        )
         assert response.status_code == 204
 
         # Verify user is deleted (try to get user should fail)
