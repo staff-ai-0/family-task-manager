@@ -232,7 +232,7 @@ const jarvisQuestions: string[] =
             <p class="text-brand-ink-soft text-sm">
                 {lang === "es" ? "No hay categorias configuradas para este mes." : "No categories set up for this month."}
             </p>
-            <a href="/budget/settings" class="text-brand-sky-deep font-semibold text-sm mt-2 inline-block">
+            <a href="/budget/settings#categories" class="text-brand-sky-deep font-semibold text-sm mt-2 inline-block">
                 {lang === "es" ? "Crear categorias" : "Create categories"}
             </a>
         </div>
@@ -249,6 +249,40 @@ const jarvisQuestions: string[] =
         <FABModal lang={lang} accounts={accounts} categories={allCategories} />
 
         <!-- Assign Funds modal (triggered from BudgetMonthNav ready-to-assign button) -->
+<script>
+    // "+" on each expense group header: create a category in that group.
+    // Delegated once at page level (BudgetCategoryGroup renders many times).
+    document.addEventListener("click", async (ev) => {
+        const t = ev.target;
+        const btn = t instanceof Element ? t.closest(".quick-add-btn") : null;
+        if (!btn) return;
+        const isEs = document.documentElement.lang !== "en";
+        const name = prompt(
+            (isEs ? "Nueva categoría en " : "New category in ") +
+                (btn.getAttribute("data-group-name") || "") + ":"
+        );
+        if (!name || !name.trim()) return;
+        // The /api/budget proxy injects the auth cookie server-side.
+        const res = await fetch("/api/budget/categories/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                group_id: btn.getAttribute("data-group-id"),
+                name: name.trim(),
+            }),
+        });
+        if (res.ok) {
+            location.reload();
+        } else {
+            const data = await res.json().catch(() => ({}));
+            alert(
+                (isEs ? "No se pudo crear la categoría. " : "Could not create the category. ") +
+                    (data.message || data.detail || "")
+            );
+        }
+    });
+</script>
+
         <AssignFundsModal
             readyToAssign={readyToAssign}
             categories={allExpenseCategories}

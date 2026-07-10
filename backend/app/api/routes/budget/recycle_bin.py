@@ -38,10 +38,35 @@ async def list_deleted_items(
         family_id, 
         item_type=item_type
     )
-    
+
+    # Flatten to the shape the recycle-bin UI consumes: a single list of
+    # {id, name, type, deleted_at}. (The endpoint used to return raw ORM
+    # objects grouped by type — unserializable, so the page 500'd the moment
+    # anything was actually in the bin.)
+    def _row(obj, type_: str, name: str) -> dict:
+        return {
+            "id": str(obj.id),
+            "type": type_,
+            "name": name,
+            "deleted_at": obj.deleted_at.isoformat() if obj.deleted_at else None,
+        }
+
+    flat: list[dict] = []
+    for t in deleted_items.get("transactions", []):
+        label = (t.description or "").strip() or "Transaction"
+        amount = (t.amount or 0) / 100
+        flat.append(_row(t, "transaction", f"{label} (${amount:,.2f})"))
+    for a in deleted_items.get("accounts", []):
+        flat.append(_row(a, "account", a.name))
+    for c in deleted_items.get("categories", []):
+        flat.append(_row(c, "category", c.name))
+    for g in deleted_items.get("category_groups", []):
+        flat.append(_row(g, "category_group", g.name))
+    flat.sort(key=lambda r: r["deleted_at"] or "", reverse=True)
+
     return {
-        "items": deleted_items,
-        "total": len(deleted_items),
+        "data": flat,
+        "total": len(flat),
     }
 
 

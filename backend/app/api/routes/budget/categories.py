@@ -99,12 +99,32 @@ async def delete_category_group(
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a category group (parent only)"""
-    await CategoryGroupService.delete_by_id(
-        db,
-        group_id,
-        to_uuid_required(current_user.family_id),
+    """Delete a category group (parent only).
+
+    SOFT delete: the group and its categories get deleted_at stamped and can
+    be restored from the recycle bin. (The old hard CASCADE delete silently
+    destroyed transactions' categorization with no way back.)
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import update as sql_update
+
+    from app.models.budget import BudgetCategory
+
+    family_id = to_uuid_required(current_user.family_id)
+    group = await CategoryGroupService.get_by_id(db, group_id, family_id)
+    now = datetime.now(timezone.utc)
+    group.deleted_at = now
+    await db.execute(
+        sql_update(BudgetCategory)
+        .where(
+            BudgetCategory.group_id == group_id,
+            BudgetCategory.family_id == family_id,
+            BudgetCategory.deleted_at.is_(None),
+        )
+        .values(deleted_at=now)
     )
+    await db.commit()
 
 
 # ============================================================================
@@ -195,11 +215,18 @@ async def delete_category(
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a category (parent only)"""
-    await CategoryService.delete_by_id(
+    """Delete a category (parent only).
+
+    SOFT delete via the reassign path (transactions keep history; the
+    category is restorable from the recycle bin). The old hard delete
+    CASCADE-destroyed data and could never reach the recycle bin.
+    """
+    await CategoryService.delete_with_reassign(
         db,
         category_id,
         to_uuid_required(current_user.family_id),
+        reassign_to_id=None,
+        deleted_by_id=to_uuid_required(current_user.id),
     )
 
 

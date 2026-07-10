@@ -222,7 +222,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                         <p class="text-lg font-bold text-red-300">{formatCurrency(totalExpenses)}</p>
                     </div>
                     <div>
-                        <p class="text-brand-cream text-xs font-semibold uppercase tracking-wider mb-1">Neto</p>
+                        <p class="text-brand-cream text-xs font-semibold uppercase tracking-wider mb-1">{es ? "Neto" : "Net"}</p>
                         <p class={`text-lg font-bold ${netAmount >= 0 ? 'text-white' : 'text-red-300'}`}>
                             {formatCurrency(netAmount)}
                         </p>

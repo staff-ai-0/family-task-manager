@@ -104,8 +104,9 @@ async def list_transactions(
             db, category_id, family_id, start_date, end_date, limit, offset
         )
     else:
-        transactions = await TransactionService.list_by_family(
-            db, family_id, limit=limit, offset=offset
+        transactions = await TransactionService.list_family_dated(
+            db, family_id, start_date=start_date, end_date=end_date,
+            limit=limit, offset=offset,
         )
 
     if not include_split_children:
