@@ -63,9 +63,12 @@ async def register(
     """
     user_data.family_id = current_user.family_id  # never trust the body
     user = await AuthService.register_user(db, user_data)
-    # Send verification email (non-blocking — failure doesn't break registration)
-    base_url = settings.BASE_URL
-    await EmailService.send_verification_email(db, user, base_url=base_url)
+    # Send verification email (non-blocking — failure doesn't break
+    # registration). Link must point at the FRONTEND origin: BASE_URL is the
+    # API origin (api-family...) in prod, where /verify-email doesn't exist.
+    await EmailService.send_verification_email(
+        db, user, base_url=settings.email_link_base
+    )
     return user
 
 
