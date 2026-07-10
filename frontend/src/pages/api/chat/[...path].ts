@@ -53,4 +53,5 @@ async function proxy({ request, params }: { request: Request; params: Record<str
 
 export const GET: APIRoute = proxy;
 export const POST: APIRoute = proxy;
+export const PUT: APIRoute = proxy;
 export const DELETE: APIRoute = proxy;

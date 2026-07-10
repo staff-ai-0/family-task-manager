@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_parent_role
 from app.core.exceptions import ValidationException
 from app.core.type_utils import to_uuid_required
 from app.models import User
@@ -32,6 +32,7 @@ class ChatMessageOut(BaseModel):
     body: str
     image_url: Optional[str] = None
     created_at: datetime
+    edited_at: Optional[datetime] = None
     reactions: List[ReactionGroup] = []
 
     model_config = {"from_attributes": True}
@@ -68,6 +69,7 @@ async def list_messages(
             body=r.body,
             image_url=r.image_url,
             created_at=r.created_at,
+            edited_at=r.edited_at,
             reactions=[ReactionGroup(**g) for g in reactions.get(r.id, [])],
         )
         for r in rows
@@ -94,6 +96,44 @@ async def post_message(
     except ValidationException as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return ChatMessageOut.model_validate(msg)
+
+
+class EditMessageRequest(BaseModel):
+    body: str = Field(..., min_length=1, max_length=2000)
+
+
+@router.put("/{message_id}", response_model=ChatMessageOut)
+async def edit_message(
+    message_id: UUID,
+    data: EditMessageRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parent moderation: edit any message in the family chat."""
+    try:
+        msg = await FamilyChatService.edit_message(
+            db,
+            message_id,
+            to_uuid_required(current_user.family_id),
+            data.body,
+        )
+    except ValidationException as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return ChatMessageOut.model_validate(msg)
+
+
+@router.delete("/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_message(
+    message_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parent moderation: delete any message in the family chat
+    (reactions cascade)."""
+    await FamilyChatService.delete_message(
+        db, message_id, to_uuid_required(current_user.family_id)
+    )
+    return None
 
 
 @router.get("/unread-count")

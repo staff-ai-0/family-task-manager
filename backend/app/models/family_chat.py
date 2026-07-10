@@ -47,3 +47,5 @@ class FamilyChatMessage(Base):
     created_at = Column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
     )
+    # Set when a parent edits the message (moderation) — UI shows "(editado)".
+    edited_at = Column(DateTime(timezone=True), nullable=True)
