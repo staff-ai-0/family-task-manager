@@ -182,6 +182,9 @@ const frequencyLabel = (freq: string) => {
                                                 class="text-brand-ink-soft hover:text-brand-sky-deep underline">
                                                 {c.hidden ? (es ? "Mostrar" : "Unhide") : (es ? "Ocultar" : "Hide")}
                                             </button>
+                                            <button onclick={`promptCategoryNotes('${c.id}','${(c.name||"").replace(/'/g,"\'")}')`}
+                                                title={c.notes || (es ? "Sin notas" : "No notes")}
+                                                class="text-brand-ink-soft hover:text-brand-sky-deep underline">{c.notes ? "📝*" : "📝"}</button>
                                             <button onclick={`promptCategoryGoal('${c.id}','${(c.name||"").replace(/'/g,"\'")}',${c.goal_amount ?? 0})`}
                                                 class="text-brand-ink-soft hover:text-brand-sky-deep underline">{c.goal_amount ? `🎯$${Math.round(c.goal_amount/100)}` : (es ? "Meta" : "Goal")}</button>
                                             <button onclick={`toggleCategoryRollover('${c.id}',${c.rollover_enabled ? "false" : "true"})`}
@@ -962,6 +965,20 @@ window.toggleCategoryHidden = async function(id, hide) {
     try {
         await apiCall(`/api/budget/categories/${id}/${hide === true || hide === "true" ? "archive" : "unarchive"}`, "POST");
         setTimeout(() => location.reload(), 400);
+    } catch(e) { showToast(e.message, "error"); }
+};
+
+window.promptCategoryNotes = async function(id, name) {
+    const cats = await apiCall(`/api/budget/categories/${id}`, "GET");
+    const val = prompt(
+        (es ? "Notas para " : "Notes for ") + name + ":",
+        cats?.notes || ""
+    );
+    if (val === null) return;
+    try {
+        await apiCall(`/api/budget/categories/${id}`, "PUT", { notes: val.trim() || null });
+        showToast(es ? "Notas guardadas" : "Notes saved");
+        setTimeout(() => location.reload(), 600);
     } catch(e) { showToast(e.message, "error"); }
 };
 

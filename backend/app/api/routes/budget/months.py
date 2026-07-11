@@ -20,6 +20,7 @@ from app.schemas.budget import (
     MonthReopenResponse,
     MonthStatusResponse,
     ClosedMonthInfo,
+    MonthHoldRequest,
 )
 from app.models import User
 
@@ -97,8 +98,54 @@ async def get_month_status(
     
     family_id = to_uuid_required(current_user.family_id)
     status_info = await MonthLockingService.get_month_status(db, family_id, month_date)
-    
-    return MonthStatusResponse(**status_info)
+
+    from sqlalchemy import func as sa_func, select
+    from app.models.budget import BudgetMonthHold
+    held = (await db.execute(
+        select(sa_func.coalesce(sa_func.sum(BudgetMonthHold.amount_cents), 0)).where(
+            BudgetMonthHold.family_id == family_id,
+            BudgetMonthHold.month == month_date,
+        )
+    )).scalar_one()
+
+    return MonthStatusResponse(**status_info, held_amount=int(held))
+
+
+@router.post("/{year}/{month}/hold", response_model=MonthStatusResponse)
+async def set_month_hold(
+    year: int,
+    month: int,
+    data: MonthHoldRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hold part of this month's Ready-to-Assign for the NEXT month
+    (Actual Budget's "hold for next month"). amount=0 clears the hold.
+    """
+    if month < 1 or month > 12:
+        raise ValidationError("Month must be between 1 and 12")
+    month_date = date(year, month, 1)
+    family_id = to_uuid_required(current_user.family_id)
+
+    from sqlalchemy import select
+    from app.models.budget import BudgetMonthHold
+    row = (await db.execute(
+        select(BudgetMonthHold).where(
+            BudgetMonthHold.family_id == family_id,
+            BudgetMonthHold.month == month_date,
+        )
+    )).scalar_one_or_none()
+    if row is None:
+        row = BudgetMonthHold(
+            family_id=family_id, month=month_date, amount_cents=data.amount,
+        )
+        db.add(row)
+    else:
+        row.amount_cents = data.amount
+    await db.commit()
+
+    status_info = await MonthLockingService.get_month_status(db, family_id, month_date)
+    return MonthStatusResponse(**status_info, held_amount=data.amount)
 
 
 @router.get("/closed", response_model=List[ClosedMonthInfo])

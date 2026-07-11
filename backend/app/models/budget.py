@@ -55,6 +55,7 @@ class BudgetCategory(Base):
     hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     rollover_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     goal_amount: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False, comment="Monthly goal in cents")
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="Free-text envelope notes (rules of use, reminders)")
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True, comment="Soft delete timestamp")
     deleted_by_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, comment="User who deleted this category")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -223,6 +224,26 @@ class BudgetTransaction(Base):
         back_populates="transaction",
         cascade="all, delete-orphan",
     )
+
+
+class BudgetMonthHold(Base):
+    """Money held back from a month's Ready-to-Assign for the NEXT month.
+
+    Actual Budget's "hold for next month": RTA(month) drops by amount_cents
+    and RTA(month+1) gains it. One row per (family, month); amount 0 = no
+    hold (rows are upserted, not deleted, to keep the history readable).
+    """
+    __tablename__ = "budget_month_holds"
+    __table_args__ = (
+        UniqueConstraint("family_id", "month", name="uq_month_hold_family_month"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
+    month: Mapped[date] = mapped_column(Date, nullable=False, comment="First day of the month the hold is taken FROM")
+    amount_cents: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class BudgetSyncState(Base):

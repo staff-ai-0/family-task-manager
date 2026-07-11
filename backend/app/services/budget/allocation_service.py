@@ -247,11 +247,34 @@ class AllocationService(BaseFamilyService[BudgetAllocation]):
         this_month = await AllocationService.get_total_expense_budgeted_for_month(db, family_id, month_date)
         prior_budgeted = await AllocationService.get_total_expense_budgeted_before_month(db, family_id, month_date)
         prior_activity = await AllocationService.get_total_expense_activity_before_month(db, family_id, month_date)
+
+        # Hold-for-next-month (Actual parity): money held FROM this month
+        # leaves its RTA; money held from the PREVIOUS month arrives here.
+        from app.models.budget import BudgetMonthHold
+        hold_this = (await db.execute(
+            select(func.coalesce(func.sum(BudgetMonthHold.amount_cents), 0)).where(
+                BudgetMonthHold.family_id == family_id,
+                BudgetMonthHold.month == month_date,
+            )
+        )).scalar_one()
+        prev_month = (
+            date(month_date.year - 1, 12, 1) if month_date.month == 1
+            else date(month_date.year, month_date.month - 1, 1)
+        )
+        hold_prev = (await db.execute(
+            select(func.coalesce(func.sum(BudgetMonthHold.amount_cents), 0)).where(
+                BudgetMonthHold.family_id == family_id,
+                BudgetMonthHold.month == prev_month,
+            )
+        )).scalar_one()
         # int() is required: func.sum over BigInteger returns Decimal under
         # asyncpg, which Pydantic serializes as a JSON STRING even on an int
         # field — the frontend's `typeof === 'number'` guard would then silently
         # drop the live Ready-to-Assign update (see CLAUDE.md).
-        return int(total_on_budget - this_month - (prior_budgeted + prior_activity))
+        return int(
+            total_on_budget - this_month - (prior_budgeted + prior_activity)
+            - int(hold_this) + int(hold_prev)
+        )
 
     @classmethod
     async def set_category_budget(

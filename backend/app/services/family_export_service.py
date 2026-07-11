@@ -85,6 +85,7 @@ from app.models.budget import (
     BudgetPayee,
     BudgetReceiptDraft,
     BudgetRecurringTransaction,
+    BudgetMonthHold,
     BudgetSavedFilter,
     BudgetTag,
     BudgetTransaction,
@@ -187,6 +188,7 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
         BudgetGoal,
         BudgetRecurringTransaction,
         # exported via budget/extras.json
+        BudgetMonthHold,
         BudgetSavedFilter,
         BudgetTag,
         BudgetCustomReport,
@@ -405,6 +407,7 @@ class FamilyExportService:
 
         # Budget extras not covered by the re-importable budget backup format.
         saved_filters = await _rows(db, fam(BudgetSavedFilter))
+        month_holds = await _rows(db, fam(BudgetMonthHold))
         tags = await _rows(db, fam(BudgetTag))
         # BudgetTransactionTag is a pure link table (no family_id) — scope via tag.
         txn_tags = await _rows(
@@ -520,6 +523,7 @@ class FamilyExportService:
             ),
             "budget/extras.json": {
                 "saved_filters": _dump(saved_filters),
+                "month_holds": _dump(month_holds),
                 "tags": _dump(tags),
                 "transaction_tags": _dump(txn_tags),
                 "custom_reports": _dump(custom_reports),
