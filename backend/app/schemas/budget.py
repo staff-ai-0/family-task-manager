@@ -61,6 +61,8 @@ class CategoryBase(BaseModel):
     hidden: bool = Field(False, description="Hide from budget view")
     rollover_enabled: bool = Field(True, description="Allow unused budget to roll over to next month")
     goal_amount: int = Field(0, ge=0, description="Monthly budget goal in cents")
+    notes: Optional[str] = Field(None, max_length=2000)
+
 
 
 class CategoryCreate(CategoryBase):
@@ -76,6 +78,7 @@ class CategoryUpdate(BaseModel):
     hidden: Optional[bool] = None
     rollover_enabled: Optional[bool] = None
     goal_amount: Optional[int] = Field(None, ge=0)
+    notes: Optional[str] = Field(None, max_length=2000)
 
 
 class CategoryResponse(CategoryBase):
@@ -684,6 +687,12 @@ class MonthStatusResponse(BaseModel):
     is_closed: bool = Field(..., description="Is this month closed?")
     closed_at: Optional[datetime] = Field(None, description="When closed (null if open)")
     allocation_count: int = Field(..., ge=0, description="Number of allocations")
+    held_amount: int = Field(0, ge=0, description="Cents held back for next month")
+
+
+class MonthHoldRequest(BaseModel):
+    """Set (or clear with 0) the amount held for next month."""
+    amount: int = Field(..., ge=0, description="Cents to hold; 0 clears")
 
 
 class ClosedMonthInfo(BaseModel):

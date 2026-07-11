@@ -59,7 +59,11 @@ const {
                 <p class="text-2xl font-bold text-brand-sky-deep" id={`${baseRoute}-available-display`}>
                     {formatCurrency(readyToAssign)}
                 </p>
-            </div>
+                            <button type="button" id={`${baseRoute}-hold-btn`}
+                    class="mt-2 text-xs underline text-brand-sky-deep hover:text-brand-ink">
+                    {lang === "es" ? "⏸ Guardar para el próximo mes…" : "⏸ Hold for next month…"}
+                </button>
+</div>
 
             <!-- Category Selection -->
             <div>
@@ -305,6 +309,23 @@ const {
             e.stopPropagation();
             openAssignModal(btn.dataset.categoryId);
         });
+    });
+
+    // Hold-for-next-month (Actual parity): park part of RTA for next month.
+    document.getElementById(`${baseRoute}-hold-btn`)?.addEventListener('click', async () => {
+        const current = prompt(lang === 'es'
+            ? 'Cantidad ($) a guardar para el próximo mes (0 para liberar):'
+            : 'Amount ($) to hold for next month (0 to release):');
+        if (current === null) return;
+        const cents = Math.round(parseFloat(current || '0') * 100);
+        if (isNaN(cents) || cents < 0) { alert(lang === 'es' ? 'Cantidad inválida' : 'Invalid amount'); return; }
+        const res = await fetch(`/api/budget/months/${year}/${month}/hold`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: cents }),
+        });
+        if (res.ok) location.reload();
+        else alert(lang === 'es' ? 'No se pudo guardar.' : 'Could not hold.');
     });
 
     // Also handle the global open-assign-funds-modal button (header button)
