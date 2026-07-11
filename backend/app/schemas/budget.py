@@ -828,6 +828,11 @@ class CustomReportResponse(BaseModel):
 
 class ReceiptDraftApprove(BaseModel):
     """Fields the human can override before approving a receipt draft."""
+    account_id: Optional[UUID] = Field(
+        None,
+        description="Account to attach the transaction to. REQUIRED when "
+        "the draft was scanned account-less (family had no accounts).",
+    )
     date: Optional[DateType] = Field(None, description="Transaction date (override extracted value)")
     amount: Optional[int] = Field(None, description="Amount in cents, negative for expenses")
     payee_name: Optional[str] = Field(None, max_length=200, description="Payee name")
@@ -839,7 +844,9 @@ class ReceiptDraftResponse(BaseModel):
     """Receipt draft as returned by the API."""
     id: UUID
     family_id: UUID
-    account_id: UUID
+    # None when the family had no accounts at scan time — the approver
+    # supplies one (ReceiptDraftApprove.account_id).
+    account_id: Optional[UUID] = None
     scanned_data: dict
     confidence: float
     status: str

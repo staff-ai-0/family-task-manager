@@ -458,7 +458,9 @@ class BudgetReceiptDraft(Base):
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
-    account_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_accounts.id", ondelete="CASCADE"), nullable=False)
+    # Nullable: a family with ZERO accounts can still scan — the draft holds
+    # the extraction and the approver picks/creates an account at review time.
+    account_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_accounts.id", ondelete="CASCADE"), nullable=True)
     scanned_data: Mapped[dict] = mapped_column(JSONB, nullable=False, comment="Extracted receipt fields: date, total_amount, payee_name, items, currency")
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, comment="Vision model confidence 0.0–1.0")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", comment="pending | approved | rejected")

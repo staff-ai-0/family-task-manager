@@ -14,7 +14,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, ValidationException
 from app.models.budget import BudgetPayee, BudgetReceiptDraft
 from app.schemas.budget import ReceiptDraftApprove
 from app.services.budget.transaction_service import TransactionService
@@ -97,6 +97,25 @@ class ReceiptDraftService:
         """
         draft = await cls.get_by_id(db, draft_id, family_id)
 
+        # Resolve the target account: explicit override wins; else the
+        # account captured at scan time. Account-less drafts (family had no
+        # accounts when scanning) REQUIRE the override.
+        target_account_id = overrides.account_id or draft.account_id
+        if target_account_id is None:
+            raise ValidationException(
+                "Elige una cuenta para aprobar este recibo / "
+                "Pick an account to approve this receipt (account_id)"
+            )
+        if overrides.account_id is not None:
+            # Validate family scope of the chosen account.
+            from app.models.budget import BudgetAccount
+            acct = (await db.execute(select(BudgetAccount).where(
+                BudgetAccount.id == overrides.account_id,
+                BudgetAccount.family_id == family_id,
+            ))).scalars().first()
+            if acct is None:
+                raise ValidationException("Account not found in this family")
+
         sd = draft.scanned_data  # what the scanner saw
 
         # Resolve payee — use overridden name or extracted name
@@ -140,7 +159,7 @@ class ReceiptDraftService:
         # NOT propagated: FX rate lookup happens at scan time, not at
         # draft-approval time, and the original FX context is gone by now.
         txn_data = TransactionCreate(
-            account_id=draft.account_id,
+            account_id=target_account_id,
             date=txn_date,
             amount=amount,
             payee_id=payee_id,

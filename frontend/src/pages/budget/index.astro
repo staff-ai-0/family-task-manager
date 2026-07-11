@@ -11,6 +11,7 @@ import MonthSummaryBar from "@components/MonthSummaryBar.astro";
 import BudgetCategoryGroup from "@components/BudgetCategoryGroup.astro";
 import AssignFundsModal from "@components/AssignFundsModal.astro";
 import CoverOverspendingModal from "@components/CoverOverspendingModal.astro";
+import MoveMoneyModal from "@components/MoveMoneyModal.astro";
 import FABButton from "@components/FABButton.astro";
 import FABModal from "@components/FABModal.astro";
 import { apiFetch } from "@lib/api";
@@ -172,6 +173,26 @@ const jarvisQuestions: string[] =
             {lang === "es" ? "📋 Copiar presupuesto del mes anterior" : "📋 Copy last month's budget"}
         </button>
         <p id="copy-last-month-msg" class="text-xs text-brand-ink-soft mt-1 hidden text-center"></p>
+        <div class="flex justify-center mt-1">
+            <button type="button" id="autofill-more"
+                class="text-xs text-brand-ink-soft underline hover:text-brand-sky-deep">
+                {lang === "es" ? "Más estrategias ▾" : "More strategies ▾"}
+            </button>
+        </div>
+        <div id="autofill-menu" class="hidden mt-1 rounded-xl border border-brand-ink/10 bg-brand-cream divide-y divide-brand-ink/10 text-sm">
+            <button type="button" data-strategy="average_3" class="autofill-opt w-full px-4 py-2.5 text-left hover:bg-brand-cream-deep">
+                {lang === "es" ? "Promedio de los últimos 3 meses" : "Average of last 3 months"}
+            </button>
+            <button type="button" data-strategy="average_6" class="autofill-opt w-full px-4 py-2.5 text-left hover:bg-brand-cream-deep">
+                {lang === "es" ? "Promedio de los últimos 6 meses" : "Average of last 6 months"}
+            </button>
+            <button type="button" data-strategy="average_12" class="autofill-opt w-full px-4 py-2.5 text-left hover:bg-brand-cream-deep">
+                {lang === "es" ? "Promedio de los últimos 12 meses" : "Average of last 12 months"}
+            </button>
+            <button type="button" data-strategy="from_goals" class="autofill-opt w-full px-4 py-2.5 text-left hover:bg-brand-cream-deep">
+                {lang === "es" ? "Desde metas de categoría" : "From category goals"}
+            </button>
+        </div>
     </div>
 
     {/* Jarvis entry point — compact card with suggested money questions that
@@ -283,6 +304,14 @@ const jarvisQuestions: string[] =
     });
 </script>
 
+        <MoveMoneyModal
+            categories={allExpenseCategories}
+            lang={lang}
+            formatCurrency={formatCurrency}
+            year={year}
+            month={month}
+        />
+
         <AssignFundsModal
             readyToAssign={readyToAssign}
             categories={allExpenseCategories}
@@ -311,6 +340,45 @@ const jarvisQuestions: string[] =
         const msg = document.getElementById("copy-last-month-msg");
         if (!btn) return;
         const es = document.documentElement.lang === "es";
+        document.getElementById("autofill-more")?.addEventListener("click", () => {
+            document.getElementById("autofill-menu")?.classList.toggle("hidden");
+        });
+        document.querySelectorAll<HTMLButtonElement>(".autofill-opt").forEach((opt) => {
+            opt.addEventListener("click", async () => {
+                const strategy = opt.dataset.strategy;
+                if (!window.confirm(es
+                    ? "¿Llenar las categorías sin presupuesto con esta estrategia?"
+                    : "Fill un-budgeted categories using this strategy?")) return;
+                opt.disabled = true;
+                try {
+                    const res = await fetch("/api/budget/allocations/auto-fill", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            target_month: btn.dataset.month,
+                            strategy,
+                            overwrite_existing: false,
+                        }),
+                    });
+                    if (!res.ok) throw new Error(String(res.status));
+                    const data = await res.json();
+                    if (data.filled_count > 0) { window.location.reload(); return; }
+                    if (msg) {
+                        msg.textContent = es
+                            ? "No hay nada que llenar con esa estrategia."
+                            : "Nothing to fill with that strategy.";
+                        msg.classList.remove("hidden");
+                    }
+                } catch {
+                    if (msg) {
+                        msg.textContent = es ? "Error al llenar." : "Fill failed.";
+                        msg.classList.remove("hidden");
+                    }
+                } finally {
+                    opt.disabled = false;
+                }
+            });
+        });
         btn.addEventListener("click", async () => {
             if (!window.confirm(es
                 ? "¿Copiar los montos del mes anterior a las categorías sin presupuesto de este mes?"

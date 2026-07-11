@@ -550,6 +550,43 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         return transaction
 
     @classmethod
+    async def post_all_due_all_families(cls, db: AsyncSession) -> int:
+        """Sweep across ALL families: post every due, active recurring
+        template (family-scoped batches, one commit per family).
+
+        Intended for the hourly background scheduler — without it, schedules
+        never materialize unless a parent presses "Post now" (Actual Budget
+        auto-posts schedules; this brings parity). Idempotent per run:
+        posting advances next_due_date past today.
+
+        Returns total transactions posted.
+        """
+        import logging
+
+        from app.models.budget import BudgetRecurringTransaction
+
+        logger = logging.getLogger(__name__)
+        today = date.today()
+        family_ids = [
+            fid for (fid,) in (await db.execute(
+                select(BudgetRecurringTransaction.family_id).where(
+                    BudgetRecurringTransaction.is_active.is_(True),
+                    BudgetRecurringTransaction.next_due_date <= today,
+                ).distinct()
+            )).all()
+        ]
+        total = 0
+        for fid in family_ids:
+            try:
+                result = await cls.post_all_due(db, fid, as_of_date=today)
+                total += int(result.get("posted", 0))
+            except Exception:
+                logger.exception(
+                    "recurring auto-post failed for family %s", fid
+                )
+        return total
+
+    @classmethod
     async def post_all_due(
         cls,
         db: AsyncSession,

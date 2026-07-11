@@ -1,0 +1,198 @@
+---
+/**
+ * MoveMoneyModal Component
+ * Actual-Budget-style "move money" between category envelopes: the clicked
+ * category's AVAILABLE balance moves into another category's envelope.
+ * Opened by the per-row available-amount button (.available-btn) on the
+ * month page — that button existed for months with no handler at all.
+ *
+ * Props mirror AssignFundsModal (same visual pattern).
+ */
+
+interface Props {
+    categories: any[]; // flattened expense categories [{id, name, group_name}]
+    lang: "en" | "es";
+    formatCurrency: (amount: number) => string;
+    year: number;
+    month: number;
+}
+
+const { categories, lang, formatCurrency, year, month } = Astro.props;
+const baseRoute = "move-money";
+---
+
+<div id={`${baseRoute}-modal`} class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+    <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] max-w-md w-full">
+        <div class="bg-brand-mint-deep text-white px-6 py-4 rounded-t-[var(--radius-card)]">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-bold">
+                    {lang === "es" ? "Mover dinero" : "Move money"}
+                </h2>
+                <button id={`${baseRoute}-close-btn`} class="text-white hover:text-brand-cream transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="p-6 space-y-4">
+            <div class="bg-brand-mint/15 border border-brand-mint rounded-xl p-4">
+                <p class="text-xs text-brand-mint-deep font-semibold mb-1 uppercase tracking-wider">
+                    {lang === "es" ? "Disponible en" : "Available in"}
+                    {" "}<span id={`${baseRoute}-from-name`}></span>
+                </p>
+                <p class="text-2xl font-bold text-brand-mint-deep" id={`${baseRoute}-from-available`}></p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-semibold text-brand-ink mb-1" for={`${baseRoute}-to-select`}>
+                    {lang === "es" ? "Mover a" : "Move to"}
+                </label>
+                <select
+                    id={`${baseRoute}-to-select`}
+                    class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-mint-deep outline-none bg-brand-cream"
+                >
+                    <option value="">{lang === "es" ? "Elegir categoría..." : "Choose a category..."}</option>
+                    {categories.map((c: any) => (
+                        <option value={c.id}>{c.group_name} → {c.name}</option>
+                    ))}
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-semibold text-brand-ink mb-1" for={`${baseRoute}-amount-input`}>
+                    {lang === "es" ? "Cantidad a mover" : "Amount to move"}
+                </label>
+                <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-brand-ink-soft">$</span>
+                    <input
+                        type="number"
+                        id={`${baseRoute}-amount-input`}
+                        step="0.01"
+                        min="0.01"
+                        placeholder="0.00"
+                        class="w-full pl-7 pr-4 py-2 border border-brand-ink/20 rounded-lg text-sm focus:ring-2 focus:ring-brand-mint-deep focus:border-brand-mint-deep"
+                    />
+                </div>
+                <button
+                    type="button"
+                    id={`${baseRoute}-all-btn`}
+                    class="mt-2 px-3 py-1.5 rounded-lg text-xs font-semibold border border-brand-ink/20 hover:border-brand-mint-deep hover:text-brand-mint-deep transition"
+                >
+                    {lang === "es" ? "Todo lo disponible" : "All available"}
+                </button>
+            </div>
+
+            <p id={`${baseRoute}-error`} class="hidden text-sm text-red-600"></p>
+            <p id={`${baseRoute}-success`} class="hidden text-sm text-brand-mint-deep"></p>
+
+            <div class="flex gap-3 pt-1">
+                <button id={`${baseRoute}-cancel-btn`}
+                    class="flex-1 bg-brand-cream-deep text-brand-ink px-4 py-2 rounded-lg font-semibold hover:bg-brand-ink/10 transition text-sm">
+                    {lang === "es" ? "Cancelar" : "Cancel"}
+                </button>
+                <button id={`${baseRoute}-confirm-btn`}
+                    class="flex-1 bg-brand-mint-deep text-white px-4 py-2 rounded-lg font-semibold hover:bg-brand-ink transition text-sm">
+                    {lang === "es" ? "Mover" : "Move"}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script define:vars={{ baseRoute, lang, year, month }}>
+    let fromCategoryId = null;
+    let fromAvailable = 0;
+
+    const modal = document.getElementById(`${baseRoute}-modal`);
+    const toSelect = document.getElementById(`${baseRoute}-to-select`);
+    const amountInput = document.getElementById(`${baseRoute}-amount-input`);
+    const errorEl = document.getElementById(`${baseRoute}-error`);
+    const successEl = document.getElementById(`${baseRoute}-success`);
+    const confirmBtn = document.getElementById(`${baseRoute}-confirm-btn`);
+
+    function fmt(cents) {
+        return new Intl.NumberFormat("es-MX", {
+            style: "currency", currency: "MXN", minimumFractionDigits: 0,
+        }).format(cents / 100);
+    }
+
+    function openMoveModal(btn) {
+        fromCategoryId = btn.dataset.categoryId;
+        fromAvailable = parseInt(btn.dataset.available || "0", 10);
+        document.getElementById(`${baseRoute}-from-name`).textContent =
+            btn.dataset.categoryName || "";
+        document.getElementById(`${baseRoute}-from-available`).textContent =
+            fmt(fromAvailable);
+        // The FROM category can't be a destination.
+        [...toSelect.options].forEach((o) => {
+            o.hidden = o.value === fromCategoryId;
+        });
+        toSelect.value = "";
+        amountInput.value = "";
+        errorEl.classList.add("hidden");
+        successEl.classList.add("hidden");
+        confirmBtn.disabled = false;
+        modal.classList.remove("hidden");
+    }
+
+    // Delegated: .available-btn renders once per category row.
+    document.addEventListener("click", (ev) => {
+        const t = ev.target;
+        const btn = t instanceof Element ? t.closest(".available-btn") : null;
+        if (!btn) return;
+        ev.stopPropagation();
+        openMoveModal(btn);
+    });
+
+    document.getElementById(`${baseRoute}-all-btn`)?.addEventListener("click", () => {
+        amountInput.value = (Math.max(fromAvailable, 0) / 100).toFixed(2);
+        amountInput.focus();
+    });
+
+    const close = () => modal.classList.add("hidden");
+    document.getElementById(`${baseRoute}-close-btn`)?.addEventListener("click", close);
+    document.getElementById(`${baseRoute}-cancel-btn`)?.addEventListener("click", close);
+    modal?.addEventListener("click", (e) => { if (e.target === modal) close(); });
+
+    confirmBtn?.addEventListener("click", async () => {
+        errorEl.classList.add("hidden");
+        const toId = toSelect.value;
+        const amountCents = Math.round(parseFloat(amountInput.value || "") * 100);
+        if (!toId) {
+            errorEl.textContent = lang === "es" ? "Elige la categoría destino" : "Pick a destination category";
+            errorEl.classList.remove("hidden");
+            return;
+        }
+        if (isNaN(amountCents) || amountCents <= 0) {
+            errorEl.textContent = lang === "es" ? "Ingresa una cantidad válida" : "Enter a valid amount";
+            errorEl.classList.remove("hidden");
+            return;
+        }
+        confirmBtn.disabled = true;
+        try {
+            const monthStr = `${year}-${String(month).padStart(2, "0")}-01`;
+            const res = await fetch("/api/budget/transfers/categories", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    from_category_id: fromCategoryId,
+                    to_category_id: toId,
+                    amount: amountCents,
+                    month: monthStr,
+                }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.message || data.detail || `Error ${res.status}`);
+            }
+            successEl.textContent = lang === "es" ? "Dinero movido" : "Money moved";
+            successEl.classList.remove("hidden");
+            setTimeout(() => location.reload(), 600);
+        } catch (e) {
+            errorEl.textContent = e.message;
+            errorEl.classList.remove("hidden");
+            confirmBtn.disabled = false;
+        }
+    });
+</script>

@@ -332,9 +332,12 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
                     return;
                 }
                 if (status >= 400 || !body || !body.success) {
-                    alert(lang === "es"
-                        ? "Error escaneando."
-                        : "Scan failed.");
+                    // Surface the backend's real reason (e.g. model config,
+                    // no accounts) instead of a generic dead-end.
+                    const reason = body && (body.message || body.detail);
+                    alert(reason
+                        ? reason
+                        : (lang === "es" ? "Error escaneando." : "Scan failed."));
                     return;
                 }
                 showConfirmCard(body);

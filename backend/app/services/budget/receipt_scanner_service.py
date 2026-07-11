@@ -1133,14 +1133,15 @@ async def _route_to_drafts(
         - currency_mismatch: receipt currency differs from account
           currency on a plan that does not allow fx_cross_charge
 
-    When account_id is None (no_accounts case), we cannot create a
-    draft row because ``BudgetReceiptDraft.account_id`` is non-nullable.
-    Returns an error-shape dict in that case instead of crashing.
+    account_id may be None (family has no accounts yet) — the draft is
+    stored account-less and the approval endpoint requires an account.
     """
     if account_id is None:
-        # Try to fall back to ANY active, non-deleted account in the family
-        # so the draft has somewhere to live. If there is truly no account
-        # at all we report the error instead of crashing on a NOT-NULL FK.
+        # Prefer ANY active account so the draft is pre-bound, but a family
+        # with ZERO accounts still gets a draft (account_id stays NULL and
+        # the reviewer picks/creates an account at approval time).
+        # Previously this returned an error — the real-world "scan is not
+        # working": vision extracted fine, nowhere to attach.
         from app.models.budget import BudgetAccount
         stmt = (
             select(BudgetAccount)
@@ -1152,19 +1153,8 @@ async def _route_to_drafts(
             .limit(1)
         )
         fallback = (await db.execute(stmt)).scalars().first()
-        if fallback is None:
-            return {
-                "success": False,
-                "transaction_id": None,
-                "draft_id": None,
-                "confidence": receipt.confidence,
-                "scanned_data": scanned_dict,
-                "message": (
-                    f"No budget account available to attach this receipt "
-                    f"to ({reason})."
-                ),
-            }
-        account_id = fallback.id
+        if fallback is not None:
+            account_id = fallback.id
 
     draft = await ReceiptDraftService.create(
         db=db,
