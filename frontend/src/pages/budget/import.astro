@@ -99,7 +99,7 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                             <input 
                                 type="file"
                                 id="csv-file"
-                                accept=".csv,.txt"
+                                accept=".csv,.txt,.ofx,.qfx,.qif,.xml"
                                 required
                                 class="block w-full px-4 py-3 border-2 border-dashed border-brand-ink/20 rounded-lg cursor-pointer file:hidden hover:border-brand-sky-deep transition"
                             />
@@ -265,7 +265,12 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
         const formData = new FormData();
         formData.append('file', csvFile);
 
-        // Build query parameters
+        // OFX/QFX/QIF/CAMT go to the file-import endpoint (auto-detects
+        // format); only real CSV/TXT uses the CSV parser + its options.
+        const ext = (csvFile.name.split('.').pop() || '').toLowerCase();
+        const isBankFile = ['ofx', 'qfx', 'qif', 'xml'].includes(ext);
+
+        // Build query parameters (CSV path only)
         const params = new URLSearchParams({
             account_id: accountId,
             delimiter: delimiter,
@@ -278,10 +283,19 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
         importBtn.textContent = lang === 'es' ? 'Importando...' : 'Importing...';
 
         try {
-            const response = await fetch(`/api/budget/transactions/import/csv?${params}`, {
-                method: 'POST',
-                body: formData
-            });
+            let response;
+            if (isBankFile) {
+                formData.append('account_id', accountId);
+                response = await fetch('/api/budget/transactions/import/file', {
+                    method: 'POST',
+                    body: formData
+                });
+            } else {
+                response = await fetch(`/api/budget/transactions/import/csv?${params}`, {
+                    method: 'POST',
+                    body: formData
+                });
+            }
 
             const data = await response.json();
 
