@@ -139,6 +139,47 @@ const reportsLocked = planName === "free";
     containerClass="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen"
 >
     <ReportSubTabs slot="after-nav" active={tab} lang={lang} />
+
+        <!-- Custom reports (saved report builder) -->
+        <div class="px-4 pt-2">
+            <div class="flex items-center gap-2 flex-wrap" id="custom-reports-bar">
+                <span class="text-[11px] uppercase tracking-wide text-brand-ink-soft">{es ? "Mis reportes" : "My reports"}:</span>
+                <button id="cr-new" class="text-xs px-2.5 py-1 rounded-full border border-brand-ink/20 text-brand-ink-soft hover:border-brand-sky-deep hover:text-brand-sky-deep">
+                    + {es ? "Nuevo" : "New"}
+                </button>
+            </div>
+            <div id="cr-output" class="hidden mt-3 bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 id="cr-output-title" class="font-bold text-brand-ink text-sm"></h3>
+                    <button id="cr-output-close" class="text-brand-ink-soft hover:text-brand-ink text-sm">✕</button>
+                </div>
+                <div id="cr-output-body" class="text-sm overflow-x-auto"></div>
+            </div>
+            <div id="cr-form" class="hidden mt-3 bg-brand-cream rounded-xl border border-brand-ink/10 p-3 space-y-2">
+                <input id="cr-name" type="text" placeholder={es ? "Nombre del reporte" : "Report name"}
+                    class="w-full text-sm border border-brand-ink/10 rounded-lg px-2 py-1.5 bg-brand-cream-deep" />
+                <div class="flex gap-2">
+                    <select id="cr-groupby" class="flex-1 text-sm border border-brand-ink/10 rounded-lg px-2 py-1.5 bg-brand-cream-deep">
+                        <option value="category">{es ? "Gasto por categoría" : "Spending by category"}</option>
+                        <option value="group">{es ? "Gasto por grupo" : "Spending by group"}</option>
+                        <option value="payee">{es ? "Gasto por beneficiario" : "Spending by payee"}</option>
+                        <option value="month">{es ? "Gasto por mes" : "Spending by month"}</option>
+                        <option value="income_vs_expense">{es ? "Ingreso vs gasto" : "Income vs expense"}</option>
+                        <option value="net_worth">{es ? "Patrimonio" : "Net worth"}</option>
+                    </select>
+                    <select id="cr-range" class="flex-1 text-sm border border-brand-ink/10 rounded-lg px-2 py-1.5 bg-brand-cream-deep">
+                        <option value="last_30">{es ? "Últimos 30 días" : "Last 30 days"}</option>
+                        <option value="last_90">{es ? "Últimos 90 días" : "Last 90 days"}</option>
+                        <option value="this_month">{es ? "Este mes" : "This month"}</option>
+                        <option value="this_year">{es ? "Este año" : "This year"}</option>
+                        <option value="last_365">{es ? "Últimos 12 meses" : "Last 12 months"}</option>
+                    </select>
+                </div>
+                <button id="cr-save" class="w-full py-2 text-sm font-bold rounded-lg bg-brand-sky-deep text-white hover:bg-brand-ink transition">
+                    {es ? "Guardar reporte" : "Save report"}
+                </button>
+            </div>
+        </div>
     <PeriodSelector slot="after-nav" activePeriod={period} lang={lang} />
 
     {reportsLocked && (
@@ -602,4 +643,102 @@ function initReportTabs() {
 
 initReportTabs();
 document.addEventListener("astro:after-swap", initReportTabs);
+</script>
+
+<script>
+// Custom reports: list chips, run (render table), create, delete.
+function initCustomReports() {
+    if ((window as any).__crInit) return;
+    (window as any).__crInit = true;
+    const es = document.documentElement.lang !== "en";
+    const bar = document.getElementById("custom-reports-bar");
+    if (!bar) return;
+
+    const fmt = (c: number) => (Math.abs(c) / 100).toLocaleString(es ? "es-MX" : "en-US", { style: "currency", currency: "MXN" });
+
+    function renderData(name: string, data: any) {
+        const out = document.getElementById("cr-output")!;
+        const body = document.getElementById("cr-output-body")!;
+        document.getElementById("cr-output-title")!.textContent = name;
+        let html = "";
+        if (Array.isArray(data?.categories)) {
+            html = `<table class="w-full text-sm"><tbody>` + data.categories.map((c: any) =>
+                `<tr class="border-b border-brand-ink/5"><td class="py-1 pr-2">${c.category_name || c.group_name || c.payee_name || c.month || "—"}</td><td class="py-1 text-right font-semibold ${c.amount < 0 ? "text-red-600" : "text-brand-mint-deep"}">${fmt(c.amount)}</td></tr>`
+            ).join("") + `</tbody></table>`;
+        } else if (Array.isArray(data?.periods)) {
+            html = `<table class="w-full text-sm"><tbody>` + data.periods.map((p: any) =>
+                `<tr class="border-b border-brand-ink/5"><td class="py-1 pr-2">${p.period || p.month}</td><td class="py-1 text-right text-brand-mint-deep">${fmt(p.income ?? 0)}</td><td class="py-1 text-right text-red-600">${fmt(p.expense ?? p.expenses ?? 0)}</td></tr>`
+            ).join("") + `</tbody></table>`;
+        } else {
+            html = `<pre class="text-xs whitespace-pre-wrap">${JSON.stringify(data, null, 2).slice(0, 3000)}</pre>`;
+        }
+        body.innerHTML = html;
+        out.classList.remove("hidden");
+        out.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    document.getElementById("cr-output-close")?.addEventListener("click", () => {
+        document.getElementById("cr-output")?.classList.add("hidden");
+    });
+
+    async function loadReports() {
+        try {
+            const res = await fetch("/api/budget/custom-reports/");
+            if (!res.ok) return;
+            const reports = await res.json();
+            [...bar.querySelectorAll(".cr-chip, .cr-del")].forEach((n) => n.remove());
+            (reports || []).forEach((r: any) => {
+                const chip = document.createElement("button");
+                chip.className = "cr-chip text-xs px-2.5 py-1 rounded-full bg-brand-sky/15 text-brand-sky-deep font-semibold hover:bg-brand-sky/30";
+                chip.textContent = r.name;
+                chip.addEventListener("click", async () => {
+                    const d = await fetch(`/api/budget/custom-reports/${r.id}/data`);
+                    if (d.ok) renderData(r.name, await d.json());
+                });
+                const del = document.createElement("button");
+                del.className = "cr-del text-[10px] text-brand-ink-soft hover:text-red-600 -ml-1";
+                del.textContent = "✕";
+                del.addEventListener("click", async () => {
+                    if (!confirm(es ? `¿Borrar reporte "${r.name}"?` : `Delete report "${r.name}"?`)) return;
+                    await fetch(`/api/budget/custom-reports/${r.id}`, { method: "DELETE" });
+                    loadReports();
+                });
+                bar.appendChild(chip);
+                bar.appendChild(del);
+            });
+        } catch { /* non-fatal */ }
+    }
+    loadReports();
+
+    document.getElementById("cr-new")?.addEventListener("click", () => {
+        document.getElementById("cr-form")?.classList.toggle("hidden");
+    });
+
+    document.getElementById("cr-save")?.addEventListener("click", async () => {
+        const name = (document.getElementById("cr-name") as HTMLInputElement).value.trim();
+        if (!name) { alert(es ? "Ponle nombre al reporte." : "Name the report."); return; }
+        const res = await fetch("/api/budget/custom-reports/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                name,
+                config: {
+                    group_by: (document.getElementById("cr-groupby") as HTMLSelectElement).value,
+                    date_range: (document.getElementById("cr-range") as HTMLSelectElement).value,
+                    graph_type: "table",
+                },
+            }),
+        });
+        if (res.ok) {
+            (document.getElementById("cr-name") as HTMLInputElement).value = "";
+            document.getElementById("cr-form")?.classList.add("hidden");
+            loadReports();
+        } else {
+            const e = await res.json().catch(() => ({}));
+            alert((e as any).message || (e as any).detail || (es ? "No se pudo guardar." : "Could not save."));
+        }
+    });
+}
+initCustomReports();
+document.addEventListener("astro:page-load", initCustomReports);
 </script>

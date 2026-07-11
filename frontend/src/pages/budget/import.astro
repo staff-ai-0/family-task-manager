@@ -104,6 +104,13 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                                 class="block w-full px-4 py-3 border-2 border-dashed border-brand-ink/20 rounded-lg cursor-pointer file:hidden hover:border-brand-sky-deep transition"
                             />
                             <div id="file-info" class="mt-2 text-xs text-brand-ink-soft"></div>
+                            <!-- Manual column mapping (CSV only; shown once a file is picked) -->
+                            <div id="mapping-box" class="hidden mt-3 border border-brand-ink/10 rounded-lg p-3">
+                                <p class="text-xs font-semibold text-brand-ink mb-2">
+                                    {lang === "es" ? "Mapeo de columnas (opcional — auto-detecta si lo dejas vacío)" : "Column mapping (optional — auto-detects when left empty)"}
+                                </p>
+                                <div class="grid grid-cols-2 gap-2" id="mapping-grid"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -234,8 +241,46 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
     if (!formEl) return;
 
     // File info display
+    const MAP_FIELDS = [
+        ["date", "Fecha / Date"],
+        ["amount", "Monto / Amount"],
+        ["description", "Payee / Descripción"],
+        ["notes", "Notas / Notes"],
+    ];
+
+    async function buildMappingUI(file: File) {
+        const box = document.getElementById('mapping-box');
+        const grid = document.getElementById('mapping-grid');
+        if (!box || !grid) return;
+        const ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (!['csv', 'txt'].includes(ext)) { box.classList.add('hidden'); return; }
+        const text = await file.slice(0, 4096).text();
+        const delim = (document.getElementById('delimiter') as HTMLSelectElement | null)?.value || ',';
+        const header = (text.split(/\r?\n/)[0] || '').split(delim).map(h => h.trim().replace(/^"|"$/g, '')).filter(Boolean);
+        if (header.length < 2) { box.classList.add('hidden'); return; }
+        grid.innerHTML = MAP_FIELDS.map(([field, label]) => `
+            <label class="text-xs text-brand-ink-soft">
+                ${label}
+                <select data-map-field="${field}" class="mt-0.5 w-full text-xs border border-brand-ink/10 rounded-lg px-2 py-1.5 bg-brand-cream-deep">
+                    <option value="">${document.documentElement.lang !== 'en' ? '(auto)' : '(auto)'}</option>
+                    ${header.map(h => `<option value="${h.replace(/"/g, '&quot;')}">${h}</option>`).join('')}
+                </select>
+            </label>`).join('');
+        box.classList.remove('hidden');
+    }
+
+    function collectMapping(): string | null {
+        const entries: Record<string, string> = {};
+        document.querySelectorAll('[data-map-field]').forEach((sel) => {
+            const v = (sel as HTMLSelectElement).value;
+            if (v) entries[(sel as HTMLElement).dataset.mapField!] = v;
+        });
+        return Object.keys(entries).length ? JSON.stringify(entries) : null;
+    }
+
     fileInput?.addEventListener('change', (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
+        if (file) buildMappingUI(file);
         if (file) {
             const fileInfo = document.getElementById('file-info');
             if (fileInfo) {
@@ -278,6 +323,8 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
             create_payees: createPayees.toString(),
             prevent_duplicates: preventDuplicates.toString(),
         });
+        const mapping = collectMapping();
+        if (mapping) params.set('column_mapping', mapping);
 
         importBtn.disabled = true;
         importBtn.textContent = lang === 'es' ? 'Importando...' : 'Importing...';
