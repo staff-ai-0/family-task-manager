@@ -236,6 +236,17 @@ const { lang, t, year, month } = Astro.props;
                     const data = await res.json().catch(() => ({}));
                     throw new Error(data.detail || data.message || (lang === 'es' ? 'No se pudo cubrir el sobregasto' : 'Could not cover overspending'));
                 }
+                const result = await res.json().catch(() => null);
+                const movedCents = result?.amount_moved ?? result?.moved_amount ?? body.amount;
+                if (movedCents) {
+                    window.queueUndo?.(
+                        lang === 'es' ? 'Sobregasto cubierto' : 'Overspending covered',
+                        [{ url: '/api/budget/transfers/categories', method: 'POST', body: {
+                            from_category_id: overspentId, to_category_id: sourceId,
+                            amount: movedCents, month: monthStr,
+                        } }],
+                    );
+                }
                 successEl?.classList.remove('hidden');
                 // Row budgeted/available are now stale — reload to resync.
                 setTimeout(() => window.location.reload(), 600);

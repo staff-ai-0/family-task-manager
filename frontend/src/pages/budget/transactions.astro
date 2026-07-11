@@ -917,6 +917,10 @@ document.addEventListener("astro:after-swap", initFilters);
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (!res.ok) throw new Error(`Error ${res.status}`);
+            (window as any).queueUndo?.(
+                es ? "Transacción eliminada" : "Transaction deleted",
+                [{ url: `/api/budget/recycle-bin/transactions/${currentTxId}/restore`, method: "POST" }],
+            );
             closeModal();
             window.location.reload();
         } catch (err) {
@@ -1202,7 +1206,12 @@ function initPowerTools() {
         if (picked.size === 0) return;
         if (!confirm(es ? `¿Eliminar ${picked.size} transacciones? (van a la papelera)` : `Delete ${picked.size} transactions? (recycle bin)`)) return;
         try {
-            await bulkCall("/api/budget/transactions/bulk-delete", { transaction_ids: [...picked] });
+            const ids = [...picked];
+            await bulkCall("/api/budget/transactions/bulk-delete", { transaction_ids: ids });
+            (window as any).queueUndo?.(
+                es ? `${ids.length} transacciones eliminadas` : `${ids.length} transactions deleted`,
+                ids.map((id) => ({ url: `/api/budget/recycle-bin/transactions/${id}/restore`, method: "POST" })),
+            );
             window.location.reload();
         } catch (e) { alert((e as Error).message); }
     });

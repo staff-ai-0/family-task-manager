@@ -231,6 +231,17 @@ const {
             // Use server-rendered year/month (query params, not pathname)
             const monthStr = `${year}-${String(month).padStart(2, '0')}-01`;
 
+            // Capture the previous allocation total so the undo toast can
+            // restore it exactly (mode=set previous).
+            let prevAmount = 0;
+            try {
+                const prevRes = await fetch(`/api/budget/allocations/?month=${monthStr}&category_id=${categoryId}`);
+                if (prevRes.ok) {
+                    const rows = await prevRes.json();
+                    prevAmount = (rows || []).reduce((sum, a) => sum + (a.budgeted_amount || 0), 0);
+                }
+            } catch { /* undo just restores 0 */ }
+
             const res = await fetch('/api/budget/allocations/set', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -251,6 +262,12 @@ const {
             }
             changed = true;
             successEl?.classList.remove('hidden');
+            (window).queueUndo?.(
+                lang === 'es' ? 'Fondos asignados' : 'Funds assigned',
+                [{ url: '/api/budget/allocations/set', method: 'POST', body: {
+                    category_id: categoryId, month: monthStr, amount: prevAmount, mode: 'set',
+                } }],
+            );
             if (amountInput) amountInput.value = '';
             if (categorySelect) categorySelect.value = '';
             confirmBtn.disabled = false;
