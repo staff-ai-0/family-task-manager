@@ -266,6 +266,39 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                     {es ? "Auto-categorizar" : "Auto-categorize"}
                 </button>
             )}
+            {user.role === "parent" && (
+                <button id="select-mode-btn"
+                    class="text-xs px-2 py-1.5 rounded-lg border border-brand-ink/10 bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-sky/20 hover:text-brand-sky-deep transition whitespace-nowrap">
+                    ☑ {es ? "Seleccionar" : "Select"}
+                </button>
+            )}
+            {user.role === "parent" && (
+                <button id="save-filter-btn" title={es ? "Guardar filtro actual" : "Save current filter"}
+                    class="text-xs px-2 py-1.5 rounded-lg border border-brand-ink/10 bg-brand-cream-deep text-brand-ink-soft hover:bg-brand-mint/20 hover:text-brand-mint-deep transition whitespace-nowrap">
+                    ★ {es ? "Guardar filtro" : "Save filter"}
+                </button>
+            )}
+        </div>
+
+        <!-- Saved filter chips -->
+        <div slot="after-nav" id="saved-filters-bar" class="hidden px-4 py-2 bg-brand-cream border-b border-brand-ink/10 flex flex-wrap gap-2 items-center">
+            <span class="text-[11px] uppercase tracking-wide text-brand-ink-soft">{es ? "Filtros" : "Filters"}:</span>
+        </div>
+
+        <!-- Bulk action bar (select mode) -->
+        <div id="bulk-bar" class="hidden sticky top-0 z-40 px-4 py-2 bg-brand-ink text-brand-cream flex flex-wrap items-center gap-2 text-sm">
+            <span id="bulk-count" class="font-bold">0</span>
+            <span>{es ? "seleccionadas" : "selected"}</span>
+            <span class="flex-1"></span>
+            <select id="bulk-category" class="text-xs rounded-lg px-2 py-1 bg-brand-cream text-brand-ink border-0">
+                <option value="">{es ? "Categorizar como..." : "Categorize as..."}</option>
+                {(categories || []).map((cat) => (
+                    <option value={cat.id}>{cat.name}</option>
+                ))}
+            </select>
+            <button id="bulk-clear" class="text-xs px-2 py-1 rounded-lg bg-brand-mint-deep text-white">✓ {es ? "Conciliar" : "Clear"}</button>
+            <button id="bulk-delete" class="text-xs px-2 py-1 rounded-lg bg-red-500 text-white">🗑 {es ? "Eliminar" : "Delete"}</button>
+            <button id="bulk-cancel" class="text-xs px-2 py-1 rounded-lg border border-brand-cream/40">{es ? "Salir" : "Exit"}</button>
         </div>
 
         <!-- Transactions List -->
@@ -1087,4 +1120,207 @@ document.addEventListener("astro:after-swap", initFilters);
     attachAutoCat();
     document.addEventListener("astro:page-load", attachAutoCat);
 })();
+</script>
+
+<script>
+// ── Power tools: bulk-select, saved filters, tags-on-edit ──────────────────
+function initPowerTools() {
+    // Runs on both script-eval and astro:page-load — guard against double
+    // registration (duplicate chips + double listeners).
+    if ((window as any).__powerToolsInit) return;
+    (window as any).__powerToolsInit = true;
+    const es = document.documentElement.lang !== "en";
+    const selBtn = document.getElementById("select-mode-btn");
+    const bulkBar = document.getElementById("bulk-bar");
+    const bulkCount = document.getElementById("bulk-count");
+    let selectMode = false;
+    const picked = new Set<string>();
+
+    function refreshBar() {
+        if (bulkCount) bulkCount.textContent = String(picked.size);
+        bulkBar?.classList.toggle("hidden", !selectMode);
+    }
+
+    function exitSelectMode() {
+        selectMode = false;
+        picked.clear();
+        document.querySelectorAll(".tx-row.ring-2").forEach((r) => r.classList.remove("ring-2", "ring-brand-sky-deep"));
+        refreshBar();
+    }
+
+    selBtn?.addEventListener("click", () => {
+        selectMode = !selectMode;
+        if (!selectMode) exitSelectMode();
+        refreshBar();
+    });
+    document.getElementById("bulk-cancel")?.addEventListener("click", exitSelectMode);
+
+    // Capture-phase so select-mode wins over the edit-sheet opener.
+    document.addEventListener("click", (ev) => {
+        if (!selectMode) return;
+        const t = ev.target as Element | null;
+        const row = t?.closest?.(".tx-row") as HTMLElement | null;
+        if (!row) return;
+        ev.stopPropagation();
+        ev.preventDefault();
+        const id = row.dataset.txId!;
+        if (picked.has(id)) { picked.delete(id); row.classList.remove("ring-2", "ring-brand-sky-deep"); }
+        else { picked.add(id); row.classList.add("ring-2", "ring-brand-sky-deep"); }
+        refreshBar();
+    }, true);
+
+    async function bulkCall(url: string, body: unknown) {
+        const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error((e as any).message || (e as any).detail || `Error ${res.status}`); }
+        return res.json();
+    }
+
+    document.getElementById("bulk-category")?.addEventListener("change", async (ev) => {
+        const v = (ev.target as HTMLSelectElement).value;
+        if (!v || picked.size === 0) return;
+        try {
+            await bulkCall("/api/budget/transactions/bulk-update", {
+                transaction_ids: [...picked], updates: { category_id: v },
+            });
+            window.location.reload();
+        } catch (e) { alert((e as Error).message); }
+    });
+    document.getElementById("bulk-clear")?.addEventListener("click", async () => {
+        if (picked.size === 0) return;
+        try {
+            await bulkCall("/api/budget/transactions/bulk-update", {
+                transaction_ids: [...picked], updates: { cleared: true },
+            });
+            window.location.reload();
+        } catch (e) { alert((e as Error).message); }
+    });
+    document.getElementById("bulk-delete")?.addEventListener("click", async () => {
+        if (picked.size === 0) return;
+        if (!confirm(es ? `¿Eliminar ${picked.size} transacciones? (van a la papelera)` : `Delete ${picked.size} transactions? (recycle bin)`)) return;
+        try {
+            await bulkCall("/api/budget/transactions/bulk-delete", { transaction_ids: [...picked] });
+            window.location.reload();
+        } catch (e) { alert((e as Error).message); }
+    });
+
+    // ── Saved filters ──
+    const bar = document.getElementById("saved-filters-bar");
+    async function loadSavedFilters() {
+        try {
+            const res = await fetch("/api/budget/saved-filters/");
+            if (!res.ok) return;
+            const filters = await res.json();
+            if (!bar || !Array.isArray(filters) || filters.length === 0) return;
+            bar.classList.remove("hidden");
+            filters.forEach((f: any) => {
+                const chip = document.createElement("button");
+                chip.className = "text-xs px-2.5 py-1 rounded-full bg-brand-sky/15 text-brand-sky-deep font-semibold hover:bg-brand-sky/30";
+                chip.textContent = f.name;
+                chip.addEventListener("click", () => {
+                    const params = new URLSearchParams(window.location.search);
+                    ["account", "category", "search"].forEach((k) => params.delete(k));
+                    (f.conditions || []).forEach((c: any) => {
+                        if (c.field === "account_id") params.set("account", c.value);
+                        if (c.field === "category_id") params.set("category", c.value);
+                        if (c.field === "search") params.set("search", c.value);
+                    });
+                    window.location.href = "/budget/transactions?" + params.toString();
+                });
+                const del = document.createElement("button");
+                del.className = "text-[10px] text-brand-ink-soft hover:text-red-600 -ml-1";
+                del.textContent = "✕";
+                del.title = es ? "Borrar filtro" : "Delete filter";
+                del.addEventListener("click", async () => {
+                    if (!confirm(es ? `¿Borrar filtro "${f.name}"?` : `Delete filter "${f.name}"?`)) return;
+                    await fetch(`/api/budget/saved-filters/${f.id}`, { method: "DELETE" });
+                    window.location.reload();
+                });
+                bar.appendChild(chip);
+                bar.appendChild(del);
+            });
+        } catch { /* non-fatal */ }
+    }
+    loadSavedFilters();
+
+    document.getElementById("save-filter-btn")?.addEventListener("click", async () => {
+        const params = new URLSearchParams(window.location.search);
+        const conditions: any[] = [];
+        if (params.get("account")) conditions.push({ field: "account_id", operator: "eq", value: params.get("account") });
+        if (params.get("category")) conditions.push({ field: "category_id", operator: "eq", value: params.get("category") });
+        if (params.get("search")) conditions.push({ field: "search", operator: "contains", value: params.get("search") });
+        if (conditions.length === 0) {
+            alert(es ? "Aplica primero un filtro (cuenta, categoría o búsqueda)." : "Apply a filter first (account, category or search).");
+            return;
+        }
+        const name = prompt(es ? "Nombre del filtro:" : "Filter name:");
+        if (!name || !name.trim()) return;
+        const res = await fetch("/api/budget/saved-filters/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name.trim(), conditions, conditions_op: "and" }),
+        });
+        if (res.ok) window.location.reload();
+        else alert(es ? "No se pudo guardar." : "Could not save.");
+    });
+
+    // ── Tags on the edit sheet ──
+    const editModal = document.getElementById("edit-modal");
+    if (editModal && !document.getElementById("edit-tags-row")) {
+        const anchor = document.getElementById("edit-error");
+        const wrap = document.createElement("div");
+        wrap.id = "edit-tags-row";
+        wrap.className = "mb-3";
+        wrap.innerHTML = `<p class="text-xs text-brand-ink-soft mb-1">${es ? "Etiquetas" : "Tags"}</p><div id="edit-tags-chips" class="flex flex-wrap gap-1.5"></div>`;
+        anchor?.parentElement?.insertBefore(wrap, anchor);
+    }
+
+    async function renderTags(txId: string) {
+        const chips = document.getElementById("edit-tags-chips");
+        if (!chips) return;
+        chips.innerHTML = "";
+        try {
+            const [allTags, txTags] = await Promise.all([
+                fetch("/api/budget/tags/").then((r) => r.json()),
+                fetch(`/api/budget/tags/transactions/${txId}/tags`).then((r) => r.json()),
+            ]);
+            if (!Array.isArray(allTags) || allTags.length === 0) {
+                chips.innerHTML = `<a href="/budget/settings#tags" class="text-xs underline text-brand-ink-soft">${es ? "Crear etiquetas en Settings" : "Create tags in Settings"}</a>`;
+                return;
+            }
+            const active = new Set((txTags || []).map((t: any) => t.id));
+            allTags.forEach((t: any) => {
+                const b = document.createElement("button");
+                b.type = "button";
+                b.textContent = t.name;
+                const on = active.has(t.id);
+                b.className = `text-xs px-2 py-0.5 rounded-full border ${on ? "bg-brand-sky-deep text-white border-brand-sky-deep" : "bg-brand-cream text-brand-ink-soft border-brand-ink/20"}`;
+                b.addEventListener("click", async () => {
+                    if (active.has(t.id)) active.delete(t.id); else active.add(t.id);
+                    await fetch(`/api/budget/tags/transactions/${txId}/tags`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ tag_ids: [...active] }),
+                    });
+                    renderTags(txId);
+                });
+                chips.appendChild(b);
+            });
+        } catch { /* non-fatal */ }
+    }
+
+    // When the edit sheet opens (any tx-row click outside select mode), load tags.
+    document.addEventListener("click", (ev) => {
+        if (selectMode) return;
+        const t = ev.target as Element | null;
+        const row = t?.closest?.(".tx-row") as HTMLElement | null;
+        if (!row) return;
+        setTimeout(() => renderTags(row.dataset.txId!), 350);
+    });
+}
+initPowerTools();
+document.addEventListener("astro:page-load", initPowerTools);
 </script>

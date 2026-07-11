@@ -293,7 +293,10 @@ const frequencyLabel = (freq: string) => {
 
         <!-- RECURRING TRANSACTIONS -->
         <SettingsAccordion id="recurring" title={es ? "Transacciones recurrentes" : "Recurring Transactions"} icon="🔄">
-            <div class="flex justify-end mb-3">
+            <div class="flex justify-end gap-2 mb-3">
+                <button onclick="detectSubscriptions()" class="px-3 py-1.5 border border-brand-sky-deep text-brand-sky-deep hover:bg-brand-sky-deep hover:text-white text-sm font-semibold rounded-lg transition">
+                    🔍 {es ? "Detectar suscripciones" : "Detect subscriptions"}
+                </button>
                 <button onclick="openRecurringModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nueva" : "New"}
                 </button>
@@ -998,6 +1001,55 @@ window.confirmDeleteCategory = function(id, name) {
             } catch(e) { showToast(e.message, "error"); }
         }
     );
+};
+
+window.detectSubscriptions = async function() {
+    document.getElementById("modal-title").textContent = es ? "Suscripciones detectadas" : "Detected subscriptions";
+    document.getElementById("modal-body").innerHTML = `<p class="text-sm text-brand-ink-soft">${es ? "Analizando historial..." : "Scanning history..."}</p>`;
+    document.getElementById("settings-modal-overlay")?.classList.remove("hidden");
+    setModalSaveHandler(() => { document.getElementById("settings-modal-overlay")?.classList.add("hidden"); });
+    try {
+        const r = await apiCall("/api/budget/recurring-transactions/detect-candidates", "GET");
+        const cands = r.candidates || [];
+        if (cands.length === 0) {
+            document.getElementById("modal-body").innerHTML = `<p class="text-sm text-brand-ink-soft text-center py-4">${es ? "No se detectaron cargos repetitivos sin plantilla." : "No repeating charges without a template found."}</p>`;
+            return;
+        }
+        const fmtc = (c) => (Math.abs(c)/100).toLocaleString(es ? "es-MX" : "en-US", {style:"currency", currency:"MXN"});
+        document.getElementById("modal-body").innerHTML = `
+            <div class="divide-y divide-brand-ink/10 max-h-72 overflow-y-auto">
+                ${cands.map((c, i) => `
+                    <div class="flex items-center justify-between py-2 gap-2">
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-brand-ink truncate">${escapeHtml(c.payee_name)}</p>
+                            <p class="text-xs text-brand-ink-soft">${fmtc(c.amount_cents)} · ${escapeHtml(c.cadence)}</p>
+                        </div>
+                        <button data-cand="${i}" class="cand-create text-xs px-2 py-1 rounded-lg bg-brand-sky-deep text-white whitespace-nowrap">
+                            + ${es ? "Crear" : "Create"}
+                        </button>
+                    </div>`).join("")}
+            </div>
+            <p class="text-[11px] text-brand-ink-soft mt-2">${es ? "Se crean como recurrentes activas (auto-post cada hora)." : "Created as active recurring templates (auto-posted hourly)."}</p>`;
+        document.querySelectorAll(".cand-create").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                const c = cands[parseInt(btn.dataset.cand, 10)];
+                btn.disabled = true;
+                try {
+                    await apiCall("/api/budget/recurring-transactions/", "POST", {
+                        name: c.payee_name,
+                        amount: c.amount_cents,
+                        account_id: c.account_id || (accountsData[0] && accountsData[0].id),
+                        payee_id: c.payee_id,
+                        recurrence_type: "monthly_dayofmonth",
+                        start_date: new Date().toISOString().slice(0, 10),
+                    });
+                    btn.textContent = "✓";
+                } catch (e) { showToast(e.message, "error"); btn.disabled = false; }
+            });
+        });
+    } catch (e) {
+        document.getElementById("modal-body").innerHTML = `<p class="text-sm text-red-600">${escapeHtml(e.message)}</p>`;
+    }
 };
 
 window.openPayeeMerge = async function() {
