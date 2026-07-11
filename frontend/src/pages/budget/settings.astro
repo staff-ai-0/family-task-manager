@@ -182,6 +182,13 @@ const frequencyLabel = (freq: string) => {
                                                 class="text-brand-ink-soft hover:text-brand-sky-deep underline">
                                                 {c.hidden ? (es ? "Mostrar" : "Unhide") : (es ? "Ocultar" : "Hide")}
                                             </button>
+                                            <button onclick={`promptCategoryGoal('${c.id}','${(c.name||"").replace(/'/g,"\'")}',${c.goal_amount ?? 0})`}
+                                                class="text-brand-ink-soft hover:text-brand-sky-deep underline">{c.goal_amount ? `🎯$${Math.round(c.goal_amount/100)}` : (es ? "Meta" : "Goal")}</button>
+                                            <button onclick={`toggleCategoryRollover('${c.id}',${c.rollover_enabled ? "false" : "true"})`}
+                                                title={es ? "El sobrante pasa (o no) al mes siguiente" : "Leftover carries (or not) into next month"}
+                                                class="text-brand-ink-soft hover:text-brand-sky-deep underline">
+                                                {c.rollover_enabled ? "↻on" : "↻off"}
+                                            </button>
                                             <button onclick={`confirmDeleteCategory('${c.id}','${(c.name||"").replace(/'/g,"\'")}')`}
                                                 class="text-brand-ink-soft hover:text-red-600 underline">{es ? "Eliminar" : "Delete"}</button>
                                         </div>
@@ -202,6 +209,9 @@ const frequencyLabel = (freq: string) => {
         <!-- PAYEES -->
         <SettingsAccordion id="payees" title={es ? "Beneficiarios" : "Payees"} icon="👤">
             <div class="flex justify-end mb-3">
+                <button onclick="openPayeeMerge()" class="px-3 py-1.5 border border-brand-sky-deep text-brand-sky-deep hover:bg-brand-sky-deep hover:text-white text-sm font-semibold rounded-lg transition mr-2">
+                    ⇉ {es ? "Fusionar" : "Merge"}
+                </button>
                 <button onclick="openPayeeModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nuevo" : "New"}
                 </button>
@@ -499,6 +509,16 @@ const frequencyLabel = (freq: string) => {
                     {es ? "Papelera de reciclaje" : "Recycle Bin"}
                 </a>
             </div>
+                    <div class="mt-4 pt-4 border-t border-brand-ink/10">
+                <p class="text-sm font-semibold text-brand-ink mb-1">{es ? "Restaurar respaldo" : "Restore backup"}</p>
+                <p class="text-xs text-red-600 mb-2">
+                    {es ? "⚠ BORRA todo el presupuesto actual y lo reemplaza con el ZIP." : "⚠ WIPES the current budget and replaces it with the ZIP."}
+                </p>
+                <input id="restore-file" type="file" accept=".zip" class="text-xs mb-2 block" />
+                <button onclick="restoreBackup()" class="px-3 py-1.5 border border-red-500 text-red-600 hover:bg-red-600 hover:text-white text-sm font-semibold rounded-lg transition">
+                    {es ? "Restaurar" : "Restore"}
+                </button>
+            </div>
         </SettingsAccordion>
 
     <Fragment slot="overlays">
@@ -788,6 +808,14 @@ window.openAccountModal = function(acc) {
                 <input id="acc-balance" type="number" step="0.01" placeholder="0.00"
                     class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none">
             </div>` : ''}
+            <label class="flex items-center gap-2 text-sm text-brand-ink">
+                <input id="acc-offbudget" type="checkbox" ${acc?.offbudget ? "checked" : ""} class="h-4 w-4 rounded border-brand-ink/20">
+                ${es ? "Fuera del presupuesto (solo seguimiento)" : "Off-budget (tracking only)"}
+            </label>
+            ${isEdit ? `<label class="flex items-center gap-2 text-sm text-brand-ink">
+                <input id="acc-closed" type="checkbox" ${acc?.closed ? "checked" : ""} class="h-4 w-4 rounded border-brand-ink/20">
+                ${es ? "Cuenta cerrada (se oculta; historial se conserva)" : "Closed (hidden; history preserved)"}
+            </label>` : ''}
         </div>
     `;
     document.getElementById("settings-modal-overlay")?.classList.remove("hidden");
@@ -802,6 +830,9 @@ window.openAccountModal = function(acc) {
             // is only a response/list-filter name) — sending account_type made
             // creates 422 with "type: Field required".
             const body = { name, type, notes: document.getElementById("acc-notes").value.trim() || undefined };
+            body.offbudget = document.getElementById("acc-offbudget")?.checked ?? false;
+            const closedEl = document.getElementById("acc-closed");
+            if (closedEl) body.closed = closedEl.checked;
             if (!isEdit) {
                 const bal = parseFloat(document.getElementById("acc-balance").value || "0");
                 if (bal) body.starting_balance = Math.round(bal * 100);
@@ -931,6 +962,29 @@ window.toggleCategoryHidden = async function(id, hide) {
     } catch(e) { showToast(e.message, "error"); }
 };
 
+window.promptCategoryGoal = async function(id, name, currentCents) {
+    const val = prompt(
+        (es ? "Meta mensual para " : "Monthly goal for ") + name +
+        (es ? " ($, 0 para quitar):" : " ($, 0 to clear):"),
+        currentCents ? (currentCents / 100).toFixed(0) : ""
+    );
+    if (val === null) return;
+    const cents = Math.round(parseFloat(val || "0") * 100);
+    if (isNaN(cents) || cents < 0) { showToast(es ? "Cantidad inválida" : "Invalid amount", "error"); return; }
+    try {
+        await apiCall(`/api/budget/categories/${id}`, "PUT", { goal_amount: cents });
+        showToast(es ? "Meta guardada" : "Goal saved");
+        setTimeout(() => location.reload(), 600);
+    } catch(e) { showToast(e.message, "error"); }
+};
+
+window.toggleCategoryRollover = async function(id, enable) {
+    try {
+        await apiCall(`/api/budget/categories/${id}`, "PUT", { rollover_enabled: enable === true || enable === "true" });
+        setTimeout(() => location.reload(), 400);
+    } catch(e) { showToast(e.message, "error"); }
+};
+
 window.confirmDeleteCategory = function(id, name) {
     openConfirm(
         es
@@ -944,6 +998,59 @@ window.confirmDeleteCategory = function(id, name) {
             } catch(e) { showToast(e.message, "error"); }
         }
     );
+};
+
+window.openPayeeMerge = async function() {
+    const payees = await apiCall("/api/budget/payees/", "GET");
+    if (!payees || payees.length < 2) { showToast(es ? "Se necesitan 2+ beneficiarios" : "Need 2+ payees", "error"); return; }
+    document.getElementById("modal-title").textContent = es ? "Fusionar beneficiarios" : "Merge payees";
+    const opts = payees.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
+    document.getElementById("modal-body").innerHTML = `
+        <div class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Conservar (destino)" : "Keep (target)"} *</label>
+                <select id="mg-target" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream">${opts}</select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Fusionar estos (se eliminan)" : "Merge these (deleted)"} *</label>
+                <select id="mg-sources" multiple size="6" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream">${opts}</select>
+                <p class="text-[11px] text-brand-ink-soft mt-1">${es ? "Sus transacciones pasan al destino." : "Their transactions move to the target."}</p>
+            </div>
+        </div>`;
+    document.getElementById("settings-modal-overlay")?.classList.remove("hidden");
+    setModalSaveHandler(async () => {
+        const target = document.getElementById("mg-target").value;
+        const sources = [...document.getElementById("mg-sources").selectedOptions].map(o => o.value).filter(v => v !== target);
+        if (sources.length === 0) { showModalError(es ? "Elige al menos uno distinto al destino" : "Pick at least one different from the target"); return; }
+        try {
+            await apiCall("/api/budget/payees/merge", "POST", { target_id: target, source_ids: sources });
+            showToast(es ? "Fusionados" : "Merged");
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showModalError(e.message); }
+    });
+};
+
+window.restoreBackup = async function() {
+    const input = document.getElementById("restore-file");
+    const f = input?.files?.[0];
+    if (!f) { showToast(es ? "Elige un archivo ZIP" : "Pick a ZIP file", "error"); return; }
+    const word = es ? "RESTAURAR" : "RESTORE";
+    const typed = prompt(es
+        ? `Esto BORRA todo el presupuesto actual. Escribe ${word} para confirmar:`
+        : `This WIPES the current budget. Type ${word} to confirm:`);
+    if (typed !== word) return;
+    const fd = new FormData();
+    fd.append("file", f);
+    try {
+        const res = await fetch("/api/budget/import-backup", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || e.detail || `Error ${res.status}`); }
+        showToast(es ? "Respaldo restaurado" : "Backup restored");
+        setTimeout(() => location.reload(), 1000);
+    } catch(e) { showToast(e.message, "error"); }
 };
 
 window.confirmDeletePayee = function(id, name) {

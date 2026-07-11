@@ -51,6 +51,7 @@ const [budgetRes, allGroupsRes, accountsRes, goalsRes, monthStatusRes, draftsCou
     apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token }),
 ]);
 const pendingDraftsCount = draftsCountRes.data?.count ?? 0;
+const monthClosed = !!monthStatusRes.data?.is_closed;
 
 const budget = budgetRes.data;
 const allGroups = allGroupsRes.data;
@@ -177,6 +178,15 @@ const jarvisQuestions: string[] =
             <button type="button" id="autofill-more"
                 class="text-xs text-brand-ink-soft underline hover:text-brand-sky-deep">
                 {lang === "es" ? "Más estrategias ▾" : "More strategies ▾"}
+            </button>
+        </div>
+        <div class="flex justify-center mt-1">
+            <button type="button" id="month-lock-btn" data-closed={monthClosed ? "1" : "0"}
+                data-year={year} data-month={month}
+                class="text-xs underline text-brand-ink-soft hover:text-brand-sky-deep">
+                {monthClosed
+                    ? (lang === "es" ? "🔓 Reabrir este mes" : "🔓 Reopen this month")
+                    : (lang === "es" ? "🔒 Cerrar este mes (bloquear cambios)" : "🔒 Close this month (lock changes)")}
             </button>
         </div>
         <div id="autofill-menu" class="hidden mt-1 rounded-xl border border-brand-ink/10 bg-brand-cream divide-y divide-brand-ink/10 text-sm">
@@ -340,6 +350,23 @@ const jarvisQuestions: string[] =
         const msg = document.getElementById("copy-last-month-msg");
         if (!btn) return;
         const es = document.documentElement.lang === "es";
+        const lockBtn = document.getElementById("month-lock-btn");
+        lockBtn?.addEventListener("click", async () => {
+            const closed = lockBtn.dataset.closed === "1";
+            const verb = closed
+                ? (es ? "reabrir" : "reopen")
+                : (es ? "cerrar" : "close");
+            if (!window.confirm(closed
+                ? (es ? "¿Reabrir este mes para permitir cambios?" : "Reopen this month to allow changes?")
+                : (es ? "¿Cerrar este mes? Las asignaciones quedan bloqueadas hasta reabrir." : "Close this month? Allocations lock until reopened."))) return;
+            try {
+                const res = await fetch(`/api/budget/months/${lockBtn.dataset.year}/${lockBtn.dataset.month}/${closed ? "reopen" : "close"}`, { method: "POST" });
+                if (!res.ok) throw new Error(String(res.status));
+                window.location.reload();
+            } catch {
+                alert(es ? `No se pudo ${verb} el mes.` : `Could not ${verb} the month.`);
+            }
+        });
         document.getElementById("autofill-more")?.addEventListener("click", () => {
             document.getElementById("autofill-menu")?.classList.toggle("hidden");
         });
