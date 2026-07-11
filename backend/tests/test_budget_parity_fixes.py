@@ -168,3 +168,59 @@ class TestRecurringAutoPost:
             db_session
         )
         assert again == 0
+
+
+class TestBudgetVsActualReport:
+    @pytest.mark.asyncio
+    async def test_report_compares_budgeted_to_activity(
+        self, client, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        from unittest.mock import AsyncMock
+
+        # Reports are premium-gated; the gate has its own tests.
+        monkeypatch.setattr(
+            "app.api.routes.budget.reports.require_feature", AsyncMock(),
+        )
+        from app.services.budget.default_categories import (
+            seed_default_categories,
+        )
+        from app.models.budget import BudgetAllocation, BudgetCategory
+
+        await seed_default_categories(db_session, test_family.id)
+        cat = (await db_session.execute(
+            select(BudgetCategory).where(
+                BudgetCategory.family_id == test_family.id,
+                BudgetCategory.name == "Despensa",
+            )
+        )).scalar_one()
+        acct = BudgetAccount(
+            family_id=test_family.id, name="BvA Checking", type="checking",
+        )
+        db_session.add(acct)
+        await db_session.commit()
+
+        db_session.add(BudgetAllocation(
+            family_id=test_family.id, category_id=cat.id,
+            month=date(2026, 7, 1), budgeted_amount=100000,
+        ))
+        db_session.add(BudgetTransaction(
+            family_id=test_family.id, account_id=acct.id,
+            category_id=cat.id, date=date(2026, 7, 8), amount=-35000,
+        ))
+        await db_session.commit()
+
+        headers = await _login(client, test_parent_user.email)
+        r = await client.get(
+            "/api/budget/reports/budget-vs-actual?year=2026&month=7",
+            headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        row = next(
+            c for c in body["categories"] if c["category_id"] == str(cat.id)
+        )
+        assert row["budgeted"] == 100000
+        assert row["actual"] == -35000
+        assert row["diff"] == 65000  # under budget by 650.00
+        assert body["totals"]["budgeted"] == 100000
+        assert body["totals"]["actual"] == -35000

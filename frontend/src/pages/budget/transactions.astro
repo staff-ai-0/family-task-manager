@@ -457,6 +457,29 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                         </label>
                     </div>
 
+                    <button id="edit-split-btn" type="button"
+                        class="w-full mb-3 py-2 text-sm font-semibold rounded-lg border border-brand-sky-deep/40 text-brand-sky-deep hover:bg-brand-sky-deep/10 transition">
+                        ✂ {es ? "Dividir en categorías" : "Split into categories"}
+                    </button>
+
+                    <!-- Split editor (hidden until requested) -->
+                    <div id="split-editor" class="hidden mb-3 border border-brand-ink/10 rounded-xl p-3 space-y-2">
+                        <p class="text-xs text-brand-ink-soft">
+                            {es ? "Reparte el total entre 2+ categorías. El restante debe quedar en $0." : "Distribute the total across 2+ categories. Remaining must reach $0."}
+                        </p>
+                        <div id="split-rows" class="space-y-2"></div>
+                        <div class="flex items-center justify-between">
+                            <button id="split-add-row" type="button" class="text-xs underline text-brand-sky-deep">
+                                + {es ? "Agregar renglón" : "Add row"}
+                            </button>
+                            <span class="text-xs font-semibold" id="split-remaining"></span>
+                        </div>
+                        <button id="split-save-btn" type="button"
+                            class="w-full py-2 text-sm font-bold rounded-lg bg-brand-sky-deep text-white hover:bg-brand-ink transition disabled:opacity-50">
+                            {es ? "Crear división" : "Create split"}
+                        </button>
+                    </div>
+
                     <div id="edit-error" class="hidden text-sm text-red-600 mb-3 px-1"></div>
 
                     <!-- Price Comparison Panel -->
@@ -544,6 +567,96 @@ document.addEventListener("astro:after-swap", initFilters);
 
     let currentTxId = null;
     let isExpense = true;
+    const es = lang === "es";
+
+    // ── Split editor ──────────────────────────────────────────────────
+    const splitBtn = document.getElementById("edit-split-btn");
+    const splitEditor = document.getElementById("split-editor");
+    const splitRows = document.getElementById("split-rows");
+    const splitRemaining = document.getElementById("split-remaining");
+
+    function catOptionsHtml() {
+        const sel = document.getElementById("edit-category");
+        return [...sel.options].map(o => `<option value="${o.value}">${o.textContent}</option>`).join("");
+    }
+
+    function addSplitRow(amountCents) {
+        const row = document.createElement("div");
+        row.className = "flex gap-2 items-center split-row";
+        row.innerHTML = `
+            <select class="split-cat flex-1 py-1.5 px-2 border border-brand-ink/10 rounded-lg text-xs bg-brand-cream">${catOptionsHtml()}</select>
+            <input type="number" step="0.01" min="0" placeholder="0.00"
+                class="split-amt w-24 py-1.5 px-2 border border-brand-ink/10 rounded-lg text-xs text-right"
+                value="${amountCents ? (amountCents/100).toFixed(2) : ""}">
+            <button type="button" class="split-del text-red-400 hover:text-red-600 text-sm">✕</button>`;
+        row.querySelector(".split-del").addEventListener("click", () => { row.remove(); updateRemaining(); });
+        row.querySelector(".split-amt").addEventListener("input", updateRemaining);
+        splitRows.appendChild(row);
+    }
+
+    function totalCents() {
+        return Math.round(parseFloat(amountInput.value || "0") * 100);
+    }
+
+    function updateRemaining() {
+        const assigned = [...document.querySelectorAll(".split-amt")]
+            .reduce((sum, i) => sum + Math.round(parseFloat(i.value || "0") * 100), 0);
+        const rem = totalCents() - assigned;
+        splitRemaining.textContent = (es ? "Restante: " : "Remaining: ") + "$" + (rem/100).toFixed(2);
+        splitRemaining.className = "text-xs font-semibold " + (rem === 0 ? "text-brand-mint-deep" : "text-amber-600");
+        document.getElementById("split-save-btn").disabled = rem !== 0;
+        return rem;
+    }
+
+    splitBtn?.addEventListener("click", () => {
+        splitEditor.classList.toggle("hidden");
+        if (!splitEditor.classList.contains("hidden") && splitRows.children.length === 0) {
+            const half = Math.floor(totalCents() / 2);
+            addSplitRow(half);
+            addSplitRow(totalCents() - half);
+            updateRemaining();
+        }
+    });
+    document.getElementById("split-add-row")?.addEventListener("click", () => { addSplitRow(0); updateRemaining(); });
+
+    document.getElementById("split-save-btn")?.addEventListener("click", async () => {
+        if (updateRemaining() !== 0) return;
+        const sign = isExpense ? -1 : 1;
+        const splits = [...document.querySelectorAll(".split-row")].map(r => ({
+            amount: sign * Math.round(parseFloat(r.querySelector(".split-amt").value || "0") * 100),
+            category_id: r.querySelector(".split-cat").value || null,
+        })).filter(sp => sp.amount !== 0);
+        if (splits.length < 2) {
+            alert(es ? "Se necesitan al menos 2 renglones." : "At least 2 rows required.");
+            return;
+        }
+        try {
+            // Create the split parent, then delete the original flat txn —
+            // the backend split endpoint creates a NEW parent+children.
+            const res = await fetch("/api/budget/transactions/split", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    account_id: accountSelect.value,
+                    date: dateInput.value,
+                    payee_name: payeeInput.value.trim() || undefined,
+                    notes: document.getElementById("edit-notes").value.trim() || undefined,
+                    splits,
+                }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || err.detail || `Error ${res.status}`);
+            }
+            await fetch(`/api/budget/transactions/${currentTxId}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            window.location.reload();
+        } catch (e) {
+            alert((es ? "No se pudo dividir: " : "Split failed: ") + e.message);
+        }
+    });
 
     const amountInput = document.getElementById("edit-amount");
     const dateInput = document.getElementById("edit-date");

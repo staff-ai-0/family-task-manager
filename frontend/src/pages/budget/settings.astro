@@ -94,7 +94,10 @@ const frequencyLabel = (freq: string) => {
 
         <!-- ACCOUNTS -->
         <SettingsAccordion id="accounts" title={es ? "Cuentas" : "Accounts"} icon="🏦">
-            <div class="flex justify-end mb-3">
+            <div class="flex justify-end gap-2 mb-3">
+                <button onclick="openTransferModal()" class="px-3 py-1.5 border border-brand-sky-deep text-brand-sky-deep hover:bg-brand-sky-deep hover:text-white text-sm font-semibold rounded-lg transition">
+                    ⇄ {es ? "Transferir" : "Transfer"}
+                </button>
                 <button onclick="openAccountModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
                     + {es ? "Nueva cuenta" : "New account"}
                 </button>
@@ -114,6 +117,11 @@ const frequencyLabel = (freq: string) => {
                                 <span class="text-sm font-semibold text-brand-ink">
                                     {formatCurrency(acc.balance_cents ?? acc.balance ?? 0)}
                                 </span>
+                                <button onclick={`openReconcileModal('${acc.id}','${acc.name.replace(/'/g,"\\'")}')`}
+                                    title={es ? "Conciliar" : "Reconcile"}
+                                    class="text-brand-ink-soft hover:text-brand-mint-deep transition text-sm font-semibold">
+                                    ✓$
+                                </button>
                                 <button onclick={`openAccountModal(${JSON.stringify(acc)})`}
                                     class="text-brand-ink-soft hover:text-brand-sky-deep transition">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -643,6 +651,114 @@ document.getElementById("export-btn")?.addEventListener("click", async () => {
 });
 
 // ─── ACCOUNTS ─────────────────────────────────────────────────────────────────
+
+// ─── ACCOUNT TRANSFERS + RECONCILE ───────────────────────────────────────────
+window.openTransferModal = function() {
+    document.getElementById("modal-title").textContent = es ? "Transferir entre cuentas" : "Transfer between accounts";
+    const opts = accountsData.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join("");
+    document.getElementById("modal-body").innerHTML = `
+        <div class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Desde" : "From"} *</label>
+                <select id="tr-from" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream">${opts}</select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Hacia" : "To"} *</label>
+                <select id="tr-to" class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm bg-brand-cream">${opts}</select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Cantidad ($)" : "Amount ($)"} *</label>
+                <input id="tr-amount" type="number" step="0.01" min="0.01" placeholder="0.00"
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Fecha" : "Date"}</label>
+                <input id="tr-date" type="date" value="${new Date().toISOString().slice(0,10)}"
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm">
+            </div>
+        </div>`;
+    if (accountsData.length > 1) document.getElementById("tr-to").selectedIndex = 1;
+    document.getElementById("settings-modal-overlay")?.classList.remove("hidden");
+    setModalSaveHandler(async () => {
+        const from = document.getElementById("tr-from").value;
+        const to = document.getElementById("tr-to").value;
+        const amt = Math.round(parseFloat(document.getElementById("tr-amount").value || "") * 100);
+        if (from === to) { showModalError(es ? "Elige cuentas distintas" : "Pick two different accounts"); return; }
+        if (!amt || amt <= 0) { showModalError(es ? "Cantidad inválida" : "Invalid amount"); return; }
+        try {
+            await apiCall("/api/budget/transfers/accounts", "POST", {
+                from_account_id: from, to_account_id: to, amount: amt,
+                date: document.getElementById("tr-date").value,
+            });
+            showToast(es ? "Transferencia creada" : "Transfer created");
+            setTimeout(() => location.reload(), 800);
+        } catch(e) { showModalError(e.message); }
+    });
+};
+
+window.openReconcileModal = async function(accountId, accountName) {
+    document.getElementById("modal-title").textContent = (es ? "Conciliar " : "Reconcile ") + accountName;
+    document.getElementById("modal-body").innerHTML = `<p class="text-sm text-brand-ink-soft">${es ? "Cargando..." : "Loading..."}</p>`;
+    document.getElementById("settings-modal-overlay")?.classList.remove("hidden");
+
+    const [bal, txns] = await Promise.all([
+        apiCall(`/api/budget/accounts/${accountId}/balance`, "GET"),
+        apiCall(`/api/budget/transactions/?account_id=${accountId}&limit=200`, "GET"),
+    ]);
+    const uncleared = (txns || []).filter(t => !t.cleared || !t.reconciled);
+    const fmtc = (c) => (c/100).toLocaleString(es ? "es-MX" : "en-US", {style:"currency", currency:"MXN"});
+
+    document.getElementById("modal-body").innerHTML = `
+        <div class="space-y-3">
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="bg-brand-cream-deep rounded-lg p-2">
+                    <span class="block text-xs text-brand-ink-soft">${es ? "Saldo en app" : "App balance"}</span>
+                    <b>${fmtc(bal.balance_cents ?? 0)}</b>
+                </div>
+                <div class="bg-brand-cream-deep rounded-lg p-2">
+                    <span class="block text-xs text-brand-ink-soft">${es ? "Confirmado (cleared)" : "Cleared"}</span>
+                    <b>${fmtc(bal.cleared_balance_cents ?? 0)}</b>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-brand-ink-soft mb-1">${es ? "Saldo del estado de cuenta ($)" : "Bank statement balance ($)"} *</label>
+                <input id="rec-statement" type="number" step="0.01"
+                    class="w-full py-2 px-3 border border-brand-ink/10 rounded-lg text-sm">
+            </div>
+            <div>
+                <p class="text-xs text-brand-ink-soft mb-1">${es ? "Palomea lo que aparece en tu estado de cuenta:" : "Check what appears on your statement:"}</p>
+                <div class="max-h-52 overflow-y-auto divide-y divide-brand-ink/10 border border-brand-ink/10 rounded-lg">
+                    ${uncleared.length === 0
+                        ? `<p class="text-xs text-brand-ink-soft p-3 text-center">${es ? "Todo conciliado" : "Everything reconciled"}</p>`
+                        : uncleared.map(t => `
+                        <label class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-brand-cream-deep">
+                            <input type="checkbox" class="rec-check" value="${t.id}" ${t.cleared ? "checked" : ""}>
+                            <span class="flex-1 truncate">${escapeHtml(t.notes || t.date)}</span>
+                            <span class="${t.amount < 0 ? "text-red-600" : "text-brand-mint-deep"} font-semibold">${fmtc(t.amount)}</span>
+                        </label>`).join("")}
+                </div>
+            </div>
+            <p class="text-[11px] text-brand-ink-soft">${es
+                ? "Al confirmar: lo palomeado se marca conciliado; si el saldo no cuadra se crea un ajuste automático."
+                : "On confirm: checked items become reconciled; if the balance doesn't match, an adjustment transaction is created."}</p>
+        </div>`;
+
+    setModalSaveHandler(async () => {
+        const stmt = document.getElementById("rec-statement").value;
+        if (stmt === "") { showModalError(es ? "Ingresa el saldo del estado de cuenta" : "Enter the statement balance"); return; }
+        const ids = [...document.querySelectorAll(".rec-check:checked")].map(c => c.value);
+        try {
+            const r = await apiCall("/api/budget/transactions/finish-reconciliation", "POST", {
+                account_id: accountId,
+                statement_balance: Math.round(parseFloat(stmt) * 100),
+                transaction_ids: ids,
+            });
+            const adj = r.adjustment_amount;
+            showToast((es ? "Conciliado. " : "Reconciled. ") + (adj ? (es ? `Ajuste: ${fmtc(adj)}` : `Adjustment: ${fmtc(adj)}`) : ""));
+            setTimeout(() => location.reload(), 1200);
+        } catch(e) { showModalError(e.message); }
+    });
+};
 
 window.openAccountModal = function(acc) {
     const isEdit = !!acc;
