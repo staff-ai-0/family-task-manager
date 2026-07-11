@@ -87,6 +87,96 @@ async def get_net_worth_report(
     return report
 
 
+@router.get("/budget-vs-actual")
+async def get_budget_vs_actual(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+):
+    """Budget vs Actual per category for one month (parity with Actual's
+    spending-vs-budget analysis).
+
+    Returns {month, categories:[{category_id, category_name, group_name,
+    budgeted, actual, diff}], totals:{budgeted, actual, diff}} — cents;
+    actual is negative for spending; diff = budgeted + actual (positive =
+    under budget). Income and transfer groups are excluded.
+    """
+    from datetime import date as date_type
+
+    from sqlalchemy import and_, func as sa_func, select
+
+    from app.models.budget import (
+        BudgetAllocation,
+        BudgetCategory,
+        BudgetCategoryGroup,
+        BudgetTransaction,
+    )
+
+    await require_feature("budget_reports", db, current_user)
+    family_id = to_uuid_required(current_user.family_id)
+    month_start = date_type(year, month, 1)
+    month_end = (
+        date_type(year + 1, 1, 1) if month == 12
+        else date_type(year, month + 1, 1)
+    )
+
+    rows = (await db.execute(
+        select(
+            BudgetCategory.id,
+            BudgetCategory.name,
+            BudgetCategoryGroup.name.label("group_name"),
+            sa_func.coalesce(
+                select(sa_func.sum(BudgetAllocation.budgeted_amount))
+                .where(
+                    BudgetAllocation.category_id == BudgetCategory.id,
+                    BudgetAllocation.month == month_start,
+                ).scalar_subquery(), 0,
+            ).label("budgeted"),
+            sa_func.coalesce(
+                select(sa_func.sum(BudgetTransaction.amount))
+                .where(
+                    BudgetTransaction.category_id == BudgetCategory.id,
+                    BudgetTransaction.date >= month_start,
+                    BudgetTransaction.date < month_end,
+                    BudgetTransaction.deleted_at.is_(None),
+                ).scalar_subquery(), 0,
+            ).label("actual"),
+        )
+        .join(BudgetCategoryGroup, BudgetCategory.group_id == BudgetCategoryGroup.id)
+        .where(
+            and_(
+                BudgetCategory.family_id == family_id,
+                BudgetCategory.deleted_at.is_(None),
+                BudgetCategory.hidden.is_(False),
+                BudgetCategoryGroup.is_income.is_(False),
+                BudgetCategoryGroup.is_transfer.is_(False),
+                BudgetCategoryGroup.deleted_at.is_(None),
+            )
+        )
+        .order_by(BudgetCategoryGroup.sort_order, BudgetCategory.sort_order)
+    )).all()
+
+    categories = [
+        {
+            "category_id": str(cid),
+            "category_name": cname,
+            "group_name": gname,
+            "budgeted": int(budgeted),
+            "actual": int(actual),
+            "diff": int(budgeted) + int(actual),
+        }
+        for cid, cname, gname, budgeted, actual in rows
+    ]
+    tot_b = sum(c["budgeted"] for c in categories)
+    tot_a = sum(c["actual"] for c in categories)
+    return {
+        "month": str(month_start),
+        "categories": categories,
+        "totals": {"budgeted": tot_b, "actual": tot_a, "diff": tot_b + tot_a},
+    }
+
+
 @router.get("/cash-flow-forecast")
 async def get_cash_flow_forecast(
     current_user: User = Depends(get_current_user),

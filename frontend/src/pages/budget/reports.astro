@@ -56,7 +56,9 @@ const startDate = startD.toISOString().split("T")[0].slice(0, 7) + "-01";
 const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
 // --- Fetch ALL reports in parallel ---
-const [spendingRes, cashflowRes, networthRes, forecastRes, accountsRes, groupsRes, draftsCountRes] = await Promise.all([
+const bvaYear = now.getFullYear();
+const bvaMonth = now.getMonth() + 1;
+const [spendingRes, cashflowRes, networthRes, forecastRes, accountsRes, groupsRes, draftsCountRes, bvaRes] = await Promise.all([
     getSpendingReport(token, startDate, endDate, "category"),
     getIncomeVsExpenseReport(token, startDate, endDate, "month"),
     getNetWorthReport(token),
@@ -64,7 +66,10 @@ const [spendingRes, cashflowRes, networthRes, forecastRes, accountsRes, groupsRe
     apiFetch<any[]>("/api/budget/accounts/", { token }),
     getCategoryGroups(token),
     apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token }),
+    apiFetch<any>(`/api/budget/reports/budget-vs-actual?year=${now.getFullYear()}&month=${now.getMonth() + 1}`, { token }),
 ]);
+const bva = bvaRes.data ?? { categories: [], totals: { budgeted: 0, actual: 0, diff: 0 } };
+const bvaRows = (bva.categories ?? []).filter((c: any) => c.budgeted !== 0 || c.actual !== 0);
 const pendingDraftsCount = draftsCountRes.data?.count ?? 0;
 
 // --- Extract data ---
@@ -459,14 +464,55 @@ const reportsLocked = planName === "free";
 
         <!-- ==================== BUDGET vs ACTUAL ==================== -->
         <div id="report-analysis" class={tab !== "analysis" ? "hidden" : ""}>
-            <div class="px-4 pb-6">
-                <div class="bg-brand-cream-deep border border-brand-ink/10 rounded-xl p-8 text-center mt-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-brand-ink-soft mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                    <p class="text-brand-ink-soft font-medium">{es ? "Proximamente" : "Coming soon"}</p>
-                    <p class="text-sm text-brand-ink-soft mt-1">{es ? "El analisis de presupuesto vs. real estara disponible pronto." : "Budget vs. actual analysis will be available soon."}</p>
-                </div>
+            <div class="px-4 pb-6 space-y-4">
+                {bvaRows.length === 0 ? (
+                    <div class="bg-brand-cream-deep border border-brand-ink/10 rounded-xl p-8 text-center mt-2">
+                        <p class="text-brand-ink-soft font-medium">{es ? "Sin datos para este mes" : "No data for this month"}</p>
+                        <p class="text-sm text-brand-ink-soft mt-1">{es ? "Asigna presupuesto o registra gastos para comparar." : "Assign budget or record spending to compare."}</p>
+                    </div>
+                ) : (
+                    <>
+                        <div class="grid grid-cols-3 gap-2 mt-2">
+                            <div class="bg-brand-cream rounded-xl border border-brand-ink/10 p-3 text-center">
+                                <p class="text-[11px] uppercase tracking-wide text-brand-ink-soft">{es ? "Presupuestado" : "Budgeted"}</p>
+                                <p class="text-lg font-extrabold text-brand-ink">{formatCurrency(bva.totals.budgeted)}</p>
+                            </div>
+                            <div class="bg-brand-cream rounded-xl border border-brand-ink/10 p-3 text-center">
+                                <p class="text-[11px] uppercase tracking-wide text-brand-ink-soft">{es ? "Gastado" : "Spent"}</p>
+                                <p class="text-lg font-extrabold text-red-600">{formatCurrency(Math.abs(bva.totals.actual))}</p>
+                            </div>
+                            <div class="bg-brand-cream rounded-xl border border-brand-ink/10 p-3 text-center">
+                                <p class="text-[11px] uppercase tracking-wide text-brand-ink-soft">{es ? "Diferencia" : "Difference"}</p>
+                                <p class={`text-lg font-extrabold ${bva.totals.diff >= 0 ? "text-brand-mint-deep" : "text-red-600"}`}>{formatCurrency(bva.totals.diff)}</p>
+                            </div>
+                        </div>
+                        <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] overflow-hidden">
+                            <div class="divide-y divide-brand-ink/10">
+                                {bvaRows.map((c: any) => {
+                                    const spent = Math.abs(c.actual);
+                                    const pct = c.budgeted > 0 ? Math.min((spent / c.budgeted) * 100, 100) : (spent > 0 ? 100 : 0);
+                                    const over = c.diff < 0;
+                                    return (
+                                        <div class="px-4 py-3">
+                                            <div class="flex items-center justify-between mb-1">
+                                                <span class="text-sm font-medium text-brand-ink truncate max-w-[50%]">{c.category_name} <span class="text-brand-ink-soft text-xs">· {c.group_name}</span></span>
+                                                <span class={`text-xs font-bold ${over ? "text-red-600" : "text-brand-mint-deep"}`}>
+                                                    {over ? (es ? "Excedido " : "Over ") : (es ? "Libre " : "Left ")}{formatCurrency(Math.abs(c.diff))}
+                                                </span>
+                                            </div>
+                                            <div class="flex items-center gap-2 text-xs text-brand-ink-soft">
+                                                <div class="flex-1 bg-brand-cream-deep rounded-full h-2 overflow-hidden">
+                                                    <div class={`h-full ${over ? "bg-red-500" : "bg-brand-mint-deep"}`} style={`width: ${pct}%`}></div>
+                                                </div>
+                                                <span class="w-32 text-right tabular-nums">{formatCurrency(spent)} / {formatCurrency(c.budgeted)}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
       </>
