@@ -64,14 +64,14 @@ interface SeoCopy {
 const PAGE_SEO: Record<string, { es: SeoCopy; en: SeoCopy }> = {
   "/": {
     es: {
-      title: "Family Task Manager — App de tareas y recompensas para niños",
+      title: "Family Task Manager — Tareas, dinero y finanzas para toda la familia",
       description:
-        "App familiar para asignar quehaceres del hogar, premiar a los niños con puntos y recompensas, y llevar el presupuesto familiar. Bilingüe español e inglés. Empieza gratis, sin tarjeta.",
+        "El sistema operativo de tu familia: tareas que se reparten solas, puntos y dinero real, presupuesto por sobres nivel pro con escáner de recibos IA y copiloto, más comidas, compras, calendario y mascota. Bilingüe. Empieza gratis, sin tarjeta.",
     },
     en: {
-      title: "Family Task Manager — Chores, rewards & budget for families",
+      title: "Family Task Manager — Chores, money & finances for the whole family",
       description:
-        "A gamified family app to assign household chores, reward kids with points and prizes, and manage the family budget. Bilingual English and Spanish. Start free, no card needed.",
+        "Your family's operating system: self-assigning chores, points and real cash, pro-grade envelope budgeting with an AI receipt scanner and copilot, plus meals, shopping, calendar and a virtual pet. Bilingual. Start free, no card needed.",
     },
   },
   "/register": {
