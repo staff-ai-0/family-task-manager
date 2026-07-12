@@ -188,6 +188,13 @@ const baseRoute = "move-money";
             }
             successEl.textContent = lang === "es" ? "Dinero movido" : "Money moved";
             successEl.classList.remove("hidden");
+            window.queueUndo?.(
+                lang === "es" ? "Dinero movido entre categorías" : "Money moved between categories",
+                [{ url: "/api/budget/transfers/categories", method: "POST", body: {
+                    from_category_id: toId, to_category_id: fromCategoryId,
+                    amount: amountCents, month: monthStr,
+                } }],
+            );
             setTimeout(() => location.reload(), 600);
         } catch (e) {
             errorEl.textContent = e.message;

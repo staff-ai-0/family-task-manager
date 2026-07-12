@@ -98,20 +98,20 @@ const tabs = [
 <script>
 // Keyboard shortcuts (desktop parity with Actual): active on every budget
 // page since this nav renders on all of them. Guarded per-window.
-if (!(window as any).__budgetKeys) {
-    (window as any).__budgetKeys = true;
+if (!window.__budgetKeys) {
+    window.__budgetKeys = true;
     let gPending = false;
-    let gTimer: ReturnType<typeof setTimeout>;
+    let gTimer;
 
-    function typingContext(el: EventTarget | null): boolean {
-        const t = el as HTMLElement | null;
+    function typingContext(el) {
+        const t = el;
         if (!t) return false;
         const tag = t.tagName;
         return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable;
     }
 
     function showKeysHelp() {
-        if (document.getElementById("keys-help")) { document.getElementById("keys-help")!.remove(); return; }
+        if (document.getElementById("keys-help")) { document.getElementById("keys-help").remove(); return; }
         const es = document.documentElement.lang !== "en";
         const div = document.createElement("div");
         div.id = "keys-help";
@@ -143,9 +143,9 @@ if (!(window as any).__budgetKeys) {
             return;
         }
         if (ev.key === "g") { gPending = true; gTimer = setTimeout(() => { gPending = false; }, 800); return; }
-        if (ev.key === "n") { ev.preventDefault(); (document.getElementById("fab-button") as HTMLElement | null)?.click(); return; }
+        if (ev.key === "n") { ev.preventDefault(); document.getElementById("fab-button")?.click(); return; }
         if (ev.key === "/") {
-            const search = document.getElementById("filter-search") as HTMLInputElement | null;
+            const search = document.getElementById("filter-search");
             if (search) { ev.preventDefault(); search.focus(); }
             else { ev.preventDefault(); location.href = "/budget/transactions"; }
             return;
@@ -153,5 +153,69 @@ if (!(window as any).__budgetKeys) {
         if (ev.key === "?") { ev.preventDefault(); showKeysHelp(); return; }
         if (ev.key === "Escape") { document.getElementById("keys-help")?.remove(); }
     });
+}
+</script>
+
+<script>
+// Scoped undo (Actual-parity, pragmatic): actions with a clean inverse queue
+// it in sessionStorage before their reload; this nav (on every budget page)
+// shows a 10s "Deshacer" toast after the reload and executes the inverse.
+if (!window.__budgetUndo) {
+    window.__budgetUndo = true;
+    const KEY = "budget_undo";
+    const TTL_MS = 15000;
+
+    window.queueUndo = (label, calls) => {
+        sessionStorage.setItem(KEY, JSON.stringify({ label, calls, ts: Date.now() }));
+        // Show immediately too — some callers (Assign Funds) don't reload.
+        document.getElementById("undo-toast")?.remove();
+        showUndoToast();
+    };
+
+    function showUndoToast() {
+        const raw = sessionStorage.getItem(KEY);
+        if (!raw) return;
+        let data;
+        try { data = JSON.parse(raw); } catch { sessionStorage.removeItem(KEY); return; }
+        const age = Date.now() - (data.ts || 0);
+        if (age > TTL_MS) { sessionStorage.removeItem(KEY); return; }
+        const es = document.documentElement.lang !== "en";
+
+        const toast = document.createElement("div");
+        toast.id = "undo-toast";
+        toast.className = "fixed bottom-20 left-1/2 -translate-x-1/2 z-[95] bg-brand-ink text-brand-cream rounded-xl px-4 py-2.5 shadow-xl flex items-center gap-3 text-sm";
+        toast.innerHTML = `<span>${data.label}</span>
+            <button id="undo-do" class="font-bold underline text-brand-sky whitespace-nowrap">${es ? "Deshacer" : "Undo"}</button>
+            <button id="undo-x" class="text-brand-cream/60">✕</button>`;
+        document.body.appendChild(toast);
+
+        const remove = () => { toast.remove(); sessionStorage.removeItem(KEY); };
+        const timer = setTimeout(remove, TTL_MS - age);
+
+        toast.querySelector("#undo-x")?.addEventListener("click", () => { clearTimeout(timer); remove(); });
+        toast.querySelector("#undo-do")?.addEventListener("click", async () => {
+            clearTimeout(timer);
+            const btn = toast.querySelector("#undo-do");
+            btn.disabled = true;
+            btn.textContent = "…";
+            try {
+                for (const c of data.calls) {
+                    const res = await fetch(c.url, {
+                        method: c.method,
+                        headers: c.body ? { "Content-Type": "application/json" } : undefined,
+                        body: c.body ? JSON.stringify(c.body) : undefined,
+                    });
+                    if (!res.ok) throw new Error(String(res.status));
+                }
+                remove();
+                location.reload();
+            } catch {
+                btn.textContent = es ? "Falló" : "Failed";
+                setTimeout(remove, 1500);
+            }
+        });
+    }
+    showUndoToast();
+    document.addEventListener("astro:page-load", showUndoToast);
 }
 </script>
