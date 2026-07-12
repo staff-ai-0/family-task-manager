@@ -40,18 +40,18 @@ const landingJsonLd = [organizationJsonLd(), softwareAppJsonLd(lang)];
   <section class="bg-brand-sky border-b-2 border-brand-ink px-6 py-20">
     <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-12 items-center">
       <div>
-        <Badge tone="cream">{es ? "Bilingüe ES · EN" : "Bilingual EN · ES"}</Badge>
+        <Badge tone="cream">{es ? "Bilingüe ES · EN · Sin tarjeta para empezar" : "Bilingual EN · ES · No card to start"}</Badge>
         <h1 class="font-display text-5xl md:text-6xl lg:text-7xl mt-4 leading-[0.95] tracking-tight">
-          {es ? <>Tareas, premios<br/>y presupuesto<br/><span class="text-brand-coral">en familia.</span></> : <>Chores, rewards,<br/>budget — <br/><span class="text-brand-coral">together.</span></>}
+          {es ? <>El sistema<br/>operativo de<br/><span class="text-brand-coral">tu familia.</span></> : <>Your family's<br/>operating<br/><span class="text-brand-coral">system.</span></>}
         </h1>
         <p class="mt-5 text-lg font-sans font-medium text-brand-ink max-w-md">
           {es
-            ? "App gamificada para familias con hijos de 6 a 17 años. Tareas automáticas, puntos canjeables y finanzas familiares — todo en un solo lugar."
-            : "Gamified family app for parents of kids 6–17. Automated chores, redeemable points, and family budgeting — all in one place."}
+            ? "Tareas que se reparten solas, dos monedas (puntos y dinero real), presupuesto por sobres a la altura de las mejores apps, escáner de recibos con IA y un copiloto que responde tus preguntas de dinero. Para familias con hijos de 6 a 17."
+            : "Chores that assign themselves, two currencies (points and real cash), envelope budgeting on par with the best finance apps, an AI receipt scanner, and a copilot that answers your money questions. For families with kids 6–17."}
         </p>
         <div class="mt-7 flex gap-3 flex-wrap">
-          <Button variant="primary" size="lg" href="/register">{es ? "Comenzar ahora →" : "Start now →"}</Button>
-          <Button variant="ghost" size="lg" href="#features">{es ? "Ver cómo funciona" : "See how it works"}</Button>
+          <Button variant="primary" size="lg" href="/register">{es ? "Comenzar gratis →" : "Start free →"}</Button>
+          <Button variant="ghost" size="lg" href="#pricing">{es ? "Ver planes" : "See pricing"}</Button>
         </div>
       </div>
       <Card tone="cream" pop class="flex items-center justify-center p-8">
@@ -118,67 +118,102 @@ const landingJsonLd = [organizationJsonLd(), softwareAppJsonLd(lang)];
   <!-- FEATURES -->
   <section id="features" class="bg-brand-cream px-6 py-20">
     <div class="max-w-6xl mx-auto">
-      <p class="font-sans font-extrabold text-xs tracking-[0.18em] uppercase text-brand-ink-soft">{es ? "Tres módulos" : "Three modules"}</p>
-      <h2 class="font-display text-4xl md:text-5xl mt-2">{es ? "Todo lo que una familia necesita." : "Everything a family needs."}</h2>
+      <p class="font-sans font-extrabold text-xs tracking-[0.18em] uppercase text-brand-ink-soft">{es ? "Todo incluido" : "All in one"}</p>
+      <h2 class="font-display text-4xl md:text-5xl mt-2">{es ? "Una app. Toda la logística familiar." : "One app. The whole family's logistics."}</h2>
 
       <div class="mt-12 grid md:grid-cols-3 gap-6">
         <Card>
-          <Badge tone="sky">{es ? "Módulo 1" : "Module 1"}</Badge>
-          <h3 class="font-display text-2xl mt-4">{es ? "Tareas automáticas" : "Automated chores"}</h3>
-          <p class="text-sm text-brand-ink-soft mt-2 font-sans">{es ? "Barajado semanal inteligente. El sistema rota tareas según frecuencia y preferencias — sin trabajo manual de los padres." : "Smart weekly shuffle. The system rotates chores based on frequency + preferences — no parent legwork."}</p>
+          <Badge tone="sky">{es ? "Tareas" : "Chores"}</Badge>
+          <h3 class="font-display text-2xl mt-4">{es ? "Se reparten solas" : "They assign themselves"}</h3>
+          <p class="text-sm text-brand-ink-soft mt-2 font-sans">{es ? "Barajado semanal balanceado por persona, días específicos, rotación justa y aprobación con foto. Cero pelea de quién le toca qué." : "Balanced weekly shuffle per person, specific weekdays, fair rotation and photo approval. Zero fights over whose turn it is."}</p>
         </Card>
         <Card>
-          <Badge tone="coral">{es ? "Módulo 2" : "Module 2"}</Badge>
-          <h3 class="font-display text-2xl mt-4">{es ? "Puntos y premios" : "Points & rewards"}</h3>
-          <p class="text-sm text-brand-ink-soft mt-2 font-sans">{es ? "Los hijos acumulan puntos por tareas completadas y los canjean por premios que la familia define." : "Kids earn points for completed chores and redeem them for rewards the family defines."}</p>
+          <Badge tone="coral">{es ? "Dos monedas" : "Two currencies"}</Badge>
+          <h3 class="font-display text-2xl mt-4">{es ? "Puntos y dinero real" : "Points & real cash"}</h3>
+          <p class="text-sm text-brand-ink-soft mt-2 font-sans">{es ? "Las tareas dan puntos canjeables por privilegios; el tablero de 'gigs' paga dinero real. Banco familiar con mesada, interés y metas de ahorro por hijo." : "Chores earn points redeemable for privileges; the gigs board pays real cash. Family bank with allowance, interest, and per-kid savings goals."}</p>
         </Card>
         <Card>
-          <Badge tone="mint">{es ? "Módulo 3" : "Module 3"}</Badge>
-          <h3 class="font-display text-2xl mt-4">{es ? "Presupuesto por sobres" : "Envelope budgeting"}</h3>
-          <p class="text-sm text-brand-ink-soft mt-2 font-sans">{es ? "Asigna dinero a categorías, controla gastos en tiempo real y enseña finanzas a tus hijos." : "Assign money to categories, track spending in real time, and teach finance to your kids."}</p>
+          <Badge tone="mint">{es ? "Finanzas" : "Finance"}</Badge>
+          <h3 class="font-display text-2xl mt-4">{es ? "Presupuesto pro" : "Pro-grade budget"}</h3>
+          <p class="text-sm text-brand-ink-soft mt-2 font-sans">{es ? "Sobres, conciliación bancaria, transacciones divididas, recurrentes que se registran solas, reportes y 'deshacer'. A la altura de las mejores apps de finanzas." : "Envelopes, bank reconciliation, split transactions, auto-posting recurring, reports and undo. On par with the best finance apps."}</p>
+        </Card>
+        <Card>
+          <Badge tone="sun">{es ? "IA" : "AI"}</Badge>
+          <h3 class="font-display text-2xl mt-4">{es ? "Escáner de recibos" : "Receipt scanner"}</h3>
+          <p class="text-sm text-brand-ink-soft mt-2 font-sans">{es ? "Toma foto del ticket y la IA extrae fecha, monto, comercio y cada artículo. Más un copiloto (Jarvis) que responde '¿cuánto gastamos en comida?'." : "Snap the receipt and AI pulls date, amount, merchant and every line item. Plus a copilot (Jarvis) that answers 'how much did we spend on food?'."}</p>
+        </Card>
+        <Card>
+          <Badge tone="sky">{es ? "Hogar" : "Home"}</Badge>
+          <h3 class="font-display text-2xl mt-4">{es ? "Comidas, compras, agenda" : "Meals, shopping, calendar"}</h3>
+          <p class="text-sm text-brand-ink-soft mt-2 font-sans">{es ? "Plan de comidas que arma la lista del súper, calendario familiar con escáner de imágenes, chat y mensajes directos. La familia coordinada en un lugar." : "Meal plans that build the shopping list, a family calendar with image scanning, group chat and direct messages. The family coordinated in one place."}</p>
+        </Card>
+        <Card>
+          <Badge tone="coral">{es ? "Para niños" : "For kids"}</Badge>
+          <h3 class="font-display text-2xl mt-4">{es ? "Mascota y modo kiosko" : "Pet & kiosk mode"}</h3>
+          <p class="text-sm text-brand-ink-soft mt-2 font-sans">{es ? "Una mascota virtual por hijo que crece al completar tareas, rutinas tipo Skylight, y un modo kiosko para la tablet compartida del refri." : "A virtual pet per kid that grows as they complete work, Skylight-style routines, and a kiosk mode for the shared fridge tablet."}</p>
         </Card>
       </div>
     </div>
   </section>
 
-  <!-- TESTIMONIALS -->
-  <section class="bg-brand-sun border-y-2 border-brand-ink px-6 py-20">
+  <!-- PRICING -->
+  <section id="pricing" class="bg-brand-sun border-y-2 border-brand-ink px-6 py-20">
     <div class="max-w-6xl mx-auto">
-      <p class="font-sans font-extrabold text-xs tracking-[0.18em] uppercase text-brand-ink">{es ? "Familias reales" : "Real families"}</p>
-      <h2 class="font-display text-4xl md:text-5xl mt-2 text-brand-ink">{es ? "Lo que las familias dicen." : "What families say."}</h2>
+      <p class="font-sans font-extrabold text-xs tracking-[0.18em] uppercase text-brand-ink">{es ? "Precios" : "Pricing"}</p>
+      <h2 class="font-display text-4xl md:text-5xl mt-2 text-brand-ink">{es ? "Empieza gratis. Sube cuando la uses." : "Start free. Upgrade when you use it."}</h2>
+      <p class="mt-3 font-sans text-brand-ink font-medium max-w-xl">{es ? "Todo el sistema de tareas, puntos y el banco familiar son gratis para siempre. Los planes de pago abren las finanzas avanzadas y la IA." : "The whole chores, points and family-bank system is free forever. Paid plans unlock advanced finance and AI."}</p>
 
-      <div class="mt-12 grid md:grid-cols-3 gap-6">
+      <div class="mt-12 grid md:grid-cols-3 gap-6 items-start">
+        <!-- FREE -->
         <Card>
-          <p class="text-base font-sans text-brand-ink leading-relaxed">{es ? "“El barajado automático cambió todo. Antes era una pelea cada semana. Ahora el sistema lo hace solo.”" : "“The automatic shuffle changed everything. Before it was a fight every week. Now the system does it.”"}</p>
-          <div class="mt-4 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-brand-coral border-2 border-brand-ink flex items-center justify-center font-display font-extrabold text-brand-ink">S</div>
-            <div>
-              <p class="font-display font-extrabold text-sm">Sandra M.</p>
-              <p class="text-xs text-brand-ink-soft font-sans">{es ? "Madre de 3" : "Mother of 3"}</p>
-            </div>
-          </div>
+          <Badge tone="sky">{es ? "Gratis" : "Free"}</Badge>
+          <p class="font-display text-4xl mt-4 num">$0</p>
+          <p class="text-xs text-brand-ink-soft font-sans mb-4">{es ? "para siempre" : "forever"}</p>
+          <ul class="space-y-2 text-sm font-sans text-brand-ink">
+            <li>✓ {es ? "Tareas, barajado y rutinas" : "Chores, shuffle & routines"}</li>
+            <li>✓ {es ? "Puntos, premios y tablero de gigs" : "Points, rewards & gigs board"}</li>
+            <li>✓ {es ? "Banco familiar (mesada + ahorro)" : "Family bank (allowance + savings)"}</li>
+            <li>✓ {es ? "Presupuesto básico (2 cuentas)" : "Basic budget (2 accounts)"}</li>
+            <li>✓ {es ? "Hasta 4 miembros" : "Up to 4 members"}</li>
+          </ul>
+          <Button variant="ghost" size="md" href="/register" class="mt-6 w-full">{es ? "Crear cuenta" : "Create account"}</Button>
         </Card>
-        <Card>
-          <p class="text-base font-sans text-brand-ink leading-relaxed">{es ? "“Por primera vez en 10 años entiendo a dónde va el dinero familiar.”" : "“For the first time in 10 years I understand where the family money goes.”"}</p>
-          <div class="mt-4 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-brand-mint border-2 border-brand-ink flex items-center justify-center font-display font-extrabold text-brand-ink">R</div>
-            <div>
-              <p class="font-display font-extrabold text-sm">Roberto K.</p>
-              <p class="text-xs text-brand-ink-soft font-sans">{es ? "Padre, CFO familiar" : "Father, family CFO"}</p>
-            </div>
+
+        <!-- PLUS (featured) -->
+        <Card pop tone="cream" class="border-brand-coral">
+          <div class="flex items-center gap-2">
+            <Badge tone="coral">Plus</Badge>
+            <span class="font-sans text-[10px] font-extrabold uppercase tracking-wide bg-brand-coral text-brand-ink px-2 py-0.5 rounded-full border border-brand-ink">{es ? "Más elegido" : "Most popular"}</span>
           </div>
+          <p class="font-display text-4xl mt-4 num">$4.99<span class="text-lg text-brand-ink-soft"> {es ? "/mes" : "/mo"}</span></p>
+          <p class="text-xs text-brand-ink-soft font-sans mb-4">{es ? "o $49 al año (2 meses gratis) · USD" : "or $49/yr (2 months free) · USD"}</p>
+          <ul class="space-y-2 text-sm font-sans text-brand-ink">
+            <li>✓ {es ? "Todo lo de Gratis, más:" : "Everything in Free, plus:"}</li>
+            <li>✓ {es ? "Escáner de recibos con IA (50/mes)" : "AI receipt scanner (50/mo)"}</li>
+            <li>✓ {es ? "Copiloto Jarvis + reportes + metas" : "Jarvis copilot + reports + goals"}</li>
+            <li>✓ {es ? "Recurrentes, import CSV/OFX, 5 cuentas" : "Recurring, CSV/OFX import, 5 accounts"}</li>
+            <li>✓ {es ? "Automatización del banco familiar" : "Family-bank automation"}</li>
+            <li>✓ {es ? "Hasta 6 miembros" : "Up to 6 members"}</li>
+          </ul>
+          <Button variant="primary" size="md" href="/register" class="mt-6 w-full">{es ? "Empezar con Plus" : "Get Plus"}</Button>
         </Card>
+
+        <!-- PRO -->
         <Card>
-          <p class="text-base font-sans text-brand-ink leading-relaxed">{es ? "“Mis hijos compiten por quién acumula más puntos. La gamificación funciona mejor de lo que esperaba.”" : "“My kids compete over who earns more points. The gamification works better than I expected.”"}</p>
-          <div class="mt-4 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-brand-sky border-2 border-brand-ink flex items-center justify-center font-display font-extrabold text-brand-ink">A</div>
-            <div>
-              <p class="font-display font-extrabold text-sm">Ana L.</p>
-              <p class="text-xs text-brand-ink-soft font-sans">{es ? "Madre de gemelos (12)" : "Mother of twins (12)"}</p>
-            </div>
-          </div>
+          <Badge tone="mint">Pro</Badge>
+          <p class="font-display text-4xl mt-4 num">$9.99<span class="text-lg text-brand-ink-soft"> {es ? "/mes" : "/mo"}</span></p>
+          <p class="text-xs text-brand-ink-soft font-sans mb-4">{es ? "o $99 al año · USD" : "or $99/yr · USD"}</p>
+          <ul class="space-y-2 text-sm font-sans text-brand-ink">
+            <li>✓ {es ? "Todo lo de Plus, sin límites:" : "Everything in Plus, unlimited:"}</li>
+            <li>✓ {es ? "Escaneos de recibos ilimitados" : "Unlimited receipt scans"}</li>
+            <li>✓ {es ? "Cuentas, transacciones y recurrentes sin tope" : "Unlimited accounts, transactions, recurring"}</li>
+            <li>✓ {es ? "Comparador de precios por artículo" : "Per-item price comparison"}</li>
+            <li>✓ {es ? "Miembros ilimitados" : "Unlimited members"}</li>
+          </ul>
+          <Button variant="ghost" size="md" href="/register" class="mt-6 w-full">{es ? "Elegir Pro" : "Go Pro"}</Button>
         </Card>
       </div>
+      <p class="mt-6 text-xs text-brand-ink font-sans">{es ? "Pago con PayPal. Cancela cuando quieras. Precios en USD." : "Pay with PayPal. Cancel anytime. Prices in USD."}</p>
     </div>
   </section>
 
