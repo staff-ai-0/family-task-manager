@@ -172,6 +172,37 @@ class TestMemberBalance:
         spread = max(totals.values()) - min(totals.values())
         assert spread <= 30, f"compensation failed: {sorted(totals.values())}"
 
+    def test_member_balance_evens_midweek_split(self, test_family):
+        # Mid-week (today=Tue) a daily chore pinned to two members has 5 days
+        # left (Tue–Sat, Sun off) → a 3/2 split; several such chores pile the
+        # "3" side on one member (prod: two teens 160 vs 120 mid-week). The
+        # member-balance pass evens their totals to within one chore.
+        from collections import Counter
+        members = _members(test_family, 4)
+        t0, t1 = members[0], members[1]
+
+        def daily_rot():
+            t = TaskTemplate(
+                title="D", points=10, effort_level=1, interval_days=1,
+                is_bonus=False, assignment_type=AssignmentType.ROTATE,
+                assigned_user_ids=[str(t0.id), str(t1.id)],
+                family_id=test_family.id,
+            )
+            t.id = uuid.uuid4()
+            return t
+
+        monday, tuesday = date(2026, 6, 1), date(2026, 6, 2)
+        rng = random.Random("mid")
+        asg, _t, _s = TaskAssignmentService._compute_assignments(
+            rng, test_family.id, monday,
+            regular_templates=[daily_rot() for _ in range(3)], bonus_templates=[],
+            members=members, today=tuesday, rest_days=[6],
+        )
+        tot = Counter()
+        for a in asg:
+            tot[a.assigned_to] += 10
+        assert abs(tot[t0.id] - tot[t1.id]) <= 10, f"midweek unbalanced: {dict(tot)}"
+
     def test_forced_first_keeps_equal_members_balanced(self, test_family):
         # Two equally-eligible members; one is pinned to extra FIXED work. AUTO
         # chores must flow to the OTHER member to compensate so their totals stay
