@@ -581,20 +581,25 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     for member in eligible:
                         assignments.append(_new_assignment(template.id, member.id, d))
 
-        # ── Final pass: even out each member's chores ACROSS their own days ──
-        # Selection above balances who does what and roughly when, but a
-        # member's day-flexible chores (no parent-pinned weekday) can still
-        # bunch on one day while leaving others empty (prod: Ariana had 4 on
-        # Thursday, nothing Mon/Wed/Fri). Greedily shift a chore from each
-        # member's heaviest day to their lightest until within one — never
-        # putting the same chore on a day it already occupies, and only moving
-        # regular (non-gig) chores whose day we chose (no days_of_week).
+        # ── Final pass: even out each member's WEEKLY chores across their days ──
+        # Selection places each weekly chore on the assignee's least-loaded day,
+        # but several weekly chores for one member can still bunch. Greedily
+        # shift from a member's heaviest day to their lightest until within one.
+        #
+        # ONLY weekly (interval 7, no pinned weekday) chores are movable: their
+        # single occurrence can sit on any day. Daily and every-N-day chores
+        # carry a cadence — "cada 3 días" means spaced every 3 days, "diario"
+        # means every day — and moving their occurrences would corrupt that
+        # (prod: a cada-3d chore must never be scattered into consecutive days).
+        # A global (template, date) guard also prevents landing a chore on a day
+        # any member already does it (one regular occurrence per day).
         week_material = _material(week_dates)
         if len(week_material) > 1:
             movable_tpl = {
                 t.id for t in regular_templates
-                if not getattr(t, "days_of_week", None)
+                if not getattr(t, "days_of_week", None) and t.interval_days == 7
             }
+            taken = {(a.template_id, a.assigned_date) for a in assignments}
             per_member: dict[UUID, list[TaskAssignment]] = {}
             for a in assignments:
                 if a.template_id in movable_tpl:
@@ -602,11 +607,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             for alist in per_member.values():
                 for _ in range(len(alist) * len(week_material)):
                     cnt = {d: 0 for d in week_material}
-                    tpl_on_day = {d: set() for d in week_material}
                     for a in alist:
                         if a.assigned_date in cnt:
                             cnt[a.assigned_date] += 1
-                            tpl_on_day[a.assigned_date].add(a.template_id)
                     heavy = max(week_material, key=lambda d: cnt[d])
                     light = min(week_material, key=lambda d: cnt[d])
                     if cnt[heavy] - cnt[light] <= 1:
@@ -614,7 +617,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     moved = False
                     for a in alist:
                         if (a.assigned_date == heavy
-                                and a.template_id not in tpl_on_day[light]):
+                                and (a.template_id, light) not in taken):
+                            taken.discard((a.template_id, heavy))
+                            taken.add((a.template_id, light))
                             a.assigned_date = light
                             moved = True
                             break

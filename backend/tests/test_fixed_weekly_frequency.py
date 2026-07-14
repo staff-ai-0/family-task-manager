@@ -173,22 +173,56 @@ class TestMemberBalance:
         assert spread <= 30, f"compensation failed: {sorted(totals.values())}"
 
 
+def _auto_interval(family, interval_days, points=10):
+    t = TaskTemplate(
+        title=f"Every{interval_days}d", points=points, effort_level=1,
+        interval_days=interval_days, is_bonus=False,
+        assignment_type=AssignmentType.AUTO, family_id=family.id,
+    )
+    t.id = uuid.uuid4()
+    return t
+
+
 class TestPerMemberDaySpread:
-    def test_each_member_days_are_even(self, test_family):
-        # After the leveling pass every member's chores fan out across their
-        # days — no bunching 4-on-Thursday-nothing-elsewhere (prod: Ariana).
+    def test_member_weekly_chores_fan_across_days(self, test_family):
+        # The leveling pass spreads a member's WEEKLY chores across their days —
+        # no bunching 4-on-Thursday-nothing-elsewhere (prod: Ariana).
         from collections import Counter
         members = _members(test_family, 4)
-        tmpls = [_auto_daily(test_family) for _ in range(5)]
-        tmpls += [_fixed_tmpl(test_family, members[0], 7) for _ in range(2)]
+        tmpls = [_fixed_tmpl(test_family, members[0], 7) for _ in range(6)]
         assignments = _run_many(test_family, members, tmpls, date(2026, 6, 1),
                                 rest_days=[6])
-        material = {0, 1, 2, 3, 4, 5}  # Mon–Sat (Sunday off)
-        for m in members:
-            per_day = Counter(
-                a.assigned_date.weekday()
-                for a in assignments if a.assigned_to == m.id
-            )
-            counts = [per_day.get(wd, 0) for wd in material]
-            assert max(counts) - min(counts) <= 1, \
-                f"member {m.id} bunched: {counts}"
+        per_day = Counter(
+            a.assigned_date.weekday()
+            for a in assignments if a.assigned_to == members[0].id
+        )
+        counts = [per_day.get(wd, 0) for wd in range(6)]  # Mon–Sat
+        assert max(counts) - min(counts) <= 1, f"weekly bunched: {counts}"
+
+    def test_interval_chore_cadence_is_preserved(self, test_family):
+        # An every-3-days chore keeps its SPACED schedule — the leveler must NOT
+        # scatter it into consecutive days (prod: "cada 3d" was running daily).
+        members = _members(test_family, 3)
+        mop = _auto_interval(test_family, interval_days=3)
+        # weekly chores present so the leveler is actively running
+        tmpls = [mop] + [_fixed_tmpl(test_family, members[0], 7) for _ in range(3)]
+        assignments = _run_many(test_family, members, tmpls, date(2026, 6, 1))
+        mop_dates = sorted(
+            a.assigned_date for a in assignments if a.template_id == mop.id
+        )
+        # _expand_dates(Mon 2026-06-01, interval 3) -> Mon, Thu, Sun
+        assert mop_dates == [date(2026, 6, 1), date(2026, 6, 4), date(2026, 6, 7)]
+
+    def test_daily_chore_hits_every_day(self, test_family):
+        # A daily chore must occupy every material day exactly once — the leveler
+        # must not pull an occurrence off a day and leave a gap.
+        members = _members(test_family, 3)
+        daily = _auto_daily(test_family)
+        tmpls = [daily] + [_fixed_tmpl(test_family, members[0], 7) for _ in range(2)]
+        assignments = _run_many(test_family, members, tmpls, date(2026, 6, 1),
+                                rest_days=[6])
+        daily_days = sorted(
+            a.assigned_date.weekday()
+            for a in assignments if a.template_id == daily.id
+        )
+        assert daily_days == [0, 1, 2, 3, 4, 5]  # Mon–Sat, one each, no gaps
