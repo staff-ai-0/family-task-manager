@@ -238,6 +238,37 @@ class TestPerMemberDaySpread:
         # _expand_dates(Mon 2026-06-01, interval 3) -> Mon, Thu, Sun
         assert mop_dates == [date(2026, 6, 1), date(2026, 6, 4), date(2026, 6, 7)]
 
+    def test_swap_evens_pinned_daily_clump(self, test_family):
+        # Two daily chores pinned (rotate) to the same two members start their
+        # round-robin at the same offset, so member0 gets Mon/Wed/Fri of BOTH →
+        # 2 on each of those days, 0 on Tue/Thu/Sat. The swap-based leveler must
+        # even every member's per-day load (regression: Ariana Fri:4, empty
+        # Mon/Wed). Cadence and counts are untouched — only assignees swap.
+        from collections import Counter
+        members = _members(test_family, 2)
+
+        def daily_rot():
+            t = TaskTemplate(
+                title="D", points=10, effort_level=1, interval_days=1,
+                is_bonus=False, assignment_type=AssignmentType.ROTATE,
+                assigned_user_ids=[str(members[0].id), str(members[1].id)],
+                family_id=test_family.id,
+            )
+            t.id = uuid.uuid4()
+            return t
+
+        assignments = _run_many(test_family, members, [daily_rot(), daily_rot()],
+                                date(2026, 6, 1), rest_days=[6])
+        for m in members:
+            per = Counter(
+                a.assigned_date.weekday()
+                for a in assignments if a.assigned_to == m.id
+            )
+            counts = [per.get(w, 0) for w in range(6)]
+            assert max(counts) - min(counts) <= 1, f"{m.id} clumped: {counts}"
+        # every day still covered by each daily chore (nothing dropped)
+        assert len(assignments) == 12
+
     def test_daily_chore_hits_every_day(self, test_family):
         # A daily chore must occupy every material day exactly once — the leveler
         # must not pull an occurrence off a day and leave a gap.

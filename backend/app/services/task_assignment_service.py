@@ -631,50 +631,83 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     for member in eligible:
                         assignments.append(_new_assignment(template.id, member.id, d))
 
-        # ── Final pass: even out each member's WEEKLY chores across their days ──
-        # Selection places each weekly chore on the assignee's least-loaded day,
-        # but several weekly chores for one member can still bunch. Greedily
-        # shift from a member's heaviest day to their lightest until within one.
-        #
-        # ONLY weekly (interval 7, no pinned weekday) chores are movable: their
-        # single occurrence can sit on any day. Daily and every-N-day chores
-        # carry a cadence — "cada 3 días" means spaced every 3 days, "diario"
-        # means every day — and moving their occurrences would corrupt that
-        # (prod: a cada-3d chore must never be scattered into consecutive days).
-        # A global (template, date) guard also prevents landing a chore on a day
-        # any member already does it (one regular occurrence per day).
+        # ── Final pass: even each member's chores across their OWN days ──
+        # Selection balances who does what and roughly when, but a member's
+        # occurrences can still bunch on one weekday while leaving others empty
+        # (prod: Ariana had Fri:4, Mon/Wed empty). Two schedule-preserving moves,
+        # neither of which changes any chore's dates, a member's total count, or
+        # the rotation cursor (positions are fixed; only assigned_to / a weekly
+        # chore's free day change):
+        #   (1) a weekly (single-occurrence, no pinned weekday) chore's day is
+        #       ours to choose — shift it to the member's lightest open day;
+        #   (2) SWAP a chore's occurrence on a member's heavy day with the SAME
+        #       chore's occurrence on their light day held by another member —
+        #       evens the over-loaded member without increasing the other's peak.
+        # Daily/every-N-day cadence is untouched (a chore keeps its exact dates;
+        # only which member does which of its days changes).
         week_material = _material(week_dates)
         if len(week_material) > 1:
-            movable_tpl = {
+            reg_ids = {t.id for t in regular_templates}
+            reg = [a for a in assignments if a.template_id in reg_ids]
+            weekly_ids = {
                 t.id for t in regular_templates
                 if not getattr(t, "days_of_week", None) and t.interval_days == 7
             }
-            taken = {(a.template_id, a.assigned_date) for a in assignments}
-            per_member: dict[UUID, list[TaskAssignment]] = {}
-            for a in assignments:
-                if a.template_id in movable_tpl:
-                    per_member.setdefault(a.assigned_to, []).append(a)
-            for alist in per_member.values():
-                for _ in range(len(alist) * len(week_material)):
-                    cnt = {d: 0 for d in week_material}
-                    for a in alist:
-                        if a.assigned_date in cnt:
-                            cnt[a.assigned_date] += 1
-                    heavy = max(week_material, key=lambda d: cnt[d])
-                    light = min(week_material, key=lambda d: cnt[d])
-                    if cnt[heavy] - cnt[light] <= 1:
+            member_ids = {a.assigned_to for a in reg}
+
+            def _day_load(uid):
+                c = {d: 0 for d in week_material}
+                for a in reg:
+                    if a.assigned_to == uid and a.assigned_date in c:
+                        c[a.assigned_date] += 1
+                return c
+
+            # (1) shift each weekly chore onto its member's lightest open day
+            taken = {(a.template_id, a.assigned_date) for a in reg}
+            for _ in range(len(reg)):
+                moved = False
+                for a in reg:
+                    if a.template_id not in weekly_ids:
+                        continue
+                    load = _day_load(a.assigned_to)
+                    light = min(week_material, key=lambda d: load[d])
+                    if (load[a.assigned_date] - load[light] >= 2
+                            and (a.template_id, light) not in taken):
+                        taken.discard((a.template_id, a.assigned_date))
+                        taken.add((a.template_id, light))
+                        a.assigned_date = light
+                        moved = True
                         break
-                    moved = False
-                    for a in alist:
-                        if (a.assigned_date == heavy
-                                and (a.template_id, light) not in taken):
-                            taken.discard((a.template_id, heavy))
-                            taken.add((a.template_id, light))
-                            a.assigned_date = light
-                            moved = True
-                            break
-                    if not moved:
+                if not moved:
+                    break
+
+            # (2) swap same-chore occurrences between an over-loaded member's
+            # heavy day and their light day (held by someone else), when it does
+            # not raise the other member's peak.
+            by_tpl_date = {}
+            for a in reg:
+                by_tpl_date.setdefault((a.template_id, a.assigned_date), a)
+            for _ in range(len(reg) * len(week_material)):
+                loads = {uid: _day_load(uid) for uid in member_ids}
+                swapped = False
+                for a_h in reg:
+                    lm = loads[a_h.assigned_to]
+                    if a_h.assigned_date not in lm:
+                        continue
+                    light = min(week_material, key=lambda d: lm[d])
+                    if lm[a_h.assigned_date] - lm[light] < 2:
+                        continue
+                    a_l = by_tpl_date.get((a_h.template_id, light))
+                    if a_l is None or a_l.assigned_to == a_h.assigned_to:
+                        continue
+                    lo = loads[a_l.assigned_to]
+                    if lo[a_h.assigned_date] + 1 <= max(lo.values()):
+                        a_h.assigned_to, a_l.assigned_to = (
+                            a_l.assigned_to, a_h.assigned_to)
+                        swapped = True
                         break
+                if not swapped:
+                    break
 
         return assignments, totals, skipped
 
