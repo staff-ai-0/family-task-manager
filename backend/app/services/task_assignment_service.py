@@ -305,7 +305,23 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         member_total = {m.id: 0 for m in members}
         totals: dict[UUID, int] = {m.id: 0 for m in members}
 
-        regular_templates = sorted(regular_templates, key=lambda t: t.points, reverse=True)
+        # Process MEMBER-FORCED chores (FIXED, and ROTATE pinned to a member
+        # list) before AUTO chores. Forced chores have no choice of assignee, so
+        # crediting them first lets the AUTO load-balancer see each member's true
+        # fixed load and compensate — otherwise a points-desc order interleaves
+        # AUTO picks before later forced chores land, and the balancer starves
+        # whichever member those forced chores would have offset (prod: two
+        # equally-eligible teens drifted to 180 vs 90 because AUTO chores were
+        # assigned before the other teen's pinned load was known). Within each
+        # group, higher points first. Forced order among themselves is moot
+        # (assignee is fixed); AUTO keeps points-desc for best-slot placement.
+        def _forced_first(t):
+            forced = t.assignment_type == AssignmentType.FIXED or (
+                t.assignment_type == AssignmentType.ROTATE
+                and bool(TaskAssignmentService._rotation_eligible(t, members))
+            )
+            return (0 if forced else 1, -t.points)
+        regular_templates = sorted(regular_templates, key=_forced_first)
         rotation_starts = rotation_starts or {}
         assignments: list[TaskAssignment] = []
         skipped: list[dict] = []

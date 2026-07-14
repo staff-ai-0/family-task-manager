@@ -172,6 +172,31 @@ class TestMemberBalance:
         spread = max(totals.values()) - min(totals.values())
         assert spread <= 30, f"compensation failed: {sorted(totals.values())}"
 
+    def test_forced_first_keeps_equal_members_balanced(self, test_family):
+        # Two equally-eligible members; one is pinned to extra FIXED work. AUTO
+        # chores must flow to the OTHER member to compensate so their totals stay
+        # close. Regression: a points-desc processing order assigned AUTO chores
+        # before the pinned load was credited, so the balancer couldn't offset it
+        # and two equally-eligible teens drifted to 180 vs 90 in prod. Processing
+        # member-forced chores first fixes this.
+        from collections import Counter
+        members = _members(test_family, 4)
+        t0, t1 = members[0], members[1]
+        pinned = TaskTemplate(
+            title="Pinned daily", points=10, effort_level=1, interval_days=1,
+            is_bonus=False, assignment_type=AssignmentType.FIXED,
+            assigned_user_ids=[str(t0.id)], family_id=test_family.id,
+        )
+        pinned.id = uuid.uuid4()
+        autos = [_auto_daily(test_family) for _ in range(4)]
+        assignments = _run_many(test_family, members, [pinned] + autos,
+                                date(2026, 6, 1), rest_days=[6])
+        tot = Counter()
+        for a in assignments:
+            tot[a.assigned_to] += 10
+        gap = abs(tot[t0.id] - tot[t1.id])
+        assert gap <= 30, f"forced-first failed to balance: {sorted(tot.values())}"
+
 
 def _auto_interval(family, interval_days, points=10):
     t = TaskTemplate(
