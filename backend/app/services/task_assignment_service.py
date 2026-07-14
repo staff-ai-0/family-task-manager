@@ -783,6 +783,18 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 if not swapped:
                     break
 
+        # Recompute per-member totals from the FINAL assignees — the member-
+        # balance pass moved chores between members after _credit ran, so the
+        # totals accumulated during generation are stale (prod: preview header
+        # showed 160 while the actual list summed to 120).
+        pts_by_tpl = {t.id: t.points for t in regular_templates}
+        totals = {m.id: 0 for m in members}
+        for a in assignments:
+            if a.template_id in pts_by_tpl:
+                totals[a.assigned_to] = (
+                    totals.get(a.assigned_to, 0) + pts_by_tpl[a.template_id]
+                )
+
         return assignments, totals, skipped
 
     @staticmethod
