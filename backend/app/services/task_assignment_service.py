@@ -272,6 +272,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         member_carry: Optional[dict[UUID, int]] = None,
         rotation_starts: Optional[dict[UUID, int]] = None,
         today: Optional[date] = None,
+        rest_days: Optional[list[int]] = None,
     ) -> tuple[list[TaskAssignment], dict[UUID, int], list[dict]]:
         """
         Pure builder — produces TaskAssignment instances WITHOUT db.add/commit.
@@ -310,11 +311,23 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         skipped: list[dict] = []
         # Deterministic tiebreak rank from the seeded shuffle above.
         member_rank = {m.id: i for i, m in enumerate(members)}
+        # Family rest days (0=Mon … 6=Sun) never receive assignments.
+        rest = {int(x) for x in (rest_days or []) if 0 <= int(x) <= 6}
         def _material(dates: list[date]) -> list[date]:
-            """Only days that can still be acted on (today onward)."""
-            if today is None or today <= week_monday:
-                return dates
-            return [d for d in dates if d >= today]
+            """Actionable days: today onward AND not a family rest day."""
+            out = dates if (today is None or today <= week_monday) \
+                else [d for d in dates if d >= today]
+            if rest:
+                out = [d for d in out if d.weekday() not in rest]
+            return out
+
+        def _spread_day(user_id: UUID, candidate_days: list[date]) -> date:
+            """The assignee's least-loaded (by points) candidate day, so several
+            day-flexible chores for one member fan out across the week instead
+            of stacking on Monday. Seeded shuffle makes ties deterministic."""
+            days = list(candidate_days)
+            rng.shuffle(days)
+            return min(days, key=lambda d: member_load[user_id][d.isoformat()])
 
         def _new_assignment(template_id: UUID, user_id: UUID, d: date) -> TaskAssignment:
             return TaskAssignment(
@@ -401,19 +414,38 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 })
                 continue
 
-            if template.interval_days == 7 and not getattr(template, "days_of_week", None):
-                task_dates = week_dates
-            else:
-                task_dates = TaskAssignmentService._expand_dates(
-                    week_monday, template.interval_days,
-                    getattr(template, "days_of_week", None),
-                )
+            # Occurrence dates for this template. A weekly (interval 7, no
+            # days_of_week) template yields ONE occurrence — never one per day.
+            # The old `task_dates = week_dates` shortcut here only ever made
+            # sense for the AUTO-weekly slot picker below, which reads
+            # week_dates DIRECTLY. FIXED (and any path that iterates task_dates)
+            # turned that 7-day list into 7 daily rows, so a once-a-week chore
+            # pinned to one member showed up every single day (prod: a weekly
+            # FIXED chore generated Mon–Sun for the assignee).
+            task_dates = TaskAssignmentService._expand_dates(
+                week_monday, template.interval_days,
+                getattr(template, "days_of_week", None),
+            )
+            # A weekly template with no pinned weekday is "day-flexible": its
+            # single occurrence can land on ANY day, so we place it on the
+            # assignee's least-loaded day instead of always Monday.
+            day_flexible = (
+                template.interval_days == 7
+                and not getattr(template, "days_of_week", None)
+            )
 
             if template.assignment_type == AssignmentType.FIXED:
                 fixed_user = eligible_members[0]
-                for d in _material(task_dates):
-                    assignments.append(_new_assignment(template.id, fixed_user.id, d))
-                    _credit(fixed_user.id, d, template.points)
+                if day_flexible:
+                    cand = _material(week_dates)
+                    if cand:
+                        d = _spread_day(fixed_user.id, cand)
+                        assignments.append(_new_assignment(template.id, fixed_user.id, d))
+                        _credit(fixed_user.id, d, template.points)
+                else:
+                    for d in _material(task_dates):
+                        assignments.append(_new_assignment(template.id, fixed_user.id, d))
+                        _credit(fixed_user.id, d, template.points)
 
             elif positional_rotation:
                 # Parent-picked list: positional round-robin in the parent's
@@ -431,8 +463,16 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     chosen = eligible_members[
                         (start + i) % len(eligible_members)
                     ]
-                    if today is not None and today > week_monday and d < today:
-                        continue  # position consumed, row not materialized
+                    if day_flexible:
+                        cand = _material(week_dates)
+                        if not cand:
+                            continue  # position consumed, row not materialized
+                        d = _spread_day(chosen.id, cand)
+                    else:
+                        if today is not None and today > week_monday and d < today:
+                            continue  # position consumed, row not materialized
+                        if d.weekday() in rest:
+                            continue  # rest day — position consumed, no row
                     assignments.append(_new_assignment(template.id, chosen.id, d))
                     _credit(chosen.id, d, template.points)
 
@@ -462,21 +502,37 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     _credit(best_member.id, best_date, template.points)
 
                 else:
-                    # Repeating AUTO chores (daily / every N days): rotate
-                    # PEOPLE across the occurrences instead of dumping every
-                    # instance on the lowest-carry member. The old per-day
-                    # greedy minimized total points, so a member with low
-                    # 2-week carry became a sink and got the SAME chore all
-                    # week ("assigns me sweep all days" — the prod complaint).
-                    # Order once by (bias, seeded rank) then round-robin: the
-                    # under-loaded member leads (points still balance out) but
-                    # everyone takes turns within the week.
-                    order = sorted(
-                        eligible_members,
-                        key=lambda m: (_bias(m.id), member_rank[m.id]),
-                    )
-                    for i, d in enumerate(_material(task_dates)):
-                        chosen = order[i % len(order)]
+                    # Repeating AUTO chores (daily / every N days). Assign each
+                    # occurrence to the member with the least CURRENT load
+                    # (bias, updated live per credit), capped so no one takes
+                    # more than a fair share of THIS chore — that cap keeps the
+                    # variety a plain greedy lost (a low-carry member became a
+                    # "sink" and got the SAME chore every day: "assigns me sweep
+                    # all days"). Day-load is the next tiebreak so a member's
+                    # chores spread across their lighter days. A fixed
+                    # (bias, rank) round-robin was the prior approach, but its
+                    # rank tiebreak quietly favored the lowest-rank member and
+                    # shorted the highest — prod drifted to 150 vs 70 pts across
+                    # members over a full board.
+                    import math as _math
+                    from collections import Counter as _Counter
+                    mats = _material(task_dates)
+                    n_elig = len(eligible_members)
+                    cap = _math.ceil(len(mats) / n_elig) if n_elig else 0
+                    used: _Counter = _Counter()
+                    for d in mats:
+                        pool = [
+                            m for m in eligible_members if used[m.id] < cap
+                        ] or eligible_members
+                        chosen = min(
+                            pool,
+                            key=lambda m: (
+                                _bias(m.id),
+                                member_load[m.id][d.isoformat()],
+                                member_rank[m.id],
+                            ),
+                        )
+                        used[chosen.id] += 1
                         assignments.append(
                             _new_assignment(template.id, chosen.id, d)
                         )
@@ -524,6 +580,46 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 for d in dates:
                     for member in eligible:
                         assignments.append(_new_assignment(template.id, member.id, d))
+
+        # ── Final pass: even out each member's chores ACROSS their own days ──
+        # Selection above balances who does what and roughly when, but a
+        # member's day-flexible chores (no parent-pinned weekday) can still
+        # bunch on one day while leaving others empty (prod: Ariana had 4 on
+        # Thursday, nothing Mon/Wed/Fri). Greedily shift a chore from each
+        # member's heaviest day to their lightest until within one — never
+        # putting the same chore on a day it already occupies, and only moving
+        # regular (non-gig) chores whose day we chose (no days_of_week).
+        week_material = _material(week_dates)
+        if len(week_material) > 1:
+            movable_tpl = {
+                t.id for t in regular_templates
+                if not getattr(t, "days_of_week", None)
+            }
+            per_member: dict[UUID, list[TaskAssignment]] = {}
+            for a in assignments:
+                if a.template_id in movable_tpl:
+                    per_member.setdefault(a.assigned_to, []).append(a)
+            for alist in per_member.values():
+                for _ in range(len(alist) * len(week_material)):
+                    cnt = {d: 0 for d in week_material}
+                    tpl_on_day = {d: set() for d in week_material}
+                    for a in alist:
+                        if a.assigned_date in cnt:
+                            cnt[a.assigned_date] += 1
+                            tpl_on_day[a.assigned_date].add(a.template_id)
+                    heavy = max(week_material, key=lambda d: cnt[d])
+                    light = min(week_material, key=lambda d: cnt[d])
+                    if cnt[heavy] - cnt[light] <= 1:
+                        break
+                    moved = False
+                    for a in alist:
+                        if (a.assigned_date == heavy
+                                and a.template_id not in tpl_on_day[light]):
+                            a.assigned_date = light
+                            moved = True
+                            break
+                    if not moved:
+                        break
 
         return assignments, totals, skipped
 
@@ -615,6 +711,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         )
         await db.execute(delete_stmt)
 
+        rest_days = await TaskAssignmentService._family_rest_days(db, family_id)
         assignments, _totals, skipped = TaskAssignmentService._compute_assignments(
             rng,
             family_id,
@@ -625,6 +722,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             member_carry=carry,
             rotation_starts=rotation_starts,
             today=today,
+            rest_days=rest_days,
         )
 
         # Guard — survivors: rows that outlived the PENDING delete
@@ -833,6 +931,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             if t.assignment_type == AssignmentType.ROTATE
             and (t.assigned_user_ids or [])
         }
+        rest_days = await TaskAssignmentService._family_rest_days(db, family_id)
         assignments, totals, skipped = TaskAssignmentService._compute_assignments(
             rng,
             family_id,
@@ -843,6 +942,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             member_carry=carry,
             rotation_starts=rotation_starts,
             today=today,
+            rest_days=rest_days,
         )
 
         # Build lightweight detail dicts (no DB IDs since not persisted)
@@ -1989,6 +2089,14 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         """Today's date in the family's timezone (fallback UTC)."""
         tz = await TaskAssignmentService._family_tz(db, family_id)
         return datetime.now(tz).date()
+
+    @staticmethod
+    async def _family_rest_days(db: AsyncSession, family_id: UUID) -> list[int]:
+        """Weekdays (0=Mon … 6=Sun) the family assigns no tasks on (rest days)."""
+        from app.models.family import Family
+        family = await db.get(Family, family_id)
+        raw = getattr(family, "rest_days", None) or []
+        return [int(x) for x in raw if isinstance(x, int) or str(x).isdigit()]
 
     @staticmethod
     async def check_overdue_assignments(

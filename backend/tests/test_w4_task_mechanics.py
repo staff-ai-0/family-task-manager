@@ -31,7 +31,11 @@ from app.models.user import User, UserRole
 from app.services.gig_offering_service import GigOfferingService
 from app.services.task_assignment_service import TaskAssignmentService
 
-MONDAY = date(2026, 7, 13)  # a Monday
+# Next upcoming Monday (always in the future) so the whole week materializes —
+# a hardcoded past Monday made the shuffle drop already-elapsed days and these
+# rotation counts flaked the day after that date.
+_today = date.today()
+MONDAY = _today + timedelta(days=(7 - _today.weekday()) % 7 or 7)
 
 
 async def _make_kids(db: AsyncSession, family, n: int) -> list[User]:

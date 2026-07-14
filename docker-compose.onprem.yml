@@ -68,6 +68,11 @@ services:
       ENVIRONMENT: production
       DEBUG: "false"
       VAULT_ENABLED: "false"
+      # Web Push (VAPID) — interpolated from .env so a scoped `up -d backend`
+      # can't silently reuse a cached pod env that predates these keys.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_CLAIM_EMAIL: ${VAPID_CLAIM_EMAIL:-admin@agent-ia.mx}
     volumes:
       - receipt_uploads:/app/uploads
     depends_on:
