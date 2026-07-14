@@ -329,10 +329,42 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         member_rank = {m.id: i for i, m in enumerate(members)}
         # Family rest days (0=Mon … 6=Sun) never receive assignments.
         rest = {int(x) for x in (rest_days or []) if 0 <= int(x) <= 6}
+        week_end = week_monday + timedelta(days=6)
+
+        # Stagger anchor per every-N-day chore (2..6) so several same-interval
+        # chores don't all pile onto the same weekdays (every-3-day chores all
+        # anchor Mon/Thu otherwise, so a member doing three of them stacks them
+        # on one day). Offset = rank-within-interval-group % interval → Mon/Thu,
+        # Tue/Fri, Wed/Sat, … The shift is applied AFTER expansion and dates
+        # that fall past the week are dropped (see _material), so the occurrence
+        # COUNT — and thus the rotation cursor — is unchanged.
+        # Only positional-rotation chores are staggered (they carry a fixed
+        # member list, so their occurrences land on set weekdays and stack when
+        # several share an interval). Listless/AUTO chores already spread via the
+        # load balancer, and staggering them would shift mid-week occurrences off
+        # remaining days — so they are left alone.
+        from collections import defaultdict as _defaultdict
+        _iv_groups: dict[int, list] = _defaultdict(list)
+        for _t in regular_templates:
+            if (2 <= _t.interval_days <= 6
+                    and not getattr(_t, "days_of_week", None)
+                    and _t.assignment_type == AssignmentType.ROTATE
+                    and bool(TaskAssignmentService._rotation_eligible(_t, members))):
+                _iv_groups[_t.interval_days].append(_t)
+        stagger: dict = {}
+        for _iv, _ts in _iv_groups.items():
+            for _i, _t in enumerate(sorted(_ts, key=lambda x: str(x.id))):
+                stagger[_t.id] = _i % _iv
+
+        def _stag(dates: list[date], template_id) -> list[date]:
+            off = stagger.get(template_id, 0)
+            return [d + timedelta(days=off) for d in dates] if off else dates
+
         def _material(dates: list[date]) -> list[date]:
-            """Actionable days: today onward AND not a family rest day."""
-            out = dates if (today is None or today <= week_monday) \
-                else [d for d in dates if d >= today]
+            """Actionable days: within this week, today onward, not a rest day."""
+            out = [d for d in dates if week_monday <= d <= week_end]
+            if not (today is None or today <= week_monday):
+                out = [d for d in out if d >= today]
             if rest:
                 out = [d for d in out if d.weekday() not in rest]
             return out
@@ -470,10 +502,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 # Chorsee failure mode. Start offset comes from the persisted
                 # cursor so the rotation continues across weeks and is
                 # identical on a same-week re-shuffle.
-                rotate_dates = TaskAssignmentService._expand_dates(
+                rotate_dates = _stag(TaskAssignmentService._expand_dates(
                     week_monday, template.interval_days,
                     getattr(template, "days_of_week", None),
-                )
+                ), template.id)
                 start = rotation_starts.get(template.id, 0)
                 for i, d in enumerate(rotate_dates):
                     chosen = eligible_members[
@@ -485,6 +517,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                             continue  # position consumed, row not materialized
                         d = _spread_day(chosen.id, cand)
                     else:
+                        if not (week_monday <= d <= week_end):
+                            continue  # staggered past week end — position consumed
                         if today is not None and today > week_monday and d < today:
                             continue  # position consumed, row not materialized
                         if d.weekday() in rest:
