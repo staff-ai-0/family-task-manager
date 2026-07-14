@@ -631,6 +631,80 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     for member in eligible:
                         assignments.append(_new_assignment(template.id, member.id, d))
 
+        # ── Member-balance pass: move a shared chore off an over-loaded member
+        # onto an under-loaded eligible one until point totals converge. ──
+        # Forced-first + the AUTO balancer handles most of it, but heavy
+        # positional pinning — or a mid-week shuffle whose remaining days split
+        # odd (5 days → 3/2 between two pinned members) — can still leave two
+        # equally-pinned members apart (prod: two teens 160 vs 120 mid-week).
+        # (Carry — prior weeks + this week's completed work — already biased WHO
+        # got what in the balancer above; this pass only evens the residual
+        # same-week point totals.) Moving preserves each chore's dates and
+        # per-day occurrence count; only assigned_to changes, never onto a
+        # (day, chore) a member already has, and never off a FIXED single-owner
+        # chore.
+        def _recv_ids(t):
+            if t.assignment_type == AssignmentType.FIXED:
+                return set()
+            base = members
+            allowed = t.allowed_roles or None
+            if allowed:
+                al = {r.lower() for r in allowed}
+                base = [
+                    m for m in base
+                    if (m.role.value if hasattr(m.role, "value") else str(m.role)).lower() in al
+                ]
+            if t.assignment_type == AssignmentType.ROTATE and (t.assigned_user_ids or []):
+                pin = {str(x) for x in t.assigned_user_ids}
+                return {m.id for m in base if str(m.id) in pin}
+            return {m.id for m in base}
+
+        reg_pts = {t.id: t.points for t in regular_templates}
+        recv = {t.id: _recv_ids(t) for t in regular_templates}
+        # This week's assigned points only — carry already biased WHO got what
+        # via the AUTO/forced-first balancer above; re-applying it here would
+        # double-count and shut a high-carry member out of the whole week. This
+        # pass only evens the residual same-week imbalance (e.g. odd mid-week
+        # day splits between two equally-pinned members).
+        mtotal = {m.id: 0 for m in members}
+        held: dict = {}
+        for a in assignments:
+            if a.template_id in reg_pts:
+                mtotal[a.assigned_to] = mtotal.get(a.assigned_to, 0) + reg_pts[a.template_id]
+                held.setdefault(a.assigned_to, set()).add((a.template_id, a.assigned_date))
+        for _ in range(len(assignments) * len(members)):
+            hi = max(mtotal, key=lambda u: mtotal[u])
+            best = None  # (assignment, receiver, points)
+            for a in assignments:
+                if a.assigned_to != hi or a.template_id not in reg_pts:
+                    continue
+                p = reg_pts[a.template_id]
+                # least-loaded ELIGIBLE receiver for THIS chore (not the global
+                # min — an over-loaded member's excess may be pinned to a set
+                # that excludes the lightest member) who doesn't already do it
+                # that day.
+                cands = [
+                    o for o in recv.get(a.template_id, set())
+                    if o != hi
+                    and (a.template_id, a.assigned_date) not in held.get(o, set())
+                ]
+                if not cands:
+                    continue
+                o = min(cands, key=lambda u: mtotal[u])
+                # move only if hi is ahead of o by MORE than the chore's points
+                # (so the move shrinks their gap instead of overshooting)
+                if mtotal[hi] - mtotal[o] > p:
+                    best = (a, o, p)
+                    break
+            if best is None:
+                break
+            a, o, p = best
+            held[hi].discard((a.template_id, a.assigned_date))
+            held.setdefault(o, set()).add((a.template_id, a.assigned_date))
+            a.assigned_to = o
+            mtotal[hi] -= p
+            mtotal[o] += p
+
         # ── Final pass: even each member's chores across their OWN days ──
         # Selection balances who does what and roughly when, but a member's
         # occurrences can still bunch on one weekday while leaving others empty
@@ -764,6 +838,28 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         carry = await TaskAssignmentService._compute_member_carry(
             db, family_id, week_monday, [m.id for m in members]
         )
+        # Credit THIS week's already-COMPLETED work into carry so a member who
+        # did chores earlier in the week (e.g. Monday) is counted and gets less
+        # of the remaining days on a mid-week re-shuffle — "take yesterday's
+        # completed tasks into account".
+        done_q = (
+            select(
+                TaskAssignment.assigned_to,
+                func.coalesce(func.sum(TaskTemplate.points), 0),
+            )
+            .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
+            .where(
+                and_(
+                    TaskAssignment.family_id == family_id,
+                    TaskAssignment.week_of == week_monday,
+                    TaskAssignment.status == AssignmentStatus.COMPLETED,
+                )
+            )
+            .group_by(TaskAssignment.assigned_to)
+        )
+        for uid, pts in (await db.execute(done_q)).all():
+            if uid in carry:
+                carry[uid] = carry.get(uid, 0) + int(pts or 0)
 
         rng = random.Random(f"{family_id}:{week_monday.isoformat()}")
 
@@ -1009,6 +1105,28 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         carry = await TaskAssignmentService._compute_member_carry(
             db, family_id, week_monday, [m.id for m in members]
         )
+        # Credit THIS week's already-COMPLETED work into carry so a member who
+        # did chores earlier in the week (e.g. Monday) is counted and gets less
+        # of the remaining days on a mid-week re-shuffle — "take yesterday's
+        # completed tasks into account".
+        done_q = (
+            select(
+                TaskAssignment.assigned_to,
+                func.coalesce(func.sum(TaskTemplate.points), 0),
+            )
+            .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
+            .where(
+                and_(
+                    TaskAssignment.family_id == family_id,
+                    TaskAssignment.week_of == week_monday,
+                    TaskAssignment.status == AssignmentStatus.COMPLETED,
+                )
+            )
+            .group_by(TaskAssignment.assigned_to)
+        )
+        for uid, pts in (await db.execute(done_q)).all():
+            if uid in carry:
+                carry[uid] = carry.get(uid, 0) + int(pts or 0)
 
         rng = random.Random(f"{family_id}:{week_monday.isoformat()}")
         # Same rotation starts as a real shuffle would use — but NOT persisted
