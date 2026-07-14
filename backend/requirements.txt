@@ -67,8 +67,11 @@ apscheduler==3.10.4
 
 # Web Push (VAPID) for parent gig-approval notifications. pywebpush is
 # sync — call via asyncio.to_thread() to keep the gig submission path
-# non-blocking.
-pywebpush==1.14.0
+# non-blocking. 1.14.1 fixes the ECE server-key call to pass an
+# EllipticCurve *instance* (ec.SECP256R1()) — 1.14.0 passed the class, which
+# cryptography>=43 rejects with "curve must be an EllipticCurve instance",
+# crashing every push send. Stays on the light 1.x deps (no aiohttp).
+pywebpush==1.14.1
 
 # Utilities
 python-dotenv==1.0.1

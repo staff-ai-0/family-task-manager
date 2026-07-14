@@ -199,8 +199,9 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                             {t(lang, "pt_interval")}
                         </label>
                         <select
+                            id="interval-select"
                             name="interval_days"
-                            class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none bg-brand-cream"
+                            class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-sky-deep outline-none bg-brand-cream disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             <option value="1" selected={tmpl.interval_days === 1}>
                                 {t(lang, "pt_interval_daily")}
@@ -212,6 +213,11 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                                 {t(lang, "pt_interval_weekly")}
                             </option>
                         </select>
+                        <p id="freq-days-hint" class="hidden text-xs text-brand-sky-deep mt-1">
+                            {lang === "es"
+                                ? "Usando días específicos ↓ — la frecuencia se ignora."
+                                : "Using specific days ↓ — frequency is ignored."}
+                        </p>
                     </div>
                 </div>
 
@@ -222,7 +228,7 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                     <label class="text-sm font-medium text-brand-ink mb-1 block">
                         {lang === "es" ? "Días específicos (opcional)" : "Specific days (optional)"}
                     </label>
-                    <div class="flex gap-1.5 flex-wrap">
+                    <div class="flex gap-1.5 flex-wrap" id="days-group">
                         {(lang === "es"
                             ? ["L", "M", "X", "J", "V", "S", "D"]
                             : ["M", "T", "W", "T", "F", "S", "S"]
@@ -246,8 +252,8 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
                     </div>
                     <p class="text-xs text-brand-ink-soft mt-1">
                         {lang === "es"
-                            ? "Si marcas días, la tarea cae exactamente en esos días y la frecuencia de arriba se ignora."
-                            : "If you pick days, the task lands exactly on those days and the frequency above is ignored."}
+                            ? "Elige UNO: una frecuencia (cada N días) o días específicos. Marcar días desactiva la frecuencia; cambiar la frecuencia borra los días."
+                            : "Pick ONE: a frequency (every N days) or specific days. Choosing days disables the frequency; changing the frequency clears the days."}
                     </p>
                 </div>
 
@@ -500,6 +506,28 @@ const memberList: any[] = Array.isArray(familyMembers) ? familyMembers : [];
     recurrenceSelect?.addEventListener("change", () => {
         recurNContainer?.classList.toggle("hidden", recurrenceSelect.value !== "since_completion");
     });
+
+    // Frequency vs specific-days are mutually exclusive: picking specific days
+    // disables the frequency dropdown (days win in the backend), and changing
+    // the frequency clears the day picks. Stops a stale weekday set from
+    // silently overriding "cada N días" (prod: a "cada 3d" chore ran Mon–Fri).
+    const intervalSel = document.getElementById("interval-select") as HTMLSelectElement | null;
+    const daysGroup = document.getElementById("days-group");
+    const dayBoxes = daysGroup
+        ? Array.from(daysGroup.querySelectorAll('input[name="days_of_week[]"]')) as HTMLInputElement[]
+        : [];
+    const freqHint = document.getElementById("freq-days-hint");
+    function syncFreqDays() {
+        const anyDay = dayBoxes.some((b) => b.checked);
+        if (intervalSel) intervalSel.disabled = anyDay;
+        freqHint?.classList.toggle("hidden", !anyDay);
+    }
+    dayBoxes.forEach((b) => b.addEventListener("change", syncFreqDays));
+    intervalSel?.addEventListener("change", () => {
+        dayBoxes.forEach((b) => { b.checked = false; });
+        syncFreqDays();
+    });
+    syncFreqDays();
 
     const btnTranslate = document.getElementById("btn-translate");
     const statusDiv = document.getElementById("translate-status");

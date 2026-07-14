@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Boolean, DateTime
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -23,6 +23,9 @@ class Family(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     name = Column(String(100), nullable=False)
     timezone = Column(String(64), nullable=False, default="UTC", server_default="UTC")
+    # Weekdays (0=Mon … 6=Sun) on which the shuffle assigns NO tasks — family
+    # rest days. Empty/null = every day is fair game. e.g. [6] clears Sundays.
+    rest_days = Column(JSONB, nullable=True)
     created_by = Column(UUID(as_uuid=True), nullable=True)  # Nullable during creation, set after user created
     join_code = Column(String(10), unique=True, nullable=True, index=True)  # Short code for family invites
     # Stable public referral code for the give-a-month/get-a-month growth
