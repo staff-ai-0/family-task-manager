@@ -917,7 +917,7 @@ document.addEventListener("astro:after-swap", initFilters);
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (!res.ok) throw new Error(`Error ${res.status}`);
-            (window as any).queueUndo?.(
+            window.queueUndo?.(
                 es ? "Transacción eliminada" : "Transaction deleted",
                 [{ url: `/api/budget/recycle-bin/transactions/${currentTxId}/restore`, method: "POST" }],
             );

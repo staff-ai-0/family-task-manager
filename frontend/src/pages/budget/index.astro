@@ -51,7 +51,7 @@ const [budgetRes, allGroupsRes, accountsRes, goalsRes, monthStatusRes, draftsCou
     apiFetch<{count: number}>("/api/budget/receipt-drafts/count", { token }),
 ]);
 const pendingDraftsCount = draftsCountRes.data?.count ?? 0;
-const monthClosed = !!monthStatusRes.data?.is_closed;
+const monthClosed = !!(monthStatusRes.data as any)?.is_closed;
 
 const budget = budgetRes.data;
 const allGroups = allGroupsRes.data;
