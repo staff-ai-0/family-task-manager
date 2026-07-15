@@ -1,6 +1,6 @@
 """Family Bank schemas (centavos). See docs/specs/family-bank.md §5."""
-from datetime import datetime
-from typing import Optional
+from datetime import date, datetime
+from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -39,6 +39,7 @@ class BankSettingsUpdate(BaseModel):
     the three split percentages is supplied, all three must be and sum to 100."""
 
     allowance_cents: Optional[int] = Field(None, ge=0)
+    allowance_mode: Optional[Literal["flat", "chore_proportional"]] = None
     payday_weekday: Optional[int] = Field(None, ge=0, le=6)
     split_spend_pct: Optional[int] = Field(None, ge=0, le=100)
     split_save_pct: Optional[int] = Field(None, ge=0, le=100)
@@ -58,6 +59,28 @@ class BankSettingsUpdate(BaseModel):
             if sum(p or 0 for p in parts) != 100:
                 raise ValueError("Split percentages must sum to 100")
         return self
+
+
+class ChorePaycheckPreview(BaseModel):
+    """Projected weekly chore paycheck — feeds the teen meter + parent review."""
+
+    user_id: UUID
+    week_of: date
+    mode: str
+    cap_cents: int
+    done_points: int
+    assigned_points: int
+    pct: int
+    projected_cents: int
+    already_released: bool
+
+
+class ChorePaycheckReleaseResult(BaseModel):
+    user_id: UUID
+    week_of: date
+    done_points: int
+    assigned_points: int
+    amount_cents: int
 
 
 class BankTransferRequest(BaseModel):

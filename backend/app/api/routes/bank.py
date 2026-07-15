@@ -22,6 +22,8 @@ from app.schemas.bank import (
     BankRequestResponse,
     BankSettingsUpdate,
     BankTransferRequest,
+    ChorePaycheckPreview,
+    ChorePaycheckReleaseResult,
     JarBalances,
     KidBankView,
     PayoutRequestBody,
@@ -169,6 +171,53 @@ async def update_settings(
     await BankService.upsert_settings(db, target, fam, data)
     view = await BankService.get_kid_bank(db, target)
     return KidBankView(**view)
+
+
+@router.get("/chore-paycheck/{user_id}", response_model=ChorePaycheckPreview)
+async def chore_paycheck_preview(
+    user_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Projected weekly chore paycheck. Parent: any kid in-family. Kid: own only.
+    No premium gate — it's a read-only projection of the free ledger."""
+    fam = to_uuid_required(current_user.family_id)
+    if current_user.role == UserRole.PARENT:
+        kid = await verify_user_in_family(db, user_id, fam)
+    else:
+        if user_id != to_uuid_required(current_user.id):
+            raise HTTPException(status_code=403, detail="Kids see only their own paycheck")
+        kid = current_user
+    if kid.role not in (UserRole.CHILD, UserRole.TEEN):
+        raise HTTPException(
+            status_code=400, detail="Chore paycheck applies to CHILD/TEEN members only"
+        )
+    return ChorePaycheckPreview(**await BankService.chore_paycheck_preview(db, kid, fam))
+
+
+@router.post(
+    "/chore-paycheck/{user_id}/release", response_model=ChorePaycheckReleaseResult
+)
+async def release_chore_paycheck(
+    user_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Parent releases a teen's chore paycheck for the current (family-local)
+    week — credits allowance_cents × completion, split into jars. Premium-gated
+    (Family-Bank automation); idempotent per (kid, week)."""
+    fam = to_uuid_required(current_user.family_id)
+    target = await verify_user_in_family(db, user_id, fam)
+    if target.role not in (UserRole.CHILD, UserRole.TEEN):
+        raise HTTPException(
+            status_code=400, detail="Chore paycheck applies to CHILD/TEEN members only"
+        )
+    await require_feature("family_bank_automation", db, current_user)
+    week_of = await BankService._family_local_today(db, fam)
+    result = await BankService.release_chore_paycheck(
+        db, target, fam, week_of, entitled=True
+    )
+    return ChorePaycheckReleaseResult(**result)
 
 
 @router.post("/transfer", response_model=JarBalances)
