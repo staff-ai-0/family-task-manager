@@ -14,7 +14,7 @@ Hard product constraint: everything here operates ONLY on the CASH ledger. It
 never reads or writes ``User.points`` / ``point_transactions``.
 """
 import logging
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -56,9 +56,12 @@ def _fmt_mxn(cents: int) -> str:
     return f"${cents / 100:,.2f}"
 
 
+ALLOWANCE_MODES = ("flat", "chore_proportional")
+
 # Config fields a parent may upsert (jar balances are NEVER settable here).
 _SETTINGS_FIELDS = (
     "allowance_cents",
+    "allowance_mode",
     "payday_weekday",
     "split_spend_pct",
     "split_save_pct",
@@ -201,6 +204,11 @@ class BankService:
     ) -> KidBankAccount:
         """Persist per-kid config. NEVER touches jar balances. Caller (route)
         performs role + tenant checks and the premium gate for automation."""
+        if data.get("allowance_mode") is not None and data["allowance_mode"] not in ALLOWANCE_MODES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"allowance_mode must be one of {ALLOWANCE_MODES}",
+            )
         user = await _get_user_locked(db, target_user.id)
         acct = await _get_or_create_account_locked(db, user, family_id)
         for field in _SETTINGS_FIELDS:
@@ -350,6 +358,139 @@ class BankService:
             q = q.where(CashTransaction.created_at > since)
         return int((await db.execute(q)).scalar() or 0)
 
+    # ── chore paycheck (chore-proportional weekly allowance) ─────────────────
+
+    @staticmethod
+    def _week_monday(d: date) -> date:
+        return d - timedelta(days=d.weekday())
+
+    @staticmethod
+    async def _chore_points(
+        db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date
+    ) -> tuple[int, int]:
+        """(done_points, assigned_points) of a kid's NON-gig chores for the week.
+
+        assigned = every non-cancelled regular assignment; done = the subset that
+        is COMPLETED and cleared quality review (approval_status NONE = no review
+        needed, or APPROVED). PENDING (awaiting the parent) and REJECTED do not
+        count — "de manera correcta". Gigs (is_bonus) pay their own cash and are
+        excluded from the chore paycheck.
+        """
+        from app.models.task_assignment import (
+            TaskAssignment, AssignmentStatus, ApprovalStatus,
+        )
+        from app.models.task_template import TaskTemplate
+
+        base = (
+            select(func.coalesce(func.sum(TaskTemplate.points), 0))
+            .select_from(TaskAssignment)
+            .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
+            .where(
+                TaskAssignment.family_id == family_id,
+                TaskAssignment.assigned_to == user_id,
+                TaskAssignment.week_of == week_monday,
+                TaskTemplate.is_bonus.is_(False),
+            )
+        )
+        assigned = int((await db.execute(
+            base.where(TaskAssignment.status != AssignmentStatus.CANCELLED)
+        )).scalar() or 0)
+        done = int((await db.execute(
+            base.where(
+                TaskAssignment.status == AssignmentStatus.COMPLETED,
+                TaskAssignment.approval_status.in_(
+                    [ApprovalStatus.NONE, ApprovalStatus.APPROVED]
+                ),
+            )
+        )).scalar() or 0)
+        return done, assigned
+
+    @staticmethod
+    def _chore_paycheck_cents(cap_cents: int, done: int, assigned: int) -> int:
+        """Weekly chore paycheck = cap × done/assigned, floored, never over cap."""
+        if assigned <= 0 or cap_cents <= 0:
+            return 0
+        return min(cap_cents, cap_cents * done // assigned)
+
+    @staticmethod
+    async def _family_local_today(db: AsyncSession, family_id: UUID) -> date:
+        tz_name = (await db.execute(
+            select(Family.timezone).where(Family.id == family_id)
+        )).scalar()
+        return datetime.now(_safe_zoneinfo(tz_name)).date()
+
+    @staticmethod
+    async def chore_paycheck_preview(
+        db: AsyncSession, target_user: User, family_id: UUID,
+        week_of: Optional[date] = None,
+    ) -> dict:
+        """Projected chore paycheck for a kid's week — feeds the teen's live
+        meter and the parent's weekly review. Side-effect free."""
+        acct = await BankService.ensure_account(db, target_user)
+        if week_of is None:
+            week_of = await BankService._family_local_today(db, family_id)
+        week_monday = BankService._week_monday(week_of)
+        done, assigned = await BankService._chore_points(
+            db, family_id, target_user.id, week_monday
+        )
+        cap = acct.allowance_cents
+        proportional = acct.allowance_mode == "chore_proportional"
+        projected = BankService._chore_paycheck_cents(cap, done, assigned) if proportional else 0
+        return {
+            "user_id": target_user.id,
+            "week_of": week_monday,
+            "mode": acct.allowance_mode,
+            "cap_cents": cap,
+            "done_points": done,
+            "assigned_points": assigned,
+            "pct": round(100 * done / assigned) if assigned else 0,
+            "projected_cents": projected,
+            "already_released": acct.last_chore_paycheck_week == week_monday,
+        }
+
+    @staticmethod
+    async def release_chore_paycheck(
+        db: AsyncSession, target_user: User, family_id: UUID,
+        week_of: date, entitled: bool,
+    ) -> dict:
+        """Parent releases a teen's weekly chore paycheck: allowance_cents scaled
+        by completed-&-approved chore points, credited split into jars. Idempotent
+        per (kid, week) via last_chore_paycheck_week. Route enforces role/tenant
+        and the premium gate (passed as ``entitled``)."""
+        user = await _get_user_locked(db, target_user.id)
+        acct = await _get_or_create_account_locked(db, user, family_id)
+        if acct.allowance_mode != "chore_proportional":
+            raise HTTPException(
+                status_code=422,
+                detail="kid is not on chore-proportional allowance",
+            )
+        week_monday = BankService._week_monday(week_of)
+        if acct.last_chore_paycheck_week == week_monday:
+            raise HTTPException(
+                status_code=409,
+                detail="chore paycheck already released for this week",
+            )
+        done, assigned = await BankService._chore_points(
+            db, family_id, user.id, week_monday
+        )
+        amount = BankService._chore_paycheck_cents(acct.allowance_cents, done, assigned)
+        if amount > 0:
+            CashService.credit_split_rows(
+                db, user, acct, family_id, amount,
+                CashTransactionType.ALLOWANCE, entitled=entitled,
+                description=f"Domingo por tareas (semana {week_monday.isoformat()})",
+            )
+        acct.last_chore_paycheck_week = week_monday
+        await db.commit()
+        await db.refresh(acct)
+        return {
+            "user_id": user.id,
+            "week_of": week_monday,
+            "done_points": done,
+            "assigned_points": assigned,
+            "amount_cents": amount,
+        }
+
     @staticmethod
     async def _pay_one_kid(
         db: AsyncSession, family_id: UUID, user_id: UUID
@@ -383,8 +524,11 @@ class BankService:
                 CashTransactionType.INTEREST, description="Interés semanal",
             )
 
-        # 3) ALLOWANCE, auto-split (family is already entitled at this point).
-        allowance = acct.allowance_cents
+        # 3) ALLOWANCE, auto-split. Only "flat" mode auto-pays here — a
+        #    chore-proportional paycheck is released explicitly by the parent
+        #    (release_chore_paycheck) after the week's chores are reviewed, so
+        #    the sweep must NOT auto-credit it (would double-pay / bypass review).
+        allowance = acct.allowance_cents if acct.allowance_mode == "flat" else 0
         if allowance > 0:
             CashService.credit_split_rows(
                 db, user, acct, family_id, allowance,

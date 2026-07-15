@@ -23,11 +23,13 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     SmallInteger,
+    String,
 )
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -61,6 +63,17 @@ class KidBankAccount(Base):
     # (default 6 — Sunday, the literal "domingo").
     allowance_cents = Column(Integer, nullable=False, default=0, server_default="0")
     payday_weekday = Column(SmallInteger, nullable=False, default=6, server_default="6")
+    # How the weekly allowance is earned:
+    #   "flat"              → pay allowance_cents every payday (legacy behaviour)
+    #   "chore_proportional"→ allowance_cents is the weekly CAP; pay it scaled by
+    #                         the share of assigned chore points the kid completed
+    #                         AND got approved that week (100% = the full cap).
+    allowance_mode = Column(
+        String(20), nullable=False, default="flat", server_default="flat"
+    )
+    # Monday of the last week whose chore paycheck the parent released — makes
+    # release_chore_paycheck idempotent per (kid, week). NULL = never released.
+    last_chore_paycheck_week = Column(Date, nullable=True)
 
     # % auto-split of every cash credit (gig payouts + allowance). Must sum 100.
     split_spend_pct = Column(SmallInteger, nullable=False, default=100, server_default="100")
