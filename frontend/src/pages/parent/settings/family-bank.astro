@@ -48,6 +48,15 @@ const { data: membersRaw } = await apiFetch<any[]>("/api/families/members", { to
 const starMap: Record<string, boolean> = {};
 (Array.isArray(membersRaw) ? membersRaw : []).forEach((m: any) => { starMap[m.id] = !!m.star_mode; });
 
+// This week's chore paycheck per kid on chore-proportional mode (parent review).
+const paycheckMap: Record<string, any> = {};
+await Promise.all(
+    kids.filter((k) => k.allowance_mode === "chore_proportional").map(async (k) => {
+        const { data } = await apiFetch<any>(`/api/bank/chore-paycheck/${k.user_id}`, { token });
+        if (data) paycheckMap[k.user_id] = data;
+    })
+);
+
 const weekdays = es
     ? ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     : ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -267,8 +276,45 @@ const weekdays = es
                                         ))}
                                     </select>
                                 </div>
-                                <p class="text-xs text-brand-ink-soft mt-1">{es ? "0 = sin mesada automática." : "0 = no automatic allowance."}</p>
+                                {/* Chore-proportional toggle */}
+                                <label class="flex items-start gap-2 mt-2 cursor-pointer select-none">
+                                    <input type="checkbox" data-field="allowance_mode"
+                                        checked={k.allowance_mode === "chore_proportional"} disabled={automationLocked}
+                                        class="mt-0.5 h-4 w-4 rounded border-brand-ink/30 text-brand-mint-deep focus:ring-brand-mint-deep disabled:opacity-50" />
+                                    <span class="text-xs text-brand-ink" data-allowance-mode-label>
+                                        <b>{es ? "Pagar por tareas completadas" : "Pay by chores completed"}</b><br/>
+                                        <span class="text-brand-ink-soft">{es
+                                            ? "El monto de arriba es el TOPE semanal; se paga proporcional a las tareas hechas y aprobadas. Tú liberas el pago al final de la semana."
+                                            : "The amount above becomes the weekly CAP; paid in proportion to chores done & approved. You release it at week's end."}</span>
+                                    </span>
+                                </label>
+                                <p class="text-xs text-brand-ink-soft mt-1" data-allowance-flat-hint>{es ? "0 = sin mesada automática." : "0 = no automatic allowance."}</p>
                             </div>
+
+                            {/* Chore paycheck — this week's review + release (proportional mode only) */}
+                            {k.allowance_mode === "chore_proportional" && paycheckMap[k.user_id] && (
+                                <div class="rounded-xl border-2 border-brand-mint-deep/40 bg-brand-mint/10 p-3" data-paycheck-card data-kid-user={k.user_id}>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-bold text-brand-ink">{es ? "💵 Cheque de tareas · esta semana" : "💵 Chore paycheck · this week"}</span>
+                                        <span class="text-xs text-brand-ink-soft" data-pc-pct>{paycheckMap[k.user_id].pct}%</span>
+                                    </div>
+                                    <div class="flex items-baseline gap-1 mt-1">
+                                        <span class="text-2xl font-extrabold text-brand-mint-deep" data-pc-amount>{fmt(paycheckMap[k.user_id].projected_cents)}</span>
+                                        <span class="text-xs text-brand-ink-soft">/ {fmt(paycheckMap[k.user_id].cap_cents)} {es ? "tope" : "cap"}</span>
+                                    </div>
+                                    <div class="h-2 rounded-full bg-brand-cream-deep overflow-hidden mt-1">
+                                        <div class="h-full bg-brand-mint-deep transition-all" data-pc-bar style={`width:${paycheckMap[k.user_id].pct}%`}></div>
+                                    </div>
+                                    <div class="flex items-center justify-between mt-2">
+                                        <span class="text-xs text-brand-ink-soft" data-pc-points>{paycheckMap[k.user_id].done_points}/{paycheckMap[k.user_id].assigned_points} pts</span>
+                                        <button type="button" data-release-paycheck data-kid-user={k.user_id} data-kid-name={k.name}
+                                            disabled={paycheckMap[k.user_id].already_released || automationLocked}
+                                            class="rounded-lg bg-brand-mint-deep text-white text-xs font-bold px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                                            {paycheckMap[k.user_id].already_released ? (es ? "Liberado ✓" : "Released ✓") : (es ? "Liberar pago" : "Release")}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Split editor */}
                             <div>
@@ -483,8 +529,10 @@ const weekdays = es
                     showToast(es ? "Los porcentajes deben sumar 100%." : "Percentages must sum to 100%.", "error");
                     return;
                 }
+                const choreMode = (card.querySelector('[data-field="allowance_mode"]') as HTMLInputElement)?.checked;
                 const payload = {
                     allowance_cents: toCents(num("allowance")),
+                    allowance_mode: choreMode ? "chore_proportional" : "flat",
                     payday_weekday: int("weekday"),
                     split_spend_pct: splitSpend,
                     split_save_pct: splitSave,
@@ -501,6 +549,30 @@ const weekdays = es
                 });
                 saveBtn.disabled = false;
                 if (res) showToast(es ? "¡Automatización guardada! 🏦" : "Automation saved! 🏦", "success");
+            });
+        });
+
+        // ── Release chore paycheck ───────────────────────────────────────
+        document.querySelectorAll<HTMLButtonElement>("[data-release-paycheck]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                const kidId = btn.dataset.kidUser!;
+                const name = btn.dataset.kidName || "";
+                btn.disabled = true;
+                const res = await mutate(`/api/bank/chore-paycheck/${kidId}/release`, {
+                    method: "POST",
+                    errorFallback: es ? "No se pudo liberar el pago" : "Could not release paycheck",
+                });
+                if (res) {
+                    btn.textContent = es ? "Liberado ✓" : "Released ✓";
+                    const amt = (res as any)?.amount_cents ?? 0;
+                    showToast(
+                        es ? `Pago liberado: $${(amt / 100).toFixed(2)} para ${name} 🎉`
+                           : `Released $${(amt / 100).toFixed(2)} to ${name} 🎉`,
+                        "success",
+                    );
+                } else {
+                    btn.disabled = false;
+                }
             });
         });
 
