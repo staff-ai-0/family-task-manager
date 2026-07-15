@@ -180,3 +180,71 @@ async def test_sweep_still_pays_flat_allowance(db):
     await db.commit()
     u = await db.get(User, kid.id)
     assert u.cash_cents == 15000
+
+
+# ── parent adjustment on release ──────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_release_applies_adjustment(db):
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    await _chore(db, fam, parent, kid, 60, AssignmentStatus.COMPLETED)   # 100% of 60
+    # base = 25000; +5000 bonus
+    r = await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True, adjustment_cents=5000)
+    assert r["amount_cents"] == 30000
+
+
+@pytest.mark.asyncio
+async def test_release_adjustment_floors_at_zero(db):
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    await _chore(db, fam, parent, kid, 60, AssignmentStatus.COMPLETED)
+    r = await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True, adjustment_cents=-99999)
+    assert r["amount_cents"] == 0
+
+
+# ── notification on release + parent reminder ─────────────────────────────
+
+@pytest.mark.asyncio
+async def test_release_notifies_kid(db):
+    from app.models.notification import Notification
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    await _chore(db, fam, parent, kid, 100, AssignmentStatus.COMPLETED)
+    await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    notes = (await db.execute(
+        select(Notification).where(Notification.user_id == kid.id)
+    )).scalars().all()
+    assert len(notes) >= 1
+
+
+@pytest.mark.asyncio
+async def test_reminder_notifies_parent_once(db):
+    from app.models.notification import Notification
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+
+    await BankService._remind_unreleased_paychecks(db, fam.id, WEEK)
+    notes1 = (await db.execute(
+        select(Notification).where(Notification.user_id == parent.id)
+    )).scalars().all()
+    assert len(notes1) == 1
+    acct = (await db.execute(
+        select(KidBankAccount).where(KidBankAccount.user_id == kid.id)
+    )).scalar_one()
+    assert acct.last_paycheck_reminder_week == WEEK
+
+    # second run: idempotent — no new reminder
+    await BankService._remind_unreleased_paychecks(db, fam.id, WEEK)
+    notes2 = (await db.execute(
+        select(Notification).where(Notification.user_id == parent.id)
+    )).scalars().all()
+    assert len(notes2) == 1
