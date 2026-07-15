@@ -19,6 +19,7 @@ class KidBankView(BaseModel):
     share_cents: int
     total_cents: int
     allowance_cents: int
+    allowance_mode: Optional[str] = None
     payday_weekday: int
     split_spend_pct: int
     split_save_pct: int

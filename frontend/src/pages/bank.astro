@@ -17,6 +17,12 @@ if (user.role === "parent") return Astro.redirect("/parent/settings/family-bank"
 
 const { data: bank, ok: bankOk } = await apiFetch<any>("/api/bank/me", { token });
 
+// Chore paycheck (chore-proportional allowance) — the live "earn up to the cap"
+// meter. Only shown when the parent put this kid on chore-proportional mode.
+const { data: paycheck } = await apiFetch<any>(`/api/bank/chore-paycheck/${user.id}`, { token });
+const choreMode = paycheck?.mode === "chore_proportional" && (paycheck?.cap_cents ?? 0) > 0;
+const pcFmt = (c: number) => `$${((c ?? 0) / 100).toFixed(2)}`;
+
 // Savings goal (P2) — tracked against the Save jar. null = kid has no goal.
 const { data: goal } = await apiFetch<any>("/api/bank/goals/me", { token });
 const hasGoal = !!goal;
@@ -97,6 +103,29 @@ function countdownText(): string {
         <div class="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
             {es ? "No pudimos cargar tu banco. Intenta de nuevo." : "Could not load your bank. Please try again."}
         </div>
+    )}
+
+    {choreMode && (
+        <section class="mb-6 rounded-2xl border-2 border-brand-mint-deep/40 bg-white p-4 shadow-[var(--shadow-card)]">
+            <div class="flex items-center justify-between mb-1">
+                <span class="text-sm font-extrabold text-brand-ink">{es ? "💵 Mi pago por tareas" : "💵 My chore paycheck"}</span>
+                <span class="text-xs text-brand-ink-soft">{es ? "esta semana" : "this week"}</span>
+            </div>
+            <div class="flex items-baseline gap-1">
+                <span class="text-3xl font-extrabold text-brand-mint-deep">{pcFmt(paycheck.projected_cents)}</span>
+                <span class="text-sm text-brand-ink-soft">/ {pcFmt(paycheck.cap_cents)}</span>
+            </div>
+            <div class="h-3 rounded-full bg-brand-cream-deep overflow-hidden mt-2">
+                <div class="h-full bg-brand-mint-deep transition-all" style={`width:${paycheck.pct}%`}></div>
+            </div>
+            <p class="text-xs text-brand-ink-soft mt-2">
+                {paycheck.already_released
+                    ? (es ? "¡Pago liberado! 🎉" : "Paycheck released! 🎉")
+                    : (es
+                        ? `${paycheck.done_points}/${paycheck.assigned_points} pts hechos · termina todo para ganar ${pcFmt(paycheck.cap_cents)}`
+                        : `${paycheck.done_points}/${paycheck.assigned_points} pts done · finish all to earn ${pcFmt(paycheck.cap_cents)}`)}
+            </p>
+        </section>
     )}
 
     <!-- Three jars -->
