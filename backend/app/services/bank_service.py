@@ -453,12 +453,13 @@ class BankService:
     @staticmethod
     async def release_chore_paycheck(
         db: AsyncSession, target_user: User, family_id: UUID,
-        week_of: date, entitled: bool,
+        week_of: date, entitled: bool, adjustment_cents: int = 0,
     ) -> dict:
         """Parent releases a teen's weekly chore paycheck: allowance_cents scaled
-        by completed-&-approved chore points, credited split into jars. Idempotent
-        per (kid, week) via last_chore_paycheck_week. Route enforces role/tenant
-        and the premium gate (passed as ``entitled``)."""
+        by completed-&-approved chore points (plus an optional signed parent
+        adjustment — a bonus or dock), credited split into jars. Idempotent per
+        (kid, week) via last_chore_paycheck_week. Route enforces role/tenant and
+        the premium gate (passed as ``entitled``)."""
         user = await _get_user_locked(db, target_user.id)
         acct = await _get_or_create_account_locked(db, user, family_id)
         if acct.allowance_mode != "chore_proportional":
@@ -475,7 +476,8 @@ class BankService:
         done, assigned = await BankService._chore_points(
             db, family_id, user.id, week_monday
         )
-        amount = BankService._chore_paycheck_cents(acct.allowance_cents, done, assigned)
+        base = BankService._chore_paycheck_cents(acct.allowance_cents, done, assigned)
+        amount = max(0, base + int(adjustment_cents or 0))
         if amount > 0:
             CashService.credit_split_rows(
                 db, user, acct, family_id, amount,
@@ -485,6 +487,17 @@ class BankService:
         acct.last_chore_paycheck_week = week_monday
         await db.commit()
         await db.refresh(acct)
+
+        # Notify the kid (+ push) — best-effort, never blocks the payout.
+        if amount > 0:
+            try:
+                pct = round(100 * done / assigned) if assigned else 0
+                await NotificationService.create_localized(
+                    db, family_id=family_id, key="chore_paycheck", user_id=user.id,
+                    params={"amount": _fmt_mxn(amount), "pct": pct}, link="/bank",
+                )
+            except Exception:
+                logger.exception("chore-paycheck notification failed for %s", user.id)
         return {
             "user_id": user.id,
             "week_of": week_monday,
@@ -629,4 +642,55 @@ class BankService:
                 except Exception:
                     await db.rollback()
                     logger.exception("payday failed for kid %s", acct.user_id)
+
+            # Nudge parents to release any unreleased chore-proportional teen.
+            try:
+                week_monday = local_now.date() - timedelta(days=local_now.date().weekday())
+                await BankService._remind_unreleased_paychecks(db, fid, week_monday)
+            except Exception:
+                await db.rollback()
+                logger.exception("paycheck reminder failed for family %s", fid)
         return paid
+
+    @staticmethod
+    async def _remind_unreleased_paychecks(
+        db: AsyncSession, family_id: UUID, week_monday: date
+    ) -> None:
+        """Once per (kid, week), push the parents to release any chore-proportional
+        teen whose paycheck isn't out yet. Idempotent via last_paycheck_reminder_week."""
+        accts = (await db.execute(
+            select(KidBankAccount).join(User, User.id == KidBankAccount.user_id).where(
+                KidBankAccount.family_id == family_id,
+                KidBankAccount.allowance_mode == "chore_proportional",
+                KidBankAccount.allowance_cents > 0,
+                or_(KidBankAccount.last_chore_paycheck_week.is_(None),
+                    KidBankAccount.last_chore_paycheck_week != week_monday),
+                or_(KidBankAccount.last_paycheck_reminder_week.is_(None),
+                    KidBankAccount.last_paycheck_reminder_week != week_monday),
+                User.is_active.is_(True),
+                User.approval_status == APPROVAL_APPROVED,
+            )
+        )).scalars().all()
+        if not accts:
+            return
+        names = []
+        for a in accts:
+            u = await db.get(User, a.user_id)
+            if u:
+                names.append(u.name)
+        parents = (await db.execute(
+            select(User).where(
+                User.family_id == family_id, User.role == UserRole.PARENT,
+                User.is_active.is_(True),
+            )
+        )).scalars().all()
+        names_str = ", ".join(n for n in names if n)
+        for parent in parents:
+            await NotificationService.create_localized(
+                db, family_id=family_id, key="chore_paycheck_reminder",
+                user_id=parent.id, params={"names": names_str},
+                link="/parent/settings/family-bank",
+            )
+        for a in accts:
+            a.last_paycheck_reminder_week = week_monday
+        await db.commit()

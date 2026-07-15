@@ -305,13 +305,23 @@ const weekdays = es
                                     <div class="h-2 rounded-full bg-brand-cream-deep overflow-hidden mt-1">
                                         <div class="h-full bg-brand-mint-deep transition-all" data-pc-bar style={`width:${paycheckMap[k.user_id].pct}%`}></div>
                                     </div>
-                                    <div class="flex items-center justify-between mt-2">
+                                    <div class="flex items-center justify-between mt-2 gap-2">
                                         <span class="text-xs text-brand-ink-soft" data-pc-points>{paycheckMap[k.user_id].done_points}/{paycheckMap[k.user_id].assigned_points} pts</span>
-                                        <button type="button" data-release-paycheck data-kid-user={k.user_id} data-kid-name={k.name}
-                                            disabled={paycheckMap[k.user_id].already_released || automationLocked}
-                                            class="rounded-lg bg-brand-mint-deep text-white text-xs font-bold px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
-                                            {paycheckMap[k.user_id].already_released ? (es ? "Liberado ✓" : "Released ✓") : (es ? "Liberar pago" : "Release")}
-                                        </button>
+                                        {!paycheckMap[k.user_id].already_released && (
+                                            <div class="flex items-center gap-1.5">
+                                                <label class="text-[11px] text-brand-ink-soft">{es ? "Ajuste $" : "Adj $"}</label>
+                                                <input type="number" step="1" placeholder="0" data-pc-adjust data-kid-user={k.user_id}
+                                                    class="w-16 rounded-lg border border-brand-ink/20 bg-white px-2 py-1 text-xs text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep" />
+                                                <button type="button" data-release-paycheck data-kid-user={k.user_id} data-kid-name={k.name}
+                                                    disabled={automationLocked}
+                                                    class="rounded-lg bg-brand-mint-deep text-white text-xs font-bold px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                    {es ? "Liberar pago" : "Release"}
+                                                </button>
+                                            </div>
+                                        )}
+                                        {paycheckMap[k.user_id].already_released && (
+                                            <span class="text-xs font-bold text-brand-mint-deep">{es ? "Liberado ✓" : "Released ✓"}</span>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -557,9 +567,12 @@ const weekdays = es
             btn.addEventListener("click", async () => {
                 const kidId = btn.dataset.kidUser!;
                 const name = btn.dataset.kidName || "";
+                const adjInput = document.querySelector(`[data-pc-adjust][data-kid-user="${kidId}"]`) as HTMLInputElement | null;
+                const adjCents = Math.round((parseFloat(adjInput?.value || "0") || 0) * 100);
                 btn.disabled = true;
                 const res = await mutate(`/api/bank/chore-paycheck/${kidId}/release`, {
                     method: "POST",
+                    body: { adjustment_cents: adjCents },
                     errorFallback: es ? "No se pudo liberar el pago" : "Could not release paycheck",
                 });
                 if (res) {

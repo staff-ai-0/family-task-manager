@@ -74,6 +74,9 @@ class KidBankAccount(Base):
     # Monday of the last week whose chore paycheck the parent released — makes
     # release_chore_paycheck idempotent per (kid, week). NULL = never released.
     last_chore_paycheck_week = Column(Date, nullable=True)
+    # Monday of the last week we nudged the parent to release this kid's chore
+    # paycheck — makes the payday reminder fire once per (kid, week), not hourly.
+    last_paycheck_reminder_week = Column(Date, nullable=True)
 
     # % auto-split of every cash credit (gig payouts + allowance). Must sum 100.
     split_spend_pct = Column(SmallInteger, nullable=False, default=100, server_default="100")

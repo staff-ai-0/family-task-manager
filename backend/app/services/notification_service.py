@@ -294,6 +294,28 @@ _COPY = {
             "en": "You earned {interest} in interest this week.",
         },
     },
+    "chore_paycheck": {
+        "type": NT.PAYDAY,
+        "title": {
+            "es": "🎉 ¡Pago por tareas! +{amount}",
+            "en": "🎉 Chore paycheck! +{amount}",
+        },
+        "body": {
+            "es": "Completaste {pct}% de tus tareas esta semana. ¡Bien hecho!",
+            "en": "You finished {pct}% of your chores this week. Nice work!",
+        },
+    },
+    "chore_paycheck_reminder": {
+        "type": NT.PAYDAY,
+        "title": {
+            "es": "💵 Hora de liberar la mesada por tareas",
+            "en": "💵 Time to release chore paychecks",
+        },
+        "body": {
+            "es": "Revisa las tareas de la semana y libera el pago de {names}.",
+            "en": "Review this week's chores and release {names}'s paycheck.",
+        },
+    },
     "bank_save_withdrawal_request": {
         "type": NT.BANK_REQUEST,
         "title": {

@@ -23,6 +23,7 @@ from app.schemas.bank import (
     BankSettingsUpdate,
     BankTransferRequest,
     ChorePaycheckPreview,
+    ChorePaycheckReleaseBody,
     ChorePaycheckReleaseResult,
     JarBalances,
     KidBankView,
@@ -200,12 +201,13 @@ async def chore_paycheck_preview(
 )
 async def release_chore_paycheck(
     user_id: UUID,
+    body: Optional[ChorePaycheckReleaseBody] = None,
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
     """Parent releases a teen's chore paycheck for the current (family-local)
-    week — credits allowance_cents × completion, split into jars. Premium-gated
-    (Family-Bank automation); idempotent per (kid, week)."""
+    week — credits allowance_cents × completion (± optional adjustment), split
+    into jars. Premium-gated (Family-Bank automation); idempotent per (kid, week)."""
     fam = to_uuid_required(current_user.family_id)
     target = await verify_user_in_family(db, user_id, fam)
     if target.role not in (UserRole.CHILD, UserRole.TEEN):
@@ -215,7 +217,8 @@ async def release_chore_paycheck(
     await require_feature("family_bank_automation", db, current_user)
     week_of = await BankService._family_local_today(db, fam)
     result = await BankService.release_chore_paycheck(
-        db, target, fam, week_of, entitled=True
+        db, target, fam, week_of, entitled=True,
+        adjustment_cents=(body.adjustment_cents if body else 0),
     )
     return ChorePaycheckReleaseResult(**result)
 

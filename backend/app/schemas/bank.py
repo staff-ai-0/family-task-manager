@@ -76,6 +76,12 @@ class ChorePaycheckPreview(BaseModel):
     already_released: bool
 
 
+class ChorePaycheckReleaseBody(BaseModel):
+    """Optional parent adjustment (signed cents) added to the computed paycheck —
+    a bonus (positive) or dock (negative). Final amount floored at 0."""
+    adjustment_cents: int = Field(0, ge=-100000, le=100000)
+
+
 class ChorePaycheckReleaseResult(BaseModel):
     user_id: UUID
     week_of: date
