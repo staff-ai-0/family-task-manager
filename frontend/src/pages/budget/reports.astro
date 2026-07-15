@@ -653,6 +653,7 @@ function initCustomReports() {
     const es = document.documentElement.lang !== "en";
     const bar = document.getElementById("custom-reports-bar");
     if (!bar) return;
+    const barEl = bar;  // stable non-null capture for the async closure below
 
     const fmt = (c: number) => (Math.abs(c) / 100).toLocaleString(es ? "es-MX" : "en-US", { style: "currency", currency: "MXN" });
 
@@ -686,7 +687,7 @@ function initCustomReports() {
             const res = await fetch("/api/budget/custom-reports/");
             if (!res.ok) return;
             const reports = await res.json();
-            [...bar.querySelectorAll(".cr-chip, .cr-del")].forEach((n) => n.remove());
+            [...barEl.querySelectorAll(".cr-chip, .cr-del")].forEach((n) => n.remove());
             (reports || []).forEach((r: any) => {
                 const chip = document.createElement("button");
                 chip.className = "cr-chip text-xs px-2.5 py-1 rounded-full bg-brand-sky/15 text-brand-sky-deep font-semibold hover:bg-brand-sky/30";
@@ -703,8 +704,8 @@ function initCustomReports() {
                     await fetch(`/api/budget/custom-reports/${r.id}`, { method: "DELETE" });
                     loadReports();
                 });
-                bar.appendChild(chip);
-                bar.appendChild(del);
+                barEl.appendChild(chip);
+                barEl.appendChild(del);
             });
         } catch { /* non-fatal */ }
     }

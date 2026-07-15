@@ -98,12 +98,12 @@ const tabs = [
 <script>
 // Keyboard shortcuts (desktop parity with Actual): active on every budget
 // page since this nav renders on all of them. Guarded per-window.
-if (!window.__budgetKeys) {
-    window.__budgetKeys = true;
+if (!(window as any).__budgetKeys) {
+    (window as any).__budgetKeys = true;
     let gPending = false;
-    let gTimer;
+    let gTimer: ReturnType<typeof setTimeout> | undefined;
 
-    function typingContext(el) {
+    function typingContext(el: any) {
         const t = el;
         if (!t) return false;
         const tag = t.tagName;
@@ -111,7 +111,8 @@ if (!window.__budgetKeys) {
     }
 
     function showKeysHelp() {
-        if (document.getElementById("keys-help")) { document.getElementById("keys-help").remove(); return; }
+        const existingHelp = document.getElementById("keys-help");
+        if (existingHelp) { existingHelp.remove(); return; }
         const es = document.documentElement.lang !== "en";
         const div = document.createElement("div");
         div.id = "keys-help";
@@ -160,12 +161,12 @@ if (!window.__budgetKeys) {
 // Scoped undo (Actual-parity, pragmatic): actions with a clean inverse queue
 // it in sessionStorage before their reload; this nav (on every budget page)
 // shows a 10s "Deshacer" toast after the reload and executes the inverse.
-if (!window.__budgetUndo) {
-    window.__budgetUndo = true;
+if (!(window as any).__budgetUndo) {
+    (window as any).__budgetUndo = true;
     const KEY = "budget_undo";
     const TTL_MS = 15000;
 
-    window.queueUndo = (label, calls) => {
+    (window as any).queueUndo = (label: string, calls: any) => {
         sessionStorage.setItem(KEY, JSON.stringify({ label, calls, ts: Date.now() }));
         // Show immediately too — some callers (Assign Funds) don't reload.
         document.getElementById("undo-toast")?.remove();
@@ -195,7 +196,7 @@ if (!window.__budgetUndo) {
         toast.querySelector("#undo-x")?.addEventListener("click", () => { clearTimeout(timer); remove(); });
         toast.querySelector("#undo-do")?.addEventListener("click", async () => {
             clearTimeout(timer);
-            const btn = toast.querySelector("#undo-do");
+            const btn = toast.querySelector("#undo-do") as HTMLButtonElement;
             btn.disabled = true;
             btn.textContent = "…";
             try {
