@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import require_parent_role
+from app.core.dependencies import require_parent_role, require_teen_or_parent
 from app.core.exceptions import ValidationError
 from app.core.premium import require_feature
 from app.core.rate_limiter import limiter, AI_LIMIT
@@ -57,12 +57,13 @@ class HistoryItem(BaseModel):
 async def chat(
     request: Request,
     data: ChatRequest,
-    current_user: User = Depends(require_parent_role),
+    current_user: User = Depends(require_teen_or_parent),
     db: AsyncSession = Depends(get_db),
 ):
     # Plan gate: Jarvis is an LLM feature — free tier has ai_features=False.
     # The per-family JARVIS_DAILY_MESSAGE_CAP inside the service still applies;
-    # AI_LIMIT above adds per-IP burst protection on top.
+    # AI_LIMIT above adds per-IP burst protection on top. Teens get a tool-free,
+    # self-scoped coach (see JarvisService); the role drives that branch.
     await require_feature("ai_features", db, current_user)
     model = data.model if data.model in ALLOWED_MODELS else None
     try:
@@ -73,6 +74,7 @@ async def chat(
             message=data.message,
             model=model,
             preferred_lang=(current_user.preferred_lang or "en"),
+            role=current_user.role,
         )
     except ValidationError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
@@ -83,7 +85,7 @@ async def chat(
 async def chat_stream(
     request: Request,
     data: ChatRequest,
-    current_user: User = Depends(require_parent_role),
+    current_user: User = Depends(require_teen_or_parent),
     db: AsyncSession = Depends(get_db),
 ):
     """SSE stream of chat progress. Client consumes via fetch + ReadableStream.
@@ -103,6 +105,7 @@ async def chat_stream(
         message=data.message,
         model=model,
         preferred_lang=(current_user.preferred_lang or "en"),
+        role=current_user.role,
     )
     return StreamingResponse(
         gen,
@@ -116,22 +119,28 @@ async def chat_stream(
 
 @router.get("/history", response_model=List[HistoryItem])
 async def history(
-    current_user: User = Depends(require_parent_role),
+    current_user: User = Depends(require_teen_or_parent),
     db: AsyncSession = Depends(get_db),
 ):
     rows = await JarvisService.list_history(
-        db, to_uuid_required(current_user.family_id)
+        db,
+        to_uuid_required(current_user.family_id),
+        user_id=to_uuid_required(current_user.id),
+        role=current_user.role,
     )
     return [HistoryItem.model_validate(r) for r in rows]
 
 
 @router.delete("/history", status_code=status.HTTP_204_NO_CONTENT)
 async def clear_history(
-    current_user: User = Depends(require_parent_role),
+    current_user: User = Depends(require_teen_or_parent),
     db: AsyncSession = Depends(get_db),
 ):
     await JarvisService.clear_history(
-        db, to_uuid_required(current_user.family_id)
+        db,
+        to_uuid_required(current_user.family_id),
+        user_id=to_uuid_required(current_user.id),
+        role=current_user.role,
     )
     return None
 
