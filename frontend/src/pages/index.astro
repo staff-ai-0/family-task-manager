@@ -22,16 +22,16 @@ const landingJsonLd = [organizationJsonLd(), softwareAppJsonLd(lang)];
 <Layout title={seo.title} description={seo.description} lang={lang} jsonLd={landingJsonLd}>
 
   <!-- TOP BAR -->
-  <header class="sticky top-0 z-50 bg-brand-cream border-b-2 border-brand-ink px-6 py-3 flex items-center gap-4">
+  <header class="sticky top-0 z-50 bg-brand-cream border-b-2 border-brand-ink px-4 sm:px-6 py-3 flex items-center gap-3">
     <Logo size="sm" href="/" />
-    <nav class="ml-auto flex gap-2 items-center">
+    <nav class="ml-auto flex gap-1.5 sm:gap-2 items-center">
       <form method="POST" action="/api/lang" class="inline">
         <input type="hidden" name="lang" value={es ? "en" : "es"} />
         <button type="submit" class="press inline-flex items-center gap-1 px-3 py-1.5 border-2 border-brand-ink rounded-full text-xs font-extrabold font-display bg-brand-cream shadow-[2px_2px_0_var(--color-brand-ink)]">
           {es ? "EN" : "ES"}
         </button>
       </form>
-      <a href="/login" class="hidden md:inline-flex font-display font-extrabold text-sm text-brand-ink px-3 py-2 hover:text-brand-coral-deep">{es ? "Iniciar sesión" : "Sign in"}</a>
+      <a href="/login" class="press inline-flex items-center px-3 py-1.5 border-2 border-brand-ink rounded-full text-xs font-extrabold font-display bg-brand-cream text-brand-ink shadow-[2px_2px_0_var(--color-brand-ink)] hover:text-brand-coral-deep">{es ? "Entrar" : "Log in"}</a>
       <Button variant="primary" size="sm" href="/register">{es ? "Comenzar gratis" : "Get started"}</Button>
     </nav>
   </header>
