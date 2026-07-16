@@ -1,5 +1,6 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
+import ImageLightbox from "@components/ui/ImageLightbox.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 
@@ -120,11 +121,11 @@ const fmtDate = (d: string) =>
                                     {row.proof_text || (lang === "es" ? "(sin texto)" : "(no proof text)")}
                                 </p>
                                 {row.proof_image_url && (
-                                    <a href={row.proof_image_url} target="_blank" rel="noopener noreferrer" class="block mb-3">
+                                    <button type="button" data-lightbox-src={row.proof_image_url} class="block mb-3 cursor-zoom-in">
                                         <img src={`${row.proof_image_url}?size=thumb`} alt={lang === "es" ? "Foto de prueba" : "Proof image"}
                                             loading="lazy"
                                             class="max-w-full max-h-48 rounded-lg border border-brand-ink/20 object-cover" />
-                                    </a>
+                                    </button>
                                 )}
                                 {row.ai_validation_score != null && (
                                     <div class={`mb-3 p-2 rounded-lg border text-xs ${
@@ -190,11 +191,11 @@ const fmtDate = (d: string) =>
                                     {claim.proof_text || (lang === "es" ? "(sin texto)" : "(no proof text)")}
                                 </p>
                                 {claim.proof_image_url && (
-                                    <a href={claim.proof_image_url} target="_blank" rel="noopener noreferrer" class="block mb-3">
+                                    <button type="button" data-lightbox-src={claim.proof_image_url} class="block mb-3 cursor-zoom-in">
                                         <img src={`${claim.proof_image_url}?size=thumb`} alt={lang === "es" ? "Foto de prueba" : "Proof image"}
                                             loading="lazy"
                                             class="max-w-full max-h-48 rounded-lg border border-brand-ink/20 object-cover" />
-                                    </a>
+                                    </button>
                                 )}
                                 <textarea data-notes rows="2"
                                     class="w-full border border-brand-ink/20 rounded-lg p-2 mb-3 text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-brand-cream"
@@ -381,4 +382,5 @@ const fmtDate = (d: string) =>
             });
         });
     </script>
+<ImageLightbox />
 </PageLayout>

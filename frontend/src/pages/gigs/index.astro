@@ -224,8 +224,8 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                 </div>
             )}
     <!-- Propose-a-gig modal (kid → parent review) -->
-    <div id="propose-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-        <div class="bg-brand-cream rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div id="propose-modal" class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+        <div class="bg-brand-cream rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-lg font-bold text-brand-ink">
                     💡 {lang === "es" ? "Proponer una gig" : "Propose a gig"}

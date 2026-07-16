@@ -1,0 +1,73 @@
+---
+// Reusable full-screen image viewer.
+//
+// Any element on the page carrying `data-lightbox-src="<url>"` opens that image
+// here on click — including elements added dynamically after load (chat stream).
+// Also callable imperatively: `window.openLightbox(src)`.
+//
+// Why this exists: proof photos in chat / the approval queue used to open via
+// `<a target="_blank">`, which on a mobile PWA / standalone webview navigates to
+// a bare image with NO back button — the user gets stuck. A native <dialog> keeps
+// them in-app: it renders in the top layer (above the fixed BottomNav with no
+// z-index fights) and closes on Escape, backdrop tap, or the × button.
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+const closeLabel = lang === "es" ? "Cerrar" : "Close";
+---
+
+<dialog
+    id="app-lightbox"
+    aria-label={closeLabel}
+    class="m-0 h-full max-h-none w-full max-w-none bg-transparent p-0 backdrop:bg-black/80"
+>
+    <div id="app-lightbox-surface" class="fixed inset-0 flex items-center justify-center p-4">
+        <button
+            type="button"
+            id="app-lightbox-close"
+            aria-label={closeLabel}
+            class="absolute right-3 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-2xl leading-none text-white shadow-lg active:scale-95"
+        >&times;</button>
+        <img
+            id="app-lightbox-img"
+            src=""
+            alt=""
+            class="max-h-full max-w-full rounded-lg object-contain"
+        />
+    </div>
+</dialog>
+
+<script is:inline>
+    (function () {
+        const dlg = document.getElementById("app-lightbox");
+        const img = document.getElementById("app-lightbox-img");
+        const surface = document.getElementById("app-lightbox-surface");
+        if (!dlg || !img) return;
+
+        function open(src) {
+            if (!src) return;
+            img.setAttribute("src", src);
+            if (typeof dlg.showModal === "function" && !dlg.open) dlg.showModal();
+        }
+        function close() {
+            if (dlg.open) dlg.close();
+        }
+        // Expose for imperative callers (e.g. non-delegated code paths).
+        window.openLightbox = open;
+
+        // Delegated trigger — catches both server-rendered triggers and any
+        // [data-lightbox-src] element inserted later (streamed chat messages).
+        document.addEventListener("click", function (e) {
+            const trigger = e.target.closest && e.target.closest("[data-lightbox-src]");
+            if (!trigger) return;
+            e.preventDefault();
+            open(trigger.getAttribute("data-lightbox-src"));
+        });
+
+        document.getElementById("app-lightbox-close")?.addEventListener("click", close);
+        // Tap on the empty backdrop area (not the image) dismisses.
+        surface?.addEventListener("click", function (e) {
+            if (e.target === surface) close();
+        });
+        // Free the image once closed (also fires on Escape).
+        dlg.addEventListener("close", function () { img.setAttribute("src", ""); });
+    })();
+</script>

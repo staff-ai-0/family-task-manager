@@ -1,5 +1,6 @@
 ---
 import ChatShell from "@components/ui/ChatShell.astro";
+import ImageLightbox from "@components/ui/ImageLightbox.astro";
 import { apiFetch } from "../lib/api";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -137,14 +138,14 @@ const labels = {
                                 )}
                                 <p class="whitespace-pre-wrap" data-msg-body>{m.body}</p>
                                 {m.image_url && (
-                                    <a href={m.image_url} target="_blank" rel="noopener">
+                                    <button type="button" data-lightbox-src={m.image_url} class="mt-1 block cursor-zoom-in">
                                         <img
                                             src={m.image_url}
                                             alt=""
                                             loading="lazy"
-                                            class="mt-1 rounded-lg max-h-48 w-auto border border-brand-ink/10"
+                                            class="rounded-lg max-h-48 w-auto border border-brand-ink/10"
                                         />
-                                    </a>
+                                    </button>
                                 )}
                                 <p class={`text-[10px] mt-1 ${mine ? "text-brand-cream/60" : "text-brand-ink-soft"}`}>
                                     {timeAgo(m.created_at)}
@@ -212,6 +213,7 @@ const labels = {
                 {labels.send}
             </button>
     </form>
+<ImageLightbox />
 </ChatShell>
 
 <script define:vars={{ currentUserId: user.id, currentRole: user.role, memberMap: Object.fromEntries(memberLookup), memberColors: Object.fromEntries(memberColorLookup), lang }}>
@@ -272,17 +274,13 @@ const labels = {
             }
             // Auto-posted completion cards carry the proof photo.
             if (msg.image_url) {
-                const link = document.createElement("a");
-                link.href = msg.image_url;
-                link.target = "_blank";
-                link.rel = "noopener";
                 const img = document.createElement("img");
                 img.src = msg.image_url;
                 img.alt = "";
                 img.loading = "lazy";
-                img.className = "mt-1 rounded-lg max-h-48 w-auto border border-brand-ink/10";
-                link.appendChild(img);
-                timeP.parentElement.insertBefore(link, timeP);
+                img.className = "mt-1 rounded-lg max-h-48 w-auto border border-brand-ink/10 cursor-zoom-in";
+                img.setAttribute("data-lightbox-src", msg.image_url);
+                timeP.parentElement.insertBefore(img, timeP);
             }
             feed.appendChild(wrapper);
             feed.scrollTo({ top: feed.scrollHeight, behavior: "smooth" });
