@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.exceptions import ValidationError
+from app.core.premium import require_feature
 from app.core.type_utils import to_uuid_required
 from app.models import User
 from app.schemas.meal import (
@@ -115,6 +116,7 @@ async def import_recipe(
 ):
     """Fetch recipe URL, parse via LLM, return fields without saving.
     Frontend reviews then POSTs to /recipes to persist."""
+    await require_feature("ai_features", db, current_user)
     try:
         r = await import_recipe_from_url(data.url)
     except ValidationError as exc:

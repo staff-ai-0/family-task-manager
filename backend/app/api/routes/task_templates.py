@@ -13,6 +13,7 @@ from uuid import UUID
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
+from app.core.premium import require_feature
 from app.core.type_utils import to_uuid_required
 from app.services.task_template_service import TaskTemplateService
 from app.services.translation_service import TranslationService
@@ -127,6 +128,7 @@ async def translate_template(
     Auto-translate a template's title and description using LiteLLM proxy (parent only).
     Does NOT save the translation — returns it for review before saving via PUT.
     """
+    await require_feature("ai_features", db, current_user)
     template = await TaskTemplateService.get_template(
         db, template_id, to_uuid_required(current_user.family_id)
     )

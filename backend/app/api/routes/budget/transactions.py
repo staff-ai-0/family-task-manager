@@ -223,6 +223,7 @@ async def auto_categorize_transactions(
     suggestion against the family's category list. Assignments also teach the
     payee a default category for future transactions. Parent only.
     """
+    await require_feature("ai_features", db, current_user)
     from app.services.budget.category_ai_service import CategoryAIService
     family_id = to_uuid_required(current_user.family_id)
     return await CategoryAIService.backfill(db, family_id)

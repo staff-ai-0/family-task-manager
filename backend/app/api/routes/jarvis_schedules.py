@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import require_parent_role
 from app.core.exceptions import NotFoundException, ValidationException
+from app.core.premium import require_feature
 from app.core.type_utils import to_uuid_required
 from app.models import User
 from app.services.jarvis_schedule_service import JarvisScheduleService
@@ -61,6 +62,8 @@ async def create_schedule(
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
+    # Schedules fire JarvisService.chat on a cron — same paid gate as /chat.
+    await require_feature("ai_features", db, current_user)
     try:
         s = await JarvisScheduleService.create(
             db,
