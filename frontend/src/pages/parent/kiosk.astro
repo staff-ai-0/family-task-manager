@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
+import { SITE_URL } from "../../lib/seo";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -64,8 +65,14 @@ const PALETTE: { name: string; hex: string }[] = [
     { name: "sun-deep", hex: "#E5A91F" },
 ];
 
+// The kiosk URL is opened on external wall devices (Echo Show, Fire TV, an old
+// iPad), so it MUST be the public origin. Behind the Cloudflare tunnel
+// Astro.url.origin resolves to http(s)://localhost — useless on a device — so
+// prefer the canonical SITE_URL, falling back to the request origin only when
+// it isn't localhost (e.g. a custom self-host).
+const _origin = typeof Astro.url.origin === "string" ? Astro.url.origin : "";
 const baseUrl =
-    typeof Astro.url.origin === "string" ? Astro.url.origin : "";
+    _origin && !/localhost|127\.0\.0\.1/.test(_origin) ? _origin : SITE_URL;
 
 const labels = {
     title: lang === "es" ? "Pantallas de pared" : "Wall displays",
