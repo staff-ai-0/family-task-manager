@@ -97,6 +97,14 @@ _COPY = {
             "en": "'{title}' was not approved. {notes}",
         },
     },
+    "gig_comment": {
+        "type": NT.GIG_COMMENT,
+        "title": {"es": "💬 Comentario en tu gig", "en": "💬 Comment on your gig"},
+        "body": {
+            "es": "{author} sobre '{title}': {snippet}",
+            "en": "{author} on '{title}': {snippet}",
+        },
+    },
     "gig_pending_review": {
         "type": NT.GIG_PENDING_REVIEW,
         "title": {"es": "🛎️ Gig por revisar", "en": "🛎️ Gig pending review"},

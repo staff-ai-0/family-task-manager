@@ -51,7 +51,7 @@ from app.models.family_chat import FamilyChatMessage
 from app.models.family_chat_reaction import FamilyChatReaction
 from app.models.jarvis_schedule import JarvisSchedule
 from app.models.dm import DMThread, DMMessage
-from app.models.gig import GigOffering, GigClaim, GigCategory, GigClaimStatus
+from app.models.gig import GigOffering, GigClaim, GigCategory, GigClaimStatus, GigClaimComment
 from app.models.reward_goal import UserRewardGoal
 from app.models.onboarding_event import OnboardingEvent, ONBOARDING_EVENT_TYPES
 from app.models.jarvis_pending_action import JarvisPendingAction

@@ -34,6 +34,8 @@ if (!user) {
     return Astro.redirect("/login");
 }
 const msgs: any[] = Array.isArray(msgsRaw) ? msgsRaw : [];
+// ?prefill= seeds the composer (e.g. "ask about this gig" from /parent/gigs).
+const prefill = (Astro.url.searchParams.get("prefill") ?? "").slice(0, 500);
 const memberMap = new Map<string, string>(
     (familyRaw?.members ?? []).map((m: any) => [m.id, m.name]),
 );
@@ -107,6 +109,8 @@ const labels = {
                 name="body"
                 required
                 maxlength="2000"
+                value={prefill}
+                autofocus={Boolean(prefill)}
                 placeholder={labels.placeholder}
                 class="flex-1 px-3 py-2.5 rounded-xl border border-brand-ink/20 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
             />
