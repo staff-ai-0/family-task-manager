@@ -399,6 +399,10 @@ const ref = (Astro.url.searchParams.get("ref") ?? "")
                     if (birthdate) body.birthdate = birthdate;
                 } else {
                     body.family_name = family_name;
+                    // Capture the browser's IANA timezone so "today" (task lists,
+                    // shuffle week, payday) is correct from day one — UTC default
+                    // showed evening families the next day's tasks.
+                    try { body.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch {}
                     // Referral code only applies when founding a new family.
                     if (ref) body.ref = ref;
                 }

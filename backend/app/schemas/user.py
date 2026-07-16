@@ -131,6 +131,10 @@ class RegisterFamilyRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
     preferred_lang: str = Field("en", pattern=r"^(en|es)$")
+    # IANA timezone captured from the browser at signup so "today" (task lists,
+    # shuffle week, payday) is right from day one — UTC default bit families in
+    # the evening (their calendar showed the next day's tasks).
+    timezone: Optional[str] = Field(None, max_length=64)
     # Only honored when joining via family_code; founding a family is always
     # PARENT and joining by code is capped at TEEN (parent requests are
     # demoted — PARENT is only granted via invitation or family creation).
