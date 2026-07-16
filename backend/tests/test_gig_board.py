@@ -30,7 +30,7 @@ async def child_headers(client: AsyncClient, test_child_user) -> dict:
 async def teen_headers(client: AsyncClient, test_teen_user) -> dict:
     res = await client.post(
         "/api/auth/login",
-        json={"email": "teen@test.local", "password": "password123"},
+        json={"email": "teen@test.com", "password": "password123"},
     )
     token = res.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
@@ -283,7 +283,10 @@ async def test_two_kids_claim_same_gig_independently(
 
     create_res = await client.post(
         "/api/gigs/offerings",
-        json={"title": "Help with groceries", "points": 15},
+        # Single-slot is now the default (2026-07-16 double-pay fix); this test
+        # exercises the explicit multi-kid mode, where independent claims are
+        # still allowed.
+        json={"title": "Help with groceries", "points": 15, "allow_multiple": True},
         headers=parent_headers,
     )
     gig_id = create_res.json()["id"]
@@ -454,8 +457,9 @@ async def test_single_slot_blocks_second_claim(
     first = await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers)
     assert first.status_code == 201
 
+    # The claim route maps ValidationException → 409 Conflict.
     second = await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=teen_headers)
-    assert second.status_code == 400
+    assert second.status_code == 409
     assert test_child_user.name in second.json()["detail"]
 
 
@@ -600,8 +604,12 @@ async def test_board_shows_active_claimers(
 async def test_family_claims_day_filter(
     client: AsyncClient, parent_headers, child_headers
 ):
-    """/claims/family lists all claims; ?on= filters to a single UTC day."""
-    from datetime import date, timedelta
+    """/claims/family lists all claims; ?on= filters to a single UTC day.
+
+    Timestamps are stored in UTC, so the filter compares UTC dates — use the
+    UTC calendar day here, not date.today() (local), or evening runs in
+    UTC-negative timezones cross the boundary and the assertion flakes."""
+    from datetime import datetime, timedelta, timezone
 
     gig_id = (
         await client.post(
@@ -614,12 +622,12 @@ async def test_family_claims_day_filter(
         await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers)
     ).json()["id"]
 
-    today = date.today().isoformat()
+    today = datetime.now(timezone.utc).date().isoformat()
     res_today = await client.get(f"/api/gigs/claims/family?on={today}", headers=parent_headers)
     assert res_today.status_code == 200
     assert any(i["id"] == claim_id for i in res_today.json())
 
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
     res_yday = await client.get(f"/api/gigs/claims/family?on={yesterday}", headers=parent_headers)
     assert res_yday.status_code == 200
     assert not any(i["id"] == claim_id for i in res_yday.json())
