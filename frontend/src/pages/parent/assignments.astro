@@ -297,14 +297,16 @@ function isToday(d: Date): boolean {
                                     <div
                                         data-day={dateStr}
                                         data-today-kind="cell"
+                                        data-drop-cell="1"
+                                        data-member={memberId}
                                         class:list={[
-                                            "min-h-16 p-0.5 rounded-b-lg border",
+                                            "min-h-16 p-0.5 rounded-b-lg border transition-colors",
                                             todayHighlight
                                                 ? "bg-sky-50 border-sky-200"
                                                 : "bg-brand-cream border-brand-ink/10",
                                         ]}>
                                         {dayTasks.length === 0 && (
-                                            <div class="h-full flex items-center justify-center">
+                                            <div class="h-full flex items-center justify-center" data-empty-dash>
                                                 <span class="text-brand-ink-soft text-xs">-</span>
                                             </div>
                                         )}
@@ -329,10 +331,12 @@ function isToday(d: Date): boolean {
                                             return (
                                                 <button
                                                     type="button"
-                                                    class={`w-full text-left text-xs px-1 py-0.5 mb-0.5 rounded border ${statusColor} truncate ${editable ? "hover:ring-2 hover:ring-sky-300 cursor-pointer" : "cursor-default"}`}
+                                                    draggable={editable ? "true" : undefined}
+                                                    class={`w-full text-left text-xs px-1 py-0.5 mb-0.5 rounded border ${statusColor} truncate ${editable ? "hover:ring-2 hover:ring-sky-300 cursor-grab active:cursor-grabbing" : "cursor-default"}`}
                                                     title={`${displayTitle} (${task.status})${task.template_is_bonus ? " [BONUS]" : ""}`}
                                                     disabled={!editable}
                                                     data-edit-assignment={editable ? "1" : undefined}
+                                                    data-drag-card={editable ? "1" : undefined}
                                                     data-assignment-id={task.id}
                                                     data-assigned-to={task.assigned_to}
                                                     data-assigned-date={task.assigned_date}
@@ -611,6 +615,71 @@ function isToday(d: Date): boolean {
             closeBtn?.addEventListener("click", close);
             cancelBtn?.addEventListener("click", close);
             modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+        });
+    </script>
+
+    <script>
+        // Drag-to-rebalance: drag an editable task card onto any member/day cell
+        // to reassign it (assigned_to + assigned_date). Optimistic move; revert on
+        // failure. PATCHes /api/task-assignments/{id} via the client proxy.
+        document.addEventListener("astro:page-load", () => {
+            let dragEl: HTMLElement | null = null;
+
+            const clearHints = () =>
+                document.querySelectorAll<HTMLElement>("[data-drop-cell]")
+                    .forEach((c) => c.classList.remove("ring-2", "ring-sky-400", "ring-inset"));
+
+            document.querySelectorAll<HTMLElement>("[data-drag-card]").forEach((card) => {
+                card.addEventListener("dragstart", (e) => {
+                    dragEl = card;
+                    (e as DragEvent).dataTransfer!.effectAllowed = "move";
+                    (e as DragEvent).dataTransfer!.setData("text/plain", card.dataset.assignmentId || "");
+                    setTimeout(() => card.classList.add("opacity-40"), 0);
+                });
+                card.addEventListener("dragend", () => {
+                    card.classList.remove("opacity-40");
+                    dragEl = null;
+                    clearHints();
+                });
+            });
+
+            document.querySelectorAll<HTMLElement>("[data-drop-cell]").forEach((cell) => {
+                cell.addEventListener("dragover", (e) => {
+                    e.preventDefault();
+                    (e as DragEvent).dataTransfer!.dropEffect = "move";
+                    cell.classList.add("ring-2", "ring-sky-400", "ring-inset");
+                });
+                cell.addEventListener("dragleave", () =>
+                    cell.classList.remove("ring-2", "ring-sky-400", "ring-inset"));
+                cell.addEventListener("drop", async (e) => {
+                    e.preventDefault();
+                    cell.classList.remove("ring-2", "ring-sky-400", "ring-inset");
+                    const card = dragEl;
+                    if (!card) return;
+                    const id = card.dataset.assignmentId;
+                    const toMember = cell.dataset.member;
+                    const toDate = cell.dataset.day;
+                    if (!id || !toMember || !toDate) return;
+                    if (card.dataset.assignedTo === toMember && card.dataset.assignedDate === toDate) return;
+
+                    // optimistic: drop the "-" placeholder, move the card in
+                    cell.querySelector("[data-empty-dash]")?.remove();
+                    cell.appendChild(card);
+                    card.dataset.assignedTo = toMember;
+                    card.dataset.assignedDate = toDate;
+
+                    try {
+                        const res = await fetch(`/api/task-assignments/${id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ assigned_to: toMember, assigned_date: toDate }),
+                        });
+                        if (!res.ok) throw new Error(String(res.status));
+                    } catch {
+                        location.reload();  // restore true state on failure
+                    }
+                });
+            });
         });
     </script>
 </PageLayout>
