@@ -18,6 +18,7 @@ interface Props {
 const { role = "child", lang = "en", unread = 0 } = Astro.props;
 const es = lang === "es";
 const isParent = role === "parent";
+const isTeen = role === "teen";
 const nextLang = es ? "en" : "es";
 
 type Link = { href: string; label: string; icon: string; badge?: number };
@@ -51,6 +52,10 @@ const help: Link = { href: es ? "/ayuda" : "/help", label: es ? "Ayuda" : "Help"
 
 const kidLinks: Link[] = [
     inbox,
+    // Teens (paid plan) get a read-only self-coach; children do not. The page
+    // + API enforce the ai_features plan gate, so an unentitled teen sees an
+    // upsell rather than a broken chat.
+    ...(isTeen ? [{ href: "/parent/jarvis", label: "Jarvis", icon: I.jarvis }] : []),
     { href: "/pet", label: es ? "Mascota" : "Pet", icon: I.pet },
     { href: "/meals", label: es ? "Comidas" : "Meals", icon: I.meals },
     { href: "/shopping", label: es ? "Compras" : "Shopping", icon: I.shopping },
