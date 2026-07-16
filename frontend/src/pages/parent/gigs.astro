@@ -42,6 +42,32 @@ const fmtDay = (iso: string | null) =>
           })
         : "—";
 
+// "Ask about this gig" → find/create the 1:1 DM thread with the kid and
+// jump into it with a prefilled question quoting the gig.
+if (Astro.request.method === "POST") {
+    const data = await Astro.request.formData();
+    if (data.get("action") === "dm-kid") {
+        const kidId = String(data.get("kid_id") || "");
+        const gigTitle = String(data.get("gig_title") || "");
+        if (kidId) {
+            const { ok, data: thread } = await apiFetch<any>("/api/dm/threads", {
+                method: "POST",
+                token,
+                body: JSON.stringify({ participant_ids: [kidId] }),
+            });
+            if (ok && thread?.id) {
+                const prefill = encodeURIComponent(
+                    lang === "es"
+                        ? `Sobre tu gig "${gigTitle}": `
+                        : `About your gig "${gigTitle}": `,
+                );
+                return Astro.redirect(`/dm/${thread.id}?prefill=${prefill}`);
+            }
+        }
+        return Astro.redirect("/parent/gigs#historial");
+    }
+}
+
 const flash = Astro.cookies.get("flash")?.value;
 if (flash) Astro.cookies.delete("flash", { path: "/" });
 const flashError = Astro.cookies.get("flash_error")?.value;
@@ -281,6 +307,30 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                         💬 {c.approval_notes}
                                     </p>
                                 )}
+                                <div class="flex items-center gap-3 mt-2">
+                                    <details class="flex-1" data-comments data-claim-id={c.id}>
+                                        <summary class="cursor-pointer text-xs font-semibold text-violet-700 select-none">
+                                            💬 {lang === "es" ? "Comentarios" : "Comments"}{c.comment_count ? ` (${c.comment_count})` : ""}
+                                        </summary>
+                                        <div data-comments-list class="mt-2 space-y-1.5"></div>
+                                        <form data-comment-form class="mt-2 flex gap-2">
+                                            <input name="body" required maxlength="1000"
+                                                placeholder={lang === "es" ? "Pregúntale o felicítalo…" : "Ask or congratulate…"}
+                                                class="flex-1 px-3 py-2 rounded-xl border border-brand-ink/20 text-sm bg-brand-cream-deep focus:ring-2 focus:ring-violet-400 outline-none" />
+                                            <button type="submit" class="px-3 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700">
+                                                {lang === "es" ? "Enviar" : "Send"}
+                                            </button>
+                                        </form>
+                                    </details>
+                                    <form method="POST" class="flex-shrink-0">
+                                        <input type="hidden" name="action" value="dm-kid" />
+                                        <input type="hidden" name="kid_id" value={c.claimed_by} />
+                                        <input type="hidden" name="gig_title" value={c.gig_title} />
+                                        <button type="submit" class="text-xs font-semibold text-indigo-700 underline">
+                                            {lang === "es" ? "Preguntar por DM" : "Ask via DM"}
+                                        </button>
+                                    </form>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -475,14 +525,53 @@ document.querySelectorAll(".archive-gig-btn").forEach(btn => {
             alert(err.detail ?? "Error");
         }
     });
+});
 
-    // History: filter cards by kid.
-    const kidFilter = document.getElementById("history-kid-filter") as HTMLSelectElement | null;
-    kidFilter?.addEventListener("change", () => {
-        const who = kidFilter.value;
-        document.querySelectorAll<HTMLElement>("[data-history-card]").forEach((card) => {
-            card.classList.toggle("hidden", Boolean(who) && card.dataset.claimer !== who);
+// History: filter cards by kid.
+const kidFilter = document.getElementById("history-kid-filter") as HTMLSelectElement | null;
+kidFilter?.addEventListener("change", () => {
+    const who = kidFilter.value;
+    document.querySelectorAll<HTMLElement>("[data-history-card]").forEach((card) => {
+        card.classList.toggle("hidden", Boolean(who) && card.dataset.claimer !== who);
+    });
+});
+
+// ---- History comment threads (load on expand, post inline) ----
+const dlang = document.documentElement.lang === "es" ? "es-MX" : "en-US";
+function commentRow(c: any): string {
+    const when = new Date(c.created_at).toLocaleDateString(dlang, { month: "short", day: "numeric" });
+    const div = document.createElement("div");
+    div.className = "text-xs bg-brand-cream-deep rounded-lg px-2.5 py-1.5";
+    div.innerHTML = `<strong></strong> <span class="text-brand-ink-soft"></span><br/>`;
+    (div.querySelector("strong") as HTMLElement).textContent = c.author_name;
+    (div.querySelector("span") as HTMLElement).textContent = when;
+    div.appendChild(document.createTextNode(c.body));
+    return div.outerHTML;
+}
+document.querySelectorAll<HTMLDetailsElement>("[data-comments]").forEach((box) => {
+    const claimId = box.dataset.claimId;
+    const list = box.querySelector("[data-comments-list]") as HTMLElement;
+    let loaded = false;
+    box.addEventListener("toggle", async () => {
+        if (!box.open || loaded) return;
+        loaded = true;
+        const r = await fetch(`/api/gigs/claims/${claimId}/comments`);
+        if (r.ok) list.innerHTML = ((await r.json()) as any[]).map(commentRow).join("");
+    });
+    box.querySelector("[data-comment-form]")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const input = (e.target as HTMLFormElement).querySelector("input[name=body]") as HTMLInputElement;
+        const body = input.value.trim();
+        if (!body) return;
+        const r = await fetch(`/api/gigs/claims/${claimId}/comments`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ body }),
         });
+        if (r.ok) {
+            list.insertAdjacentHTML("beforeend", commentRow(await r.json()));
+            input.value = "";
+        }
     });
 });
 </script>

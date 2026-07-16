@@ -166,3 +166,34 @@ class GigClaim(Base):
 
     def __repr__(self):
         return f"<GigClaim(id={self.id}, gig_id={self.gig_id}, claimed_by={self.claimed_by}, status={self.status})>"
+
+
+class GigClaimComment(Base):
+    """Parent ↔ kid conversation attached to a gig claim.
+
+    Visibility mirrors the claim itself: the family's parents plus the kid
+    who claimed it. One flat thread per claim (no nesting).
+    """
+
+    __tablename__ = "gig_claim_comments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    claim_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("gig_claims.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    family_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("families.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    author_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    author = relationship("User", foreign_keys=[author_id])

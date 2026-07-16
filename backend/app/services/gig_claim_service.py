@@ -468,12 +468,26 @@ class GigClaimService:
 
         result = await db.execute(stmt)
         claims = result.unique().scalars().all()
+
+        # Comment counts in one query (history cards show a 💬 badge).
+        from app.models.gig import GigClaimComment
+
+        counts: dict = {}
+        if claims:
+            rows = await db.execute(
+                select(GigClaimComment.claim_id, sa_func.count())
+                .where(GigClaimComment.claim_id.in_([c.id for c in claims]))
+                .group_by(GigClaimComment.claim_id)
+            )
+            counts = {cid: n for cid, n in rows.all()}
+
         return [
             {
                 "claim": c,
                 "claimer_name": c.claimer.name if c.claimer else str(c.claimed_by),
                 "gig_title": c.offering.title if c.offering else "—",
                 "gig_points": c.offering.points if c.offering else 0,
+                "comment_count": counts.get(c.id, 0),
             }
             for c in claims
         ]
@@ -498,11 +512,25 @@ class GigClaimService:
             ).order_by(GigClaim.created_at.desc())
         )
         claims = result.unique().scalars().all()
+
+        from sqlalchemy import func as sa_func
+        from app.models.gig import GigClaimComment
+
+        counts: dict = {}
+        if claims:
+            rows = await db.execute(
+                select(GigClaimComment.claim_id, sa_func.count())
+                .where(GigClaimComment.claim_id.in_([c.id for c in claims]))
+                .group_by(GigClaimComment.claim_id)
+            )
+            counts = {cid: n for cid, n in rows.all()}
+
         return [
             {
                 "claim": c,
                 "gig_title": c.offering.title if c.offering else "—",
                 "gig_points": c.offering.points if c.offering else 0,
+                "comment_count": counts.get(c.id, 0),
             }
             for c in claims
         ]
@@ -601,3 +629,132 @@ class GigClaimService:
                     "notify claimer of gig rejection failed", exc_info=True
                 )
             return claim
+
+    # ------------------------------------------------------------------
+    # Comment threads (parent ↔ kid conversation on a claim)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def _claim_for_comments(
+        db: AsyncSession, family_id: UUID, claim_id: UUID, user
+    ) -> GigClaim:
+        """Family-scoped claim fetch + comment visibility check.
+
+        Parents of the family and the kid who owns the claim may read/write
+        comments; other kids get 403, other families 404.
+        """
+        from sqlalchemy.orm import joinedload
+        from app.models.user import UserRole
+
+        claim = (
+            await db.execute(
+                select(GigClaim)
+                .options(joinedload(GigClaim.offering))
+                .where(GigClaim.id == claim_id, GigClaim.family_id == family_id)
+            )
+        ).unique().scalar_one_or_none()
+        if claim is None:
+            raise NotFoundException("Claim not found")
+        if user.role != UserRole.PARENT and claim.claimed_by != user.id:
+            raise ForbiddenException("Only parents or the claim owner may comment")
+        return claim
+
+    @staticmethod
+    async def list_comments(
+        db: AsyncSession, family_id: UUID, claim_id: UUID, user
+    ) -> List[dict]:
+        from sqlalchemy.orm import joinedload
+        from app.models.gig import GigClaimComment
+
+        await GigClaimService._claim_for_comments(db, family_id, claim_id, user)
+        rows = (
+            await db.execute(
+                select(GigClaimComment)
+                .options(joinedload(GigClaimComment.author))
+                .where(GigClaimComment.claim_id == claim_id)
+                .order_by(GigClaimComment.created_at.asc())
+            )
+        ).unique().scalars().all()
+        return [
+            {
+                "id": c.id,
+                "author_id": c.author_id,
+                "author_name": c.author.name if c.author else "—",
+                "body": c.body,
+                "created_at": c.created_at,
+            }
+            for c in rows
+        ]
+
+    @staticmethod
+    async def add_comment(
+        db: AsyncSession, family_id: UUID, claim_id: UUID, user, body: str
+    ) -> dict:
+        from app.models.gig import GigClaimComment
+        from app.models.user import User, UserRole
+
+        claim = await GigClaimService._claim_for_comments(
+            db, family_id, claim_id, user
+        )
+        comment = GigClaimComment(
+            claim_id=claim_id,
+            family_id=family_id,
+            author_id=user.id,
+            body=body.strip(),
+        )
+        db.add(comment)
+        await db.commit()
+        await db.refresh(comment)
+
+        # Notify the other side of the conversation (best-effort).
+        try:
+            from app.services.notification_service import NotificationService
+
+            gig_title = claim.offering.title if claim.offering else "Gig"
+            snippet = body.strip()[:80]
+            if user.role == UserRole.PARENT:
+                recipients = (
+                    [claim.claimed_by] if claim.claimed_by != user.id else []
+                )
+                link = "/gigs/my-gigs"
+            else:
+                recipients = list(
+                    (
+                        await db.execute(
+                            select(User.id).where(
+                                and_(
+                                    User.family_id == family_id,
+                                    User.role == UserRole.PARENT,
+                                )
+                            )
+                        )
+                    ).scalars().all()
+                )
+                link = "/parent/gigs#historial"
+            for rid in recipients:
+                await NotificationService.create_localized(
+                    db,
+                    family_id=family_id,
+                    key="gig_comment",
+                    user_id=rid,
+                    params={
+                        "author": user.name,
+                        "title": gig_title,
+                        "snippet": snippet,
+                    },
+                    link=link,
+                )
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "gig comment notification failed", exc_info=True
+            )
+
+        return {
+            "id": comment.id,
+            "author_id": comment.author_id,
+            "author_name": user.name,
+            "body": comment.body,
+            "created_at": comment.created_at,
+        }

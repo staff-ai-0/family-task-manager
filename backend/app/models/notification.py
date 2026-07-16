@@ -20,6 +20,7 @@ class NotificationType:
     GIG_APPROVED = "gig_approved"
     GIG_REJECTED = "gig_rejected"
     GIG_PENDING_REVIEW = "gig_pending_review"
+    GIG_COMMENT = "gig_comment"
     LATE_PENALTY_APPLIED = "late_penalty_applied"
     REWARDS_LOCKED = "rewards_locked"
     REWARD_REDEEMED = "reward_redeemed"

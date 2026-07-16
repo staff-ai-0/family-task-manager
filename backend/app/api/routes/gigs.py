@@ -103,6 +103,8 @@ class GigClaimResponse(BaseModel):
     gig_points: Optional[int] = None
     # Duplicate-pay guardrail: who already got paid for this same gig.
     already_awarded_to: Optional[str] = None
+    # Comment-thread badge (populated by list endpoints).
+    comment_count: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -339,11 +341,13 @@ async def family_claims(
                     "gig_title",
                     "gig_points",
                     "already_awarded_to",
+                    "comment_count",
                 }
             ),
             claimer_name=item["claimer_name"],
             gig_title=item["gig_title"],
             gig_points=item["gig_points"],
+            comment_count=item.get("comment_count", 0),
         )
         for item in items
     ]
@@ -362,10 +366,11 @@ async def my_claims(
     return [
         GigClaimResponse(
             **GigClaimResponse.model_validate(item["claim"]).model_dump(
-                exclude={"gig_title", "gig_points"}
+                exclude={"gig_title", "gig_points", "comment_count"}
             ),
             gig_title=item["gig_title"],
             gig_points=item["gig_points"],
+            comment_count=item.get("comment_count", 0),
         )
         for item in items
     ]
@@ -417,3 +422,54 @@ async def approve_claim(
         notes=data.notes,
     )
     return claim
+
+
+# ---------------------------------------------------------------------------
+# Claim comment threads (parent ↔ kid conversation about a completed gig)
+# ---------------------------------------------------------------------------
+
+class CommentCreate(BaseModel):
+    body: str = Field(..., min_length=1, max_length=1000)
+
+
+class CommentOut(BaseModel):
+    id: UUID
+    author_id: Optional[UUID]
+    author_name: str
+    body: str
+    created_at: datetime
+
+
+@router.get("/claims/{claim_id}/comments", response_model=List[CommentOut])
+async def list_claim_comments(
+    claim_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Comments on a claim (family parents + the claim owner)."""
+    items = await GigClaimService.list_comments(
+        db, to_uuid_required(current_user.family_id), claim_id, current_user
+    )
+    return [CommentOut(**i) for i in items]
+
+
+@router.post(
+    "/claims/{claim_id}/comments",
+    response_model=CommentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_claim_comment(
+    claim_id: UUID,
+    data: CommentCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a comment; notifies the other side (parent ↔ kid)."""
+    item = await GigClaimService.add_comment(
+        db,
+        to_uuid_required(current_user.family_id),
+        claim_id,
+        current_user,
+        data.body,
+    )
+    return CommentOut(**item)

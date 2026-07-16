@@ -106,13 +106,13 @@ const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
                                 <form class="space-y-3" data-complete-form data-claim-id={claim.id}>
                                     <div>
                                         <label class="block text-sm font-medium text-brand-ink mb-1">
-                                            {lang === "es" ? "¿Qué hiciste? (opcional)" : "What did you do? (optional)"}
+                                            {lang === "es" ? "¿Qué hiciste? ¿Qué aprendiste?" : "What did you do? What did you learn?"}
                                         </label>
                                         <textarea
                                             name="proof_text"
-                                            rows={3}
+                                            rows={4}
                                             class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink placeholder-brand-ink-soft focus:outline-none focus:ring-2 focus:ring-violet-400"
-                                            placeholder={lang === "es" ? "Describe lo que hiciste..." : "Describe what you did..."}
+                                            placeholder={lang === "es" ? "Cuéntalo AQUÍ con tus palabras (no en papel): qué hiciste, qué aprendiste, qué te gustó…" : "Tell it HERE in your own words (not on paper): what you did, what you learned, what you liked…"}
                                         />
                                     </div>
                                     <div>
@@ -145,6 +145,21 @@ const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
                                     <strong>{lang === "es" ? "Evidencia enviada:" : "Submitted proof:"}</strong> {claim.proof_text}
                                 </div>
                             )}
+
+                            <details class="mt-3" data-comments data-claim-id={claim.id}>
+                                <summary class="cursor-pointer text-xs font-semibold text-violet-700 select-none">
+                                    💬 {lang === "es" ? "Comentarios" : "Comments"}{claim.comment_count ? ` (${claim.comment_count})` : ""}
+                                </summary>
+                                <div data-comments-list class="mt-2 space-y-1.5"></div>
+                                <form data-comment-form class="mt-2 flex gap-2">
+                                    <input name="body" required maxlength="1000"
+                                        placeholder={lang === "es" ? "Escribe una respuesta…" : "Write a reply…"}
+                                        class="flex-1 px-3 py-2 rounded-xl border border-brand-ink/20 text-sm bg-brand-cream-deep focus:ring-2 focus:ring-violet-400 outline-none" />
+                                    <button type="submit" class="px-3 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700">
+                                        {lang === "es" ? "Enviar" : "Send"}
+                                    </button>
+                                </form>
+                            </details>
                         </div>
                     ))}
                 </div>
@@ -199,6 +214,47 @@ document.querySelectorAll("[data-complete-form]").forEach(form => {
             btn.disabled = false;
             btn.textContent = lang === "es" ? "Enviar para aprobación" : "Submit for approval";
             alert(err.detail ?? "Error");
+        }
+    });
+});
+
+// ---- Gig-claim comment threads (load on expand, post inline) ----
+function commentRow(c: any): string {
+    const when = new Date(c.created_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", { month: "short", day: "numeric" });
+    const div = document.createElement("div");
+    div.className = "text-xs bg-brand-cream-deep rounded-lg px-2.5 py-1.5";
+    div.innerHTML = `<strong></strong> <span class="text-brand-ink-soft"></span><br/>`;
+    (div.querySelector("strong") as HTMLElement).textContent = c.author_name;
+    (div.querySelector("span") as HTMLElement).textContent = when;
+    div.appendChild(document.createTextNode(c.body));
+    return div.outerHTML;
+}
+
+document.querySelectorAll<HTMLDetailsElement>("[data-comments]").forEach((box) => {
+    const claimId = box.dataset.claimId;
+    const list = box.querySelector("[data-comments-list]") as HTMLElement;
+    let loaded = false;
+    box.addEventListener("toggle", async () => {
+        if (!box.open || loaded) return;
+        loaded = true;
+        const r = await fetch(`/api/gigs/claims/${claimId}/comments`);
+        if (r.ok) list.innerHTML = ((await r.json()) as any[]).map(commentRow).join("");
+    });
+    box.querySelector("[data-comment-form]")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const input = (e.target as HTMLFormElement).querySelector("input[name=body]") as HTMLInputElement;
+        const body = input.value.trim();
+        if (!body) return;
+        const r = await fetch(`/api/gigs/claims/${claimId}/comments`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ body }),
+        });
+        if (r.ok) {
+            list.insertAdjacentHTML("beforeend", commentRow(await r.json()));
+            input.value = "";
+        } else {
+            alert(lang === "es" ? "No se pudo enviar." : "Could not send.");
         }
     });
 });

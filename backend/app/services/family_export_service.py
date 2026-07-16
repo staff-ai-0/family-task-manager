@@ -45,6 +45,7 @@ from app.models import (
     FamilyInvitation,
     FamilySubscription,
     GigClaim,
+    GigClaimComment,
     GigOffering,
     JarvisMcpToken,
     JarvisMessage,
@@ -151,6 +152,7 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
         TaskAssignment,
         GigOffering,
         GigClaim,
+        GigClaimComment,
         CashTransaction,
         KidBankAccount,
         KidSavingsGoal,
@@ -335,6 +337,7 @@ class FamilyExportService:
         assignments = await _rows(db, fam(TaskAssignment))
         offerings = await _rows(db, fam(GigOffering))
         claims = await _rows(db, fam(GigClaim))
+        claim_comments = await _rows(db, fam(GigClaimComment))
         # PointTransaction has no family_id — it is user-scoped.
         points = await _rows(
             db,
@@ -480,6 +483,7 @@ class FamilyExportService:
             "tasks/task_assignments.json": _dump(assignments),
             "gigs/offerings.json": _dump(offerings),
             "gigs/claims.json": _dump(claims),
+            "gigs/claim_comments.json": _dump(claim_comments),
             "points/point_transactions.json": _dump(points),
             "points/cash_transactions.json": _dump(cash),
             "bank/kid_bank_accounts.json": _dump(bank_accounts),
