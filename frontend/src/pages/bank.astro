@@ -283,8 +283,8 @@ function countdownText(): string {
     </section>
 
     <!-- Move / request modal -->
-    <div id="bank-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-        <div class="bg-brand-cream rounded-t-3xl sm:rounded-[var(--radius-card)] w-full max-w-md p-6 border-2 border-brand-ink shadow-[var(--shadow-pop)]">
+    <div id="bank-modal" class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+        <div class="bg-brand-cream rounded-t-3xl sm:rounded-[var(--radius-card)] w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 max-h-[90dvh] overflow-y-auto border-2 border-brand-ink shadow-[var(--shadow-pop)]">
             <div class="flex justify-between items-center mb-2">
                 <h2 id="bank-modal-title" class="text-lg font-bold text-brand-ink"></h2>
                 <button id="bank-modal-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
@@ -309,8 +309,8 @@ function countdownText(): string {
     </div>
 
     <!-- Savings-goal create modal -->
-    <div id="goal-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-        <div class="bg-brand-cream rounded-t-3xl sm:rounded-[var(--radius-card)] w-full max-w-md p-6 border-2 border-brand-ink shadow-[var(--shadow-pop)]">
+    <div id="goal-modal" class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+        <div class="bg-brand-cream rounded-t-3xl sm:rounded-[var(--radius-card)] w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 max-h-[90dvh] overflow-y-auto border-2 border-brand-ink shadow-[var(--shadow-pop)]">
             <div class="flex justify-between items-center mb-2">
                 <h2 class="text-lg font-bold text-brand-ink">🎯 {es ? "Mi meta de ahorro" : "My savings goal"}</h2>
                 <button id="goal-modal-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>

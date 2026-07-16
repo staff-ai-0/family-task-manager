@@ -503,8 +503,8 @@ function isToday(d: Date): boolean {
             )}
 
     <!-- Edit-assignment modal -->
-    <div id="assignment-edit-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
-        <div class="bg-brand-cream w-full md:max-w-md rounded-t-[var(--radius-card)] md:rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] border border-brand-ink/10">
+    <div id="assignment-edit-modal" class="hidden fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
+        <div class="bg-brand-cream w-full md:max-w-md max-h-[90dvh] overflow-y-auto rounded-t-[var(--radius-card)] md:rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] border border-brand-ink/10 pb-[env(safe-area-inset-bottom,0px)] md:pb-0">
             <form id="assignment-edit-form" method="POST" action="/api/assignments/patch" class="p-5 space-y-4">
                 <input type="hidden" name="assignment_id" id="edit-assignment-id" />
                 <div class="flex items-start justify-between gap-3">

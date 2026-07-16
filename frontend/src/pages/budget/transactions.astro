@@ -5,6 +5,7 @@
  */
 
 import BudgetShell from "@components/ui/BudgetShell.astro";
+import ImageLightbox from "@components/ui/ImageLightbox.astro";
 import FABButton from "@components/FABButton.astro";
 import FABModal from "@components/FABModal.astro";
 import { apiFetch } from "@lib/api";
@@ -477,9 +478,9 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
 
                     <!-- Receipt image thumbnail (when present) -->
                     <div id="receipt-thumb-wrap" class="hidden mt-3">
-                        <a id="receipt-thumb-link" href="#" target="_blank" rel="noopener" class="block">
+                        <button id="receipt-thumb-link" type="button" class="block cursor-zoom-in">
                             <img id="receipt-thumb" src="" alt="Receipt" class="max-h-32 rounded-lg border border-brand-ink/10" />
-                        </a>
+                        </button>
                     </div>
 
                     <!-- Cleared -->
@@ -556,6 +557,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
         <FABButton />
         <FABModal lang={lang} accounts={accounts || []} categories={allCategories} />
     </Fragment>
+<ImageLightbox />
 </BudgetShell>
 
 <script>
@@ -806,7 +808,7 @@ document.addEventListener("astro:after-swap", initFilters);
                 if (thumbWrap && thumb && thumbLink && row.dataset.hasReceiptImage === "1") {
                     const url = `/api/budget/transactions/${txId}/receipt`;
                     thumb.src = url;
-                    thumbLink.href = url;
+                    thumbLink.setAttribute("data-lightbox-src", url);
                     thumbWrap.classList.remove("hidden");
                 } else if (thumbWrap) {
                     thumbWrap.classList.add("hidden");
