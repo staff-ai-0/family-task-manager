@@ -190,8 +190,8 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 </PageLayout>
 
 <!-- Create/Edit Gig Modal -->
-<div id="gig-modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-    <div class="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+<div id="gig-modal" class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+    <div class="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-5">
             <h2 id="modal-title" class="text-lg font-bold text-brand-ink"></h2>
             <button id="close-modal" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>

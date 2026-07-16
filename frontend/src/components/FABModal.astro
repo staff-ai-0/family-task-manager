@@ -23,7 +23,7 @@ const newAccountLabel = lang === "es" ? "＋ Nueva cuenta…" : "＋ New account
 <!-- Backdrop -->
 <div
     id="fab-backdrop"
-    class="fixed inset-0 bg-black/50 z-40 hidden opacity-0 transition-opacity duration-300"
+    class="fixed inset-0 bg-black/50 z-[55] hidden opacity-0 transition-opacity duration-300"
 ></div>
 
 <!-- Bottom sheet -->
@@ -31,9 +31,9 @@ const newAccountLabel = lang === "es" ? "＋ Nueva cuenta…" : "＋ New account
     id="fab-modal"
     role="dialog"
     aria-modal="true"
-    class="fixed bottom-0 left-0 right-0 z-50 translate-y-full transition-transform duration-300 ease-out"
+    class="fixed bottom-0 left-0 right-0 z-[60] translate-y-full transition-transform duration-300 ease-out"
 >
-    <div class="max-w-md mx-auto bg-brand-cream rounded-t-[var(--radius-card)] shadow-[var(--shadow-stamp)] max-h-[85vh] overflow-y-auto">
+    <div class="max-w-md mx-auto bg-brand-cream rounded-t-[var(--radius-card)] shadow-[var(--shadow-stamp)] max-h-[85dvh] overflow-y-auto pb-[env(safe-area-inset-bottom,0px)]">
         <!-- Drag handle -->
         <div class="flex justify-center pt-3 pb-2">
             <div class="w-10 h-1 bg-brand-cream-deep rounded-full"></div>

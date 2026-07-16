@@ -27,7 +27,7 @@ const dowLabels = lang === "es"
 <!-- Backdrop -->
 <div
     id="tcm-backdrop"
-    class="fixed inset-0 bg-black/50 z-40 hidden opacity-0 transition-opacity duration-300"
+    class="fixed inset-0 bg-black/50 z-[55] hidden opacity-0 transition-opacity duration-300"
 ></div>
 
 <!-- Dialog -->
@@ -36,9 +36,9 @@ const dowLabels = lang === "es"
     role="dialog"
     aria-modal="true"
     aria-labelledby="tcm-dialog-title"
-    class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+    class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4"
 >
-    <div class="w-full sm:max-w-lg bg-brand-cream rounded-t-[var(--radius-card)] sm:rounded-[var(--radius-card)] shadow-[var(--shadow-pop)] max-h-[90vh] flex flex-col">
+    <div class="w-full sm:max-w-lg bg-brand-cream rounded-t-[var(--radius-card)] sm:rounded-[var(--radius-card)] shadow-[var(--shadow-pop)] max-h-[90dvh] flex flex-col pb-[env(safe-area-inset-bottom,0px)] sm:pb-0">
 
         <!-- Header -->
         <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b border-brand-ink/10 flex-shrink-0">
