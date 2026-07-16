@@ -225,8 +225,18 @@ async def register_family(
                     ),
                 )
 
+            # Validate the browser-supplied IANA timezone; fall back to UTC.
+            fam_tz = "UTC"
+            if data.timezone:
+                try:
+                    from zoneinfo import ZoneInfo
+                    ZoneInfo(data.timezone)
+                    fam_tz = data.timezone
+                except Exception:
+                    fam_tz = "UTC"
             family = Family(
                 name=data.family_name,
+                timezone=fam_tz,
                 join_code=generate_join_code(),
             )
             db.add(family)

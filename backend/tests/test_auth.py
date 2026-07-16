@@ -48,6 +48,36 @@ class TestUserRegistration:
         assert "password" not in data
 
     @pytest.mark.asyncio
+    async def test_register_family_captures_browser_timezone(self, client, db):
+        """A founding family stores the browser IANA timezone; garbage → UTC."""
+        from sqlalchemy import select
+        from app.models.family import Family
+
+        ok = await client.post("/api/auth/register-family", json={
+            "family_name": "TZ Family", "name": "Founder",
+            "email": "tzfounder@test.com", "password": "SecurePass123!",
+            "preferred_lang": "es", "accept_terms": True,
+            "timezone": "America/Mexico_City",
+        })
+        assert ok.status_code in (200, 201), ok.text
+        fam = (await db.execute(
+            select(Family).where(Family.name == "TZ Family")
+        )).scalar_one()
+        assert fam.timezone == "America/Mexico_City"
+
+        bad = await client.post("/api/auth/register-family", json={
+            "family_name": "Bad TZ", "name": "F2",
+            "email": "badtz@test.com", "password": "SecurePass123!",
+            "preferred_lang": "en", "accept_terms": True,
+            "timezone": "Not/AZone",
+        })
+        assert bad.status_code in (200, 201), bad.text
+        fam2 = (await db.execute(
+            select(Family).where(Family.name == "Bad TZ")
+        )).scalar_one()
+        assert fam2.timezone == "UTC"
+
+    @pytest.mark.asyncio
     async def test_register_duplicate_email(
         self, client: AsyncClient, test_parent_user
     ):
