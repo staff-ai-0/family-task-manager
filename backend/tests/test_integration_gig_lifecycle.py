@@ -54,8 +54,9 @@ async def _seed_gig(db, family, child):
 
 class TestGigLifecycleAIAutoApproval:
     async def test_high_ai_score_auto_approves_and_credits(
-        self, db_session, test_family, test_child_user, monkeypatch
+        self, db_session, test_family, test_child_user, plus_subscription, monkeypatch
     ):
+        # AI photo validation is paid-only (ai_features) — see test_ai_gating.
         # Force trust streak below threshold so AI is the gate.
         test_child_user.gig_trust_streak = 0
         test_child_user.points = 0
@@ -123,7 +124,7 @@ class TestGigLifecycleAIAutoApproval:
         assert len(notifs) >= 1
 
     async def test_low_ai_score_goes_to_manual_review(
-        self, db_session, test_family, test_child_user, monkeypatch
+        self, db_session, test_family, test_child_user, plus_subscription, monkeypatch
     ):
         test_child_user.gig_trust_streak = 0
         test_child_user.points = 0

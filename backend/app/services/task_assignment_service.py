@@ -1461,10 +1461,12 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             # If either path approves, points credit immediately.
             #
             # Path 2 processes a KID-taken photo, so it requires the family's
-            # explicit AI-processing opt-in (families.ai_processing_consent).
-            # Without consent there is NO AI call — the gig simply lands in
-            # the existing manual parent-approval queue (HITL path).
+            # explicit AI-processing opt-in (families.ai_processing_consent)
+            # AND a paid plan (ai_features — AI is paid-only). Without either
+            # there is NO AI call — the gig simply lands in the existing
+            # manual parent-approval queue (HITL path).
             from app.core.config import settings
+            from app.core.premium import family_tier_allows
             from app.services.family_service import FamilyService
             from app.services.points_service import PointsService
             from app.services.task_proof_validator import validate_proof_photo
@@ -1477,8 +1479,10 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             if child.gig_trust_streak >= threshold:
                 auto_approved = True
                 approval_reason = "Auto-approved via trust streak"
-            elif assignment.proof_image_url and await FamilyService.has_ai_processing_consent(
-                db, family_id
+            elif (
+                assignment.proof_image_url
+                and await FamilyService.has_ai_processing_consent(db, family_id)
+                and await family_tier_allows(db, family_id, "ai_features")
             ):
                 validation = await validate_proof_photo(
                     assignment.proof_image_url,

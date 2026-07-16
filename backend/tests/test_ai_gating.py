@@ -349,6 +349,76 @@ async def test_bank_sync_create_skips_ai_for_free(
     assert suggest.await_count == 0
 
 
+# ---------------------------------------------------------------------------
+# 6. Gig proof-photo AI validation (auto-approve) — paid-only on top of the
+#    ai_processing_consent gate (see test_ai_consent_gate.py for consent).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_gig_photo_ai_skipped_for_free(
+    db_session, test_family, test_child_user, monkeypatch
+):
+    from app.models.task_assignment import ApprovalStatus
+    from app.services.task_assignment_service import TaskAssignmentService
+    from tests.test_ai_consent_gate import _seed_gig
+
+    test_family.ai_processing_consent = True  # consent alone is not enough
+    test_child_user.gig_trust_streak = 0
+    await db_session.commit()
+    tmpl, a = await _seed_gig(db_session, test_family, test_child_user)
+
+    validate = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        "app.services.task_proof_validator.validate_proof_photo", validate
+    )
+
+    result = await TaskAssignmentService.complete_assignment(
+        db_session,
+        a.id,
+        test_family.id,
+        test_child_user.id,
+        proof_text="raked everything",
+        proof_image_url="/uploads/gig-proofs/synthetic.jpg",
+    )
+
+    assert validate.await_count == 0
+    assert result.approval_status == ApprovalStatus.PENDING  # manual HITL
+
+
+@pytest.mark.asyncio
+async def test_gig_photo_ai_runs_for_plus(
+    db_session, test_family, test_child_user, plus_subscription, monkeypatch
+):
+    from app.models.task_assignment import ApprovalStatus
+    from app.services.task_assignment_service import TaskAssignmentService
+    from app.services.task_proof_validator import ProofValidation
+    from tests.test_ai_consent_gate import _seed_gig
+
+    test_family.ai_processing_consent = True
+    test_child_user.gig_trust_streak = 0
+    await db_session.commit()
+    tmpl, a = await _seed_gig(db_session, test_family, test_child_user)
+
+    validate = AsyncMock(
+        return_value=ProofValidation(score=0.95, explanation="Leaves raked.")
+    )
+    monkeypatch.setattr(
+        "app.services.task_proof_validator.validate_proof_photo", validate
+    )
+
+    result = await TaskAssignmentService.complete_assignment(
+        db_session,
+        a.id,
+        test_family.id,
+        test_child_user.id,
+        proof_text="raked everything",
+        proof_image_url="/uploads/gig-proofs/synthetic.jpg",
+    )
+
+    assert validate.await_count == 1
+    assert result.approval_status == ApprovalStatus.APPROVED
+
+
 @pytest.mark.asyncio
 async def test_bank_sync_create_uses_ai_for_plus(
     client: AsyncClient, a2a_webhook_row, plus_subscription, monkeypatch

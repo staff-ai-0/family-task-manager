@@ -92,8 +92,9 @@ class PayPalAPI:
 # Pro MX$199/mo | MX$1990/yr (annual ≈ 2 months free).
 # THREE copies of these prices exist — keep ALL in sync when changing:
 #   1. here (what gets provisioned at PayPal),
-#   2. the DB seed MXN_PRICES in
-#      migrations/versions/2026_07_08_mxn_plan_currency_w6.py,
+#   2. the DB seeds — MXN_PRICES in
+#      migrations/versions/2026_07_08_mxn_plan_currency_w6.py and USD_PRICES
+#      in migrations/versions/2026_07_16_usd_price_alignment.py,
 #   3. the pre-migration display fallback `fallbackCents` in
 #      frontend/src/pages/parent/settings/subscription.astro.
 PLAN_PRICES: dict[str, dict[tuple[str, str], str]] = {
