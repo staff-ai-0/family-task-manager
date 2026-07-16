@@ -216,7 +216,10 @@ async def test_teen_user(db_session: AsyncSession, test_family):
     from app.core.security import get_password_hash
 
     user = User(
-        email="teen@test.local",
+        # NOTE: must be a routable-looking domain — pydantic's EmailStr
+        # (email-validator 2.x) rejects special-use TLDs like ".local",
+        # which silently broke /api/auth/login for this fixture.
+        email="teen@test.com",
         password_hash=get_password_hash("password123"),
         name="Test Teen",
         role=UserRole.TEEN,

@@ -73,6 +73,13 @@ class GigOffering(Base):
         comment="List of role strings eligible to claim; null = all non-parent roles",
     )
     is_active = Column(Boolean, nullable=False, default=True, server_default="true", index=True)
+    # Single-slot by default: the first APPROVED claim closes the gig and
+    # releases every other active claim, so a family never pays twice for the
+    # same job (2026-07-16 double-pay incident). Set true for gigs that several
+    # kids may legitimately complete and get paid for independently.
+    allow_multiple = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     # Kid-proposed gigs (W4.4): parent-created offerings are 'approved';
     # kid proposals start 'pending' (with is_active=False) until a parent
     # approves (→ 'approved' + active) or rejects (→ 'rejected').

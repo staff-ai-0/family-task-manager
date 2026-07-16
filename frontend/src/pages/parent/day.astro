@@ -1,0 +1,174 @@
+---
+import PageLayout from "@components/ui/PageLayout.astro";
+import { apiFetch } from "../../lib/api";
+import { t } from "../../lib/i18n";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = Astro.cookies.get("lang")?.value ?? "es";
+const es = lang === "es";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+if (user.role !== "parent") return Astro.redirect("/dashboard");
+
+// Target day: ?d=YYYY-MM-DD, default today (server-local).
+function iso(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+const dParam = Astro.url.searchParams.get("d");
+const day = /^\d{4}-\d{2}-\d{2}$/.test(dParam ?? "") ? (dParam as string) : iso(new Date());
+const dayDate = new Date(day + "T12:00:00");
+const prevDay = iso(new Date(dayDate.getTime() - 86400000));
+const nextDay = iso(new Date(dayDate.getTime() + 86400000));
+const isToday = day === iso(new Date());
+
+const dayLabel = dayDate.toLocaleDateString(es ? "es-MX" : "en-US", {
+    weekday: "long", month: "long", day: "numeric",
+});
+
+// One day = the week fetch filtered to assigned_date + the family's gig
+// claims stamped that day (approved → completed → created).
+const [assignRes, gigRes] = await Promise.all([
+    apiFetch<any[]>(`/api/task-assignments/week?week_of=${day}`, { token }),
+    apiFetch<any[]>(`/api/gigs/claims/family?on=${day}`, { token }),
+]);
+const assignments = (Array.isArray(assignRes.data) ? assignRes.data : []).filter(
+    (a: any) => String(a.assigned_date).slice(0, 10) === day,
+);
+const gigClaims: any[] = Array.isArray(gigRes.data) ? gigRes.data : [];
+
+// Group by kid.
+type Bucket = { tasks: any[]; gigs: any[] };
+const byKid = new Map<string, Bucket>();
+const bucket = (name: string): Bucket => {
+    if (!byKid.has(name)) byKid.set(name, { tasks: [], gigs: [] });
+    return byKid.get(name)!;
+};
+for (const a of assignments) bucket(a.assigned_user_name || "—").tasks.push(a);
+for (const c of gigClaims) bucket(c.claimer_name || "—").gigs.push(c);
+
+const doneCount = assignments.filter((a: any) => a.status === "completed").length;
+const gigPaid = gigClaims
+    .filter((c: any) => c.status === "approved")
+    .reduce((s: number, c: any) => s + (c.points_awarded ?? 0), 0);
+
+function taskBadge(a: any): { label: string; cls: string } {
+    if (a.status === "completed" && a.approval_status === "rejected")
+        return { label: es ? "Rechazada" : "Rejected", cls: "bg-red-100 text-red-700" };
+    if (a.status === "completed" && a.approval_status === "pending")
+        return { label: es ? "Por aprobar" : "To approve", cls: "bg-sky-100 text-sky-700" };
+    if (a.status === "completed")
+        return { label: es ? "Hecha" : "Done", cls: "bg-emerald-100 text-emerald-700" };
+    if (a.is_overdue || a.status === "overdue")
+        return { label: es ? "Tarde" : "Late", cls: "bg-red-100 text-red-700" };
+    return { label: es ? "Pendiente" : "Pending", cls: "bg-brand-cream-deep text-brand-ink-soft" };
+}
+function gigBadge(c: any): { label: string; cls: string } {
+    if (c.status === "approved")
+        return { label: `✅ +$${c.points_awarded ?? c.gig_points} MXN`, cls: "bg-emerald-100 text-emerald-700" };
+    if (c.status === "completed")
+        return { label: es ? "⏳ Por aprobar" : "⏳ To approve", cls: "bg-sky-100 text-sky-700" };
+    if (c.status === "rejected")
+        return { label: es ? "Liberada/Rechazada" : "Released/Rejected", cls: "bg-brand-cream-deep text-brand-ink-soft" };
+    return { label: es ? "Reclamada" : "Claimed", cls: "bg-amber-100 text-amber-700" };
+}
+---
+
+<PageLayout
+    title={es ? "Día a día" : "Day review"}
+    headerClass="bg-gradient-to-br from-sky-700 to-sky-600"
+    dark
+    backClass="text-sky-100 hover:text-white"
+    backHref="/parent"
+    backLabel={t(lang, "back_parent") as string}
+    role={user.role}
+    active="parent"
+    lang={lang as "en" | "es"}
+    mainClass="flex-1 px-4 py-6 space-y-5"
+>
+    <p slot="header-extra" class="text-sky-100 text-sm mt-1">
+        {es ? "Todo lo que hizo cada quien: tareas y gigs." : "Everything each kid did: tasks and gigs."}
+    </p>
+
+    <!-- Date nav -->
+    <div class="flex items-center justify-between gap-2 bg-brand-cream rounded-2xl p-3 border border-brand-ink/10 shadow-[var(--shadow-card)]">
+        <a href={`/parent/day?d=${prevDay}`} class="px-3 py-2 rounded-xl bg-brand-cream-deep text-brand-ink font-bold" aria-label={es ? "Día anterior" : "Previous day"}>←</a>
+        <div class="text-center min-w-0">
+            <p class="font-bold text-brand-ink capitalize truncate">{dayLabel}</p>
+            {!isToday && (
+                <a href="/parent/day" class="text-xs text-sky-700 underline">{es ? "Ir a hoy" : "Go to today"}</a>
+            )}
+        </div>
+        <a href={`/parent/day?d=${nextDay}`} class="px-3 py-2 rounded-xl bg-brand-cream-deep text-brand-ink font-bold" aria-label={es ? "Día siguiente" : "Next day"}>→</a>
+    </div>
+
+    <!-- Day summary -->
+    <div class="grid grid-cols-2 gap-3">
+        <div class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)] text-center">
+            <p class="text-2xl font-extrabold text-brand-ink">{doneCount}/{assignments.length}</p>
+            <p class="text-xs text-brand-ink-soft font-medium">{es ? "tareas hechas" : "tasks done"}</p>
+        </div>
+        <div class="bg-brand-cream rounded-2xl p-4 border border-brand-ink/10 shadow-[var(--shadow-card)] text-center">
+            <p class="text-2xl font-extrabold text-emerald-600">${gigPaid}</p>
+            <p class="text-xs text-brand-ink-soft font-medium">{es ? "pagado en gigs" : "paid in gigs"}</p>
+        </div>
+    </div>
+
+    {byKid.size === 0 && (
+        <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
+            <p class="text-4xl mb-2">🗓️</p>
+            <p class="text-brand-ink-soft text-sm">
+                {es ? "Nada registrado este día." : "Nothing recorded on this day."}
+            </p>
+        </div>
+    )}
+
+    {[...byKid.entries()].map(([kid, b]) => (
+        <section class="bg-brand-cream rounded-2xl p-5 border border-brand-ink/10 shadow-[var(--shadow-card)]">
+            <h2 class="font-bold text-brand-ink mb-3">{kid}</h2>
+
+            {b.tasks.length > 0 && (
+                <div class="mb-3">
+                    <p class="text-[11px] font-bold text-brand-ink-soft uppercase tracking-wider mb-1.5">
+                        {es ? "Tareas" : "Tasks"}
+                    </p>
+                    <ul class="space-y-1.5">
+                        {b.tasks.map((a: any) => {
+                            const badge = taskBadge(a);
+                            return (
+                                <li class="flex items-center justify-between gap-2 text-sm">
+                                    <span class="text-brand-ink truncate">
+                                        {es && a.template_title_es ? a.template_title_es : a.template_title}
+                                        {a.template_is_bonus && <span class="ml-1">⭐</span>}
+                                    </span>
+                                    <span class={`flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold ${badge.cls}`}>{badge.label}</span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            )}
+
+            {b.gigs.length > 0 && (
+                <div>
+                    <p class="text-[11px] font-bold text-brand-ink-soft uppercase tracking-wider mb-1.5">Gigs</p>
+                    <ul class="space-y-1.5">
+                        {b.gigs.map((c: any) => {
+                            const badge = gigBadge(c);
+                            return (
+                                <li class="flex items-center justify-between gap-2 text-sm">
+                                    <span class="text-brand-ink truncate">{c.gig_title}</span>
+                                    <span class={`flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold ${badge.cls}`}>{badge.label}</span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            )}
+        </section>
+    ))}
+</PageLayout>

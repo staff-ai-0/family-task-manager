@@ -30,7 +30,7 @@ async def child_headers(client: AsyncClient, test_child_user) -> dict:
 async def teen_headers(client: AsyncClient, test_teen_user) -> dict:
     res = await client.post(
         "/api/auth/login",
-        json={"email": "teen@test.local", "password": "password123"},
+        json={"email": "teen@test.com", "password": "password123"},
     )
     token = res.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
@@ -283,7 +283,10 @@ async def test_two_kids_claim_same_gig_independently(
 
     create_res = await client.post(
         "/api/gigs/offerings",
-        json={"title": "Help with groceries", "points": 15},
+        # Single-slot is now the default (2026-07-16 double-pay fix); this test
+        # exercises the explicit multi-kid mode, where independent claims are
+        # still allowed.
+        json={"title": "Help with groceries", "points": 15, "allow_multiple": True},
         headers=parent_headers,
     )
     gig_id = create_res.json()["id"]
@@ -434,3 +437,197 @@ async def test_auto_approve_when_streak_at_threshold(
 
     await db_session.refresh(test_child_user)
     assert test_child_user.gig_trust_streak == 4  # incremented on auto-approve
+
+
+# ── Single-slot gigs (2026-07-16 double-pay incident) ────────────────────────
+
+@pytest.mark.asyncio
+async def test_single_slot_blocks_second_claim(
+    client: AsyncClient, parent_headers, child_headers, teen_headers, test_child_user
+):
+    """Default gigs are single-slot: a second kid cannot claim a taken gig."""
+    gig_id = (
+        await client.post(
+            "/api/gigs/offerings",
+            json={"title": "Wash car inside", "points": 70},
+            headers=parent_headers,
+        )
+    ).json()["id"]
+
+    first = await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers)
+    assert first.status_code == 201
+
+    # The claim route maps ValidationException → 409 Conflict.
+    second = await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=teen_headers)
+    assert second.status_code == 409
+    assert test_child_user.name in second.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_allow_multiple_permits_second_claim(
+    client: AsyncClient, parent_headers, child_headers, teen_headers
+):
+    gig_id = (
+        await client.post(
+            "/api/gigs/offerings",
+            json={"title": "Rake leaves (everyone)", "points": 30, "allow_multiple": True},
+            headers=parent_headers,
+        )
+    ).json()["id"]
+
+    assert (await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers)).status_code == 201
+    assert (await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=teen_headers)).status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_approval_releases_duplicate_claims_and_closes_gig(
+    client: AsyncClient, parent_headers, child_headers,
+    test_family, test_child_user, test_teen_user, db_session: AsyncSession,
+):
+    """Pre-guard duplicate claims (like the prod incident): approving one claim
+    on a single-slot gig releases the others (no pay, streak intact) and
+    deactivates the offering."""
+    from app.models.gig import GigClaim, GigClaimStatus
+
+    gig_id = (
+        await client.post(
+            "/api/gigs/offerings",
+            json={"title": "Vacuum car", "points": 70},
+            headers=parent_headers,
+        )
+    ).json()["id"]
+
+    claim_id = (
+        await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers)
+    ).json()["id"]
+    assert (
+        await client.post(
+            f"/api/gigs/claims/{claim_id}/complete",
+            json={"proof_text": "done"},
+            headers=child_headers,
+        )
+    ).status_code == 200
+
+    # Simulate a duplicate claim that predates the claim-time guard.
+    from uuid import UUID as _UUID
+    dup = GigClaim(
+        gig_id=_UUID(gig_id),
+        family_id=test_family.id,
+        claimed_by=test_teen_user.id,
+        status=GigClaimStatus.COMPLETED,
+        proof_text="me too",
+    )
+    db_session.add(dup)
+    await db_session.commit()
+    await db_session.refresh(dup)
+    teen_cash_before = test_teen_user.cash_cents
+    teen_streak_before = test_teen_user.gig_trust_streak
+
+    approve = await client.post(
+        f"/api/gigs/claims/{claim_id}/approve",
+        json={"approved": True},
+        headers=parent_headers,
+    )
+    assert approve.status_code == 200, approve.text
+
+    await db_session.refresh(dup)
+    assert dup.status == GigClaimStatus.REJECTED
+    assert "primero" in (dup.approval_notes or "")
+
+    # Released kid: no cash, streak untouched.
+    await db_session.refresh(test_teen_user)
+    assert test_teen_user.cash_cents == teen_cash_before
+    assert test_teen_user.gig_trust_streak == teen_streak_before
+
+    # Winner got paid; offering closed off the board.
+    await db_session.refresh(test_child_user)
+    assert test_child_user.cash_cents == 7000
+    from app.models.gig import GigOffering
+    offering = await db_session.get(GigOffering, _UUID(gig_id))
+    assert offering.is_active is False
+
+
+@pytest.mark.asyncio
+async def test_pending_approvals_flags_already_awarded_to(
+    client: AsyncClient, parent_headers, child_headers, teen_headers, test_child_user
+):
+    """On multi-slot gigs the queue warns when the same gig was already paid."""
+    gig_id = (
+        await client.post(
+            "/api/gigs/offerings",
+            json={"title": "Weed the garden", "points": 20, "allow_multiple": True},
+            headers=parent_headers,
+        )
+    ).json()["id"]
+
+    c1 = (await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers)).json()["id"]
+    c2 = (await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=teen_headers)).json()["id"]
+    for cid, hdrs in ((c1, child_headers), (c2, teen_headers)):
+        assert (
+            await client.post(
+                f"/api/gigs/claims/{cid}/complete", json={"proof_text": "ok"}, headers=hdrs
+            )
+        ).status_code == 200
+
+    assert (
+        await client.post(
+            f"/api/gigs/claims/{c1}/approve", json={"approved": True}, headers=parent_headers
+        )
+    ).status_code == 200
+
+    pending = await client.get("/api/gigs/claims/pending-approvals", headers=parent_headers)
+    assert pending.status_code == 200
+    row = next(i for i in pending.json() if i["id"] == c2)
+    assert row["already_awarded_to"] == test_child_user.name
+
+
+@pytest.mark.asyncio
+async def test_board_shows_active_claimers(
+    client: AsyncClient, parent_headers, child_headers, teen_headers, test_child_user
+):
+    gig_id = (
+        await client.post(
+            "/api/gigs/offerings",
+            json={"title": "Fold laundry", "points": 15},
+            headers=parent_headers,
+        )
+    ).json()["id"]
+    assert (await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers)).status_code == 201
+
+    board = await client.get("/api/gigs/offerings", headers=teen_headers)
+    item = next(i for i in board.json() if i["offering"]["id"] == gig_id)
+    assert test_child_user.name in item["active_claimers"]
+    assert item["offering"]["allow_multiple"] is False
+
+
+@pytest.mark.asyncio
+async def test_family_claims_day_filter(
+    client: AsyncClient, parent_headers, child_headers
+):
+    """/claims/family lists all claims; ?on= filters to a single UTC day.
+
+    Timestamps are stored in UTC, so the filter compares UTC dates — use the
+    UTC calendar day here, not date.today() (local), or evening runs in
+    UTC-negative timezones cross the boundary and the assertion flakes."""
+    from datetime import datetime, timedelta, timezone
+
+    gig_id = (
+        await client.post(
+            "/api/gigs/offerings",
+            json={"title": "Sweep patio", "points": 10},
+            headers=parent_headers,
+        )
+    ).json()["id"]
+    claim_id = (
+        await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers)
+    ).json()["id"]
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    res_today = await client.get(f"/api/gigs/claims/family?on={today}", headers=parent_headers)
+    assert res_today.status_code == 200
+    assert any(i["id"] == claim_id for i in res_today.json())
+
+    yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+    res_yday = await client.get(f"/api/gigs/claims/family?on={yesterday}", headers=parent_headers)
+    assert res_yday.status_code == 200
+    assert not any(i["id"] == claim_id for i in res_yday.json())

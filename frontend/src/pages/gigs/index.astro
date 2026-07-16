@@ -140,6 +140,10 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                         const isApproved = claim?.status === "approved";
                         const isCompleted = claim?.status === "completed";
                         const isClaimed = claim?.status === "claimed";
+                        // Who else is actively on this gig (single-slot gigs
+                        // can't be claimed once taken — show who has it).
+                        const takenBy: string[] = item.active_claimers ?? [];
+                        const lockedBySibling = !hasClaim && takenBy.length > 0 && !o.allow_multiple;
                         return (
                             <div class={`bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border ${hasClaim ? "border-violet-200" : "border-brand-ink/10"} transition-all`}>
                                 <div class="flex justify-between items-start mb-3">
@@ -161,8 +165,20 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                                     </span>
                                 </div>
 
-                                {!hasClaim && (
+                                {lockedBySibling && (
+                                    <div class="w-full py-2.5 px-4 bg-brand-cream-deep text-brand-ink-soft font-semibold rounded-xl text-center text-sm">
+                                        🔒 {lang === "es"
+                                            ? `${takenBy[0]} ya la está haciendo`
+                                            : `${takenBy[0]} is already on it`}
+                                    </div>
+                                )}
+                                {!hasClaim && !lockedBySibling && (
                                     <form method="POST" action={`/api/gigs/offerings/${o.id}/claim`} data-claim-form>
+                                        {takenBy.length > 0 && (
+                                            <p class="text-xs text-brand-ink-soft mb-2">
+                                                👥 {takenBy.join(", ")} {lang === "es" ? "también la está haciendo" : "is also on it"}
+                                            </p>
+                                        )}
                                         <input type="hidden" name="gig_id" value={o.id} />
                                         <button
                                             type="submit"
