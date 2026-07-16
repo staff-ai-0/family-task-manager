@@ -14,10 +14,11 @@ if (!user) {
 }
 if (user.role !== "parent") return Astro.redirect("/gigs");
 
-const [offeringsRes, pendingRes, proposalsRes] = await Promise.all([
+const [offeringsRes, pendingRes, proposalsRes, claimsRes] = await Promise.all([
     apiFetch<any[]>("/api/gigs/offerings?include_inactive=false", { token }),
     apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token }),
     apiFetch<any[]>("/api/gigs/offerings/proposals/pending", { token }),
+    apiFetch<any[]>("/api/gigs/claims/family", { token }),
 ]);
 const offerings: any[] = offeringsRes.data ?? [];
 // Claim approvals now live in the unified /parent/approvals queue — keep only the
@@ -25,6 +26,21 @@ const offerings: any[] = offeringsRes.data ?? [];
 const pendingCount = Array.isArray(pendingRes.data) ? pendingRes.data.length : 0;
 // Kid-proposed gigs awaiting review (W4.4).
 const proposals: any[] = Array.isArray(proposalsRes.data) ? proposalsRes.data : [];
+
+// History: every claim that made it past "claimed" — what got done, when,
+// and the kid's proof/learning text. Newest meaningful timestamp first.
+const claimStamp = (c: any) => c.approved_at ?? c.completed_at ?? c.created_at ?? "";
+const history: any[] = (Array.isArray(claimsRes.data) ? claimsRes.data : [])
+    .filter((c: any) => c.status !== "claimed")
+    .sort((a: any, b: any) => String(claimStamp(b)).localeCompare(String(claimStamp(a))));
+const historyKids = [...new Set(history.map((c: any) => c.claimer_name).filter(Boolean))] as string[];
+const fmtDay = (iso: string | null) =>
+    iso
+        ? new Date(iso).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
+              month: "short",
+              day: "numeric",
+          })
+        : "—";
 
 const flash = Astro.cookies.get("flash")?.value;
 if (flash) Astro.cookies.delete("flash", { path: "/" });
@@ -188,6 +204,82 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     );
                 })}
             </div>
+
+            <!-- Completed-gig history: when it was done and what the kid
+                 did/learned (proof_text). Data lives in gig_claims; the day
+                 view (/parent/day) only shows one date at a time. -->
+            <section class="mt-8">
+                <div class="flex items-center justify-between mb-3 px-1">
+                    <h2 class="text-sm font-bold text-brand-ink-soft uppercase tracking-wide">
+                        📜 {lang === "es" ? "Historial" : "History"}
+                    </h2>
+                    {historyKids.length > 1 && (
+                        <select id="history-kid-filter" class="text-xs border border-brand-ink/20 rounded-lg px-2 py-1 bg-brand-cream">
+                            <option value="">{lang === "es" ? "Todos" : "All kids"}</option>
+                            {historyKids.map((k) => <option value={k}>{k}</option>)}
+                        </select>
+                    )}
+                </div>
+                {history.length === 0 ? (
+                    <div class="bg-brand-cream rounded-2xl p-6 text-center border border-brand-ink/10">
+                        <p class="text-brand-ink-soft text-sm">
+                            {lang === "es" ? "Aún no hay gigs completadas." : "No completed gigs yet."}
+                        </p>
+                    </div>
+                ) : (
+                    <div class="space-y-2">
+                        {history.map((c: any) => (
+                            <div data-history-card data-claimer={c.claimer_name ?? ""}
+                                class={`bg-brand-cream rounded-2xl p-4 border shadow-[var(--shadow-card)] ${
+                                    c.status === "approved" ? "border-emerald-200"
+                                    : c.status === "rejected" ? "border-red-200 opacity-70"
+                                    : "border-sky-200"
+                                }`}>
+                                <div class="flex items-baseline justify-between gap-2">
+                                    <p class="font-bold text-brand-ink text-sm">
+                                        {c.claimer_name} · {c.gig_title}
+                                    </p>
+                                    <span class={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                                        c.status === "approved" ? "bg-emerald-100 text-emerald-700"
+                                        : c.status === "rejected" ? "bg-red-100 text-red-700"
+                                        : "bg-sky-100 text-sky-700"
+                                    }`}>
+                                        {c.status === "approved"
+                                            ? `✓ ${lang === "es" ? "Aprobada" : "Approved"}`
+                                            : c.status === "rejected"
+                                            ? (lang === "es" ? "Rechazada" : "Rejected")
+                                            : (lang === "es" ? "Por aprobar" : "Awaiting approval")}
+                                    </span>
+                                </div>
+                                <p class="text-[11px] text-brand-ink-soft mt-1">
+                                    {lang === "es" ? "Completada" : "Completed"}: {fmtDay(c.completed_at)}
+                                    {c.approved_at && ` · ${lang === "es" ? "aprobada" : "approved"} ${fmtDay(c.approved_at)}`}
+                                    {" · "}
+                                    <span class="font-bold text-emerald-700">
+                                        ${c.points_awarded ?? c.gig_points} MXN
+                                    </span>
+                                </p>
+                                {c.proof_text && (
+                                    <p class="text-xs text-brand-ink mt-2 bg-brand-cream-deep rounded-lg p-2 whitespace-pre-wrap">
+                                        📝 {c.proof_text}
+                                    </p>
+                                )}
+                                {c.proof_image_url && (
+                                    <a href={c.proof_image_url} target="_blank"
+                                       class="inline-block text-xs text-violet-700 underline mt-2">
+                                        📷 {lang === "es" ? "Ver foto" : "View photo"}
+                                    </a>
+                                )}
+                                {c.approval_notes && (
+                                    <p class="text-[11px] text-brand-ink-soft italic mt-1.5">
+                                        💬 {c.approval_notes}
+                                    </p>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </section>
 </PageLayout>
 
 <!-- Create/Edit Gig Modal -->
@@ -376,6 +468,15 @@ document.querySelectorAll(".archive-gig-btn").forEach(btn => {
             const err = await res.json().catch(() => ({ detail: "Error" }));
             alert(err.detail ?? "Error");
         }
+    });
+
+    // History: filter cards by kid.
+    const kidFilter = document.getElementById("history-kid-filter") as HTMLSelectElement | null;
+    kidFilter?.addEventListener("change", () => {
+        const who = kidFilter.value;
+        document.querySelectorAll<HTMLElement>("[data-history-card]").forEach((card) => {
+            card.classList.toggle("hidden", Boolean(who) && card.dataset.claimer !== who);
+        });
     });
 });
 </script>
