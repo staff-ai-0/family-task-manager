@@ -21,7 +21,7 @@ from uuid import UUID
 from fastapi.concurrency import run_in_threadpool
 from mcp.shared.memory import create_connected_server_and_client_session
 from openai import OpenAI
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -34,7 +34,7 @@ from app.mcp.server import server as mcp_server
 from app.models.jarvis_message import JarvisMessage
 from app.models.kid_pet import KidPet
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.services.analytics_service import AnalyticsService
 from app.services.budget.receipt_scanner_service import LLM_TIMEOUT, RECEIPT_MODEL
 from app.services.jarvis_pending_action_service import PendingActionService
@@ -51,6 +51,27 @@ SYSTEM_BASE = (
     "Avoid platitudes. If you don't know, say so."
 )
 
+# Teen persona: a self-scoped coach with NO tools and NO family-wide visibility.
+# The teen path never dispatches MCP tools, so this assistant can only advise —
+# it literally cannot read another member's data or change anything.
+SYSTEM_TEEN = (
+    "You are Jarvis, a friendly, encouraging coach for a teen who uses a family "
+    "chores-and-rewards app (their name is in the snapshot below). Help them "
+    "understand THEIR OWN tasks, points, cash, and gigs and stay motivated to "
+    "earn and save. You can only see their own information and you cannot change "
+    "anything or act on their behalf — give advice and encouragement, not "
+    "actions. If they ask you to do something (create, delete, approve, move "
+    "money), tell them to do it in the app or ask a parent. Be concise (2-4 "
+    "sentences) and upbeat. If you don't know, say so."
+)
+
+
+def _is_teen(role) -> bool:
+    """The teen path is tool-free + self-scoped. Accepts a UserRole enum or a
+    plain string; anything not TEEN (i.e. PARENT) keeps full copilot behaviour."""
+    val = getattr(role, "value", role)
+    return str(val or "").upper() == "TEEN"
+
 LANG_NAMES = {"en": "English", "es": "Spanish"}
 
 # Localized fallback when the model returns nothing useful.
@@ -60,12 +81,14 @@ _EMPTY_REPLY = {
 }
 
 
-def _build_system(context_block: str, preferred_lang: str) -> str:
+def _build_system(
+    context_block: str, preferred_lang: str, base: str = SYSTEM_BASE
+) -> str:
     """System prompt with a hard language directive so Jarvis replies in the
     user's app language from the first turn (not just after they switch)."""
     lang_name = LANG_NAMES.get(preferred_lang, "English")
     return (
-        SYSTEM_BASE
+        base
         + f"\n\nIMPORTANT: Always respond in {lang_name}, regardless of the "
         "language of the family-state data below or earlier turns."
         + "\n\n"
@@ -173,15 +196,97 @@ class JarvisService:
         )
 
     @staticmethod
-    async def _load_history(
-        db: AsyncSession, family_id: UUID, limit: int
-    ) -> List[JarvisMessage]:
-        q = (
-            select(JarvisMessage)
-            .where(JarvisMessage.family_id == family_id)
-            .order_by(JarvisMessage.created_at.desc())
-            .limit(limit)
+    async def _build_teen_context(
+        db: AsyncSession, family_id: UUID, user_id: UUID
+    ) -> str:
+        """Self-scoped snapshot for a teen — ONLY their own data. No other
+        members, no family finances, no family-wide PUP roll-up."""
+        from datetime import date
+        from app.models.gig import GigClaim, GigClaimStatus
+
+        u = (
+            await db.execute(select(User).where(User.id == user_id))
+        ).scalar_one_or_none()
+        name = (u.name if u else None) or "you"
+        points = int((u.points if u else 0) or 0)
+        cash = int((u.cash_cents if u else 0) or 0) / 100
+
+        today = date.today()
+        row = (
+            await db.execute(
+                select(
+                    func.count(TaskAssignment.id).label("total"),
+                    func.count()
+                    .filter(TaskAssignment.status == AssignmentStatus.COMPLETED)
+                    .label("done"),
+                    func.count()
+                    .filter(TaskAssignment.status == AssignmentStatus.OVERDUE)
+                    .label("late"),
+                )
+                .select_from(TaskAssignment)
+                .where(
+                    and_(
+                        TaskAssignment.assigned_to == user_id,
+                        TaskAssignment.assigned_date == today,
+                    )
+                )
+            )
+        ).one()
+        total, done, late = int(row.total or 0), int(row.done or 0), int(row.late or 0)
+
+        gc = (
+            await db.execute(
+                select(
+                    func.count()
+                    .filter(GigClaim.status == GigClaimStatus.COMPLETED)
+                    .label("pending"),
+                    func.count()
+                    .filter(GigClaim.status == GigClaimStatus.APPROVED)
+                    .label("approved"),
+                )
+                .select_from(GigClaim)
+                .where(GigClaim.claimed_by == user_id)
+            )
+        ).one()
+        approved, pending = int(gc.approved or 0), int(gc.pending or 0)
+
+        return (
+            f"YOUR STUFF (live snapshot for {name}):\n"
+            f"- Points: {points}\n"
+            f"- Cash saved: ${cash:.2f} MXN\n"
+            f"- Today's tasks: {done}/{total} done, {late} late\n"
+            f"- Your gigs: {approved} approved, "
+            f"{pending} waiting for a parent to approve"
         )
+
+    @staticmethod
+    async def _load_history(
+        db: AsyncSession,
+        family_id: UUID,
+        limit: int,
+        *,
+        user_id: UUID | None = None,
+        teen: bool = False,
+    ) -> List[JarvisMessage]:
+        q = select(JarvisMessage).where(JarvisMessage.family_id == family_id)
+        if teen and user_id is not None:
+            # A teen has a private thread: only their own rows (both the user
+            # turn and its assistant reply are persisted with their user_id).
+            q = q.where(JarvisMessage.user_id == user_id)
+        else:
+            # Parent thread stays family-wide but must not swallow teen rows.
+            # Parent user turns carry a parent user_id; assistant rows carry
+            # NULL — so keep exactly those. (No-op for pre-teen data.)
+            parent_ids = select(User.id).where(
+                and_(User.family_id == family_id, User.role == UserRole.PARENT)
+            )
+            q = q.where(
+                or_(
+                    JarvisMessage.user_id.is_(None),
+                    JarvisMessage.user_id.in_(parent_ids),
+                )
+            )
+        q = q.order_by(JarvisMessage.created_at.desc()).limit(limit)
         rows = list((await db.execute(q)).scalars().all())
         rows.reverse()
         return rows
@@ -226,6 +331,7 @@ class JarvisService:
         message: str,
         model: str | None = None,
         preferred_lang: str = "en",
+        role: str = "PARENT",
     ):
         """Public SSE generator — owns a short-lived DB session that is closed on
         completion AND on client disconnect (the async-with __aexit__ runs on
@@ -235,7 +341,7 @@ class JarvisService:
         from app.core.database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
             async for evt in JarvisService._chat_stream_inner(
-                db, family_id, user_id, message, model, preferred_lang
+                db, family_id, user_id, message, model, preferred_lang, role
             ):
                 yield evt
 
@@ -247,6 +353,7 @@ class JarvisService:
         message: str,
         model: str | None = None,
         preferred_lang: str = "en",
+        role: str = "PARENT",
     ):
         """Async generator yielding SSE event lines.
 
@@ -279,12 +386,24 @@ class JarvisService:
 
             yield "event: thinking\ndata: {}\n\n"
 
+            teen = _is_teen(role)
             history = await JarvisService._load_history(
-                db, family_id, limit=MAX_HISTORY_TURNS
+                db, family_id, limit=MAX_HISTORY_TURNS, user_id=user_id, teen=teen
             )
-            context_block = await JarvisService._build_context(db, family_id)
+            context_block = (
+                await JarvisService._build_teen_context(db, family_id, user_id)
+                if teen
+                else await JarvisService._build_context(db, family_id)
+            )
             msgs: list[dict[str, Any]] = [
-                {"role": "system", "content": _build_system(context_block, preferred_lang)}
+                {
+                    "role": "system",
+                    "content": _build_system(
+                        context_block,
+                        preferred_lang,
+                        base=SYSTEM_TEEN if teen else SYSTEM_BASE,
+                    ),
+                }
             ]
             for h in history:
                 if h.role in ("user", "assistant"):
@@ -300,7 +419,11 @@ class JarvisService:
             actions_taken: list[str] = []
             reply = ""
             effective_model = model or CHAT_MODEL
-            tool_defs = await _mcp_tool_definitions()
+            # Teens get NO tools — a self-scoped coach that can only advise.
+            tool_defs = [] if teen else await _mcp_tool_definitions()
+            tool_kwargs = (
+                {"tools": tool_defs, "tool_choice": "auto"} if tool_defs else {}
+            )
 
             for hop in range(MAX_TOOL_HOPS + 1):
                 # Sync OpenAI client: offload each hop to a worker thread so a
@@ -314,14 +437,13 @@ class JarvisService:
                         model=effective_model,
                         max_tokens=512,
                         messages=msgs,
-                        tools=tool_defs,
-                        tool_choice="auto",
+                        **tool_kwargs,
                     )
                 )
                 choice = completion.choices[0].message
                 tool_calls = getattr(choice, "tool_calls", None) or []
 
-                if tool_calls and hop < MAX_TOOL_HOPS:
+                if tool_calls and hop < MAX_TOOL_HOPS and not teen:
                     msgs.append({
                         "role": "assistant",
                         "content": choice.content or "",
@@ -408,7 +530,9 @@ class JarvisService:
             )
             bot_row = JarvisMessage(
                 family_id=family_id,
-                user_id=None,
+                # Teen replies carry the teen's id so their thread stays private
+                # and self-scoped; parent replies stay NULL (family-wide thread).
+                user_id=user_id if teen else None,
                 role="assistant",
                 content=reply
                 + (
@@ -445,6 +569,7 @@ class JarvisService:
         message: str,
         model: str | None = None,
         preferred_lang: str = "en",
+        role: str = "PARENT",
     ) -> dict:
         if not settings.LITELLM_API_KEY:
             raise ValidationError(
@@ -462,13 +587,25 @@ class JarvisService:
                     f"Daily Jarvis cap reached ({cap}). Try again tomorrow."
                 )
 
+        teen = _is_teen(role)
         history = await JarvisService._load_history(
-            db, family_id, limit=MAX_HISTORY_TURNS
+            db, family_id, limit=MAX_HISTORY_TURNS, user_id=user_id, teen=teen
         )
-        context_block = await JarvisService._build_context(db, family_id)
+        context_block = (
+            await JarvisService._build_teen_context(db, family_id, user_id)
+            if teen
+            else await JarvisService._build_context(db, family_id)
+        )
 
         msgs: list[dict[str, Any]] = [
-            {"role": "system", "content": _build_system(context_block, preferred_lang)}
+            {
+                "role": "system",
+                "content": _build_system(
+                    context_block,
+                    preferred_lang,
+                    base=SYSTEM_TEEN if teen else SYSTEM_BASE,
+                ),
+            }
         ]
         for h in history:
             if h.role in ("user", "assistant"):
@@ -484,7 +621,11 @@ class JarvisService:
         actions_taken: list[str] = []
         reply = ""
         effective_model = model or CHAT_MODEL
-        tool_defs = await _mcp_tool_definitions()
+        # Teens get NO tools — a self-scoped coach that can only advise.
+        tool_defs = [] if teen else await _mcp_tool_definitions()
+        tool_kwargs = (
+            {"tools": tool_defs, "tool_choice": "auto"} if tool_defs else {}
+        )
 
         for hop in range(MAX_TOOL_HOPS + 1):
             try:
@@ -496,8 +637,7 @@ class JarvisService:
                         model=effective_model,
                         max_tokens=512,
                         messages=msgs,
-                        tools=tool_defs,
-                        tool_choice="auto",
+                        **tool_kwargs,
                     )
                 )
             except Exception as exc:
@@ -506,7 +646,7 @@ class JarvisService:
             choice = completion.choices[0].message
             tool_calls = getattr(choice, "tool_calls", None) or []
 
-            if tool_calls and hop < MAX_TOOL_HOPS:
+            if tool_calls and hop < MAX_TOOL_HOPS and not teen:
                 msgs.append({
                     "role": "assistant",
                     "content": choice.content or "",
@@ -573,7 +713,9 @@ class JarvisService:
         )
         bot_msg = JarvisMessage(
             family_id=family_id,
-            user_id=None,
+            # Teen replies join their private, self-scoped thread; parent replies
+            # stay NULL (shared family-wide thread).
+            user_id=user_id if teen else None,
             role="assistant",
             content=reply
             + (f"\n\n[actions: {', '.join(actions_taken)}]" if actions_taken else ""),
@@ -590,15 +732,44 @@ class JarvisService:
 
     @staticmethod
     async def list_history(
-        db: AsyncSession, family_id: UUID, limit: int = HISTORY_RETURN_LIMIT
+        db: AsyncSession,
+        family_id: UUID,
+        limit: int = HISTORY_RETURN_LIMIT,
+        *,
+        user_id: UUID | None = None,
+        role: str = "PARENT",
     ) -> List[JarvisMessage]:
-        return await JarvisService._load_history(db, family_id, limit=limit)
+        return await JarvisService._load_history(
+            db, family_id, limit=limit, user_id=user_id, teen=_is_teen(role)
+        )
 
     @staticmethod
-    async def clear_history(db: AsyncSession, family_id: UUID) -> int:
+    async def clear_history(
+        db: AsyncSession,
+        family_id: UUID,
+        *,
+        user_id: UUID | None = None,
+        role: str = "PARENT",
+    ) -> int:
         from sqlalchemy import delete as sql_delete
-        result = await db.execute(
-            sql_delete(JarvisMessage).where(JarvisMessage.family_id == family_id)
+
+        stmt = sql_delete(JarvisMessage).where(
+            JarvisMessage.family_id == family_id
         )
+        if _is_teen(role) and user_id is not None:
+            # A teen may only clear their own private thread.
+            stmt = stmt.where(JarvisMessage.user_id == user_id)
+        else:
+            # A parent clears the shared parent thread, never a teen's.
+            parent_ids = select(User.id).where(
+                and_(User.family_id == family_id, User.role == UserRole.PARENT)
+            )
+            stmt = stmt.where(
+                or_(
+                    JarvisMessage.user_id.is_(None),
+                    JarvisMessage.user_id.in_(parent_ids),
+                )
+            )
+        result = await db.execute(stmt)
         await db.commit()
         return result.rowcount or 0

@@ -11,7 +11,11 @@ if (!user) {
     Astro.cookies.delete("access_token", { path: "/" });
     return Astro.redirect("/login");
 }
-if (user.role !== "parent") return Astro.redirect("/dashboard");
+// Jarvis is open to parents (full copilot) and teens (read-only self-coach —
+// the backend gates behaviour + tools by role). Children have no access.
+const roleLower = String(user.role).toLowerCase();
+if (roleLower !== "parent" && roleLower !== "teen") return Astro.redirect("/dashboard");
+const isTeen = roleLower === "teen";
 
 if (Astro.request.method === "POST") {
     const data = await Astro.request.formData();
@@ -35,8 +39,21 @@ const kidName =
     (familyRaw?.members ?? [])
         .find((m: any) => String(m.role).toLowerCase() !== "parent")
         ?.name?.split(" ")[0] ?? (lang === "es" ? "tu hijo/a" : "your kid");
-const exampleChips =
-    lang === "es"
+const exampleChips = isTeen
+    ? (lang === "es"
+        ? [
+              "¿Cómo voy con mis tareas de hoy?",
+              "¿Cuántos puntos tengo?",
+              "¿Cómo gano más para mi meta de ahorro?",
+              "Dame un plan para terminar mis pendientes",
+          ]
+        : [
+              "How am I doing on today's tasks?",
+              "How many points do I have?",
+              "How can I earn more for my savings goal?",
+              "Give me a plan to finish my chores",
+          ])
+    : (lang === "es"
         ? [
               "Registra $250 de súper en OXXO",
               `Asigna lavar los platos a ${kidName} esta semana`,
@@ -52,7 +69,7 @@ const exampleChips =
               "Add milk to the shopping list",
               "Post a gig: wash the car for $50",
               "How's the budget looking this month?",
-          ];
+          ]);
 
 const labels = {
     title: lang === "es" ? "Jarvis" : "Jarvis",
@@ -70,6 +87,15 @@ const labels = {
         : "No messages yet. Ask Jarvis something.",
     thinking: lang === "es" ? "Pensando…" : "Thinking…",
 };
+
+if (isTeen) {
+    labels.subtitle = lang === "es"
+        ? "Tu coach personal — pregúntame de tus tareas, puntos y gigs"
+        : "Your personal coach — ask about your tasks, points and gigs";
+    labels.placeholder = lang === "es"
+        ? "¿Cómo voy? ¿Qué hago para ganar más?"
+        : "How am I doing? How do I earn more?";
+}
 ---
 
 <ChatShell
@@ -88,9 +114,11 @@ const labels = {
                     <p class="text-violet-100 text-xs mt-1">{labels.subtitle}</p>
                 </div>
                 <div class="flex gap-2 items-center">
-                    <a href="/parent/jarvis-schedules" class="text-xs underline text-violet-200 hover:text-white">
-                        ⏰ {lang === "es" ? "Programaciones" : "Schedules"}
-                    </a>
+                    {!isTeen && (
+                        <a href="/parent/jarvis-schedules" class="text-xs underline text-violet-200 hover:text-white">
+                            ⏰ {lang === "es" ? "Programaciones" : "Schedules"}
+                        </a>
+                    )}
                     {history.length > 0 && (
                         <form method="POST">
                             <input type="hidden" name="action" value="clear" />

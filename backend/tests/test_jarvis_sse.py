@@ -198,3 +198,88 @@ class TestSSEStream:
         # The template must still exist — nothing was deleted.
         still = await db_session.get(TaskTemplate, tmpl.id)
         assert still is not None
+
+
+class TestTeenSelfCoach:
+    """Teens get a tool-free, self-scoped coach on their own private thread."""
+
+    async def test_teen_gets_no_tools_and_private_thread(
+        self, db_session, test_family, test_teen_user, monkeypatch
+    ):
+        completion = _mk_message(content="Nice work — try one more task today!")
+        client = MagicMock()
+        client.chat.completions.create.return_value = completion
+        monkeypatch.setattr(
+            "app.services.jarvis_service.OpenAI", lambda *a, **kw: client
+        )
+
+        events = await _collect_events(
+            JarvisService._chat_stream_inner(
+                db_session,
+                test_family.id,
+                test_teen_user.id,
+                "how am I doing?",
+                role="TEEN",
+            )
+        )
+        names = [e for e, _ in events]
+        assert "reply" in names and names[-1] == "done"
+
+        # Tool-free: the completion call must NOT pass any tools/tool_choice —
+        # structurally a teen cannot trigger a family-wide MCP tool.
+        _, kwargs = client.chat.completions.create.call_args
+        assert "tools" not in kwargs
+        assert "tool_choice" not in kwargs
+
+        # Both persisted rows land on the teen's OWN thread (user_id == teen).
+        from sqlalchemy import select
+        from app.models.jarvis_message import JarvisMessage
+
+        rows = (
+            await db_session.execute(
+                select(JarvisMessage).where(
+                    JarvisMessage.family_id == test_family.id
+                )
+            )
+        ).scalars().all()
+        assert rows, "expected persisted messages"
+        assert all(r.user_id == test_teen_user.id for r in rows)
+
+    async def test_teen_thread_isolated_from_parent(
+        self, db_session, test_family, test_parent_user, test_teen_user, monkeypatch
+    ):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _mk_message(content="ok")
+        monkeypatch.setattr(
+            "app.services.jarvis_service.OpenAI", lambda *a, **kw: client
+        )
+
+        # Parent turn (shared family-wide thread) then a teen turn (private).
+        await _collect_events(
+            JarvisService._chat_stream_inner(
+                db_session, test_family.id, test_parent_user.id,
+                "parent secret", role="PARENT",
+            )
+        )
+        await _collect_events(
+            JarvisService._chat_stream_inner(
+                db_session, test_family.id, test_teen_user.id,
+                "teen question", role="TEEN",
+            )
+        )
+
+        teen_hist = await JarvisService.list_history(
+            db_session, test_family.id, user_id=test_teen_user.id, role="TEEN"
+        )
+        parent_hist = await JarvisService.list_history(
+            db_session, test_family.id, user_id=test_parent_user.id, role="PARENT"
+        )
+        teen_texts = " ".join(m.content for m in teen_hist)
+        parent_texts = " ".join(m.content for m in parent_hist)
+
+        # Teen sees ONLY their own turn — never the parent's.
+        assert "teen question" in teen_texts
+        assert "parent secret" not in teen_texts
+        # Parent's family-wide thread excludes the teen's private turn.
+        assert "parent secret" in parent_texts
+        assert "teen question" not in parent_texts
