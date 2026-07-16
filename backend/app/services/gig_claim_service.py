@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from app.models.gig import GigClaim, GigClaimStatus, GigOffering
 from app.core.exceptions import (
@@ -62,6 +62,29 @@ class GigClaimService:
         if existing.scalar_one_or_none():
             raise ValidationException("Ya tienes un reclamo activo para esta gig")
 
+        # Single-slot gigs (the default): first come, first serve — block a
+        # second kid from claiming a gig someone else is already doing, so two
+        # siblings can't both do the work and expect double pay.
+        if not offering.allow_multiple:
+            from app.models.user import User as _User
+            taken_by = (
+                await db.execute(
+                    select(_User.name)
+                    .join(GigClaim, GigClaim.claimed_by == _User.id)
+                    .where(
+                        and_(
+                            GigClaim.gig_id == gig_id,
+                            GigClaim.claimed_by != user_id,
+                            GigClaim.status.in_(
+                                [GigClaimStatus.CLAIMED, GigClaimStatus.COMPLETED]
+                            ),
+                        )
+                    )
+                )
+            ).scalars().first()
+            if taken_by:
+                raise ValidationException(f"{taken_by} ya está haciendo esta gig")
+
         claim = GigClaim(
             gig_id=gig_id,
             family_id=family_id,
@@ -120,6 +143,9 @@ class GigClaimService:
             claim.points_awarded = pesos
             claim.status = GigClaimStatus.APPROVED
             claim.approved_at = datetime.now(timezone.utc)
+            released = await GigClaimService._release_other_claims(
+                db, offering, claim, claimer.name
+            )
             await db.commit()
             await db.refresh(claim)
             try:
@@ -134,6 +160,7 @@ class GigClaimService:
             await GigClaimService._notify_claimer_approved(
                 db, claim, offering, pesos, auto=True
             )
+            await GigClaimService._notify_released(db, released, offering, claimer.name)
             return claim
 
         # Normal path — awaits parent review.
@@ -142,6 +169,61 @@ class GigClaimService:
         await db.refresh(claim)
         await GigClaimService._notify_parents_pending(db, claim, offering, claimer)
         return claim
+
+    @staticmethod
+    async def _release_other_claims(db, offering, winning_claim, winner_name) -> list:
+        """Single-slot gigs: the first APPROVED claim closes the offering and
+        releases every other active claim, so the family never pays twice for
+        the same job (2026-07-16 double-pay incident). Released kids keep their
+        trust streak — it's not their fault. Caller commits + notifies after."""
+        if not offering or offering.allow_multiple:
+            return []
+        offering.is_active = False
+        result = await db.execute(
+            select(GigClaim)
+            .where(
+                and_(
+                    GigClaim.gig_id == offering.id,
+                    GigClaim.id != winning_claim.id,
+                    GigClaim.status.in_(
+                        [GigClaimStatus.CLAIMED, GigClaimStatus.COMPLETED]
+                    ),
+                )
+            )
+            .with_for_update()
+        )
+        released = list(result.scalars().all())
+        for other in released:
+            other.status = GigClaimStatus.REJECTED
+            other.approval_notes = f"Auto: {winner_name} completó esta gig primero"
+        return released
+
+    @staticmethod
+    async def _notify_released(db, released, offering, winner_name) -> None:
+        """Best-effort in-app notice to kids whose claims were auto-released."""
+        if not released:
+            return
+        try:
+            from app.services.notification_service import NotificationService
+
+            for other in released:
+                await NotificationService.create_localized(
+                    db,
+                    family_id=other.family_id,
+                    key="gig_claim_released",
+                    user_id=other.claimed_by,
+                    params={
+                        "title": offering.title if offering else "Gig",
+                        "winner": winner_name,
+                    },
+                    link="/gigs",
+                )
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "gig release notification failed", exc_info=True
+            )
 
     @staticmethod
     async def _notify_parents_pending(db, claim, offering, claimer) -> None:
@@ -326,6 +408,66 @@ class GigClaimService:
             ).order_by(GigClaim.completed_at.asc())
         )
         claims = result.unique().scalars().all()
+
+        # Duplicate-pay guardrail: if any of these gigs already has an APPROVED
+        # claim, surface who got paid so the approving parent sees a warning
+        # ("ya le pagaste esto a Ariana") instead of blind-approving a dup.
+        awarded_map: dict = {}
+        gig_ids = {c.gig_id for c in claims}
+        if gig_ids:
+            rows = await db.execute(
+                select(GigClaim.gig_id, User.name)
+                .join(User, User.id == GigClaim.claimed_by)
+                .where(
+                    and_(
+                        GigClaim.gig_id.in_(gig_ids),
+                        GigClaim.status == GigClaimStatus.APPROVED,
+                    )
+                )
+            )
+            for gid, name in rows.all():
+                awarded_map.setdefault(gid, name)
+
+        return [
+            {
+                "claim": c,
+                "claimer_name": c.claimer.name if c.claimer else str(c.claimed_by),
+                "gig_title": c.offering.title if c.offering else "—",
+                "gig_points": c.offering.points if c.offering else 0,
+                "already_awarded_to": awarded_map.get(c.gig_id),
+            }
+            for c in claims
+        ]
+
+    @staticmethod
+    async def list_family_claims(
+        db: AsyncSession,
+        family_id: UUID,
+        on: Optional[date] = None,
+    ) -> List[dict]:
+        """Every claim in the family (parent oversight / per-day review),
+        optionally narrowed to one UTC day — matched on the claim's most
+        meaningful timestamp: approved_at → completed_at → created_at."""
+        from sqlalchemy import func as sa_func
+        from sqlalchemy.orm import joinedload
+
+        stmt = (
+            select(GigClaim)
+            .options(
+                joinedload(GigClaim.offering),
+                joinedload(GigClaim.claimer),
+            )
+            .where(GigClaim.family_id == family_id)
+        )
+        if on is not None:
+            stamp = sa_func.coalesce(
+                GigClaim.approved_at, GigClaim.completed_at, GigClaim.created_at
+            )
+            stmt = stmt.where(sa_func.date(stamp) == on)
+        stmt = stmt.order_by(GigClaim.created_at.desc()).limit(200)
+
+        result = await db.execute(stmt)
+        claims = result.unique().scalars().all()
         return [
             {
                 "claim": c,
@@ -415,6 +557,9 @@ class GigClaimService:
             claimer.gig_trust_streak += 1
             claim.points_awarded = pesos
             claim.status = GigClaimStatus.APPROVED
+            released = await GigClaimService._release_other_claims(
+                db, offering, claim, claimer.name
+            )
             await db.commit()
             await db.refresh(claim)
             try:
@@ -429,6 +574,7 @@ class GigClaimService:
             await GigClaimService._notify_claimer_approved(
                 db, claim, offering, pesos, auto=False
             )
+            await GigClaimService._notify_released(db, released, offering, claimer.name)
             return claim
         else:
             # Rejection breaks the trust streak.
