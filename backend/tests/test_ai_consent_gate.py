@@ -101,9 +101,10 @@ class TestProofValidatorConsentGate:
         assert test_child_user.points == 0  # nothing credited yet
 
     async def test_consent_true_uses_ai_path(
-        self, db_session, test_family, test_child_user, monkeypatch
+        self, db_session, test_family, test_child_user, plus_subscription, monkeypatch
     ):
-        """With parental opt-in, the AI validator runs and can auto-approve."""
+        """With parental opt-in (and a paid plan — see test_ai_gating for the
+        plan gate), the AI validator runs and can auto-approve."""
         test_family.ai_processing_consent = True
         test_child_user.gig_trust_streak = 0
         test_child_user.points = 0

@@ -34,8 +34,13 @@ async def test_create_bilingual_template(client: AsyncClient, test_parent_user: 
     assert data["description_es"] == "Limpia tu cuarto"
 
 @pytest.mark.asyncio
-async def test_translate_endpoint(client: AsyncClient, test_parent_user: User):
-    """Test the translation endpoint with mocked service"""
+async def test_translate_endpoint(
+    client: AsyncClient, test_parent_user: User, plus_subscription
+):
+    """Test the translation endpoint with mocked service.
+
+    Needs a paid plan — translate is gated on ai_features (test_ai_gating).
+    """
     # Authenticate
     response = await client.post(
         "/api/auth/login",
