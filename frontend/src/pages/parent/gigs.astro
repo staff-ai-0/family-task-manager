@@ -173,6 +173,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     data-points={o.points}
                                     data-difficulty={o.difficulty ?? 1}
                                     data-category={o.category ?? "other"}
+                                    data-allow-multiple={o.allow_multiple ? "1" : "0"}
                                 >
                                     {lang === "es" ? "Editar" : "Edit"}
                                 </button>
@@ -241,6 +242,18 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     <option value="other">{lang === "es" ? "Otro" : "Other"}</option>
                 </select>
             </div>
+            <label class="flex items-start gap-3 rounded-xl bg-brand-cream-deep/60 px-3 py-2.5 cursor-pointer">
+                <input type="checkbox" id="f-allow-multiple" name="allow_multiple"
+                    class="mt-0.5 h-4 w-4 rounded border-brand-ink/30 text-violet-600 focus:ring-violet-400" />
+                <span class="text-sm text-brand-ink">
+                    <span class="font-medium">{lang === "es" ? "Varios niños pueden hacerla" : "Multiple kids can do it"}</span>
+                    <span class="block text-xs text-brand-ink-soft mt-0.5">
+                        {lang === "es"
+                            ? "Si está apagado, la gig se cierra al aprobar la primera entrega (nadie cobra doble)."
+                            : "If off, the gig closes once the first submission is approved (no double pay)."}
+                    </span>
+                </span>
+            </label>
             <button type="submit"
                 class="w-full py-3 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-700 active:scale-[.98] transition-all"
             >
@@ -282,6 +295,7 @@ document.querySelectorAll(".edit-gig-btn").forEach(btn => {
         (document.getElementById("f-points") as HTMLInputElement).value = b.dataset.points!;
         (document.getElementById("f-difficulty") as HTMLSelectElement).value = b.dataset.difficulty!;
         (document.getElementById("f-category") as HTMLSelectElement).value = b.dataset.category!;
+        (document.getElementById("f-allow-multiple") as HTMLInputElement).checked = b.dataset.allowMultiple === "1";
         openModal(lang === "es" ? "Editar Gig" : "Edit Gig");
     });
 });
@@ -295,6 +309,7 @@ form.addEventListener("submit", async (e) => {
         points: parseInt((document.getElementById("f-points") as HTMLInputElement).value),
         difficulty: parseInt((document.getElementById("f-difficulty") as HTMLSelectElement).value),
         category: (document.getElementById("f-category") as HTMLSelectElement).value,
+        allow_multiple: (document.getElementById("f-allow-multiple") as HTMLInputElement).checked,
     };
     const btn = form.querySelector("button[type=submit]") as HTMLButtonElement;
     btn.disabled = true;

@@ -149,6 +149,19 @@ _COPY = {
         },
         "body": {"es": "{reason}", "en": "{reason}"},
     },
+    # Auto-release: a sibling's claim on the same single-slot gig was approved
+    # first — informational, no fault, trust streak untouched.
+    "gig_claim_released": {
+        "type": NT.GIG_REJECTED,
+        "title": {
+            "es": "🔓 Gig ya realizada",
+            "en": "🔓 Gig already done",
+        },
+        "body": {
+            "es": "'{title}' ya la completó {winner}, así que tu reclamo se liberó. ¡Busca otra gig en el tablero!",
+            "en": "'{title}' was completed by {winner}, so your claim was released. Grab another gig from the board!",
+        },
+    },
     # ── Kid-proposed gigs (W4.4) ────────────────────────────────────
     "gig_proposal_pending": {
         "type": NT.GIG_PENDING_REVIEW,

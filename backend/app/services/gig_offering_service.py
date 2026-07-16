@@ -49,12 +49,34 @@ class GigOfferingService:
             for claim in claim_result.scalars():
                 claim_map[claim.gig_id] = claim
 
+        # Batch-load who currently holds an ACTIVE claim on each offering, so
+        # the board can show "Ariana ya la está haciendo" before a sibling
+        # claims (or gets blocked on) a single-slot gig.
+        claimers_map: dict[UUID, list] = {}
+        if offering_ids:
+            from app.models.user import User
+            rows = await db.execute(
+                select(GigClaim.gig_id, User.name)
+                .join(User, User.id == GigClaim.claimed_by)
+                .where(
+                    and_(
+                        GigClaim.gig_id.in_(offering_ids),
+                        GigClaim.status.in_(
+                            [GigClaimStatus.CLAIMED, GigClaimStatus.COMPLETED]
+                        ),
+                    )
+                )
+            )
+            for gid, name in rows.all():
+                claimers_map.setdefault(gid, []).append(name)
+
         enriched = []
         for offering in offerings:
             claim = claim_map.get(offering.id)
             enriched.append({
                 "offering": offering,
                 "my_claim": claim,
+                "active_claimers": claimers_map.get(offering.id, []),
             })
         return enriched
 
@@ -81,6 +103,7 @@ class GigOfferingService:
         category: str = "other",
         description: Optional[str] = None,
         allowed_roles: Optional[list] = None,
+        allow_multiple: bool = False,
     ) -> GigOffering:
         offering = GigOffering(
             family_id=family_id,
@@ -91,6 +114,7 @@ class GigOfferingService:
             difficulty=difficulty,
             category=category,
             allowed_roles=allowed_roles,
+            allow_multiple=allow_multiple,
         )
         db.add(offering)
         await db.commit()

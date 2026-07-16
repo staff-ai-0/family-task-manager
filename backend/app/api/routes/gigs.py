@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, Query, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 from typing import List, Optional, Any
 from uuid import UUID
+from datetime import date, datetime
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
@@ -25,6 +26,8 @@ class GigOfferingCreate(BaseModel):
     difficulty: int = Field(1, ge=1, le=3)
     category: str = "other"
     allowed_roles: Optional[List[str]] = None
+    # False (default) = single-slot: first approved claim closes the gig.
+    allow_multiple: bool = False
 
 
 class GigOfferingUpdate(BaseModel):
@@ -35,6 +38,7 @@ class GigOfferingUpdate(BaseModel):
     category: Optional[str] = None
     allowed_roles: Optional[List[str]] = None
     is_active: Optional[bool] = None
+    allow_multiple: Optional[bool] = None
 
 
 class GigOfferingResponse(BaseModel):
@@ -47,6 +51,7 @@ class GigOfferingResponse(BaseModel):
     category: str
     allowed_roles: Optional[List[str]]
     is_active: bool
+    allow_multiple: bool = False
     status: str = "approved"
     review_notes: Optional[str] = None
     created_by: Optional[UUID] = None
@@ -89,10 +94,15 @@ class GigClaimResponse(BaseModel):
     points_awarded: Optional[int]
     approved_by: Optional[UUID]
     approval_notes: Optional[str]
+    created_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    approved_at: Optional[datetime] = None
     # Enriched fields (populated on list endpoints)
     claimer_name: Optional[str] = None
     gig_title: Optional[str] = None
     gig_points: Optional[int] = None
+    # Duplicate-pay guardrail: who already got paid for this same gig.
+    already_awarded_to: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -101,6 +111,8 @@ class GigClaimResponse(BaseModel):
 class EnrichedOfferingResponse(BaseModel):
     offering: GigOfferingResponse
     my_claim: Optional[GigClaimResponse]
+    # Kids with an ACTIVE (claimed/completed) claim — "Ariana ya la está haciendo".
+    active_claimers: List[str] = []
 
 
 class CompleteClaimRequest(BaseModel):
@@ -127,6 +139,7 @@ async def list_offerings(
         EnrichedOfferingResponse(
             offering=GigOfferingResponse.model_validate(item["offering"]),
             my_claim=GigClaimResponse.model_validate(item["my_claim"]) if item["my_claim"] else None,
+            active_claimers=item.get("active_claimers", []),
         )
         for item in items
     ]
@@ -292,7 +305,41 @@ async def pending_approvals(
     return [
         GigClaimResponse(
             **GigClaimResponse.model_validate(item["claim"]).model_dump(
-                exclude={"claimer_name", "gig_title", "gig_points"}
+                exclude={
+                    "claimer_name",
+                    "gig_title",
+                    "gig_points",
+                    "already_awarded_to",
+                }
+            ),
+            claimer_name=item["claimer_name"],
+            gig_title=item["gig_title"],
+            gig_points=item["gig_points"],
+            already_awarded_to=item.get("already_awarded_to"),
+        )
+        for item in items
+    ]
+
+
+@router.get("/claims/family", response_model=List[GigClaimResponse])
+async def family_claims(
+    on: Optional[date] = Query(None, description="Filter to one UTC day (approved→completed→created)"),
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """All the family's gig claims (parent oversight / day review)."""
+    items = await GigClaimService.list_family_claims(
+        db, family_id=to_uuid_required(current_user.family_id), on=on
+    )
+    return [
+        GigClaimResponse(
+            **GigClaimResponse.model_validate(item["claim"]).model_dump(
+                exclude={
+                    "claimer_name",
+                    "gig_title",
+                    "gig_points",
+                    "already_awarded_to",
+                }
             ),
             claimer_name=item["claimer_name"],
             gig_title=item["gig_title"],
