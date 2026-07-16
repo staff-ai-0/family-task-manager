@@ -1,6 +1,8 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
+import UpgradePrompt from "@components/UpgradePrompt.astro";
 import { apiFetch } from "../../lib/api";
+import { isFreePlan } from "../../lib/plan";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -14,6 +16,9 @@ if (!user) {
 if (user.role !== "parent") {
     return Astro.redirect("/calendar");
 }
+
+// AI document scan is paid-only (ai_features). Fail-open; backend enforces.
+const aiLocked = await isFreePlan(token);
 
 const labels = {
     title: lang === "es" ? "Escanear documento" : "Scan document",
@@ -42,10 +47,16 @@ const labels = {
     containerClass="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep"
 >
     <p slot="header-extra" class="text-purple-100 text-sm">{labels.subtitle}</p>
+    {aiLocked && (
+        <UpgradePrompt feature="ai_features" planNeeded="Plus" lang={lang} />
+    )}
 
     <div id="error-box" class="hidden p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl"></div>
 
-    <label class="block bg-brand-cream rounded-2xl border-2 border-dashed border-brand-ink/30 p-12 text-center cursor-pointer hover:border-brand-ink transition-colors">
+    <label class:list={[
+        "block bg-brand-cream rounded-2xl border-2 border-dashed border-brand-ink/30 p-12 text-center cursor-pointer hover:border-brand-ink transition-colors",
+        aiLocked && "hidden",
+    ]}>
         <input
             type="file"
             id="scan-file"
