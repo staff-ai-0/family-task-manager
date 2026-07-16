@@ -1,6 +1,8 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
+import UpgradePrompt from "@components/UpgradePrompt.astro";
 import { apiFetch } from "../../lib/api";
+import { isFreePlan } from "../../lib/plan";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -13,9 +15,13 @@ if (!user) {
 }
 if (user.role !== "parent") return Astro.redirect("/dashboard");
 
+// Jarvis schedules fire LLM prompts on cron — paid-only (ai_features).
+// Fail-open plan check; the backend enforces regardless.
+const aiLocked = await isFreePlan(token);
+
 let errorMsg = "";
 
-if (Astro.request.method === "POST") {
+if (Astro.request.method === "POST" && !aiLocked) {
     const data = await Astro.request.formData();
     const action = data.get("action");
     if (action === "create") {
@@ -51,9 +57,9 @@ if (Astro.request.method === "POST") {
     return Astro.redirect("/parent/jarvis-schedules");
 }
 
-const { data: schedulesRaw } = await apiFetch<any[]>("/api/jarvis/schedules/", {
-    token,
-});
+const { data: schedulesRaw } = aiLocked
+    ? { data: [] as any[] }
+    : await apiFetch<any[]>("/api/jarvis/schedules/", { token });
 const schedules: any[] = Array.isArray(schedulesRaw) ? schedulesRaw : [];
 
 function fmt(iso: string | null): string {
@@ -111,6 +117,11 @@ const labels = {
     containerClass="w-full max-w-md md:max-w-4xl mx-auto bg-brand-cream-deep"
 >
     <p slot="header-extra" class="text-violet-200 text-xs">{labels.subtitle}</p>
+    {aiLocked && (
+        <UpgradePrompt feature="ai_features" planNeeded="Plus" lang={lang} />
+    )}
+    {!aiLocked && (
+        <>
             {errorMsg && (
                 <div class="p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-xl">
                     {errorMsg}
@@ -198,6 +209,8 @@ const labels = {
                     ))}
                 </ul>
             )}
+        </>
+    )}
 </PageLayout>
 
 <script>

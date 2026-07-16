@@ -1,10 +1,14 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
+import { isFreePlan } from "../lib/plan";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 const lang = Astro.cookies.get("lang")?.value ?? "es";
+
+// AI recipe import is paid-only (ai_features). Fail-open; backend enforces.
+const aiLocked = await isFreePlan(token);
 
 let errorMsg = "";
 
@@ -258,6 +262,17 @@ const jarvisTemplate = {
             📖 {labels.add_recipe}
         </summary>
         <div class="px-3 pb-3">
+            {aiLocked ? (
+                <a href="/parent/settings/subscription"
+                   class="mb-3 p-2 border border-dashed border-brand-ink/20 rounded-lg flex items-center justify-between gap-2 hover:border-brand-sun-deep">
+                    <span class="text-xs text-brand-ink-soft font-semibold">
+                        {lang === "es" ? "🔗 Importar desde URL (IA)" : "🔗 Import from URL (AI)"}
+                    </span>
+                    <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-brand-sun border border-brand-ink text-brand-ink whitespace-nowrap">
+                        🔒 Plus →
+                    </span>
+                </a>
+            ) : (
             <div class="mb-3 p-2 border border-dashed border-brand-ink/20 rounded-lg space-y-2">
                 <p class="text-xs text-brand-ink-soft font-semibold">
                     {lang === "es" ? "🔗 Importar desde URL (IA)" : "🔗 Import from URL (AI)"}
@@ -279,6 +294,7 @@ const jarvisTemplate = {
                 </div>
                 <p id="recipe-import-status" class="text-xs text-brand-ink-soft hidden"></p>
             </div>
+            )}
         </div>
         <form method="POST" class="px-3 pb-3 space-y-2">
             <input type="hidden" name="action" value="add_recipe" />
