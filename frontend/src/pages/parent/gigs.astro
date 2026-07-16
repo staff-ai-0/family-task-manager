@@ -83,6 +83,12 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         >
             💵 {lang === "es" ? "Pagar dinero ganado" : "Pay out earned cash"}
         </a>
+        <a
+            href="#historial"
+            class="flex items-center justify-center gap-2 py-2 mt-2 text-sm font-semibold rounded-xl bg-white/15 text-white hover:bg-white/25 transition-colors"
+        >
+            📜 {lang === "es" ? "Historial de gigs completadas" : "Completed-gig history"}
+        </a>
     </div>
 
     {flash && (
@@ -208,7 +214,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
             <!-- Completed-gig history: when it was done and what the kid
                  did/learned (proof_text). Data lives in gig_claims; the day
                  view (/parent/day) only shows one date at a time. -->
-            <section class="mt-8">
+            <section id="historial" class="mt-8 scroll-mt-4">
                 <div class="flex items-center justify-between mb-3 px-1">
                     <h2 class="text-sm font-bold text-brand-ink-soft uppercase tracking-wide">
                         📜 {lang === "es" ? "Historial" : "History"}
