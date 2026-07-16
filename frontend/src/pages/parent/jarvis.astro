@@ -1,6 +1,8 @@
 ---
 import ChatShell from "@components/ui/ChatShell.astro";
+import UpgradePrompt from "@components/UpgradePrompt.astro";
 import { apiFetch } from "../../lib/api";
+import { isFreePlan } from "../../lib/plan";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -17,6 +19,10 @@ const roleLower = String(user.role).toLowerCase();
 if (roleLower !== "parent" && roleLower !== "teen") return Astro.redirect("/dashboard");
 const isTeen = roleLower === "teen";
 
+// Jarvis is paid-only (ai_features) — free families get the upsell instead
+// of a chat that 403s on send. Fail-open; the backend enforces regardless.
+const aiLocked = await isFreePlan(token);
+
 if (Astro.request.method === "POST") {
     const data = await Astro.request.formData();
     const action = data.get("action");
@@ -26,10 +32,12 @@ if (Astro.request.method === "POST") {
     return Astro.redirect("/parent/jarvis");
 }
 
-const [{ data: historyRaw }, { data: familyRaw }] = await Promise.all([
-    apiFetch<any[]>("/api/jarvis/history", { token }),
-    apiFetch<any>("/api/families/me", { token }),
-]);
+const [{ data: historyRaw }, { data: familyRaw }] = aiLocked
+    ? [{ data: [] as any[] }, { data: null as any }]
+    : await Promise.all([
+          apiFetch<any[]>("/api/jarvis/history", { token }),
+          apiFetch<any>("/api/families/me", { token }),
+      ]);
 const history: any[] = Array.isArray(historyRaw) ? historyRaw : [];
 
 // Example prompts grounded in tools Jarvis actually has (budget, tasks,
@@ -144,7 +152,12 @@ if (isTeen) {
                 </select>
             </div>
     </Fragment>
-            {history.length === 0 ? (
+            {aiLocked && (
+                <div class="pt-2">
+                    <UpgradePrompt feature="ai_features" planNeeded="Plus" lang={lang} />
+                </div>
+            )}
+            {!aiLocked && history.length === 0 ? (
                 <div class="bg-brand-cream rounded-2xl p-6 text-center border border-brand-ink/10">
                     <p class="text-4xl mb-2">🤖</p>
                     <p class="text-brand-ink-soft text-sm mb-4">{labels.empty}</p>
@@ -162,7 +175,7 @@ if (isTeen) {
                         ))}
                     </div>
                 </div>
-            ) : (
+            ) : !aiLocked ? (
                 history.map((m: any) => (
                     <div class={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                         <div class={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
@@ -174,13 +187,16 @@ if (isTeen) {
                         </div>
                     </div>
                 ))
-            )}
+            ) : null}
             <div id="pending" class="hidden flex justify-start">
                 <div class="bg-brand-cream border border-brand-ink/10 text-brand-ink-soft rounded-2xl px-4 py-2.5 text-sm italic">
                     {labels.thinking}
                 </div>
             </div>
-    <form slot="composer" id="chat-form" class="p-3 border-t border-brand-ink/10 bg-brand-cream flex-shrink-0 flex gap-2">
+    <form slot="composer" id="chat-form" class:list={[
+        "p-3 border-t border-brand-ink/10 bg-brand-cream flex-shrink-0 flex gap-2",
+        aiLocked && "hidden",
+    ]}>
             <input
                 type="text"
                 id="message-input"
@@ -350,8 +366,19 @@ if (isTeen) {
                     let txt = "Error";
                     try {
                         const d = (await resp.json()).detail;
-                        // 422s carry an array of Pydantic error objects.
-                        txt = Array.isArray(d) ? d.map((x: any) => x.msg || JSON.stringify(x)).join("; ") : (d || txt);
+                        // 422s carry an array of Pydantic error objects; the
+                        // premium gate (403) carries an object with .error.
+                        if (Array.isArray(d)) {
+                            txt = d.map((x: any) => x.msg || JSON.stringify(x)).join("; ");
+                        } else if (d && typeof d === "object") {
+                            txt = d.error === "upgrade_required"
+                                ? (document.documentElement.lang === "es"
+                                    ? "Jarvis requiere el plan Plus — ve a Suscripción."
+                                    : "Jarvis requires the Plus plan — see Subscription.")
+                                : (d.message || JSON.stringify(d));
+                        } else {
+                            txt = d || txt;
+                        }
                     } catch {}
                     alert(txt);
                     return;
