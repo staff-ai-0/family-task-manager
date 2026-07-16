@@ -291,7 +291,9 @@ async def pending_approvals(
     )
     return [
         GigClaimResponse(
-            **{k: v for k, v in GigClaimResponse.model_validate(item["claim"]).model_dump().items()},
+            **GigClaimResponse.model_validate(item["claim"]).model_dump(
+                exclude={"claimer_name", "gig_title", "gig_points"}
+            ),
             claimer_name=item["claimer_name"],
             gig_title=item["gig_title"],
             gig_points=item["gig_points"],
@@ -312,7 +314,9 @@ async def my_claims(
     )
     return [
         GigClaimResponse(
-            **{k: v for k, v in GigClaimResponse.model_validate(item["claim"]).model_dump().items()},
+            **GigClaimResponse.model_validate(item["claim"]).model_dump(
+                exclude={"gig_title", "gig_points"}
+            ),
             gig_title=item["gig_title"],
             gig_points=item["gig_points"],
         )

@@ -172,6 +172,57 @@ async def test_claim_complete_approve_awards_points(
 
 
 @pytest.mark.asyncio
+async def test_pending_approvals_endpoint_returns_completed_claim(
+    client: AsyncClient, parent_headers, child_headers
+):
+    """Regression: GET /claims/pending-approvals (and /claims/my) must serialize a
+    COMPLETED claim without 500ing.
+
+    The route enriches GigClaimResponse with claimer_name/gig_title/gig_points —
+    which are already fields on the response model — via `**model_dump()` spread
+    PLUS the same keys as explicit kwargs. That collides ("multiple values for
+    keyword argument"), so the parent's approval queue crashed the instant a kid
+    finished their first gig. Prod incident 2026-07-16 (Ariana's car gig).
+    """
+    create_res = await client.post(
+        "/api/gigs/offerings",
+        json={"title": "Vacuum car interior", "points": 70},
+        headers=parent_headers,
+    )
+    gig_id = create_res.json()["id"]
+
+    claim_id = (
+        await client.post(f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers)
+    ).json()["id"]
+
+    complete_res = await client.post(
+        f"/api/gigs/claims/{claim_id}/complete",
+        json={"proof_text": "shiny"},
+        headers=child_headers,
+    )
+    assert complete_res.status_code == 200
+
+    # Parent's unified approval queue must load (was 500 pre-fix).
+    pending_res = await client.get(
+        "/api/gigs/claims/pending-approvals", headers=parent_headers
+    )
+    assert pending_res.status_code == 200, pending_res.text
+    row = next((i for i in pending_res.json() if i["id"] == claim_id), None)
+    assert row is not None, "completed claim missing from approvals queue"
+    assert row["gig_title"] == "Vacuum car interior"
+    assert row["gig_points"] == 70
+    assert row["claimer_name"]  # enriched, non-empty
+
+    # The kid's own list endpoint shared the same double-pass bug.
+    my_res = await client.get("/api/gigs/claims/my", headers=child_headers)
+    assert my_res.status_code == 200, my_res.text
+    assert any(
+        i["id"] == claim_id and i["gig_title"] == "Vacuum car interior"
+        for i in my_res.json()
+    )
+
+
+@pytest.mark.asyncio
 async def test_reject_claim_no_points(
     client: AsyncClient, parent_headers, child_headers, test_child_user, db_session: AsyncSession
 ):
