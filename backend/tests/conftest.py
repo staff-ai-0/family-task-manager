@@ -613,3 +613,55 @@ async def transaction_factory_with_payee(db: AsyncSession, family):
         return tx
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# Subscription fixtures (AI/premium gating)
+# ---------------------------------------------------------------------------
+
+# Mirrors the post-`plan_limit_feature_keys` prod Plus row.
+PLUS_PLAN_LIMITS = {
+    "max_family_members": 6,
+    "max_budget_accounts": 10,
+    "max_budget_transactions_per_month": -1,
+    "max_recurring_transactions": -1,
+    "budget_reports": True,
+    "budget_goals": True,
+    "csv_import": True,
+    "max_receipt_scans_per_month": 50,
+    "ai_features": True,
+    "a2a_webhook": True,
+    "item_trends": True,
+    "max_gigs_per_month": 30,
+    "family_bank_automation": True,
+}
+
+
+@pytest_asyncio.fixture
+async def plus_subscription(db_session: AsyncSession, test_family):
+    """Give test_family an active Plus subscription (unlocks ai_features etc.)."""
+    from datetime import datetime, timezone
+    from app.models.subscription import FamilySubscription, SubscriptionPlan
+
+    plan = SubscriptionPlan(
+        name="plus",
+        display_name="Plus",
+        display_name_es="Plus",
+        price_monthly_cents=499,
+        price_annual_cents=4900,
+        limits=PLUS_PLAN_LIMITS,
+    )
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    sub = FamilySubscription(
+        family_id=test_family.id,
+        plan_id=plan.id,
+        billing_cycle="monthly",
+        status="active",
+        current_period_start=datetime.now(timezone.utc),
+    )
+    db_session.add(sub)
+    await db_session.commit()
+    return sub

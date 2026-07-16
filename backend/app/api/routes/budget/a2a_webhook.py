@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import require_parent_role
+from app.core.premium import require_feature
 from app.core.type_utils import to_uuid_required
 from app.models import User
 from app.schemas.a2a import A2AWebhookRead, A2AWebhookSaveResult, A2AWebhookUpdate
@@ -38,6 +39,7 @@ async def put_webhook(
     (the ONLY time it is returned — store it immediately).  Subsequent reads
     omit the secret entirely.
     """
+    await require_feature("a2a_webhook", db, current_user)
     family_id = to_uuid_required(current_user.family_id)
     cfg, plaintext = await A2AWebhookService.upsert_config(
         db,

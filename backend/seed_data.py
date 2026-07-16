@@ -831,6 +831,7 @@ async def create_subscription_plans(session):
                     "max_budget_transactions_per_month": 200, "max_recurring_transactions": 5,
                     "budget_reports": True, "budget_goals": True, "csv_import": True,
                     "max_receipt_scans_per_month": 15, "ai_features": True,
+                    "a2a_webhook": True, "item_trends": True, "max_gigs_per_month": 30,
                     "family_bank_automation": True}},
         {"name": "pro", "display_name": "Pro", "display_name_es": "Pro",
          "price_monthly_cents": 1500, "price_annual_cents": 15000, "sort_order": 2,
@@ -838,7 +839,8 @@ async def create_subscription_plans(session):
                     "max_budget_transactions_per_month": -1, "max_recurring_transactions": -1,
                     "budget_reports": True, "budget_goals": True, "csv_import": True,
                     "max_receipt_scans_per_month": -1, "ai_features": True,
-                    "family_bank_automation": True}},
+                    "a2a_webhook": True, "item_trends": True, "fx_cross_charge": True,
+                    "max_gigs_per_month": -1, "family_bank_automation": True}},
     ]
     plans = [SubscriptionPlan(**d) for d in plans_data]
     session.add_all(plans)

@@ -236,9 +236,12 @@ async def enabled_webhook(db: AsyncSession, test_family):
 
 @pytest.mark.asyncio
 async def test_put_webhook_returns_secret_on_rotate(
-    client: AsyncClient, auth_headers: dict
+    client: AsyncClient, auth_headers: dict, plus_subscription
 ):
-    """PUT with rotate_secret=True must return plaintext secret in response."""
+    """PUT with rotate_secret=True must return plaintext secret in response.
+
+    Config writes are plan-gated (a2a_webhook, plus+) — see test_ai_gating.
+    """
     resp = await client.put(
         "/api/budget/a2a-webhook",
         json={"url": "https://hook.example/x", "enabled": True, "rotate_secret": True},

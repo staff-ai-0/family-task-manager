@@ -231,13 +231,17 @@ async def create_from_alert(
         if payee_row is not None and payee_row.default_category_id:
             cat = payee_row.default_category_id
     if cat is None:
-        from app.services.budget.category_ai_service import CategoryAIService
-        try:
-            cat = await CategoryAIService.suggest(
-                db, family_id, body.merchant, is_income=(body.direction == "credit"),
-            )
-        except Exception:
-            logger.exception("AI categorize failed for bank-sync txn")
+        # AI categorization is paid-only; free/downgraded families still get
+        # the transaction, just uncategorized.
+        from app.core.premium import family_tier_allows
+        if await family_tier_allows(db, family_id, "ai_features"):
+            from app.services.budget.category_ai_service import CategoryAIService
+            try:
+                cat = await CategoryAIService.suggest(
+                    db, family_id, body.merchant, is_income=(body.direction == "credit"),
+                )
+            except Exception:
+                logger.exception("AI categorize failed for bank-sync txn")
     if cat is not None:
         txn.category_id = cat
         if payee_id is not None:

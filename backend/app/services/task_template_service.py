@@ -75,7 +75,9 @@ class TaskTemplateService(BaseFamilyService[TaskTemplate]):
 
         # Best-effort auto-translate to ES when blank. Failures are non-fatal —
         # template still saves without ES, parent can fill manually later.
-        if not title_es:
+        # AI is paid-only: free families skip the LLM call silently.
+        from app.core.premium import family_tier_allows
+        if not title_es and await family_tier_allows(db, family_id, "ai_features"):
             try:
                 translated = await TranslationService.translate_template_fields(
                     title=data.title,

@@ -192,7 +192,24 @@ class JarvisScheduleService:
         )
         due = list((await db.execute(q)).scalars().all())
         fired = 0
+        # AI is paid-only: skip schedules whose family no longer meets the
+        # ai_features tier (e.g. downgraded after creating the schedule).
+        # Skipped schedules still advance next_run_at below so they don't
+        # re-fire every sweep, and resume automatically on re-upgrade.
+        from app.core.premium import family_tier_allows
+        tier_ok: dict = {}
         for s in due:
+            allowed = tier_ok.get(s.family_id)
+            if allowed is None:
+                allowed = await family_tier_allows(db, s.family_id, "ai_features")
+                tier_ok[s.family_id] = allowed
+            if not allowed:
+                s.last_run_at = now
+                try:
+                    s.next_run_at = _next_fire(_parse_cron(s.cron_expr), now)
+                except Exception:
+                    s.is_active = False
+                continue
             try:
                 result = await JarvisService.chat(
                     db,

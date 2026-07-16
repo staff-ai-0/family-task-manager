@@ -268,6 +268,20 @@ async def get_family_plan(db: AsyncSession, user: User) -> FamilyPlan:
 # Feature gating
 # ---------------------------------------------------------------------------
 
+async def family_tier_allows(db: AsyncSession, family_id, feature: str) -> bool:
+    """Non-raising tier check: does the family's plan meet FEATURE_MIN_PLAN?
+
+    For silent gates — background jobs (Jarvis schedule sweep) and
+    best-effort AI enrichment (auto-translate, bank-sync categorization) —
+    where a free family should skip the feature rather than get a 403.
+    Compares plan tier rank, so it works even when a plan row's limits
+    dict predates the feature key.
+    """
+    plan = await get_family_plan_by_id(db, family_id)
+    min_plan = FEATURE_MIN_PLAN.get(feature, "free")
+    return PLAN_ORDER.get(plan.name, 0) >= PLAN_ORDER.get(min_plan, 0)
+
+
 async def require_feature(
     feature: str, db: AsyncSession, user: User, units: int = 1
 ) -> FamilyPlan:
