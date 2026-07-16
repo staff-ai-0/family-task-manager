@@ -2,14 +2,22 @@
 import Layout from "@layouts/Layout.astro";
 import BottomNav from "@components/BottomNav.astro";
 import DrawerMenu from "@components/DrawerMenu.astro";
+import UpgradePrompt from "@components/UpgradePrompt.astro";
 import { apiFetch } from "@lib/api";
+import { isFreePlan } from "@lib/plan";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
 const { data: user } = await apiFetch<any>("/api/auth/me", { token });
 if (user?.role !== "parent") return Astro.redirect("/dashboard");
-const { data: cfg } = await apiFetch<any>("/api/budget/a2a-webhook", { token });
+
+// A2A webhook config is a Plus+ feature (a2a_webhook). Fail-open plan
+// check; the backend PUT enforces require_feature regardless.
+const a2aLocked = await isFreePlan(token);
+const { data: cfg } = a2aLocked
+    ? { data: null as any }
+    : await apiFetch<any>("/api/budget/a2a-webhook", { token });
 ---
 
 <Layout title={lang === "es" ? "Agente de precios" : "Price Agent"} lang={lang}>
@@ -17,6 +25,9 @@ const { data: cfg } = await apiFetch<any>("/api/budget/a2a-webhook", { token });
   <main class="px-4 pb-32 pt-6 max-w-md mx-auto">
     <h1 class="text-2xl font-display mb-4">{lang === "es" ? "Agente de precios" : "Price Agent"}</h1>
 
+    {a2aLocked ? (
+      <UpgradePrompt feature="a2a_webhook" planNeeded="Plus" lang={lang} />
+    ) : (
     <form id="form" class="card p-4 space-y-3">
       <label class="block">
         <span class="text-sm">URL</span>
@@ -40,12 +51,13 @@ const { data: cfg } = await apiFetch<any>("/api/budget/a2a-webhook", { token });
       </button>
       <pre id="secret-out" class="hidden text-xs bg-fg/5 p-2 rounded"></pre>
     </form>
+    )}
   </main>
   <BottomNav lang={lang} role={user?.role} active="parent" />
 </Layout>
 
 <script type="module" define:vars={{ token, lang }}>
-  document.getElementById("form").addEventListener("submit", async (e) => {
+  document.getElementById("form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const resp = await fetch("/api/budget/a2a-webhook", {
       method: "PUT",
@@ -58,6 +70,14 @@ const { data: cfg } = await apiFetch<any>("/api/budget/a2a-webhook", { token });
       }),
     });
     const body = await resp.json();
+    if (!resp.ok) {
+      const detail = body?.detail;
+      const msg = detail?.error === "upgrade_required"
+        ? (lang === "es" ? "Requiere plan Plus — ve a Suscripción." : "Requires the Plus plan — see Subscription.")
+        : (typeof detail === "string" ? detail : (lang === "es" ? "Error al guardar." : "Save failed."));
+      alert(msg);
+      return;
+    }
     if (body.secret) {
       const out = document.getElementById("secret-out");
       out.classList.remove("hidden");
