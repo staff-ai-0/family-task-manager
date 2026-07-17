@@ -2,6 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import DifficultyChip from "../../components/DifficultyChip.astro";
 import { apiFetch } from "../../lib/api";
+import { gigTerm } from "../../lib/gigTerm";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -14,13 +15,15 @@ if (!user) {
 }
 if (user.role !== "parent") return Astro.redirect("/gigs");
 
-const [offeringsRes, pendingRes, proposalsRes, claimsRes] = await Promise.all([
+const [offeringsRes, pendingRes, proposalsRes, claimsRes, familyRes] = await Promise.all([
     apiFetch<any[]>("/api/gigs/offerings?include_inactive=false", { token }),
     apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token }),
     apiFetch<any[]>("/api/gigs/offerings/proposals/pending", { token }),
     apiFetch<any[]>("/api/gigs/claims/family", { token }),
+    apiFetch<any>("/api/families/me", { token }),
 ]);
 const offerings: any[] = offeringsRes.data ?? [];
+const gt = gigTerm(familyRes.data?.gig_term ?? "gig", lang);
 // Claim approvals now live in the unified /parent/approvals queue — keep only the
 // pending count here for the "review" link so there is a single approval surface.
 const pendingCount = Array.isArray(pendingRes.data) ? pendingRes.data.length : 0;
@@ -75,19 +78,20 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 ---
 
 <PageLayout
-    title="Gigs"
+    title={gt.Many}
     headerClass="bg-gradient-to-br from-violet-800 to-violet-600"
     dark
     role="parent"
     active="gigs"
     lang={lang}
+    gigTerm={gt.Many}
 >
     <button
         slot="actions"
         id="new-gig-btn"
         class="bg-white text-violet-700 font-bold text-sm px-4 py-2 rounded-xl shadow hover:bg-violet-50 transition-colors"
     >
-        + {lang === "es" ? "Nueva Gig" : "New Gig"}
+        + {lang === "es" ? `Nueva ${gt.One}` : `New ${gt.One}`}
     </button>
     <div slot="header-extra">
         <p class="text-violet-200 text-sm mt-0.5 mb-4">
@@ -339,7 +343,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 </PageLayout>
 
 <!-- Create/Edit Gig Modal -->
-<div id="gig-modal" class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+<div id="gig-modal" data-term-one={gt.One} class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
     <div class="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-5">
             <h2 id="modal-title" class="text-lg font-bold text-brand-ink"></h2>
@@ -417,6 +421,9 @@ const modal = document.getElementById("gig-modal")!;
 const modalTitle = document.getElementById("modal-title")!;
 const form = document.getElementById("gig-form") as HTMLFormElement;
 const editIdInput = document.getElementById("edit-gig-id") as HTMLInputElement;
+// Resolved gig-term ("Gig"/"Chamba"), threaded from the Astro frontmatter via
+// a data attribute since this hoisted script has no access to gigTerm().
+const termOne = modal.dataset.termOne || "Gig";
 
 const openModal = (title: string) => {
     modalTitle.textContent = title;
@@ -429,7 +436,7 @@ const closeModal = () => {
 };
 
 document.getElementById("new-gig-btn")!.addEventListener("click", () => {
-    openModal(lang === "es" ? "Nueva Gig" : "New Gig");
+    openModal(lang === "es" ? `Nueva ${termOne}` : `New ${termOne}`);
 });
 document.getElementById("close-modal")!.addEventListener("click", closeModal);
 modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
@@ -444,7 +451,7 @@ document.querySelectorAll(".edit-gig-btn").forEach(btn => {
         (document.getElementById("f-difficulty") as HTMLSelectElement).value = b.dataset.difficulty!;
         (document.getElementById("f-category") as HTMLSelectElement).value = b.dataset.category!;
         (document.getElementById("f-allow-multiple") as HTMLInputElement).checked = b.dataset.allowMultiple === "1";
-        openModal(lang === "es" ? "Editar Gig" : "Edit Gig");
+        openModal(lang === "es" ? `Editar ${termOne}` : `Edit ${termOne}`);
     });
 });
 
