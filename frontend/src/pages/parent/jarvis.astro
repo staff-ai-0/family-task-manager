@@ -343,14 +343,43 @@ if (isTeen) {
             input.disabled = true;
             const selectedModel = modelSelect?.value || "gemini-2.5-flash";
 
+            const isEs = document.documentElement.lang === "es";
+
+            // Failures render as chat bubbles, never alert(): WK29 QA showed a
+            // free-plan 403 (an object detail) reaching alert() as
+            // "[object Object]", and alerts also swallow the typed message.
+            const showError = (msg: string, upsell = false) => {
+                if (!scroll) return;
+                const wrap = document.createElement("div");
+                wrap.className = "flex justify-start";
+                wrap.setAttribute("data-error-bubble", "");
+                wrap.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-red-50 border border-red-200 text-red-800"><p class="whitespace-pre-wrap"></p></div>`;
+                (wrap.querySelector("p") as HTMLElement).textContent = msg;
+                if (upsell) {
+                    const a = document.createElement("a");
+                    a.href = "/parent/settings/subscription";
+                    a.className = "mt-1.5 inline-block text-xs font-bold underline text-red-800";
+                    a.textContent = isEs ? "Ver planes →" : "See plans →";
+                    wrap.querySelector("div")!.appendChild(a);
+                }
+                scroll.insertBefore(wrap, pending);
+                scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+            };
+
             // Optimistic user bubble
+            let userBubble: HTMLDivElement | null = null;
             if (scroll) {
-                const userBubble = document.createElement("div");
+                userBubble = document.createElement("div");
                 userBubble.className = "flex justify-end";
                 userBubble.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-brand-ink text-brand-cream"><p class="whitespace-pre-wrap"></p></div>`;
                 (userBubble.querySelector("p") as HTMLElement).textContent = message;
                 scroll.insertBefore(userBubble, pending);
             }
+            const markSendFailed = () => {
+                userBubble?.setAttribute("data-send-failed", "");
+                userBubble?.classList.add("opacity-60");
+                if (!input.value) input.value = message;
+            };
             pending?.classList.remove("hidden");
             scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
 
@@ -364,6 +393,7 @@ if (isTeen) {
                 if (!resp.ok || !resp.body) {
                     pending?.classList.add("hidden");
                     let txt = "Error";
+                    let upsell = false;
                     try {
                         const d = (await resp.json()).detail;
                         // 422s carry an array of Pydantic error objects; the
@@ -371,16 +401,18 @@ if (isTeen) {
                         if (Array.isArray(d)) {
                             txt = d.map((x: any) => x.msg || JSON.stringify(x)).join("; ");
                         } else if (d && typeof d === "object") {
-                            txt = d.error === "upgrade_required"
-                                ? (document.documentElement.lang === "es"
-                                    ? "Jarvis requiere el plan Plus — ve a Suscripción."
-                                    : "Jarvis requires the Plus plan — see Subscription.")
+                            upsell = d.error === "upgrade_required";
+                            txt = upsell
+                                ? (isEs
+                                    ? "Jarvis requiere el plan Plus."
+                                    : "Jarvis requires the Plus plan.")
                                 : (d.message || JSON.stringify(d));
                         } else {
                             txt = d || txt;
                         }
                     } catch {}
-                    alert(txt);
+                    showError(txt, upsell);
+                    markSendFailed();
                     return;
                 }
 
@@ -452,13 +484,24 @@ if (isTeen) {
                             }
                         } else if (event === "error") {
                             pending?.classList.add("hidden");
-                            alert(payload.detail || "Error");
+                            const d = payload.detail;
+                            showError(
+                                typeof d === "string" && d
+                                    ? d
+                                    : (d?.message || (isEs ? "Error — intenta de nuevo." : "Error — try again.")),
+                            );
+                            markSendFailed();
                         }
                     }
                 }
             } catch (err) {
                 pending?.classList.add("hidden");
-                alert(String(err));
+                showError(
+                    isEs
+                        ? "Error de conexión — revisa tu internet e intenta de nuevo."
+                        : "Connection error — check your internet and try again.",
+                );
+                markSendFailed();
             } finally {
                 input.disabled = false;
                 input.focus();
