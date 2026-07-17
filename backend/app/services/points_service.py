@@ -47,7 +47,6 @@ class PointsService:
     async def award_points_for_task(
         db: AsyncSession,
         user_id: UUID,
-        task_id: UUID,
         points: int,
     ) -> PointTransaction:
         """
@@ -56,7 +55,6 @@ class PointsService:
         Args:
             db: Database session
             user_id: ID of user receiving points
-            task_id: ID of completed task
             points: Number of points to award
 
         Returns:
@@ -68,7 +66,6 @@ class PointsService:
         # Create transaction
         transaction = PointTransaction.create_task_completion(
             user_id=user_id,
-            task_id=task_id,
             points=points,
             balance_before=user.points,
         )

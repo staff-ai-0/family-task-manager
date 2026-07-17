@@ -245,9 +245,8 @@ class TestFamilyDeletion:
 
     async def test_delete_family_cascades(self, db_session, test_parent_user):
         """Test that deleting family removes related data properly"""
-        from app.models import Family, User, Task
+        from app.models import Family, User, TaskTemplate
         from app.models.user import UserRole
-        from app.models.task import TaskStatus
 
         # Create a family with related data
         family = Family(name="Cascade Test", is_active=True)
@@ -269,19 +268,16 @@ class TestFamilyDeletion:
         await db_session.commit()
         await db_session.refresh(user)
 
-        # Add a task
-        task = Task(
+        # Add a task template (family-scoped child row for the cascade check)
+        template = TaskTemplate(
             title="Cascade Task",
             description="Test task",
             points=10,
-            status=TaskStatus.PENDING,
             family_id=family.id,
-            assigned_to=user.id,
-            created_by=test_parent_user.id,
         )
-        db_session.add(task)
+        db_session.add(template)
         await db_session.commit()
-        await db_session.refresh(task)
+        await db_session.refresh(template)
 
         family_id = family.id
 

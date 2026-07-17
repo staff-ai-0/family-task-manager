@@ -2,7 +2,7 @@
 Whole-family data export (WS-DEL / compliance).
 
 Builds a ZIP of JSON dumps for every user-facing domain owned by ONE family:
-users (sans credentials), tasks, gigs, points/cash, rewards, consequences,
+users (sans credentials), task templates/assignments, gigs, points/cash, rewards, consequences,
 budget (reusing the budget ExportService so that portion stays re-importable),
 calendar, meals, shopping, chat + DMs, pets, notifications, Jarvis (chat
 history, schedules, pending actions, MCP token metadata), kiosk devices,
@@ -68,7 +68,6 @@ from app.models import (
     RewardRedemption,
     ShoppingItem,
     ShoppingList,
-    Task,
     TaskAssignment,
     TaskTemplate,
     UsageTracking,
@@ -147,7 +146,6 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
     for model in (
         # exported directly by this service
         User,
-        Task,
         TaskTemplate,
         TaskAssignment,
         GigOffering,
@@ -332,7 +330,6 @@ class FamilyExportService:
             return select(model).where(model.family_id == family_id)
 
         users = await _rows(db, fam(User))
-        tasks = await _rows(db, fam(Task))
         templates = await _rows(db, fam(TaskTemplate))
         assignments = await _rows(db, fam(TaskAssignment))
         offerings = await _rows(db, fam(GigOffering))
@@ -478,7 +475,6 @@ class FamilyExportService:
         # of named record lists.
         files: dict[str, Any] = {
             "users.json": _dump(users, exclude=_USER_EXCLUDED_COLUMNS),
-            "tasks/legacy_tasks.json": _dump(tasks),
             "tasks/task_templates.json": _dump(templates),
             "tasks/task_assignments.json": _dump(assignments),
             "gigs/offerings.json": _dump(offerings),

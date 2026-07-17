@@ -18,7 +18,6 @@ class ConsequenceCreate(BaseModel):
     severity: str = "low"  # ConsequenceSeverity enum value as string
     duration_days: int = Field(1, ge=1, le=30)
     description: Optional[str] = None
-    triggered_by_task_id: Optional[UUID] = None
 
 
 class ConsequenceUpdate(BaseModel):

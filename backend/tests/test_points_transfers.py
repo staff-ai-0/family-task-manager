@@ -346,15 +346,15 @@ class TestTransactionHistory:
         assert history == []
 
     async def test_get_transaction_history_with_transactions(
-        self, db_session, test_child_user, test_task
+        self, db_session, test_child_user
     ):
         """Test getting transaction history after some transactions"""
         # Create some transactions
         await PointsService.award_points_for_task(
-            db_session, test_child_user.id, test_task.id, 50
+            db_session, test_child_user.id, 50
         )
         await PointsService.award_points_for_task(
-            db_session, test_child_user.id, test_task.id, 30
+            db_session, test_child_user.id, 30
         )
 
         history = await PointsService.get_transaction_history(
@@ -367,13 +367,13 @@ class TestTransactionHistory:
         assert history[1].points == 50
 
     async def test_get_transaction_history_with_limit(
-        self, db_session, test_child_user, test_task
+        self, db_session, test_child_user
     ):
         """Test transaction history respects limit parameter"""
         # Create multiple transactions
         for i in range(10):
             await PointsService.award_points_for_task(
-                db_session, test_child_user.id, test_task.id, 10
+                db_session, test_child_user.id, 10
             )
 
         history = await PointsService.get_transaction_history(

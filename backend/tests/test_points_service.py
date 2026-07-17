@@ -18,7 +18,7 @@ class TestAwardPointsForTask:
     """Test award_points_for_task helper function"""
 
     async def test_award_points_creates_transaction(
-        self, db_session, test_child_user, test_task
+        self, db_session, test_child_user
     ):
         """Test that awarding points creates a transaction"""
         initial_points = test_child_user.points
@@ -27,20 +27,18 @@ class TestAwardPointsForTask:
         transaction = await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
-            task_id=test_task.id,
             points=points_to_award,
         )
 
         # Verify transaction was created
         assert transaction is not None
         assert transaction.user_id == test_child_user.id
-        assert transaction.task_id == test_task.id
         assert transaction.points == points_to_award
         assert transaction.balance_before == initial_points
         assert transaction.balance_after == initial_points + points_to_award
 
     async def test_award_points_updates_user_balance(
-        self, db_session, test_child_user, test_task
+        self, db_session, test_child_user
     ):
         """Test that awarding points updates the user's balance"""
         initial_points = test_child_user.points
@@ -49,7 +47,6 @@ class TestAwardPointsForTask:
         await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
-            task_id=test_task.id,
             points=points_to_award,
         )
 
@@ -59,7 +56,7 @@ class TestAwardPointsForTask:
         assert test_child_user.points == initial_points + points_to_award
 
     async def test_award_points_with_zero_points(
-        self, db_session, test_child_user, test_task
+        self, db_session, test_child_user
     ):
         """Test awarding zero points (edge case)"""
         initial_points = test_child_user.points
@@ -67,7 +64,6 @@ class TestAwardPointsForTask:
         transaction = await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
-            task_id=test_task.id,
             points=0,
         )
 
@@ -76,7 +72,7 @@ class TestAwardPointsForTask:
         assert test_child_user.points == initial_points
 
     async def test_award_points_with_large_amount(
-        self, db_session, test_child_user, test_task
+        self, db_session, test_child_user
     ):
         """Test awarding a large amount of points"""
         initial_points = test_child_user.points
@@ -85,7 +81,6 @@ class TestAwardPointsForTask:
         transaction = await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
-            task_id=test_task.id,
             points=points_to_award,
         )
 
@@ -93,7 +88,7 @@ class TestAwardPointsForTask:
         assert test_child_user.points == initial_points + points_to_award
         assert transaction.balance_after == initial_points + points_to_award
 
-    async def test_award_points_for_nonexistent_user(self, db_session, test_task):
+    async def test_award_points_for_nonexistent_user(self, db_session):
         """Test awarding points to a user that doesn't exist"""
         non_existent_user_id = uuid4()
 
@@ -101,12 +96,11 @@ class TestAwardPointsForTask:
             await PointsService.award_points_for_task(
                 db=db_session,
                 user_id=non_existent_user_id,
-                task_id=test_task.id,
                 points=50,
             )
 
     async def test_award_points_multiple_times(
-        self, db_session, test_child_user, test_task
+        self, db_session, test_child_user
     ):
         """Test awarding points multiple times accumulates correctly"""
         initial_points = test_child_user.points
@@ -115,7 +109,6 @@ class TestAwardPointsForTask:
         await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
-            task_id=test_task.id,
             points=30,
         )
 
@@ -126,7 +119,6 @@ class TestAwardPointsForTask:
         await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
-            task_id=test_task.id,
             points=20,
         )
 
@@ -261,7 +253,7 @@ class TestDeductPointsForReward:
         assert transaction.points == 0
 
     async def test_award_then_deduct_points(
-        self, db_session, test_child_user, test_task, test_reward
+        self, db_session, test_child_user, test_reward
     ):
         """Test award and deduct flow (realistic scenario)"""
         initial_points = test_child_user.points
@@ -270,7 +262,6 @@ class TestDeductPointsForReward:
         await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
-            task_id=test_task.id,
             points=100,
         )
 
@@ -294,20 +285,18 @@ class TestPointsHistoryRoute:
     """GET /api/users/me/points/history — the kid-visible ledger."""
 
     async def test_history_returns_own_transactions_newest_first(
-        self, client, db_session, test_child_user, test_task
+        self, client, db_session, test_child_user
     ):
         from app.core.security import create_access_token
 
         await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
-            task_id=test_task.id,
             points=25,
         )
         await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
-            task_id=test_task.id,
             points=10,
         )
 
@@ -330,14 +319,14 @@ class TestPointsHistoryRoute:
         assert all(tx["user_id"] == str(test_child_user.id) for tx in body)
 
     async def test_history_limit_is_clamped(
-        self, client, db_session, test_child_user, test_task
+        self, client, db_session, test_child_user
     ):
         """limit is clamped to [1, 200] — junk values return 200, never 500."""
         from app.core.security import create_access_token
 
         for _ in range(3):
             await PointsService.award_points_for_task(
-                db=db_session, user_id=test_child_user.id, task_id=test_task.id, points=5
+                db=db_session, user_id=test_child_user.id, points=5
             )
         token = create_access_token(
             data={

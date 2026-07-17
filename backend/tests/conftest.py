@@ -70,8 +70,6 @@ async def test_engine_session():
         # Create enum types explicitly
         enum_types = [
             ("userrole", ["PARENT", "CHILD", "TEEN"]),
-            ("taskstatus", ["PENDING", "COMPLETED", "OVERDUE", "CANCELLED"]),
-            ("taskfrequency", ["DAILY", "WEEKLY", "MONTHLY", "ONE_TIME"]),
             ("transactiontype", ["TASK_COMPLETED", "REWARD_REDEEMED", "PARENT_ADJUSTMENT", "BONUS", "PENALTY", "TRANSFER", "GIG_APPROVED"]),
             ("rewardcategory", ["SCREEN_TIME", "TREATS", "ACTIVITIES", "PRIVILEGES", "MONEY", "TOYS"]),
             ("assignmentstatus", ["pending", "claimed", "completed", "overdue", "cancelled"]),
@@ -231,32 +229,6 @@ async def test_teen_user(db_session: AsyncSession, test_family):
     await db_session.commit()
     await db_session.refresh(user)
     return user
-
-
-@pytest_asyncio.fixture
-async def test_task(
-    db_session: AsyncSession, test_family, test_child_user, test_parent_user
-):
-    """Create a test task"""
-    from app.models.task import Task, TaskStatus, TaskFrequency
-    from datetime import date
-
-    task = Task(
-        family_id=test_family.id,
-        assigned_to=test_child_user.id,
-        created_by=test_parent_user.id,
-        title="Clean Your Room",
-        description="Make your bed and pick up toys",
-        points=50,
-        is_default=True,
-        frequency=TaskFrequency.DAILY,
-        status=TaskStatus.PENDING,
-        due_date=date.today(),
-    )
-    db_session.add(task)
-    await db_session.commit()
-    await db_session.refresh(task)
-    return task
 
 
 @pytest_asyncio.fixture

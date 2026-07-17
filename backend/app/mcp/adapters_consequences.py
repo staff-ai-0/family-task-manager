@@ -26,7 +26,6 @@ def _ser_consequence(c) -> dict:
         "active": c.active,
         "resolved": c.resolved,
         "applied_to_user": str(c.applied_to_user),
-        "triggered_by_task_id": str(c.triggered_by_task_id) if c.triggered_by_task_id else None,
         "start_date": c.start_date.isoformat() if c.start_date else None,
         "end_date": c.end_date.isoformat() if c.end_date else None,
         "resolved_at": c.resolved_at.isoformat() if c.resolved_at else None,
