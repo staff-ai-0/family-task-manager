@@ -24,15 +24,6 @@ from app.schemas.family import (
     FamilyStats,
 )
 
-from app.schemas.task import (
-    TaskBase,
-    TaskCreate,
-    TaskUpdate,
-    TaskComplete,
-    TaskResponse,
-    TaskWithDetails,
-)
-
 from app.schemas.task_template import (
     TaskTemplateBase,
     TaskTemplateCreate,

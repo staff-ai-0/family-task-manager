@@ -1,5 +1,4 @@
 import asyncio
-from datetime import datetime, timedelta, time
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,13 +9,13 @@ import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.core.config import settings
-from app.core.database import engine, Base, AsyncSessionLocal
+from app.core.database import engine, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
 from app.core.request_context import RequestIDLogFilter, RequestIDMiddleware
 from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm, bank, family_cup, referrals, routines
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
-from app.api.routes import oversight, onboarding, sync
+from app.api.routes import oversight, onboarding
 from app.jobs.subscription_sweep import run_sweep
 from app.services.task_assignment_service import TaskAssignmentService
 from app.services.consequence_service import ConsequenceService
@@ -362,7 +361,6 @@ app.include_router(invitations.router, prefix="/api/invitations", tags=["Invitat
 app.include_router(budget_router, prefix="/api/budget", tags=["Budget"])
 app.include_router(gigs_router, prefix="/api/gigs", tags=["Gigs"])
 app.include_router(oversight.router, prefix="/api/oversight", tags=["Oversight"])
-app.include_router(sync.router, prefix="/api/sync", tags=["Sync (gone)"])
 app.include_router(cash.router, prefix="/api/cash", tags=["Cash"])
 app.include_router(bank.router, prefix="/api/bank", tags=["Family Bank"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions"])
