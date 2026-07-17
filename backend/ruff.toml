@@ -1,9 +1,13 @@
 # Ruff — canonical Python linter for this repo (replaces ad-hoc flake8/isort runs).
-# Default rule set (E4/E7/E9/F) only: this is a legacy-size tree, widen gradually.
+# Default rule set (E4/E7/E9/F) plus DTZ; widen gradually.
 target-version = "py312"
 extend-exclude = ["migrations", "venv", ".venv"]
 
 [lint]
+# DTZ (flake8-datetimez): every datetime here must be timezone-aware — naive
+# values on timestamptz columns get reinterpreted in the SESSION timezone
+# (the 2026-07-16/17 bug class). Enforced in CI.
+extend-select = ["DTZ"]
 # E712: SQLAlchemy filters use `== True` / `== False` on purpose — `is True`
 # would break query compilation.
 ignore = ["E712"]

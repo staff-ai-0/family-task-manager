@@ -9,6 +9,7 @@ from uuid import UUID
 from app.mcp.adapters import ServiceAdapter
 from app.mcp.context import McpContext
 from app.models.meal import MealPlanEntry, Recipe
+from app.core.time_utils import utc_today
 
 
 def _ser_recipe(r: Recipe) -> dict:
@@ -68,10 +69,10 @@ class RecipeAdapter(ServiceAdapter):
 class PlanEntryAdapter(ServiceAdapter):
     async def list(self, ctx: McpContext) -> list[dict]:
         """Return all plan entries for the family (up to 90 days back)."""
-        from datetime import timedelta, date as _date
+        from datetime import timedelta
         from app.services.meal_service import MealService
 
-        today = _date.today()
+        today = utc_today()
         rows = await MealService.list_plan(
             ctx.db,
             ctx.family_id,

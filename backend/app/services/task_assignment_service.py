@@ -21,6 +21,7 @@ from app.core.exceptions import (
     ForbiddenException,
     ValidationException,
 )
+from app.core.time_utils import utc_today
 from app.services.base_service import (
     BaseFamilyService,
     get_user_by_id,
@@ -115,7 +116,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         NEXT week (it was already Sunday in UTC).
         """
         if week_of is None:
-            today = today or date.today()
+            today = today or utc_today()
             if today.weekday() == 6:  # Sunday → next week
                 return today + timedelta(days=1)
             return TaskAssignmentService._get_monday(today)

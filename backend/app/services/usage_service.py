@@ -21,6 +21,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.subscription import UsageTracking
+from app.core.time_utils import utc_today
 
 
 class UsageService:
@@ -29,7 +30,7 @@ class UsageService:
     @classmethod
     def _current_period(cls) -> date:
         """Return the first day of the current month as the period key."""
-        today = date.today()
+        today = utc_today()
         return today.replace(day=1)
 
     @classmethod

@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.budget import BudgetAccount, BudgetTransaction
 from app.services.budget.a2a_webhook_service import A2AWebhookService
+from app.core.time_utils import utc_today
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ async def list_candidates(
     _verify(secret, f"candidates:{days}".encode("utf-8"), x_a2a_signature)
 
     from app.models.budget import BudgetPayee
-    cutoff = _date.today() - timedelta(days=days)
+    cutoff = utc_today() - timedelta(days=days)
     rows = (await db.execute(
         select(BudgetTransaction, BudgetPayee.name)
         .outerjoin(BudgetPayee, BudgetTransaction.payee_id == BudgetPayee.id)

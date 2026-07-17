@@ -590,7 +590,7 @@ class TestKidEmailInvites:
             invitation_code=FamilyInvitation.generate_code(),
             status=InvitationStatus.PENDING,
             role=UserRole.TEEN,
-            expires_at=datetime.now(_tz.utc).replace(tzinfo=None)
+            expires_at=datetime.now(_tz.utc)
             + timedelta(days=30),
         )
         db_session.add(inv)

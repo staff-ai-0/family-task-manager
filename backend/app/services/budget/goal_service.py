@@ -16,6 +16,7 @@ from app.schemas.budget import (
     GoalUpdate,
 )
 from app.services.base_service import BaseFamilyService
+from app.core.time_utils import utc_today
 
 
 class GoalService(BaseFamilyService[BudgetGoal]):
@@ -171,7 +172,7 @@ class GoalService(BaseFamilyService[BudgetGoal]):
             List of active budget goals that are valid on the target date
         """
         if target_date is None:
-            target_date = date.today()
+            target_date = utc_today()
 
         query = (
             select(BudgetGoal)

@@ -97,7 +97,7 @@ class FamilyService:
             )).scalar_one_or_none()
             if not existing:
                 family.join_code = code
-                family.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                family.updated_at = datetime.now(timezone.utc)
                 await db.commit()
                 await db.refresh(family)
                 return code
@@ -148,7 +148,7 @@ class FamilyService:
                 tzinfo=None
             )
 
-        family.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        family.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(family)
         return family

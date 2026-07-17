@@ -25,6 +25,7 @@ from app.schemas.budget import (
     RecurringTransactionNextDate,
 )
 from app.models import User
+from app.core.time_utils import utc_today
 
 router = APIRouter()
 
@@ -178,7 +179,7 @@ async def get_next_occurrence(
         from_date=as_of_date,
     )
     
-    is_expired = template.end_date and (as_of_date or date.today()) > template.end_date
+    is_expired = template.end_date and (as_of_date or utc_today()) > template.end_date
     
     return RecurringTransactionNextDate(
         next_due_date=next_due,

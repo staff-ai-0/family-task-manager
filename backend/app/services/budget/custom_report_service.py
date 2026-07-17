@@ -13,6 +13,7 @@ from app.models.budget import BudgetCustomReport
 from app.schemas.budget import CustomReportCreate, CustomReportUpdate
 from app.services.base_service import BaseFamilyService
 from app.services.budget.report_service import ReportService
+from app.core.time_utils import utc_today
 
 
 class CustomReportService(BaseFamilyService[BudgetCustomReport]):
@@ -98,7 +99,7 @@ class CustomReportService(BaseFamilyService[BudgetCustomReport]):
 
 def _resolve_date_range(config: dict) -> tuple[date, date]:
     """Resolve date range from config, returning (start_date, end_date)."""
-    today = date.today()
+    today = utc_today()
     date_range = config.get("date_range", "last_30")
 
     if date_range == "custom":

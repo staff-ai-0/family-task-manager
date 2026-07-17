@@ -88,7 +88,7 @@ class TransferService:
         
         # Parse date
         try:
-            transfer_date = datetime.strptime(date, "%Y-%m-%d").date()
+            transfer_date = datetime.strptime(date, "%Y-%m-%d").date()  # noqa: DTZ007 — date-only parse, tz irrelevant
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -196,7 +196,7 @@ class TransferService:
         
         # Parse month
         try:
-            month_date = datetime.strptime(month, "%Y-%m-%d").date()
+            month_date = datetime.strptime(month, "%Y-%m-%d").date()  # noqa: DTZ007 — date-only parse, tz irrelevant
             # Ensure it's first day of month
             month_date = date(month_date.year, month_date.month, 1)
         except ValueError:
@@ -306,7 +306,7 @@ class TransferService:
         """
         # Parse month
         try:
-            month_date = datetime.strptime(month, "%Y-%m-%d").date()
+            month_date = datetime.strptime(month, "%Y-%m-%d").date()  # noqa: DTZ007 — date-only parse, tz irrelevant
             month_date = date(month_date.year, month_date.month, 1)
         except ValueError:
             raise HTTPException(

@@ -132,7 +132,7 @@ async def test_accept_invitation_expired(client, test_family, test_parent_user, 
         invited_email="expired@example.com",
         invited_by_user_id=test_parent_user.id,
         invitation_code=FamilyInvitation.generate_code(),
-        expires_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)
+        expires_at=datetime.now(timezone.utc) - timedelta(days=1)
     )
     db_session.add(invitation)
     await db_session.commit()
@@ -321,7 +321,7 @@ async def test_invitation_email_link_uses_frontend_origin(
         invited_by_user_id=test_parent_user.id,
         invitation_code=FamilyInvitation.generate_code(),
         role="parent",
-        expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=30),
     )
 
     ok = await EmailService.send_invitation_email(

@@ -10,7 +10,7 @@ Higher PUP = more friction. The UI uses this to nudge parents toward
 re-balancing, scheduling lighter weeks, or talking with a kid.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from statistics import pstdev
 from typing import List, Optional
 from uuid import UUID
@@ -26,6 +26,7 @@ from app.models.pup_snapshot import PupScoreSnapshot
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.task_template import TaskTemplate
 from app.models.user import User
+from app.core.time_utils import utc_today
 
 
 class AnalyticsService:
@@ -37,7 +38,7 @@ class AnalyticsService:
         lookback_weeks: int = 4,
     ) -> List[dict]:
         """Per-member mandatory completion rate over the lookback window."""
-        today = date.today()
+        today = utc_today()
         start = today - timedelta(weeks=lookback_weeks)
         start_dt = datetime.combine(start, datetime.min.time()).replace(
             tzinfo=timezone.utc
@@ -227,7 +228,7 @@ class AnalyticsService:
     async def write_snapshot(db: AsyncSession, family_id: UUID) -> dict:
         """Compute today's PUP and upsert as that family's daily snapshot."""
         result = await AnalyticsService.pup_score(db, family_id)
-        today = date.today()
+        today = utc_today()
         stmt = (
             pg_insert(PupScoreSnapshot)
             .values(
@@ -268,7 +269,7 @@ class AnalyticsService:
     async def list_snapshots(
         db: AsyncSession, family_id: UUID, *, days: int = 30
     ) -> List[dict]:
-        start = date.today() - timedelta(days=days)
+        start = utc_today() - timedelta(days=days)
         q = (
             select(PupScoreSnapshot)
             .where(

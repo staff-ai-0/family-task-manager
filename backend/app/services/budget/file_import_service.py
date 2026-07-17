@@ -134,9 +134,9 @@ def _parse_ofx_date(date_str: str) -> Optional[date]:
 
     try:
         if len(date_str) >= 14:
-            return datetime.strptime(date_str[:14], "%Y%m%d%H%M%S").date()
+            return datetime.strptime(date_str[:14], "%Y%m%d%H%M%S").date()  # noqa: DTZ007 — date-only parse, tz irrelevant
         elif len(date_str) >= 8:
-            return datetime.strptime(date_str[:8], "%Y%m%d").date()
+            return datetime.strptime(date_str[:8], "%Y%m%d").date()  # noqa: DTZ007 — date-only parse, tz irrelevant
     except ValueError:
         pass
     return None

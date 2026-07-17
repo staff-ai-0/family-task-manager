@@ -30,6 +30,7 @@ from app.schemas.task_assignment import (
 )
 from app.models import User
 from app.models.task_assignment import AssignmentStatus
+from app.core.time_utils import utc_today
 
 router = APIRouter()
 
@@ -52,7 +53,7 @@ async def shuffle_tasks(
         week_of=request.week_of,
     )
 
-    week_of = assignments[0].week_of if assignments else (request.week_of or date.today())
+    week_of = assignments[0].week_of if assignments else (request.week_of or utc_today())
 
     return ShuffleResponse(
         week_of=week_of,
@@ -91,7 +92,7 @@ async def list_week_assignments(
     status: Optional[AssignmentStatus] = Query(None, description="Filter by status"),
 ):
     """List all assignments for a given week"""
-    target = week_of or date.today()
+    target = week_of or utc_today()
     family_id = to_uuid_required(current_user.family_id)
     assignments = await TaskAssignmentService.list_assignments_for_week(
         db,

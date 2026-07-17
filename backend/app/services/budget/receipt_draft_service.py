@@ -19,6 +19,7 @@ from app.models.budget import BudgetPayee, BudgetReceiptDraft
 from app.schemas.budget import ReceiptDraftApprove
 from app.services.budget.transaction_service import TransactionService
 from app.schemas.budget import TransactionCreate
+from app.core.time_utils import utc_today
 
 
 class ReceiptDraftService:
@@ -147,7 +148,7 @@ class ReceiptDraftService:
                 txn_date = date.fromisoformat(sd["date"])
             except (ValueError, TypeError):
                 pass
-        txn_date = txn_date or date.today()
+        txn_date = txn_date or utc_today()
 
         notes = overrides.notes
         if notes is None:

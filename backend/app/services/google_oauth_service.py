@@ -381,7 +381,7 @@ class GoogleOAuthService:
         # approves from the members page. Founding a new family is trusted
         # (the founder just consented above).
         joining_existing_family = bool(join_code or family_id)
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(timezone.utc)
 
         user = User(
             id=uuid4(),

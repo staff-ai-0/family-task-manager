@@ -14,6 +14,7 @@ from app.models.budget import BudgetTransaction
 from app.schemas.budget import TransactionCreate, TransactionUpdate, SplitChild
 from app.services.base_service import BaseFamilyService
 from app.core.exceptions import NotFoundException, ValidationError
+from app.core.time_utils import utc_today
 
 
 class TransactionService(BaseFamilyService[BudgetTransaction]):
@@ -869,7 +870,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         adjustment_amount = statement_balance - cleared_total
         adjustment_id = None
         if adjustment_amount != 0:
-            today = date.today()
+            today = utc_today()
             from app.services.budget.month_locking_service import MonthLockingService
             await MonthLockingService.validate_month_not_closed(
                 db, family_id, date(today.year, today.month, 1)
@@ -956,7 +957,7 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             pid for pid in (await db.execute(covered_q)).scalars().all() if pid is not None
         }
 
-        since = date.today() - timedelta(days=lookback_days)
+        since = utc_today() - timedelta(days=lookback_days)
         txn_q = (
             select(BudgetTransaction, BudgetPayee.name)
             .join(BudgetPayee, BudgetTransaction.payee_id == BudgetPayee.id)

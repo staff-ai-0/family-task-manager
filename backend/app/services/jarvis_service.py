@@ -38,6 +38,7 @@ from app.models.user import User, UserRole
 from app.services.analytics_service import AnalyticsService
 from app.services.budget.receipt_scanner_service import LLM_TIMEOUT, RECEIPT_MODEL
 from app.services.jarvis_pending_action_service import PendingActionService
+from app.core.time_utils import utc_today
 
 
 # Jarvis model alias — defaults to receipt scanner's claude-haiku for
@@ -145,8 +146,7 @@ class JarvisService:
         score = pup["pup_score"]
         label = pup["label"]
 
-        from datetime import date
-        today = date.today()
+        today = utc_today()
         q = (
             select(
                 func.count(TaskAssignment.id).label("total"),
@@ -201,7 +201,6 @@ class JarvisService:
     ) -> str:
         """Self-scoped snapshot for a teen — ONLY their own data. No other
         members, no family finances, no family-wide PUP roll-up."""
-        from datetime import date
         from app.models.gig import GigClaim, GigClaimStatus
 
         u = (
@@ -211,7 +210,7 @@ class JarvisService:
         points = int((u.points if u else 0) or 0)
         cash = int((u.cash_cents if u else 0) or 0) / 100
 
-        today = date.today()
+        today = utc_today()
         row = (
             await db.execute(
                 select(

@@ -363,7 +363,7 @@ class RewardService(BaseFamilyService[Reward]):
         notes: Optional[str] = None,
     ):
         """Approve (deduct points now) or reject a queued redemption."""
-        from datetime import datetime as _dt
+        from datetime import datetime as _dt, timezone as _tz
         from app.models.reward import RewardRedemption, RedemptionStatus
         from app.models.user import User
 
@@ -420,7 +420,7 @@ class RewardService(BaseFamilyService[Reward]):
             redemption.status = RedemptionStatus.REJECTED.value
 
         redemption.decided_by = parent_id
-        redemption.decided_at = _dt.utcnow()
+        redemption.decided_at = _dt.now(_tz.utc)
         redemption.decision_notes = notes
         await db.commit()
         await db.refresh(redemption)

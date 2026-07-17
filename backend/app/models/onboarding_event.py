@@ -6,7 +6,7 @@ they were shown it (that's the boolean users.completed_welcome_tour flag).
 """
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from app.core.database import Base
@@ -36,4 +36,4 @@ class OnboardingEvent(Base):
     )
     event_type = Column(String(40), nullable=False)
     step_index = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)

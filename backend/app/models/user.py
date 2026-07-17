@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Integer, Boolean, Date, DateTime, ForeignKey, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import enum
 
@@ -48,7 +48,7 @@ class User(Base):
     preferred_lang = Column(String(5), default="en", nullable=False, server_default="en")
     
     email_verified = Column(Boolean, default=False, nullable=False)
-    email_verified_at = Column(DateTime, nullable=True)
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
 
     # True once the user has received the welcome email. Set by
     # EmailService.send_welcome_if_not_sent after a successful Resend
@@ -81,7 +81,7 @@ class User(Base):
 
     # Consent capture (LFPDPPP / terms acceptance). Set when the user (or the
     # registering adult) accepts the terms + privacy notice at signup.
-    consented_at = Column(DateTime, nullable=True)
+    consented_at = Column(DateTime(timezone=True), nullable=True)
     consent_policy_version = Column(String(32), nullable=True)
 
     # Parental-approval state for join-code self-signups. 'approved' for all
@@ -94,7 +94,7 @@ class User(Base):
         server_default=APPROVAL_APPROVED,
         index=True,
     )
-    approved_at = Column(DateTime, nullable=True)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
 
     # Optional birthdate collected for CHILD/TEEN signups. No hard age logic
     # yet — enables future age gating (COPPA-style flows).
@@ -109,8 +109,8 @@ class User(Base):
     oauth_provider = Column(String(50), nullable=True)
     oauth_id = Column(String(255), nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Family chat read receipt (W8.5). Null = never visited chat.
     chat_last_read_at = Column(DateTime(timezone=True), nullable=True)
