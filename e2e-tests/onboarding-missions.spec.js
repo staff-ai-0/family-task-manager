@@ -53,3 +53,27 @@ test('mission target present but CSS-hidden → degrades cleanly, never highligh
   await page.goto(`${BASE_URL}/parent/tasks`);
   await expect(page.locator('.driver-popover')).toHaveCount(0, { timeout: 5000 });
 });
+
+// Mission 2 ("first-gig") support: the parent gig-create form (parent/gigs.astro)
+// now carries a payout_cadence select alongside the gig-fab/gig-cadence/gig-submit
+// data-tour hooks and dispatches the matching ftm:mission signals. This test
+// doesn't drive the mission popover itself (covered by the pattern above) — it
+// verifies the real, non-mission behavior the mission's steps are anchored to:
+// the cadence value picked in the UI actually round-trips through the
+// POST /api/gigs/offerings body and persists.
+test('gig form posts payout_cadence and it persists', async ({ page }) => {
+  await login(page);
+  await page.goto(`${BASE_URL}/gigs`);
+  await page.click('[data-tour="gig-fab"]');
+  await page.fill('input[name="title"], #gig-title', 'Lavar el coche');
+  await page.fill('input[name="points"], #gig-points', '50');
+  await page.selectOption('[data-tour="gig-cadence"]', 'weekly');
+  await page.click('[data-tour="gig-submit"]');
+  // The new gig card renders; reload and confirm the cadence stuck via API.
+  // GET /api/gigs/offerings returns EnrichedOfferingResponse rows
+  // ({ offering, my_claim, active_claimers }), not flat offerings — same
+  // `item.offering ?? item` unwrap parent/gigs.astro's frontmatter uses.
+  const resp = await page.request.get(`${BASE_URL}/api/gigs/offerings`);
+  const offerings = await resp.json();
+  expect(offerings.some((o) => (o.offering ?? o).payout_cadence === 'weekly')).toBeTruthy();
+});

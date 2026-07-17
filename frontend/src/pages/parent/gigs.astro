@@ -89,6 +89,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
     <button
         slot="actions"
         id="new-gig-btn"
+        data-tour="gig-fab"
         class="bg-white text-violet-700 font-bold text-sm px-4 py-2 rounded-xl shadow hover:bg-violet-50 transition-colors"
     >
         + {lang === "es" ? `Nueva ${gt.One}` : `New ${gt.One}`}
@@ -226,6 +227,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     data-difficulty={o.difficulty ?? 1}
                                     data-category={o.category ?? "other"}
                                     data-allow-multiple={o.allow_multiple ? "1" : "0"}
+                                    data-payout-cadence={o.payout_cadence ?? "immediate"}
                                 >
                                     {lang === "es" ? "Editar" : "Edit"}
                                 </button>
@@ -382,6 +384,17 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 </div>
             </div>
             <div>
+                <label class="block text-sm font-medium text-brand-ink mb-1">{lang === "es" ? "Frecuencia de pago" : "Payout cadence"}</label>
+                <select id="f-cadence" name="payout_cadence" data-tour="gig-cadence"
+                    class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-violet-400"
+                >
+                    <option value="immediate">{lang === "es" ? "Inmediato" : "Immediate"}</option>
+                    <option value="weekly">{lang === "es" ? "Semanal" : "Weekly"}</option>
+                    <option value="biweekly">{lang === "es" ? "Quincenal" : "Biweekly"}</option>
+                    <option value="monthly">{lang === "es" ? "Mensual" : "Monthly"}</option>
+                </select>
+            </div>
+            <div>
                 <label class="block text-sm font-medium text-brand-ink mb-1">{lang === "es" ? "Categoría" : "Category"}</label>
                 <select id="f-category" name="category"
                     class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-violet-400"
@@ -407,6 +420,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 </span>
             </label>
             <button type="submit"
+                data-tour="gig-submit"
                 class="w-full py-3 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-700 active:scale-[.98] transition-all"
             >
                 {lang === "es" ? "Guardar" : "Save"}
@@ -437,9 +451,17 @@ const closeModal = () => {
 
 document.getElementById("new-gig-btn")!.addEventListener("click", () => {
     openModal(lang === "es" ? `Nueva ${termOne}` : `New ${termOne}`);
+    // The FAB always opens this modal — dispatch alongside the real action,
+    // additive only (mirrors TaskCreateModal's task-modal-open pattern).
+    window.dispatchEvent(new CustomEvent("ftm:mission", { detail: { signal: "gig-modal-open" } }));
 });
 document.getElementById("close-modal")!.addEventListener("click", closeModal);
 modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+const cadenceSelect = document.getElementById("f-cadence") as HTMLSelectElement;
+cadenceSelect?.addEventListener("change", () => {
+    window.dispatchEvent(new CustomEvent("ftm:mission", { detail: { signal: "gig-cadence-set" } }));
+});
 
 document.querySelectorAll(".edit-gig-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -451,6 +473,7 @@ document.querySelectorAll(".edit-gig-btn").forEach(btn => {
         (document.getElementById("f-difficulty") as HTMLSelectElement).value = b.dataset.difficulty!;
         (document.getElementById("f-category") as HTMLSelectElement).value = b.dataset.category!;
         (document.getElementById("f-allow-multiple") as HTMLInputElement).checked = b.dataset.allowMultiple === "1";
+        (document.getElementById("f-cadence") as HTMLSelectElement).value = b.dataset.payoutCadence || "immediate";
         openModal(lang === "es" ? `Editar ${termOne}` : `Edit ${termOne}`);
     });
 });
@@ -465,6 +488,7 @@ form.addEventListener("submit", async (e) => {
         difficulty: parseInt((document.getElementById("f-difficulty") as HTMLSelectElement).value),
         category: (document.getElementById("f-category") as HTMLSelectElement).value,
         allow_multiple: (document.getElementById("f-allow-multiple") as HTMLInputElement).checked,
+        payout_cadence: (document.getElementById("f-cadence") as HTMLSelectElement).value,
     };
     const btn = form.querySelector("button[type=submit]") as HTMLButtonElement;
     btn.disabled = true;
@@ -474,6 +498,11 @@ form.addEventListener("submit", async (e) => {
         : await fetch("/api/gigs/offerings", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) });
 
     if (res.ok) {
+        // Success-gated: only a real CREATE (not an edit save) satisfies the
+        // "create your first gig" mission's final step.
+        if (!gigId) {
+            window.dispatchEvent(new CustomEvent("ftm:mission", { detail: { signal: "gig-created" } }));
+        }
         closeModal();
         window.location.reload();
     } else {
