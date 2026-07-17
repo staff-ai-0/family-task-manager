@@ -29,7 +29,6 @@ from app.schemas.task_assignment import (
     GigApprovalRow,
 )
 from app.models import User
-from app.models.user import UserRole
 from app.models.task_assignment import AssignmentStatus
 
 router = APIRouter()
@@ -243,13 +242,10 @@ async def upload_gig_proof(
 
 @router.get("/pending-approvals", response_model=List[GigApprovalRow])
 async def list_pending_approvals(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
     """List gigs awaiting parent approval (parents only)."""
-    if current_user.role != UserRole.PARENT:
-        raise HTTPException(status_code=403, detail="Parents only")
-
     family_id = to_uuid_required(current_user.family_id)
     rows = await TaskAssignmentService.list_pending_approvals(db, family_id)
 

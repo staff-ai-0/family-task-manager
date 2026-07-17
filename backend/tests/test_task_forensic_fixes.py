@@ -46,6 +46,17 @@ from app.services.task_template_service import TaskTemplateService
 
 # ─── Helpers ─────────────────────────────────────────────────────────
 
+
+def _utc_today():
+    """Family fixtures default to timezone="UTC", and the task services compute
+    "today" in the family timezone. A local date.today() diverges from that
+    after 18:00 America/Mexico_City (UTC midnight), flaking these tests in
+    evening runs while CI (UTC) stays green — so always derive today in UTC.
+    """
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).date()
+
+
 async def _template(db, family_id, parent_id, **kwargs):
     defaults = {
         "title": f"Chore {uuid4().hex[:6]}",
@@ -75,7 +86,7 @@ async def _extra_user(db, family_id, email, role=UserRole.CHILD):
 
 
 def _week_monday() -> date:
-    today = date.today()
+    today = _utc_today()
     if today.weekday() == 6:
         return today + timedelta(days=1)
     return today - timedelta(days=today.weekday())
@@ -344,7 +355,7 @@ class TestLifecycle:
             db_session, test_family.id, test_parent_user.id,
             title="Future Chore", interval_days=1,
         )
-        future = date.today() + timedelta(days=2)
+        future = _utc_today() + timedelta(days=2)
         row = await _direct_assignment(
             db_session, tmpl, test_child_user.id, test_family.id, future
         )
@@ -364,7 +375,7 @@ class TestLifecycle:
             db_session, test_family.id, test_parent_user.id,
             title="Capped Gig", interval_days=1, is_bonus=True, points=10,
         )
-        today = date.today()
+        today = _utc_today()
         row = await _direct_assignment(
             db_session, tmpl, test_child_user.id, test_family.id, today
         )
@@ -396,7 +407,7 @@ class TestLifecycle:
             title="Revive Chore", interval_days=1, points=10,
         )
         row = await _direct_assignment(
-            db_session, tmpl, test_child_user.id, test_family.id, date.today()
+            db_session, tmpl, test_child_user.id, test_family.id, _utc_today()
         )
         before = test_child_user.points
         await TaskAssignmentService.complete_assignment(
@@ -426,7 +437,7 @@ class TestLifecycle:
             title="Cancel Chore", interval_days=1, points=10,
         )
         row = await _direct_assignment(
-            db_session, tmpl, test_child_user.id, test_family.id, date.today()
+            db_session, tmpl, test_child_user.id, test_family.id, _utc_today()
         )
         before = test_child_user.points
         await TaskAssignmentService.complete_assignment(
@@ -449,7 +460,7 @@ class TestLifecycle:
             title="Approved Gig", interval_days=1, is_bonus=True, points=10,
         )
         row = await _direct_assignment(
-            db_session, tmpl, test_child_user.id, test_family.id, date.today()
+            db_session, tmpl, test_child_user.id, test_family.id, _utc_today()
         )
         await TaskAssignmentService.complete_assignment(
             db_session, row.id, test_family.id, test_child_user.id,
@@ -473,7 +484,7 @@ class TestLifecycle:
             gig_mode="competition",
         )
         row = await _direct_assignment(
-            db_session, tmpl, test_child_user.id, test_family.id, date.today()
+            db_session, tmpl, test_child_user.id, test_family.id, _utc_today()
         )
         with pytest.raises(ValidationException):
             await TaskAssignmentService.complete_assignment(
@@ -491,15 +502,15 @@ class TestLifecycle:
             title="Ghost Chore", interval_days=1,
         )
         open_row = await _direct_assignment(
-            db_session, tmpl, test_child_user.id, test_family.id, date.today()
+            db_session, tmpl, test_child_user.id, test_family.id, _utc_today()
         )
         overdue_row = await _direct_assignment(
             db_session, tmpl, test_child_user.id, test_family.id,
-            date.today() - timedelta(days=1), status=AssignmentStatus.OVERDUE,
+            _utc_today() - timedelta(days=1), status=AssignmentStatus.OVERDUE,
         )
         done_row = await _direct_assignment(
             db_session, tmpl, test_child_user.id, test_family.id,
-            date.today() - timedelta(days=2), status=AssignmentStatus.COMPLETED,
+            _utc_today() - timedelta(days=2), status=AssignmentStatus.COMPLETED,
         )
 
         await AuthService.deactivate_user(db_session, test_child_user.id)
@@ -552,7 +563,7 @@ class TestTemplateGuards:
             title="Hard Chore", points=10, effort_level=3,  # ×2.0 → 20
         )
         await _direct_assignment(
-            db_session, tmpl, test_child_user.id, test_family.id, date.today()
+            db_session, tmpl, test_child_user.id, test_family.id, _utc_today()
         )
         rows = await TaskAssignmentService.list_for_user_today_with_locks(
             db_session, test_child_user.id, test_family.id
