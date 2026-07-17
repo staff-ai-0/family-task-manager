@@ -195,7 +195,7 @@ class CSVImportService:
         
         for fmt in formats:
             try:
-                return datetime.strptime(date_str, fmt).date()
+                return datetime.strptime(date_str, fmt).date()  # noqa: DTZ007 — date-only parse, tz irrelevant
             except ValueError:
                 continue
         

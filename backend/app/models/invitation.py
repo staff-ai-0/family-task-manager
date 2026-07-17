@@ -33,9 +33,9 @@ class FamilyInvitation(Base):
     invitation_code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
     status: Mapped[str] = mapped_column(SQLEnum(InvitationStatus), default=InvitationStatus.PENDING, nullable=False)
     role: Mapped[str] = mapped_column(SQLEnum(UserRole), default=UserRole.CHILD, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)  # 30 days from creation
-    accepted_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)  # 30 days from creation
+    accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     accepted_by_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Relationships
@@ -54,7 +54,7 @@ class FamilyInvitation(Base):
 
     def is_expired(self) -> bool:
         """Check if invitation has expired"""
-        return datetime.now(timezone.utc).replace(tzinfo=None) > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
 
     def is_valid(self) -> bool:
         """Check if invitation is still valid"""

@@ -17,6 +17,7 @@ from app.schemas.budget import (
     RecurringTransactionUpdate,
 )
 from app.services.base_service import BaseFamilyService
+from app.core.time_utils import utc_today
 
 
 class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction]):
@@ -249,7 +250,7 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
             List of recurring transactions due for posting
         """
         if as_of_date is None:
-            as_of_date = date.today()
+            as_of_date = utc_today()
 
         query = (
             select(BudgetRecurringTransaction)
@@ -326,7 +327,7 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
             Next occurrence date or None if template has expired/exhausted
         """
         if from_date is None:
-            from_date = date.today()
+            from_date = utc_today()
 
         # Check if after_n limit reached
         if end_mode == "after_n" and occurrence_limit is not None:
@@ -538,7 +539,7 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         intended behavior, since no human triggered the post.
         """
         if transaction_date is None:
-            transaction_date = date.today()
+            transaction_date = utc_today()
 
         recurring = await cls.get_by_id(db, recurring_id, family_id)
         transaction = cls._post_recurring_no_commit(
@@ -565,7 +566,7 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         from app.models.budget import BudgetRecurringTransaction
 
         logger = logging.getLogger(__name__)
-        today = date.today()
+        today = utc_today()
         family_ids = [
             fid for (fid,) in (await db.execute(
                 select(BudgetRecurringTransaction.family_id).where(
@@ -606,7 +607,7 @@ class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction])
         transaction_id}]}.
         """
         if as_of_date is None:
-            as_of_date = date.today()
+            as_of_date = utc_today()
 
         due = await cls.list_due_for_posting(db, family_id, as_of_date)
 

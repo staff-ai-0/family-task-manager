@@ -57,7 +57,7 @@ async def _make_pending_invite(
         invitation_code=FamilyInvitation.generate_code(),
         status=InvitationStatus.PENDING,
         role=role,
-        expires_at=datetime.now(timezone.utc).replace(tzinfo=None)
+        expires_at=datetime.now(timezone.utc)
         + timedelta(days=30),
     )
     db_session.add(inv)

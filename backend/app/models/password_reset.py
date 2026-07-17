@@ -16,9 +16,9 @@ class PasswordResetToken(Base):
     
     token = Column(String(64), primary_key=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    expires_at = Column(DateTime, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
     is_used = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     
     # Relationships
     user = relationship("User", back_populates="password_reset_tokens")
@@ -32,7 +32,7 @@ class PasswordResetToken(Base):
     def create_for_user(user_id, hours_valid: int = 24):
         """Create a new password reset token"""
         token = PasswordResetToken.generate_token()
-        expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=hours_valid)
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=hours_valid)
         
         return PasswordResetToken(
             token=token,
@@ -42,4 +42,4 @@ class PasswordResetToken(Base):
     
     def is_valid(self) -> bool:
         """Check if token is still valid"""
-        return not self.is_used and datetime.now(timezone.utc).replace(tzinfo=None) < self.expires_at
+        return not self.is_used and datetime.now(timezone.utc) < self.expires_at

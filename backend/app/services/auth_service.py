@@ -145,7 +145,7 @@ class AuthService:
         
         # Update password
         user.password_hash = get_password_hash(new_password)
-        user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        user.updated_at = datetime.now(timezone.utc)
         
         await db.commit()
         await db.refresh(user)
@@ -168,7 +168,7 @@ class AuthService:
 
         user = await AuthService.get_user_by_id(db, user_id)
         user.is_active = False
-        user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        user.updated_at = datetime.now(timezone.utc)
 
         await db.execute(
             sql_update(TaskAssignment)
@@ -192,7 +192,7 @@ class AuthService:
         """Activate a user account"""
         user = await AuthService.get_user_by_id(db, user_id)
         user.is_active = True
-        user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        user.updated_at = datetime.now(timezone.utc)
         
         await db.commit()
         await db.refresh(user)
@@ -207,7 +207,7 @@ class AuthService:
             if value is not None and hasattr(user, key):
                 setattr(user, key, value)
 
-        user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        user.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(user)
         return user
@@ -224,8 +224,8 @@ class AuthService:
             raise ValidationException("User is not pending approval")
 
         user.approval_status = APPROVAL_APPROVED
-        user.approved_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        user.approved_at = datetime.now(timezone.utc)
+        user.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(user)
         return user

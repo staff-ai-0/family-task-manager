@@ -10,6 +10,7 @@ from sqlalchemy import select, and_, func, case, or_
 from typing import Dict, List, Optional
 from uuid import UUID
 
+from app.core.time_utils import utc_today
 from app.models.budget import (
     BudgetCategory,
     BudgetCategoryGroup,
@@ -420,7 +421,7 @@ class ReportService:
         from app.services.budget.account_service import AccountService
         
         if not as_of_date:
-            as_of_date = date.today()
+            as_of_date = utc_today()
         
         # Get all accounts and their balances
         accounts = await AccountService.list_by_family(db, family_id)
@@ -499,7 +500,7 @@ class ReportService:
                 "current_net_worth_currency": 0.0,
             }
 
-        today = date.today()
+        today = utc_today()
         current_month = date(today.year, today.month, 1)
         month_starts = [
             current_month - relativedelta(months=i)
@@ -809,7 +810,7 @@ class ReportService:
         )
 
         if as_of_date is None:
-            as_of_date = date.today()
+            as_of_date = utc_today()
         # Clamp to a sane range so a bad query param can't cost unbounded work.
         horizon_days = max(1, min(int(horizon_days), 365))
         window_start = as_of_date

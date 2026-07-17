@@ -14,6 +14,7 @@ from app.models.budget import BudgetAccount, BudgetTransaction
 from app.schemas.budget import AccountCreate, AccountUpdate
 from app.services.base_service import BaseFamilyService
 from app.core.exceptions import ValidationError
+from app.core.time_utils import utc_today
 
 
 class AccountService(BaseFamilyService[BudgetAccount]):
@@ -106,7 +107,7 @@ class AccountService(BaseFamilyService[BudgetAccount]):
             starting_txn = BudgetTransaction(
                 family_id=family_id,
                 account_id=account.id,
-                date=date.today(),
+                date=utc_today(),
                 amount=data.starting_balance,
                 notes="Starting Balance",
                 cleared=True,

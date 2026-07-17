@@ -46,6 +46,7 @@ from app.models.budget import (
 )
 from app.services.budget.categorization_rule_service import CategorizationRuleService
 from app.services.budget.receipt_draft_service import ReceiptDraftService
+from app.core.time_utils import utc_today
 
 # Hard ceiling for any single LiteLLM/vision request. A hung or slow provider
 # must never block the event loop indefinitely.
@@ -367,9 +368,9 @@ async def scan_receipt(
     # Sanity-guard the parsed date: vision models misread receipt dates
     # (e.g. "2087-07-02", "2008-07-29"). Reject anything >30 days in the
     # future or older than ~2 years → fall back to today downstream
-    # (`receipt.date or date.today()`), so reports never get garbage months.
+    # (`receipt.date or utc_today()`), so reports never get garbage months.
     if parsed_date is not None:
-        _today = date.today()
+        _today = utc_today()
         if parsed_date > _today + timedelta(days=30) or parsed_date < _today - timedelta(days=730):
             logger.warning("discarding implausible receipt date %s", parsed_date)
             parsed_date = None
@@ -644,7 +645,7 @@ async def scan_and_create_transaction(
     ):
         rate = await FXService.get_rate(
             receipt.currency, match.matched_account_currency,
-            on_date=receipt.date or date.today(),
+            on_date=receipt.date or utc_today(),
         )
         if rate is None:
             # No FX rate available — route to drafts instead of writing the
@@ -755,7 +756,7 @@ async def scan_and_create_transaction(
             }
 
     # (5) Persist transaction ------------------------------------------------
-    txn_date = receipt.date or date.today()
+    txn_date = receipt.date or utc_today()
     # Month-locking gate: a parent may have closed the month after the
     # receipt date. Route to drafts so the human can re-date or unlock.
     from app.services.budget.month_locking_service import MonthLockingService

@@ -871,7 +871,7 @@ class EmailService:
 
         if user:
             user.email_verified = True
-            user.email_verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            user.email_verified_at = datetime.now(timezone.utc)
 
         await db.commit()
 

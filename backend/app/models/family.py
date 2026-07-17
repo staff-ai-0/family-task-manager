@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import secrets
 
@@ -49,7 +49,7 @@ class Family(Base):
     ai_processing_consent = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )
-    ai_processing_consent_at = Column(DateTime, nullable=True)
+    ai_processing_consent_at = Column(DateTime(timezone=True), nullable=True)
 
     # Onboarding checklist — tracked per family, all False on creation.
     onboarding_child_invited = Column(Boolean, nullable=False, default=False, server_default="false")
@@ -58,8 +58,8 @@ class Family(Base):
     onboarding_points_awarded = Column(Boolean, nullable=False, default=False, server_default="false")
     onboarding_dismissed = Column(Boolean, nullable=False, default=False, server_default="false")
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Soft-delete tombstone (self-serve account deletion). Set when a parent
     # closes the whole family; the row + all family data is retained for a

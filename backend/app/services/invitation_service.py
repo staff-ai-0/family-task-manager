@@ -49,7 +49,7 @@ class InvitationService:
         """Stamp an invitation as accepted by ``user`` (shared by all accept
         paths — token accept, OAuth invite-join, register invite-join)."""
         invitation.status = InvitationStatus.ACCEPTED
-        invitation.accepted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        invitation.accepted_at = datetime.now(timezone.utc)
         invitation.accepted_by_user_id = user.id
 
     @staticmethod
@@ -111,7 +111,7 @@ class InvitationService:
             invitation_code=invitation_code,
             status=InvitationStatus.PENDING,
             role=role,
-            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30)
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30)
         )
         
         db.add(invitation)
@@ -283,7 +283,7 @@ class InvitationService:
 
         # Refresh the window so a stale-but-pending invite is valid again.
         invitation.expires_at = (
-            datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30)
+            datetime.now(timezone.utc) + timedelta(days=30)
         )
         await db.flush()
 

@@ -9,7 +9,7 @@ Migrated from the legacy ``jarvis_tools`` handlers:
   - ``tasks_overdue_list`` (was ``list_overdue_tasks``)
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
@@ -19,6 +19,7 @@ from app.mcp.context import McpContext
 from app.models.task_assignment import AssignmentStatus, TaskAssignment
 from app.models.task_template import TaskTemplate
 from app.models.user import User
+from app.core.time_utils import utc_today
 
 
 def _ser_template(t: TaskTemplate) -> dict:
@@ -83,7 +84,7 @@ class TodayProgressAdapter(ServiceAdapter):
     """Read-only: today's per-member task progress."""
 
     async def list(self, ctx: McpContext) -> list[dict]:
-        today = date.today()
+        today = utc_today()
         q = (
             select(
                 TaskAssignment.assigned_to,
@@ -149,7 +150,7 @@ class OverdueTasksAdapter(ServiceAdapter):
     """Read-only: overdue assignments across the family (last 14 days)."""
 
     async def list(self, ctx: McpContext) -> list[dict]:
-        today = date.today()
+        today = utc_today()
         q = (
             select(TaskAssignment)
             .where(

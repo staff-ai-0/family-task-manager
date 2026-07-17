@@ -257,7 +257,7 @@ async def register_family(
     # Join-by-code signups start pending parental approval; every other
     # path is trusted (founder consented above, invitations are parent-sent).
     approval_status = APPROVAL_PENDING if data.family_code else APPROVAL_APPROVED
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(timezone.utc)
 
     user = User(
         email=data.email,
