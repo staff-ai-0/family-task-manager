@@ -41,3 +41,15 @@ test('mission target absent → no dead end (popover closes gracefully)', async 
   // Runner finds no element for step 3 here and ends without throwing.
   await expect(page.locator('.driver-popover')).toHaveCount(0, { timeout: 5000 });
 });
+
+test('mission target present but CSS-hidden → degrades cleanly, never highlighted', async ({ page }) => {
+  await login(page);
+  // Step index 1 targets '[data-tour="task-template-grid"]', which lives
+  // inside TaskCreateModal.astro — always rendered in the DOM, but behind
+  // a "hidden" (display:none) class until the + FAB opens it. A
+  // DOM-presence-only check would find it and highlight nothing-visible;
+  // the runner must treat "present but not visible" the same as "absent".
+  await page.evaluate(() => sessionStorage.setItem('ftm_mission_first-task', '1'));
+  await page.goto(`${BASE_URL}/parent/tasks`);
+  await expect(page.locator('.driver-popover')).toHaveCount(0, { timeout: 5000 });
+});
