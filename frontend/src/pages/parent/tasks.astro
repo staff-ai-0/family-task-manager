@@ -156,6 +156,7 @@ function freqLabel(tmpl: any): string {
     <button
         slot="actions"
         id="tcm-trigger"
+        data-tour="task-fab"
         class="press h-10 w-10 rounded-full bg-brand-sky-deep border-2 border-brand-ink shadow-[var(--shadow-card)] text-white flex items-center justify-center text-xl font-bold flex-shrink-0"
         aria-label={lang === "es" ? "Nueva tarea" : "New task"}
     >+</button>
@@ -410,6 +411,13 @@ function freqLabel(tmpl: any): string {
 
     <script>
         document.addEventListener('astro:page-load', () => {
+        // Mission signal: the + FAB always opens TaskCreateModal (see TaskCreateModal.astro's
+        // "tcm-trigger" click listener) — dispatch alongside that real action, additive only.
+        const fabTrigger = document.getElementById("tcm-trigger");
+        fabTrigger?.addEventListener("click", () => {
+            window.dispatchEvent(new CustomEvent("ftm:mission", { detail: { signal: "task-modal-open" } }));
+        });
+
         const previewBtn = document.getElementById("btn-shuffle-preview");
         const modal = document.getElementById("preview-modal");
         const closeBtn = document.getElementById("preview-close");
