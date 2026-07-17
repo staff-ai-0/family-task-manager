@@ -5,7 +5,7 @@ upserts make a same-day re-run a no-op.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
@@ -30,5 +30,5 @@ class PupScoreSnapshot(Base):
     label = Column(String(16), nullable=False)
     snapshot_date = Column(Date, nullable=False)
     created_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

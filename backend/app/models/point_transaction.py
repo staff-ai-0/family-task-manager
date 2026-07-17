@@ -6,7 +6,7 @@ Tracks all point-related activities for audit and transparency.
 from sqlalchemy import Column, Integer, DateTime, ForeignKey, Enum as SQLEnum, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import enum
 
@@ -49,7 +49,7 @@ class PointTransaction(Base):
     gig_claim_id = Column(UUID(as_uuid=True), ForeignKey("gig_claims.id", ondelete="SET NULL"), nullable=True)
     
     # Metadata
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # Admin who created
     
     # Relationships

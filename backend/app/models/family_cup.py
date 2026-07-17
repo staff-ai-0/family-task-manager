@@ -11,7 +11,7 @@ history only.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column,
@@ -56,5 +56,5 @@ class FamilyCupSeason(Base):
     winner_name = Column(String(120), nullable=True)  # denormalized snapshot
     winner_points = Column(Integer, nullable=False, default=0)
     created_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

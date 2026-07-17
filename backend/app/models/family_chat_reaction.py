@@ -5,7 +5,7 @@ from the same user; toggling re-adds is a no-op via insert-on-conflict.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
@@ -35,5 +35,5 @@ class FamilyChatReaction(Base):
     )
     emoji = Column(String(16), nullable=False)
     created_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
