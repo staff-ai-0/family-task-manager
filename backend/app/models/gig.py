@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     Index,
+    CheckConstraint,
     text,
     Enum as SQLEnum,
 )
@@ -48,10 +49,23 @@ class GigOfferingStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class GigPayoutCadence(str, Enum):
+    IMMEDIATE = "immediate"
+    WEEKLY = "weekly"
+    BIWEEKLY = "biweekly"
+    MONTHLY = "monthly"
+
+
 class GigOffering(Base):
     """A gig posted by a parent that kids can claim independently."""
 
     __tablename__ = "gig_offerings"
+    __table_args__ = (
+        CheckConstraint(
+            "payout_cadence IN ('immediate','weekly','biweekly','monthly')",
+            name="ck_gig_offerings_payout_cadence",
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     family_id = Column(
@@ -79,6 +93,15 @@ class GigOffering(Base):
     # kids may legitimately complete and get paid for independently.
     allow_multiple = Column(
         Boolean, nullable=False, default=False, server_default="false"
+    )
+    # Advisory payout rhythm: when the parent is reminded to hand over accrued
+    # gig cash (weekly / quincena / mes). Never blocks an early payout and no
+    # scheduler auto-pays — reminders + payout-screen grouping only.
+    payout_cadence = Column(
+        String(10),
+        nullable=False,
+        default=GigPayoutCadence.IMMEDIATE.value,
+        server_default=GigPayoutCadence.IMMEDIATE.value,
     )
     # Kid-proposed gigs (W4.4): parent-created offerings are 'approved';
     # kid proposals start 'pending' (with is_active=False) until a parent
