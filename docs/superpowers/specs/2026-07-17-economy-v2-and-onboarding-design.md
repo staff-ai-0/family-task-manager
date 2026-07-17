@@ -61,9 +61,14 @@ Two currencies with clearer boundaries. **Additive** — nothing existing is rem
   approved (unchanged UX).
 
 ### Naming
-- Keep **"Gig"** as the product term (Juan's call — it is in the DB, URLs, and
-  brand). Copy must clarify a gig is **extra dinero**, distinct from a **premio**
-  (points reward). Fix the tour line that conflates the two.
+- The gig **term is per-family configurable**: `gig` (default) or `chamba`
+  (Juan's call, 2026-07-17). Stored on the family; every gig-facing label in the
+  UI renders the family's chosen term (singular/plural, capitalized where the
+  string is). The DB tables, URLs (`/gigs`, `/api/gigs`), and code identifiers
+  stay `gig` — only user-visible copy varies.
+- Regardless of term, copy must clarify a gig/chamba is **extra dinero**,
+  distinct from a **premio** (points reward). Fix the tour line that conflates
+  the two.
 
 ## 3. Scope — five work items
 
@@ -74,6 +79,7 @@ Two currencies with clearer boundaries. **Additive** — nothing existing is rem
 | 3 | Economy copy rewrite (v2) | frontend i18n | S | low |
 | 4 | Action-driven onboarding missions | frontend | L | med |
 | 5 | Readability polish (fonts, shorter (i) boxes, GIF slots) | frontend | S–M | low |
+| 6 | Per-family gig term (`gig` \| `chamba`) | backend + frontend | M | low |
 
 ### 3.1 Backend — `chore_gated` allowance mode
 - Add `"chore_gated"` to `ALLOWANCE_MODES` (`bank_service.py`) and the
@@ -165,6 +171,19 @@ The heart of the rebuild. Replaces passive tooltips with *do-it* missions.
   mission is skipped and the checklist item stays actionable via deep-link.
 - Build behind the current tour: the classic tooltip tour remains the fallback
   path; missions are the enhanced path when targets are present.
+
+### 3.6 Per-family gig term (`gig` | `chamba`)
+- New column `Family.gig_term String(10) NOT NULL default 'gig'`, check-constrained
+  to `('gig','chamba')`. Alembic migration (chains after the gig_payout_cadence
+  revision — single head).
+- Surface in the family settings API: add `gig_term` to `FamilyUpdate` (optional
+  Literal) and `FamilyResponse`. Parent-only edit, in the family settings page.
+- Frontend term resolver: a small helper `gigTerm(term, lang) -> { one, many, One, Many }`
+  ("gig"/"gigs"/"Gig"/"Gigs" or "chamba"/"chambas"/"Chamba"/"Chambas"). The handful
+  of gig-facing i18n strings (nav label, page title, "+ Nueva Gig", subtitle,
+  mission copy) render the resolved term instead of a literal "Gig". DB tables,
+  routes (`/gigs`, `/api/gigs`), and code identifiers stay `gig`.
+- Default `gig` preserves today's wording for every existing family.
 
 ### 3.5 Readability polish
 - Bump info-banner body font size + contrast (the yellow "Cómo funcionan…" card and
