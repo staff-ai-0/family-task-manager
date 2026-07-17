@@ -9,7 +9,9 @@ that file for the sibling ``chore_proportional`` mode and its helpers
 constant used to keep these tests clock-independent).
 """
 import pytest
+from sqlalchemy import select
 
+from app.models.kid_bank import KidBankAccount
 from app.models.task_assignment import ApprovalStatus, AssignmentStatus
 from app.models.user import User, UserRole
 from app.services.bank_service import ALLOWANCE_MODES, BankService
@@ -78,3 +80,30 @@ async def test_gated_release_pays_only_at_full_completion(db):
     assert getattr(ei.value, "status_code", None) == 409
     u = await db.get(User, kid.id)
     assert u.cash_cents == 25000
+
+
+# ── weekly parent-nudge sweep must also cover gated kids ───────────────────
+#
+# Contract: "chore_gated accepted anywhere chore_proportional is." The sweep
+# (_remind_unreleased_paychecks) must nudge parents for an unreleased
+# chore_gated paycheck too, not just chore_proportional — mirrors
+# test_reminder_notifies_parent_once in test_chore_paycheck.py.
+
+
+@pytest.mark.asyncio
+async def test_reminder_notifies_parent_for_gated_kid(db):
+    from app.models.notification import Notification
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_gated", allowance_cents=25000)
+
+    await BankService._remind_unreleased_paychecks(db, fam.id, WEEK)
+    notes = (await db.execute(
+        select(Notification).where(Notification.user_id == parent.id)
+    )).scalars().all()
+    assert len(notes) == 1
+    acct = (await db.execute(
+        select(KidBankAccount).where(KidBankAccount.user_id == kid.id)
+    )).scalar_one()
+    assert acct.last_paycheck_reminder_week == WEEK

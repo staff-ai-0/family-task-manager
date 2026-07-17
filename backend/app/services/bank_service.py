@@ -657,7 +657,8 @@ class BankService:
                     await db.rollback()
                     logger.exception("payday failed for kid %s", acct.user_id)
 
-            # Nudge parents to release any unreleased chore-proportional teen.
+            # Nudge parents to release any unreleased teen paycheck
+            # (chore_proportional or chore_gated mode).
             try:
                 week_monday = local_now.date() - timedelta(days=local_now.date().weekday())
                 await BankService._remind_unreleased_paychecks(db, fid, week_monday)
@@ -670,12 +671,13 @@ class BankService:
     async def _remind_unreleased_paychecks(
         db: AsyncSession, family_id: UUID, week_monday: date
     ) -> None:
-        """Once per (kid, week), push the parents to release any chore-proportional
-        teen whose paycheck isn't out yet. Idempotent via last_paycheck_reminder_week."""
+        """Once per (kid, week), push the parents to release any chore_proportional
+        or chore_gated teen whose paycheck isn't out yet. Idempotent via
+        last_paycheck_reminder_week."""
         accts = (await db.execute(
             select(KidBankAccount).join(User, User.id == KidBankAccount.user_id).where(
                 KidBankAccount.family_id == family_id,
-                KidBankAccount.allowance_mode == "chore_proportional",
+                KidBankAccount.allowance_mode.in_(("chore_proportional", "chore_gated")),
                 KidBankAccount.allowance_cents > 0,
                 or_(KidBankAccount.last_chore_paycheck_week.is_(None),
                     KidBankAccount.last_chore_paycheck_week != week_monday),
