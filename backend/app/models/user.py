@@ -124,8 +124,7 @@ class User(Base):
 
     # Relationships
     family = relationship("Family", back_populates="members")
-    # Legacy task relationships (to be removed after migration)
-    # New template/assignment relationships
+    # Template/assignment relationships
     created_templates = relationship("TaskTemplate", back_populates="creator", foreign_keys="TaskTemplate.created_by")
     task_assignments = relationship("TaskAssignment", back_populates="assigned_user", foreign_keys="TaskAssignment.assigned_to", cascade="all, delete-orphan")
     consequences = relationship("Consequence", back_populates="user", cascade="all, delete-orphan")

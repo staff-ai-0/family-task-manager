@@ -31,11 +31,23 @@ from app.models.user import User, UserRole
 from app.services.gig_offering_service import GigOfferingService
 from app.services.task_assignment_service import TaskAssignmentService
 
+def _utc_today():
+    """Family fixtures default to timezone="UTC", and the task services compute
+    "today" in the family timezone. A local date.today() diverges from that
+    after 18:00 America/Mexico_City (UTC midnight), flaking these tests in
+    evening runs while CI (UTC) stays green — so always derive today in UTC.
+    """
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).date()
+
+
 # Next upcoming Monday (always in the future) so the whole week materializes —
 # a hardcoded past Monday made the shuffle drop already-elapsed days and these
 # rotation counts flaked the day after that date.
-_today = date.today()
+_today = _utc_today()
 MONDAY = _today + timedelta(days=(7 - _today.weekday()) % 7 or 7)
+
+
 
 
 async def _make_kids(db: AsyncSession, family, n: int) -> list[User]:
@@ -272,7 +284,7 @@ class TestIntervalRecurrence:
         kids = await _make_kids(db_session, test_family, 1)
         tmpl = await _interval_template(db_session, test_family, kids)
 
-        d0 = date.today()
+        d0 = _utc_today()
         created = await TaskAssignmentService.spawn_interval_assignments_for_family(
             db_session, test_family.id, today=d0
         )
@@ -300,7 +312,7 @@ class TestIntervalRecurrence:
         kids = await _make_kids(db_session, test_family, 1)
         await _interval_template(db_session, test_family, kids, n_days=3)
 
-        d0 = date.today()
+        d0 = _utc_today()
         created = await TaskAssignmentService.spawn_interval_assignments_for_family(
             db_session, test_family.id, today=d0
         )
@@ -332,7 +344,7 @@ class TestIntervalRecurrence:
             assignment_type=AssignmentType.ROTATE,
         )
 
-        d = date.today()
+        d = _utc_today()
         picks = []
         for i in range(4):
             created = await TaskAssignmentService.spawn_interval_assignments_for_family(
@@ -424,7 +436,7 @@ class TestIntervalRecurrence:
             db_session, test_family, kids, n_days=1, requires_proof=True
         )
 
-        d0 = date.today()
+        d0 = _utc_today()
         created = await TaskAssignmentService.spawn_interval_assignments_for_family(
             db_session, test_family.id, today=d0
         )
@@ -482,8 +494,8 @@ async def _proof_chore_with_assignment(db, family, kid):
         assigned_to=kid.id,
         family_id=family.id,
         status=AssignmentStatus.PENDING,
-        assigned_date=date.today(),
-        week_of=TaskAssignmentService._get_monday(date.today()),
+        assigned_date=_utc_today(),
+        week_of=TaskAssignmentService._get_monday(_utc_today()),
     )
     db.add(a)
     await db.commit()

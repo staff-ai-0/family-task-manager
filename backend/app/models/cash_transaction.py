@@ -7,7 +7,7 @@ docs/superpowers/specs/2026-06-30-two-currency-economy-design.md.
 from sqlalchemy import Column, Integer, DateTime, ForeignKey, Enum as SQLEnum, Text, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import enum
 
@@ -75,7 +75,7 @@ class CashTransaction(Base):
     )
 
     created_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True,
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True,
     )
 
     user = relationship(

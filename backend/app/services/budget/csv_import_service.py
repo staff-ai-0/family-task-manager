@@ -172,20 +172,6 @@ class CSVImportService:
         return None
     
     @classmethod
-    def _detect_format(cls, fieldnames: List[str]) -> str:
-        """Detect CSV format based on field names"""
-        
-        # Check for OFX format
-        if any("DTPOSTED" in f or "TRNAMT" in f for f in fieldnames):
-            return "ofx"
-        
-        # Check for QuickBooks format
-        if any("Transaction Date" in f or "Account" in f for f in fieldnames):
-            return "quickbooks"
-        
-        return "generic"
-    
-    @classmethod
     def _parse_date(cls, date_str: str) -> Optional[date]:
         """Try to parse various date formats"""
         if not date_str or not isinstance(date_str, str):

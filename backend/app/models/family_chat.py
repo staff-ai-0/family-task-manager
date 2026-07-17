@@ -6,7 +6,7 @@ home" / "running late" / "grab milk" pings.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import UUID
@@ -45,7 +45,12 @@ class FamilyChatMessage(Base):
     # photo here when one is present). Nullable — normal chat pings have none.
     image_url = Column(String(512), nullable=True)
     created_at = Column(
-        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+        # Aware UTC — a naive utcnow() on a timestamptz column gets read in
+        # the SESSION timezone by Postgres, stamping messages hours off on
+        # any non-UTC host (unread counts then disagree with mark_read).
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
     )
     # Set when a parent edits the message (moderation) — UI shows "(editado)".
     edited_at = Column(DateTime(timezone=True), nullable=True)

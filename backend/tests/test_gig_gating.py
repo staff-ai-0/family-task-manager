@@ -12,6 +12,17 @@ from app.models.task_assignment import TaskAssignment, AssignmentStatus, Approva
 from app.services.task_assignment_service import TaskAssignmentService
 
 
+
+def _utc_today():
+    """Family fixtures default to timezone="UTC", and the task services compute
+    "today" in the family timezone. A local date.today() diverges from that
+    after 18:00 America/Mexico_City (UTC midnight), flaking these tests in
+    evening runs while CI (UTC) stays green — so always derive today in UTC.
+    """
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).date()
+
+
 def _monday_of(d: date) -> date:
     """Helper: return Monday of the week containing d."""
     return d - timedelta(days=d.weekday())
@@ -36,7 +47,7 @@ async def test_mandatory_completion_awards_points(
     # immediately and without approval. Cash is reserved for gigs.
     template = await mandatory_template_factory(family=test_family, points=10)
     assert template.effective_points == 10
-    today = date.today()
+    today = _utc_today()
     assignment = TaskAssignment(
         id=uuid4(),
         template_id=template.id,
@@ -77,7 +88,7 @@ async def test_gig_locked_when_mandatory_pending(
     mandatory = await mandatory_template_factory(family=test_family)
     gig = await gig_template_factory(family=test_family, points=20)
 
-    today = date.today()
+    today = _utc_today()
     monday = _monday_of(today)
     mand_assign = TaskAssignment(
         id=uuid4(), template_id=mandatory.id, assigned_to=test_child_user.id,
@@ -104,7 +115,7 @@ async def test_gig_unlocked_completes_pending(
     db_session, test_family, test_child_user, gig_template_factory,
 ):
     gig = await gig_template_factory(family=test_family, points=20)
-    today = date.today()
+    today = _utc_today()
     assignment = TaskAssignment(
         id=uuid4(), template_id=gig.id, assigned_to=test_child_user.id,
         family_id=test_family.id, assigned_date=today, week_of=_monday_of(today),
@@ -133,7 +144,7 @@ async def test_list_marks_gigs_locked_when_mandatory_pending(
 ):
     mand = await mandatory_template_factory(family=test_family)
     gig = await gig_template_factory(family=test_family, points=20)
-    today = date.today()
+    today = _utc_today()
     week_of = today - timedelta(days=today.weekday())
     db_session.add_all([
         TaskAssignment(
@@ -166,7 +177,7 @@ async def test_carry_over_overdue_mandatory_blocks_today_gig(
     """An OVERDUE mandatory from yesterday should block today's gigs."""
     mand = await mandatory_template_factory(family=test_family)
     gig = await gig_template_factory(family=test_family, points=20)
-    today = date.today()
+    today = _utc_today()
     yesterday = today - timedelta(days=1)
     week_of = today - timedelta(days=today.weekday())
 
@@ -201,7 +212,7 @@ async def test_carry_over_pending_from_yesterday_blocks_today_gig(
     """A still-PENDING mandatory from yesterday should also block."""
     mand = await mandatory_template_factory(family=test_family)
     gig = await gig_template_factory(family=test_family, points=20)
-    today = date.today()
+    today = _utc_today()
     yesterday = today - timedelta(days=1)
     week_of = today - timedelta(days=today.weekday())
 
@@ -239,7 +250,7 @@ async def test_cancelled_mandatory_does_not_block(
     """CANCELLED mandatory (parent waived) does not block gigs."""
     mand = await mandatory_template_factory(family=test_family)
     gig = await gig_template_factory(family=test_family, points=20)
-    today = date.today()
+    today = _utc_today()
     yesterday = today - timedelta(days=1)
     week_of = today - timedelta(days=today.weekday())
 
@@ -277,7 +288,7 @@ async def test_progress_bonus_unlocked_respects_carry_over(
     """get_daily_progress.bonus_unlocked must be False when overdue mandatory exists."""
     mand = await mandatory_template_factory(family=test_family)
     gig = await gig_template_factory(family=test_family, points=20)
-    today = date.today()
+    today = _utc_today()
     yesterday = today - timedelta(days=1)
     week_of = today - timedelta(days=today.weekday())
 

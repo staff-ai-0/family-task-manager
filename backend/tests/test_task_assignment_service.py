@@ -25,6 +25,17 @@ from app.core.exceptions import (
 
 # ─── Helpers ─────────────────────────────────────────────────────────
 
+
+def _utc_today():
+    """Family fixtures default to timezone="UTC", and the task services compute
+    "today" in the family timezone. A local date.today() diverges from that
+    after 18:00 America/Mexico_City (UTC midnight), flaking these tests in
+    evening runs while CI (UTC) stays green — so always derive today in UTC.
+    """
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).date()
+
+
 async def _create_template(db, family_id, parent_id, **kwargs):
     """Helper to quickly create a template"""
     defaults = {
@@ -288,7 +299,7 @@ class TestAssignmentQueries:
 
         # Anchor to the week shuffle actually populated. It assigns to the
         # upcoming week, which is next week's Monday when run on a Sunday — so
-        # date.today() would query the wrong (empty) week every Sunday.
+        # _utc_today() would query the wrong (empty) week every Sunday.
         in_week = assignments[0].week_of
         week_list = await TaskAssignmentService.list_assignments_for_week(
             db_session, test_family.id, in_week
@@ -324,7 +335,7 @@ class TestAssignmentQueries:
             db_session, test_family.id, today=_this_monday()
         )
 
-        # Query a date shuffle actually populated (not date.today(), which is
+        # Query a date shuffle actually populated (not _utc_today(), which is
         # outside the populated week when run on a Sunday).
         a_date = assignments[0].assigned_date
         today_list = await TaskAssignmentService.list_assignments_for_date(
@@ -353,7 +364,7 @@ class TestCompletion:
         await db_session.refresh(a)
         # Weekly slots can land on a future weekday; future-dated completions
         # are blocked, so pull the row to today first.
-        a.assigned_date = date.today()
+        a.assigned_date = _utc_today()
         await db_session.commit()
 
         # Get the user this was assigned to
@@ -384,7 +395,7 @@ class TestCompletion:
         )
         a = assignments[0]
         user_id = a.assigned_to
-        a.assigned_date = date.today()  # avoid the future-date completion guard
+        a.assigned_date = _utc_today()  # avoid the future-date completion guard
         await db_session.commit()
 
         await TaskAssignmentService.complete_assignment(
@@ -450,7 +461,7 @@ class TestBonusGating:
     ):
         from datetime import date
         result = await TaskAssignmentService.has_open_mandatory_through(
-            db_session, test_child_user.id, test_family.id, date.today()
+            db_session, test_child_user.id, test_family.id, _utc_today()
         )
         assert result is False  # No required tasks = nothing open = unlocked
 
@@ -505,7 +516,7 @@ class TestOverdueCheck:
             db_session, test_family.id, test_parent_user.id,
             title="Old Task", interval_days=7
         )
-        yesterday = date.today() - timedelta(days=1)
+        yesterday = _utc_today() - timedelta(days=1)
         past_monday = yesterday - timedelta(days=yesterday.weekday())
         past_assignment = TaskAssignment(
             template_id=template.id,
@@ -535,7 +546,7 @@ class TestOverdueCheck:
             db_session, test_family.id, test_parent_user.id,
             title="Today Task", interval_days=7
         )
-        today = date.today()
+        today = _utc_today()
         today_monday = today - timedelta(days=today.weekday())
         today_assignment = TaskAssignment(
             template_id=template.id,
