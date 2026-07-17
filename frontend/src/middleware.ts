@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { defineMiddleware } from "astro:middleware";
 import type { User } from "./types/api";
 
@@ -28,6 +29,49 @@ const CSP = [
     "form-action 'self'",
     "object-src 'none'",
 ].join("; ");
+
+// ---------------------------------------------------------------------------
+// Short-TTL auth context cache (WS-perf). Before this, EVERY proxied /api/*
+// request cost two extra backend round-trips (/api/auth/me +
+// /api/subscriptions/current) before the real call — 3x amplification.
+//
+// Safety model: the backend validates the JWT on the real proxied request
+// anyway; this middleware check is a redundant pre-check whose only products
+// are context.locals.user/plan (role gates in a few Astro API routes, plan
+// upsell UI). Serving those from a cache for up to AUTH_CACHE_TTL_SECONDS
+// (default 30s, 0 disables) means a just-revoked token or just-changed plan
+// can be reflected stale for that window in locals — never in actual backend
+// authorization. Keyed by SHA-256 of the token so raw tokens never sit in the
+// map; a refresh mints a new token and therefore a new key.
+const AUTH_CACHE_TTL_MS =
+    (Number(process.env.AUTH_CACHE_TTL_SECONDS ?? "30") || 0) * 1000;
+const AUTH_CACHE_MAX_ENTRIES = 500;
+type AuthCacheEntry = { user: User; plan: unknown; expires: number };
+const authCache = new Map<string, AuthCacheEntry>();
+
+function authCacheKey(token: string): string {
+    return createHash("sha256").update(token).digest("hex");
+}
+
+function authCacheGet(key: string): AuthCacheEntry | undefined {
+    const hit = authCache.get(key);
+    if (!hit) return undefined;
+    if (hit.expires <= Date.now()) {
+        authCache.delete(key);
+        return undefined;
+    }
+    return hit;
+}
+
+function authCacheSet(key: string, user: User, plan: unknown): void {
+    if (AUTH_CACHE_TTL_MS <= 0) return;
+    // Cheap size cap: evict the oldest insertion (Map preserves order).
+    if (authCache.size >= AUTH_CACHE_MAX_ENTRIES) {
+        const oldest = authCache.keys().next().value;
+        if (oldest !== undefined) authCache.delete(oldest);
+    }
+    authCache.set(key, { user, plan, expires: Date.now() + AUTH_CACHE_TTL_MS });
+}
 
 function withSecurityHeaders(response: Response): Response {
     const h = response.headers;
@@ -275,6 +319,22 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // Verify token is valid by checking with backend for API routes
     // For page routes, we'll let the page components handle token validation
     if (path.startsWith("/api/") && path !== "/api/auth/login") {
+        // Cache fast-path: skip both backend round-trips when this token's
+        // auth context is still fresh (see AUTH_CACHE_TTL_MS above).
+        const cacheKey = AUTH_CACHE_TTL_MS > 0 ? authCacheKey(accessToken) : null;
+        if (cacheKey) {
+            const hit = authCacheGet(cacheKey);
+            if (hit) {
+                context.locals.user = hit.user;
+                context.locals.token = accessToken;
+                if (hit.plan) context.locals.plan = hit.plan;
+                const response = await next();
+                if (refreshedSetCookies) {
+                    for (const c of refreshedSetCookies) response.headers.append("Set-Cookie", c);
+                }
+                return withSecurityHeaders(response);
+            }
+        }
         try {
             const apiUrl = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
             const response = await fetch(`${apiUrl}/api/auth/me`, {
@@ -291,7 +351,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 // wiping the cookie so the user can retry.
                 if (response.status === 401 || response.status === 403) {
                     // The (possibly just-refreshed) access token is still
-                    // rejected — clear both cookies so the client re-auths.
+                    // rejected — drop any cached context for it and clear both
+                    // cookies so the client re-auths.
+                    if (cacheKey) authCache.delete(cacheKey);
                     const { clearAuthCookies } = await import("./lib/auth-cookies");
                     const headers = new Headers({ "Content-Type": "application/json" });
                     for (const c of clearAuthCookies()) headers.append("Set-Cookie", c);
@@ -310,7 +372,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
             }
 
             const user: User = await response.json();
-            
+
             // Attach user to context for use in endpoints
             context.locals.user = user;
             context.locals.token = accessToken;
@@ -325,6 +387,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 }
             } catch {
                 // Plan fetch failure is non-fatal — default to free
+            }
+
+            if (cacheKey) {
+                authCacheSet(cacheKey, user, context.locals.plan ?? null);
             }
         } catch (error) {
             // fetch() throws only on NETWORK failures (DNS, connection refused,
