@@ -182,6 +182,12 @@ const links = isParent ? parentLinks : kidLinks;
         openBtn.addEventListener("click", (e) => { e.preventDefault(); open(); });
         closeBtn?.addEventListener("click", close);
         backdrop.addEventListener("click", close);
+        // The wrapper spans the full viewport width (z-60, above the backdrop)
+        // while the card is max-w-md centered — on desktop, clicks beside the
+        // card land here, not on the backdrop. Treat them as outside-clicks.
+        sheet.addEventListener("click", (e) => {
+            if (e.target === sheet) close();
+        });
         document.addEventListener("keydown", (e) => {
             if (e.key === "Escape" && !backdrop.classList.contains("hidden")) close();
         });
