@@ -103,6 +103,7 @@ class GigOfferingService:
         description: Optional[str] = None,
         allowed_roles: Optional[list] = None,
         allow_multiple: bool = False,
+        payout_cadence: str = "immediate",
     ) -> GigOffering:
         offering = GigOffering(
             family_id=family_id,
@@ -114,6 +115,7 @@ class GigOfferingService:
             category=category,
             allowed_roles=allowed_roles,
             allow_multiple=allow_multiple,
+            payout_cadence=payout_cadence,
         )
         db.add(offering)
         await db.commit()

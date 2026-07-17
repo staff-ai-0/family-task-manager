@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Literal
 from uuid import UUID
 from datetime import date, datetime
 
@@ -27,6 +27,10 @@ class GigOfferingCreate(BaseModel):
     allowed_roles: Optional[List[str]] = None
     # False (default) = single-slot: first approved claim closes the gig.
     allow_multiple: bool = False
+    # Advisory payout rhythm (reminders + payout-screen grouping only; never
+    # blocks an early payout). Defaults to immediate so older clients that
+    # don't send this field keep today's behavior.
+    payout_cadence: Literal["immediate", "weekly", "biweekly", "monthly"] = "immediate"
 
 
 class GigOfferingUpdate(BaseModel):
@@ -38,6 +42,7 @@ class GigOfferingUpdate(BaseModel):
     allowed_roles: Optional[List[str]] = None
     is_active: Optional[bool] = None
     allow_multiple: Optional[bool] = None
+    payout_cadence: Optional[Literal["immediate", "weekly", "biweekly", "monthly"]] = None
 
 
 class GigOfferingResponse(BaseModel):
@@ -51,6 +56,7 @@ class GigOfferingResponse(BaseModel):
     allowed_roles: Optional[List[str]]
     is_active: bool
     allow_multiple: bool = False
+    payout_cadence: str = "immediate"
     status: str = "approved"
     review_notes: Optional[str] = None
     created_by: Optional[UUID] = None
