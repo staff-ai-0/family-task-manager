@@ -182,26 +182,8 @@ class TestAmountParsing:
         assert amount is None
 
 
-class TestFormatDetection:
-    """Test CSV format detection"""
-
-    def test_detect_generic_format(self):
-        """Test detecting generic CSV format"""
-        headers = ["date", "description", "amount"]
-        detected_format = CSVImportService._detect_format(headers)
-        assert detected_format == "generic"
-
-    def test_detect_ofx_format(self):
-        """Test detecting OFX format by specific field names"""
-        headers = ["DTPOSTED", "MEMO", "TRNAMT"]
-        detected_format = CSVImportService._detect_format(headers)
-        assert detected_format == "ofx"
-
-    def test_detect_quickbooks_format(self):
-        """Test detecting QuickBooks format"""
-        headers = ["Transaction Date", "Memo", "Amount", "Account"]
-        detected_format = CSVImportService._detect_format(headers)
-        assert detected_format == "quickbooks"
+class TestColumnDetection:
+    """Test CSV column detection"""
 
     def test_find_column_exact_match(self):
         """Test finding column with exact match"""

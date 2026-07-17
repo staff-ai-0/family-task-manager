@@ -138,7 +138,7 @@ SQLAlchemy `func.sum` over a `BigInteger` column returns a `Decimal` under async
 
 All routes prefixed `/api/`. Key route groups:
 - `/api/auth/` — register, login, OAuth callbacks
-- `/api/task-templates/` + `/api/task-assignments/` — the task system (the pre-2026 legacy `/api/tasks` code was deleted 2026-07-16; only the DB table + `models/task.py` remain until a drop migration ships)
+- `/api/task-templates/` + `/api/task-assignments/` — the task system (the pre-2026 legacy `/api/tasks` system was fully removed 2026-07-16: code, model, and — via the `drop_legacy_tasks` migration — its table)
 - `/api/rewards/`, `/api/consequences/`, `/api/points-conversion/`
 - `/api/subscriptions/` — plan management, PayPal integration
 - `/api/budget/` — 23 sub-route groups (see Budget System below)
