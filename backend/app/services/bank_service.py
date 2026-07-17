@@ -54,7 +54,7 @@ def _fmt_mxn(cents: int) -> str:
     return f"${cents / 100:,.2f}"
 
 
-ALLOWANCE_MODES = ("flat", "chore_proportional")
+ALLOWANCE_MODES = ("flat", "chore_proportional", "chore_gated")
 
 # Config fields a parent may upsert (jar balances are NEVER settable here).
 _SETTINGS_FIELDS = (
@@ -413,6 +413,14 @@ class BankService:
         return min(cap_cents, cap_cents * done // assigned)
 
     @staticmethod
+    def _chore_paycheck_gated(cap_cents: int, done: int, assigned: int) -> int:
+        """All-or-nothing weekly chore paycheck: the full cap iff every assigned
+        obligatory point was completed-and-approved this week, else 0."""
+        if assigned <= 0 or cap_cents <= 0:
+            return 0
+        return cap_cents if done >= assigned else 0
+
+    @staticmethod
     async def _family_local_today(db: AsyncSession, family_id: UUID) -> date:
         tz_name = (await db.execute(
             select(Family.timezone).where(Family.id == family_id)
@@ -434,8 +442,13 @@ class BankService:
             db, family_id, target_user.id, week_monday
         )
         cap = acct.allowance_cents
-        proportional = acct.allowance_mode == "chore_proportional"
-        projected = BankService._chore_paycheck_cents(cap, done, assigned) if proportional else 0
+        mode = acct.allowance_mode
+        if mode == "chore_proportional":
+            projected = BankService._chore_paycheck_cents(cap, done, assigned)
+        elif mode == "chore_gated":
+            projected = BankService._chore_paycheck_gated(cap, done, assigned)
+        else:
+            projected = 0
         return {
             "user_id": target_user.id,
             "week_of": week_monday,
@@ -460,10 +473,10 @@ class BankService:
         the premium gate (passed as ``entitled``)."""
         user = await _get_user_locked(db, target_user.id)
         acct = await _get_or_create_account_locked(db, user, family_id)
-        if acct.allowance_mode != "chore_proportional":
+        if acct.allowance_mode not in ("chore_proportional", "chore_gated"):
             raise HTTPException(
                 status_code=422,
-                detail="kid is not on chore-proportional allowance",
+                detail="kid is not on a chore-based allowance",
             )
         week_monday = BankService._week_monday(week_of)
         if acct.last_chore_paycheck_week == week_monday:
@@ -474,7 +487,10 @@ class BankService:
         done, assigned = await BankService._chore_points(
             db, family_id, user.id, week_monday
         )
-        base = BankService._chore_paycheck_cents(acct.allowance_cents, done, assigned)
+        if acct.allowance_mode == "chore_gated":
+            base = BankService._chore_paycheck_gated(acct.allowance_cents, done, assigned)
+        else:
+            base = BankService._chore_paycheck_cents(acct.allowance_cents, done, assigned)
         amount = max(0, base + int(adjustment_cents or 0))
         if amount > 0:
             CashService.credit_split_rows(
