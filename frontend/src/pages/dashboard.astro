@@ -1020,4 +1020,29 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
             });
         });
     </script>
+
+    <script>
+        import { buildMission } from "../lib/tourSteps";
+        import { runMission } from "../lib/missionRunner";
+
+        function resumeMissions() {
+            if ((window as any).__ftmMissionInit) return;
+            (window as any).__ftmMissionInit = true;
+            const lang = document.documentElement.lang === "es" ? "es" : "en";
+            // /dashboard hosts none of the current mission targets, so this is
+            // effectively the "user wandered off mid-flow" degrade path: the
+            // runner finds no element for the active step and ends gracefully
+            // instead of leaving a stale popover following the user around.
+            for (const id of ["first-task", "first-gig"] as const) {
+                if (sessionStorage.getItem("ftm_mission_" + id)) runMission(buildMission(id, lang), lang);
+            }
+        }
+
+        document.addEventListener("astro:page-load", resumeMissions);
+        // The one-shot astro:page-load fires on DOMContentLoaded; a module
+        // that executes after that would miss it (see WelcomeTour.astro).
+        // Self-trigger if the DOM is already ready — __ftmMissionInit keeps
+        // this idempotent.
+        if (document.readyState !== "loading") resumeMissions();
+    </script>
 </PageLayout>

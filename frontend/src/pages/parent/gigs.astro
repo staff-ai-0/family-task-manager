@@ -582,3 +582,26 @@ document.querySelectorAll<HTMLDetailsElement>("[data-comments]").forEach((box) =
     });
 });
 </script>
+
+<script>
+    import { buildMission } from "../../lib/tourSteps";
+    import { runMission } from "../../lib/missionRunner";
+
+    function resumeMissions() {
+        if ((window as any).__ftmMissionInit) return;
+        (window as any).__ftmMissionInit = true;
+        const lang = document.documentElement.lang === "es" ? "es" : "en";
+        // Resume an in-progress mission (e.g. "first-gig", once wired) now
+        // that this page hosts its next target. Degrades gracefully — if the
+        // step's element isn't here, the runner just ends the mission.
+        for (const id of ["first-task", "first-gig"] as const) {
+            if (sessionStorage.getItem("ftm_mission_" + id)) runMission(buildMission(id, lang), lang);
+        }
+    }
+
+    document.addEventListener("astro:page-load", resumeMissions);
+    // The one-shot astro:page-load fires on DOMContentLoaded; a module that
+    // executes after that would miss it (see WelcomeTour.astro). Self-trigger
+    // if the DOM is already ready — __ftmMissionInit keeps this idempotent.
+    if (document.readyState !== "loading") resumeMissions();
+</script>

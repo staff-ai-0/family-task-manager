@@ -521,6 +521,7 @@ export const translations = {
         // Parent dashboard (migrated from inline ES/EN ternaries)
         pd_onb_title: "Getting Started 🚀",
         pd_onb_task: "Create your first task",
+        pd_onb_task_cta: "Guide me",
         pd_onb_reward: "Create a reward",
         pd_onb_invite: "Invite a child",
         pd_onb_approve: "Approve first task",
@@ -1056,6 +1057,7 @@ export const translations = {
         // Tablero de padres (migrado de ternarios ES/EN en línea)
         pd_onb_title: "¡Empecemos! 🚀",
         pd_onb_task: "Crea tu primera tarea",
+        pd_onb_task_cta: "Guíame",
         pd_onb_reward: "Crea una recompensa",
         pd_onb_invite: "Invita a un hijo/a",
         pd_onb_approve: "Aprueba la primera tarea",

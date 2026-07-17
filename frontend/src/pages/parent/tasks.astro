@@ -410,7 +410,17 @@ function freqLabel(tmpl: any): string {
     </div>
 
     <script>
+        import { buildMission } from "../../lib/tourSteps";
+        import { runMission } from "../../lib/missionRunner";
+
         document.addEventListener('astro:page-load', () => {
+        // Resume an in-progress mission (e.g. started from the parent
+        // dashboard checklist) now that this page hosts its next target.
+        const lang = document.documentElement.lang === "es" ? "es" : "en";
+        for (const id of ["first-task", "first-gig"] as const) {
+            if (sessionStorage.getItem("ftm_mission_" + id)) runMission(buildMission(id, lang), lang);
+        }
+
         // Mission signal: the + FAB always opens TaskCreateModal (see TaskCreateModal.astro's
         // "tcm-trigger" click listener) — dispatch alongside that real action, additive only.
         const fabTrigger = document.getElementById("tcm-trigger");
