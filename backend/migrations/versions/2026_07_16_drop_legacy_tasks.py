@@ -28,10 +28,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # NOTE: no explicit Enum.create() here — op.create_table auto-creates the
+    # PG types for sa.Enum columns, and doing both raises DuplicateObject
+    # (caught by the CI downgrade round-trip on this file's first run).
     taskstatus = sa.Enum("PENDING", "COMPLETED", "OVERDUE", "CANCELLED", name="taskstatus")
     taskfrequency = sa.Enum("DAILY", "WEEKLY", "MONTHLY", "ONE_TIME", name="taskfrequency")
-    taskstatus.create(op.get_bind(), checkfirst=True)
-    taskfrequency.create(op.get_bind(), checkfirst=True)
 
     op.create_table(
         "tasks",
