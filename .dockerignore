@@ -1,3 +1,6 @@
+# Root build context is used ONLY by frontend/Dockerfile (compose sets
+# `context: .` so the image can COPY frontend/ + docs/ — help.astro/ayuda.astro
+# import markdown from docs/). Keep everything else out of the context.
 **/node_modules
 **/.git
 **/__pycache__
@@ -5,3 +8,26 @@
 **/.env
 **/dist
 **/.astro
+**/*.rdb
+
+# Not needed by any image built from the root context
+backend/
+e2e-tests/
+scripts/
+logs/
+backups/
+web-stack/
+.playwright-mcp/
+.venv/
+**/venv/
+.ruff_cache/
+.pytest_cache/
+
+# Root-level screenshots / notebooks (unanchored patterns match root only)
+*.png
+*.ipynb
+*.sql
+
+# docs/ ships only its markdown (imported at build time) — not binaries/audits
+docs/**/*.pdf
+docs/audit/

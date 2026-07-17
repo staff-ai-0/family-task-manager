@@ -1,0 +1,14 @@
+# Backend image build context (compose sets `context: ./backend`).
+# tests/ intentionally ships — the documented workflow runs pytest inside the
+# container (see CLAUDE.md).
+venv/
+.venv/
+**/__pycache__
+*.pyc
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.rdb
+*.sql
+.env

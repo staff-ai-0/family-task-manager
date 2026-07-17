@@ -6,134 +6,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Family Task Manager** — gamified family chore/task app with points, rewards, and consequences. Multi-tenant by design (each family is fully isolated). Live at https://family.agent-ia.mx.
 
-**Stack**: Python 3.12 + FastAPI (backend) · Astro 5 + Tailwind CSS v4 (frontend) · PostgreSQL 15 + Redis 7 · Docker Compose · Anthropic Claude API (receipt scanner)
+**Stack**: Python 3.12 + FastAPI (backend) · Astro 5 + Tailwind CSS v4 (frontend) · PostgreSQL 15 + Redis 7 · rootless Podman (prod) · Anthropic Claude via LiteLLM proxy (AI features)
 
 **Environments**:
 - Local (dev): frontend `http://localhost:3003`, backend `http://localhost:8003/docs` — secrets in `.env`
 - **Production (on-prem 10.1.0.91) — CANONICAL (since 2026-07-05)**: `https://family.agent-ia.mx` + `https://api-family.agent-ia.mx` (Cloudflare Tunnel `family-onprem`). RHEL 10 rootless podman under user `jc`. App at `/home/jc/family-task-manager/`, compose file `docker-compose.onprem.yml`, secrets in `.env` on host (template `.env.onprem.example`). Deploy via `./scripts/deploy-onprem.sh` (config in `.deploy.onprem.env`). SHARED box (school-admin/medical/platform/vault also run here) — never `sudo podman` (global `~/.claude/CLAUDE.md` rootless rules apply).
-- **GCP (`family-app`) — DECOMMISSIONED 2026-07-05**: was `https://gcp-family.agent-ia.mx` + `https://api-gcp-family.agent-ia.mx` (Docker CE, project `family-prod`/`us-central1-a`). VM **stopped** (not yet deleted), stack down, volumes kept for rollback. Final pre-cutover dump at `backups/prod-cutover-gcp-20260705.sql` (local + on .91). `deploy-gcp.sh` / `docker-compose.gcp.yml` / `.deploy.gcp.env` retained for archival + rollback only — do NOT deploy there without reassessment.
-- **On-prem (10.1.0.99) — DECOMMISSIONED 2026-05-23**: earlier host under rootless podman. systemd unit disabled, containers stopped. DB dump retained at `/mnt/nvme/docker-prod/family-task-manager/backups/pre-gig-photo-*.sql`. Do NOT redeploy — canonical DB now lives on 10.1.0.91.
+- **GCP (`family-app`) — DECOMMISSIONED 2026-07-05**: VM stopped (not deleted), volumes kept for rollback. Final pre-cutover dump at `backups/prod-cutover-gcp-20260705.sql` (local + on .91). `scripts/deploy-gcp.sh` / `docker-compose.gcp.yml` / `.deploy.gcp.env` / `scripts/gcp-bootstrap.sh` retained for rollback ONLY — do NOT deploy there without reassessment.
+- **On-prem (10.1.0.99) — DECOMMISSIONED 2026-05-23**: predecessor host; systemd unit disabled, DB dump retained on that host. Do NOT redeploy there. (The box itself still hosts the shared LiteLLM proxy at `litellm.agent-ia.mx`.)
 
-**Production deployment**: `./scripts/deploy-onprem.sh` is the canonical path (target: on-prem 10.1.0.91) — rsyncs source over SSH, builds images with rootless `podman compose`, pins network DNS + chowns volumes, runs alembic migrations against the new image, brings the stack up, smoke-checks the public endpoints. Local `docker-compose.yml` is for dev only. `deploy-gcp.sh` targets the now-decommissioned GCP VM (rollback only).
+**Production deployment**: `./scripts/deploy-onprem.sh` is the canonical path (target: 10.1.0.91) — rsyncs source over SSH, builds images with rootless `podman compose`, pins network DNS + chowns volumes, runs alembic migrations against the new image, brings the stack up (scoped `down` + `up` so stale images never survive), smoke-checks the public endpoints. Local `docker-compose.yml` is for dev only.
 
-> Note: `docker-compose.onprem.yml` + `scripts/deploy-onprem.sh` + `.deploy.onprem.env` are the live on-prem path. `docker-compose.gcp.yml` / `deploy-gcp.sh` are retained for GCP rollback. There is NO `.github/workflows/`. The legacy `deploy-prod.sh` is kept for archival only — do not run it.
-
----
-
-## Production runtime — GCP VM `family-app`
-
-Standard Docker CE under user `jc`. e2-medium in `family-prod` / `us-central1-a`. All AI traffic routes through the on-prem LiteLLM proxy at `https://litellm.agent-ia.mx`. No Vault — secrets live in `.env` on the VM at `/home/jc/family-task-manager/.env` (template at `.env.gcp.example`). The project/zone/instance identifiers used by every `scripts/*.sh` helper are sourced from `.deploy.gcp.env` at the repo root — update them there, not in individual scripts.
-
-**Recovery**: if the instance is ever deleted or otherwise needs to be recreated (deploy script reports `VM ... is not RUNNING` and `gcloud compute instances list` shows it missing), recreate via:
-
-```bash
-gcloud --account=info@agent-ia.mx --project=family-prod \
-    compute instances create family-app \
-    --zone=us-central1-a --machine-type=e2-medium \
-    --image-family=debian-12 --image-project=debian-cloud \
-    --tags=http-server,https-server --boot-disk-size=30GB
-```
-
-Then `./scripts/gcp-bootstrap.sh` → scp .env → `./scripts/deploy-gcp.sh` → restore DB from the most recent dump.
-
-**Cloudflare Tunnel `family-onprem`** routes the public hostnames (per-stack `cloudflared` container on 10.1.0.91). Configured in the Zero Trust dashboard (NOT in `cloudflared` config.yaml):
+**Cloudflare Tunnel `family-onprem`** routes the public hostnames (per-stack `cloudflared` container on .91, configured in the Zero Trust dashboard):
 - `family.agent-ia.mx` → `http://family_onprem_frontend:3000`
 - `api-family.agent-ia.mx` → `http://family_onprem_backend:8000`
 
-Routes MUST target the **container names**, not bare `frontend`/`backend`: on rootless netavark the tunnel joins the egress `frontend` net ONLY (`backend` is dual-homed there as `family_onprem_backend`; the bare `backend` alias resolves to the unreachable internal-net IP). That egress net pins explicit DNS (`--dns 1.1.1.1 8.8.8.8`, done by `deploy-onprem.sh`) because the host resolv.conf's IPv6 link-local upstream breaks aardvark external forwarding — without it the connector can't reach Cloudflare's edge (HTTP 530) and backend egress (LiteLLM/OAuth/PayPal/SMTP) fails to resolve. Google OAuth redirect URI is `https://family.agent-ia.mx/auth/google/callback`. The old GCP `gcp-family` tunnel + apex are **retired**. Canonical URL is `family.agent-ia.mx`.
+Routes MUST target the **container names**, not bare `frontend`/`backend`: on rootless netavark the tunnel joins the egress `frontend` net ONLY (`backend` is dual-homed there as `family_onprem_backend`). That egress net pins explicit DNS (`--dns 1.1.1.1 8.8.8.8`, done by `deploy-onprem.sh`) because the host resolv.conf's IPv6 link-local upstream breaks aardvark external forwarding — without it the connector can't reach Cloudflare's edge (HTTP 530) and backend egress (LiteLLM/OAuth/PayPal/SMTP) fails to resolve. Google OAuth redirect URI is `https://family.agent-ia.mx/auth/google/callback`.
 
-### Bootstrap (one-time per VM)
+## CI
 
-```bash
-./scripts/gcp-bootstrap.sh         # installs docker + compose-plugin, creates app dir
-gcloud compute scp .env.gcp.example jc@family-app:/home/jc/family-task-manager/.env --zone=us-central1-a
-# Fill in secrets in the VM's .env (or scp a complete one from local), then:
-./scripts/deploy-gcp.sh
-```
-
-### Common ops
-
-```bash
-# Status
-gcloud --account=info@agent-ia.mx --project=family-prod \
-  compute ssh family-app --zone=us-central1-a \
-  --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml ps'
-
-# Logs (backend)
-gcloud --account=info@agent-ia.mx --project=family-prod \
-  compute ssh family-app --zone=us-central1-a \
-  --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml logs -f backend'
-
-# Quick redeploy (skip backup + cached images)
-./scripts/deploy-gcp.sh --skip-backup --skip-build -y
-
-# Run migrations only
-gcloud --account=info@agent-ia.mx --project=family-prod \
-  compute ssh family-app --zone=us-central1-a \
-  --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T backend alembic upgrade head'
-
-# DB shell
-gcloud --account=info@agent-ia.mx --project=family-prod \
-  compute ssh family-app --zone=us-central1-a \
-  --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T postgres psql -U familyapp familyapp'
-```
-
-### Gig proof uploads volume
-
-Backend persists gig proof images under `/app/uploads/gig-proofs/<uuid>.<ext>`. The volume is bind-mounted from the host (`receipt_uploads`). Backend mounts `/uploads/*` as FastAPI `StaticFiles`. The frontend serves them publicly through the Astro proxy at `/uploads/gig-proofs/[file].ts`, which forces cookie-bearer auth before piping bytes from backend.
-
-If a fresh deploy hits `PermissionError: [Errno 13] Permission denied: '/app/uploads/gig-proofs'`, the volume's UID/GID does not match the in-container `appuser` (UID 1000). Fix:
-
-```bash
-# Identify volume mountpoint then chown:
-sudo chown -R 1000:1000 $(docker volume inspect family-task-manager_receipt_uploads --format '{{.Mountpoint}}')
-sudo docker compose --env-file .env -f docker-compose.gcp.yml restart backend
-```
-
-### DB backup + restore
-
-Backups under `/home/jc/family-task-manager/backups/` (created by `./scripts/deploy-gcp.sh` unless `--skip-backup`). To dump on demand:
-
-```bash
-gcloud --account=info@agent-ia.mx --project=family-prod \
-  compute ssh family-app --zone=us-central1-a \
-  --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T postgres pg_dump -U familyapp familyapp' > /tmp/family-backup.sql
-```
-
-Restore (after stopping or with empty target DB):
-
-```bash
-gcloud compute scp /tmp/family-backup.sql jc@family-app:/tmp/restore.sql --zone=us-central1-a
-gcloud --account=info@agent-ia.mx --project=family-prod \
-  compute ssh family-app --zone=us-central1-a \
-  --command='cd /home/jc/family-task-manager && sudo docker cp /tmp/restore.sql gcp_family_db:/tmp/restore.sql && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T postgres bash -c "psql -U \$POSTGRES_USER \$POSTGRES_DB < /tmp/restore.sql"'
-```
-
-### Decommissioned on-prem (10.1.0.99) — DO NOT RESURRECT WITHOUT REVIEW
-
-The on-prem stack is stopped (`systemctl --user disable --now family-task-manager.service`, ran 2026-05-23). Containers and volumes still live at `/mnt/nvme/docker-prod/family-task-manager/` in case a quick rollback is ever needed, but the canonical DB has moved to GCP. The host's other services (`homeassistant.service`, `cloudflared.service`, host-wide LiteLLM proxy at `litellm.agent-ia.mx`) continue to run as before — only the family stack is down.
+`.github/workflows/ci.yml` runs on every push/PR to main:
+- **backend** — `ruff check app` (zero-tolerance, config in `backend/ruff.toml`), alembic upgrade/downgrade round-trip, full pytest suite against postgres:15 + redis:7 services (coverage gate ≥70% from `pytest.ini`)
+- **frontend** — `npm ci` + `astro check` + `astro build`
 
 ---
 
 ## Common Commands
 
-### Production / GCP (Docker CE, as `jc` via gcloud)
+### Production ops (on-prem .91, rootless podman as jc)
 
 ```bash
-# Full deploy (rsync + build + up + migrate)
-./scripts/deploy-gcp.sh -y
-
-# Quick redeploy
-./scripts/deploy-gcp.sh --skip-backup --skip-build -y
-
-# Status / logs (helpers — see Common Ops above for full incantations)
-gcloud --account=info@agent-ia.mx --project=family-prod \
-  compute ssh family-app --zone=us-central1-a --command='sudo docker ps'
-
-# Run backend tests inside the running container
-gcloud --account=info@agent-ia.mx --project=family-prod \
-  compute ssh family-app --zone=us-central1-a \
-  --command='cd /home/jc/family-task-manager && sudo docker compose --env-file .env -f docker-compose.gcp.yml exec -T backend pytest tests/ -v'
+./scripts/deploy-onprem.sh            # full deploy (backup → rsync → build → migrate → up → smoke)
+./scripts/deploy-onprem.sh --dry-run  # print remote commands only
+ssh jc@10.1.0.91 'podman ps'          # status (NEVER sudo podman)
+ssh jc@10.1.0.91 'podman logs -f family_onprem_backend'
+./scripts/backup-db.sh                # on-demand DB dump
+./scripts/restore-db.sh               # restore helper
 ```
 
 ### Local dev (podman compose)
@@ -141,13 +48,15 @@ gcloud --account=info@agent-ia.mx --project=family-prod \
 ```bash
 podman compose up -d                                          # Start all services
 podman compose ps                                             # Status
-podman compose logs -f backend                               # Logs
+podman compose logs -f backend                                # Logs
 
 # Tests (run inside container)
 podman exec -e PYTHONPATH=/app family_app_backend pytest tests/ -v
-podman exec -e PYTHONPATH=/app family_app_backend pytest tests/test_auth.py -v
 podman exec -e PYTHONPATH=/app family_app_backend pytest -k "test_name" -v
 podman exec -e PYTHONPATH=/app family_app_backend pytest tests/ --cov=app --cov-report=html
+
+# Lint
+cd backend && ruff check app
 
 # Migrations
 podman exec family_app_backend alembic upgrade head
@@ -157,7 +66,9 @@ podman exec family_app_backend alembic revision --autogenerate -m "description"
 podman exec family_app_backend python /app/seed_data.py
 ```
 
-### Local development (without Docker)
+When podman is down locally, the suite also runs bare-metal (Homebrew PG on 5435 + local redis + `backend/.venv/bin/pytest --no-cov`).
+
+### Local development (without containers)
 
 ```bash
 # Backend
@@ -167,7 +78,7 @@ uvicorn app.main:app --reload --port 8000
 
 # Frontend
 cd frontend && npm install && npm run dev      # localhost:3000
-npm run build && npm run preview
+npm run check && npm run build
 ```
 
 ### E2E Tests (Playwright)
@@ -193,7 +104,7 @@ npm run test:headed           # With visible browser
 
 - **API Docs**: http://localhost:8003/docs
 - **Frontend**: http://localhost:3003
-- **Frontend→Backend (SSR)**: uses internal Docker URL `http://backend:8000`
+- **Frontend→Backend (SSR)**: uses internal container URL `http://backend:8000`
 
 ---
 
@@ -213,11 +124,11 @@ Routes must not contain business logic. Services own domain rules. Use `base_ser
 
 ### Authentication
 
-- JWT tokens contain `user_id`, `role`, `family_id`
+- JWT tokens contain `user_id`, `role`, `family_id`; access+refresh pair in httpOnly cookies
 - Sessions stored in Redis
 - Roles: `PARENT` (full access), `TEEN` (extended), `CHILD` (limited)
-- Auth cookies: `secure=True`, `httpOnly=True` in production
-- Google OAuth accepts multiple client IDs: `GOOGLE_CLIENT_ID` (web) plus `GOOGLE_CLIENT_IDS` (comma list, for native iOS/Android client IDs registered under the same Cloud project). `GoogleOAuthService.verify_google_token` skips library-level `aud` validation and checks against the union manually (`backend/app/services/google_oauth_service.py:49-77`).
+- Prefer the `require_parent_role` dependency (`app/core/dependencies.py`) over inline role checks
+- Google OAuth accepts multiple client IDs: `GOOGLE_CLIENT_ID` (web) plus `GOOGLE_CLIENT_IDS` (comma list, for native iOS/Android client IDs under the same Cloud project). `GoogleOAuthService.verify_google_token` skips library-level `aud` validation and checks against the union manually (`backend/app/services/google_oauth_service.py`).
 
 ### JSON serialization for strict clients (iOS Swift, Android Kotlin)
 
@@ -227,57 +138,53 @@ SQLAlchemy `func.sum` over a `BigInteger` column returns a `Decimal` under async
 
 All routes prefixed `/api/`. Key route groups:
 - `/api/auth/` — register, login, OAuth callbacks
-- `/api/tasks/` — legacy task model
-- `/api/task-templates/` + `/api/task-assignments/` — current task system
+- `/api/task-templates/` + `/api/task-assignments/` — the task system (the pre-2026 legacy `/api/tasks` code was deleted 2026-07-16; only the DB table + `models/task.py` remain until a drop migration ships)
 - `/api/rewards/`, `/api/consequences/`, `/api/points-conversion/`
 - `/api/subscriptions/` — plan management, PayPal integration
-- `/api/budget/` — 17 sub-route groups (see Budget System below)
-- `/api/sync/*` — **returns 410 Gone** (decommissioned; replaced by `/api/budget/`)
+- `/api/budget/` — 23 sub-route groups (see Budget System below)
+- Full domain list: see "Additional domains" table below
 
 ### Budget system
 
-Fully native to PostgreSQL (the external "Actual Budget" service was decommissioned in Phase 10). Never re-introduce external budget dependencies.
+Fully native to PostgreSQL (the external "Actual Budget" service was decommissioned in Phase 10; the old `/api/sync/*` 410 stubs were removed 2026-07-16). Never re-introduce external budget dependencies.
 
 **Account list endpoint includes computed balance**: `GET /api/budget/accounts/` enriches every row with `balance_cents` + `cleared_balance_cents` (both `Optional[int]`, populated only by list endpoints — null on POST/PUT responses). Avoids N+1 calls from clients. `starting_balance` is the seed value at account creation; when non-zero `AccountService.create` auto-inserts a synthetic "Starting Balance" transaction so the computed balance is correct from day one.
 
-**15 budget models** in `backend/app/models/budget.py`:
-- Core: `BudgetCategoryGroup`, `BudgetCategory`, `BudgetAccount`, `BudgetPayee`, `BudgetTransaction`, `BudgetAllocation`
+**17 budget models** in `backend/app/models/budget.py`:
+- Core: `BudgetCategoryGroup`, `BudgetCategory`, `BudgetAccount`, `BudgetPayee`, `BudgetTransaction`, `BudgetAllocation` (+ transaction items/splits)
 - Rules & Goals: `BudgetCategorizationRule`, `BudgetGoal`
 - Scheduling: `BudgetRecurringTransaction`
 - Organization: `BudgetSavedFilter`, `BudgetTag`, `BudgetTransactionTag`
 - Analytics: `BudgetCustomReport`
 - HITL: `BudgetReceiptDraft` — low-confidence scans pending human review
-- Sync (legacy): `BudgetSyncState`
+- Sync (legacy table): `BudgetSyncState`
 
-**18 budget sub-routes** (`/api/budget/`):
+**23 budget sub-routes** (`backend/app/api/routes/budget/`):
 - Core CRUD: `categories`, `accounts`, `transactions`, `allocations`, `payees`, `transfers`
 - Time: `month` (single month view), `months` (month locking)
-- Rules: `categorization-rules`
-- Goals: `goals`
-- Scheduling: `recurring-transactions`
+- Rules: `categorization-rules` · Goals: `goals` · Scheduling: `recurring-transactions`
 - Data: `recycle-bin`, `saved-filters`, `tags`
 - HITL: `receipt-drafts` (list pending / approve / reject low-confidence scans)
 - Import/Export: `transactions/import/csv`, `transactions/import/file` (OFX/QIF/CAMT), `transactions/scan-receipt` (AI), `export`, `import-backup`
-- Analytics: `reports`, `custom-reports`
-- Templates: `allocations/auto-fill` (5 strategies)
+- Analytics: `reports`, `custom-reports` · Templates: `allocations/auto-fill` (5 strategies)
 
-**20 budget services** in `backend/app/services/budget/`:
-`account`, `allocation`, `categorization_rule`, `category`, `csv_import`, `custom_report`, `export`, `file_import`, `goal`, `month_locking`, `payee`, `receipt_draft`, `receipt_scanner`, `recurring_transaction`, `recycle_bin`, `report`, `saved_filter`, `tag`, `transaction`, `transfer`
+**28 budget services** in `backend/app/services/budget/` — one per concern; notable beyond the CRUD set: `a2a_webhook_service` (bank-email-matcher agent intake), `account_matching_service`, `category_ai_service`, `dedup_service`, `duplicate_guard_service`, `transfer_detector`, `transaction_item_service`, `default_categories`.
 
 ### Subscription & premium gating
 
-3-tier plan system (Free / Plus / Pro) with PayPal billing integration.
+3-tier plan system (Free / Plus / Pro) with PayPal billing integration (PayPal ONLY — no Stripe, no Mercado Pago).
 
 - Models: `SubscriptionPlan`, `FamilySubscription`, `UsageTracking` in `backend/app/models/subscription.py`
 - Feature gating: `backend/app/core/premium.py` — `require_feature()` checks plan limits
 - Metered features: `receipt_scan`, `budget_transaction`, `recurring_transaction`, `family_member`, `budget_account`
 - Boolean features: `budget_reports`, `budget_goals`, `csv_import`, `ai_features`
+- **Every LLM call site must be gated** (`require_feature("ai_features")` or `family_tier_allows`); regression suite `test_ai_gating.py`
 
 ### AI Receipt Scanner
 
 Uses Claude Vision via LiteLLM proxy to extract transaction data from receipt photos/PDFs.
 
-- Service: `backend/app/services/budget/receipt_scanner_service.py`
+- Service: `backend/app/services/budget/receipt_scanner_service.py` (also exports the shared `LLM_TIMEOUT` used by every LLM call site)
 - Endpoint: `POST /api/budget/transactions/scan-receipt` (parent only, premium gated)
 - Frontend: `/budget/scan-receipt` (camera capture + file upload + drag-drop; accepts JPEG/PNG/WebP/PDF)
 - Routes through LiteLLM proxy (`LITELLM_API_BASE` / `LITELLM_API_KEY`) using model alias `claude-haiku`
@@ -287,44 +194,39 @@ Uses Claude Vision via LiteLLM proxy to extract transaction data from receipt ph
 
 Low-confidence scans (<30% or no detectable total) create a `BudgetReceiptDraft` record instead of being discarded.
 
-- Model: `BudgetReceiptDraft` in `backend/app/models/budget.py`
-- Service: `backend/app/services/budget/receipt_draft_service.py`
+- Model: `BudgetReceiptDraft` · Service: `receipt_draft_service.py`
 - Endpoints: `GET/POST/DELETE /api/budget/receipt-drafts/` (parent only)
 - Frontend: `/budget/receipt-drafts` — review queue with pre-filled editable form per draft
 - Nav badge: red dot on clipboard icon in `BudgetNavNew` shows pending count on all budget pages
 
 ### Additional domains (beyond budget/task/gig)
 
-The app has grown well past the budget/task/gig core. These domains are fully wired
-(routes + services + models + frontend) and multi-tenant by `family_id`:
+Fully wired (routes + services + models + frontend), multi-tenant by `family_id`:
 
 | Domain | Routes | Notes |
 |--------|--------|-------|
-| **Jarvis** (AI copilot) | `/api/jarvis`, `/api/jarvis/schedules`, `/mcp` | Parent-facing LLM assistant via LiteLLM (tool-calling + SSE streaming) + cron-driven scheduled prompts. Formerly "Frankie". MCP server (`/mcp`) + in-app MCP client; full family-scoped CRUD over activity domains; destructive ops HITL-gated. See `docs/JARVIS_MCP.md`. |
+| **Jarvis** (AI copilot) | `/api/jarvis`, `/api/jarvis/schedules`, `/mcp` | Parent-facing LLM assistant via LiteLLM (tool-calling + SSE streaming) + cron-driven scheduled prompts. MCP server (`/mcp`) + in-app MCP client; full family-scoped CRUD over activity domains; destructive ops HITL-gated. See `docs/JARVIS_MCP.md`. |
 | **Pet** | `/api/pet` | Gamified virtual pet per kid (`kid_pet`, `pup_snapshot`); decays over time, fed by completing work. |
 | **Meals** | `/api/meals` | Meal planning + recipe import; syncs to shopping lists. |
 | **Shopping** | `/api/shopping` | Family shopping lists; receipt-scan + meal-plan integration. |
-| **Calendar** | `/api/calendar` | Family events + AI calendar-image scanner (`calendar_scanner_service`). |
+| **Calendar** | `/api/calendar` | Family events + AI calendar-image scanner. |
 | **Chat / DM** | `/api/chat`, `/api/dm` | Family group chat (reactions, read state) + direct messages. |
 | **Kiosk** | `/api/kiosk` | Shared-device kiosk mode (`kiosk_device`). |
 | **Analytics** | `/api/analytics` | Family "PUP" snapshots / progress analytics. |
+| **Gigs / Cash / Bank** | `/api/gigs`, `/api/cash`, `/api/bank` | Two-currency economy: chores+bonus → points; gig BOARD → cash ($MXN). Family Bank (match/interest/allowance payday sweep). |
 | **Consequences / Rewards / Points** | `/api/consequences`, `/api/rewards`, `/api/points-conversion` | Discipline + reward economy on top of the points system. |
 
-A 2026-06-04 production-readiness audit lives in `docs/audit/2026-06-04/` (findings,
-remediation plan, and what's been fixed across Tracks A–D).
+Production-readiness audits live in `docs/audit/` (2026-06-04 techdebt, 2026-07-02 UX, 2026-07-07 launch gaps).
 
 ### Frontend (Astro 5)
 
-Pages live in `frontend/src/pages/`. Routing is file-based. All server-side API calls go to `http://backend:8000` (internal Docker network). Auth state managed via cookies + Astro middleware (`frontend/src/middleware.ts`).
+Pages live in `frontend/src/pages/` (file-based routing, SSR via Node adapter, no client framework — vanilla `<script>` islands). All server-side API calls go through same-origin Astro proxy routes (`/api/*`) to `http://backend:8000`. Auth state via cookies + `frontend/src/middleware.ts` (CSP/security headers, CSRF origin check, transparent token refresh).
 
 Key frontend pages:
-- `/budget/` — main budget dashboard
-- `/budget/transactions` — transaction list with filters
-- `/budget/scan-receipt` — AI receipt scanner (JPEG/PNG/WebP/PDF)
-- `/budget/receipt-drafts` — HITL review queue for low-confidence scans
-- `/budget/import` — CSV import
-- `/budget/reports/` — spending reports
+- `/budget/` — dashboard · `/budget/transactions` · `/budget/scan-receipt` · `/budget/receipt-drafts` · `/budget/import` · `/budget/reports/`
+- `/gigs`, `/bank`, `/pet`, `/calendar`, `/chat`, `/kiosk`
 - `/parent/settings/subscription` — plan management
+- `/help` + `/ayuda` — user guides rendered from `docs/USER_GUIDE_{EN,ES}.md` (the `frontend/docs` symlink + root build context exist for this)
 
 ---
 
@@ -332,66 +234,52 @@ Key frontend pages:
 
 | File | Purpose |
 |------|---------|
-| `backend/app/main.py` | FastAPI app setup, middleware, router registration |
+| `backend/app/main.py` | FastAPI app setup, middleware, router registration, scheduler sweeps |
 | `backend/app/core/config.py` | All env vars via Pydantic settings |
-| `backend/app/core/dependencies.py` | `get_current_user` and other FastAPI deps |
+| `backend/app/core/dependencies.py` | `get_current_user`, `require_parent_role` |
 | `backend/app/core/premium.py` | Feature gating, plan resolution, usage limits |
 | `backend/app/services/base_service.py` | CRUD base class — extend for new services |
-| `backend/app/models/budget.py` | All 15 budget tables |
+| `backend/app/models/budget.py` | All 17 budget tables |
 | `backend/app/models/subscription.py` | Subscription plans, family subscriptions, usage tracking |
-| `backend/app/services/budget/receipt_scanner_service.py` | Claude Vision receipt scanning |
-| `backend/app/services/budget/file_import_service.py` | OFX/QIF/CAMT parsers |
-| `backend/app/services/budget/export_service.py` | Budget export/import as ZIP |
+| `backend/ruff.toml` | Lint config (CI-enforced) |
 | `backend/tests/conftest.py` | Test fixtures, test DB setup |
-| `frontend/src/middleware.ts` | Auth/session middleware for Astro SSR |
+| `frontend/src/middleware.ts` | Auth/session/security-header middleware for Astro SSR |
+| `.github/workflows/ci.yml` | CI (ruff + migrations round-trip + pytest; astro check + build) |
 | `docker-compose.yml` | Local dev compose (all services) |
-| `docker-compose.gcp.yml` | Production compose (used by `./scripts/deploy-gcp.sh`) |
-| `docker-compose.stage.yml` | Staging compose (override) |
-| `scripts/deploy-gcp.sh` | Canonical production deploy script (target: GCP VM) |
-| `scripts/gcp-bootstrap.sh` | First-time VM setup (Docker CE install, app dir) |
-| `deploy-prod.sh` | **LEGACY** — old on-prem path, do not run |
+| `docker-compose.onprem.yml` | Production compose (used by `./scripts/deploy-onprem.sh`) |
+| `scripts/deploy-onprem.sh` | Canonical production deploy script (target: 10.1.0.91) |
+| `docker-compose.gcp.yml` + `scripts/deploy-gcp.sh` | **ROLLBACK ONLY** — decommissioned GCP path |
 
 ---
 
 ## Environment variables
 
-Key env vars (set in `.env` or compose file). In production, secrets come from Vault (`secret/family-task-manager/prod`):
+Key env vars (set in `.env` — local, and on the prod host; templates `.env.example` / `.env.onprem.example`):
 
 | Variable | Purpose | Required |
 |----------|---------|----------|
 | `DATABASE_URL` | PostgreSQL connection | Yes |
 | `SECRET_KEY` | JWT signing key | Yes |
 | `REDIS_URL` | Redis connection | Yes |
-| `ANTHROPIC_API_KEY` | Claude Vision for receipt scanning | For AI features |
+| `LITELLM_API_BASE/KEY` | All AI features (receipt/calendar scan, Jarvis, translation) | For AI features |
 | `GOOGLE_CLIENT_ID/SECRET` | Google OAuth | For Google login |
 | `PAYPAL_CLIENT_ID/SECRET` | PayPal subscriptions | For billing |
-| `RESEND_API_KEY` | Transactional emails | For email features |
-| `LITELLM_API_BASE/KEY` | Auto-translation | For translation |
+| `RESEND_API_KEY` / SMTP vars | Transactional emails | For email features |
+
+`app/core/vault_bootstrap.py` still folds Vault KV into env WHEN `VAULT_ADDR`/`VAULT_TOKEN` are set — current prod does not set them (secrets live in `.env` on the host).
 
 ---
 
 ## Testing
 
-- **968+ tests collected**, 0 failures (suite fully greened in PR #36)
+- **~1760 tests**, full suite green; CI blocks on it (plus coverage gate ≥70%)
 - Use the separate **test database** (port 5435) — `conftest.py` creates/drops schema per run
 - All new features need tests before merging
 - Test files follow pattern: `tests/test_<feature>.py`
 
-Key test files:
-- `test_wave1_gap_closure.py` — 22 tests (payee favorites/merge, schedule end modes)
-- `test_wave2_gap_closure.py` — 28 tests (saved filters, rule actions, tags)
-- `test_wave3_gap_closure.py` — 30 tests (file import, auto-fill, export, custom reports)
-- `test_receipt_scanner.py` — 6 tests (Claude Vision mocked, scan+create flow)
-- `test_subscription.py` — subscription/premium gating tests
-
 ## Database migrations
 
-Always use Alembic — never modify the DB schema with raw SQL. Test migrations locally before production.
-
-Current migration chain (latest):
-```
-... → subscription_tables → wave1_budget_gap_closure → wave2_saved_filters_tags → wave3_custom_reports_table
-```
+Always use Alembic — never modify the DB schema with raw SQL. Test migrations locally before production. Single-head chain (102 revisions as of 2026-07-16); CI exercises upgrade → downgrade -1 → upgrade.
 
 ## Demo credentials (after seeding)
 
@@ -405,4 +293,5 @@ lucas@demo.com / password123  (TEEN)
 ## Reference data (prod)
 
 - Real user: `juan.mtz79@gmail.com` (PARENT, family_id `1998e48d-2ef0-48b6-a437-cbb730ae935c`); second parent `mayra.escamilla79@gmail.com`. Family name "Juan Carlos Martinez's Family".
-- **Tasks / gigs / budget data was fully reset on 2026-06-23** (per user request) — all task templates, gig offerings, and the entire budget (accounts, transactions, categories, payees, allocations) deleted; points/`gig_trust_streak` zeroed. Pre-reset full DB dump retained on the VM at `/home/jc/family-task-manager/backups/prod-fulldb-pre-cleanup-juan-20260623-224237.sql`. The old "~60 transactions / 17 accounts incl. dup card variants" no longer exists; the family starts clean.
+- Tasks / gigs / budget data was fully reset on 2026-06-23 (per user request); the family starts clean. Pre-reset dump retained (see backups on the prod host).
+- `info@agent-ia.mx` family is a seeded DEMO family (`seed_demo_family.py`, additive + scoped) — not Juan's real family.
