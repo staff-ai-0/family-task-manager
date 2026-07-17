@@ -209,6 +209,24 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                             )}
                             {!onboarding?.task_created && <a href="/parent/tasks" class="text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
                         </li>
+                        {/* No backend onboarding flag tracks gig creation (do not invent
+                            one) — this row is intentionally ungated (always shown) and,
+                            like the optional flyer-scan row below, left out of onbSteps/
+                            onbDone so it can't cap the progress bar short of 100%. */}
+                        <li class="flex items-center gap-3 flex-wrap">
+                            <span class="text-brand-ink-soft">◻</span>
+                            <span class="text-brand-ink">
+                                {t(lang, "pd_onb_gig")}
+                            </span>
+                            <button
+                                type="button"
+                                data-mission="first-gig"
+                                class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs"
+                            >
+                                🧭 {t(lang, "pd_onb_gig_cta")}
+                            </button>
+                            <a href="/parent/gigs" class="text-brand-sky-deep font-semibold hover:underline text-xs">→</a>
+                        </li>
                         <li class="flex items-center gap-3">
                             <span class={onboarding?.reward_created ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.reward_created ? "✅" : "◻"}</span>
                             <span class={onboarding?.reward_created ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
@@ -672,6 +690,25 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                 sessionStorage.setItem("ftm_mission_" + id, "0");
                 window.location.href = id === "first-task" ? "/parent/tasks" : "/parent/gigs";
             });
+        });
+
+        // Completion chain: finishing first-task auto-nudges into first-gig —
+        // arm it and hop to the page hosting its first target, same as the
+        // checklist launcher above, so the resume block there picks it up.
+        // first-task's last step only ever completes on parent/tasks.astro
+        // (TaskCreateModal's "task-created" signal), so in practice this
+        // listener never fires here — mirrored onto this page anyway for
+        // consistency with the resume loop above (also duplicated per-page
+        // regardless of which page a given mission's steps live on).
+        // Always re-arms on every first-task completion rather than tracking
+        // a separate "already done" guard — simpler, and harmless since the
+        // checklist CTA that can retrigger first-task is itself hidden once
+        // onboarding.task_created is true.
+        window.addEventListener("ftm:mission-complete", (e) => {
+            const detail = (e as CustomEvent).detail;
+            if (detail?.id !== "first-task") return;
+            sessionStorage.setItem("ftm_mission_first-gig", "0");
+            window.location.href = "/parent/gigs";
         });
     }
 

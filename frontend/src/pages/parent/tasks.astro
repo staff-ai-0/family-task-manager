@@ -428,6 +428,22 @@ function freqLabel(tmpl: any): string {
             window.dispatchEvent(new CustomEvent("ftm:mission", { detail: { signal: "task-modal-open" } }));
         });
 
+        // Completion chain: first-task's last step ("task-created", fired by
+        // TaskCreateModal above) completes here, so this is where
+        // ftm:mission-complete for it actually fires. Arm first-gig and hop
+        // to the page hosting its first target — same pattern as the
+        // checklist launcher in parent/index.astro — so the resume block in
+        // parent/gigs.astro picks it up. Always re-arms rather than tracking
+        // a separate "already done" guard (simpler; harmless since replaying
+        // first-task requires the checklist CTA, which hides itself once
+        // onboarding.task_created is true).
+        window.addEventListener("ftm:mission-complete", (e) => {
+            const detail = (e as CustomEvent).detail;
+            if (detail?.id !== "first-task") return;
+            sessionStorage.setItem("ftm_mission_first-gig", "0");
+            window.location.href = "/parent/gigs";
+        });
+
         const previewBtn = document.getElementById("btn-shuffle-preview");
         const modal = document.getElementById("preview-modal");
         const closeBtn = document.getElementById("preview-close");

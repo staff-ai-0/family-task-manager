@@ -54,6 +54,24 @@ test('mission target present but CSS-hidden → degrades cleanly, never highligh
   await expect(page.locator('.driver-popover')).toHaveCount(0, { timeout: 5000 });
 });
 
+// Mission 2 ("first-gig") reachability: until this fix, buildMission("first-gig"),
+// the gig anchors/signals, and the resume blocks all existed but NOTHING armed
+// the mission — no element carried data-mission="first-gig" (the dashboard
+// checklist only had a first-task launcher), and missionRunner.ts's
+// ftm:mission-complete event (dispatched when first-task finishes) had no
+// listener. This proves the new checklist launcher on parent/index.astro arms
+// first-gig (mirrors the first-task launcher already covered above) and the
+// resume block on parent/gigs.astro picks it up on load.
+test('first-gig mission is reachable from the checklist launcher', async ({ page }) => {
+  await login(page);
+  await page.goto(`${BASE_URL}/parent`);
+  await page.waitForLoadState('networkidle');
+  await page.click('[data-mission="first-gig"]');
+  await page.waitForURL('**/parent/gigs', { timeout: 15000 });
+  // Step 1 of the first-gig mission highlights the gig FAB.
+  await expect(page.locator('.driver-popover')).toBeVisible({ timeout: 5000 });
+});
+
 // Mission 2 ("first-gig") support: the parent gig-create form (parent/gigs.astro)
 // now carries a payout_cadence select alongside the gig-fab/gig-cadence/gig-submit
 // data-tour hooks and dispatches the matching ftm:mission signals. This test
