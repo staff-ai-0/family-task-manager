@@ -3,7 +3,7 @@ PointTransaction model
 
 Tracks all point-related activities for audit and transparency.
 """
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Enum as SQLEnum, Text
+from sqlalchemy import Column, Integer, DateTime, ForeignKey, Enum as SQLEnum, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime

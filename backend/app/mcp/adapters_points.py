@@ -59,7 +59,7 @@ class LedgerAdapter(ServiceAdapter):
 
     async def get(self, ctx: McpContext, entity_id: UUID) -> dict:
         from app.models import PointTransaction, User
-        from app.core.exceptions import NotFoundException, ForbiddenException
+        from app.core.exceptions import NotFoundException
         stmt = (
             select(PointTransaction)
             .join(User, User.id == PointTransaction.user_id)

@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from datetime import date
-from uuid import UUID
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role

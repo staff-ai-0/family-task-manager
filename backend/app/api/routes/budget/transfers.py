@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user, require_parent_role
+from app.core.dependencies import require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.services.budget.transfer_service import TransferService
 from app.schemas.budget import TransactionResponse

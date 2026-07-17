@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundException, ValidationException
+from app.core.exceptions import NotFoundException
 from app.models.meal import MealPlanEntry, Recipe
 from app.models.shopping import ShoppingList
 from app.schemas.meal import (

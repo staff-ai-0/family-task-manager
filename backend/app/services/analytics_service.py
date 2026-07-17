@@ -12,7 +12,7 @@ re-balancing, scheduling lighter weeks, or talking with a kid.
 
 from datetime import date, datetime, timedelta, timezone
 from statistics import pstdev
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_, func, select

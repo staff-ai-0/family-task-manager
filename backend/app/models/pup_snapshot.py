@@ -5,7 +5,7 @@ upserts make a same-day re-run a no-op.
 """
 
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 
 from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID

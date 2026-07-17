@@ -5,7 +5,7 @@ Handles weekly shuffle, assignment queries, completion with bonus gating,
 and daily progress tracking.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional

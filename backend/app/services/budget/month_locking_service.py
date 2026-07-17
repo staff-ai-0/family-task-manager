@@ -8,7 +8,7 @@ Prevents edits to past closed months for data integrity.
 from datetime import date, datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 
 from app.models.budget import BudgetAllocation

@@ -12,7 +12,7 @@ from uuid import UUID
 from app.models.budget import BudgetPayee, BudgetTransaction, BudgetRecurringTransaction
 from app.schemas.budget import PayeeCreate, PayeeUpdate, PayeeMergeRequest
 from app.services.base_service import BaseFamilyService
-from app.core.exceptions import NotFoundException, ValidationException
+from app.core.exceptions import ValidationException
 
 
 class PayeeService(BaseFamilyService[BudgetPayee]):

@@ -17,7 +17,6 @@ from app.schemas.budget import (
     RecurringTransactionUpdate,
 )
 from app.services.base_service import BaseFamilyService
-from app.core.exceptions import NotFoundException
 
 
 class RecurringTransactionService(BaseFamilyService[BudgetRecurringTransaction]):

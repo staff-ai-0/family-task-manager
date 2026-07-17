@@ -81,6 +81,11 @@ jobs:
         # and adds pytest/pytest-asyncio/pytest-cov (needed by pytest.ini addopts).
         run: pip install -r requirements-dev.txt
 
+      - name: Lint (ruff)
+        # Zero-tolerance: the tree was brought to a clean `ruff check` on
+        # 2026-07-16 (config in backend/ruff.toml); keep it that way.
+        run: ruff check app
+
       - name: Run migrations (alembic upgrade head + downgrade round-trip)
         # Prod deploys run `alembic upgrade head` for real — CI must exercise
         # the chain first so a broken migration fails here, not on the host.

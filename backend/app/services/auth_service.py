@@ -4,9 +4,8 @@ Authentication Service
 Business logic for user authentication and authorization.
 """
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
-from typing import Optional
-from datetime import datetime, timedelta, timezone
+from sqlalchemy import select
+from datetime import datetime, timezone
 from uuid import UUID
 
 from app.models import User, Family
@@ -17,7 +16,6 @@ from app.models.user import (
 )
 from app.schemas.user import UserCreate, UserLogin
 from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
-from app.core.config import settings
 from app.core.exceptions import (
     ForbiddenException,
     NotFoundException,

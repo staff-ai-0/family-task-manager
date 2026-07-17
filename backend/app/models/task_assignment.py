@@ -9,8 +9,6 @@ Each assignment has a specific date and tracks completion status.
 from sqlalchemy import (
     Column,
     String,
-    Integer,
-    Boolean,
     DateTime,
     Date,
     Float,
@@ -21,7 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime, date, timezone
+from datetime import datetime, timezone
 import uuid
 import enum
 

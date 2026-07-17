@@ -37,6 +37,15 @@ from fastapi.concurrency import run_in_threadpool
 from app.core.config import settings
 from app.core.exceptions import ValidationError
 from app.core.metrics import record_llm_call
+from app.core.premium import FEATURE_MIN_PLAN, PLAN_ORDER, get_family_plan
+from app.models.budget import (
+    BudgetAccount,
+    BudgetCategorizationRule,
+    BudgetPayee,
+    BudgetTransaction,
+)
+from app.services.budget.categorization_rule_service import CategorizationRuleService
+from app.services.budget.receipt_draft_service import ReceiptDraftService
 
 # Hard ceiling for any single LiteLLM/vision request. A hung or slow provider
 # must never block the event loop indefinitely.
@@ -47,17 +56,6 @@ LLM_REQUEST_TIMEOUT_SECONDS = 60.0
 # client is built (jarvis, calendar scanner, recipe importer, proof
 # validator, category AI) so the connect/read split stays consistent.
 LLM_TIMEOUT = httpx.Timeout(LLM_REQUEST_TIMEOUT_SECONDS, connect=5.0)
-from app.core.premium import FEATURE_MIN_PLAN, PLAN_ORDER, get_family_plan
-from app.models.budget import (
-    BudgetAccount,
-    BudgetCategorizationRule,
-    BudgetPayee,
-    BudgetTransaction,
-)
-from app.schemas.budget import TransactionCreate
-from app.services.budget.transaction_service import TransactionService
-from app.services.budget.categorization_rule_service import CategorizationRuleService
-from app.services.budget.receipt_draft_service import ReceiptDraftService
 
 
 logger = logging.getLogger(__name__)

@@ -16,7 +16,6 @@ from app.models.budget import BudgetCategorizationRule, BudgetCategory, BudgetTr
 from app.schemas.budget import (
     CategorizationRuleCreate,
     CategorizationRuleUpdate,
-    CategorizationRuleResponse,
 )
 from app.services.base_service import BaseFamilyService
 from app.core.exceptions import NotFoundException, ValidationException

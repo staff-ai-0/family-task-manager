@@ -8,7 +8,7 @@ import io
 import json
 import zipfile
 from datetime import date, datetime, timezone
-from typing import Any, List
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession

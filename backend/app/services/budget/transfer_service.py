@@ -67,7 +67,7 @@ class TransferService:
         if not from_account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Source account not found"
+                detail="Source account not found"
             )
         
         to_account_result = await db.execute(
@@ -83,7 +83,7 @@ class TransferService:
         if not to_account:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Destination account not found"
+                detail="Destination account not found"
             )
         
         # Parse date

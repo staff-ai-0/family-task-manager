@@ -17,7 +17,6 @@ from app.services.google_oauth_service import (
     OAuthConsentRequiredError,
 )
 from app.schemas.user import UserResponse, TokenResponse
-from app.core.exceptions import ValidationException
 
 
 router = APIRouter()

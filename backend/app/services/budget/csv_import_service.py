@@ -15,11 +15,10 @@ import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.models.budget import BudgetTransaction, BudgetPayee, BudgetAccount, BudgetCategory
+from app.models.budget import BudgetTransaction, BudgetPayee, BudgetCategory
 from app.services.budget.transaction_service import TransactionService
 from app.services.budget.categorization_rule_service import CategorizationRuleService
 from app.schemas.budget import TransactionCreate
-from app.core.type_utils import to_uuid_required
 
 
 class CSVImportError(Exception):
@@ -175,7 +174,6 @@ class CSVImportService:
     @classmethod
     def _detect_format(cls, fieldnames: List[str]) -> str:
         """Detect CSV format based on field names"""
-        fieldnames_lower = [f.lower() for f in fieldnames]
         
         # Check for OFX format
         if any("DTPOSTED" in f or "TRNAMT" in f for f in fieldnames):
@@ -286,7 +284,6 @@ class CSVImportService:
         
         # Detect format if column mapping not provided
         if not column_mapping:
-            format_type = cls._detect_format(list(rows[0].keys()) if rows else [])
             column_mapping = {}
         
         # Build effective column names

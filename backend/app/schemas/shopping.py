@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.schemas.base import FamilyEntityResponse, BaseResponse, EntityResponse
+from app.schemas.base import FamilyEntityResponse, EntityResponse
 
 
 class ShoppingItemBase(BaseModel):

@@ -5,7 +5,6 @@ Business logic for saved custom report configurations and execution.
 """
 
 from datetime import date, timedelta
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -7,10 +7,9 @@ Business logic for reward management and redemption.
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from typing import List, Optional
-from datetime import datetime
 from uuid import UUID
 
-from app.models import Reward, User, PointTransaction, Consequence
+from app.models import Reward, PointTransaction, Consequence
 from app.models.reward import RewardCategory
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.task_template import TaskTemplate

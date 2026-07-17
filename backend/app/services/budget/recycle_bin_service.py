@@ -6,8 +6,8 @@ Handles restoration, permanent deletion, and listing of deleted items.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, desc
-from typing import List, Optional, Type, TypeVar
+from sqlalchemy import select, desc
+from typing import Optional, TypeVar
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -17,7 +17,7 @@ from app.models.budget import (
     BudgetCategory,
     BudgetCategoryGroup,
 )
-from app.core.exceptions import NotFoundException, ValidationError
+from app.core.exceptions import NotFoundException
 
 T = TypeVar('T')
 

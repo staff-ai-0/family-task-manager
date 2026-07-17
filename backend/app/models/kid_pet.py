@@ -20,16 +20,16 @@ Decay is handled by the daily scheduler that already runs the overdue sweep.
 import math
 import uuid
 from datetime import datetime, timezone
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 from typing import Optional
 
 from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 VALID_SPECIES = {"cat", "dog", "dragon", "fox", "owl", "bunny"}

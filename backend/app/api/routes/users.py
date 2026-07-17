@@ -8,12 +8,11 @@ from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
-from uuid import UUID
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role, get_family_user
 from app.services import AuthService, PointsService
-from app.schemas.user import UserUpdate, UserResponse
+from app.schemas.user import UserResponse
 from app.schemas.points import (
     PointsSummary,
     PointTransactionResponse,

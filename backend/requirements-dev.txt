@@ -8,8 +8,7 @@ pytest==7.4.4
 pytest-asyncio==0.23.3
 pytest-cov==4.1.0
 
-# Code Quality
-black==24.1.1
-flake8==7.0.0
-mypy==1.8.0
-isort==5.13.2
+# Code Quality — ruff is the single linter (config in backend/ruff.toml).
+# Replaced black/flake8/mypy/isort 2026-07-16: none had config files and none
+# ran in CI; ruff check now gates CI instead.
+ruff==0.15.12

@@ -7,8 +7,11 @@ This module contains all models for the subscription system:
 - UsageTracking: Feature usage counters per billing period
 """
 from datetime import date, datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID, uuid4
+
+if TYPE_CHECKING:
+    from app.models.family import Family
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID

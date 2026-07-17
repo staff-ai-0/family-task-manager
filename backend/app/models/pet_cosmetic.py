@@ -13,10 +13,6 @@ the acting user's own pet, so isolation is structural.
 import uuid
 from datetime import datetime, timezone
 
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
-
 from sqlalchemy import (
     Boolean,
     Column,
@@ -28,6 +24,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class PetCosmetic(Base):

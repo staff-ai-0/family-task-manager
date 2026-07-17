@@ -7,7 +7,7 @@ main.py calling ``sweep_due()`` every 5 minutes.
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 
 from apscheduler.triggers.cron import CronTrigger

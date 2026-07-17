@@ -11,7 +11,6 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from app.models.budget import (
-    BudgetAccount,
     BudgetCategory,
     BudgetCategoryGroup,
     BudgetTransaction,
@@ -63,7 +62,6 @@ class ReportService:
         end_date: date,
     ) -> Dict:
         """Get spending grouped by category"""
-        from app.models.budget import BudgetPayee
         
         # Query for spending by category
         query = (
@@ -490,7 +488,6 @@ class ReportService:
         """
         from dateutil.relativedelta import relativedelta
         from app.services.budget.account_service import AccountService
-        from app.models.budget import BudgetAccount
 
         accounts = await AccountService.list_by_family(db, family_id)
 

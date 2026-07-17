@@ -29,8 +29,6 @@ from app.models.kid_bank import KidBankAccount
 from app.models.user import APPROVAL_APPROVED, User, UserRole
 from app.services.cash_service import (
     JAR_SAVE,
-    JAR_SHARE,
-    JAR_SPEND,
     JARS,
     CashService,
     _add_jar,

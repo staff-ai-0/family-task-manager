@@ -21,7 +21,7 @@ Endpoints:
 import hashlib
 import hmac
 import logging
-from datetime import date as _date, datetime, timedelta, timezone
+from datetime import date as _date, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status

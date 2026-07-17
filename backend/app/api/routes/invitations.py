@@ -4,14 +4,13 @@ Family Invitation Routes
 Handles sending, accepting, and managing family member invitations.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from app.core.database import get_db
 from app.core.dependencies import (
     ensure_email_verified,
-    get_current_user,
     require_parent_role,
     verify_family_id,
 )
@@ -28,8 +27,7 @@ from app.schemas.invitation import (
     AcceptInvitationResponse,
     PendingInvitationResponse,
 )
-from app.models import User, FamilyInvitation
-from app.models.family import Family
+from app.models import User
 from sqlalchemy import select
 
 router = APIRouter()
@@ -108,7 +106,6 @@ async def get_pending_invitations(
     # Enrich with invited_by_user_name
     results = []
     for inv in invitations:
-        from sqlalchemy import select
         invited_by = (await db.execute(
             select(User).where(User.id == inv.invited_by_user_id)
         )).scalar_one_or_none()
@@ -188,7 +185,7 @@ async def accept_invitation(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            message=f"Welcome to the family!"
+            message="Welcome to the family!"
         )
     except HTTPException:
         raise

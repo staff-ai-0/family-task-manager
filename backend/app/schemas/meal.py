@@ -1,7 +1,7 @@
 """Meal planning schemas (W7.2)."""
 
 from datetime import date as date_t
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
