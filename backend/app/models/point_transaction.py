@@ -44,7 +44,6 @@ class PointTransaction(Base):
     balance_after = Column(Integer, nullable=False)
     
     # Related entities
-    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)  # Legacy, to be removed
     assignment_id = Column(UUID(as_uuid=True), ForeignKey("task_assignments.id", ondelete="SET NULL"), nullable=True)
     reward_id = Column(UUID(as_uuid=True), ForeignKey("rewards.id", ondelete="SET NULL"), nullable=True)
     gig_claim_id = Column(UUID(as_uuid=True), ForeignKey("gig_claims.id", ondelete="SET NULL"), nullable=True)
@@ -55,7 +54,6 @@ class PointTransaction(Base):
     
     # Relationships
     user = relationship("User", back_populates="point_transactions", foreign_keys=[user_id])
-    task = relationship("Task", back_populates="point_transactions")  # Legacy
     assignment = relationship("TaskAssignment", back_populates="point_transactions")
     reward = relationship("Reward", back_populates="redemptions")
     gig_claim = relationship("GigClaim", back_populates="point_transactions")
@@ -65,12 +63,11 @@ class PointTransaction(Base):
         return f"<PointTransaction(id={self.id}, type={self.type.value}, points={self.points})>"
 
     @classmethod
-    def create_task_completion(cls, user_id: UUID, task_id: UUID, points: int, balance_before: int):
-        """Create transaction for task completion (legacy)"""
+    def create_task_completion(cls, user_id: UUID, points: int, balance_before: int):
+        """Create transaction for a completed task/chore"""
         return cls(
             type=TransactionType.TASK_COMPLETED,
             user_id=user_id,
-            task_id=task_id,
             points=points,
             balance_before=balance_before,
             balance_after=balance_before + points,

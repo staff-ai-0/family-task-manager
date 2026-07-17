@@ -41,7 +41,6 @@ class ConsequenceService(BaseFamilyService[Consequence]):
             severity=consequence_data.severity,
             restriction_type=consequence_data.restriction_type,
             duration_days=consequence_data.duration_days,
-            triggered_by_task_id=consequence_data.triggered_by_task_id,
             applied_to_user=consequence_data.applied_to_user,
             family_id=family_id,
         )

@@ -78,7 +78,6 @@ class Family(Base):
         "User", back_populates="family", cascade="all, delete-orphan"
     )
     # Legacy task relationship (to be removed after migration)
-    tasks = relationship("Task", back_populates="family", cascade="all, delete-orphan")
     # New template/assignment relationships
     task_templates = relationship("TaskTemplate", back_populates="family", cascade="all, delete-orphan")
     task_assignments = relationship("TaskAssignment", back_populates="family", cascade="all, delete-orphan")

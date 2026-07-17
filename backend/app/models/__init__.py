@@ -11,7 +11,6 @@ from app.core.database import Base
 # Import models in dependency order
 from app.models.family import Family
 from app.models.user import User, UserRole
-from app.models.task import Task, TaskStatus, TaskFrequency
 from app.models.task_template import TaskTemplate
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.reward import Reward, RewardCategory, RewardRedemption, RedemptionStatus
@@ -67,7 +66,6 @@ __all__ = [
     # Models
     "Family",
     "User",
-    "Task",
     "TaskTemplate",
     "TaskAssignment",
     "Reward",
@@ -148,8 +146,6 @@ __all__ = [
     "JarvisMcpToken",
     # Enums
     "UserRole",
-    "TaskStatus",
-    "TaskFrequency",
     "AssignmentStatus",
     "RewardCategory",
     "ConsequenceSeverity",

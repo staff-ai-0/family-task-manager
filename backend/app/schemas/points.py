@@ -74,7 +74,6 @@ class PointTransactionResponse(BaseResponse):
     user_id: UUID
     balance_before: int
     balance_after: int
-    task_id: Optional[UUID]
     reward_id: Optional[UUID]
     created_by: Optional[UUID]
     created_at: datetime

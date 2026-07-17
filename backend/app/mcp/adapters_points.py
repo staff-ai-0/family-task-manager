@@ -27,7 +27,6 @@ def _ser_txn(t) -> dict:
         "user_id": str(t.user_id),
         "balance_before": t.balance_before,
         "balance_after": t.balance_after,
-        "task_id": str(t.task_id) if t.task_id else None,
         "reward_id": str(t.reward_id) if t.reward_id else None,
         "created_by": str(t.created_by) if t.created_by else None,
         "created_at": t.created_at.isoformat() if t.created_at else None,

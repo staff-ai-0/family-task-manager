@@ -29,7 +29,6 @@ class ConsequenceCreate(ConsequenceBase):
     """Schema for creating a new consequence"""
 
     applied_to_user: UUID
-    triggered_by_task_id: Optional[UUID] = None
 
 
 class ConsequenceUpdate(BaseModel):
@@ -60,7 +59,6 @@ class ConsequenceResponse(FamilyEntityResponse):
     duration_days: int = Field(1, ge=1, le=30)
     active: bool
     resolved: bool
-    triggered_by_task_id: Optional[UUID]
     applied_to_user: UUID
     start_date: datetime
     end_date: datetime
