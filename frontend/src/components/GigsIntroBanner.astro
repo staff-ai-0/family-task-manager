@@ -24,7 +24,15 @@ const { lang, show } = Astro.props;
             </div>
             <div class="flex-1">
                 <h3 class="font-semibold text-brand-ink mb-1">{t(lang, "intro_banner_title")}</h3>
-                <p class="text-sm text-brand-ink/80 mb-3">{t(lang, "intro_banner_body")}</p>
+                <p class="text-sm text-brand-ink/80 mb-3">
+                    {t(lang, "intro_banner_body")}{" "}
+                    <a
+                        href={lang === "es" ? "/ayuda" : "/help"}
+                        class="font-medium text-brand-sky-deep underline hover:no-underline"
+                    >
+                        {t(lang, "intro_banner_learn_more")}
+                    </a>
+                </p>
                 <button
                     id="gigs-intro-dismiss"
                     class="px-4 py-2 bg-brand-sky-deep text-white rounded-lg text-sm font-medium hover:bg-brand-sky transition-colors"

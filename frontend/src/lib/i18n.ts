@@ -448,7 +448,8 @@ export const translations = {
 
         // Gigs intro banner (one-time after scope change)
         intro_banner_title: "How points & cash work",
-        intro_banner_body: "Two ways to earn. Finish your chores to earn points — spend them on rewards and privileges like screen time, movie night, or picking dinner. Take on gigs from the gig board to earn real cash ($MXN), paid out by a parent after they review your proof. Gigs stay locked until every required chore (today and any overdue) is done. Points and cash are separate — points never turn into cash.",
+        intro_banner_body: "Two currencies. Finish your required chores to earn points — spend them on rewards, and finishing them all unlocks your weekly allowance. Gigs are extra cash a parent pays you.",
+        intro_banner_learn_more: "See how it works",
         intro_banner_dismiss: "Got it",
 
         // Welcome tour (driver.js) — shared button labels
@@ -460,7 +461,7 @@ export const translations = {
         tour_p_welcome_title: "Welcome to Family Task Manager! 👋",
         tour_p_welcome_body: "Take 30 seconds to get your family set up. You can skip anytime and replay this later from your Profile.",
         tour_p_manage_title: "Your control center",
-        tour_p_manage_body: "Manage is your home base — create chores, post gigs, review proof, and invite your family from here.",
+        tour_p_manage_body: "Your home base. Tap the + on Tasks to create your first chore, publish gigs, review proof, and invite your family.",
         tour_p_checklist_title: "Getting-started checklist",
         tour_p_checklist_body: "Knock out these first steps: create a task, add a reward, invite a child, and approve their first job.",
         tour_p_gigs_title: "Gigs — pay for extra jobs",
@@ -967,7 +968,8 @@ export const translations = {
 
         // Gigs intro banner (one-time after scope change)
         intro_banner_title: "Cómo funcionan los puntos y el dinero",
-        intro_banner_body: "Dos formas de ganar. Termina tus tareas para ganar puntos — cámbialos por premios y privilegios como tiempo de pantalla, noche de película o elegir la cena. Toma gigs del tablero de gigs para ganar dinero real ($MXN), que un padre te paga después de revisar tu evidencia. Los gigs quedan bloqueados hasta terminar todas las tareas obligatorias (de hoy y atrasadas). Los puntos y el dinero son separados — los puntos nunca se vuelven dinero.",
+        intro_banner_body: "Dos monedas. Termina tus tareas obligatorias para ganar puntos — cámbialos por premios, y al terminarlas todas desbloqueas tu domingo semanal. Las gigs son dinero extra que un padre te paga.",
+        intro_banner_learn_more: "Ver cómo funciona",
         intro_banner_dismiss: "Entendido",
 
         // Recorrido de bienvenida (driver.js) — botones
@@ -979,7 +981,7 @@ export const translations = {
         tour_p_welcome_title: "¡Bienvenido a Family Task Manager! 👋",
         tour_p_welcome_body: "Toma 30 segundos para configurar a tu familia. Puedes saltarlo cuando quieras y repetirlo después desde tu Perfil.",
         tour_p_manage_title: "Tu centro de control",
-        tour_p_manage_body: "Gestión es tu base — crea tareas, publica gigs, revisa la evidencia e invita a tu familia desde aquí.",
+        tour_p_manage_body: "Tu base. Toca el + en Tareas para crear tu primera tarea, publica gigs, revisa la evidencia e invita a tu familia.",
         tour_p_checklist_title: "Lista para empezar",
         tour_p_checklist_body: "Completa estos primeros pasos: crea una tarea, agrega un premio, invita a un hijo/a y aprueba su primer trabajo.",
         tour_p_gigs_title: "Gigs — paga por trabajos extra",

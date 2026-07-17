@@ -118,6 +118,8 @@ Bienvenido a la guia oficial de **Family Task Manager**, la aplicacion para orga
 
 Family Task Manager es una aplicacion web disenada para familias con hijos que desean organizar las tareas del hogar de manera divertida y gamificada. Los ninos completan tareas, ganan puntos y los canjean por premios reales que los padres configuran. Ademas, incluye un modulo completo de presupuesto familiar basado en el metodo de sobres.
 
+**Como funciona la economia:** Dos monedas, dos propositos. Terminar tus tareas obligatorias gana **puntos** — cambialos en la Tienda de Premios, y terminar todas las tareas obligatorias tambien desbloquea el **domingo semanal** de la familia. Los gigs son trabajos opcionales pagados del tablero de gigs que ganan **dinero extra ($MXN)**, que un padre libera cada vez que aprueba tu evidencia enviada — un saldo separado de los puntos.
+
 **Para quien es esta aplicacion:**
 
 - Familias con hijos de cualquier edad (ninos, adolescentes)
@@ -1975,9 +1977,9 @@ Haga clic en **"Mejorar Plan"** para actualizar a Plus o Pro. El pago se procesa
 
 # Capitulo 17: Gigs (Ganancias Extra)
 
-**Quien lo usa:** Los padres publican y aprueban gigs. Los hijos y adolescentes los exploran, reclaman y completan. Los gigs son la capa de "ganancias extra" encima de las tareas regulares — trabajos opcionales que pagan puntos de bono.
+**Quien lo usa:** Los padres publican y aprueban gigs. Los hijos y adolescentes los exploran, reclaman y completan. Los gigs son la capa de "ganancias extra" encima de las tareas regulares — trabajos opcionales que pagan dinero real.
 
-Los gigs son trabajos pagados de una sola vez que un padre publica para la familia. A diferencia de las plantillas de tareas semanales (que se asignan y rotan), un gig queda en un tablero abierto que cualquier hijo elegible puede tomar por orden de llegada. El hijo hace el trabajo, envia evidencia y un padre lo aprueba para liberar los puntos. Como **1 punto = $1 MXN** en esta app, los gigs funcionan tambien como un sistema sencillo de domingo/changarros.
+Los gigs son trabajos pagados de una sola vez que un padre publica para la familia. A diferencia de las plantillas de tareas semanales (que se asignan y rotan), un gig queda en un tablero abierto que cualquier hijo elegible puede tomar por orden de llegada. El hijo hace el trabajo, envia evidencia y un padre lo aprueba para liberar el **dinero ($MXN)** — se paga cada vez que un padre aprueba un envio, ademas de tu saldo de puntos y por separado de este.
 
 ## 17.1 El Tablero de Gigs (Hijos)
 
