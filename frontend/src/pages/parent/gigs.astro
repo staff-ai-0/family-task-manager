@@ -61,8 +61,8 @@ if (Astro.request.method === "POST") {
             if (ok && thread?.id) {
                 const prefill = encodeURIComponent(
                     lang === "es"
-                        ? `Sobre tu gig "${gigTitle}": `
-                        : `About your gig "${gigTitle}": `,
+                        ? `Sobre tu ${gt.one} "${gigTitle}": `
+                        : `About your ${gt.one} "${gigTitle}": `,
                 );
                 return Astro.redirect(`/dm/${thread.id}?prefill=${prefill}`);
             }
@@ -117,7 +117,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
             href="#historial"
             class="flex items-center justify-center gap-2 py-2 mt-2 text-sm font-semibold rounded-xl bg-white/15 text-white hover:bg-white/25 transition-colors"
         >
-            📜 {lang === "es" ? "Historial de gigs completadas" : "Completed-gig history"}
+            📜 {lang === "es" ? `Historial de ${gt.many} completadas` : `Completed-${gt.one} history`}
         </a>
     </div>
 
@@ -196,7 +196,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 {offerings.length === 0 && (
                     <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
                         <p class="text-brand-ink-soft text-sm">
-                            {lang === "es" ? "No has publicado ninguna gig aún. ¡Crea la primera!" : "No gigs posted yet. Create the first one!"}
+                            {lang === "es" ? `No has publicado ninguna ${gt.one} aún. ¡Crea la primera!` : `No ${gt.many} posted yet. Create the first one!`}
                         </p>
                     </div>
                 )}
@@ -259,7 +259,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 {history.length === 0 ? (
                     <div class="bg-brand-cream rounded-2xl p-6 text-center border border-brand-ink/10">
                         <p class="text-brand-ink-soft text-sm">
-                            {lang === "es" ? "Aún no hay gigs completadas." : "No completed gigs yet."}
+                            {lang === "es" ? `Aún no hay ${gt.many} completadas.` : `No completed ${gt.many} yet.`}
                         </p>
                     </div>
                 ) : (
@@ -401,8 +401,8 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     <span class="font-medium">{lang === "es" ? "Varios niños pueden hacerla" : "Multiple kids can do it"}</span>
                     <span class="block text-xs text-brand-ink-soft mt-0.5">
                         {lang === "es"
-                            ? "Si está apagado, la gig se cierra al aprobar la primera entrega (nadie cobra doble)."
-                            : "If off, the gig closes once the first submission is approved (no double pay)."}
+                            ? `Si está apagado, la ${gt.one} se cierra al aprobar la primera entrega (nadie cobra doble).`
+                            : `If off, the ${gt.one} closes once the first submission is approved (no double pay).`}
                     </span>
                 </span>
             </label>
@@ -517,7 +517,7 @@ document.querySelectorAll<HTMLElement>("[data-proposal-card]").forEach(card => {
 
 document.querySelectorAll(".archive-gig-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
-        if (!confirm(lang === "es" ? "¿Archivar esta gig?" : "Archive this gig?")) return;
+        if (!confirm(lang === "es" ? `¿Archivar esta ${termOne.toLowerCase()}?` : `Archive this ${termOne.toLowerCase()}?`)) return;
         const b = btn as HTMLElement;
         const res = await fetch(`/api/gigs/offerings/${b.dataset.id}`, { method: "DELETE" });
         if (res.ok) {

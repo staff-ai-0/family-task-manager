@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
+import { gigTerm } from "../../lib/gigTerm";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -13,8 +14,12 @@ if (!userOk) {
 }
 if (user.role === "parent") return Astro.redirect("/parent/gigs");
 
-const { data: claims } = await apiFetch<any[]>("/api/gigs/claims/my", { token });
+const [{ data: claims }, { data: family }] = await Promise.all([
+    apiFetch<any[]>("/api/gigs/claims/my", { token }),
+    apiFetch<any>("/api/families/me", { token }),
+]);
 const myClaims: any[] = claims ?? [];
+const gt = gigTerm(family?.gig_term ?? "gig", lang);
 
 const flash = Astro.cookies.get("flash")?.value;
 if (flash) Astro.cookies.delete("flash", { path: "/" });
@@ -31,15 +36,16 @@ const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
 ---
 
 <PageLayout
-    title={lang === "es" ? "Mis Gigs" : "My Gigs"}
+    title={lang === "es" ? `Mis ${gt.Many}` : `My ${gt.Many}`}
     headerClass="bg-gradient-to-br from-violet-700 to-violet-500"
     dark
     backClass="text-violet-200 hover:text-white"
     backHref="/gigs"
-    backLabel={lang === "es" ? "Tablero de Gigs" : "Gig Board"}
+    backLabel={lang === "es" ? `Tablero de ${gt.Many}` : `${gt.One} Board`}
     role={user.role?.toLowerCase()}
     active="gigs"
     lang={lang}
+    gigTerm={gt.Many}
 >
             {flash && (
                 <div class="mb-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
@@ -55,10 +61,10 @@ const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
             {myClaims.length === 0 ? (
                 <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
                     <p class="text-brand-ink-soft text-sm">
-                        {lang === "es" ? "No has reclamado ninguna gig aún." : "You haven't claimed any gigs yet."}
+                        {lang === "es" ? `No has reclamado ninguna ${gt.one} aún.` : `You haven't claimed any ${gt.many} yet.`}
                     </p>
                     <a href="/gigs" class="inline-block mt-4 px-4 py-2 bg-violet-600 text-white text-sm font-semibold rounded-xl hover:bg-violet-700 transition-colors">
-                        {lang === "es" ? "Ver tablero de gigs" : "View gig board"}
+                        {lang === "es" ? `Ver tablero de ${gt.many}` : `View ${gt.one} board`}
                     </a>
                 </div>
             ) : (
