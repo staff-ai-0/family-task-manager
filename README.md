@@ -1,6 +1,6 @@
 # Family Task Manager
 
-Multi-tenant gamified family task manager. Each family is fully isolated. Includes points/rewards/consequences, native budget (15 models, 18 sub-routes), AI receipt scanner with HITL review queue, subscription billing.
+Multi-tenant gamified family task manager. Each family is fully isolated. Includes points/rewards/consequences, native budget (17 models, 23 sub-routes), AI receipt scanner with HITL review queue, Jarvis AI copilot (MCP), and PayPal subscription billing.
 
 Live: <https://family.agent-ia.mx>
 
@@ -8,14 +8,14 @@ Live: <https://family.agent-ia.mx>
 
 - Backend: Python 3.12, FastAPI, async SQLAlchemy 2.0, Alembic, PostgreSQL 15, Redis 7
 - Frontend: Astro 5 + Tailwind CSS v4 (SSR via Node adapter)
-- AI: Anthropic Claude Vision (receipt scanner) + LiteLLM for translation
-- Subscriptions: PayPal + Mercado Pago + Stripe
+- AI: Anthropic Claude via LiteLLM proxy (receipt/calendar scanning, Jarvis, translation)
+- Subscriptions: PayPal (only)
 
 ## Local Development
 
 ```bash
 cp .env.example .env                      # set SECRET_KEY (openssl rand -hex 32)
-docker compose up -d                       # backend, frontend, postgres, test-db, redis
+podman compose up -d                      # backend, frontend, postgres, test-db, redis
 
 # Apps
 # Frontend: http://localhost:3003
@@ -25,8 +25,8 @@ docker compose up -d                       # backend, frontend, postgres, test-d
 Run tests inside the backend container:
 
 ```bash
-docker exec -e PYTHONPATH=/app family_app_backend pytest tests/ -v
-docker exec -e PYTHONPATH=/app family_app_backend pytest tests/ --cov=app --cov-report=html
+podman exec -e PYTHONPATH=/app family_app_backend pytest tests/ -v
+cd backend && ruff check app              # lint (CI-enforced)
 ```
 
 E2E (Playwright):
@@ -39,19 +39,23 @@ npm run test:budget     # budget only
 
 ## Production
 
-- Host: `10.1.0.99` (RHEL 10, podman 5.6 rootless)
-- App dir: `/mnt/nvme/docker-prod/family-task-manager/`
-- Compose: `docker-compose.yml` (single file is prod-ready; `docker-compose.stage.yml` for staging)
-- Public URL: `https://family.agent-ia.mx` via Cloudflare Tunnel
-- Secrets: Vault path `secret/family-task-manager/prod` (periodic token in `.env` on host)
+- Host: on-prem `10.1.0.91` (RHEL 10, rootless podman, shared box — never `sudo podman`)
+- App dir: `/home/jc/family-task-manager/`
+- Compose: `docker-compose.onprem.yml`
+- Public URLs: `https://family.agent-ia.mx` + `https://api-family.agent-ia.mx` via Cloudflare Tunnel `family-onprem`
+- Secrets: `.env` on the host (template `.env.onprem.example`)
 
 Deploy:
 
 ```bash
-./deploy-prod.sh        # canonical on-prem deploy script
+./scripts/deploy-onprem.sh        # canonical deploy (backup → rsync → build → migrate → up → smoke)
 ```
 
-Per-repo gotcha (NVMe mode drift): `git config core.fileMode false`
+The GCP path (`scripts/deploy-gcp.sh`, `docker-compose.gcp.yml`) is retained for rollback only — decommissioned 2026-07-05.
+
+## CI
+
+`.github/workflows/ci.yml`: backend (ruff + alembic round-trip + full pytest w/ coverage gate) and frontend (astro check + build) on every push/PR to main.
 
 ## Service Ports
 
@@ -65,21 +69,21 @@ Per-repo gotcha (NVMe mode drift): `git config core.fileMode false`
 
 ## Documentation
 
-- `CLAUDE.md` — agent context (full architecture, conventions)
-- `AGENTS.md` — AI development guide
+- `CLAUDE.md` — canonical agent/dev context (architecture, conventions, ops)
 - `ARCHITECTURE.md` — multi-tenant patterns
 - `docs/DEPLOYMENT.md` — deployment procedures
-- `docs/USER_GUIDE_EN.md` / `docs/USER_GUIDE_ES.md` / `docs/MANUAL_USUARIO.md` — user guides
-- `docs/OAUTH_PAYMENT_SETUP.md` — Google OAuth + payment provider setup
-- `.github/instructions/` — coding standards (multi-tenant, type safety, testing)
+- `docs/USER_GUIDE_EN.md` / `docs/USER_GUIDE_ES.md` — user guides (rendered at `/help` + `/ayuda`)
+- `docs/OAUTH_PAYMENT_SETUP.md` — Google OAuth + PayPal setup
+- `docs/JARVIS_MCP.md` — Jarvis MCP server
 
 ## Architecture Highlights
 
 - Multi-tenant: every row scoped by `family_id`, enforced by JWT claim
 - Clean architecture: Routes → Services → SQLAlchemy models
 - Auth: JWT with `user_id` + `role` (PARENT/TEEN/CHILD) + `family_id`; sessions in Redis
-- Native budget (Phase 10): no external Actual Budget dependency. `/api/sync/*` returns 410 Gone permanently.
+- Native budget (Phase 10): no external Actual Budget dependency
 - HITL review queue: low-confidence receipt scans (<30%) create `BudgetReceiptDraft` records for manual review
+- Two-currency economy: chores/bonus tasks → points; gig board → cash ($MXN)
 
 ## Demo Login (after seeding)
 
@@ -93,5 +97,4 @@ lucas@demo.com  / password123  (TEEN)
 ## Repository
 
 - Origin: `https://github.com/staff-ai-0/family-task-manager.git`
-- Stable: `main`
-- Active: `chore/budget-cleanup` (and topic branches)
+- Stable: `main` (PR-based flow; CI must pass)

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user, require_parent_role
+from app.core.dependencies import require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.models import User
 from app.models.calendar_event import CalendarEvent
@@ -29,7 +29,6 @@ from app.models.kiosk_device import KioskDevice
 from app.models.point_transaction import PointTransaction
 from app.models.shopping import ShoppingItem, ShoppingList
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
-from app.models.task_template import TaskTemplate
 from app.models.user import UserRole
 from app.services.member_prefs_service import (
     MEMBER_COLORS,
@@ -502,7 +501,6 @@ async def snapshot(
         tz = ZoneInfo("UTC")
     now_local = datetime.now(tz)
     today_local = now_local.date()
-    tomorrow_local = today_local + timedelta(days=1)
     today_start = datetime.combine(today_local, datetime.min.time(), tzinfo=tz)
     tomorrow_start = today_start + timedelta(days=1)
     day_after = today_start + timedelta(days=2)
@@ -646,7 +644,7 @@ async def snapshot(
     lists = list((await db.execute(lists_q)).scalars().all())
     shopping_out: List[KioskShoppingList] = []
     if lists:
-        list_ids = [l.id for l in lists]
+        list_ids = [sl.id for sl in lists]
         counts_q = (
             select(
                 ShoppingItem.list_id,
@@ -658,9 +656,9 @@ async def snapshot(
             .group_by(ShoppingItem.list_id)
         )
         pending = {row[0]: int(row[1] or 0) for row in (await db.execute(counts_q)).all()}
-        for l in lists:
+        for sl in lists:
             shopping_out.append(
-                KioskShoppingList(name=l.name, pending=pending.get(l.id, 0))
+                KioskShoppingList(name=sl.name, pending=pending.get(sl.id, 0))
             )
 
     # Cooperative weekly boss battle (same family-local week as the leaderboard).

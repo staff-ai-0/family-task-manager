@@ -10,12 +10,12 @@ from typing import Optional
 from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
-
-logger = logging.getLogger(__name__)
 from app.models.email_verification import EmailVerificationToken
 from app.models.password_reset import PasswordResetToken
 from app.models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------

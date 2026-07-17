@@ -23,7 +23,6 @@ from app.core.exceptions import (
 )
 from app.services.base_service import (
     BaseFamilyService,
-    verify_user_in_family,
     get_user_by_id,
 )
 

@@ -4,7 +4,7 @@ Transaction routes
 CRUD endpoints for budget transactions.
 """
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status, Query, File, UploadFile, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query, File, UploadFile, Form
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict

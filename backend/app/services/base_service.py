@@ -6,7 +6,7 @@ Reduces duplication across service classes.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, delete as sql_delete
+from sqlalchemy import select, and_
 from typing import TypeVar, Generic, Type, List, Optional
 from uuid import UUID
 from datetime import datetime, timezone

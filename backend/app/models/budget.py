@@ -10,8 +10,11 @@ This module contains all models for the budget management feature:
 """
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID, uuid4
+
+if TYPE_CHECKING:
+    from app.models.family import Family
 
 from sqlalchemy import BigInteger, Boolean, CHAR, Date, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID

@@ -6,7 +6,7 @@ Handles parsing and importing OFX, QIF, and CAMT.053 files containing financial 
 
 import re
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import List, Optional
 

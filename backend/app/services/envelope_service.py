@@ -18,7 +18,6 @@ kid's default (no-op) bank row on first touch — exactly as the deployed
 (that stays owned by ``GET /api/bank/goals/me``).
 """
 from typing import List, Optional
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

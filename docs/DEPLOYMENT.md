@@ -1,110 +1,54 @@
 # Family Task Manager — Deployment
 
-## Production Target
+> Canonical ops context lives in [CLAUDE.md](../CLAUDE.md) (environments, tunnel wiring, rollback paths). This page is the hands-on runbook.
 
-- **Host**: `10.1.0.99` (RHEL 10, podman 5.6 rootless)
-- **App dir**: `/mnt/nvme/docker-prod/family-task-manager/`
-- **Compose file**: `docker-compose.yml` (single file is prod-ready; `docker-compose.stage.yml` for staging only)
-- **Public URL**: `https://family.agent-ia.mx` (Cloudflare Tunnel)
-- **Backend URL**: `https://fam-backend.agent-ia.mx` (Cloudflare Tunnel)
+## Production Target (since 2026-07-05)
 
-## Prerequisites
-
-- SSH access to `10.1.0.99` as `jc` (key in `~/.ssh/`)
-- Clean working tree on local machine (deploy script refuses dirty state)
-- Vault periodic token in prod `.env` (rotated per memory)
+- **Host**: on-prem `10.1.0.91` (RHEL 10, rootless podman, user `jc`) — SHARED box; **never `sudo podman`**
+- **App dir**: `/home/jc/family-task-manager/`
+- **Compose file**: `docker-compose.onprem.yml`
+- **Public URLs**: `https://family.agent-ia.mx` (frontend) + `https://api-family.agent-ia.mx` (backend) via Cloudflare Tunnel `family-onprem`
+- **Secrets**: `.env` on the host (template `.env.onprem.example`); no Vault in the live path
 
 ## Deploy
 
 ```bash
-./deploy-prod.sh
+./scripts/deploy-onprem.sh              # full: backup → rsync → rollback point → build → migrate → up → smoke
+./scripts/deploy-onprem.sh --dry-run    # print remote commands only
 ```
 
-The script:
-1. Verifies clean git state
-2. SSHes to `10.1.0.99`
-3. `git pull` in `/mnt/nvme/docker-prod/family-task-manager/`
-4. `sudo docker compose` (docker-compatible shim over podman) build + up -d
-5. Runs `alembic upgrade head` inside backend container
-6. Health-checks `/api/sync/health` (expects HTTP 410 — sync deprecation marker)
+Deploy config (SSH target, paths) lives in `.deploy.onprem.env`.
+
+The script does a scoped `down` + re-pins network DNS + `up` — never hand-roll `podman compose up -d` after a rebuild; partial recreate can silently keep the stale image running.
 
 ## Manual Operations (after SSH)
 
 ```bash
-ssh jc@10.1.0.99
-cd /mnt/nvme/docker-prod/family-task-manager
-DC="podman compose --env-file .env -f docker-compose.yml"
+ssh jc@10.1.0.91
+cd /home/jc/family-task-manager
+DC="podman compose --env-file .env -f docker-compose.onprem.yml"
 
 $DC ps                          # state
-$DC logs -f backend             # tail
+podman logs -f family_onprem_backend
 $DC exec -T backend alembic upgrade head
-$DC restart backend frontend
 ```
 
-## Vault
+## Backups
 
-- Path: `secret/family-task-manager/prod`
-- Token: periodic per-app in `.env` on host (auto-renews on use)
-- Loader: `backend/app/core/config.py` reads via `vault-client-python`
-
-To rotate the periodic token:
-
-```bash
-vault token create -policy=family-task-manager-prod -period=720h \
-  -display-name=family-task-manager-prod
-# Update /mnt/nvme/docker-prod/family-task-manager/.env on host
-$DC restart backend
-```
-
-## File-Mode Drift (NVMe)
-
-NVMe ext4 at `/mnt/nvme/docker-prod` mangles file modes (644→755) on `git checkout`. Per-repo workaround:
-
-```bash
-git config core.fileMode false
-```
-
-(Per workspace memory `prod_nvme_filemode_drift`.)
+- `./scripts/backup-db.sh` — on-demand dump (also runs automatically at the start of each deploy)
+- `./scripts/restore-db.sh` — restore helper
+- systemd timers in `scripts/systemd/` (`family-onprem-backup.*`) schedule host-side dumps
 
 ## Database Migrations
 
-Always Alembic — never raw SQL. Test locally first:
-
-```bash
-docker exec family_app_backend alembic revision --autogenerate -m "description"
-docker exec family_app_backend alembic upgrade head
-```
-
-In production, deploy script runs `alembic upgrade head` automatically.
+Alembic only. CI (`.github/workflows/ci.yml`) exercises `upgrade head → downgrade -1 → upgrade head` on every PR; the deploy script runs `alembic upgrade head` against the freshly built image before switching traffic.
 
 ## Rollback
 
-If a deploy goes bad:
+1. **Images**: the deploy script tags the previously running backend/frontend images as a rollback point before rebuilding — retag + `up` to revert.
+2. **GCP (last resort)**: the decommissioned GCP VM (`family-app`, project `family-prod`) still has its volumes; `scripts/deploy-gcp.sh` + `docker-compose.gcp.yml` + the pre-cutover dump `backups/prod-cutover-gcp-20260705.sql` can resurrect it. Reassess before using — DNS/tunnel need switching back.
 
-```bash
-ssh jc@10.1.0.99
-cd /mnt/nvme/docker-prod/family-task-manager
-git log --oneline -10            # find last good commit
-git checkout <good-sha>
-$DC up -d --build
-$DC exec -T backend alembic downgrade -1   # only if migration ran
-```
+## Decommissioned targets
 
-## Health & Monitoring
-
-- Backend health: `https://fam-backend.agent-ia.mx/health`
-- `/api/sync/*` deprecated: returns 410 Gone (used as proof-of-life check)
-- Logs: stdout via podman → host journald
-
-## Service Ports (Production)
-
-| Service       | Container port | Host port | Notes |
-| ------------- | -------------- | --------- | ----- |
-| Frontend SSR  | 3000           | 3003      | Astro 5 |
-| Backend API   | 8000           | 8003      | FastAPI |
-| PostgreSQL    | 5432           | 5437      | Per-family schema |
-| Redis         | 6379           | 6380      | Sessions |
-
-## Last Deployment of Note
-
-`docs/deployments/2026-04-11.md` — cold-start deployment after `deploy-prod.sh` rewrite.
+- **GCP `family-app`** — stopped 2026-07-05 (kept for rollback, see above)
+- **On-prem 10.1.0.99** — stopped 2026-05-23; do not redeploy the app there (the box still hosts the shared LiteLLM proxy)

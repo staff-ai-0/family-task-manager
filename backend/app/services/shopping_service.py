@@ -5,14 +5,14 @@ read/write; archived lists stay queryable for history.
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.exceptions import NotFoundException, ForbiddenException
+from app.core.exceptions import NotFoundException
 from app.models.shopping import ShoppingItem, ShoppingList
 from app.schemas.shopping import (
     ShoppingItemCreate,
@@ -56,7 +56,7 @@ class ShoppingService:
 
         if not lists:
             return []
-        list_ids = [l.id for l in lists]
+        list_ids = [sl.id for sl in lists]
         rows = (
             await db.execute(
                 select(
@@ -74,11 +74,11 @@ class ShoppingService:
 
         return [
             {
-                "obj": l,
-                "item_count": counts.get(l.id, (0, 0))[0],
-                "pending_count": counts.get(l.id, (0, 0))[1],
+                "obj": sl,
+                "item_count": counts.get(sl.id, (0, 0))[0],
+                "pending_count": counts.get(sl.id, (0, 0))[1],
             }
-            for l in lists
+            for sl in lists
         ]
 
     @staticmethod

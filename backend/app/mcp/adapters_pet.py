@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select, join
+from sqlalchemy import select
 
 from app.mcp.adapters import ServiceAdapter
 from app.mcp.context import McpContext

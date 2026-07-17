@@ -208,7 +208,6 @@ async def post_recurring_transaction(
     transaction_date: Optional[date] = Query(None, description="Date to post transaction (defaults to today)"),
 ):
     """Post a transaction from a recurring template (parent only)"""
-    from app.schemas.budget import TransactionResponse
     
     transaction = await RecurringTransactionService.post_transaction(
         db,

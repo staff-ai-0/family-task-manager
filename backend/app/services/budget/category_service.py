@@ -171,8 +171,8 @@ class CategoryService(BaseFamilyService[BudgetCategory]):
         Raises:
             NotFoundException: If category group not found
         """
-        # Verify the group exists and belongs to the family
-        group = await CategoryGroupService.get_by_id(db, data.group_id, family_id)
+        # Verify the group exists and belongs to the family (raises if not)
+        await CategoryGroupService.get_by_id(db, data.group_id, family_id)
 
         category = BudgetCategory(
             family_id=family_id,

@@ -6,7 +6,7 @@ Stores tokens for email verification and password reset.
 from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import backref, relationship
-from datetime import datetime, timedelta, timezone, timezone
+from datetime import datetime, timezone
 import uuid
 import secrets
 

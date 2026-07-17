@@ -6,7 +6,7 @@ compared to the full app schemas (no family_id, no read-only fields).
 The adapters translate these to the real app service schemas before
 calling into the service layer.
 """
-from typing import Any, Optional
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel

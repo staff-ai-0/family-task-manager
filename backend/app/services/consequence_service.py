@@ -5,16 +5,15 @@ Business logic for consequence management and enforcement.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, update
+from sqlalchemy import select, and_, update
 from typing import List, Optional
 from datetime import datetime, timezone
 from uuid import UUID
 
-from app.models import Consequence, User
-from app.models.consequence import ConsequenceSeverity, RestrictionType
+from app.models import Consequence
+from app.models.consequence import RestrictionType
 from app.schemas.consequence import ConsequenceCreate, ConsequenceUpdate
 from app.core.exceptions import (
-    NotFoundException,
     ValidationException,
 )
 from app.services.base_service import BaseFamilyService, verify_user_in_family

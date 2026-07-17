@@ -259,6 +259,9 @@ else
     --exclude='playwright-report/' --exclude='test-results/' --exclude='e2e-tests/' \
     --exclude='.env' --exclude='.env.local' --exclude='.deploy.onprem.env' \
     --exclude='.deploy-state' \
+    --exclude='/.playwright-mcp/' --exclude='/web-stack/' --exclude='/*.png' \
+    --exclude='/*.ipynb' --exclude='*.rdb' --exclude='.pytest_cache/' \
+    --exclude='.ruff_cache/' \
     -e "ssh -o BatchMode=yes" \
     "$PROJECT_ROOT/" "$SSH_TARGET:$REMOTE_PATH/"
 fi

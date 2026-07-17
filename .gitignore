@@ -114,6 +114,11 @@ Thumbs.db
 
 *.db
 *.sqlite3
+*.rdb
+
+# Local icon-staging scratch dir (never shipped; canonical icons live in
+# frontend/public/)
+web-stack/
 
 # =============================================================================
 # Logs

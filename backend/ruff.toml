@@ -1,0 +1,15 @@
+# Ruff — canonical Python linter for this repo (replaces ad-hoc flake8/isort runs).
+# Default rule set (E4/E7/E9/F) only: this is a legacy-size tree, widen gradually.
+target-version = "py312"
+extend-exclude = ["migrations", "venv", ".venv"]
+
+[lint]
+# E712: SQLAlchemy filters use `== True` / `== False` on purpose — `is True`
+# would break query compilation.
+ignore = ["E712"]
+
+[lint.per-file-ignores]
+# Package __init__ files re-export for the public API surface.
+"**/__init__.py" = ["F401"]
+# main.py registers routers after app setup — late imports are intentional.
+"app/main.py" = ["E402"]

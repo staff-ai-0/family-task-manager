@@ -4,9 +4,9 @@ Family Invitation Model
 Represents an invitation sent to a user to join a family.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import uuid4, UUID
-from sqlalchemy import String, DateTime, Boolean, ForeignKey, Enum as SQLEnum
+from sqlalchemy import String, DateTime, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 import enum
 

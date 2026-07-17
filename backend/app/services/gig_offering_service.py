@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from app.models.gig import GigOffering, GigClaimStatus, GigOfferingStatus
 from app.core.exceptions import (
     NotFoundException,
-    ForbiddenException,
     ValidationException,
 )
 

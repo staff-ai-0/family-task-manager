@@ -16,7 +16,6 @@ from app.schemas.budget import (
     GoalUpdate,
 )
 from app.services.base_service import BaseFamilyService
-from app.core.exceptions import NotFoundException
 
 
 class GoalService(BaseFamilyService[BudgetGoal]):

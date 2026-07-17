@@ -4,7 +4,6 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 import secrets
-import string
 
 from app.core.database import Base
 

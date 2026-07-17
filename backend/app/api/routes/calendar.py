@@ -1,6 +1,6 @@
 """Calendar routes (W2.1)."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 

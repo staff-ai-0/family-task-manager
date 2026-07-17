@@ -60,7 +60,7 @@ class GCSReceiptStorage:
         blob.cache_control = "private, max-age=900"
         try:
             blob.upload_from_string(image_bytes, content_type=content_type)
-        except GoogleCloudError as exc:
+        except GoogleCloudError:
             logger.exception("GCS upload failed for %s", path)
             raise
         return path

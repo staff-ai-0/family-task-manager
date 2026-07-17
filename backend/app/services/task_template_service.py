@@ -13,7 +13,7 @@ from uuid import UUID
 
 from app.models.task_template import TaskTemplate
 from app.schemas.task_template import TaskTemplateCreate, TaskTemplateUpdate
-from app.core.exceptions import NotFoundException, ValidationException
+from app.core.exceptions import ValidationException
 from app.services.base_service import BaseFamilyService
 from app.services.translation_service import TranslationService
 

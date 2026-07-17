@@ -10,7 +10,6 @@ never from adapter arguments.
 from __future__ import annotations
 
 from datetime import date as _date
-from typing import Any
 from uuid import UUID
 
 from app.mcp.adapters import ServiceAdapter
@@ -554,7 +553,6 @@ class ReceiptDraftAdapter(ServiceAdapter):
     async def delete(self, ctx: McpContext, entity_id: UUID) -> None:
         from app.services.budget.receipt_draft_service import ReceiptDraftService
         # ReceiptDraftService has no delete_by_id; use a direct delete
-        from app.models.budget import BudgetReceiptDraft
         draft = await ReceiptDraftService.get_by_id(ctx.db, entity_id, ctx.family_id)
         await ctx.db.delete(draft)
         await ctx.db.commit()

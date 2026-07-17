@@ -14,7 +14,7 @@ as the receipt scanner) for centralized spend tracking. Each call:
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, List
 from uuid import UUID
 
@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.exceptions import ValidationError
 from app.core.metrics import record_llm_call
-from app.mcp.confirm import is_destructive, summarize
+from app.mcp.confirm import is_destructive
 from app.mcp.context import McpContext, use_context
 from app.mcp.openai_bridge import mcp_tools_to_openai
 from app.mcp.server import server as mcp_server

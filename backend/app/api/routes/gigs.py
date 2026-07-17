@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
-from typing import List, Optional, Any
+from typing import List, Optional
 from uuid import UUID
 from datetime import date, datetime
 
@@ -9,7 +9,6 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
 from app.core.type_utils import to_uuid_required
 from app.models import User
-from app.models.gig import GigClaimStatus
 from app.services.gig_offering_service import GigOfferingService
 from app.services.gig_claim_service import GigClaimService
 from app.core.exceptions import ValidationException

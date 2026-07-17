@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, delete as sql_delete
 
 from app.models.budget import BudgetTag, BudgetTransactionTag, BudgetTransaction
-from app.schemas.budget import TagCreate, TagUpdate, TagResponse
+from app.schemas.budget import TagCreate, TagUpdate
 from app.services.base_service import BaseFamilyService
 from app.core.exceptions import NotFoundException, ValidationException
 
