@@ -171,7 +171,21 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                         placeholder={lang === "es" ? "Nota para tu hijo/a (opcional)" : "Note for your kid (optional)"}
                                         class="mt-3 w-full px-3 py-2 rounded-lg border border-brand-ink/20 text-sm bg-brand-cream focus:ring-2 focus:ring-violet-400 outline-none"
                                     />
-                                    <div class="flex gap-2 mt-3">
+                                    <button
+                                        data-edit-proposal
+                                        data-id={o.id}
+                                        data-title={o.title}
+                                        data-description={o.description ?? ""}
+                                        data-points={o.points}
+                                        data-difficulty={o.difficulty ?? 1}
+                                        data-category={o.category ?? "other"}
+                                        data-allow-multiple={o.allow_multiple ? "1" : "0"}
+                                        data-payout-cadence={o.payout_cadence ?? "immediate"}
+                                        class="mt-3 w-full py-2 text-sm font-semibold text-violet-700 bg-violet-100 rounded-xl hover:bg-violet-200 transition-colors"
+                                    >
+                                        {lang === "es" ? "✏️ Editar detalles" : "✏️ Edit details"}
+                                    </button>
+                                    <div class="flex gap-2 mt-2">
                                         <button
                                             data-proposal-action="reject"
                                             class="flex-1 py-2 text-sm font-semibold text-red-700 border border-red-300 rounded-xl hover:bg-red-50 transition-colors"
@@ -463,18 +477,32 @@ cadenceSelect?.addEventListener("change", () => {
     window.dispatchEvent(new CustomEvent("ftm:mission", { detail: { signal: "gig-cadence-set" } }));
 });
 
+const fillModalFromDataset = (b: HTMLElement) => {
+    editIdInput.value = b.dataset.id!;
+    (document.getElementById("f-title") as HTMLInputElement).value = b.dataset.title!;
+    (document.getElementById("f-description") as HTMLTextAreaElement).value = b.dataset.description!;
+    (document.getElementById("f-points") as HTMLInputElement).value = b.dataset.points!;
+    (document.getElementById("f-difficulty") as HTMLSelectElement).value = b.dataset.difficulty!;
+    (document.getElementById("f-category") as HTMLSelectElement).value = b.dataset.category!;
+    (document.getElementById("f-allow-multiple") as HTMLInputElement).checked = b.dataset.allowMultiple === "1";
+    (document.getElementById("f-cadence") as HTMLSelectElement).value = b.dataset.payoutCadence || "immediate";
+};
+
 document.querySelectorAll(".edit-gig-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-        const b = btn as HTMLElement;
-        editIdInput.value = b.dataset.id!;
-        (document.getElementById("f-title") as HTMLInputElement).value = b.dataset.title!;
-        (document.getElementById("f-description") as HTMLTextAreaElement).value = b.dataset.description!;
-        (document.getElementById("f-points") as HTMLInputElement).value = b.dataset.points!;
-        (document.getElementById("f-difficulty") as HTMLSelectElement).value = b.dataset.difficulty!;
-        (document.getElementById("f-category") as HTMLSelectElement).value = b.dataset.category!;
-        (document.getElementById("f-allow-multiple") as HTMLInputElement).checked = b.dataset.allowMultiple === "1";
-        (document.getElementById("f-cadence") as HTMLSelectElement).value = b.dataset.payoutCadence || "immediate";
+        fillModalFromDataset(btn as HTMLElement);
         openModal(lang === "es" ? `Editar ${termOne}` : `Edit ${termOne}`);
+    });
+});
+
+// Kid proposals reuse the same rich modal. Saving PUTs /offerings/{id} with a
+// payload that omits is_active, so update()'s implicit-approval guard never
+// fires and the proposal stays pending — Approve/Reject below is still the only
+// path that publishes it. Regression-locked in test_gig_board.py.
+document.querySelectorAll<HTMLElement>("[data-edit-proposal]").forEach(btn => {
+    btn.addEventListener("click", () => {
+        fillModalFromDataset(btn);
+        openModal(lang === "es" ? "Editar propuesta" : "Edit proposal");
     });
 });
 

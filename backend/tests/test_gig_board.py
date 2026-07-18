@@ -115,6 +115,50 @@ async def test_edit_and_deactivate_offering(client: AsyncClient, parent_headers)
     assert gig_id not in ids
 
 
+@pytest.mark.asyncio
+async def test_parent_edit_of_pending_proposal_keeps_it_pending(
+    client: AsyncClient, parent_headers, teen_headers
+):
+    """A parent editing a kid's pending proposal via the generic PUT (the
+    "Editar propuesta" modal path in parent/gigs.astro) must NOT publish it:
+    status stays 'pending' and is_active stays False. Only an explicit
+    is_active=True (or the /review approve path) may flip it live. This locks
+    the invariant that makes reusing the rich edit modal for proposals safe.
+    """
+    # Teen proposes a gig → lands pending / inactive.
+    propose_res = await client.post(
+        "/api/gigs/offerings/propose",
+        json={"title": "Rake leaves", "points": 20},
+        headers=teen_headers,
+    )
+    assert propose_res.status_code == 201, propose_res.text
+    proposal = propose_res.json()
+    assert proposal["status"] == "pending"
+    assert proposal["is_active"] is False
+    gig_id = proposal["id"]
+
+    # Parent fixes the wording and bumps the pay through the plain edit endpoint.
+    edit_res = await client.put(
+        f"/api/gigs/offerings/{gig_id}",
+        json={"title": "Rake the front-yard leaves", "points": 35},
+        headers=parent_headers,
+    )
+    assert edit_res.status_code == 200, edit_res.text
+    edited = edit_res.json()
+    assert edited["title"] == "Rake the front-yard leaves"
+    assert edited["points"] == 35
+    # The crux: editing did not silently publish the proposal.
+    assert edited["status"] == "pending"
+    assert edited["is_active"] is False
+
+    # It still sits in the parent's pending-review queue.
+    pending_res = await client.get(
+        "/api/gigs/offerings/proposals/pending", headers=parent_headers
+    )
+    assert pending_res.status_code == 200, pending_res.text
+    assert any(row["offering"]["id"] == gig_id for row in pending_res.json())
+
+
 # ── Claim lifecycle ───────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
