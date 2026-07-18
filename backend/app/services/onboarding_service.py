@@ -55,6 +55,14 @@ class OnboardingService:
                 CalendarEvent.source == "ocr_flyer",
             ).limit(1)
         )).scalar_one_or_none() is not None
+        # Derived optional step: has this family ever posted a gig? Mirrors the
+        # flyer_scanned pattern so no new family column is needed.
+        from app.models.gig import GigOffering
+        gig_created = (await db.execute(
+            select(GigOffering.id).where(
+                GigOffering.family_id == family_id,
+            ).limit(1)
+        )).scalar_one_or_none() is not None
         return OnboardingState(
             child_invited=row.onboarding_child_invited,
             task_created=row.onboarding_task_created,
@@ -62,6 +70,7 @@ class OnboardingService:
             points_awarded=row.onboarding_points_awarded,
             dismissed=row.onboarding_dismissed,
             flyer_scanned=flyer_scanned,
+            gig_created=gig_created,
         )
 
     @staticmethod
