@@ -13,6 +13,24 @@ async def test_get_state_all_false(db_session, test_family):
     assert state.points_awarded is False
     assert state.dismissed is False
     assert state.all_done is False
+    assert state.gig_created is False
+
+
+@pytest.mark.asyncio
+async def test_gig_created_derived_from_offering(db_session, test_family):
+    # No gig yet → derived flag False.
+    state = await OnboardingService.get_state(test_family.id, db_session)
+    assert state.gig_created is False
+
+    # Posting a gig offering flips the derived flag, without any column write.
+    from app.models.gig import GigOffering
+    db_session.add(GigOffering(family_id=test_family.id, title="Wash the car", points=50))
+    await db_session.commit()
+
+    state = await OnboardingService.get_state(test_family.id, db_session)
+    assert state.gig_created is True
+    # Derived optional step must NOT cap the core progress bar.
+    assert state.all_done is False
 
 
 @pytest.mark.asyncio

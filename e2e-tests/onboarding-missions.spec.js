@@ -54,20 +54,20 @@ test('mission target present but CSS-hidden → degrades cleanly, never highligh
   await expect(page.locator('.driver-popover')).toHaveCount(0, { timeout: 5000 });
 });
 
-// Mission 2 ("first-gig") reachability: until this fix, buildMission("first-gig"),
-// the gig anchors/signals, and the resume blocks all existed but NOTHING armed
-// the mission — no element carried data-mission="first-gig" (the dashboard
-// checklist only had a first-task launcher), and missionRunner.ts's
-// ftm:mission-complete event (dispatched when first-task finishes) had no
-// listener. This proves the new checklist launcher on parent/index.astro arms
-// first-gig (mirrors the first-task launcher already covered above) and the
-// resume block on parent/gigs.astro picks it up on load.
-test('first-gig mission is reachable from the checklist launcher', async ({ page }) => {
+// Mission 2 ("first-gig") reachability: buildMission("first-gig"), the gig
+// anchors/signals, and the resume blocks all exist, but the mission is only
+// useful if arming it actually runs it. This seeds the armed state (the same
+// sessionStorage key the checklist launcher + first-task completion chain set)
+// and confirms the resume block on parent/gigs.astro picks it up and highlights
+// the gig FAB. We arm directly rather than clicking the checklist launcher
+// because that launcher is (correctly) hidden once the family has any gig —
+// gig_created is derived on read — and the demo family already has gigs.
+test('first-gig mission runs when armed (resume block on /parent/gigs)', async ({ page }) => {
   await login(page);
-  await page.goto(`${BASE_URL}/parent`);
+  await page.goto(`${BASE_URL}/parent/gigs`);
+  await page.evaluate(() => sessionStorage.setItem('ftm_mission_first-gig', '0'));
+  await page.goto(`${BASE_URL}/parent/gigs`);
   await page.waitForLoadState('networkidle');
-  await page.click('[data-mission="first-gig"]');
-  await page.waitForURL('**/parent/gigs', { timeout: 15000 });
   // Step 1 of the first-gig mission highlights the gig FAB.
   await expect(page.locator('.driver-popover')).toBeVisible({ timeout: 5000 });
 });

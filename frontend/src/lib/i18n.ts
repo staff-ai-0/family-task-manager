@@ -503,7 +503,7 @@ export const translations = {
         m_gig_cadence_title: "When it pays out",
         m_gig_cadence_body: "Weekly, quincena, or monthly — when you hand over the cash.",
         m_gig_create_title: "Publish it",
-        m_gig_create_body: "Tap Publish. A kid can now claim it for real cash.",
+        m_gig_create_body: "Tap Save. A kid can now claim it for real cash.",
         // Onboarding checklist + tour replay
         onboarding_progress_label: "Setup progress",
         onboarding_take_tour: "Take the guided tour",
@@ -1041,7 +1041,7 @@ export const translations = {
         m_gig_cadence_title: "Cuándo se paga",
         m_gig_cadence_body: "Semanal, quincenal o mensual — cuándo entregas el dinero.",
         m_gig_create_title: "Publícala",
-        m_gig_create_body: "Toca Publicar. Un hijo ya puede tomarla por dinero real.",
+        m_gig_create_body: "Toca Guardar. Un hijo ya puede tomarla por dinero real.",
         // Lista de inicio + repetir recorrido
         onboarding_progress_label: "Progreso de configuración",
         onboarding_take_tour: "Tomar el recorrido guiado",

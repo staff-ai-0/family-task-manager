@@ -13,6 +13,10 @@ class OnboardingState(BaseModel):
     # source='ocr_flyer' — no family column needed. NOT part of all_done so
     # existing families' completed checklists don't regress.
     flyer_scanned: bool = False
+    # Optional extra step: derived from gig_offerings (has this family ever
+    # posted a gig?). Like flyer_scanned, kept out of compute_all_done so it
+    # never caps the core progress bar.
+    gig_created: bool = False
     all_done: bool = False
 
     @model_validator(mode="after")
