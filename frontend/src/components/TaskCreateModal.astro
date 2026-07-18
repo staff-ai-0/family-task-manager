@@ -736,11 +736,51 @@ const dowLabels = lang === "es"
         // exactly on those days and interval_days is ignored by the backend.
         const daysOfWeek = isIntervalMode ? [] : selectedDows();
 
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "…"; }
+
+        // The parent authors in the UI language. Map that onto the canonical
+        // columns (title/description = English base, NON-NULL; *_es = Spanish)
+        // so Spanish-typed text no longer lands in the English column. Translate
+        // the other language now via the stateless endpoint, bounded so a slow
+        // LLM proxy never stalls creation; on failure we degrade, never block.
+        const uiLang = isEs ? "es" : "en";
+        const otherLang = isEs ? "en" : "es";
+        let altTitle = "";
+        let altDesc = null;
+        {
+            const ac = new AbortController();
+            const tmo = setTimeout(() => ac.abort(), 6000);
+            try {
+                const tRes = await fetch("/api/task-templates/translate-text", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                    body: JSON.stringify({ title, description, source_lang: uiLang, target_lang: otherLang }),
+                    signal: ac.signal,
+                });
+                if (tRes.ok) {
+                    const tData = await tRes.json();
+                    altTitle = (tData.title || "").trim();
+                    altDesc = (tData.description || "").trim() || null;
+                }
+            } catch (_) { /* silent (incl. abort / 403 free plan) — create untranslated */ }
+            finally { clearTimeout(tmo); }
+        }
+
+        let titleEn, descEn, titleEs, descEs;
+        if (isEs) {
+            titleEs = title; descEs = description;
+            titleEn = altTitle || title;        // NOT NULL base; degrade to ES if translation unavailable
+            descEn = altDesc ?? description;
+        } else {
+            titleEn = title; descEn = description;
+            titleEs = altTitle || null; descEs = altDesc ?? null;
+        }
+
         const payload = {
-            title,
-            description,
-            title_es: null,
-            description_es: null,
+            title: titleEn,
+            description: descEn || null,
+            title_es: titleEs || null,
+            description_es: descEs || null,
             points,
             effort_level: parseInt(chipState.effort, 10),
             interval_days: isIntervalMode ? 7 : parseInt(chipState.interval, 10),
@@ -761,8 +801,6 @@ const dowLabels = lang === "es"
             allowed_roles: allowedRoles.length > 0 ? allowedRoles : null,
         };
 
-        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "…"; }
-
         try {
             const res = await fetch("/api/task-templates/", {
                 method: "POST",
@@ -778,13 +816,10 @@ const dowLabels = lang === "es"
                 throw new Error(errData.detail || `Error ${res.status}`);
             }
 
-            const created = await res.json();
+            await res.json();
             window.dispatchEvent(new CustomEvent("ftm:mission", { detail: { signal: "task-created" } }));
             closeModal();
             refreshTemplateList();
-
-            // Background auto-translate (fire-and-forget)
-            autoTranslate(created.id, created.title, created.description || "");
         } catch (err) {
             showError(err.message || "Error creating task");
             if (submitBtn) {
@@ -792,39 +827,6 @@ const dowLabels = lang === "es"
                 submitBtn.textContent = submitBtnOriginalText;
             }
         }
-    }
-
-    // ----- Auto-translate -----
-    async function autoTranslate(templateId, title, description) {
-        try {
-            const transRes = await fetch(`/api/task-templates/${templateId}/translate`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`,
-                },
-                body: JSON.stringify({ source_lang: "en", target_lang: "es" }),
-            });
-            if (!transRes.ok) return;
-            const transData = await transRes.json();
-
-            if (transData.title_es) {
-                const putRes = await fetch(`/api/task-templates/${templateId}`, {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        title_es: transData.title_es,
-                        description_es: transData.description_es || null,
-                    }),
-                });
-                if (putRes.ok) {
-                    refreshTemplateList();
-                }
-            }
-        } catch (_) { /* silent */ }
     }
 
     // ----- Refresh template list -----

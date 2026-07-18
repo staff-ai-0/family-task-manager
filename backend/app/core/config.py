@@ -187,6 +187,10 @@ class Settings(BaseSettings):
     LITELLM_API_BASE: str = "http://10.1.0.99:4000"
     LITELLM_API_KEY: str = ""
     LITELLM_MODEL: str = "mistral-nemo"
+    # Model used specifically for ES<->EN task-template translation. Empty → falls
+    # back to LITELLM_MODEL. Set to a funded/local alias (e.g. "qwen3") so
+    # translation does not depend on the Anthropic-backed "claude-haiku" alias.
+    TRANSLATION_MODEL: str = ""
 
     # Vision model used for receipt scanning. Must be a registered alias in
     # litellm_config.yaml. Per-family override stored in Redis takes precedence
