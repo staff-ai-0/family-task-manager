@@ -3,6 +3,7 @@ import PageLayout from "@components/ui/PageLayout.astro";
 import DifficultyChip from "../../components/DifficultyChip.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
+import { gigTerm } from "../../lib/gigTerm";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -15,12 +16,14 @@ if (!userOk) {
 }
 if (user.role === "parent") return Astro.redirect("/parent/gigs");
 
-const [{ data: items }, { data: myProposalsData }] = await Promise.all([
+const [{ data: items }, { data: myProposalsData }, { data: family }] = await Promise.all([
     apiFetch<any[]>("/api/gigs/offerings", { token }),
     apiFetch<any[]>("/api/gigs/offerings/proposals/mine", { token }),
+    apiFetch<any>("/api/families/me", { token }),
 ]);
 const offerings: any[] = items ?? [];
 const myProposals: any[] = Array.isArray(myProposalsData) ? myProposalsData : [];
+const gt = gigTerm(family?.gig_term ?? "gig", lang);
 
 const flash = Astro.cookies.get("flash")?.value;
 if (flash) Astro.cookies.delete("flash", { path: "/" });
@@ -39,33 +42,34 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
 ---
 
 <PageLayout
-    title="Gigs"
+    title={gt.Many}
     role={user.role?.toLowerCase()}
     active="gigs"
     lang={lang}
+    gigTerm={gt.Many}
 >
     <!-- Eyebrow + glass-card header — page-owned via header slot -->
     <header slot="header" class="bg-gradient-to-br from-violet-700 to-violet-500 text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
             <div class="flex justify-between items-center mb-4">
                 <div>
                     <p class="text-violet-200 text-sm font-medium">{lang === "es" ? "¡Gana dinero!" : "Earn cash!"}</p>
-                    <h1 class="text-2xl font-bold">{lang === "es" ? "Gigs" : "Gigs"}</h1>
+                    <h1 class="text-2xl font-bold">{gt.Many}</h1>
                 </div>
                 <a href="/gigs/my-gigs" class="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-white/30 transition-colors">
-                    {lang === "es" ? "Mis Gigs" : "My Gigs"}
+                    {lang === "es" ? `Mis ${gt.Many}` : `My ${gt.Many}`}
                 </a>
             </div>
             <div class="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 text-sm text-violet-100">
                 {lang === "es"
-                    ? "Reclama gigs, complétalas con evidencia y gana dinero ($MXN)."
-                    : "Claim gigs, complete them with proof, and earn cash ($MXN)."}
+                    ? `Reclama ${gt.many}, complétalas con evidencia y gana dinero ($MXN).`
+                    : `Claim ${gt.many}, complete them with proof, and earn cash ($MXN).`}
             </div>
             <button
                 id="propose-gig-btn"
                 type="button"
                 class="mt-3 w-full py-2.5 rounded-xl bg-white text-violet-700 font-bold text-sm hover:bg-violet-50 active:scale-[.98] transition-all"
             >
-                💡 {lang === "es" ? "Proponer una gig" : "Propose a gig"}
+                💡 {lang === "es" ? `Proponer una ${gt.one}` : `Propose a ${gt.one}`}
             </button>
         </header>
             {flash && (
@@ -128,8 +132,8 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
                     </div>
-                    <h3 class="font-bold text-brand-ink mb-1">{lang === "es" ? "Sin gigs disponibles" : "No gigs available"}</h3>
-                    <p class="text-brand-ink-soft text-sm">{lang === "es" ? "Tu papá/mamá publicará gigs pronto." : "Your parent will post gigs soon."}</p>
+                    <h3 class="font-bold text-brand-ink mb-1">{lang === "es" ? `Sin ${gt.many} disponibles` : `No ${gt.many} available`}</h3>
+                    <p class="text-brand-ink-soft text-sm">{lang === "es" ? `Tu papá/mamá publicará ${gt.many} pronto.` : `Your parent will post ${gt.many} soon.`}</p>
                 </div>
             ) : (
                 <div class="space-y-4">
@@ -244,7 +248,7 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
         <div class="bg-brand-cream rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-lg font-bold text-brand-ink">
-                    💡 {lang === "es" ? "Proponer una gig" : "Propose a gig"}
+                    💡 {lang === "es" ? `Proponer una ${gt.one}` : `Propose a ${gt.one}`}
                 </h2>
                 <button id="propose-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
             </div>

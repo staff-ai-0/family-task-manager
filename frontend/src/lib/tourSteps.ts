@@ -127,3 +127,53 @@ export function buildTour(
         guardKey: userId ? `ftm_tour_done_${userId}` : "ftm_tour_done",
     };
 }
+
+/**
+ * Action-driven onboarding "mission" — unlike the passive driver.js welcome
+ * tour above, a mission step only advances when the REAL UI action happens
+ * (a genuine DOM event), not on a timer or a "Next" click. The runner that
+ * consumes this (later task) listens for `ftm:mission` CustomEvents on
+ * `window` whose `detail.signal` matches `advanceOn.signal`.
+ */
+export interface MissionStep {
+    element: string;
+    title: string;
+    description: string;
+    side?: "top" | "bottom" | "left" | "right";
+    /** The real DOM signal (CustomEvent detail.signal) that completes this step. */
+    advanceOn: { signal: string };
+}
+
+export interface Mission {
+    id: string;
+    steps: MissionStep[];
+}
+
+export function buildMission(id: "first-task" | "first-gig", lang: string): Mission {
+    if (id === "first-task") {
+        return {
+            id,
+            steps: [
+                { element: '[data-tour="task-fab"]', advanceOn: { signal: "task-modal-open" },
+                  title: t(lang, "m_task_open_title"), description: t(lang, "m_task_open_body"), side: "left" },
+                { element: '[data-tour="task-template-grid"]', advanceOn: { signal: "task-template-selected" },
+                  title: t(lang, "m_task_tpl_title"), description: t(lang, "m_task_tpl_body"), side: "top" },
+                { element: '[data-tour="task-assign"]', advanceOn: { signal: "task-assignee-selected" },
+                  title: t(lang, "m_task_assign_title"), description: t(lang, "m_task_assign_body"), side: "top" },
+                { element: '[data-tour="task-submit"]', advanceOn: { signal: "task-created" },
+                  title: t(lang, "m_task_create_title"), description: t(lang, "m_task_create_body"), side: "top" },
+            ],
+        };
+    }
+    return {
+        id,
+        steps: [
+            { element: '[data-tour="gig-fab"]', advanceOn: { signal: "gig-modal-open" },
+              title: t(lang, "m_gig_open_title"), description: t(lang, "m_gig_open_body"), side: "left" },
+            { element: '[data-tour="gig-cadence"]', advanceOn: { signal: "gig-cadence-set" },
+              title: t(lang, "m_gig_cadence_title"), description: t(lang, "m_gig_cadence_body"), side: "top" },
+            { element: '[data-tour="gig-submit"]', advanceOn: { signal: "gig-created" },
+              title: t(lang, "m_gig_create_title"), description: t(lang, "m_gig_create_body"), side: "top" },
+        ],
+    };
+}

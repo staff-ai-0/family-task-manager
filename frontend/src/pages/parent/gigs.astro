@@ -2,6 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import DifficultyChip from "../../components/DifficultyChip.astro";
 import { apiFetch } from "../../lib/api";
+import { gigTerm } from "../../lib/gigTerm";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -14,13 +15,15 @@ if (!user) {
 }
 if (user.role !== "parent") return Astro.redirect("/gigs");
 
-const [offeringsRes, pendingRes, proposalsRes, claimsRes] = await Promise.all([
+const [offeringsRes, pendingRes, proposalsRes, claimsRes, familyRes] = await Promise.all([
     apiFetch<any[]>("/api/gigs/offerings?include_inactive=false", { token }),
     apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token }),
     apiFetch<any[]>("/api/gigs/offerings/proposals/pending", { token }),
     apiFetch<any[]>("/api/gigs/claims/family", { token }),
+    apiFetch<any>("/api/families/me", { token }),
 ]);
 const offerings: any[] = offeringsRes.data ?? [];
+const gt = gigTerm(familyRes.data?.gig_term ?? "gig", lang);
 // Claim approvals now live in the unified /parent/approvals queue — keep only the
 // pending count here for the "review" link so there is a single approval surface.
 const pendingCount = Array.isArray(pendingRes.data) ? pendingRes.data.length : 0;
@@ -58,8 +61,8 @@ if (Astro.request.method === "POST") {
             if (ok && thread?.id) {
                 const prefill = encodeURIComponent(
                     lang === "es"
-                        ? `Sobre tu gig "${gigTitle}": `
-                        : `About your gig "${gigTitle}": `,
+                        ? `Sobre tu ${gt.one} "${gigTitle}": `
+                        : `About your ${gt.one} "${gigTitle}": `,
                 );
                 return Astro.redirect(`/dm/${thread.id}?prefill=${prefill}`);
             }
@@ -75,19 +78,21 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 ---
 
 <PageLayout
-    title="Gigs"
+    title={gt.Many}
     headerClass="bg-gradient-to-br from-violet-800 to-violet-600"
     dark
     role="parent"
     active="gigs"
     lang={lang}
+    gigTerm={gt.Many}
 >
     <button
         slot="actions"
         id="new-gig-btn"
+        data-tour="gig-fab"
         class="bg-white text-violet-700 font-bold text-sm px-4 py-2 rounded-xl shadow hover:bg-violet-50 transition-colors"
     >
-        + {lang === "es" ? "Nueva Gig" : "New Gig"}
+        + {lang === "es" ? `Nueva ${gt.One}` : `New ${gt.One}`}
     </button>
     <div slot="header-extra">
         <p class="text-violet-200 text-sm mt-0.5 mb-4">
@@ -113,7 +118,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
             href="#historial"
             class="flex items-center justify-center gap-2 py-2 mt-2 text-sm font-semibold rounded-xl bg-white/15 text-white hover:bg-white/25 transition-colors"
         >
-            📜 {lang === "es" ? "Historial de gigs completadas" : "Completed-gig history"}
+            📜 {lang === "es" ? `Historial de ${gt.many} completadas` : `Completed-${gt.one} history`}
         </a>
     </div>
 
@@ -192,7 +197,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 {offerings.length === 0 && (
                     <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
                         <p class="text-brand-ink-soft text-sm">
-                            {lang === "es" ? "No has publicado ninguna gig aún. ¡Crea la primera!" : "No gigs posted yet. Create the first one!"}
+                            {lang === "es" ? `No has publicado ninguna ${gt.one} aún. ¡Crea la primera!` : `No ${gt.many} posted yet. Create the first one!`}
                         </p>
                     </div>
                 )}
@@ -222,6 +227,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     data-difficulty={o.difficulty ?? 1}
                                     data-category={o.category ?? "other"}
                                     data-allow-multiple={o.allow_multiple ? "1" : "0"}
+                                    data-payout-cadence={o.payout_cadence ?? "immediate"}
                                 >
                                     {lang === "es" ? "Editar" : "Edit"}
                                 </button>
@@ -255,7 +261,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 {history.length === 0 ? (
                     <div class="bg-brand-cream rounded-2xl p-6 text-center border border-brand-ink/10">
                         <p class="text-brand-ink-soft text-sm">
-                            {lang === "es" ? "Aún no hay gigs completadas." : "No completed gigs yet."}
+                            {lang === "es" ? `Aún no hay ${gt.many} completadas.` : `No completed ${gt.many} yet.`}
                         </p>
                     </div>
                 ) : (
@@ -339,7 +345,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 </PageLayout>
 
 <!-- Create/Edit Gig Modal -->
-<div id="gig-modal" class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+<div id="gig-modal" data-term-one={gt.One} class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
     <div class="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-5">
             <h2 id="modal-title" class="text-lg font-bold text-brand-ink"></h2>
@@ -378,6 +384,17 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 </div>
             </div>
             <div>
+                <label class="block text-sm font-medium text-brand-ink mb-1">{lang === "es" ? "Frecuencia de pago" : "Payout cadence"}</label>
+                <select id="f-cadence" name="payout_cadence" data-tour="gig-cadence"
+                    class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-violet-400"
+                >
+                    <option value="immediate">{lang === "es" ? "Inmediato" : "Immediate"}</option>
+                    <option value="weekly">{lang === "es" ? "Semanal" : "Weekly"}</option>
+                    <option value="biweekly">{lang === "es" ? "Quincenal" : "Biweekly"}</option>
+                    <option value="monthly">{lang === "es" ? "Mensual" : "Monthly"}</option>
+                </select>
+            </div>
+            <div>
                 <label class="block text-sm font-medium text-brand-ink mb-1">{lang === "es" ? "Categoría" : "Category"}</label>
                 <select id="f-category" name="category"
                     class="w-full rounded-xl border border-brand-ink/20 bg-brand-cream-deep px-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-violet-400"
@@ -397,12 +414,13 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     <span class="font-medium">{lang === "es" ? "Varios niños pueden hacerla" : "Multiple kids can do it"}</span>
                     <span class="block text-xs text-brand-ink-soft mt-0.5">
                         {lang === "es"
-                            ? "Si está apagado, la gig se cierra al aprobar la primera entrega (nadie cobra doble)."
-                            : "If off, the gig closes once the first submission is approved (no double pay)."}
+                            ? `Si está apagado, la ${gt.one} se cierra al aprobar la primera entrega (nadie cobra doble).`
+                            : `If off, the ${gt.one} closes once the first submission is approved (no double pay).`}
                     </span>
                 </span>
             </label>
             <button type="submit"
+                data-tour="gig-submit"
                 class="w-full py-3 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-700 active:scale-[.98] transition-all"
             >
                 {lang === "es" ? "Guardar" : "Save"}
@@ -417,6 +435,9 @@ const modal = document.getElementById("gig-modal")!;
 const modalTitle = document.getElementById("modal-title")!;
 const form = document.getElementById("gig-form") as HTMLFormElement;
 const editIdInput = document.getElementById("edit-gig-id") as HTMLInputElement;
+// Resolved gig-term ("Gig"/"Chamba"), threaded from the Astro frontmatter via
+// a data attribute since this hoisted script has no access to gigTerm().
+const termOne = modal.dataset.termOne || "Gig";
 
 const openModal = (title: string) => {
     modalTitle.textContent = title;
@@ -429,10 +450,18 @@ const closeModal = () => {
 };
 
 document.getElementById("new-gig-btn")!.addEventListener("click", () => {
-    openModal(lang === "es" ? "Nueva Gig" : "New Gig");
+    openModal(lang === "es" ? `Nueva ${termOne}` : `New ${termOne}`);
+    // The FAB always opens this modal — dispatch alongside the real action,
+    // additive only (mirrors TaskCreateModal's task-modal-open pattern).
+    window.dispatchEvent(new CustomEvent("ftm:mission", { detail: { signal: "gig-modal-open" } }));
 });
 document.getElementById("close-modal")!.addEventListener("click", closeModal);
 modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+const cadenceSelect = document.getElementById("f-cadence") as HTMLSelectElement;
+cadenceSelect?.addEventListener("change", () => {
+    window.dispatchEvent(new CustomEvent("ftm:mission", { detail: { signal: "gig-cadence-set" } }));
+});
 
 document.querySelectorAll(".edit-gig-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -444,7 +473,8 @@ document.querySelectorAll(".edit-gig-btn").forEach(btn => {
         (document.getElementById("f-difficulty") as HTMLSelectElement).value = b.dataset.difficulty!;
         (document.getElementById("f-category") as HTMLSelectElement).value = b.dataset.category!;
         (document.getElementById("f-allow-multiple") as HTMLInputElement).checked = b.dataset.allowMultiple === "1";
-        openModal(lang === "es" ? "Editar Gig" : "Edit Gig");
+        (document.getElementById("f-cadence") as HTMLSelectElement).value = b.dataset.payoutCadence || "immediate";
+        openModal(lang === "es" ? `Editar ${termOne}` : `Edit ${termOne}`);
     });
 });
 
@@ -458,6 +488,7 @@ form.addEventListener("submit", async (e) => {
         difficulty: parseInt((document.getElementById("f-difficulty") as HTMLSelectElement).value),
         category: (document.getElementById("f-category") as HTMLSelectElement).value,
         allow_multiple: (document.getElementById("f-allow-multiple") as HTMLInputElement).checked,
+        payout_cadence: (document.getElementById("f-cadence") as HTMLSelectElement).value,
     };
     const btn = form.querySelector("button[type=submit]") as HTMLButtonElement;
     btn.disabled = true;
@@ -467,6 +498,11 @@ form.addEventListener("submit", async (e) => {
         : await fetch("/api/gigs/offerings", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) });
 
     if (res.ok) {
+        // Success-gated: only a real CREATE (not an edit save) satisfies the
+        // "create your first gig" mission's final step.
+        if (!gigId) {
+            window.dispatchEvent(new CustomEvent("ftm:mission", { detail: { signal: "gig-created" } }));
+        }
         closeModal();
         window.location.reload();
     } else {
@@ -510,7 +546,7 @@ document.querySelectorAll<HTMLElement>("[data-proposal-card]").forEach(card => {
 
 document.querySelectorAll(".archive-gig-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
-        if (!confirm(lang === "es" ? "¿Archivar esta gig?" : "Archive this gig?")) return;
+        if (!confirm(lang === "es" ? `¿Archivar esta ${termOne.toLowerCase()}?` : `Archive this ${termOne.toLowerCase()}?`)) return;
         const b = btn as HTMLElement;
         const res = await fetch(`/api/gigs/offerings/${b.dataset.id}`, { method: "DELETE" });
         if (res.ok) {
@@ -574,4 +610,27 @@ document.querySelectorAll<HTMLDetailsElement>("[data-comments]").forEach((box) =
         }
     });
 });
+</script>
+
+<script>
+    import { buildMission } from "../../lib/tourSteps";
+    import { runMission } from "../../lib/missionRunner";
+
+    function resumeMissions() {
+        if ((window as any).__ftmMissionInit) return;
+        (window as any).__ftmMissionInit = true;
+        const lang = document.documentElement.lang === "es" ? "es" : "en";
+        // Resume an in-progress mission (e.g. "first-gig", once wired) now
+        // that this page hosts its next target. Degrades gracefully — if the
+        // step's element isn't here, the runner just ends the mission.
+        for (const id of ["first-task", "first-gig"] as const) {
+            if (sessionStorage.getItem("ftm_mission_" + id)) runMission(buildMission(id, lang), lang);
+        }
+    }
+
+    document.addEventListener("astro:page-load", resumeMissions);
+    // The one-shot astro:page-load fires on DOMContentLoaded; a module that
+    // executes after that would miss it (see WelcomeTour.astro). Self-trigger
+    // if the DOM is already ready — __ftmMissionInit keeps this idempotent.
+    if (document.readyState !== "loading") resumeMissions();
 </script>

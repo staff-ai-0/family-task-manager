@@ -193,12 +193,39 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                         </a>
                     )}
                     <ol class="space-y-2 text-sm">
-                        <li class="flex items-center gap-3">
+                        <li class="flex items-center gap-3 flex-wrap">
                             <span class={onboarding?.task_created ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.task_created ? "✅" : "◻"}</span>
                             <span class={onboarding?.task_created ? "line-through text-brand-ink-soft" : "text-brand-ink"}>
                                 {t(lang, "pd_onb_task")}
                             </span>
-                            {!onboarding?.task_created && <a href="/parent/tasks" class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
+                            {!onboarding?.task_created && (
+                                <button
+                                    type="button"
+                                    data-mission="first-task"
+                                    class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs"
+                                >
+                                    🧭 {t(lang, "pd_onb_task_cta")}
+                                </button>
+                            )}
+                            {!onboarding?.task_created && <a href="/parent/tasks" class="text-brand-sky-deep font-semibold hover:underline text-xs">→</a>}
+                        </li>
+                        {/* No backend onboarding flag tracks gig creation (do not invent
+                            one) — this row is intentionally ungated (always shown) and,
+                            like the optional flyer-scan row below, left out of onbSteps/
+                            onbDone so it can't cap the progress bar short of 100%. */}
+                        <li class="flex items-center gap-3 flex-wrap">
+                            <span class="text-brand-ink-soft">◻</span>
+                            <span class="text-brand-ink">
+                                {t(lang, "pd_onb_gig")}
+                            </span>
+                            <button
+                                type="button"
+                                data-mission="first-gig"
+                                class="ml-auto text-brand-sky-deep font-semibold hover:underline text-xs"
+                            >
+                                🧭 {t(lang, "pd_onb_gig_cta")}
+                            </button>
+                            <a href="/parent/gigs" class="text-brand-sky-deep font-semibold hover:underline text-xs">→</a>
                         </li>
                         <li class="flex items-center gap-3">
                             <span class={onboarding?.reward_created ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.reward_created ? "✅" : "◻"}</span>
@@ -635,4 +662,59 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
     };
     document.getElementById("ai-consent-allow")?.addEventListener("click", () => aiConsentDecide(true));
     document.getElementById("ai-consent-decline")?.addEventListener("click", () => aiConsentDecide(false));
+</script>
+
+<script>
+    import { buildMission } from "../../lib/tourSteps";
+    import { runMission } from "../../lib/missionRunner";
+
+    function initMissions() {
+        if ((window as any).__ftmMissionInit) return;
+        (window as any).__ftmMissionInit = true;
+
+        const lang = document.documentElement.lang === "es" ? "es" : "en";
+
+        // Resume an in-progress mission that has no target on this page (e.g.
+        // the user navigated back here mid-flow) — the runner degrades
+        // gracefully when it can't find the current step's element.
+        for (const id of ["first-task", "first-gig"] as const) {
+            if (sessionStorage.getItem("ftm_mission_" + id)) runMission(buildMission(id, lang), lang);
+        }
+
+        // Launch a mission from the checklist: arm step 0, then navigate to
+        // the page hosting its first target — the resume block there picks
+        // it up on load.
+        document.querySelectorAll<HTMLElement>("[data-mission]").forEach((el) => {
+            el.addEventListener("click", () => {
+                const id = el.getAttribute("data-mission") as "first-task" | "first-gig";
+                sessionStorage.setItem("ftm_mission_" + id, "0");
+                window.location.href = id === "first-task" ? "/parent/tasks" : "/parent/gigs";
+            });
+        });
+
+        // Completion chain: finishing first-task auto-nudges into first-gig —
+        // arm it and hop to the page hosting its first target, same as the
+        // checklist launcher above, so the resume block there picks it up.
+        // first-task's last step only ever completes on parent/tasks.astro
+        // (TaskCreateModal's "task-created" signal), so in practice this
+        // listener never fires here — mirrored onto this page anyway for
+        // consistency with the resume loop above (also duplicated per-page
+        // regardless of which page a given mission's steps live on).
+        // Always re-arms on every first-task completion rather than tracking
+        // a separate "already done" guard — simpler, and harmless since the
+        // checklist CTA that can retrigger first-task is itself hidden once
+        // onboarding.task_created is true.
+        window.addEventListener("ftm:mission-complete", (e) => {
+            const detail = (e as CustomEvent).detail;
+            if (detail?.id !== "first-task") return;
+            sessionStorage.setItem("ftm_mission_first-gig", "0");
+            window.location.href = "/parent/gigs";
+        });
+    }
+
+    document.addEventListener("astro:page-load", initMissions);
+    // The one-shot astro:page-load fires on DOMContentLoaded; a module that
+    // executes after that would miss it (see WelcomeTour.astro). Self-trigger
+    // if the DOM is already ready — __ftmMissionInit keeps this idempotent.
+    if (document.readyState !== "loading") initMissions();
 </script>

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime
+from sqlalchemy import CheckConstraint, Column, String, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -25,6 +25,8 @@ class Family(Base):
     # Weekdays (0=Mon … 6=Sun) on which the shuffle assigns NO tasks — family
     # rest days. Empty/null = every day is fair game. e.g. [6] clears Sundays.
     rest_days = Column(JSONB, nullable=True)
+    # User-visible term for the gig board, per family. DB/routes stay "gig".
+    gig_term = Column(String(10), nullable=False, default="gig", server_default="gig")
     created_by = Column(UUID(as_uuid=True), nullable=True)  # Nullable during creation, set after user created
     join_code = Column(String(10), unique=True, nullable=True, index=True)  # Short code for family invites
     # Stable public referral code for the give-a-month/get-a-month growth
@@ -69,6 +71,10 @@ class Family(Base):
     # the family is excluded from join-by-code lookups. Indexed so the purge
     # sweep's `WHERE deleted_at < cutoff` is a cheap range scan.
     deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+
+    __table_args__ = (
+        CheckConstraint("gig_term IN ('gig','chamba')", name="ck_families_gig_term"),
+    )
 
     # Relationships
     # delete-orphan so deleting a family cascades to its members (users have a

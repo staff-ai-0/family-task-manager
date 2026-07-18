@@ -4,9 +4,15 @@ import { t } from "../lib/i18n";
 interface Props {
     lang: string;
     show: boolean;
+    /** Optional onboarding GIF path, e.g. "/onboarding/first-task.gif" or
+     *  "/onboarding/first-gig.gif" (see frontend/public/onboarding/.gitkeep).
+     *  Unset today — asset files land in a follow-up; the slot below renders
+     *  nothing until then. */
+    gifSrc?: string;
+    gifAlt?: string;
 }
 
-const { lang, show } = Astro.props;
+const { lang, show, gifSrc, gifAlt } = Astro.props;
 ---
 
 {show && (
@@ -24,7 +30,20 @@ const { lang, show } = Astro.props;
             </div>
             <div class="flex-1">
                 <h3 class="font-semibold text-brand-ink mb-1">{t(lang, "intro_banner_title")}</h3>
-                <p class="text-sm text-brand-ink/80 mb-3">{t(lang, "intro_banner_body")}</p>
+                <p class="text-sm leading-relaxed text-brand-ink mb-3">
+                    {t(lang, "intro_banner_body")}{" "}
+                    <a
+                        href={lang === "es" ? "/ayuda" : "/help"}
+                        class="font-medium text-brand-sky-deep underline hover:no-underline"
+                    >
+                        {t(lang, "intro_banner_learn_more")}
+                    </a>
+                </p>
+                {/* Lazy GIF slot — no-op until gifSrc is provided (assets: first-task.gif, first-gig.gif). */}
+                {gifSrc && (
+                    <img src={gifSrc} alt={gifAlt} loading="lazy"
+                         class="mt-2 rounded-lg border border-brand-ink/10 max-w-full w-full h-auto" />
+                )}
                 <button
                     id="gigs-intro-dismiss"
                     class="px-4 py-2 bg-brand-sky-deep text-white rounded-lg text-sm font-medium hover:bg-brand-sky transition-colors"

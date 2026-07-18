@@ -41,6 +41,10 @@ interface Props {
   role?: string;
   active?: "tasks" | "rewards" | "profile" | "parent" | "budget" | "notifications" | "pet" | "chat" | "gigs";
   lang?: "en" | "es";
+  /** Resolved gig-term label (gigTerm().Many) — forwarded to BottomNav's
+   *  "Gigs" tab. Only pages on the gig surface pass this; everywhere else
+   *  BottomNav keeps its own "Gigs" default. */
+  gigTerm?: string;
   mainClass?: string;
   containerClass?: string;
   /**
@@ -65,6 +69,7 @@ const {
   role = "child",
   active,
   lang = "en",
+  gigTerm,
   mainClass = "flex-1 px-4 py-6",
   containerClass = "w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep",
   completedTour = true,
@@ -104,6 +109,6 @@ const showWelcomeTour =
     <main class={mainClass}>
       <slot />
     </main>
-    <BottomNav active={active} role={role} lang={lang} />
+    <BottomNav active={active} role={role} lang={lang} gigTerm={gigTerm} />
   </div>
 </Layout>

@@ -7,8 +7,14 @@ interface Props {
     active?: "tasks" | "rewards" | "profile" | "parent" | "budget" | "notifications" | "pet" | "chat" | "gigs" | "approvals" | "more";
     role?: string;
     lang?: string;
+    /** Resolved gig-term label (e.g. "Gigs"/"Chambas", from gigTerm().Many).
+     *  Only passed by gig-surface pages; every other page keeps the "Gigs"
+     *  default so this stays scoped instead of requiring a family fetch on
+     *  every page that renders the nav. */
+    gigTerm?: string;
 }
-const { active = "tasks", role = "child", lang = "en" } = Astro.props;
+const { active = "tasks", role = "child", lang = "en", gigTerm } = Astro.props;
+const gigsLabel = gigTerm ?? "Gigs";
 const es = lang === "es";
 const isParent = role === "parent";
 
@@ -49,7 +55,7 @@ type Item = { key: string; href: string; label: string; icon: string; badge?: nu
 
 const kidItems: Item[] = [
     { key: "tasks",   href: "/dashboard", label: t(lang, "nav_tasks") as string,   icon: I.tasks },
-    { key: "gigs",    href: "/gigs",      label: "Gigs",                            icon: I.gigs },
+    { key: "gigs",    href: "/gigs",      label: gigsLabel,                         icon: I.gigs },
     { key: "rewards", href: "/rewards",   label: t(lang, "nav_rewards") as string, icon: I.rewards },
     { key: "chat",    href: "/chat",      label: "Chat",                            icon: I.chat },
 ];
@@ -57,7 +63,7 @@ const parentItems: Item[] = [
     { key: "parent",    href: "/parent",            label: es ? "Inicio" : "Home",        icon: I.home },
     { key: "approvals", href: "/parent/approvals",  label: es ? "Aprobar" : "Approve",    icon: I.approvals, badge: pendingApprovals },
     { key: "budget",    href: "/budget/month",      label: t(lang, "nav_budget") as string, icon: I.budget },
-    { key: "gigs",      href: "/parent/gigs",       label: "Gigs",                        icon: I.gigs },
+    { key: "gigs",      href: "/parent/gigs",       label: gigsLabel,                     icon: I.gigs },
 ];
 const items = isParent ? parentItems : kidItems;
 // The "More" item carries the unread badge, since Inbox now lives inside it.

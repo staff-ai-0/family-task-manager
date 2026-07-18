@@ -8,7 +8,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
+from typing import Literal, Optional, List
 from uuid import UUID
 
 from app.schemas.user import UserResponse
@@ -48,6 +48,8 @@ class FamilyUpdate(BaseModel):
     # Parental opt-in for AI processing of kid-generated content (proof
     # photos, family chat). Service stamps ai_processing_consent_at on change.
     ai_processing_consent: Optional[bool] = None
+    # User-visible term for the gig board, per family. DB/routes stay "gig".
+    gig_term: Optional[Literal["gig", "chamba"]] = None
 
     @field_validator("timezone")
     @classmethod
@@ -78,6 +80,8 @@ class FamilyResponse(EntityResponse):
     # (dashboard shows a one-time prompt banner while NULL).
     ai_processing_consent: bool = False
     ai_processing_consent_at: Optional[datetime] = None
+    # User-visible term for the gig board, per family. DB/routes stay "gig".
+    gig_term: str = "gig"
 
 
 class FamilyWithMembers(FamilyResponse):

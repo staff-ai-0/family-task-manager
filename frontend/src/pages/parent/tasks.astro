@@ -156,6 +156,7 @@ function freqLabel(tmpl: any): string {
     <button
         slot="actions"
         id="tcm-trigger"
+        data-tour="task-fab"
         class="press h-10 w-10 rounded-full bg-brand-sky-deep border-2 border-brand-ink shadow-[var(--shadow-card)] text-white flex items-center justify-center text-xl font-bold flex-shrink-0"
         aria-label={lang === "es" ? "Nueva tarea" : "New task"}
     >+</button>
@@ -409,7 +410,40 @@ function freqLabel(tmpl: any): string {
     </div>
 
     <script>
+        import { buildMission } from "../../lib/tourSteps";
+        import { runMission } from "../../lib/missionRunner";
+
         document.addEventListener('astro:page-load', () => {
+        // Resume an in-progress mission (e.g. started from the parent
+        // dashboard checklist) now that this page hosts its next target.
+        const lang = document.documentElement.lang === "es" ? "es" : "en";
+        for (const id of ["first-task", "first-gig"] as const) {
+            if (sessionStorage.getItem("ftm_mission_" + id)) runMission(buildMission(id, lang), lang);
+        }
+
+        // Mission signal: the + FAB always opens TaskCreateModal (see TaskCreateModal.astro's
+        // "tcm-trigger" click listener) — dispatch alongside that real action, additive only.
+        const fabTrigger = document.getElementById("tcm-trigger");
+        fabTrigger?.addEventListener("click", () => {
+            window.dispatchEvent(new CustomEvent("ftm:mission", { detail: { signal: "task-modal-open" } }));
+        });
+
+        // Completion chain: first-task's last step ("task-created", fired by
+        // TaskCreateModal above) completes here, so this is where
+        // ftm:mission-complete for it actually fires. Arm first-gig and hop
+        // to the page hosting its first target — same pattern as the
+        // checklist launcher in parent/index.astro — so the resume block in
+        // parent/gigs.astro picks it up. Always re-arms rather than tracking
+        // a separate "already done" guard (simpler; harmless since replaying
+        // first-task requires the checklist CTA, which hides itself once
+        // onboarding.task_created is true).
+        window.addEventListener("ftm:mission-complete", (e) => {
+            const detail = (e as CustomEvent).detail;
+            if (detail?.id !== "first-task") return;
+            sessionStorage.setItem("ftm_mission_first-gig", "0");
+            window.location.href = "/parent/gigs";
+        });
+
         const previewBtn = document.getElementById("btn-shuffle-preview");
         const modal = document.getElementById("preview-modal");
         const closeBtn = document.getElementById("preview-close");

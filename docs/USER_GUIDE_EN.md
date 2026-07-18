@@ -118,6 +118,8 @@ Welcome to the official **Family Task Manager** guide, the app for organizing yo
 
 Family Task Manager is a web application designed for families with children who want to organize household chores in a fun, gamified way. Kids complete tasks, earn points, and redeem them for real rewards that parents set up. It also includes a full family budget module based on the envelope method.
 
+**How the economy works:** Two currencies, two purposes. Finishing your required chores earns **points** — spend them in the Rewards Store, and finishing every required chore also unlocks the family's **weekly allowance**. Gigs are optional paid jobs from the gig board that earn **extra cash ($MXN)**, paid out by a parent each time they approve your submitted proof — a separate balance from points.
+
 **Who is this app for:**
 
 - Families with children of any age (kids, teenagers)
@@ -1974,9 +1976,9 @@ Click **"Upgrade Plan"** to upgrade to Plus or Pro. Payment is processed through
 
 # Chapter 17: Gigs (Extra Earning)
 
-**Who uses this:** Parents post and approve gigs. Children and Teens browse, claim, and complete them. Gigs are the "extra earning" layer on top of regular tasks — optional jobs that pay bonus points.
+**Who uses this:** Parents post and approve gigs. Children and Teens browse, claim, and complete them. Gigs are the "extra earning" layer on top of regular tasks — optional jobs that pay real cash.
 
-Gigs are one-off paid jobs a parent posts to the family. Unlike weekly task templates (which are assigned and rotated), a gig sits on an open board that any eligible kid can grab on a first-come basis. The kid does the work, submits proof, and a parent approves it to release the points. Since **1 point = $1 MXN** in this app, gigs double as a simple allowance/odd-jobs system.
+Gigs are one-off paid jobs a parent posts to the family. Unlike weekly task templates (which are assigned and rotated), a gig sits on an open board that any eligible kid can grab on a first-come basis. The kid does the work, submits proof, and a parent approves it to release the **cash ($MXN)** — paid out each time a parent approves a submission, on top of and separate from your points balance.
 
 ## 17.1 The Gig Board (Kids)
 
