@@ -6,13 +6,15 @@ Includes auto-translation endpoint for bilingual support.
 """
 
 import logging
-from fastapi import APIRouter, Depends, status, Query, HTTPException
+from fastapi import APIRouter, Depends, status, Query, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from uuid import UUID
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role
+from app.core.premium import require_feature
+from app.core.rate_limiter import limiter, AI_LIMIT
 from app.core.type_utils import to_uuid_required
 from app.services.task_template_service import TaskTemplateService
 from app.services.translation_service import TranslationService
@@ -118,32 +120,40 @@ async def toggle_template(
 
 
 @router.post("/translate-text", response_model=TranslateResponse)
+@limiter.limit(AI_LIMIT)
 async def translate_text(
-    request: TranslateTextRequest,
+    request: Request,
+    data: TranslateTextRequest,
     current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
 ):
     """
-    Stateless auto-translation of arbitrary title/description text (parent only).
+    Stateless auto-translation of arbitrary title/description text (parent only,
+    premium-gated).
 
     Translates the text carried in the request body — so the editor can translate
     an in-progress edit before it is saved, and the create flow can translate
     before the template row exists. Does NOT persist anything.
     """
     # Same-language request is a no-op — echo the input back without a proxy call.
-    if request.source_lang == request.target_lang:
+    # No LLM work happens, so it is neither rate-limited in spirit nor gated.
+    if data.source_lang == data.target_lang:
         return TranslateResponse(
-            title=request.title,
-            description=request.description,
-            source_lang=request.source_lang,
-            target_lang=request.target_lang,
+            title=data.title,
+            description=data.description,
+            source_lang=data.source_lang,
+            target_lang=data.target_lang,
         )
+
+    # Every LLM call site is premium-gated (see require_feature / test_premium_gating).
+    await require_feature("ai_features", db, current_user)
 
     try:
         result = await TranslationService.translate_template_fields(
-            title=request.title,
-            description=request.description,
-            source_lang=request.source_lang,
-            target_lang=request.target_lang,
+            title=data.title,
+            description=data.description,
+            source_lang=data.source_lang,
+            target_lang=data.target_lang,
         )
     except ValueError as e:
         raise HTTPException(
@@ -160,8 +170,8 @@ async def translate_text(
     return TranslateResponse(
         title=result["title"],
         description=result["description"],
-        source_lang=request.source_lang,
-        target_lang=request.target_lang,
+        source_lang=data.source_lang,
+        target_lang=data.target_lang,
     )
 
 

@@ -588,18 +588,25 @@ const customPreset = { emoji: "✏️", title: "", effort_level: 1, interval_day
         let altT = (altTitleInput?.value || "").trim();
         let altD = (altDescInput?.value || "").trim() || null;
         if (!altT) {
+            // Bound the translate call so a slow/hung LLM proxy (e.g. the
+            // out-of-credits state) never stalls task creation — on timeout we
+            // abort and create with an empty other language (backfilled later).
+            const ac = new AbortController();
+            const tmo = setTimeout(() => ac.abort(), 6000);
             try {
                 const tRes = await fetch("/api/task-templates/translate-text", {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                     body: JSON.stringify({ title, description, source_lang: uiLang, target_lang: otherLang }),
+                    signal: ac.signal,
                 });
                 if (tRes.ok) {
                     const tData = await tRes.json();
                     altT = (tData.title || "").trim();
                     altD = (tData.description || "").trim() || null;
                 }
-            } catch (_) { /* silent — fall through with an empty other language */ }
+            } catch (_) { /* silent (incl. abort) — fall through with an empty other language */ }
+            finally { clearTimeout(tmo); }
         }
 
         // Map entered (UI-language) text + its translation onto the canonical columns.

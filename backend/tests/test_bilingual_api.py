@@ -2,6 +2,16 @@ import pytest
 from httpx import AsyncClient
 from unittest.mock import patch, AsyncMock
 from app.models.user import User
+from app.core.premium import FamilyPlan
+
+
+def _set_plan(monkeypatch, *, ai_features: bool) -> None:
+    """Force the family plan resolution that require_feature reads, so the
+    translate-text ai_features gate can be exercised without seeding a real
+    subscription. Patches at the point require_feature looks it up."""
+    async def _fake_plan(_db, _user):
+        return FamilyPlan(name="pro", limits={"ai_features": ai_features}, status="active")
+    monkeypatch.setattr("app.core.premium.get_family_plan", _fake_plan)
 
 @pytest.mark.asyncio
 async def test_create_bilingual_template(client: AsyncClient, test_parent_user: User):
@@ -105,9 +115,10 @@ async def _login(client: AsyncClient, user: User) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_translate_text_en_to_es(client: AsyncClient, test_parent_user: User):
+async def test_translate_text_en_to_es(client: AsyncClient, test_parent_user: User, monkeypatch):
     """Stateless translate-text returns body text translated, without persisting."""
     headers = await _login(client, test_parent_user)
+    _set_plan(monkeypatch, ai_features=True)
 
     with patch(
         "app.services.translation_service.TranslationService.translate_template_fields",
@@ -138,9 +149,10 @@ async def test_translate_text_en_to_es(client: AsyncClient, test_parent_user: Us
 
 
 @pytest.mark.asyncio
-async def test_translate_text_es_to_en(client: AsyncClient, test_parent_user: User):
+async def test_translate_text_es_to_en(client: AsyncClient, test_parent_user: User, monkeypatch):
     """es->en direction is honored (the Spanish-UI create path relies on this)."""
     headers = await _login(client, test_parent_user)
+    _set_plan(monkeypatch, ai_features=True)
 
     with patch(
         "app.services.translation_service.TranslationService.translate_template_fields",
@@ -182,9 +194,10 @@ async def test_translate_text_same_lang_is_noop(client: AsyncClient, test_parent
 
 
 @pytest.mark.asyncio
-async def test_translate_text_service_unavailable(client: AsyncClient, test_parent_user: User):
+async def test_translate_text_service_unavailable(client: AsyncClient, test_parent_user: User, monkeypatch):
     """A missing LiteLLM key surfaces as 503 rather than a 500."""
     headers = await _login(client, test_parent_user)
+    _set_plan(monkeypatch, ai_features=True)
 
     with patch(
         "app.services.translation_service.TranslationService.translate_template_fields",
@@ -198,3 +211,25 @@ async def test_translate_text_service_unavailable(client: AsyncClient, test_pare
         )
 
     assert res.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_translate_text_requires_ai_features(client: AsyncClient, test_parent_user: User, monkeypatch):
+    """Cross-language translate-text is an LLM call site — gated behind ai_features.
+    A free-plan family gets 403 and the translation service is never invoked."""
+    headers = await _login(client, test_parent_user)
+    _set_plan(monkeypatch, ai_features=False)
+
+    with patch(
+        "app.services.translation_service.TranslationService.translate_template_fields",
+        new_callable=AsyncMock,
+    ) as mock_translate:
+        res = await client.post(
+            "/api/task-templates/translate-text",
+            json={"title": "Sweep Floor", "source_lang": "en", "target_lang": "es"},
+            headers=headers,
+        )
+
+    assert res.status_code == 403
+    assert res.json()["detail"]["error"] == "upgrade_required"
+    mock_translate.assert_not_awaited()
