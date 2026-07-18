@@ -51,7 +51,7 @@ class TranslationService:
             "Content-Type": "application/json",
         }
         payload = {
-            "model": settings.LITELLM_MODEL,
+            "model": settings.TRANSLATION_MODEL or settings.LITELLM_MODEL,
             "messages": [
                 {
                     "role": "system",
