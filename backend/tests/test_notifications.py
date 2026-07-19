@@ -192,8 +192,8 @@ class TestLocalizedNotifications:
             params={"child": "Emma", "title": "Lavar el coche"},
             push=False,
         )
-        assert n.title == "🛎️ Gig por revisar"
-        assert "Emma terminó 'Lavar el coche'" in n.body
+        assert n.title == "🛎️ Tarea por revisar"
+        assert "Emma terminó la tarea 'Lavar el coche'" in n.body
 
     async def test_render_truncates_title_to_column_width(self):
         title, _ = NotificationService.render(

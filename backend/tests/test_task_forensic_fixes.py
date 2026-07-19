@@ -239,7 +239,12 @@ class TestReshuffleSafety:
         first = await TaskAssignmentService.shuffle_tasks(
             db_session, test_family.id, today=monday
         )
+        # Re-date the slot to real today before completing — the anchored week
+        # can sit entirely in the future (Sundays anchor to next Monday) and
+        # completing a future-dated slot is rejected.
         target = first[0]
+        target.assigned_date = _utc_today()
+        await db_session.commit()
         await TaskAssignmentService.complete_assignment(
             db_session, target.id, test_family.id, target.assigned_to
         )

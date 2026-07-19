@@ -138,7 +138,7 @@ SQLAlchemy `func.sum` over a `BigInteger` column returns a `Decimal` under async
 
 All routes prefixed `/api/`. Key route groups:
 - `/api/auth/` — register, login, OAuth callbacks
-- `/api/task-templates/` + `/api/task-assignments/` — the task system (the pre-2026 legacy `/api/tasks` system was fully removed 2026-07-16: code, model, and — via the `drop_legacy_tasks` migration — its table)
+- `/api/task-templates/` + `/api/task-assignments/` — the task system (the pre-2026 legacy `/api/tasks` system was fully removed 2026-07-16: code, model, and — via the `drop_legacy_tasks` migration — its table). Parent review is **graded**: `ApprovalDecision.grade` = `full` / `partial` (1–99%, default 50) / `missed`; point awards scale by the grade (integer half-up) and `approval_notes` surfaces to the kid. Partial is rejected on collaboration gigs (pot conservation). **Wording rule**: this review queue is chores + bonus tasks (points) — user-facing copy says "task/tarea"; the word "gig" is reserved for the cash gig board (`gig_claim_*` keys).
 - `/api/rewards/`, `/api/consequences/`, `/api/points-conversion/`
 - `/api/subscriptions/` — plan management, PayPal integration
 - `/api/budget/` — 23 sub-route groups (see Budget System below)
@@ -213,10 +213,14 @@ Fully wired (routes + services + models + frontend), multi-tenant by `family_id`
 | **Chat / DM** | `/api/chat`, `/api/dm` | Family group chat (reactions, read state) + direct messages. |
 | **Kiosk** | `/api/kiosk` | Shared-device kiosk mode (`kiosk_device`). |
 | **Analytics** | `/api/analytics` | Family "PUP" snapshots / progress analytics. |
-| **Gigs / Cash / Bank** | `/api/gigs`, `/api/cash`, `/api/bank` | Two-currency economy: chores+bonus → points; gig BOARD → cash ($MXN). Family Bank (match/interest/allowance payday sweep). |
+| **Gigs / Cash / Bank** | `/api/gigs`, `/api/cash`, `/api/bank` | Two-currency economy: chores+bonus → points; gig BOARD → cash ($MXN). Family Bank (match/interest/allowance payday sweep). Allowance modes per kid: `flat` · `chore_proportional` (points-weighted) · `chore_gated` · `points_rate` (grade-scaled chore points × `families.point_value_cents`, parent-released; converted points deducted). Paycheck math is grade-aware (`_chore_units`: points×pct integer units). |
 | **Consequences / Rewards / Points** | `/api/consequences`, `/api/rewards`, `/api/points-conversion` | Discipline + reward economy on top of the points system. |
 
 Production-readiness audits live in `docs/audit/` (2026-06-04 techdebt, 2026-07-02 UX, 2026-07-07 launch gaps).
+
+### Per-family module registry
+
+`families.enabled_modules` (JSONB, NULL = all on) lets a family switch optional surfaces off: `meals`, `shopping`, `calendar`, `pet`, `chat`, `budget`, `gigs` (`backend/app/core/modules.py`). Core (tasks/rewards/consequences/points) is never togglable. Gating is UX-only: `/auth/me` denormalizes the list, BottomNav/MoreSheet filter links, and `frontend/src/middleware.ts` bounces deep links into a disabled module to `/dashboard?module_off=1` — backend APIs stay live. Toggles + starter presets live in parent settings → family ("Módulos").
 
 ### Frontend (Astro 5)
 

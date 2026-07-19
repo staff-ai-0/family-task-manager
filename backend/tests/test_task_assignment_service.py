@@ -449,6 +449,13 @@ class TestBonusGating:
         # Find bonus assignment for child
         child_bonus = [a for a in assignments if a.assigned_to == test_child_user.id]
         if child_bonus:
+            # The shuffle may land the slot on a future weekday (on Sundays the
+            # whole anchored week is next week); pin it to real today so
+            # completion is valid whatever day the suite runs.
+            from datetime import date as _d
+
+            child_bonus[0].assigned_date = _d.today()
+            await db_session.commit()
             # Should succeed: no required tasks means bonus unlocked
             completed = await TaskAssignmentService.complete_assignment(
                 db_session, child_bonus[0].id, test_family.id, test_child_user.id,

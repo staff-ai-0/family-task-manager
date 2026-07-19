@@ -219,6 +219,7 @@ async def release_chore_paycheck(
     result = await BankService.release_chore_paycheck(
         db, target, fam, week_of, entitled=True,
         adjustment_cents=(body.adjustment_cents if body else 0),
+        released_by=to_uuid_required(current_user.id),
     )
     return ChorePaycheckReleaseResult(**result)
 

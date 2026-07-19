@@ -485,9 +485,21 @@ async def logout(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Get current user information"""
-    return current_user
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get current user information (+ the family's module registry so the
+    frontend can gate nav from the middleware-cached payload)."""
+    from sqlalchemy import select as sa_select
+
+    from app.models.family import Family
+
+    resp = UserResponse.model_validate(current_user)
+    resp.enabled_modules = (await db.execute(
+        sa_select(Family.enabled_modules).where(Family.id == current_user.family_id)
+    )).scalar()
+    return resp
 
 
 @router.put("/me", response_model=UserResponse)

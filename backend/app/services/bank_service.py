@@ -54,7 +54,11 @@ def _fmt_mxn(cents: int) -> str:
     return f"${cents / 100:,.2f}"
 
 
-ALLOWANCE_MODES = ("flat", "chore_proportional", "chore_gated")
+ALLOWANCE_MODES = ("flat", "chore_proportional", "chore_gated", "points_rate")
+
+# Modes whose weekly paycheck is parent-released (never auto-paid by the
+# payday sweep) after the week's chores are reviewed.
+CHORE_PAYCHECK_MODES = ("chore_proportional", "chore_gated", "points_rate")
 
 # Config fields a parent may upsert (jar balances are NEVER settable here).
 _SETTINGS_FIELDS = (
@@ -365,24 +369,33 @@ class BankService:
         return d - timedelta(days=d.weekday())
 
     @staticmethod
-    async def _chore_points(
+    async def _chore_units(
         db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date
     ) -> tuple[int, int]:
-        """(done_points, assigned_points) of a kid's NON-gig chores for the week.
+        """(done_units, assigned_units) of a kid's NON-gig chores for the week,
+        where one unit = one template point × one percent (points × 100 = full
+        credit for one task). Integer math end to end — no float cents.
 
-        assigned = every non-cancelled regular assignment; done = the subset that
-        is COMPLETED and cleared quality review (approval_status NONE = no review
-        needed, or APPROVED). PENDING (awaiting the parent) and REJECTED do not
-        count — "de manera correcta". Gigs (is_bonus) pay their own cash and are
-        excluded from the chore paycheck.
+        assigned_units: every non-cancelled regular assignment at 100%.
+        done_units: COMPLETED work that cleared quality review (approval_status
+        NONE = no review needed, or APPROVED), scaled by the parent's grade —
+        'partial' contributes partial_credit_pct, everything else 100. PENDING
+        (awaiting the parent) and REJECTED/missed contribute 0 — "de manera
+        correcta". Gigs (is_bonus) pay their own cash and are excluded.
         """
         from app.models.task_assignment import (
             TaskAssignment, AssignmentStatus, ApprovalStatus,
         )
         from app.models.task_template import TaskTemplate
 
-        base = (
-            select(func.coalesce(func.sum(TaskTemplate.points), 0))
+        rows = (await db.execute(
+            select(
+                TaskTemplate.points,
+                TaskAssignment.status,
+                TaskAssignment.approval_status,
+                TaskAssignment.completion_grade,
+                TaskAssignment.partial_credit_pct,
+            )
             .select_from(TaskAssignment)
             .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
             .where(
@@ -390,24 +403,26 @@ class BankService:
                 TaskAssignment.assigned_to == user_id,
                 TaskAssignment.week_of == week_monday,
                 TaskTemplate.is_bonus.is_(False),
+                TaskAssignment.status != AssignmentStatus.CANCELLED,
             )
-        )
-        assigned = int((await db.execute(
-            base.where(TaskAssignment.status != AssignmentStatus.CANCELLED)
-        )).scalar() or 0)
-        done = int((await db.execute(
-            base.where(
-                TaskAssignment.status == AssignmentStatus.COMPLETED,
-                TaskAssignment.approval_status.in_(
-                    [ApprovalStatus.NONE, ApprovalStatus.APPROVED]
-                ),
-            )
-        )).scalar() or 0)
-        return done, assigned
+        )).all()
+
+        done_units = 0
+        assigned_units = 0
+        for points, status, approval, grade, pct in rows:
+            pts = int(points or 0)
+            assigned_units += pts * 100
+            if status != AssignmentStatus.COMPLETED:
+                continue
+            if approval not in (ApprovalStatus.NONE, ApprovalStatus.APPROVED):
+                continue
+            done_units += pts * (int(pct or 50) if grade == "partial" else 100)
+        return done_units, assigned_units
 
     @staticmethod
     def _chore_paycheck_cents(cap_cents: int, done: int, assigned: int) -> int:
-        """Weekly chore paycheck = cap × done/assigned, floored, never over cap."""
+        """Weekly chore paycheck = cap × done/assigned, floored, never over cap.
+        done/assigned are unit sums from _chore_units (scale cancels)."""
         if assigned <= 0 or cap_cents <= 0:
             return 0
         return min(cap_cents, cap_cents * done // assigned)
@@ -415,10 +430,26 @@ class BankService:
     @staticmethod
     def _chore_paycheck_gated(cap_cents: int, done: int, assigned: int) -> int:
         """All-or-nothing weekly chore paycheck: the full cap iff every assigned
-        obligatory point was completed-and-approved this week, else 0."""
+        obligatory point was completed-and-approved this week (at full credit —
+        one partial grade blocks the gate), else 0."""
         if assigned <= 0 or cap_cents <= 0:
             return 0
         return cap_cents if done >= assigned else 0
+
+    @staticmethod
+    def _points_rate_cents(done_units: int, point_value_cents: int) -> int:
+        """Piece-rate paycheck: grade-scaled chore points × family point value.
+        done_units carry a ×100 scale (points × pct), hence the // 100."""
+        if done_units <= 0 or point_value_cents <= 0:
+            return 0
+        return done_units * point_value_cents // 100
+
+    @staticmethod
+    async def _family_point_value_cents(db: AsyncSession, family_id: UUID) -> int:
+        val = (await db.execute(
+            select(Family.point_value_cents).where(Family.id == family_id)
+        )).scalar()
+        return int(val or 100)
 
     @staticmethod
     async def _family_local_today(db: AsyncSession, family_id: UUID) -> date:
@@ -438,15 +469,19 @@ class BankService:
         if week_of is None:
             week_of = await BankService._family_local_today(db, family_id)
         week_monday = BankService._week_monday(week_of)
-        done, assigned = await BankService._chore_points(
+        done_u, assigned_u = await BankService._chore_units(
             db, family_id, target_user.id, week_monday
         )
         cap = acct.allowance_cents
         mode = acct.allowance_mode
         if mode == "chore_proportional":
-            projected = BankService._chore_paycheck_cents(cap, done, assigned)
+            projected = BankService._chore_paycheck_cents(cap, done_u, assigned_u)
         elif mode == "chore_gated":
-            projected = BankService._chore_paycheck_gated(cap, done, assigned)
+            projected = BankService._chore_paycheck_gated(cap, done_u, assigned_u)
+        elif mode == "points_rate":
+            projected = BankService._points_rate_cents(
+                done_u, await BankService._family_point_value_cents(db, family_id)
+            )
         else:
             projected = 0
         return {
@@ -454,9 +489,10 @@ class BankService:
             "week_of": week_monday,
             "mode": acct.allowance_mode,
             "cap_cents": cap,
-            "done_points": done,
-            "assigned_points": assigned,
-            "pct": round(100 * done / assigned) if assigned else 0,
+            # Display in points (units carry ×100 grade scale).
+            "done_points": round(done_u / 100) if done_u else 0,
+            "assigned_points": assigned_u // 100,
+            "pct": round(100 * done_u / assigned_u) if assigned_u else 0,
             "projected_cents": projected,
             "already_released": acct.last_chore_paycheck_week == week_monday,
         }
@@ -465,6 +501,7 @@ class BankService:
     async def release_chore_paycheck(
         db: AsyncSession, target_user: User, family_id: UUID,
         week_of: date, entitled: bool, adjustment_cents: int = 0,
+        released_by: Optional[UUID] = None,
     ) -> dict:
         """Parent releases a teen's weekly chore paycheck: allowance_cents scaled
         by completed-&-approved chore points (plus an optional signed parent
@@ -473,7 +510,7 @@ class BankService:
         the premium gate (passed as ``entitled``)."""
         user = await _get_user_locked(db, target_user.id)
         acct = await _get_or_create_account_locked(db, user, family_id)
-        if acct.allowance_mode not in ("chore_proportional", "chore_gated"):
+        if acct.allowance_mode not in CHORE_PAYCHECK_MODES:
             raise HTTPException(
                 status_code=422,
                 detail="kid is not on a chore-based allowance",
@@ -484,11 +521,20 @@ class BankService:
                 status_code=409,
                 detail="chore paycheck already released for this week",
             )
-        done, assigned = await BankService._chore_points(
+        done, assigned = await BankService._chore_units(
             db, family_id, user.id, week_monday
         )
+        points_converted = 0
         if acct.allowance_mode == "chore_gated":
             base = BankService._chore_paycheck_gated(acct.allowance_cents, done, assigned)
+        elif acct.allowance_mode == "points_rate":
+            base = BankService._points_rate_cents(
+                done, await BankService._family_point_value_cents(db, family_id)
+            )
+            # The paid points were pending cash — deduct them so they aren't
+            # spendable twice (floored at the available balance; ledger row
+            # below keeps the history auditable).
+            points_converted = min(done // 100, max(0, int(user.points or 0)))
         else:
             base = BankService._chore_paycheck_cents(acct.allowance_cents, done, assigned)
         amount = max(0, base + int(adjustment_cents or 0))
@@ -498,6 +544,17 @@ class BankService:
                 CashTransactionType.ALLOWANCE, entitled=entitled,
                 description=f"Domingo por tareas (semana {week_monday.isoformat()})",
             )
+        if amount > 0 and points_converted > 0:
+            from app.models.point_transaction import PointTransaction
+
+            db.add(PointTransaction.create_parent_adjustment(
+                user_id=user.id,
+                points=-points_converted,
+                balance_before=user.points,
+                reason=f"Puntos convertidos a efectivo (semana {week_monday.isoformat()})",
+                created_by=released_by or user.id,
+            ))
+            user.points = max(0, int(user.points or 0) - points_converted)
         acct.last_chore_paycheck_week = week_monday
         await db.commit()
         await db.refresh(acct)
@@ -515,9 +572,11 @@ class BankService:
         return {
             "user_id": user.id,
             "week_of": week_monday,
-            "done_points": done,
-            "assigned_points": assigned,
+            # Units → display points (grade-scaled ×100 internally).
+            "done_points": round(done / 100) if done else 0,
+            "assigned_points": assigned // 100,
             "amount_cents": amount,
+            "points_converted": points_converted,
         }
 
     @staticmethod
@@ -677,8 +736,12 @@ class BankService:
         accts = (await db.execute(
             select(KidBankAccount).join(User, User.id == KidBankAccount.user_id).where(
                 KidBankAccount.family_id == family_id,
-                KidBankAccount.allowance_mode.in_(("chore_proportional", "chore_gated")),
-                KidBankAccount.allowance_cents > 0,
+                KidBankAccount.allowance_mode.in_(CHORE_PAYCHECK_MODES),
+                # points_rate has no cap — the rate itself is the pay.
+                or_(
+                    KidBankAccount.allowance_cents > 0,
+                    KidBankAccount.allowance_mode == "points_rate",
+                ),
                 or_(KidBankAccount.last_chore_paycheck_week.is_(None),
                     KidBankAccount.last_chore_paycheck_week != week_monday),
                 or_(KidBankAccount.last_paycheck_reminder_week.is_(None),

@@ -49,6 +49,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
                 body: JSON.stringify({
                     approve: Boolean(body.approve),
                     notes: body.notes ?? null,
+                    grade: body.grade ?? null,
+                    partial_credit_pct: body.partial_credit_pct ?? null,
                 }),
             }
         );

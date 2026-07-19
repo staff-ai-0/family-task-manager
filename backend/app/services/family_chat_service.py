@@ -316,9 +316,10 @@ class FamilyChatService:
     ) -> Optional[FamilyChatMessage]:
         """Auto-post a celebratory completion card into family chat (Spanish-first
         to match the app default). Used by the task-approval flow so approved
-        chores/gigs light up the shared thread with the proof photo attached."""
-        emoji = "\U0001F389" if is_bonus else "✅"  # 🎉 gig / ✅ chore
-        kind = "la gig" if is_bonus else "la tarea"
+        chores/bonus tasks light up the shared thread with the proof photo
+        attached. "Gig" wording is reserved for the cash gig board."""
+        emoji = "\U0001F389" if is_bonus else "✅"  # 🎉 bonus / ✅ chore
+        kind = "la tarea bonus" if is_bonus else "la tarea"
         pts_txt = f" (+{points} pts)" if points else ""
         body = f"{emoji} {user_name} completó {kind} «{title}»{pts_txt}"
         return await FamilyChatService.post_event_message(

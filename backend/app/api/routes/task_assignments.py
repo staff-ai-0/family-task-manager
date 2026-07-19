@@ -263,6 +263,7 @@ async def list_pending_approvals(
             template_id=r.template_id,
             template_title=r.template.title if r.template else "",
             template_is_bonus=r.template.is_bonus if r.template else True,
+            template_gig_mode=(r.template.gig_mode if r.template else "claim") or "claim",
             points=r.template.award_points_per_completer if r.template else 0,
             assigned_to=r.assigned_to,
             assigned_to_name=user_names.get(r.assigned_to, ""),
@@ -438,6 +439,8 @@ async def approve_assignment(
         parent_id=to_uuid_required(current_user.id),
         approve=decision.approve,
         notes=decision.notes,
+        grade=decision.grade,
+        partial_credit_pct=decision.partial_credit_pct,
     )
     assignment = await TaskAssignmentService.get_assignment(
         db, assignment_id, family_id
@@ -509,4 +512,7 @@ def _assignment_to_detail(assignment) -> dict:
         ),
         "proof_text": getattr(assignment, "proof_text", None),
         "proof_image_url": getattr(assignment, "proof_image_url", None),
+        "approval_notes": getattr(assignment, "approval_notes", None),
+        "completion_grade": getattr(assignment, "completion_grade", None),
+        "partial_credit_pct": getattr(assignment, "partial_credit_pct", None),
     }

@@ -90,8 +90,10 @@ _COPY = {
         },
     },
     "gig_rejected": {
+        # Task-review queue (chores + bonus tasks → POINTS). Copy says "task":
+        # the word "gig" is reserved for the cash gig board (gig_claim_* keys).
         "type": NT.GIG_REJECTED,
-        "title": {"es": "❌ Gig rechazado", "en": "❌ Gig rejected"},
+        "title": {"es": "❌ Tarea no aprobada", "en": "❌ Task not approved"},
         "body": {
             "es": "'{title}' no fue aprobada. {notes}",
             "en": "'{title}' was not approved. {notes}",
@@ -106,11 +108,15 @@ _COPY = {
         },
     },
     "gig_pending_review": {
+        # Task-review queue (chores + bonus tasks → POINTS), NOT the cash gig
+        # board — that one notifies via gig_claim_pending. Saying "gig" here
+        # confused parents ("Ariana finished a gig" for a proof-required
+        # chore like cleaning the bar).
         "type": NT.GIG_PENDING_REVIEW,
-        "title": {"es": "🛎️ Gig por revisar", "en": "🛎️ Gig pending review"},
+        "title": {"es": "🛎️ Tarea por revisar", "en": "🛎️ Task to review"},
         "body": {
-            "es": "{child} terminó '{title}'. Aprueba o rechaza en Aprobaciones.",
-            "en": "{child} finished '{title}'. Approve or reject in Approvals.",
+            "es": "{child} terminó la tarea '{title}'. Aprueba o rechaza en Aprobaciones.",
+            "en": "{child} finished the task '{title}'. Approve or reject in Approvals.",
         },
     },
     "task_approved_push": {

@@ -86,7 +86,7 @@ def test_paycheck_cents_math():
 # ── what counts as done-&-approved ────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_chore_points_counts_only_completed_and_approved(db):
+async def test_chore_units_counts_only_completed_and_approved(db):
     fam = await _family(db)
     parent = await _user(db, fam, UserRole.PARENT)
     kid = await _user(db, fam)
@@ -98,9 +98,31 @@ async def test_chore_points_counts_only_completed_and_approved(db):
     await _chore(db, fam, parent, kid, 40, AssignmentStatus.CANCELLED)                           # excluded both
     await _chore(db, fam, parent, kid, 99, AssignmentStatus.COMPLETED, bonus=True)               # gig → excluded
 
-    done, assigned = await BankService._chore_points(db, fam.id, kid.id, WEEK)
-    assert done == 30           # 20 + 10
-    assert assigned == 60       # 20+10+10(pending appr)+10(rejected)+10(pending) — cancelled & gig out
+    done, assigned = await BankService._chore_units(db, fam.id, kid.id, WEEK)
+    # Units = points × pct (×100 for full credit).
+    assert done == 3000         # (20 + 10) × 100
+    assert assigned == 6000     # (20+10+10+10+10) × 100 — cancelled & gig out
+
+
+@pytest.mark.asyncio
+async def test_chore_units_partial_grade_scales_credit(db):
+    """A 'partial' grade contributes partial_credit_pct of the task's points;
+    a graded 'missed' (REJECTED) contributes 0. Grades never change assigned."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    full = await _chore(db, fam, parent, kid, 20, AssignmentStatus.COMPLETED, ApprovalStatus.APPROVED)
+    half = await _chore(db, fam, parent, kid, 10, AssignmentStatus.COMPLETED, ApprovalStatus.APPROVED)
+    missed = await _chore(db, fam, parent, kid, 10, AssignmentStatus.COMPLETED, ApprovalStatus.REJECTED)
+    full.completion_grade = "full"
+    half.completion_grade = "partial"
+    half.partial_credit_pct = 50
+    missed.completion_grade = "missed"
+    await db.commit()
+
+    done, assigned = await BankService._chore_units(db, fam.id, kid.id, WEEK)
+    assert done == 2500         # 20×100 + 10×50 + 0
+    assert assigned == 4000     # (20+10+10) × 100
 
 
 # ── preview + release ─────────────────────────────────────────────────────

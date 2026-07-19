@@ -7,6 +7,7 @@ Each assignment has a specific date and tracks completion status.
 """
 
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     String,
     DateTime,
@@ -14,6 +15,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
+    SmallInteger,
     Text,
     Enum as SQLEnum,
 )
@@ -55,6 +57,14 @@ class TaskAssignment(Base):
     # nothing queried). Mirrors the task_forensic_fixes migration.
     __table_args__ = (
         Index("ix_task_assignments_family_assigned", "family_id", "assigned_date"),
+        CheckConstraint(
+            "completion_grade IN ('full','partial','missed')",
+            name="ck_task_assignments_completion_grade",
+        ),
+        CheckConstraint(
+            "partial_credit_pct >= 0 AND partial_credit_pct <= 100",
+            name="ck_task_assignments_partial_credit_pct",
+        ),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
@@ -103,6 +113,11 @@ class TaskAssignment(Base):
         server_default="none",
         index=True,
     )
+    # Grading at parent review: 'full' (100%), 'partial' (partial_credit_pct),
+    # 'missed' (0). NULL = decided pre-feature or via legacy plain reject.
+    completion_grade = Column(String(10), nullable=True)
+    partial_credit_pct = Column(SmallInteger, nullable=True)
+
     proof_text = Column(Text, nullable=True)
     proof_image_url = Column(String(512), nullable=True)
     ai_validation_score = Column(Float, nullable=True)
