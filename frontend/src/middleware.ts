@@ -73,6 +73,24 @@ function authCacheSet(key: string, user: User, plan: unknown): void {
     authCache.set(key, { user, plan, expires: Date.now() + AUTH_CACHE_TTL_MS });
 }
 
+/** Page-prefix → togglable module key (families.enabled_modules). Only these
+ *  prefixes are module-gated; settings/core surfaces never appear here. */
+function moduleForPath(p: string): string | null {
+    if (p.startsWith("/meals")) return "meals";
+    if (p.startsWith("/shopping")) return "shopping";
+    if (p.startsWith("/calendar")) return "calendar";
+    if (p.startsWith("/pet")) return "pet";
+    if (p.startsWith("/chat") || p.startsWith("/dm")) return "chat";
+    if (p.startsWith("/budget") || p.startsWith("/envelopes")) return "budget";
+    if (
+        p.startsWith("/gigs") ||
+        p.startsWith("/bank") ||
+        p.startsWith("/parent/gigs") ||
+        p.startsWith("/parent/payouts")
+    ) return "gigs";
+    return null;
+}
+
 function withSecurityHeaders(response: Response): Response {
     const h = response.headers;
     h.set("X-Content-Type-Options", "nosniff");
@@ -405,6 +423,38 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 }),
                 { status: 503, headers: { "Content-Type": "application/json" } }
             ));
+        }
+    }
+
+    // ── Per-family module gating (UX-level; backend APIs stay live) ──────
+    // Deep links into a module the family switched off bounce to the
+    // dashboard. Fail-open: any doubt (no cache, fetch error, null registry)
+    // renders the page normally. Settings pages are never gated so a parent
+    // can always re-enable.
+    if (isPageRequest && accessToken) {
+        const gated = moduleForPath(path);
+        if (gated) {
+            let meUser: any = context.locals.user ?? null;
+            const ck = AUTH_CACHE_TTL_MS > 0 ? authCacheKey(accessToken) : null;
+            if (!meUser && ck) meUser = authCacheGet(ck)?.user ?? null;
+            if (!meUser) {
+                try {
+                    const apiUrl = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
+                    const r = await fetch(`${apiUrl}/api/auth/me`, {
+                        headers: { Authorization: `Bearer ${accessToken}` },
+                    });
+                    if (r.ok) {
+                        meUser = await r.json();
+                        if (ck && meUser) authCacheSet(ck, meUser, null);
+                    }
+                } catch {
+                    // fail open
+                }
+            }
+            const enabled = meUser?.enabled_modules;
+            if (Array.isArray(enabled) && !enabled.includes(gated)) {
+                return withSecurityHeaders(redirect("/dashboard?module_off=1", 302));
+            }
         }
     }
 

@@ -301,6 +301,13 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         </header>
 
     <Fragment slot="banner">
+        {Astro.url.searchParams.get("module_off") === "1" && (
+            <div class="mx-4 mt-3 rounded-xl border border-brand-ink/15 bg-brand-cream px-4 py-2.5 text-sm text-brand-ink-soft">
+                {lang === "es"
+                    ? "Esa sección está desactivada para tu familia. Un padre puede activarla en Ajustes → Módulos."
+                    : "That section is switched off for your family. A parent can enable it in Settings → Modules."}
+            </div>
+        )}
         <VerifyEmailBanner lang={lang} show={!(user.email_verified ?? true)} userId={user.id} />
         <GigsIntroBanner lang={lang} show={!user.acknowledged_gigs_intro} />
 
