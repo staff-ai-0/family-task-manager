@@ -199,6 +199,26 @@ async def test_partial_pct_must_be_1_to_99(
 
 
 @pytest.mark.asyncio
+async def test_approve_route_accepts_grade_and_echoes_it(
+    client, auth_headers, db_session, test_family, test_child_user, gig_template_factory,
+):
+    gig = await gig_template_factory(family=test_family, points=25)
+    a = await _make_pending(db_session, test_family, test_child_user, gig)
+
+    r = await client.post(
+        f"/api/task-assignments/{a.id}/approve",
+        json={"approve": True, "grade": "partial", "partial_credit_pct": 75,
+              "notes": "casi perfecto"},
+        headers=auth_headers,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["completion_grade"] == "partial"
+    assert body["partial_credit_pct"] == 75
+    assert body["approval_notes"] == "casi perfecto"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "approve,grade", [(True, "missed"), (False, "full"), (False, "partial"), (True, "bogus")]
 )

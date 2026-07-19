@@ -77,6 +77,8 @@ class TaskAssignmentWithDetails(TaskAssignmentResponse):
     ai_validation_score: Optional[float] = None
     ai_validation_notes: Optional[str] = None
     approval_notes: Optional[str] = None
+    completion_grade: Optional[str] = None
+    partial_credit_pct: Optional[int] = None
 
 
 class SkippedTemplate(BaseModel):
@@ -147,6 +149,10 @@ class CompleteAssignmentRequest(BaseModel):
 class ApprovalDecision(BaseModel):
     approve: bool
     notes: Optional[str] = Field(None, max_length=2000)
+    # Grading: 'full' | 'partial' | 'missed'. None = legacy behavior
+    # (full credit on approve, ungraded reject). Service validates the triple.
+    grade: Optional[str] = Field(None, pattern="^(full|partial|missed)$")
+    partial_credit_pct: Optional[int] = Field(None, ge=1, le=99)
 
 
 class GigApprovalRow(BaseModel):
