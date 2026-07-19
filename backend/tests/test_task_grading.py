@@ -199,6 +199,32 @@ async def test_partial_pct_must_be_1_to_99(
 
 
 @pytest.mark.asyncio
+async def test_reopen_clears_stale_grade(
+    db_session, test_family, test_parent_user, test_child_user,
+):
+    """Parent re-opens a graded chore via patch: the stale partial grade must
+    be wiped with the rest of the decision trail — otherwise the redo would
+    silently pay partial credit in the payday math without a fresh review."""
+    chore = await _make_chore_template(db_session, test_family, points=20)
+    a = await _make_pending(db_session, test_family, test_child_user, chore)
+    await TaskAssignmentService.approve_gig(
+        db_session, a.id, test_family.id, test_parent_user.id,
+        approve=True, grade="partial", partial_credit_pct=50,
+    )
+    await db_session.refresh(a)
+    assert a.partial_credit_pct == 50
+
+    await TaskAssignmentService.patch_assignment(
+        db_session, a.id, test_family.id, status=AssignmentStatus.PENDING,
+    )
+    await db_session.refresh(a)
+    assert a.status == AssignmentStatus.PENDING
+    assert a.completion_grade is None
+    assert a.partial_credit_pct is None
+    assert a.approval_status == ApprovalStatus.NONE
+
+
+@pytest.mark.asyncio
 async def test_approve_route_accepts_grade_and_echoes_it(
     client, auth_headers, db_session, test_family, test_child_user, gig_template_factory,
 ):

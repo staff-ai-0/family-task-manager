@@ -445,7 +445,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
                     });
                     if (r.ok) {
                         meUser = await r.json();
-                        if (ck && meUser) authCacheSet(ck, meUser, null);
+                        // Deliberately NOT cached: an entry stored here would
+                        // carry plan=null and starve the API path's plan fetch
+                        // for the TTL window (cache hits skip it), flashing
+                        // free-tier upsell state at paid users.
                     }
                 } catch {
                     // fail open

@@ -2276,11 +2276,16 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 assignment.completed_at = None
             if reopening_completed and template is not None and not template.is_bonus:
                 # Proof-required chores re-enter the queue on the next
-                # completion; clear the stale decision trail.
+                # completion; clear the stale decision trail. The grade must
+                # go too — a leftover 'partial' would silently haircut the
+                # payday math (_chore_units) after the redo completes without
+                # a fresh review (non-proof chores complete at approval NONE).
                 assignment.approval_status = ApprovalStatus.NONE
                 assignment.approved_by = None
                 assignment.approved_at = None
                 assignment.approval_notes = None
+                assignment.completion_grade = None
+                assignment.partial_credit_pct = None
 
         await db.commit()
         # Re-fetch with template + user eagerly loaded
