@@ -608,7 +608,7 @@ class EmailService:
 
         html = (
             f"<div style='font-family:system-ui,sans-serif;color:#222;'>"
-            f"<h2 style='margin:0 0 8px;'>{child_name} submitted a gig</h2>"
+            f"<h2 style='margin:0 0 8px;'>{child_name} submitted a task for review</h2>"
             f"<p><strong>{gig_title}</strong></p>"
             f"{proof_html}"
             f"{image_html}"
@@ -617,7 +617,9 @@ class EmailService:
             f"border-radius:6px;text-decoration:none;'>Review &amp; approve</a></p>"
             f"</div>"
         )
-        subject = f"Gig waiting: {child_name} - {gig_title}"
+        # Task-review queue (chores + bonus tasks) — "gig" is reserved for the
+        # cash gig board, whose emails go out from the gig-claim flow.
+        subject = f"Task waiting: {child_name} - {gig_title}"
 
         sent = 0
         for parent in parents:
