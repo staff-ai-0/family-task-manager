@@ -50,6 +50,8 @@ class FamilyUpdate(BaseModel):
     ai_processing_consent: Optional[bool] = None
     # User-visible term for the gig board, per family. DB/routes stay "gig".
     gig_term: Optional[Literal["gig", "chamba"]] = None
+    # Value of one point in centavos for the points_rate paycheck (100 = $1 MXN).
+    point_value_cents: Optional[int] = Field(None, ge=1, le=100_000)
 
     @field_validator("timezone")
     @classmethod
@@ -82,6 +84,7 @@ class FamilyResponse(EntityResponse):
     ai_processing_consent_at: Optional[datetime] = None
     # User-visible term for the gig board, per family. DB/routes stay "gig".
     gig_term: str = "gig"
+    point_value_cents: int = 100
 
 
 class FamilyWithMembers(FamilyResponse):

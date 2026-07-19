@@ -40,7 +40,9 @@ class BankSettingsUpdate(BaseModel):
     the three split percentages is supplied, all three must be and sum to 100."""
 
     allowance_cents: Optional[int] = Field(None, ge=0)
-    allowance_mode: Optional[Literal["flat", "chore_proportional", "chore_gated"]] = None
+    allowance_mode: Optional[
+        Literal["flat", "chore_proportional", "chore_gated", "points_rate"]
+    ] = None
     payday_weekday: Optional[int] = Field(None, ge=0, le=6)
     split_spend_pct: Optional[int] = Field(None, ge=0, le=100)
     split_save_pct: Optional[int] = Field(None, ge=0, le=100)
@@ -88,6 +90,8 @@ class ChorePaycheckReleaseResult(BaseModel):
     done_points: int
     assigned_points: int
     amount_cents: int
+    # points_rate mode only: points deducted because they were paid out as cash.
+    points_converted: int = 0
 
 
 class BankTransferRequest(BaseModel):
