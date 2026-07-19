@@ -14,9 +14,11 @@ Most of the payment infra already exists in Family Bank (`kid_bank.py`, `bank_se
 ## Approved decisions
 
 - Scope: **module toggles + integration** (all modules stay; per-family on/off; onboarding starter profiles).
-- Payout math: **add `chore_weighted` as a 4th mode** — existing `chore_proportional` (count-based) untouched.
+- Payout math: keep existing modes untouched; add a points piece-rate mode.
 - Partial credit: **parent slider at review, default 50%**.
 - Points→cash: **weekly payday via Family Bank**; converted points are **deducted** (points are pending cash in `points_rate` mode, not a double currency).
+
+**Amendment (2026-07-19, during planning)**: code inspection showed `_chore_points` already sums `TaskTemplate.points` — `chore_proportional` is **already weight-proportional** ("fixed weekly amount distributed by task weight" exists today). The approved "add `chore_weighted` as 4th mode" is therefore redundant and dropped. Phase 2 instead: (a) integrate grade pct into the existing weighted math, (b) add `points_rate` as the 4th mode, (c) `families.point_value_cents`.
 
 ## Phase 1 — Task grading
 
@@ -30,7 +32,7 @@ Most of the payment infra already exists in Family Bank (`kid_bank.py`, `bank_se
 - Parent review flow becomes 3-way: **Complete** (100%) · **Almost** (slider 25/50/75, default 50) · **Missed** (0%). Any grade may carry a comment — reuses the existing `approval_notes` column, now surfaced to the kid.
 - Points credited = `round(effective_points × pct / 100)` (grade pct; existing effort multiplier still applies inside `effective_points`).
 - `full` maps to approval `APPROVED`; `partial` also `APPROVED` (with reduced credit); `missed` maps to `REJECTED` semantics (trust-streak reset, no celebration) while recording the grade for payout math.
-- Optional auto-consequence on `missed` behind a per-family flag, default **off** (uses existing consequences module).
+- Collaboration gigs: grade recorded, but `partial` is rejected with 422 — the pot re-split conserves total points exactly and a per-completer percentage would break conservation. UI hides the slider for collaboration claims.
 - Kid surface: task detail + notification show grade + parent comment. Overdue sweep unchanged — grading happens only at parent review.
 
 ## Phase 2 — Configurable economy
@@ -38,12 +40,12 @@ Most of the payment infra already exists in Family Bank (`kid_bank.py`, `bank_se
 **Schema** (additive):
 
 - `families.point_value_cents`: int, default 100, CHECK > 0. 100 = 1 pt = $1 MXN (matches the gig-board anchor). Family-configurable in Family Bank settings.
-- `kid_bank_accounts.allowance_mode` grows to 5 values: `flat`, `chore_proportional`, `chore_gated` (untouched), plus:
-  - **`chore_weighted`** — payout = `allowance_cents × Σ(points_i × pct_i) / Σ(points_i over all assigned)` for the week. Fixed weekly pot distributed by task weight; grade pct scales each task's share.
-  - **`points_rate`** — payout = `Σ(credited points that week) × point_value_cents`. Piece-rate; no `allowance_cents` cap involved. At payday the converted points are **deducted** from the kid's points balance (they were pending cash). Deduction is recorded as a point transaction with a dedicated reason so history stays auditable.
+- `kid_bank_accounts.allowance_mode` grows to 4 values: `flat`, `chore_proportional`, `chore_gated` (untouched — proportional is already points-weighted via `_chore_points`), plus:
+  - **`points_rate`** — payout = `Σ(grade-scaled chore points that week) × point_value_cents`. Piece-rate over non-bonus chores; no `allowance_cents` cap involved. Released by the parent via the existing `release_chore_paycheck` flow (same HITL review as proportional/gated); the payday sweep never auto-pays it. At release the converted points are **deducted** from the kid's points balance (they were pending cash), floored at the available balance, recorded as a point transaction with a dedicated reason so history stays auditable. Bonus-task points and gig cash are untouched — points earned outside mandatory chores stay privilege currency.
+- Grade integration (applies to proportional, gated, and points_rate): `_chore_points` moves to integer "units" — `done_units = Σ(points_i × pct_i)`, `assigned_units = Σ(points_i × 100)` — so a partial-graded task contributes its percentage. `pct_i` = 100 for full/ungraded-approved, `partial_credit_pct` for partial, 0 for missed/rejected.
 - Per-kid mode selection is unchanged in shape — a 6-year-old can stay on stars/points while a teen runs a weighted budget.
 
-**Reuse**: payday sweep, chore-paycheck preview endpoint, idempotency via `last_chore_paycheck_week`, jar splits, interest, match — all as-is. New modes slot into `_chore_paycheck_*` dispatch and the sweep's mode filter.
+**Reuse**: payday sweep, chore-paycheck preview endpoint, release endpoint, idempotency via `last_chore_paycheck_week`, jar splits, interest, match — all as-is. `points_rate` slots into the preview/release dispatch next to the existing modes.
 
 **Rounding**: all money math in integer cents; remainders follow the existing `distribute_points` floor pattern (no silently lost cents).
 
@@ -71,6 +73,7 @@ Most of the payment infra already exists in Family Bank (`kid_bank.py`, `bank_se
 
 ## Out of scope
 
+- Auto-consequence on `missed` grade (deferred — manual consequences already exist; revisit if parents ask).
 - Backend enforcement of module toggles (frontend-only this pass).
 - Deeper shopping→budget automation (future phase).
 - Any change to gig-board pricing (cash-priced offerings unchanged).
