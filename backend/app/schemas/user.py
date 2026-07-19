@@ -69,6 +69,11 @@ class UserResponse(EntityResponse):
     # Parental-approval state: 'approved' everywhere except join-code
     # self-signups, which start 'pending' until a parent approves.
     approval_status: str = "approved"
+    # Family module registry, denormalized onto /auth/me so every SSR page
+    # (middleware caches the payload into Astro.locals.user) can gate nav
+    # without an extra fetch. None = all modules on. Only /auth/me populates
+    # it — member-listing endpoints leave it None.
+    enabled_modules: Optional[list[str]] = None
     # NB: users.birthdate is deliberately NOT serialized here. UserResponse
     # is returned by member-listing endpoints visible to CHILD/TEEN accounts,
     # and birthdates shouldn't be readable by every family member. The field

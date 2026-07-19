@@ -33,6 +33,11 @@ class Family(Base):
     point_value_cents = Column(
         Integer, nullable=False, default=100, server_default="100"
     )
+    # Optional per-family module registry: list of ENABLED togglable module
+    # keys (see app.core.modules.TOGGLABLE_MODULES). NULL = all modules on
+    # (the pre-feature default). Core surfaces (tasks/rewards/points/bank
+    # settings) are never listed — they cannot be disabled.
+    enabled_modules = Column(JSONB, nullable=True)
     created_by = Column(UUID(as_uuid=True), nullable=True)  # Nullable during creation, set after user created
     join_code = Column(String(10), unique=True, nullable=True, index=True)  # Short code for family invites
     # Stable public referral code for the give-a-month/get-a-month growth

@@ -52,6 +52,21 @@ class FamilyUpdate(BaseModel):
     gig_term: Optional[Literal["gig", "chamba"]] = None
     # Value of one point in centavos for the points_rate paycheck (100 = $1 MXN).
     point_value_cents: Optional[int] = Field(None, ge=1, le=100_000)
+    # Module registry: list of ENABLED togglable modules. None = leave as-is
+    # on PATCH; stored NULL = all on. Must be a subset of TOGGLABLE_MODULES.
+    enabled_modules: Optional[List[str]] = None
+
+    @field_validator("enabled_modules")
+    @classmethod
+    def _check_modules(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return v
+        from app.core.modules import TOGGLABLE_MODULES
+
+        unknown = sorted(set(v) - TOGGLABLE_MODULES)
+        if unknown:
+            raise ValueError(f"unknown modules: {', '.join(unknown)}")
+        return sorted(set(v))
 
     @field_validator("timezone")
     @classmethod
@@ -85,6 +100,8 @@ class FamilyResponse(EntityResponse):
     # User-visible term for the gig board, per family. DB/routes stay "gig".
     gig_term: str = "gig"
     point_value_cents: int = 100
+    # Stored value: NULL = all modules on. Clients resolve via the same rule.
+    enabled_modules: Optional[List[str]] = None
 
 
 class FamilyWithMembers(FamilyResponse):
