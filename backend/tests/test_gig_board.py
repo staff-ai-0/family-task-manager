@@ -159,6 +159,42 @@ async def test_parent_edit_of_pending_proposal_keeps_it_pending(
     assert any(row["offering"]["id"] == gig_id for row in pending_res.json())
 
 
+@pytest.mark.asyncio
+async def test_parent_put_is_active_true_publishes_pending_proposal(
+    client: AsyncClient, parent_headers, teen_headers
+):
+    """The other side of the guard: an explicit is_active=True on a pending
+    proposal (update()'s implicit-approval branch) DOES publish it — status
+    flips to 'approved' and it leaves the pending-review queue. Together with
+    test_parent_edit_of_pending_proposal_keeps_it_pending this locks both
+    sides of the is_active guard from the HTTP edge.
+    """
+    propose_res = await client.post(
+        "/api/gigs/offerings/propose",
+        json={"title": "Sweep the porch", "points": 15},
+        headers=teen_headers,
+    )
+    assert propose_res.status_code == 201, propose_res.text
+    gig_id = propose_res.json()["id"]
+
+    edit_res = await client.put(
+        f"/api/gigs/offerings/{gig_id}",
+        json={"is_active": True},
+        headers=parent_headers,
+    )
+    assert edit_res.status_code == 200, edit_res.text
+    edited = edit_res.json()
+    assert edited["status"] == "approved"
+    assert edited["is_active"] is True
+
+    # Published → no longer awaiting review.
+    pending_res = await client.get(
+        "/api/gigs/offerings/proposals/pending", headers=parent_headers
+    )
+    assert pending_res.status_code == 200, pending_res.text
+    assert all(row["offering"]["id"] != gig_id for row in pending_res.json())
+
+
 # ── Claim lifecycle ───────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
