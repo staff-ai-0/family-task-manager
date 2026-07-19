@@ -193,6 +193,21 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                             <span class="text-brand-sky-deep font-bold">→</span>
                         </a>
                     )}
+                    {/* Module starter: while the registry is unset (NULL = all on),
+                        offer the focus choice — chores-only vs full family OS. */}
+                    {!onboarding?.all_done && user.enabled_modules == null && (
+                        <a
+                            href="/parent/settings/family#modules-section"
+                            class="mb-4 flex items-center justify-between gap-3 rounded-xl bg-brand-mint/10 border border-brand-mint-deep/30 px-4 py-3 hover:bg-brand-mint/20 transition-colors"
+                        >
+                            <span class="text-sm font-semibold text-brand-ink">
+                                🎛️ {lang === "es"
+                                    ? "¿Solo tareas y domingo, o la app completa? Elige tus módulos"
+                                    : "Just chores & allowance, or the full app? Pick your modules"}
+                            </span>
+                            <span class="text-brand-mint-deep font-bold">→</span>
+                        </a>
+                    )}
                     <ol class="space-y-2 text-sm">
                         <li class="flex items-center gap-3 flex-wrap">
                             <span class={onboarding?.task_created ? "text-green-600" : "text-brand-ink-soft"}>{onboarding?.task_created ? "✅" : "◻"}</span>

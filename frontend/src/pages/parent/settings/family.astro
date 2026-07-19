@@ -184,6 +184,48 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
         </div>
     </form>
 
+    <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3" id="modules-section">
+        <h2 class="text-sm font-bold text-brand-ink">📦 {lang === "es" ? "Módulos" : "Modules"}</h2>
+        <p class="text-xs text-brand-ink-soft">
+            {lang === "es"
+                ? "Apaga lo que tu familia no use — la app se enfoca en lo que sí. Tareas, premios y puntos siempre están activos."
+                : "Switch off what your family doesn't use — the app focuses on what you do. Tasks, rewards and points are always on."}
+        </p>
+        <div class="flex flex-wrap gap-2">
+            <button type="button" data-module-preset="chores"
+                class="px-3 py-1.5 rounded-full border border-brand-ink/20 text-xs font-bold text-brand-ink hover:bg-brand-cream-deep transition-colors">
+                {lang === "es" ? "🧹 Tareas y domingo" : "🧹 Chores & allowance"}
+            </button>
+            <button type="button" data-module-preset="all"
+                class="px-3 py-1.5 rounded-full border border-brand-ink/20 text-xs font-bold text-brand-ink hover:bg-brand-cream-deep transition-colors">
+                {lang === "es" ? "🏠 Familia completa" : "🏠 Full family OS"}
+            </button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="module-toggles">
+            {([
+                ["gigs", lang === "es" ? "Gigs y Banco Familiar" : "Gigs & Family Bank"],
+                ["budget", lang === "es" ? "Presupuesto" : "Budget"],
+                ["chat", lang === "es" ? "Chat y mensajes" : "Chat & messages"],
+                ["calendar", lang === "es" ? "Calendario" : "Calendar"],
+                ["meals", lang === "es" ? "Comidas" : "Meals"],
+                ["shopping", lang === "es" ? "Compras" : "Shopping"],
+                ["pet", lang === "es" ? "Mascota virtual" : "Virtual pet"],
+            ] as [string, string][]).map(([key, label]) => (
+                <label class="flex items-center gap-3 cursor-pointer rounded-xl bg-brand-cream-deep/60 px-3 py-2">
+                    <input type="checkbox" data-module-key={key}
+                        checked={family?.enabled_modules == null || family.enabled_modules.includes(key)}
+                        class="h-4 w-4 rounded border-brand-ink/30 text-brand-sky-deep focus:ring-brand-sky" />
+                    <span class="text-sm text-brand-ink">{label}</span>
+                </label>
+            ))}
+        </div>
+        <button type="button" id="modules-save"
+            class="rounded-xl bg-brand-sky-deep text-white text-sm font-bold px-4 py-2 hover:opacity-90 transition-opacity">
+            {lang === "es" ? "Guardar módulos" : "Save modules"}
+        </button>
+        <span id="modules-status" class="text-sm block" aria-live="polite"></span>
+    </section>
+
     <section class="mt-4 bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 space-y-3">
         <h2 class="text-sm font-bold text-brand-ink">{L.ai_title}</h2>
         <label class="flex items-start gap-3 cursor-pointer">
@@ -331,6 +373,49 @@ const aiConsent: boolean = family?.ai_processing_consent === true;
             console.error(err);
         } finally {
             aiToggle.removeAttribute("disabled");
+        }
+    });
+
+    // --- Modules (per-family registry) --------------------------------------
+    // Presets tick the boxes; "Guardar módulos" PATCHes the enabled list.
+    const CHORES_PRESET = new Set(["gigs"]); // chores+allowance: money core on, organizers off
+    document.querySelectorAll("[data-module-preset]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const all = btn.dataset.modulePreset === "all";
+            document.querySelectorAll("[data-module-key]").forEach((cb) => {
+                cb.checked = all || CHORES_PRESET.has(cb.dataset.moduleKey || "");
+            });
+        });
+    });
+    const modulesSave = document.getElementById("modules-save");
+    const modulesStatus = document.getElementById("modules-status");
+    modulesSave?.addEventListener("click", async () => {
+        if (!modulesStatus) return;
+        const enabled = Array.from(
+            document.querySelectorAll("[data-module-key]")
+        ).filter((cb) => cb.checked).map((cb) => cb.dataset.moduleKey);
+        modulesSave.disabled = true;
+        modulesStatus.textContent = "";
+        try {
+            const r = await fetch("/api/families/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enabled_modules: enabled }),
+            });
+            if (r.ok) {
+                modulesStatus.textContent = savedLabel;
+                modulesStatus.className = "text-sm block text-green-700";
+                // Nav renders server-side from /auth/me — reload so the change shows.
+                setTimeout(() => window.location.reload(), 600);
+            } else {
+                modulesStatus.textContent = errorLabel;
+                modulesStatus.className = "text-sm block text-red-700";
+            }
+        } catch {
+            modulesStatus.textContent = errorLabel;
+            modulesStatus.className = "text-sm block text-red-700";
+        } finally {
+            modulesSave.disabled = false;
         }
     });
 
