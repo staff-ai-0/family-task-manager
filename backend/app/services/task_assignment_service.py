@@ -2176,6 +2176,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "is_locked": is_bonus and has_open and r.status != AssignmentStatus.COMPLETED,
                 "assigned_date": r.assigned_date,
                 "completed_at": r.completed_at,
+                "completion_grade": r.completion_grade,
+                "partial_credit_pct": r.partial_credit_pct,
+                "approval_notes": r.approval_notes,
             })
         return out
 

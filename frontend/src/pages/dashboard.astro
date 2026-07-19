@@ -560,10 +560,21 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                             <p class="text-xs text-brand-ink-soft">
                                                 {a.approval_status === "pending"
                                                     ? (lang === "es" ? "⏳ Esperando aprobación de la foto" : "⏳ Awaiting photo approval")
-                                                    : (starMode
-                                                        ? `+${a.template_points} ⭐`
-                                                        : t(lang, "dashboard_earned")(a.template_points))}
+                                                    : a.completion_grade === "partial"
+                                                        ? (() => {
+                                                            const pct = a.partial_credit_pct ?? 50;
+                                                            const earned = Math.floor((a.template_points * pct + 50) / 100);
+                                                            return `${lang === "es" ? "Casi" : "Almost"} (${pct}%) · +${earned}${starMode ? " ⭐" : " pts"}`;
+                                                        })()
+                                                        : (starMode
+                                                            ? `+${a.template_points} ⭐`
+                                                            : t(lang, "dashboard_earned")(a.template_points))}
                                             </p>
+                                            {a.completion_grade === "partial" && a.approval_notes && (
+                                                <p class="text-xs mt-1 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 no-underline">
+                                                    💬 {a.approval_notes}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -597,13 +608,20 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                             {fmtShortDate(a.assigned_date)}
                                             {!rejected && (lang === "es" ? " · Un padre la revisará pronto" : " · A parent will review soon")}
                                         </p>
+                                        {rejected && a.approval_notes && (
+                                            <p class="text-xs mt-1 px-2 py-1 rounded-lg bg-red-100/60 border border-red-200 text-red-800">
+                                                💬 {a.approval_notes}
+                                            </p>
+                                        )}
                                     </div>
                                     <span class:list={[
                                         "text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0",
                                         rejected ? "bg-red-100 text-red-700" : "bg-brand-sun/20 text-brand-sun-deep",
                                     ]}>
                                         {rejected
-                                            ? (lang === "es" ? "Rechazada" : "Rejected")
+                                            ? (a.completion_grade === "missed"
+                                                ? (lang === "es" ? "No hecha" : "Missed")
+                                                : (lang === "es" ? "Rechazada" : "Rejected"))
                                             : (lang === "es" ? "Pendiente" : "Pending")}
                                     </span>
                                 </div>

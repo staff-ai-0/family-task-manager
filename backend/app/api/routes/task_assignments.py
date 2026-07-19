@@ -263,6 +263,7 @@ async def list_pending_approvals(
             template_id=r.template_id,
             template_title=r.template.title if r.template else "",
             template_is_bonus=r.template.is_bonus if r.template else True,
+            template_gig_mode=(r.template.gig_mode if r.template else "claim") or "claim",
             points=r.template.award_points_per_completer if r.template else 0,
             assigned_to=r.assigned_to,
             assigned_to_name=user_names.get(r.assigned_to, ""),

@@ -160,6 +160,7 @@ class GigApprovalRow(BaseModel):
     template_id: UUID
     template_title: str
     template_is_bonus: bool = True
+    template_gig_mode: str = "claim"
     points: int
     assigned_to: UUID
     assigned_to_name: str
