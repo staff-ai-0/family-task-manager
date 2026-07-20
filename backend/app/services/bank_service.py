@@ -498,6 +498,51 @@ class BankService:
         }
 
     @staticmethod
+    async def payout_summary(db: AsyncSession, family_id: UUID) -> dict:
+        """Aggregate of everything the parent currently owes the kids:
+        gig-board cash awaiting payout + this week's chore paychecks awaiting
+        release (parent-released modes only). Side-effect free."""
+        kids = (await db.execute(
+            select(User)
+            .where(
+                User.family_id == family_id,
+                User.role.in_([UserRole.CHILD, UserRole.TEEN]),
+            )
+            .order_by(User.name)
+        )).scalars().all()
+
+        rows = []
+        cash_total = 0
+        paycheck_total = 0
+        for kid in kids:
+            acct = await BankService.ensure_account(db, kid)
+            cash = int(kid.cash_cents or 0)
+            paycheck = 0
+            released = False
+            if acct.allowance_mode in CHORE_PAYCHECK_MODES:
+                preview = await BankService.chore_paycheck_preview(
+                    db, kid, family_id
+                )
+                released = bool(preview["already_released"])
+                paycheck = 0 if released else int(preview["projected_cents"])
+            cash_total += cash
+            paycheck_total += paycheck
+            rows.append({
+                "user_id": kid.id,
+                "name": kid.name,
+                "cash_pending_cents": cash,
+                "paycheck_cents": paycheck,
+                "paycheck_released": released,
+                "allowance_mode": acct.allowance_mode,
+            })
+        return {
+            "kids": rows,
+            "cash_total_cents": cash_total,
+            "paycheck_total_cents": paycheck_total,
+            "grand_total_cents": cash_total + paycheck_total,
+        }
+
+    @staticmethod
     async def release_chore_paycheck(
         db: AsyncSession, target_user: User, family_id: UUID,
         week_of: date, entitled: bool, adjustment_cents: int = 0,
