@@ -52,12 +52,12 @@ class Settings(BaseSettings):
     # exchange counts as one message. Prevents accidental spend overruns
     # on the LiteLLM proxy. 0 = unlimited.
     JARVIS_DAILY_MESSAGE_CAP: int = 100
-    # LiteLLM model alias for Jarvis chat. gemini-2.5-flash is the only model
-    # the FTM virtual key can actually reach end-to-end right now — the granted
-    # Anthropic (haiku/claude-sonnet) + OpenAI (gpt-4o) routes 401 upstream and
-    # qwen2.5/mistral aliases 400 as invalid (see jctux/platform#86). It's also
-    # the receipt scanner's model, so the proxy path is proven. Override via
-    # JARVIS_MODEL env once platform fixes the other upstreams.
+    # Default LiteLLM model alias for Jarvis chat (frontend dropdown can
+    # override per-request — see ALLOWED_MODELS in api/routes/jarvis.py).
+    # gemini-2.5-flash stays the default: it's also the receipt scanner's
+    # model, so the proxy path is proven. qwen3 (Ollama) and claude-haiku are
+    # now also confirmed working end-to-end (jctux/platform#86, resolved
+    # 2026-07-20) and selectable, just not the default.
     JARVIS_MODEL: str = "gemini-2.5-flash"
 
     # MCP HTTP transport — mounts the family-scoped MCP server at /mcp behind

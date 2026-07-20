@@ -24,12 +24,11 @@ from app.services.jarvis_mcp_token_service import TokenService
 router = APIRouter()
 
 
-# gemini-2.5-flash is the only model the FTM key reaches end-to-end today: the
-# granted Anthropic/OpenAI routes 401 upstream and qwen/mistral aliases are
-# invalid on the proxy (see jctux/platform#86). Any other selection falls back
-# to the default (also gemini) below. Re-expand this once platform fixes the
-# other upstreams.
-ALLOWED_MODELS = {"gemini-2.5-flash"}
+# jctux/platform#86 resolved 2026-07-20: qwen3 (Ollama) confirmed serving 200
+# and granted to the FTM key, along with claude-haiku (naming-drift fix — the
+# key previously only granted "haiku"). claude-sonnet/gpt-4o stay out — their
+# Anthropic/OpenAI upstream fix was never confirmed end-to-end in that issue.
+ALLOWED_MODELS = {"gemini-2.5-flash", "qwen3", "claude-haiku"}
 
 
 class ChatRequest(BaseModel):

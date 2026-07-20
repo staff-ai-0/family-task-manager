@@ -145,10 +145,12 @@ if (isTeen) {
                     id="model-select"
                     class="w-full bg-white/15 text-white text-xs font-semibold rounded-xl px-3 py-2 border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50 appearance-none cursor-pointer"
                 >
-                    <!-- gemini-2.5-flash is the only model the LiteLLM key
-                         currently reaches end-to-end (see jctux/platform#86);
-                         re-add others once their upstreams are fixed. -->
+                    <!-- jctux/platform#86 resolved 2026-07-20: qwen3 (Ollama) +
+                         claude-haiku confirmed granted + working end-to-end.
+                         claude-sonnet/gpt-4o stay out (upstream fix unconfirmed). -->
                     <option value="gemini-2.5-flash">💎 Gemini 2.5 Flash</option>
+                    <option value="claude-haiku">⚡ Claude Haiku</option>
+                    <option value="qwen3">🖥️ Qwen 2.5 7B · GPU</option>
                 </select>
             </div>
     </Fragment>
@@ -223,12 +225,15 @@ if (isTeen) {
         const scroll = document.getElementById("chat-scroll");
         if (!form || !input) return;
 
-        // gemini-2.5-flash is the only model the LiteLLM key reaches today, so
-        // pin to it and migrate any stale persisted choice (platform#86).
-        const WORKING_MODEL = "gemini-2.5-flash";
+        // Must mirror ALLOWED_MODELS in backend/app/api/routes/jarvis.py — an
+        // invalid/stale persisted choice (e.g. from before platform#86 was
+        // resolved, or a since-removed model) falls back to the default
+        // rather than silently sending a model the key can't reach.
+        const VALID_MODELS = ["gemini-2.5-flash", "claude-haiku", "qwen3"];
+        const DEFAULT_MODEL = "gemini-2.5-flash";
         let savedModel = localStorage.getItem("jarvis-model");
-        if (savedModel !== WORKING_MODEL) {
-            savedModel = WORKING_MODEL;
+        if (!savedModel || !VALID_MODELS.includes(savedModel)) {
+            savedModel = DEFAULT_MODEL;
             localStorage.setItem("jarvis-model", savedModel);
         }
         if (modelSelect) {
@@ -463,7 +468,7 @@ if (isTeen) {
                                     "claude-sonnet":    { label: "Claude Sonnet",      icon: "🧠", color: "bg-violet-100 text-violet-700" },
                                     "gpt-4o":           { label: "GPT-4o",             icon: "🟢", color: "bg-green-100 text-green-700" },
                                     "gemini-2.5-flash": { label: "Gemini 2.5 Flash",   icon: "💎", color: "bg-sky-100 text-sky-700" },
-                                    "qwen3":            { label: "Qwen 2.5 3B · GPU",  icon: "🖥️", color: "bg-gray-100 text-gray-600" },
+                                    "qwen3":            { label: "Qwen 2.5 7B · GPU",  icon: "🖥️", color: "bg-gray-100 text-gray-600" },
                                 };
                                 const bot = document.createElement("div");
                                 bot.className = "flex justify-start flex-col gap-1";
