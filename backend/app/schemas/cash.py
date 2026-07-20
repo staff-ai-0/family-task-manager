@@ -6,12 +6,25 @@ from uuid import UUID
 from datetime import datetime
 
 
+class GigCashPill(BaseModel):
+    """One gig-earning credit behind a kid's pending gig cash (parent payouts
+    dashboard). "Since last payout" is an approximation — payouts are
+    lump-sum and don't reference which specific gigs they settle."""
+
+    title: str
+    amount_cents: int
+    approved_at: Optional[datetime] = None
+    approval_notes: Optional[str] = None
+
+
 class CashSummary(BaseModel):
     user_id: UUID
     name: Optional[str] = None
     current_balance_cents: int
     total_earned_cents: int
     total_paid_cents: int
+    # Populated only by GET /api/cash/family (parent view) — see GigCashPill.
+    recent_gigs: list[GigCashPill] = []
 
 
 class CashTxn(BaseModel):

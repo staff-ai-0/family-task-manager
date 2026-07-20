@@ -561,6 +561,47 @@ class BankService:
         }
 
     @staticmethod
+    async def chore_paycheck_history(
+        db: AsyncSession, target_user: User, family_id: UUID, limit: int = 12
+    ) -> dict:
+        """Past released chore-paycheck weeks for a kid, newest first, capped
+        at `limit` (`has_more=True` when more exist beyond the cap — no
+        silent truncation). Each week's `tasks` reuses _chore_week_tasks
+        (same shape as payout_summary), just pointed at that past week."""
+        rows = (await db.execute(
+            select(
+                CashTransaction.week_of,
+                func.sum(CashTransaction.amount_cents).label("amount_cents"),
+                func.max(CashTransaction.created_at).label("released_at"),
+            )
+            .where(
+                CashTransaction.user_id == target_user.id,
+                CashTransaction.family_id == family_id,
+                CashTransaction.type == CashTransactionType.ALLOWANCE,
+                CashTransaction.week_of.isnot(None),
+            )
+            .group_by(CashTransaction.week_of)
+            .order_by(CashTransaction.week_of.desc())
+            .limit(limit + 1)
+        )).all()
+
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+
+        weeks = []
+        for week_of, amount_cents, released_at in rows:
+            tasks = await BankService._chore_week_tasks(
+                db, family_id, target_user.id, week_of
+            )
+            weeks.append({
+                "week_of": week_of,
+                "amount_cents": int(amount_cents),
+                "released_at": released_at,
+                "tasks": tasks,
+            })
+        return {"weeks": weeks, "has_more": has_more}
+
+    @staticmethod
     async def payout_summary(db: AsyncSession, family_id: UUID) -> dict:
         """Aggregate of everything the parent currently owes the kids:
         gig-board cash awaiting payout + this week's chore paychecks awaiting
@@ -663,6 +704,7 @@ class BankService:
                 db, user, acct, family_id, amount,
                 CashTransactionType.ALLOWANCE, entitled=entitled,
                 description=f"Domingo por tareas (semana {week_monday.isoformat()})",
+                week_of=week_monday,
             )
         if amount > 0 and points_converted > 0:
             from app.models.point_transaction import PointTransaction

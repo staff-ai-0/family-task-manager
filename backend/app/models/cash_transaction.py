@@ -4,7 +4,7 @@ Mirror of PointTransaction, but cash lives in centavos. Points (privileges)
 and cash (money) are intentionally separate currencies; see
 docs/superpowers/specs/2026-06-30-two-currency-economy-design.md.
 """
-from sqlalchemy import Column, Integer, DateTime, ForeignKey, Enum as SQLEnum, Text, String
+from sqlalchemy import Column, Date, Integer, DateTime, ForeignKey, Enum as SQLEnum, Text, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -69,6 +69,9 @@ class CashTransaction(Base):
         UUID(as_uuid=True), ForeignKey("gig_claims.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # The chore-paycheck week (Monday) an ALLOWANCE credit belongs to — feeds
+    # the payout history view. Nullable: pre-existing rows have none.
+    week_of = Column(Date, nullable=True)
     created_by = Column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,

@@ -17,6 +17,7 @@ populate_existing=True) THEN the kid_bank_accounts row (``_get_account_locked``)
 Never the reverse (deadlock). ``BankService`` builds the higher-level jar
 config / transfers / payday sweep on top of these primitives.
 """
+from datetime import date
 from uuid import UUID
 from typing import Optional, List
 
@@ -201,6 +202,7 @@ class CashService:
         gig_claim_id: Optional[UUID] = None,
         created_by: Optional[UUID] = None,
         description: Optional[str] = None,
+        week_of: Optional[date] = None,
     ) -> List[CashTransaction]:
         """Split a positive credit across jars, emitting one ledger row per
         non-zero jar with a contiguous balance chain against the TOTAL.
@@ -234,6 +236,7 @@ class CashService:
                 balance_before=running,
                 balance_after=running + share,
                 description=description,
+                week_of=week_of,
             )
             running += share
             _add_jar(acct, jar, share)
@@ -496,3 +499,58 @@ class CashService:
             "total_earned": int(earned),
             "total_paid": int(abs(paid)),
         }
+
+    @staticmethod
+    async def recent_gig_pills(db: AsyncSession, user_id: UUID) -> list[dict]:
+        """Gig-earning credits since the kid's last payout (or all-time if
+        never paid) — feeds the parent payouts dashboard's gig-cash pills.
+        Grouped by gig_claim_id: a single gig award can emit multiple ledger
+        rows (spend/save/share split), which must collapse to one pill with
+        the summed amount, not one pill per jar.
+
+        "Since last payout" is an approximation: payouts are lump-sum debits
+        with no reference to which specific gigs they settle. Callers should
+        label this clearly (e.g. "since last payout"), not as "unpaid"."""
+        from app.models.gig import GigClaim, GigOffering
+
+        last_payout_at = (await db.execute(
+            select(func.max(CashTransaction.created_at)).where(
+                CashTransaction.user_id == user_id,
+                CashTransaction.type == CashTransactionType.PAYOUT,
+            )
+        )).scalar()
+
+        conditions = [
+            CashTransaction.user_id == user_id,
+            CashTransaction.type == CashTransactionType.GIG_EARNED,
+            CashTransaction.gig_claim_id.isnot(None),
+        ]
+        if last_payout_at is not None:
+            conditions.append(CashTransaction.created_at > last_payout_at)
+
+        rows = (await db.execute(
+            select(
+                GigOffering.title,
+                func.sum(CashTransaction.amount_cents).label("amount_cents"),
+                GigClaim.approved_at,
+                GigClaim.approval_notes,
+                func.max(CashTransaction.created_at).label("last_credit_at"),
+            )
+            .select_from(CashTransaction)
+            .join(GigClaim, CashTransaction.gig_claim_id == GigClaim.id)
+            .join(GigOffering, GigClaim.gig_id == GigOffering.id)
+            .where(*conditions)
+            .group_by(GigClaim.id, GigOffering.title, GigClaim.approved_at, GigClaim.approval_notes)
+            .having(func.sum(CashTransaction.amount_cents) > 0)
+            .order_by(func.max(CashTransaction.created_at).desc())
+        )).all()
+
+        return [
+            {
+                "title": title,
+                "amount_cents": int(amount_cents),
+                "approved_at": approved_at,
+                "approval_notes": approval_notes,
+            }
+            for title, amount_cents, approved_at, approval_notes, _ in rows
+        ]

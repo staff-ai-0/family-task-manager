@@ -118,6 +118,21 @@ class PayoutSummary(BaseModel):
     grand_total_cents: int
 
 
+class PayoutWeekHistory(BaseModel):
+    """One past released chore-paycheck week — amount, when, and why
+    (same per-task breakdown shape as PayoutSummaryKid.tasks)."""
+
+    week_of: date
+    amount_cents: int
+    released_at: datetime
+    tasks: list[PayoutTaskDetail]
+
+
+class PayoutHistoryResponse(BaseModel):
+    weeks: list[PayoutWeekHistory]
+    has_more: bool
+
+
 class ChorePaycheckReleaseBody(BaseModel):
     """Optional parent adjustment (signed cents) added to the computed paycheck —
     a bonus (positive) or dock (negative). Final amount floored at 0."""

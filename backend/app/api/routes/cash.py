@@ -19,7 +19,7 @@ from app.models.user import UserRole
 from app.services.cash_service import CashService
 from app.services.base_service import verify_user_in_family
 from app.schemas.cash import (
-    CashSummary, CashTxn, PayoutRequest, AdjustRequest, PayoutResponse,
+    CashSummary, CashTxn, GigCashPill, PayoutRequest, AdjustRequest, PayoutResponse,
 )
 
 router = APIRouter()
@@ -66,11 +66,13 @@ async def family_cash(
     out: List[CashSummary] = []
     for k in kids:
         s = await CashService.get_summary(db, k.id)
+        pills = await CashService.recent_gig_pills(db, k.id)
         out.append(CashSummary(
             user_id=k.id, name=k.name,
             current_balance_cents=s["current_balance"],
             total_earned_cents=s["total_earned"],
             total_paid_cents=s["total_paid"],
+            recent_gigs=[GigCashPill(**p) for p in pills],
         ))
     return out
 

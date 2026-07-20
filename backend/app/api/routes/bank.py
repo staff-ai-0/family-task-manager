@@ -27,6 +27,7 @@ from app.schemas.bank import (
     ChorePaycheckReleaseResult,
     JarBalances,
     KidBankView,
+    PayoutHistoryResponse,
     PayoutRequestBody,
     PayoutSummary,
     SaveWithdrawalRequest,
@@ -236,6 +237,25 @@ async def release_chore_paycheck(
         released_by=to_uuid_required(current_user.id),
     )
     return ChorePaycheckReleaseResult(**result)
+
+
+@router.get(
+    "/chore-paycheck/{user_id}/history", response_model=PayoutHistoryResponse
+)
+async def chore_paycheck_history(
+    user_id: UUID,
+    limit: int = 12,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Past released chore-paycheck weeks for a kid — amount, when, and the
+    per-task breakdown behind it. Parent only, read-only (no premium gate:
+    it's history of ledger rows that already exist)."""
+    fam = to_uuid_required(current_user.family_id)
+    target = await verify_user_in_family(db, user_id, fam)
+    return PayoutHistoryResponse(
+        **await BankService.chore_paycheck_history(db, target, fam, limit=limit)
+    )
 
 
 @router.post("/transfer", response_model=JarBalances)
