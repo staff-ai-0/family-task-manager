@@ -420,6 +420,69 @@ class BankService:
         return done_units, assigned_units
 
     @staticmethod
+    async def _chore_week_tasks(
+        db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date
+    ) -> list[dict]:
+        """Per-task breakdown behind _chore_units for the parent payouts
+        dashboard — same filters, one row per assignment with its status
+        bucket and the grade-scaled points it contributed. Only `credited`
+        rows earn; the bucket rules must stay in lockstep with _chore_units."""
+        from app.models.task_assignment import (
+            TaskAssignment, AssignmentStatus, ApprovalStatus,
+        )
+        from app.models.task_template import TaskTemplate
+
+        rows = (await db.execute(
+            select(
+                TaskTemplate.title,
+                TaskTemplate.points,
+                TaskAssignment.status,
+                TaskAssignment.approval_status,
+                TaskAssignment.completion_grade,
+                TaskAssignment.partial_credit_pct,
+                TaskAssignment.assigned_date,
+                TaskAssignment.completed_at,
+                TaskAssignment.approval_notes,
+            )
+            .select_from(TaskAssignment)
+            .join(TaskTemplate, TaskAssignment.template_id == TaskTemplate.id)
+            .where(
+                TaskAssignment.family_id == family_id,
+                TaskAssignment.assigned_to == user_id,
+                TaskAssignment.week_of == week_monday,
+                TaskTemplate.is_bonus.is_(False),
+                TaskAssignment.status != AssignmentStatus.CANCELLED,
+            )
+            .order_by(TaskAssignment.assigned_date, TaskTemplate.title)
+        )).all()
+
+        tasks = []
+        for title, points, status, approval, grade, pct, day, done_at, notes in rows:
+            pts = int(points or 0)
+            if status != AssignmentStatus.COMPLETED:
+                bucket, earned = "not_done", 0
+            elif approval in (ApprovalStatus.NONE, ApprovalStatus.APPROVED):
+                credit_pct = int(pct or 50) if grade == "partial" else 100
+                # Same display rounding as done_points in the preview.
+                bucket, earned = "credited", round(pts * credit_pct / 100)
+            elif approval == ApprovalStatus.PENDING:
+                bucket, earned = "pending_review", 0
+            else:  # REJECTED — parent graded it missed
+                bucket, earned = "missed", 0
+            tasks.append({
+                "title": title,
+                "points": pts,
+                "earned_points": earned,
+                "status": bucket,
+                "grade": grade,
+                "partial_credit_pct": pct,
+                "assigned_date": day,
+                "completed_at": done_at,
+                "approval_notes": notes,
+            })
+        return tasks
+
+    @staticmethod
     def _chore_paycheck_cents(cap_cents: int, done: int, assigned: int) -> int:
         """Weekly chore paycheck = cap × done/assigned, floored, never over cap.
         done/assigned are unit sums from _chore_units (scale cancels)."""
@@ -520,6 +583,7 @@ class BankService:
             paycheck = 0
             released = False
             done_points = assigned_points = pct = 0
+            tasks: list = []
             if acct.allowance_mode in CHORE_PAYCHECK_MODES:
                 preview = await BankService.chore_paycheck_preview(
                     db, kid, family_id
@@ -529,6 +593,9 @@ class BankService:
                 done_points = preview["done_points"]
                 assigned_points = preview["assigned_points"]
                 pct = preview["pct"]
+                tasks = await BankService._chore_week_tasks(
+                    db, family_id, kid.id, preview["week_of"]
+                )
             cash_total += cash
             paycheck_total += paycheck
             rows.append({
@@ -541,6 +608,7 @@ class BankService:
                 "done_points": done_points,
                 "assigned_points": assigned_points,
                 "pct": pct,
+                "tasks": tasks,
             })
         return {
             "kids": rows,

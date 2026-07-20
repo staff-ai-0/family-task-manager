@@ -26,6 +26,38 @@ const grandTotal = summary?.grand_total_cents ?? 0;
 const paycheckKids: any[] = (summary?.kids ?? []).filter(
     (k: any) => k.allowance_mode && k.allowance_mode !== "flat",
 );
+
+// Per-task chips under each paycheck row (hover/tap for details).
+const chipCls: Record<string, string> = {
+    credited: "bg-brand-mint/20 border-brand-mint-deep/40 text-brand-mint-deep",
+    pending_review: "bg-amber-100 border-amber-300 text-amber-800",
+    missed: "bg-red-100 border-red-300 text-red-700",
+    not_done: "bg-brand-ink/5 border-brand-ink/15 text-brand-ink-soft",
+};
+const chipIcon: Record<string, string> = {
+    credited: "✓",
+    pending_review: "⏳",
+    missed: "✗",
+    not_done: "·",
+};
+const statusLabel = (t: any): string => {
+    if (t.status === "credited") {
+        const base = lang === "es" ? "Completada ✓" : "Completed ✓";
+        return t.grade === "partial"
+            ? `${base} · ${lang === "es" ? "parcial" : "partial"} ${t.partial_credit_pct}%`
+            : base;
+    }
+    if (t.status === "pending_review")
+        return lang === "es" ? "Esperando revisión" : "Awaiting review";
+    if (t.status === "missed") return lang === "es" ? "No cumplida" : "Missed";
+    return lang === "es" ? "Sin hacer" : "Not done yet";
+};
+const dayLabel = (iso: string): string =>
+    new Date(`${iso}T00:00:00`).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+    });
 ---
 
 <PageLayout
@@ -141,7 +173,7 @@ const paycheckKids: any[] = (summary?.kids ?? []).filter(
                 <div class="space-y-3">
                     {paycheckKids.map((k) => (
                         <div
-                            class="rounded-2xl border-2 border-brand-mint-deep/40 bg-brand-mint/10 p-4"
+                            class="relative rounded-2xl border-2 border-brand-mint-deep/40 bg-brand-mint/10 p-4"
                             data-paycheck-row
                             data-kid-id={k.user_id}
                             data-amount-cents={k.paycheck_cents}
@@ -174,6 +206,32 @@ const paycheckKids: any[] = (summary?.kids ?? []).filter(
                                     </div>
                                 </div>
                             </div>
+                            {(k.tasks ?? []).length > 0 && (
+                                <div class="flex flex-wrap gap-1.5 mt-3">
+                                    {k.tasks.map((t: any) => (
+                                        <button
+                                            type="button"
+                                            class={`group px-2 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-brand-mint-deep/50 ${chipCls[t.status] ?? chipCls.not_done}`}
+                                        >
+                                            <span aria-hidden="true">{chipIcon[t.status] ?? "·"}</span>
+                                            <span class="max-w-[9rem] truncate">{t.title}</span>
+                                            <span class="opacity-70">{t.earned_points}/{t.points}</span>
+                                            {/* Detail panel — hover on desktop, tap/focus on touch. */}
+                                            {/* Above the row + z-[60] so BottomNav (z-50) never covers it. */}
+                                            <span class="hidden group-hover:block group-focus:block pointer-events-none absolute left-2 right-2 bottom-full mb-1 z-[60] rounded-xl bg-brand-ink text-brand-cream text-left text-xs font-normal p-3 shadow-lg">
+                                                <span class="block font-bold mb-0.5">{t.title}</span>
+                                                <span class="block">
+                                                    {statusLabel(t)} · {t.earned_points}/{t.points} pts
+                                                </span>
+                                                <span class="block opacity-80">{dayLabel(t.assigned_date)}</span>
+                                                {t.approval_notes && (
+                                                    <span class="block mt-1 opacity-90">📝 {t.approval_notes}</span>
+                                                )}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                             <p class="hidden text-xs mt-2" data-msg></p>
                         </div>
                     ))}

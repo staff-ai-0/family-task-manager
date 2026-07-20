@@ -78,6 +78,21 @@ class ChorePaycheckPreview(BaseModel):
     already_released: bool
 
 
+class PayoutTaskDetail(BaseModel):
+    """One week-task behind a chore-paycheck row (payouts dashboard tooltip).
+    Status buckets mirror the paycheck credit math: only `credited` rows earn."""
+
+    title: str
+    points: int
+    earned_points: int
+    status: Literal["credited", "pending_review", "missed", "not_done"]
+    grade: Optional[str] = None
+    partial_credit_pct: Optional[int] = None
+    assigned_date: date
+    completed_at: Optional[datetime] = None
+    approval_notes: Optional[str] = None
+
+
 class PayoutSummaryKid(BaseModel):
     user_id: UUID
     name: str
@@ -89,6 +104,8 @@ class PayoutSummaryKid(BaseModel):
     done_points: int = 0
     assigned_points: int = 0
     pct: int = 0
+    # Per-task breakdown of the week (empty on flat mode).
+    tasks: list[PayoutTaskDetail] = []
 
 
 class PayoutSummary(BaseModel):
