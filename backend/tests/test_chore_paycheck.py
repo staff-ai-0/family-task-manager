@@ -171,6 +171,27 @@ async def test_release_credits_and_is_idempotent(db):
 
 
 @pytest.mark.asyncio
+async def test_release_records_week_of(db):
+    """The ledger row must carry the paycheck week — feeds the payout
+    history view (grouping past releases by week)."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    await _chore(db, fam, parent, kid, 120, AssignmentStatus.COMPLETED)
+
+    await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+
+    row = (await db.execute(
+        select(CashTransaction).where(
+            CashTransaction.user_id == kid.id,
+            CashTransaction.type == CashTransactionType.ALLOWANCE,
+        )
+    )).scalar_one()
+    assert row.week_of == WEEK
+
+
+@pytest.mark.asyncio
 async def test_release_rejects_flat_mode(db):
     fam = await _family(db)
     kid = await _user(db, fam)
@@ -178,6 +199,60 @@ async def test_release_rejects_flat_mode(db):
     with pytest.raises(Exception) as ei:
         await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
     assert getattr(ei.value, "status_code", None) == 422
+
+
+# ── payout history (past released weeks) ──────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_history_empty_when_never_released(db):
+    fam = await _family(db)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+
+    result = await BankService.chore_paycheck_history(db, kid, fam.id)
+    assert result["weeks"] == []
+    assert result["has_more"] is False
+
+
+@pytest.mark.asyncio
+async def test_history_lists_past_weeks_newest_first_with_tasks(db):
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+
+    week1 = WEEK - timedelta(days=7)
+    week2 = WEEK
+    await _chore(db, fam, parent, kid, 100, AssignmentStatus.COMPLETED, week=week1)
+    await BankService.release_chore_paycheck(db, kid, fam.id, week1, entitled=True)
+    await _chore(db, fam, parent, kid, 60, AssignmentStatus.COMPLETED, week=week2)
+    await BankService.release_chore_paycheck(db, kid, fam.id, week2, entitled=True)
+
+    result = await BankService.chore_paycheck_history(db, kid, fam.id)
+    assert result["has_more"] is False
+    assert [w["week_of"] for w in result["weeks"]] == [week2, week1]  # newest first
+    assert result["weeks"][0]["amount_cents"] == 25000  # 100% of week2's 60 pts
+    assert result["weeks"][1]["amount_cents"] == 25000  # 100% of week1's 100 pts
+    # Task breakdown reuses the same per-task shape as payout-summary.
+    assert [t["title"] for t in result["weeks"][1]["tasks"]] == ["C"]
+    assert result["weeks"][1]["tasks"][0]["status"] == "credited"
+
+
+@pytest.mark.asyncio
+async def test_history_caps_and_reports_has_more(db):
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=1000)
+
+    for i in range(3):
+        week = WEEK - timedelta(days=7 * i)
+        await _chore(db, fam, parent, kid, 10, AssignmentStatus.COMPLETED, week=week)
+        await BankService.release_chore_paycheck(db, kid, fam.id, week, entitled=True)
+
+    result = await BankService.chore_paycheck_history(db, kid, fam.id, limit=2)
+    assert len(result["weeks"]) == 2
+    assert result["has_more"] is True
 
 
 # ── sweep must NOT auto-pay proportional allowance ────────────────────────

@@ -317,3 +317,61 @@ async def test_payout_summary_flat_mode_has_no_task_list(
     child = _kid_row(r.json(), test_child_user.id)
     assert child["allowance_mode"] == "flat"
     assert child["tasks"] == []
+
+
+# ── Chore-paycheck history route ─────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_history_route_parent_only(client, test_teen_user, teen_headers):
+    r = await client.get(
+        f"/api/bank/chore-paycheck/{test_teen_user.id}/history", headers=teen_headers
+    )
+    assert r.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_history_route_returns_past_releases(
+    client, db_session, test_family, test_parent_user, test_teen_user, parent_headers,
+):
+    await _bank_config(
+        db_session, test_teen_user,
+        allowance_mode="chore_proportional", allowance_cents=10000,
+    )
+    week = await _current_week_monday(db_session, test_family.id)
+    await _chore(db_session, test_family.id, test_parent_user.id, test_teen_user.id, 10, week)
+    await BankService.release_chore_paycheck(
+        db_session, test_teen_user, test_family.id, week, entitled=True,
+    )
+
+    r = await client.get(
+        f"/api/bank/chore-paycheck/{test_teen_user.id}/history", headers=parent_headers
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["has_more"] is False
+    assert len(body["weeks"]) == 1
+    assert body["weeks"][0]["week_of"] == week.isoformat()
+    assert body["weeks"][0]["amount_cents"] == 10000
+    assert body["weeks"][0]["tasks"][0]["title"] == "C"
+
+
+@pytest.mark.asyncio
+async def test_history_route_cross_tenant_404(
+    client, db_session, test_family, parent_headers,
+):
+    other_fam = Family(name="Other Fam 2")
+    db_session.add(other_fam)
+    await db_session.flush()
+    outsider = User(
+        email=f"o{uuid4().hex[:8]}@t.com", name="Outsider", role=UserRole.TEEN,
+        family_id=other_fam.id, email_verified=True, cash_cents=0, points=0,
+        approval_status=APPROVAL_APPROVED, is_active=True,
+    )
+    db_session.add(outsider)
+    await db_session.commit()
+
+    r = await client.get(
+        f"/api/bank/chore-paycheck/{outsider.id}/history", headers=parent_headers
+    )
+    assert r.status_code == 404
