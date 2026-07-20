@@ -163,8 +163,10 @@ class PushService:
         if not parents:
             return 0
 
+        # Task-review queue (chores + bonus tasks → points) — "gig" wording is
+        # reserved for the cash gig board (see gig_claim_service pushes).
         payload = {
-            "title": "Gig awaiting approval",
+            "title": "Task awaiting approval",
             "body": f"{child_name} submitted: {gig_title} ({points} pts)",
             "url": "/parent/approvals",
             "tag": "gig-pending",

@@ -1697,7 +1697,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         return assignment
 
     @staticmethod
-    async def _award_assignment(db: AsyncSession, assignment, template, user_id) -> int:
+    async def _award_assignment(
+        db: AsyncSession, assignment, template, user_id, award_pct: int = 100
+    ) -> int:
         """Credit a bonus-task completer and return the points credited to THEM.
 
         Bonus tasks (is_bonus=True) award privilege POINTS, like mandatory
@@ -1711,9 +1713,11 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         from app.services.points_service import PointsService
 
         if (template.gig_mode or "claim") != "collaboration":
-            pts = template.award_points_per_completer
+            # Integer half-up partial-credit scaling (grade from parent review).
+            pts = (template.award_points_per_completer * award_pct + 50) // 100
             await PointsService.award_gig_points(db, user_id, assignment.id, pts)
             return pts
+        # Collaboration: _resolve_grade guarantees award_pct == 100 here.
         return await TaskAssignmentService._settle_collaboration(db, assignment, template)
 
     @staticmethod
@@ -1927,6 +1931,42 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
     # ─── Gig approval (parent-only) ──────────────────────────────────
 
     @staticmethod
+    def _resolve_grade(
+        approve: bool,
+        grade: Optional[str],
+        partial_credit_pct: Optional[int],
+        template,
+    ) -> tuple[Optional[str], Optional[int], int]:
+        """Validate the (approve, grade, pct) triple.
+
+        Returns (grade, stored_pct, award_pct). award_pct is what point awards
+        are scaled by (100 for full/legacy, 0 for missed/reject). Legacy calls
+        (grade=None) keep today's exact behavior: full credit on approve,
+        NULL grade on reject.
+        """
+        if grade is None:
+            return ("full" if approve else None, None, 100 if approve else 0)
+        if grade not in ("full", "partial", "missed"):
+            raise ValidationException(f"Unknown grade: {grade}")
+        if approve and grade == "missed":
+            raise ValidationException("missed grade requires approve=false")
+        if not approve and grade != "missed":
+            raise ValidationException(f"{grade} grade requires approve=true")
+        if grade == "partial":
+            if (template.gig_mode or "claim") == "collaboration":
+                raise ValidationException(
+                    "partial credit is not supported on collaboration gigs "
+                    "(the pot re-split conserves total points)"
+                )
+            pct = 50 if partial_credit_pct is None else partial_credit_pct
+            if not (1 <= pct <= 99):
+                raise ValidationException("partial credit must be 1-99 percent")
+            return ("partial", pct, pct)
+        if grade == "full":
+            return ("full", None, 100)
+        return ("missed", None, 0)
+
+    @staticmethod
     async def approve_gig(
         db: AsyncSession,
         assignment_id: UUID,
@@ -1934,6 +1974,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         parent_id: UUID,
         approve: bool,
         notes: Optional[str] = None,
+        grade: Optional[str] = None,
+        partial_credit_pct: Optional[int] = None,
     ) -> TaskAssignment:
         from app.models.user import UserRole
         from app.services.points_service import PointsService
@@ -1953,6 +1995,11 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 f"Gig already decided (status: {assignment.approval_status.value})"
             )
 
+        grade, stored_pct, award_pct = TaskAssignmentService._resolve_grade(
+            approve, grade, partial_credit_pct, assignment.template
+        )
+        assignment.completion_grade = grade
+        assignment.partial_credit_pct = stored_pct
         assignment.approved_by = parent_id
         assignment.approved_at = datetime.now(timezone.utc)
         assignment.approval_notes = notes
@@ -1980,13 +2027,16 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             child = await get_user_by_id(db, assignment.assigned_to)
             if is_bonus:
                 pts = await TaskAssignmentService._award_assignment(
-                    db, assignment, assignment.template, assignment.assigned_to
+                    db, assignment, assignment.template, assignment.assigned_to,
+                    award_pct=award_pct,
                 )
                 # Increment trust streak so the child graduates to
                 # auto-approval after enough consecutive approvals.
                 child.gig_trust_streak += 1
             else:
-                pts = assignment.template.effective_points
+                # Integer half-up so partial credit never silently floors away
+                # a point (25 pts × 50% → 13, not 12).
+                pts = (assignment.template.effective_points * award_pct + 50) // 100
                 await PointsService.award_assignment_completion(
                     db, assignment.assigned_to, assignment.id, pts
                 )
@@ -2126,6 +2176,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "is_locked": is_bonus and has_open and r.status != AssignmentStatus.COMPLETED,
                 "assigned_date": r.assigned_date,
                 "completed_at": r.completed_at,
+                "completion_grade": r.completion_grade,
+                "partial_credit_pct": r.partial_credit_pct,
+                "approval_notes": r.approval_notes,
             })
         return out
 
@@ -2223,11 +2276,16 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 assignment.completed_at = None
             if reopening_completed and template is not None and not template.is_bonus:
                 # Proof-required chores re-enter the queue on the next
-                # completion; clear the stale decision trail.
+                # completion; clear the stale decision trail. The grade must
+                # go too — a leftover 'partial' would silently haircut the
+                # payday math (_chore_units) after the redo completes without
+                # a fresh review (non-proof chores complete at approval NONE).
                 assignment.approval_status = ApprovalStatus.NONE
                 assignment.approved_by = None
                 assignment.approved_at = None
                 assignment.approval_notes = None
+                assignment.completion_grade = None
+                assignment.partial_credit_pct = None
 
         await db.commit()
         # Re-fetch with template + user eagerly loaded

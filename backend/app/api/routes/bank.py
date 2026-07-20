@@ -28,6 +28,7 @@ from app.schemas.bank import (
     JarBalances,
     KidBankView,
     PayoutRequestBody,
+    PayoutSummary,
     SaveWithdrawalRequest,
 )
 from app.schemas.envelope import KidEnvelopesView
@@ -89,6 +90,19 @@ async def family_bank(
     """Parent view: every kid's jar balances + settings summary."""
     rows = await BankService.get_family_bank(db, current_user)
     return [KidBankView(**r) for r in rows]
+
+
+@router.get("/payout-summary", response_model=PayoutSummary)
+async def payout_summary(
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Everything the parent currently owes the kids: gig cash awaiting payout
+    + this week's chore paychecks awaiting release. Feeds the parent home card
+    and the payouts dashboard."""
+    return await BankService.payout_summary(
+        db, to_uuid_required(current_user.family_id)
+    )
 
 
 # ── Kid budget-envelopes (thin projection over jars + savings goal) ──────────
@@ -219,6 +233,7 @@ async def release_chore_paycheck(
     result = await BankService.release_chore_paycheck(
         db, target, fam, week_of, entitled=True,
         adjustment_cents=(body.adjustment_cents if body else 0),
+        released_by=to_uuid_required(current_user.id),
     )
     return ChorePaycheckReleaseResult(**result)
 

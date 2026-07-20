@@ -21,9 +21,12 @@ const isParent = role === "parent";
 const token = Astro.cookies.get("access_token")?.value;
 let unreadCount = 0;
 let pendingApprovals = 0;
+// Per-family module registry (families.enabled_modules via /auth/me).
+// null = all modules on — also the fail-open value on any fetch error.
+let enabledModules: string[] | null = null;
 if (token) {
     try {
-        const [unread, taskPending, gigPending] = await Promise.all([
+        const [unread, taskPending, gigPending, me] = await Promise.all([
             apiFetch<{ unread: number }>("/api/notifications/unread-count", { token }),
             isParent
                 ? apiFetch<any[]>("/api/task-assignments/pending-approvals", { token })
@@ -31,9 +34,11 @@ if (token) {
             isParent
                 ? apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token })
                 : Promise.resolve({ data: null as any[] | null }),
+            apiFetch<any>("/api/auth/me", { token }),
         ]);
         unreadCount = unread.data?.unread ?? 0;
         pendingApprovals = (taskPending.data?.length ?? 0) + (gigPending.data?.length ?? 0);
+        enabledModules = me.data?.enabled_modules ?? null;
     } catch {
         unreadCount = 0;
         pendingApprovals = 0;
@@ -49,23 +54,44 @@ const I = {
     approvals: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
     budget: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
     more: "M4 6h16M4 12h16M4 18h16",
+    pet: "M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z",
+    calendar: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
+    profile: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
 };
 
 type Item = { key: string; href: string; label: string; icon: string; badge?: number };
 
+const mod = (k: string) => enabledModules == null || enabledModules.includes(k);
+
 const kidItems: Item[] = [
     { key: "tasks",   href: "/dashboard", label: t(lang, "nav_tasks") as string,   icon: I.tasks },
-    { key: "gigs",    href: "/gigs",      label: gigsLabel,                         icon: I.gigs },
+    ...(mod("gigs") ? [{ key: "gigs", href: "/gigs", label: gigsLabel, icon: I.gigs }] : []),
     { key: "rewards", href: "/rewards",   label: t(lang, "nav_rewards") as string, icon: I.rewards },
-    { key: "chat",    href: "/chat",      label: "Chat",                            icon: I.chat },
+    ...(mod("chat") ? [{ key: "chat", href: "/chat", label: "Chat", icon: I.chat }] : []),
 ];
 const parentItems: Item[] = [
     { key: "parent",    href: "/parent",            label: es ? "Inicio" : "Home",        icon: I.home },
     { key: "approvals", href: "/parent/approvals",  label: es ? "Aprobar" : "Approve",    icon: I.approvals, badge: pendingApprovals },
-    { key: "budget",    href: "/budget/month",      label: t(lang, "nav_budget") as string, icon: I.budget },
-    { key: "gigs",      href: "/parent/gigs",       label: gigsLabel,                     icon: I.gigs },
+    ...(mod("budget") ? [{ key: "budget", href: "/budget/month", label: t(lang, "nav_budget") as string, icon: I.budget }] : []),
+    ...(mod("gigs") ? [{ key: "gigs", href: "/parent/gigs", label: gigsLabel, icon: I.gigs }] : []),
+];
+// Backfill freed slots so the bar keeps its rhythm (candidates respect the
+// registry; always-on cores last).
+const kidFills: Item[] = [
+    ...(mod("pet") ? [{ key: "pet", href: "/pet", label: es ? "Mascota" : "Pet", icon: I.pet }] : []),
+    ...(mod("calendar") ? [{ key: "calendar" as const, href: "/calendar", label: es ? "Agenda" : "Calendar", icon: I.calendar }] : []),
+    { key: "profile", href: "/profile", label: t(lang, "nav_profile") as string, icon: I.profile },
+];
+const parentFills: Item[] = [
+    { key: "tasks", href: "/parent/tasks", label: es ? "Tareas" : "Tasks", icon: I.tasks },
+    { key: "rewards", href: "/parent/rewards", label: t(lang, "nav_rewards") as string, icon: I.rewards },
 ];
 const items = isParent ? parentItems : kidItems;
+const fills = isParent ? parentFills : kidFills;
+for (const f of fills) {
+    if (items.length >= 4) break;
+    if (!items.some((it) => it.key === f.key)) items.push(f);
+}
 // The "More" item carries the unread badge, since Inbox now lives inside it.
 
 // min-w-0 lets a long label shrink/truncate instead of forcing page overflow
@@ -110,7 +136,7 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
     </div>
 </nav>
 
-<MoreSheet role={role} lang={lang} unread={unreadCount} />
+<MoreSheet role={role} lang={lang} unread={unreadCount} modules={enabledModules} />
 
 <script>
     const ACTIVE = "bg-brand-coral text-brand-ink border-2 border-brand-ink shadow-[2px_2px_0_var(--color-brand-ink)]";

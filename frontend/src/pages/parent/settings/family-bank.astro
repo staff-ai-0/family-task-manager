@@ -48,14 +48,19 @@ const { data: membersRaw } = await apiFetch<any[]>("/api/families/members", { to
 const starMap: Record<string, boolean> = {};
 (Array.isArray(membersRaw) ? membersRaw : []).forEach((m: any) => { starMap[m.id] = !!m.star_mode; });
 
-// This week's chore paycheck per kid on chore-proportional mode (parent review).
+// This week's chore paycheck per kid on any parent-released mode.
+const CHORE_MODES = ["chore_proportional", "chore_gated", "points_rate"];
 const paycheckMap: Record<string, any> = {};
 await Promise.all(
-    kids.filter((k) => k.allowance_mode === "chore_proportional").map(async (k) => {
+    kids.filter((k) => CHORE_MODES.includes(k.allowance_mode)).map(async (k) => {
         const { data } = await apiFetch<any>(`/api/bank/chore-paycheck/${k.user_id}`, { token });
         if (data) paycheckMap[k.user_id] = data;
     })
 );
+
+// Family-wide point value (points_rate mode): what one chore point pays.
+const { data: familyData } = await apiFetch<any>("/api/families/me", { token });
+const pointValueCents: number = familyData?.point_value_cents ?? 100;
 
 const weekdays = es
     ? ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
@@ -148,6 +153,31 @@ const weekdays = es
         </div>
     ) : (
         <div class="space-y-6">
+            <!-- Family-wide point value (drives the "Por puntos" payment model) -->
+            <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] px-5 py-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <p class="font-bold text-brand-ink text-sm">⭐ {es ? "Valor del punto" : "Point value"}</p>
+                        <p class="text-xs text-brand-ink-soft">
+                            {es
+                                ? "Cuánto paga cada punto en el modelo «Por puntos» (ej. $1.00 → 10 puntos = $10)."
+                                : "What each point pays in the points model (e.g. $1.00 → 10 points = $10)."}
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-brand-ink-soft text-sm">$</span>
+                            <input type="number" min="0.01" step="0.01" inputmode="decimal" id="point-value-input"
+                                value={toPesos(pointValueCents)} disabled={automationLocked}
+                                class="w-24 rounded-xl border border-brand-ink/20 bg-white pl-7 pr-2 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep disabled:opacity-50 disabled:bg-brand-cream-deep" />
+                        </div>
+                        <button type="button" id="point-value-save" disabled={automationLocked}
+                            class="rounded-xl bg-brand-mint-deep text-white text-sm font-bold px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            {es ? "Guardar" : "Save"}
+                        </button>
+                    </div>
+                </div>
+            </div>
             {kids.map((k: any) => {
                 const spend = k.spend_cents ?? 0;
                 const save = k.save_cents ?? 0;
@@ -276,23 +306,34 @@ const weekdays = es
                                         ))}
                                     </select>
                                 </div>
-                                {/* Chore-proportional toggle */}
-                                <label class="flex items-start gap-2 mt-2 cursor-pointer select-none">
-                                    <input type="checkbox" data-field="allowance_mode"
-                                        checked={k.allowance_mode === "chore_proportional"} disabled={automationLocked}
-                                        class="mt-0.5 h-4 w-4 rounded border-brand-ink/30 text-brand-mint-deep focus:ring-brand-mint-deep disabled:opacity-50" />
-                                    <span class="text-xs text-brand-ink" data-allowance-mode-label>
-                                        <b>{es ? "Pagar por tareas completadas" : "Pay by chores completed"}</b><br/>
-                                        <span class="text-brand-ink-soft">{es
-                                            ? "El monto de arriba es el TOPE semanal; se paga proporcional a las tareas hechas y aprobadas. Tú liberas el pago al final de la semana."
-                                            : "The amount above becomes the weekly CAP; paid in proportion to chores done & approved. You release it at week's end."}</span>
-                                    </span>
-                                </label>
-                                <p class="text-xs text-brand-ink-soft mt-1" data-allowance-flat-hint>{es ? "0 = sin mesada automática." : "0 = no automatic allowance."}</p>
+                                {/* Payment model — how the weekly money is computed */}
+                                <div class="mt-2">
+                                    <label class="block text-xs font-bold text-brand-ink mb-1">
+                                        {es ? "Modelo de pago" : "Payment model"}
+                                    </label>
+                                    <select data-field="allowance_mode" disabled={automationLocked}
+                                        class="w-full rounded-xl border border-brand-ink/20 bg-white px-3 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep disabled:opacity-50 disabled:bg-brand-cream-deep">
+                                        <option value="flat" selected={k.allowance_mode === "flat"}>
+                                            {es ? "Fijo — se paga completo el día de pago" : "Flat — paid in full on payday"}
+                                        </option>
+                                        <option value="chore_proportional" selected={k.allowance_mode === "chore_proportional"}>
+                                            {es ? "Por tareas — proporcional al peso completado" : "By chores — proportional to completed weight"}
+                                        </option>
+                                        <option value="chore_gated" selected={k.allowance_mode === "chore_gated"}>
+                                            {es ? "Todo o nada — 100% de tareas o $0" : "All or nothing — 100% of chores or $0"}
+                                        </option>
+                                        <option value="points_rate" selected={k.allowance_mode === "points_rate"}>
+                                            {es ? "Por puntos — cada punto vale $ (tarifa familiar)" : "By points — each point pays $ (family rate)"}
+                                        </option>
+                                    </select>
+                                    <p class="text-xs text-brand-ink-soft mt-1">{es
+                                        ? "En los modos por tareas, el monto de arriba es el TOPE semanal y tú liberas el pago al revisar la semana. En «Por puntos» el monto se ignora: pagan los puntos aprobados × la tarifa."
+                                        : "In chore modes the amount above is the weekly CAP and you release the pay after reviewing the week. In points mode the amount is ignored: approved points × the family rate."}</p>
+                                </div>
                             </div>
 
-                            {/* Chore paycheck — this week's review + release (proportional mode only) */}
-                            {k.allowance_mode === "chore_proportional" && paycheckMap[k.user_id] && (
+                            {/* Chore paycheck — this week's review + release (parent-released modes) */}
+                            {CHORE_MODES.includes(k.allowance_mode) && paycheckMap[k.user_id] && (
                                 <div class="rounded-xl border-2 border-brand-mint-deep/40 bg-brand-mint/10 p-3" data-paycheck-card data-kid-user={k.user_id}>
                                     <div class="flex items-center justify-between">
                                         <span class="text-xs font-bold text-brand-ink">{es ? "💵 Cheque de tareas · esta semana" : "💵 Chore paycheck · this week"}</span>
@@ -300,7 +341,9 @@ const weekdays = es
                                     </div>
                                     <div class="flex items-baseline gap-1 mt-1">
                                         <span class="text-2xl font-extrabold text-brand-mint-deep" data-pc-amount>{fmt(paycheckMap[k.user_id].projected_cents)}</span>
-                                        <span class="text-xs text-brand-ink-soft">/ {fmt(paycheckMap[k.user_id].cap_cents)} {es ? "tope" : "cap"}</span>
+                                        {k.allowance_mode === "points_rate"
+                                            ? <span class="text-xs text-brand-ink-soft">({fmt(pointValueCents)} {es ? "por punto" : "per point"})</span>
+                                            : <span class="text-xs text-brand-ink-soft">/ {fmt(paycheckMap[k.user_id].cap_cents)} {es ? "tope" : "cap"}</span>}
                                     </div>
                                     <div class="h-2 rounded-full bg-brand-cream-deep overflow-hidden mt-1">
                                         <div class="h-full bg-brand-mint-deep transition-all" data-pc-bar style={`width:${paycheckMap[k.user_id].pct}%`}></div>
@@ -539,10 +582,10 @@ const weekdays = es
                     showToast(es ? "Los porcentajes deben sumar 100%." : "Percentages must sum to 100%.", "error");
                     return;
                 }
-                const choreMode = (card.querySelector('[data-field="allowance_mode"]') as HTMLInputElement)?.checked;
+                const modeSel = card.querySelector('[data-field="allowance_mode"]') as HTMLSelectElement | null;
                 const payload = {
                     allowance_cents: toCents(num("allowance")),
-                    allowance_mode: choreMode ? "chore_proportional" : "flat",
+                    allowance_mode: modeSel?.value || "flat",
                     payday_weekday: int("weekday"),
                     split_spend_pct: splitSpend,
                     split_save_pct: splitSave,
@@ -560,6 +603,25 @@ const weekdays = es
                 saveBtn.disabled = false;
                 if (res) showToast(es ? "¡Automatización guardada! 🏦" : "Automation saved! 🏦", "success");
             });
+        });
+
+        // ── Family point value (points_rate model) ───────────────────────
+        const pvSave = document.getElementById("point-value-save") as HTMLButtonElement | null;
+        pvSave?.addEventListener("click", async () => {
+            const input = document.getElementById("point-value-input") as HTMLInputElement | null;
+            const pesos = parseFloat(input?.value || "0");
+            if (!pesos || pesos <= 0) {
+                showToast(es ? "El valor debe ser mayor a $0." : "Value must be above $0.", "error");
+                return;
+            }
+            pvSave.disabled = true;
+            const res = await mutate("/api/families/me", {
+                method: "PATCH",
+                body: { point_value_cents: Math.round(pesos * 100) },
+                errorFallback: es ? "No se pudo guardar" : "Could not save",
+            });
+            pvSave.disabled = false;
+            if (res) showToast(es ? "Valor del punto guardado ⭐" : "Point value saved ⭐", "success");
         });
 
         // ── Release chore paycheck ───────────────────────────────────────

@@ -92,6 +92,19 @@ def _week_monday() -> date:
     return today - timedelta(days=today.weekday())
 
 
+def _pin_family_today(monkeypatch, fixed):
+    """Freeze TaskAssignmentService's notion of "today" to `fixed` — removes
+    the real-wall-clock dependency between the shuffle anchor and
+    complete_assignment's own _family_local_today() read. See the twin
+    helper + comment in test_task_assignment_service.py for the root cause
+    this replaces (the two independent clock reads disagreeing is what
+    intermittently raised the future-day guard, confirmed CI-failing only on
+    real Sundays)."""
+    async def _fake(db, family_id):
+        return fixed
+    monkeypatch.setattr(TaskAssignmentService, "_family_local_today", _fake)
+
+
 async def _direct_assignment(
     db, template, user_id, family_id, assigned_date, status=AssignmentStatus.PENDING
 ):
@@ -227,11 +240,12 @@ class TestRotateFallback:
 
 class TestReshuffleSafety:
     async def test_reshuffle_preserves_completed_without_duplicate(
-        self, db_session, test_family, test_parent_user, test_child_user
+        self, db_session, test_family, test_parent_user, test_child_user, monkeypatch
     ):
         """A completed occurrence must survive a re-shuffle WITHOUT the
         shuffle regenerating a twin slot for the same template+date."""
-        monday = _week_monday()
+        monday = date(2026, 1, 5)  # fixed Monday — see _pin_family_today
+        _pin_family_today(monkeypatch, monday)
         await _template(
             db_session, test_family.id, test_parent_user.id,
             title="Daily Dup Check", interval_days=1,
@@ -240,6 +254,8 @@ class TestReshuffleSafety:
             db_session, test_family.id, today=monday
         )
         target = first[0]
+        target.assigned_date = monday
+        await db_session.commit()
         await TaskAssignmentService.complete_assignment(
             db_session, target.id, test_family.id, target.assigned_to
         )

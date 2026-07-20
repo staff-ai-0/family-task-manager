@@ -16,6 +16,48 @@ if (user.role !== "parent") return Astro.redirect("/dashboard");
 const { data: kidsData } = await apiFetch<any[]>("/api/cash/family", { token });
 const kids: any[] = Array.isArray(kidsData) ? kidsData : [];
 const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+// Aggregate owed: gig cash pending + this week's chore paychecks to release.
+const { data: summary } = await apiFetch<any>("/api/bank/payout-summary", { token });
+const cashTotal = summary?.cash_total_cents ?? 0;
+const paycheckTotal = summary?.paycheck_total_cents ?? 0;
+const grandTotal = summary?.grand_total_cents ?? 0;
+// Kids on a parent-released allowance mode → weekly paycheck rows.
+const paycheckKids: any[] = (summary?.kids ?? []).filter(
+    (k: any) => k.allowance_mode && k.allowance_mode !== "flat",
+);
+
+// Per-task chips under each paycheck row (hover/tap for details).
+const chipCls: Record<string, string> = {
+    credited: "bg-brand-mint/20 border-brand-mint-deep/40 text-brand-mint-deep",
+    pending_review: "bg-amber-100 border-amber-300 text-amber-800",
+    missed: "bg-red-100 border-red-300 text-red-700",
+    not_done: "bg-brand-ink/5 border-brand-ink/15 text-brand-ink-soft",
+};
+const chipIcon: Record<string, string> = {
+    credited: "✓",
+    pending_review: "⏳",
+    missed: "✗",
+    not_done: "·",
+};
+const statusLabel = (t: any): string => {
+    if (t.status === "credited") {
+        const base = lang === "es" ? "Completada ✓" : "Completed ✓";
+        return t.grade === "partial"
+            ? `${base} · ${lang === "es" ? "parcial" : "partial"} ${t.partial_credit_pct}%`
+            : base;
+    }
+    if (t.status === "pending_review")
+        return lang === "es" ? "Esperando revisión" : "Awaiting review";
+    if (t.status === "missed") return lang === "es" ? "No cumplida" : "Missed";
+    return lang === "es" ? "Sin hacer" : "Not done yet";
+};
+const dayLabel = (iso: string): string =>
+    new Date(`${iso}T00:00:00`).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+    });
 ---
 
 <PageLayout
@@ -27,6 +69,27 @@ const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
     lang={lang}
 >
     <div class="px-4 py-5 space-y-4">
+        {/* Grand total — everything currently owed to the kids. */}
+        <div
+            class="rounded-2xl bg-gradient-to-br from-emerald-700 to-emerald-600 text-white p-5 shadow-[var(--shadow-card)]"
+            data-owed-header
+            data-cash-cents={cashTotal}
+            data-paycheck-cents={paycheckTotal}
+        >
+            <p class="text-[11px] font-semibold uppercase tracking-wider text-emerald-100">
+                💵 {lang === "es" ? "Total por pagar a los kids" : "Total owed to the kids"}
+            </p>
+            <p class="text-4xl font-extrabold tracking-tight" data-grand-total>{fmt(grandTotal)}</p>
+            <p class="text-xs text-emerald-100 mt-1">
+                {lang === "es" ? "Gigs" : "Gigs"} <span class="font-bold" data-cash-total>{fmt(cashTotal)}</span>
+                {" · "}
+                {lang === "es" ? "Cheques de tareas" : "Chore paychecks"} <span class="font-bold" data-paycheck-total>{fmt(paycheckTotal)}</span>
+            </p>
+        </div>
+
+        <h2 class="text-sm font-bold text-brand-ink pt-1">
+            💼 {lang === "es" ? "Cash de gigs" : "Gig cash"}
+        </h2>
         <p class="text-sm text-brand-ink-soft">
             {lang === "es"
                 ? "El dinero que los kids ganan en los gigs se acumula aquí hasta que lo pagas."
@@ -96,12 +159,106 @@ const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
                 ))}
             </div>
         )}
+
+        {paycheckKids.length > 0 && (
+            <>
+                <h2 class="text-sm font-bold text-brand-ink pt-2">
+                    💵 {lang === "es" ? "Cheques de tareas · esta semana" : "Chore paychecks · this week"}
+                </h2>
+                <p class="text-sm text-brand-ink-soft">
+                    {lang === "es"
+                        ? "Revisa la semana y libera el pago; al liberarlo se abona al saldo del kid."
+                        : "Review the week and release the pay; it credits the kid's balance."}
+                </p>
+                <div class="space-y-3">
+                    {paycheckKids.map((k) => (
+                        <div
+                            class="relative rounded-2xl border-2 border-brand-mint-deep/40 bg-brand-mint/10 p-4"
+                            data-paycheck-row
+                            data-kid-id={k.user_id}
+                            data-amount-cents={k.paycheck_cents}
+                        >
+                            <div class="flex items-center justify-between gap-3">
+                                <div>
+                                    <h3 class="font-bold text-brand-ink">{k.name}</h3>
+                                    <p class="text-xs text-brand-ink-soft">
+                                        {k.done_points}/{k.assigned_points} pts · {k.pct}%
+                                    </p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-2xl font-extrabold text-brand-mint-deep">
+                                        {fmt(k.paycheck_cents)}
+                                    </p>
+                                    <div data-release-slot>
+                                        {k.paycheck_released ? (
+                                            <span class="text-xs font-bold text-brand-mint-deep">
+                                                {lang === "es" ? "Liberado ✓" : "Released ✓"}
+                                            </span>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                data-release
+                                                class="mt-1 px-3 py-1.5 bg-brand-mint-deep hover:opacity-90 text-white font-semibold text-xs rounded-lg transition-opacity"
+                                            >
+                                                {lang === "es" ? "Liberar pago" : "Release"}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            {(k.tasks ?? []).length > 0 && (
+                                <div class="flex flex-wrap gap-1.5 mt-3">
+                                    {k.tasks.map((t: any) => (
+                                        <button
+                                            type="button"
+                                            class={`group px-2 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-brand-mint-deep/50 ${chipCls[t.status] ?? chipCls.not_done}`}
+                                        >
+                                            <span aria-hidden="true">{chipIcon[t.status] ?? "·"}</span>
+                                            <span class="max-w-[9rem] truncate">{t.title}</span>
+                                            <span class="opacity-70">{t.earned_points}/{t.points}</span>
+                                            {/* Detail panel — hover on desktop, tap/focus on touch. */}
+                                            {/* Above the row + z-[60] so BottomNav (z-50) never covers it. */}
+                                            <span class="hidden group-hover:block group-focus:block pointer-events-none absolute left-2 right-2 bottom-full mb-1 z-[60] rounded-xl bg-brand-ink text-brand-cream text-left text-xs font-normal p-3 shadow-lg">
+                                                <span class="block font-bold mb-0.5">{t.title}</span>
+                                                <span class="block">
+                                                    {statusLabel(t)} · {t.earned_points}/{t.points} pts
+                                                </span>
+                                                <span class="block opacity-80">{dayLabel(t.assigned_date)}</span>
+                                                {t.approval_notes && (
+                                                    <span class="block mt-1 opacity-90">📝 {t.approval_notes}</span>
+                                                )}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            <p class="hidden text-xs mt-2" data-msg></p>
+                        </div>
+                    ))}
+                </div>
+            </>
+        )}
     </div>
 </PageLayout>
 
 <script define:vars={{ lang }}>
 (function initPayouts() {
     const fmt = (cents) => `$${(cents / 100).toFixed(2)}`;
+
+    // Live totals header. Releasing a paycheck moves money between buckets
+    // (paycheck → gig cash, kid balance credited) so the grand total holds;
+    // recording a payout shrinks cash and the grand total.
+    const header = document.querySelector("[data-owed-header]");
+    function adjustTotals(cashDelta, paycheckDelta) {
+        if (!header) return;
+        const cash = Math.max(0, parseInt(header.dataset.cashCents || "0", 10) + cashDelta);
+        const paycheck = Math.max(0, parseInt(header.dataset.paycheckCents || "0", 10) + paycheckDelta);
+        header.dataset.cashCents = String(cash);
+        header.dataset.paycheckCents = String(paycheck);
+        header.querySelector("[data-cash-total]").textContent = fmt(cash);
+        header.querySelector("[data-paycheck-total]").textContent = fmt(paycheck);
+        header.querySelector("[data-grand-total]").textContent = fmt(cash + paycheck);
+    }
 
     document.querySelectorAll("[data-kid-card]").forEach((card) => {
         const kidId = card.getAttribute("data-kid-id");
@@ -142,6 +299,7 @@ const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
                 }
                 balanceEl.textContent = fmt(data.new_balance_cents);
                 amountEl.value = "";
+                adjustTotals(-amountCents, 0);
                 showMsg(
                     (lang === "es" ? "Pagado. Nuevo saldo: " : "Paid. New balance: ") + fmt(data.new_balance_cents),
                     true
@@ -159,6 +317,54 @@ const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
             pay(Math.round(pesos * 100));
         });
         payAllBtn.addEventListener("click", () => pay(currentBalanceCents()));
+    });
+
+    // ── Release this week's chore paycheck ──────────────────────────────
+    document.querySelectorAll("[data-paycheck-row]").forEach((row) => {
+        const btn = row.querySelector("[data-release]");
+        if (!btn) return;
+        const kidId = row.getAttribute("data-kid-id");
+        const projected = parseInt(row.getAttribute("data-amount-cents") || "0", 10);
+        const msgEl = row.querySelector("[data-msg]");
+        const slot = row.querySelector("[data-release-slot]");
+
+        btn.addEventListener("click", async () => {
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/bank/chore-paycheck/${kidId}/release`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    msgEl.textContent = data.detail || `Error ${res.status}`;
+                    msgEl.classList.remove("hidden");
+                    msgEl.classList.add("text-red-600");
+                    btn.disabled = false;
+                    return;
+                }
+                const amt = data.amount_cents || 0;
+                slot.innerHTML = `<span class="text-xs font-bold text-brand-mint-deep">${
+                    lang === "es" ? "Liberado ✓" : "Released ✓"
+                }</span>`;
+                // Paycheck bucket empties; the released amount lands in the
+                // kid's gig-cash balance (jars) and stays owed until paid.
+                adjustTotals(amt, -projected);
+                const bal = document.querySelector(
+                    `[data-kid-card][data-kid-id="${kidId}"] [data-balance]`
+                );
+                if (bal) {
+                    const cur = Math.round(parseFloat((bal.textContent || "").replace(/[^0-9.]/g, "") || "0") * 100);
+                    bal.textContent = fmt(cur + amt);
+                }
+            } catch (e) {
+                msgEl.textContent = lang === "es" ? "Error de red" : "Network error";
+                msgEl.classList.remove("hidden");
+                msgEl.classList.add("text-red-600");
+                btn.disabled = false;
+            }
+        });
     });
 })();
 </script>

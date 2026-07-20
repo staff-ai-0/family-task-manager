@@ -1,4 +1,4 @@
-from sqlalchemy import CheckConstraint, Column, String, Boolean, DateTime
+from sqlalchemy import CheckConstraint, Column, Integer, String, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -27,6 +27,17 @@ class Family(Base):
     rest_days = Column(JSONB, nullable=True)
     # User-visible term for the gig board, per family. DB/routes stay "gig".
     gig_term = Column(String(10), nullable=False, default="gig", server_default="gig")
+    # Family-set value of ONE point in centavos for the points_rate allowance
+    # mode (100 = 1 pt = $1 MXN, the gig-board anchor). Gig cash pricing is
+    # unaffected — this only drives the weekly points→cash paycheck.
+    point_value_cents = Column(
+        Integer, nullable=False, default=100, server_default="100"
+    )
+    # Optional per-family module registry: list of ENABLED togglable module
+    # keys (see app.core.modules.TOGGLABLE_MODULES). NULL = all modules on
+    # (the pre-feature default). Core surfaces (tasks/rewards/points/bank
+    # settings) are never listed — they cannot be disabled.
+    enabled_modules = Column(JSONB, nullable=True)
     created_by = Column(UUID(as_uuid=True), nullable=True)  # Nullable during creation, set after user created
     join_code = Column(String(10), unique=True, nullable=True, index=True)  # Short code for family invites
     # Stable public referral code for the give-a-month/get-a-month growth
@@ -74,6 +85,7 @@ class Family(Base):
 
     __table_args__ = (
         CheckConstraint("gig_term IN ('gig','chamba')", name="ck_families_gig_term"),
+        CheckConstraint("point_value_cents > 0", name="ck_families_point_value_cents"),
     )
 
     # Relationships

@@ -14,8 +14,10 @@ interface Props {
     role?: string;
     lang?: string;
     unread?: number;
+    /** Family module registry from /auth/me (null = all modules on). */
+    modules?: string[] | null;
 }
-const { role = "child", lang = "en", unread = 0 } = Astro.props;
+const { role = "child", lang = "en", unread = 0, modules = null } = Astro.props;
 const es = lang === "es";
 const isParent = role === "parent";
 const isTeen = role === "teen";
@@ -50,17 +52,21 @@ const inbox: Link = { href: "/notifications", label: es ? "Avisos" : "Inbox", ic
 
 const help: Link = { href: es ? "/ayuda" : "/help", label: es ? "Ayuda" : "Help", icon: I.help };
 
+// Per-family module registry (BottomNav fetches /auth/me and forwards it).
+// null = all on. Links tied to a disabled module disappear from the sheet.
+const mod = (k: string) => modules == null || modules.includes(k);
+
 const kidLinks: Link[] = [
     inbox,
     // Teens (paid plan) get a read-only self-coach; children do not. The page
     // + API enforce the ai_features plan gate, so an unentitled teen sees an
     // upsell rather than a broken chat.
     ...(isTeen ? [{ href: "/parent/jarvis", label: "Jarvis", icon: I.jarvis }] : []),
-    { href: "/pet", label: es ? "Mascota" : "Pet", icon: I.pet },
-    { href: "/meals", label: es ? "Comidas" : "Meals", icon: I.meals },
-    { href: "/shopping", label: es ? "Compras" : "Shopping", icon: I.shopping },
-    { href: "/calendar", label: es ? "Calendario" : "Calendar", icon: I.calendar },
-    { href: "/dm", label: es ? "Mensajes" : "Messages", icon: I.dm },
+    ...(mod("pet") ? [{ href: "/pet", label: es ? "Mascota" : "Pet", icon: I.pet }] : []),
+    ...(mod("meals") ? [{ href: "/meals", label: es ? "Comidas" : "Meals", icon: I.meals }] : []),
+    ...(mod("shopping") ? [{ href: "/shopping", label: es ? "Compras" : "Shopping", icon: I.shopping }] : []),
+    ...(mod("calendar") ? [{ href: "/calendar", label: es ? "Calendario" : "Calendar", icon: I.calendar }] : []),
+    ...(mod("chat") ? [{ href: "/dm", label: es ? "Mensajes" : "Messages", icon: I.dm }] : []),
     { href: "/profile", label: t(lang, "nav_profile") as string, icon: I.profile },
     help,
 ];
@@ -71,16 +77,18 @@ const parentLinks: Link[] = [
     { href: "/parent/members", label: es ? "Miembros" : "Members", icon: I.members },
     { href: "/parent/rewards", label: t(lang, "nav_rewards") as string, icon: I.rewards },
     { href: "/parent/consequences", label: es ? "Consecuencias" : "Consequences", icon: I.consequences },
-    { href: "/parent/payouts", label: es ? "Pagos" : "Payouts", icon: I.payouts },
+    ...(mod("gigs") ? [{ href: "/parent/payouts", label: es ? "Pagos" : "Payouts", icon: I.payouts }] : []),
     { href: "/parent/assignments", label: es ? "Asignaciones" : "Assignments", icon: I.assignments },
     { href: "/parent/day", label: es ? "Día a día" : "Day review", icon: I.calendar },
     { href: "/parent/analytics", label: es ? "Análisis" : "Analytics", icon: I.analytics },
     { href: "/parent/jarvis", label: "Jarvis", icon: I.jarvis },
-    { href: "/chat", label: "Chat", icon: I.chat },
-    { href: "/dm", label: es ? "Mensajes" : "Messages", icon: I.dm },
-    { href: "/meals", label: es ? "Comidas" : "Meals", icon: I.meals },
-    { href: "/shopping", label: es ? "Compras" : "Shopping", icon: I.shopping },
-    { href: "/calendar", label: es ? "Calendario" : "Calendar", icon: I.calendar },
+    ...(mod("chat") ? [
+        { href: "/chat", label: "Chat", icon: I.chat },
+        { href: "/dm", label: es ? "Mensajes" : "Messages", icon: I.dm },
+    ] : []),
+    ...(mod("meals") ? [{ href: "/meals", label: es ? "Comidas" : "Meals", icon: I.meals }] : []),
+    ...(mod("shopping") ? [{ href: "/shopping", label: es ? "Compras" : "Shopping", icon: I.shopping }] : []),
+    ...(mod("calendar") ? [{ href: "/calendar", label: es ? "Calendario" : "Calendar", icon: I.calendar }] : []),
     { href: "/parent/kiosk", label: "Kiosk", icon: I.kiosk },
     { href: "/parent/settings", label: es ? "Ajustes" : "Settings", icon: I.settings },
     { href: "/profile", label: t(lang, "nav_profile") as string, icon: I.profile },

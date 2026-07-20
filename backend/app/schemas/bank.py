@@ -40,7 +40,9 @@ class BankSettingsUpdate(BaseModel):
     the three split percentages is supplied, all three must be and sum to 100."""
 
     allowance_cents: Optional[int] = Field(None, ge=0)
-    allowance_mode: Optional[Literal["flat", "chore_proportional", "chore_gated"]] = None
+    allowance_mode: Optional[
+        Literal["flat", "chore_proportional", "chore_gated", "points_rate"]
+    ] = None
     payday_weekday: Optional[int] = Field(None, ge=0, le=6)
     split_spend_pct: Optional[int] = Field(None, ge=0, le=100)
     split_save_pct: Optional[int] = Field(None, ge=0, le=100)
@@ -76,6 +78,46 @@ class ChorePaycheckPreview(BaseModel):
     already_released: bool
 
 
+class PayoutTaskDetail(BaseModel):
+    """One week-task behind a chore-paycheck row (payouts dashboard tooltip).
+    Status buckets mirror the paycheck credit math: only `credited` rows earn."""
+
+    title: str
+    points: int
+    earned_points: int
+    status: Literal["credited", "pending_review", "missed", "not_done"]
+    grade: Optional[str] = None
+    partial_credit_pct: Optional[int] = None
+    assigned_date: date
+    completed_at: Optional[datetime] = None
+    approval_notes: Optional[str] = None
+
+
+class PayoutSummaryKid(BaseModel):
+    user_id: UUID
+    name: str
+    cash_pending_cents: int
+    paycheck_cents: int
+    paycheck_released: bool
+    allowance_mode: str
+    # Week progress behind paycheck_cents (0 on flat mode).
+    done_points: int = 0
+    assigned_points: int = 0
+    pct: int = 0
+    # Per-task breakdown of the week (empty on flat mode).
+    tasks: list[PayoutTaskDetail] = []
+
+
+class PayoutSummary(BaseModel):
+    """Everything a parent currently owes the kids: gig cash awaiting payout
+    plus this week's chore paychecks awaiting release."""
+
+    kids: list[PayoutSummaryKid]
+    cash_total_cents: int
+    paycheck_total_cents: int
+    grand_total_cents: int
+
+
 class ChorePaycheckReleaseBody(BaseModel):
     """Optional parent adjustment (signed cents) added to the computed paycheck —
     a bonus (positive) or dock (negative). Final amount floored at 0."""
@@ -88,6 +130,8 @@ class ChorePaycheckReleaseResult(BaseModel):
     done_points: int
     assigned_points: int
     amount_cents: int
+    # points_rate mode only: points deducted because they were paid out as cash.
+    points_converted: int = 0
 
 
 class BankTransferRequest(BaseModel):

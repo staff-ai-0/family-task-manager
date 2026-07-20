@@ -161,7 +161,7 @@ async def test_fan_out_calls_webpush_per_parent(
         assert mock_webpush.call_count >= 1
         call_kwargs = mock_webpush.call_args.kwargs
         assert call_kwargs["subscription_info"]["endpoint"].endswith("PARENT-AAA")
-        assert "Gig awaiting approval" in call_kwargs["data"]
+        assert "Task awaiting approval" in call_kwargs["data"]
 
     settings.VAPID_PRIVATE_KEY = ""
     settings.VAPID_PUBLIC_KEY = ""
