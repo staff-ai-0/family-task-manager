@@ -85,6 +85,24 @@ def _this_monday():
         return today + _td(days=1)
     return today - _td(days=today.weekday())
 
+
+def _pin_family_today(monkeypatch, fixed):
+    """Freeze TaskAssignmentService's notion of "today" to `fixed`.
+
+    Root cause of the intermittent "future day" failure this replaces: the
+    old pattern re-read real wall-clock TWICE — once via _this_monday()'s
+    naive date.today() to pick the shuffle anchor (which itself bumps a
+    Sunday to next week), and again via _family_local_today() inside
+    complete_assignment's future-day guard — and hoped both reads agreed.
+    They're independent reads of "now" with no barrier between them; on a
+    real Sunday CI run they diverged and tripped the guard. Pinning one
+    fixed date for both removes the real-clock dependency entirely, so the
+    test can't flake based on which day it happens to run.
+    """
+    async def _fake(db, family_id):
+        return fixed
+    monkeypatch.setattr(TaskAssignmentService, "_family_local_today", _fake)
+
 # ─── Shuffle Tests ───────────────────────────────────────────────────
 
 class TestShuffle:
@@ -435,26 +453,24 @@ class TestBonusGating:
     # balancing could put all required tasks on the parent) and was removed.
 
     async def test_bonus_allowed_when_all_required_done(
-        self, db_session, test_family, test_parent_user, test_child_user
+        self, db_session, test_family, test_parent_user, test_child_user, monkeypatch
     ):
+        today = date(2026, 1, 5)  # fixed Monday — see _pin_family_today
+        _pin_family_today(monkeypatch, today)
+
         # Create only a bonus weekly template (no required tasks)
         await _create_template(
             db_session, test_family.id, test_parent_user.id,
             title="Bonus Only", interval_days=7, is_bonus=True, points=30
         )
         assignments = await TaskAssignmentService.shuffle_tasks(
-            db_session, test_family.id, today=_this_monday()
+            db_session, test_family.id, today=today
         )
 
         # Find bonus assignment for child
         child_bonus = [a for a in assignments if a.assigned_to == test_child_user.id]
         if child_bonus:
-            # The shuffle may land the slot on a future weekday (on Sundays the
-            # whole anchored week is next week); pin it to real today so
-            # completion is valid whatever day the suite runs.
-            from datetime import date as _d
-
-            child_bonus[0].assigned_date = _d.today()
+            child_bonus[0].assigned_date = today
             await db_session.commit()
             # Should succeed: no required tasks means bonus unlocked
             completed = await TaskAssignmentService.complete_assignment(
