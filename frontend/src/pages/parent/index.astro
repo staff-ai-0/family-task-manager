@@ -36,6 +36,18 @@ const paidRecently = (Array.isArray(bankFamily) ? bankFamily : []).filter(
 );
 const paidNames = paidRecently.map((k: any) => k.name).join(", ");
 
+// Money owed to the kids (gig cash pending + chore paychecks awaiting release).
+const { data: payoutSummary } = await apiFetch<any>("/api/bank/payout-summary", { token });
+const owedGrand = payoutSummary?.grand_total_cents ?? 0;
+const owedCash = payoutSummary?.cash_total_cents ?? 0;
+const owedPaychecks = payoutSummary?.paycheck_total_cents ?? 0;
+const fmtMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+// With the gigs module off there is no payouts page (middleware bounces it);
+// paychecks are released from the Family Bank settings surface instead.
+const gigsModuleOn =
+    user.enabled_modules == null || user.enabled_modules.includes("gigs");
+const owedHref = gigsModuleOn ? "/parent/payouts" : "/parent/settings/family-bank";
+
 // Pending approvals badge — BOTH sources (task/chore proofs AND gig-board claim proofs).
 const [taskPendingRes, gigPendingRes] = await Promise.all([
     apiFetch<any[]>("/api/task-assignments/pending-approvals", { token }),
@@ -295,6 +307,25 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                         </a>
                     </div>
                 </div>
+            )}
+            {owedGrand > 0 && (
+                <a
+                    href={owedHref}
+                    class="mb-4 flex items-center justify-between gap-3 rounded-2xl bg-gradient-to-br from-emerald-700 to-emerald-600 text-white px-5 py-4 shadow-[var(--shadow-card)] hover:from-emerald-800 hover:to-emerald-700 transition-colors"
+                >
+                    <div>
+                        <p class="text-[11px] font-semibold uppercase tracking-wider text-emerald-100">
+                            💵 {lang === "es" ? "Por pagar a los kids" : "Owed to the kids"}
+                        </p>
+                        <p class="text-3xl font-extrabold tracking-tight">{fmtMoney(owedGrand)}</p>
+                        <p class="text-xs text-emerald-100 mt-0.5">
+                            {lang === "es" ? "Gigs" : "Gigs"} {fmtMoney(owedCash)}
+                            {" · "}
+                            {lang === "es" ? "Cheques de tareas" : "Chore paychecks"} {fmtMoney(owedPaychecks)}
+                        </p>
+                    </div>
+                    <span class="text-2xl font-bold" aria-hidden="true">→</span>
+                </a>
             )}
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 <a

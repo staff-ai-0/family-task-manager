@@ -519,12 +519,16 @@ class BankService:
             cash = int(kid.cash_cents or 0)
             paycheck = 0
             released = False
+            done_points = assigned_points = pct = 0
             if acct.allowance_mode in CHORE_PAYCHECK_MODES:
                 preview = await BankService.chore_paycheck_preview(
                     db, kid, family_id
                 )
                 released = bool(preview["already_released"])
                 paycheck = 0 if released else int(preview["projected_cents"])
+                done_points = preview["done_points"]
+                assigned_points = preview["assigned_points"]
+                pct = preview["pct"]
             cash_total += cash
             paycheck_total += paycheck
             rows.append({
@@ -534,6 +538,9 @@ class BankService:
                 "paycheck_cents": paycheck,
                 "paycheck_released": released,
                 "allowance_mode": acct.allowance_mode,
+                "done_points": done_points,
+                "assigned_points": assigned_points,
+                "pct": pct,
             })
         return {
             "kids": rows,

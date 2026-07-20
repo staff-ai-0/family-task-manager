@@ -85,6 +85,10 @@ class PayoutSummaryKid(BaseModel):
     paycheck_cents: int
     paycheck_released: bool
     allowance_mode: str
+    # Week progress behind paycheck_cents (0 on flat mode).
+    done_points: int = 0
+    assigned_points: int = 0
+    pct: int = 0
 
 
 class PayoutSummary(BaseModel):

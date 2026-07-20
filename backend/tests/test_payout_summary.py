@@ -127,6 +127,10 @@ async def test_payout_summary_includes_proportional_paycheck(
     assert teen["paycheck_cents"] == 20000  # 100% done → full cap
     assert teen["paycheck_released"] is False
     assert teen["allowance_mode"] == "chore_proportional"
+    # Week-progress fields feed the payouts dashboard rows.
+    assert teen["done_points"] == 10
+    assert teen["assigned_points"] == 10
+    assert teen["pct"] == 100
     assert body["paycheck_total_cents"] == 20000
     assert body["cash_total_cents"] == 3000
     assert body["grand_total_cents"] == 23000
