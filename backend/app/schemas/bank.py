@@ -78,6 +78,29 @@ class ChorePaycheckPreview(BaseModel):
     already_released: bool
 
 
+class PayoutSummaryKid(BaseModel):
+    user_id: UUID
+    name: str
+    cash_pending_cents: int
+    paycheck_cents: int
+    paycheck_released: bool
+    allowance_mode: str
+    # Week progress behind paycheck_cents (0 on flat mode).
+    done_points: int = 0
+    assigned_points: int = 0
+    pct: int = 0
+
+
+class PayoutSummary(BaseModel):
+    """Everything a parent currently owes the kids: gig cash awaiting payout
+    plus this week's chore paychecks awaiting release."""
+
+    kids: list[PayoutSummaryKid]
+    cash_total_cents: int
+    paycheck_total_cents: int
+    grand_total_cents: int
+
+
 class ChorePaycheckReleaseBody(BaseModel):
     """Optional parent adjustment (signed cents) added to the computed paycheck —
     a bonus (positive) or dock (negative). Final amount floored at 0."""
