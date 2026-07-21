@@ -16,7 +16,7 @@ if (!user) {
 if (user.role !== "parent") return Astro.redirect("/gigs");
 
 const [offeringsRes, pendingRes, proposalsRes, claimsRes, familyRes] = await Promise.all([
-    apiFetch<any[]>("/api/gigs/offerings?include_inactive=false", { token }),
+    apiFetch<any[]>("/api/gigs/offerings?include_inactive=true", { token }),
     apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token }),
     apiFetch<any[]>("/api/gigs/offerings/proposals/pending", { token }),
     apiFetch<any[]>("/api/gigs/claims/family", { token }),
@@ -24,6 +24,15 @@ const [offeringsRes, pendingRes, proposalsRes, claimsRes, familyRes] = await Pro
 ]);
 const offerings: any[] = offeringsRes.data ?? [];
 const gt = gigTerm(familyRes.data?.gig_term ?? "gig", lang);
+// include_inactive=true above (not "false") so closed gigs can still be
+// reposted from History; activeOfferings filters back to the visible list.
+const activeOfferings = offerings.filter((item: any) => (item.offering ?? item).is_active);
+const offeringById = new Map(
+    offerings.map((item: any) => {
+        const o = item.offering ?? item;
+        return [o.id, o];
+    }),
+);
 // Claim approvals now live in the unified /parent/approvals queue — keep only the
 // pending count here for the "review" link so there is a single approval surface.
 const pendingCount = Array.isArray(pendingRes.data) ? pendingRes.data.length : 0;
@@ -37,6 +46,10 @@ const history: any[] = (Array.isArray(claimsRes.data) ? claimsRes.data : [])
     .filter((c: any) => c.status !== "claimed")
     .sort((a: any, b: any) => String(claimStamp(b)).localeCompare(String(claimStamp(a))));
 const historyKids = [...new Set(history.map((c: any) => c.claimer_name).filter(Boolean))] as string[];
+const historyEnriched = history.map((c: any) => ({
+    ...c,
+    repostOffering: offeringById.get(c.gig_id) ?? null,
+}));
 const fmtDay = (iso: string | null) =>
     iso
         ? new Date(iso).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
@@ -209,14 +222,14 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 
             <!-- Gig offerings -->
             <div class="space-y-3">
-                {offerings.length === 0 && (
+                {activeOfferings.length === 0 && (
                     <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
                         <p class="text-brand-ink-soft text-sm">
                             {lang === "es" ? `No has publicado ninguna ${gt.one} aún. ¡Crea la primera!` : `No ${gt.many} posted yet. Create the first one!`}
                         </p>
                     </div>
                 )}
-                {offerings.map((item: any) => {
+                {activeOfferings.map((item: any) => {
                     const o = item.offering ?? item;
                     return (
                         <div data-gig-card class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
@@ -247,7 +260,9 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     {lang === "es" ? "Editar" : "Edit"}
                                 </button>
                                 <button
-                                    class="duplicate-gig-btn flex-1 py-2 text-sm font-semibold text-indigo-700 bg-indigo-100 rounded-xl hover:bg-indigo-200 transition-colors"
+                                    class="duplicate-gig-btn shrink-0 w-11 py-2 text-base text-indigo-700 bg-indigo-100 rounded-xl hover:bg-indigo-200 transition-colors"
+                                    aria-label={lang === "es" ? "Duplicar" : "Duplicate"}
+                                    title={lang === "es" ? "Duplicar" : "Duplicate"}
                                     data-title={o.title}
                                     data-description={o.description ?? ""}
                                     data-points={o.points}
@@ -256,13 +271,15 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     data-allow-multiple={o.allow_multiple ? "1" : "0"}
                                     data-payout-cadence={o.payout_cadence ?? "immediate"}
                                 >
-                                    {lang === "es" ? "Duplicar" : "Duplicate"}
+                                    📋
                                 </button>
                                 <button
-                                    class="archive-gig-btn flex-1 py-2 text-sm font-semibold text-brand-ink-soft bg-brand-cream-deep rounded-xl hover:bg-red-100 hover:text-red-700 transition-colors"
+                                    class="archive-gig-btn shrink-0 w-11 py-2 text-base text-brand-ink-soft bg-brand-cream-deep rounded-xl hover:bg-red-100 hover:text-red-700 transition-colors"
+                                    aria-label={lang === "es" ? "Archivar" : "Archive"}
+                                    title={lang === "es" ? "Archivar" : "Archive"}
                                     data-id={o.id}
                                 >
-                                    {lang === "es" ? "Archivar" : "Archive"}
+                                    🗄️
                                 </button>
                             </div>
                         </div>
@@ -293,7 +310,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     </div>
                 ) : (
                     <div class="space-y-2">
-                        {history.map((c: any) => (
+                        {historyEnriched.map((c: any) => (
                             <div data-history-card data-claimer={c.claimer_name ?? ""}
                                 class={`bg-brand-cream rounded-2xl p-4 border shadow-[var(--shadow-card)] ${
                                     c.status === "approved" ? "border-emerald-200"
@@ -339,6 +356,20 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                     <p class="text-[11px] text-brand-ink-soft italic mt-1.5">
                                         💬 {c.approval_notes}
                                     </p>
+                                )}
+                                {c.repostOffering && !c.repostOffering.is_active && (
+                                    <button
+                                        class="duplicate-gig-btn w-full mt-2 py-2 text-sm font-semibold text-indigo-700 bg-indigo-100 rounded-xl hover:bg-indigo-200 transition-colors"
+                                        data-title={c.repostOffering.title}
+                                        data-description={c.repostOffering.description ?? ""}
+                                        data-points={c.repostOffering.points}
+                                        data-difficulty={c.repostOffering.difficulty ?? 1}
+                                        data-category={c.repostOffering.category ?? "other"}
+                                        data-allow-multiple={c.repostOffering.allow_multiple ? "1" : "0"}
+                                        data-payout-cadence={c.repostOffering.payout_cadence ?? "immediate"}
+                                    >
+                                        {lang === "es" ? `↻ Repostar ${gt.one}` : `↻ Repost this ${gt.one}`}
+                                    </button>
                                 )}
                                 <div class="flex items-center gap-3 mt-2">
                                     <details class="flex-1" data-comments data-claim-id={c.id}>
