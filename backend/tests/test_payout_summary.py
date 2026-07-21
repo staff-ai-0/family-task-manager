@@ -148,6 +148,40 @@ async def test_payout_summary_includes_proportional_paycheck(
 
 
 @pytest.mark.asyncio
+async def test_payout_summary_outstanding_weeks_includes_backlog(
+    client, db_session, test_family, test_parent_user, test_teen_user, parent_headers,
+):
+    """The new additive fields surface a backlog the old flat fields can't:
+    a fully-elapsed unreleased past week plus the current week."""
+    await _bank_config(
+        db_session, test_teen_user,
+        allowance_mode="chore_proportional", allowance_cents=20000,
+    )
+    current_week = await _current_week_monday(db_session, test_family.id)
+    past_week = current_week - timedelta(days=7)
+    await _approved_chore(
+        db_session, test_family.id, test_parent_user.id, test_teen_user.id, 10, past_week
+    )
+    await _approved_chore(
+        db_session, test_family.id, test_parent_user.id, test_teen_user.id, 5, current_week
+    )
+
+    r = await client.get("/api/bank/payout-summary", headers=parent_headers)
+    body = r.json()
+    teen = _kid_row(body, test_teen_user.id)
+
+    weeks_seen = {w["week_of"] for w in teen["outstanding_weeks"]}
+    assert past_week.isoformat() in weeks_seen
+    assert current_week.isoformat() in weeks_seen
+    # Old current-week-only fields are completely unaffected by the backlog.
+    assert teen["paycheck_cents"] == 20000  # 100% of current_week's 5 pts
+    assert body["paycheck_total_cents"] == 20000
+    # New totals include the past week's 20000 too.
+    assert body["outstanding_paycheck_total_cents"] == 40000
+    assert body["outstanding_grand_total_cents"] == 40000
+
+
+@pytest.mark.asyncio
 async def test_payout_summary_points_rate_paycheck(
     client, db_session, test_family, test_parent_user, test_teen_user, parent_headers,
 ):

@@ -522,6 +522,39 @@ class BankService:
         return datetime.now(_safe_zoneinfo(tz_name)).date()
 
     @staticmethod
+    async def _paycheck_projection(
+        db: AsyncSession, acct: KidBankAccount, family_id: UUID, week_monday: date,
+    ) -> dict:
+        """Pure per-week paycheck math shared by chore_paycheck_preview (single,
+        current-week-biased) and list_outstanding_weeks (multi-week scan).
+        Includes assigned_units (pre-scale) so callers can decide whether a
+        week is worth surfacing without re-deriving it."""
+        done_u, assigned_u = await BankService._chore_units(
+            db, family_id, acct.user_id, week_monday
+        )
+        cap = acct.allowance_cents
+        mode = acct.allowance_mode
+        if mode == "chore_proportional":
+            amount = BankService._chore_paycheck_cents(cap, done_u, assigned_u)
+        elif mode == "chore_gated":
+            amount = BankService._chore_paycheck_gated(cap, done_u, assigned_u)
+        elif mode == "points_rate":
+            amount = BankService._points_rate_cents(
+                done_u, await BankService._family_point_value_cents(db, family_id)
+            )
+        else:
+            amount = 0
+        return {
+            "week_of": week_monday,
+            "cap_cents": cap,
+            "amount_cents": amount,
+            "done_points": round(done_u / 100) if done_u else 0,
+            "assigned_points": assigned_u // 100,
+            "pct": round(100 * done_u / assigned_u) if assigned_u else 0,
+            "assigned_units": assigned_u,
+        }
+
+    @staticmethod
     async def chore_paycheck_preview(
         db: AsyncSession, target_user: User, family_id: UUID,
         week_of: Optional[date] = None,
@@ -532,33 +565,72 @@ class BankService:
         if week_of is None:
             week_of = await BankService._family_local_today(db, family_id)
         week_monday = BankService._week_monday(week_of)
-        done_u, assigned_u = await BankService._chore_units(
-            db, family_id, target_user.id, week_monday
-        )
-        cap = acct.allowance_cents
-        mode = acct.allowance_mode
-        if mode == "chore_proportional":
-            projected = BankService._chore_paycheck_cents(cap, done_u, assigned_u)
-        elif mode == "chore_gated":
-            projected = BankService._chore_paycheck_gated(cap, done_u, assigned_u)
-        elif mode == "points_rate":
-            projected = BankService._points_rate_cents(
-                done_u, await BankService._family_point_value_cents(db, family_id)
-            )
-        else:
-            projected = 0
+        p = await BankService._paycheck_projection(db, acct, family_id, week_monday)
         return {
             "user_id": target_user.id,
-            "week_of": week_monday,
+            "week_of": p["week_of"],
             "mode": acct.allowance_mode,
-            "cap_cents": cap,
-            # Display in points (units carry ×100 grade scale).
-            "done_points": round(done_u / 100) if done_u else 0,
-            "assigned_points": assigned_u // 100,
-            "pct": round(100 * done_u / assigned_u) if assigned_u else 0,
-            "projected_cents": projected,
+            "cap_cents": p["cap_cents"],
+            "done_points": p["done_points"],
+            "assigned_points": p["assigned_points"],
+            "pct": p["pct"],
+            "projected_cents": p["amount_cents"],
             "already_released": acct.last_chore_paycheck_week == week_monday,
         }
+
+    @staticmethod
+    async def list_outstanding_weeks(
+        db: AsyncSession, target_user: User, family_id: UUID,
+        lookback_weeks: int = 8,
+    ) -> list[dict]:
+        """Every unreleased chore-paycheck week for a kid, oldest first. A
+        week counts as released when a CashTransaction(ALLOWANCE, week_of=
+        that_monday) exists — the ledger, same source chore_paycheck_history
+        already trusts — NOT last_chore_paycheck_week, which only remembers
+        the single most recent release and can't represent an out-of-order
+        past release. Past weeks are included only when something was
+        assigned that week (assigned_units > 0); the current week is always
+        included regardless, preserving the existing 'this week, in
+        progress' visibility."""
+        acct = await BankService.ensure_account(db, target_user)
+        if acct.allowance_mode not in CHORE_PAYCHECK_MODES:
+            return []
+        today = await BankService._family_local_today(db, family_id)
+        current_monday = BankService._week_monday(today)
+
+        released_weeks = set((await db.execute(
+            select(CashTransaction.week_of).where(
+                CashTransaction.user_id == target_user.id,
+                CashTransaction.family_id == family_id,
+                CashTransaction.type == CashTransactionType.ALLOWANCE,
+                CashTransaction.week_of.isnot(None),
+            )
+        )).scalars().all())
+
+        weeks: list[dict] = []
+        for i in range(lookback_weeks - 1, -1, -1):
+            week_monday = current_monday - timedelta(weeks=i)
+            is_current = week_monday == current_monday
+            if week_monday in released_weeks:
+                continue
+            projection = await BankService._paycheck_projection(
+                db, acct, family_id, week_monday
+            )
+            if not is_current and projection["assigned_units"] <= 0:
+                continue
+            tasks = await BankService._chore_week_tasks(
+                db, family_id, target_user.id, week_monday
+            )
+            weeks.append({
+                "week_of": projection["week_of"],
+                "amount_cents": projection["amount_cents"],
+                "done_points": projection["done_points"],
+                "assigned_points": projection["assigned_points"],
+                "pct": projection["pct"],
+                "is_current_week": is_current,
+                "tasks": tasks,
+            })
+        return weeks
 
     @staticmethod
     async def chore_paycheck_history(
@@ -618,6 +690,7 @@ class BankService:
         rows = []
         cash_total = 0
         paycheck_total = 0
+        outstanding_total = 0
         for kid in kids:
             acct = await BankService.ensure_account(db, kid)
             cash = int(kid.cash_cents or 0)
@@ -625,6 +698,7 @@ class BankService:
             released = False
             done_points = assigned_points = pct = 0
             tasks: list = []
+            outstanding: list = []
             if acct.allowance_mode in CHORE_PAYCHECK_MODES:
                 preview = await BankService.chore_paycheck_preview(
                     db, kid, family_id
@@ -637,8 +711,12 @@ class BankService:
                 tasks = await BankService._chore_week_tasks(
                     db, family_id, kid.id, preview["week_of"]
                 )
+                outstanding = await BankService.list_outstanding_weeks(
+                    db, kid, family_id
+                )
             cash_total += cash
             paycheck_total += paycheck
+            outstanding_total += sum(w["amount_cents"] for w in outstanding)
             rows.append({
                 "user_id": kid.id,
                 "name": kid.name,
@@ -650,12 +728,15 @@ class BankService:
                 "assigned_points": assigned_points,
                 "pct": pct,
                 "tasks": tasks,
+                "outstanding_weeks": outstanding,
             })
         return {
             "kids": rows,
             "cash_total_cents": cash_total,
             "paycheck_total_cents": paycheck_total,
             "grand_total_cents": cash_total + paycheck_total,
+            "outstanding_paycheck_total_cents": outstanding_total,
+            "outstanding_grand_total_cents": cash_total + outstanding_total,
         }
 
     @staticmethod
