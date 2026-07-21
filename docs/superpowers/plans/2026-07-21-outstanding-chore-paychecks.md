@@ -741,13 +741,21 @@ Replace that entire block (from `{paycheckKids.length > 0 && (` through its clos
                                             <div class="text-right">
                                                 <p class="text-2xl font-extrabold text-brand-mint-deep">{fmt(w.amount_cents)}</p>
                                                 <div data-release-slot class="flex items-center gap-1.5 justify-end mt-1">
-                                                    <label class="text-[11px] text-brand-ink-soft">{lang === "es" ? "Ajuste $" : "Adj $"}</label>
-                                                    <input type="number" step="1" placeholder="0" data-adjust
-                                                        class="w-14 rounded-lg border border-brand-ink/20 bg-white px-1.5 py-1 text-xs text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep" />
-                                                    <button type="button" data-release
-                                                        class="px-3 py-1.5 bg-brand-mint-deep hover:opacity-90 text-white font-semibold text-xs rounded-lg transition-opacity">
-                                                        {lang === "es" ? "Liberar" : "Release"}
-                                                    </button>
+                                                    {w.already_released ? (
+                                                        <span class="text-xs font-bold text-brand-mint-deep">
+                                                            {lang === "es" ? "Liberado ✓" : "Released ✓"}
+                                                        </span>
+                                                    ) : (
+                                                        <>
+                                                            <label class="text-[11px] text-brand-ink-soft">{lang === "es" ? "Ajuste $" : "Adj $"}</label>
+                                                            <input type="number" step="1" placeholder="0" data-adjust
+                                                                class="w-14 rounded-lg border border-brand-ink/20 bg-white px-1.5 py-1 text-xs text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep" />
+                                                            <button type="button" data-release
+                                                                class="px-3 py-1.5 bg-brand-mint-deep hover:opacity-90 text-white font-semibold text-xs rounded-lg transition-opacity">
+                                                                {lang === "es" ? "Liberar" : "Release"}
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
