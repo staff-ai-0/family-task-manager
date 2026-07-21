@@ -277,6 +277,10 @@ async def chore_paycheck_outstanding(
     including the current in-progress week. Parent only, read-only."""
     fam = to_uuid_required(current_user.family_id)
     target = await verify_user_in_family(db, user_id, fam)
+    if target.role not in (UserRole.CHILD, UserRole.TEEN):
+        raise HTTPException(
+            status_code=400, detail="Chore paycheck applies to CHILD/TEEN members only"
+        )
     weeks = await BankService.list_outstanding_weeks(db, target, fam)
     return ChorePaycheckOutstandingResponse(weeks=weeks)
 

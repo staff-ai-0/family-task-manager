@@ -399,6 +399,26 @@ async def test_history_route_parent_only(client, test_teen_user, teen_headers):
 
 
 @pytest.mark.asyncio
+async def test_outstanding_route_rejects_non_kid_target(
+    client, db_session, test_family, test_parent_user, parent_headers,
+):
+    """A parent targeting another PARENT's id must be rejected, not silently
+    create a spurious KidBankAccount row for a non-kid user."""
+    other_parent = User(
+        email=f"p{uuid4().hex[:8]}@t.com", name="Other Parent", role=UserRole.PARENT,
+        family_id=test_family.id, email_verified=True, cash_cents=0, points=0,
+        approval_status=APPROVAL_APPROVED, is_active=True,
+    )
+    db_session.add(other_parent)
+    await db_session.commit()
+
+    r = await client.get(
+        f"/api/bank/chore-paycheck/{other_parent.id}/outstanding", headers=parent_headers
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_history_route_returns_past_releases(
     client, db_session, test_family, test_parent_user, test_teen_user, parent_headers,
 ):
