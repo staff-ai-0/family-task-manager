@@ -591,43 +591,56 @@ class BankService:
         past release. Past weeks are included only when something was
         assigned that week (assigned_units > 0); the current week is always
         included regardless, preserving the existing 'this week, in
-        progress' visibility."""
+        progress' visibility.
+
+        A released current week is still included (already_released=True,
+        amount_cents reflects what was actually paid) so it never silently
+        drops off the dashboard."""
         acct = await BankService.ensure_account(db, target_user)
         if acct.allowance_mode not in CHORE_PAYCHECK_MODES:
             return []
         today = await BankService._family_local_today(db, family_id)
         current_monday = BankService._week_monday(today)
 
-        released_weeks = set((await db.execute(
-            select(CashTransaction.week_of).where(
+        released_amounts: dict = dict((await db.execute(
+            select(CashTransaction.week_of, func.sum(CashTransaction.amount_cents))
+            .where(
                 CashTransaction.user_id == target_user.id,
                 CashTransaction.family_id == family_id,
                 CashTransaction.type == CashTransactionType.ALLOWANCE,
                 CashTransaction.week_of.isnot(None),
             )
-        )).scalars().all())
+            .group_by(CashTransaction.week_of)
+        )).all())
 
         weeks: list[dict] = []
         for i in range(lookback_weeks - 1, -1, -1):
             week_monday = current_monday - timedelta(weeks=i)
             is_current = week_monday == current_monday
-            if week_monday in released_weeks:
+            is_released = week_monday in released_amounts
+            if is_released and not is_current:
+                # Fully handled past week — lives in chore_paycheck_history,
+                # not here.
                 continue
             projection = await BankService._paycheck_projection(
                 db, acct, family_id, week_monday
             )
-            if not is_current and projection["assigned_units"] <= 0:
+            if not is_current and not is_released and projection["assigned_units"] <= 0:
                 continue
             tasks = await BankService._chore_week_tasks(
                 db, family_id, target_user.id, week_monday
             )
             weeks.append({
                 "week_of": projection["week_of"],
-                "amount_cents": projection["amount_cents"],
+                # A released current week shows what was actually paid, not
+                # a re-projection — chores completed/graded after release
+                # must not change what's displayed as "what you paid".
+                "amount_cents": int(released_amounts[week_monday]) if is_released else projection["amount_cents"],
                 "done_points": projection["done_points"],
                 "assigned_points": projection["assigned_points"],
                 "pct": projection["pct"],
                 "is_current_week": is_current,
+                "already_released": is_released,
                 "tasks": tasks,
             })
         return weeks
@@ -758,7 +771,21 @@ class BankService:
                 detail="kid is not on a chore-based allowance",
             )
         week_monday = BankService._week_monday(week_of)
-        if acct.last_chore_paycheck_week == week_monday:
+        # Idempotency is ledger-truth (a CashTransaction for this exact
+        # week), not last_chore_paycheck_week — that single field only
+        # remembers the most recent release and would let an out-of-order
+        # backlog release (release week 2, then week 1) clobber it, making
+        # an already-paid week look unreleased again and risking a second
+        # payment for it.
+        already_paid = (await db.execute(
+            select(CashTransaction.id).where(
+                CashTransaction.user_id == user.id,
+                CashTransaction.family_id == family_id,
+                CashTransaction.type == CashTransactionType.ALLOWANCE,
+                CashTransaction.week_of == week_monday,
+            )
+        )).scalar_one_or_none()
+        if already_paid is not None:
             raise HTTPException(
                 status_code=409,
                 detail="chore paycheck already released for this week",
@@ -780,13 +807,17 @@ class BankService:
         else:
             base = BankService._chore_paycheck_cents(acct.allowance_cents, done, assigned)
         amount = max(0, base + int(adjustment_cents or 0))
-        if amount > 0:
-            CashService.credit_split_rows(
-                db, user, acct, family_id, amount,
-                CashTransactionType.ALLOWANCE, entitled=entitled,
-                description=f"Domingo por tareas (semana {week_monday.isoformat()})",
-                week_of=week_monday,
-            )
+        # Always leaves a ledger row, even at $0 — a genuinely empty week
+        # (kid did nothing, or a chore_gated week that missed the gate)
+        # must still be markable as "handled" so it stops reappearing as
+        # outstanding forever. credit_split_rows already supports a zero
+        # credit as a single spend-jar row (same as gig payouts do).
+        CashService.credit_split_rows(
+            db, user, acct, family_id, amount,
+            CashTransactionType.ALLOWANCE, entitled=entitled,
+            description=f"Domingo por tareas (semana {week_monday.isoformat()})",
+            week_of=week_monday,
+        )
         if amount > 0 and points_converted > 0:
             from app.models.point_transaction import PointTransaction
 

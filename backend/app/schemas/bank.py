@@ -95,7 +95,9 @@ class PayoutTaskDetail(BaseModel):
 
 class PayoutPaycheckWeek(BaseModel):
     """One chore-paycheck week for a kid — either a fully-elapsed unreleased
-    week, or the current week in progress. Same per-task shape as history."""
+    week, or the current week (in progress, or already released — the
+    current week always appears regardless of release status so the
+    dashboard never loses track of it). Same per-task shape as history."""
 
     week_of: date
     amount_cents: int
@@ -103,6 +105,7 @@ class PayoutPaycheckWeek(BaseModel):
     assigned_points: int
     pct: int
     is_current_week: bool
+    already_released: bool
     tasks: list[PayoutTaskDetail] = []
 
 

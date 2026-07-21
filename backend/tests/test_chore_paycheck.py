@@ -288,6 +288,92 @@ async def test_release_targets_an_explicit_past_week_independent_of_current(db):
 
 
 @pytest.mark.asyncio
+async def test_out_of_order_release_does_not_allow_double_pay(db):
+    """Releasing an older backlog week AFTER the current week must not make
+    the current week payable again — the money-safety bug: a single-field
+    last_chore_paycheck_week comparison gets clobbered by an out-of-order
+    release, making an already-paid week look unreleased again."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+
+    older_week = WEEK - timedelta(days=7)
+    await _chore(db, fam, parent, kid, 120, AssignmentStatus.COMPLETED, week=WEEK)
+    await _chore(db, fam, parent, kid, 60, AssignmentStatus.COMPLETED, week=older_week)
+
+    await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    await BankService.release_chore_paycheck(db, kid, fam.id, older_week, entitled=True)
+
+    with pytest.raises(Exception) as ei:
+        await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    assert getattr(ei.value, "status_code", None) == 409
+
+    u = await db.get(User, kid.id)
+    assert u.cash_cents == 50000  # both weeks paid in full once each (100% each)
+    rows = (await db.execute(
+        select(CashTransaction).where(
+            CashTransaction.user_id == kid.id,
+            CashTransaction.type == CashTransactionType.ALLOWANCE,
+        )
+    )).scalars().all()
+    assert len(rows) == 2  # the third (rejected) attempt must not have written a row
+
+
+@pytest.mark.asyncio
+async def test_zero_amount_release_still_clears_from_outstanding(db):
+    """A week where nothing was done (or a chore_gated week that missed the
+    gate) still needs to be markable as handled — otherwise a genuinely
+    missed week nags forever, defeating the point of this feature."""
+    fam = await _family(db)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_gated", allowance_cents=25000)
+    # No chores at all this week -> gated payout is 0 (assigned=0 guard).
+
+    r = await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    assert r["amount_cents"] == 0
+
+    rows = (await db.execute(
+        select(CashTransaction).where(
+            CashTransaction.user_id == kid.id,
+            CashTransaction.type == CashTransactionType.ALLOWANCE,
+        )
+    )).scalars().all()
+    assert len(rows) == 1  # a $0 row was still written
+
+    # Re-releasing the same week is still correctly blocked (idempotent) —
+    # zero amount must not be treated as "never happened".
+    with pytest.raises(Exception) as ei:
+        await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    assert getattr(ei.value, "status_code", None) == 409
+
+
+@pytest.mark.asyncio
+async def test_outstanding_weeks_shows_released_current_week_with_actual_amount(db):
+    """The current week must not vanish from the list just because it was
+    released — a kid whose only relevant week is an already-paid current
+    week must not disappear from the payouts dashboard entirely."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    current_week = await _current_week_monday(db, fam.id)
+    await _chore(db, fam, parent, kid, 60, AssignmentStatus.COMPLETED, week=current_week)
+
+    await BankService.release_chore_paycheck(
+        db, kid, fam.id, current_week, entitled=True, adjustment_cents=5000,
+    )  # 25000 base (100% of 60/60) + 5000 bonus = 30000 actually paid
+
+    weeks = await BankService.list_outstanding_weeks(db, kid, fam.id, lookback_weeks=4)
+    by_week = {w["week_of"]: w for w in weeks}
+    assert current_week in by_week
+    current = by_week[current_week]
+    assert current["is_current_week"] is True
+    assert current["already_released"] is True
+    assert current["amount_cents"] == 30000  # actual paid, including the bonus
+
+
+@pytest.mark.asyncio
 async def test_release_rejects_flat_mode(db):
     fam = await _family(db)
     kid = await _user(db, fam)
