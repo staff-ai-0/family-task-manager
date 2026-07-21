@@ -6,6 +6,33 @@ Welcome to the official **Family Task Manager** guide, the app for organizing yo
 
 ---
 
+## Prologue
+
+Every family runs into the same tension: kids need to learn responsibility and money management, but the usual tools for teaching it — chore charts, flat allowances, spreadsheets — feel like homework, not something a kid actually wants to engage with.
+
+Family Task Manager started from a simple question: what if household chores and family finances worked like a fair game with clear rules, instead of a list of obligations? That question led to a full family economy — points for responsibility, real money for extra work, rewards that are actually earned, consequences that are understood rather than resented, and a budget the whole family can see and learn to use.
+
+This guide documents the application exactly as it exists today: every module, every screen, every system rule. It's written so a parent with no technical background can read it start to finish and come away knowing exactly how to set up, use, and get real value out of the app with their family.
+
+## Executive Summary
+
+Family Task Manager combines, in a single multi-tenant application (every family is fully isolated from every other):
+
+- **Gamified tasks** — chore templates that get distributed automatically among family members every week (or manually), with rotation, difficulty, and configurable points.
+- **Two-currency economy** — **points** are earned by completing mandatory chores and redeemed for privileges in the Rewards Store; **real money ($MXN)** is earned on the **gigs** board (optional paid jobs a parent approves and pays out) and managed through the Family Bank.
+- **Rewards and consequences** — a parent-configurable rewards store, and a consequence system for when responsibilities aren't met.
+- **Envelope-based family budget** — accounts, transactions, categories, savings goals, recurring transactions, spending and cash-flow reports, AI-powered receipt scanning, and CSV bank import.
+- **Jarvis, the AI copilot** — a conversational assistant parents can use to query and manage family activity.
+- **Optional modules** — a virtual pet, meal planning, shopping lists, a family calendar, chat, kiosk mode, and analytics — each can be turned on or off per family from settings.
+
+The chapters that follow cover each of these modules in step-by-step detail.
+
+## Objective
+
+Family Task Manager's objective is to help families build real habits of responsibility and financial literacy from an early age — not through one more to-do list, but through a complete, fair, and transparent family economy that kids learn to navigate while playing, and that parents can configure and oversee without friction.
+
+---
+
 ## Table of Contents
 
 1. [Chapter 1: Getting Started](#chapter-1-getting-started)
