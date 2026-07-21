@@ -729,7 +729,12 @@ class BankService:
                 )
             cash_total += cash
             paycheck_total += paycheck
-            outstanding_total += sum(w["amount_cents"] for w in outstanding)
+            # Exclude already-released weeks (a released current week can
+            # appear here so the dashboard doesn't lose track of it, but its
+            # money already moved — it must not count as still owed).
+            outstanding_total += sum(
+                w["amount_cents"] for w in outstanding if not w.get("already_released")
+            )
             rows.append({
                 "user_id": kid.id,
                 "name": kid.name,

@@ -182,6 +182,40 @@ async def test_payout_summary_outstanding_weeks_includes_backlog(
 
 
 @pytest.mark.asyncio
+async def test_payout_summary_excludes_released_current_week_from_total(
+    client, db_session, test_family, test_parent_user, test_teen_user, parent_headers,
+):
+    """A released current week must not be double-counted into 'total owed'
+    — its money already moved to the kid, it isn't outstanding anymore."""
+    await _bank_config(
+        db_session, test_teen_user,
+        allowance_mode="chore_proportional", allowance_cents=20000,
+    )
+    current_week = await _current_week_monday(db_session, test_family.id)
+    await _approved_chore(
+        db_session, test_family.id, test_parent_user.id, test_teen_user.id, 10, current_week
+    )
+    await BankService.release_chore_paycheck(
+        db_session, test_teen_user, test_family.id, current_week, entitled=True,
+    )
+
+    r = await client.get("/api/bank/payout-summary", headers=parent_headers)
+    body = r.json()
+    teen = _kid_row(body, test_teen_user.id)
+
+    current = next(w for w in teen["outstanding_weeks"] if w["week_of"] == current_week.isoformat())
+    assert current["already_released"] is True
+    assert current["amount_cents"] == 20000  # shows what was actually paid...
+    assert body["outstanding_paycheck_total_cents"] == 0  # ...but isn't "still owed"
+    # The released amount already landed in the kid's cash wallet (release
+    # credits cash_cents), so it correctly appears there instead — the grand
+    # total must not ALSO add it from outstanding_total (that was the bug:
+    # 20000 cash + 20000 outstanding == 40000, double-counting one payout).
+    assert body["cash_total_cents"] == 20000
+    assert body["outstanding_grand_total_cents"] == 20000
+
+
+@pytest.mark.asyncio
 async def test_payout_summary_points_rate_paycheck(
     client, db_session, test_family, test_parent_user, test_teen_user, parent_headers,
 ):
