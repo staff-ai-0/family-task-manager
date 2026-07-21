@@ -766,8 +766,10 @@ class BankService:
         """Parent releases a teen's weekly chore paycheck: allowance_cents scaled
         by completed-&-approved chore points (plus an optional signed parent
         adjustment — a bonus or dock), credited split into jars. Idempotent per
-        (kid, week) via last_chore_paycheck_week. Route enforces role/tenant and
-        the premium gate (passed as ``entitled``)."""
+        (kid, week) via a CashTransaction(ALLOWANCE, week_of=that week) existence
+        check — not last_chore_paycheck_week, which only remembers the most
+        recent release and can't represent an out-of-order past one. Route
+        enforces role/tenant and the premium gate (passed as ``entitled``)."""
         user = await _get_user_locked(db, target_user.id)
         acct = await _get_or_create_account_locked(db, user, family_id)
         if acct.allowance_mode not in CHORE_PAYCHECK_MODES:
@@ -788,7 +790,7 @@ class BankService:
                 CashTransaction.family_id == family_id,
                 CashTransaction.type == CashTransactionType.ALLOWANCE,
                 CashTransaction.week_of == week_monday,
-            )
+            ).limit(1)
         )).scalar_one_or_none()
         if already_paid is not None:
             raise HTTPException(
@@ -834,7 +836,8 @@ class BankService:
                 created_by=released_by or user.id,
             ))
             user.points = max(0, int(user.points or 0) - points_converted)
-        acct.last_chore_paycheck_week = week_monday
+        if acct.last_chore_paycheck_week is None or week_monday > acct.last_chore_paycheck_week:
+            acct.last_chore_paycheck_week = week_monday
         await db.commit()
         await db.refresh(acct)
 
