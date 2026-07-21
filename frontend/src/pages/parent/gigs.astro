@@ -46,10 +46,15 @@ const history: any[] = (Array.isArray(claimsRes.data) ? claimsRes.data : [])
     .filter((c: any) => c.status !== "claimed")
     .sort((a: any, b: any) => String(claimStamp(b)).localeCompare(String(claimStamp(a))));
 const historyKids = [...new Set(history.map((c: any) => c.claimer_name).filter(Boolean))] as string[];
-const historyEnriched = history.map((c: any) => ({
-    ...c,
-    repostOffering: offeringById.get(c.gig_id) ?? null,
-}));
+const seenGigIds = new Set<string>();
+const historyEnriched = history.map((c: any) => {
+    const isFirstForGig = !seenGigIds.has(c.gig_id);
+    seenGigIds.add(c.gig_id);
+    return {
+        ...c,
+        repostOffering: isFirstForGig ? (offeringById.get(c.gig_id) ?? null) : null,
+    };
+});
 const fmtDay = (iso: string | null) =>
     iso
         ? new Date(iso).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
