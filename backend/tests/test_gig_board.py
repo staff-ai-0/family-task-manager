@@ -114,6 +114,14 @@ async def test_edit_and_deactivate_offering(client: AsyncClient, parent_headers)
     ids = [i["offering"]["id"] for i in list_res.json()]
     assert gig_id not in ids
 
+    # ...but IS returned when include_inactive=true (needed so the frontend
+    # can source a closed gig's fields to repost it from History)
+    list_all_res = await client.get(
+        "/api/gigs/offerings?include_inactive=true", headers=parent_headers
+    )
+    all_ids = [i["offering"]["id"] for i in list_all_res.json()]
+    assert gig_id in all_ids
+
 
 @pytest.mark.asyncio
 async def test_parent_edit_of_pending_proposal_keeps_it_pending(

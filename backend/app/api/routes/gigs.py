@@ -136,12 +136,15 @@ class ApproveClaimRequest(BaseModel):
 
 @router.get("/offerings", response_model=List[EnrichedOfferingResponse])
 async def list_offerings(
+    include_inactive: bool = Query(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     family_id = to_uuid_required(current_user.family_id)
     user_id = to_uuid_required(current_user.id)
-    items = await GigOfferingService.list_for_family(db, family_id, user_id)
+    items = await GigOfferingService.list_for_family(
+        db, family_id, user_id, include_inactive=include_inactive
+    )
     return [
         EnrichedOfferingResponse(
             offering=GigOfferingResponse.model_validate(item["offering"]),
