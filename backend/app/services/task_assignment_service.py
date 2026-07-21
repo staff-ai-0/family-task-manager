@@ -903,6 +903,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 TaskAssignment.week_of == week_monday,
                 TaskAssignment.status == AssignmentStatus.PENDING,
                 TaskAssignment.template_id.not_in(interval_template_ids),
+                TaskAssignment.assigned_date >= today,
             )
         )
         await db.execute(delete_stmt)
