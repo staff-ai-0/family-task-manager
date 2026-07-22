@@ -124,28 +124,37 @@ async def create_family_and_users(session: AsyncSession):
     return family, mom, dad, emma, lucas
 
 
-async def create_e2e_account(session: AsyncSession):
-    """Provision the dedicated E2E parent account in its own family.
+async def create_e2e_account(
+    session: AsyncSession,
+    email: str = "e2e-fresh@example.com",
+    password: str = "fresh1234",
+    family_name: str = "E2E Test Family",
+    name: str = "E2E Parent",
+):
+    """Provision a dedicated E2E parent account in its own family.
 
     The Playwright suite logs in as e2e-fresh@example.com / fresh1234 (see
-    e2e-tests/helpers/auth.js + README). Seeding it here makes `re-seed then run
-    E2E` reproducible — otherwise every TRUNCATE wipes a manually-created account
-    and the whole suite fails at login. Email is pre-verified so no verification
-    banner / extra me-status polling slows the post-login dashboard render.
+    e2e-tests/helpers/auth.js + README) for most specs, plus a second,
+    deliberately-unsubscribed account (e2e-free@example.com — see caller in
+    main()) for the free-tier paywall-gating tests. Seeding both here makes
+    `re-seed then run E2E` reproducible — otherwise every TRUNCATE wipes a
+    manually-created account and the whole suite fails at login. Email is
+    pre-verified so no verification banner / extra me-status polling slows
+    the post-login dashboard render.
     """
-    print("\nCreating E2E test account...")
-    e2e_family = Family(name="E2E Test Family")
+    print(f"\nCreating E2E test account ({email})...")
+    e2e_family = Family(name=family_name)
     session.add(e2e_family)
     await session.flush()
     e2e_parent = User(
-        email="e2e-fresh@example.com",
-        password_hash=get_password_hash("fresh1234"),
-        name="E2E Parent", role=UserRole.PARENT,
+        email=email,
+        password_hash=get_password_hash(password),
+        name=name, role=UserRole.PARENT,
         family_id=e2e_family.id, email_verified=True, points=0,
     )
     session.add(e2e_parent)
     await session.commit()
-    print("  e2e-fresh@example.com / fresh1234 (PARENT, verified)")
+    print(f"  {email} / {password} (PARENT, verified)")
     return e2e_family, e2e_parent
 
 
@@ -914,6 +923,19 @@ async def main():
         # suite instead of always hitting the upgrade-lock screen.
         e2e_family, _e2e_parent = await create_e2e_account(session)
         await create_demo_subscription(session, e2e_family, plans)
+
+        # A second, deliberately-unsubscribed E2E account for the free-tier
+        # paywall-gating tests (jarvis.spec.js's "free-plan parent sees
+        # upsell" case) — e2e-fresh above is now Plus, so that test needs
+        # its own account rather than sharing one that other specs expect
+        # to be entitled.
+        await create_e2e_account(
+            session,
+            email="e2e-free@example.com",
+            password="free1234",
+            family_name="E2E Free-Tier Test Family",
+            name="E2E Free Parent",
+        )
 
     await engine.dispose()
 

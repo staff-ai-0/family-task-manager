@@ -3,6 +3,11 @@ const { test, expect } = require('@playwright/test');
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3003';
 const EMAIL = process.env.E2E_EMAIL || 'e2e-fresh@example.com';
 const PASSWORD = process.env.E2E_PASSWORD || 'fresh1234';
+// e2e-fresh is on Plus (other specs — jarvis-schedules, scanner-v2 — need
+// AI-gated pages to render for real, not the upsell screen). This gating
+// test needs a genuinely unsubscribed account instead (backend/seed_data.py).
+const FREE_EMAIL = process.env.E2E_FREE_EMAIL || 'e2e-free@example.com';
+const FREE_PASSWORD = process.env.E2E_FREE_PASSWORD || 'free1234';
 
 async function login(page) {
   await page.goto(`${BASE_URL}/login`);
@@ -13,10 +18,19 @@ async function login(page) {
   await page.waitForURL('**/dashboard', { timeout: 30000 });
 }
 
+async function loginFree(page) {
+  await page.goto(`${BASE_URL}/login`);
+  await page.waitForLoadState('networkidle');
+  await page.fill('input[name="email"]', FREE_EMAIL);
+  await page.fill('input[name="password"]', FREE_PASSWORD);
+  await page.click('#login-submit-btn');
+  await page.waitForURL('**/dashboard', { timeout: 30000 });
+}
+
 test.describe('Jarvis copilot', () => {
   test('free-plan parent sees upsell instead of chat input', async ({ page }) => {
-    // e2e-fresh has no subscription → free plan → Jarvis is paid-only.
-    await login(page);
+    // e2e-free has no subscription → free plan → Jarvis is paid-only.
+    await loginFree(page);
     await page.goto(`${BASE_URL}/parent/jarvis`);
     await expect(page.locator('h1')).toContainText('Jarvis');
     await expect(page.locator('a[href*="subscription"]')).toBeVisible();
