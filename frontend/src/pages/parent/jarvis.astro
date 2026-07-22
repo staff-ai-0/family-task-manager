@@ -151,6 +151,7 @@ if (isTeen) {
                     <option value="gemini-2.5-flash">💎 Gemini 2.5 Flash</option>
                     <option value="claude-haiku">⚡ Claude Haiku</option>
                     <option value="qwen3">🖥️ Qwen 2.5 7B · GPU</option>
+                    <option value="mistral-nemo">🖥️ Mistral Nemo · GPU</option>
                 </select>
             </div>
     </Fragment>
@@ -229,7 +230,7 @@ if (isTeen) {
         // invalid/stale persisted choice (e.g. from before platform#86 was
         // resolved, or a since-removed model) falls back to the default
         // rather than silently sending a model the key can't reach.
-        const VALID_MODELS = ["gemini-2.5-flash", "claude-haiku", "qwen3"];
+        const VALID_MODELS = ["gemini-2.5-flash", "claude-haiku", "qwen3", "mistral-nemo"];
         const DEFAULT_MODEL = "gemini-2.5-flash";
         let savedModel = localStorage.getItem("jarvis-model");
         if (!savedModel || !VALID_MODELS.includes(savedModel)) {
@@ -469,6 +470,7 @@ if (isTeen) {
                                     "gpt-4o":           { label: "GPT-4o",             icon: "🟢", color: "bg-green-100 text-green-700" },
                                     "gemini-2.5-flash": { label: "Gemini 2.5 Flash",   icon: "💎", color: "bg-sky-100 text-sky-700" },
                                     "qwen3":            { label: "Qwen 2.5 7B · GPU",  icon: "🖥️", color: "bg-gray-100 text-gray-600" },
+                                    "mistral-nemo":     { label: "Mistral Nemo · GPU", icon: "🖥️", color: "bg-gray-100 text-gray-600" },
                                 };
                                 const bot = document.createElement("div");
                                 bot.className = "flex justify-start flex-col gap-1";

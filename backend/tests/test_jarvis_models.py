@@ -10,12 +10,19 @@ key's grant now includes qwen3 + claude-haiku (the naming-drift the issue
 also flagged — the app requested "claude-haiku", the key only granted
 "haiku"). claude-sonnet/gpt-4o's Anthropic/OpenAI upstream fix was never
 confirmed in that thread, so they stay out — re-expand only once verified.
+
+2026-07-22: mistral-nemo (Ollama) added to litellm_config.yaml model_list
+alongside qwen3, confirmed 200 end-to-end via the FTM key. Note: the GPU
+box (2x12GB) can't hold qwen2.5:7b + qwen2.5vl:7b + mistral-nemo:12b
+loaded simultaneously — Ollama evicts under VRAM pressure despite
+keep_alive=-1, causing ~20s cold-reload latency on the next request to
+whichever model got evicted. Not a correctness bug, just a shared-GPU cost.
 """
 from app.api.routes.jarvis import ALLOWED_MODELS
 from app.core.config import settings
 
-# Models confirmed working end-to-end with the FTM key (platform#86).
-WORKING_MODELS = {"gemini-2.5-flash", "qwen3", "claude-haiku"}
+# Models confirmed working end-to-end with the FTM key (platform#86, mistral-nemo 2026-07-22).
+WORKING_MODELS = {"gemini-2.5-flash", "qwen3", "claude-haiku", "mistral-nemo"}
 
 
 def test_all_offered_models_work_end_to_end():
@@ -33,6 +40,10 @@ def test_qwen3_and_claude_haiku_offered_now_platform_granted():
     # platform#86 fix: both now reach the LiteLLM proxy end-to-end.
     assert "qwen3" in ALLOWED_MODELS
     assert "claude-haiku" in ALLOWED_MODELS
+
+
+def test_mistral_nemo_offered():
+    assert "mistral-nemo" in ALLOWED_MODELS
 
 
 def test_unconfirmed_upstreams_stay_out():
