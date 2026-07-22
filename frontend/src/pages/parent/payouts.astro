@@ -238,20 +238,33 @@ const dayLabel = (iso: string): string =>
                                             </div>
                                             <div class="text-right">
                                                 <p class="text-2xl font-extrabold text-brand-mint-deep">{fmt(w.amount_cents)}</p>
-                                                <div data-release-slot class="flex items-center gap-1.5 justify-end mt-1">
+                                                <div data-release-slot class="flex flex-col items-end gap-1 mt-1">
                                                     {w.already_released ? (
                                                         <span class="text-xs font-bold text-brand-mint-deep">
                                                             {lang === "es" ? "Liberado ✓" : "Released ✓"}
                                                         </span>
                                                     ) : (
                                                         <>
-                                                            <label class="text-[11px] text-brand-ink-soft">{lang === "es" ? "Ajuste $" : "Adj $"}</label>
-                                                            <input type="number" step="1" placeholder="0" data-adjust
-                                                                class="w-14 rounded-lg border border-brand-ink/20 bg-white px-1.5 py-1 text-xs text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep" />
-                                                            <button type="button" data-release
-                                                                class="px-3 py-1.5 bg-brand-mint-deep hover:opacity-90 text-white font-semibold text-xs rounded-lg transition-opacity">
-                                                                {lang === "es" ? "Liberar" : "Release"}
-                                                            </button>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <label
+                                                                    class="text-[11px] text-brand-ink-soft"
+                                                                    title={lang === "es"
+                                                                        ? "Bono o descuento EXTRA sobre el monto de arriba — no escribas aquí el total a pagar"
+                                                                        : "Extra bonus or dock ON TOP of the amount above — don't type the total to pay here"}
+                                                                >
+                                                                    {lang === "es" ? "+ Ajuste $" : "+ Adj $"}
+                                                                </label>
+                                                                <input type="number" step="1" placeholder="0" data-adjust
+                                                                    class="w-14 rounded-lg border border-brand-ink/20 bg-white px-1.5 py-1 text-xs text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep" />
+                                                                <button type="button" data-release
+                                                                    class="px-3 py-1.5 bg-brand-mint-deep hover:opacity-90 text-white font-semibold text-xs rounded-lg transition-opacity">
+                                                                    {lang === "es" ? "Liberar" : "Release"}
+                                                                </button>
+                                                            </div>
+                                                            <p class="text-[11px] text-brand-ink-soft">
+                                                                {lang === "es" ? "Total a liberar: " : "Total to release: "}
+                                                                <span class="font-bold text-brand-ink" data-total-value>{fmt(w.amount_cents)}</span>
+                                                            </p>
                                                         </>
                                                     )}
                                                 </div>
@@ -387,8 +400,16 @@ const dayLabel = (iso: string): string =>
         const projected = parseInt(row.getAttribute("data-amount-cents") || "0", 10);
         const kidId = row.getAttribute("data-kid-id");
         const adjustEl = row.querySelector("[data-adjust]");
+        const totalValueEl = row.querySelector("[data-total-value]");
         const msgEl = row.querySelector("[data-msg]");
         const slot = row.querySelector("[data-release-slot]");
+
+        const updateTotalPreview = () => {
+            if (!totalValueEl) return;
+            const adj = Math.round((parseFloat(adjustEl?.value || "0") || 0) * 100);
+            totalValueEl.textContent = fmt(Math.max(0, projected + adj));
+        };
+        adjustEl?.addEventListener("input", updateTotalPreview);
 
         btn.addEventListener("click", async () => {
             const adjustCents = Math.round((parseFloat(adjustEl?.value || "0") || 0) * 100);
