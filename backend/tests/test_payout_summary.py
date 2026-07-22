@@ -148,6 +148,74 @@ async def test_payout_summary_includes_proportional_paycheck(
 
 
 @pytest.mark.asyncio
+async def test_payout_summary_outstanding_weeks_includes_backlog(
+    client, db_session, test_family, test_parent_user, test_teen_user, parent_headers,
+):
+    """The new additive fields surface a backlog the old flat fields can't:
+    a fully-elapsed unreleased past week plus the current week."""
+    await _bank_config(
+        db_session, test_teen_user,
+        allowance_mode="chore_proportional", allowance_cents=20000,
+    )
+    current_week = await _current_week_monday(db_session, test_family.id)
+    past_week = current_week - timedelta(days=7)
+    await _approved_chore(
+        db_session, test_family.id, test_parent_user.id, test_teen_user.id, 10, past_week
+    )
+    await _approved_chore(
+        db_session, test_family.id, test_parent_user.id, test_teen_user.id, 5, current_week
+    )
+
+    r = await client.get("/api/bank/payout-summary", headers=parent_headers)
+    body = r.json()
+    teen = _kid_row(body, test_teen_user.id)
+
+    weeks_seen = {w["week_of"] for w in teen["outstanding_weeks"]}
+    assert past_week.isoformat() in weeks_seen
+    assert current_week.isoformat() in weeks_seen
+    # Old current-week-only fields are completely unaffected by the backlog.
+    assert teen["paycheck_cents"] == 20000  # 100% of current_week's 5 pts
+    assert body["paycheck_total_cents"] == 20000
+    # New totals include the past week's 20000 too.
+    assert body["outstanding_paycheck_total_cents"] == 40000
+    assert body["outstanding_grand_total_cents"] == 40000
+
+
+@pytest.mark.asyncio
+async def test_payout_summary_excludes_released_current_week_from_total(
+    client, db_session, test_family, test_parent_user, test_teen_user, parent_headers,
+):
+    """A released current week must not be double-counted into 'total owed'
+    — its money already moved to the kid, it isn't outstanding anymore."""
+    await _bank_config(
+        db_session, test_teen_user,
+        allowance_mode="chore_proportional", allowance_cents=20000,
+    )
+    current_week = await _current_week_monday(db_session, test_family.id)
+    await _approved_chore(
+        db_session, test_family.id, test_parent_user.id, test_teen_user.id, 10, current_week
+    )
+    await BankService.release_chore_paycheck(
+        db_session, test_teen_user, test_family.id, current_week, entitled=True,
+    )
+
+    r = await client.get("/api/bank/payout-summary", headers=parent_headers)
+    body = r.json()
+    teen = _kid_row(body, test_teen_user.id)
+
+    current = next(w for w in teen["outstanding_weeks"] if w["week_of"] == current_week.isoformat())
+    assert current["already_released"] is True
+    assert current["amount_cents"] == 20000  # shows what was actually paid...
+    assert body["outstanding_paycheck_total_cents"] == 0  # ...but isn't "still owed"
+    # The released amount already landed in the kid's cash wallet (release
+    # credits cash_cents), so it correctly appears there instead — the grand
+    # total must not ALSO add it from outstanding_total (that was the bug:
+    # 20000 cash + 20000 outstanding == 40000, double-counting one payout).
+    assert body["cash_total_cents"] == 20000
+    assert body["outstanding_grand_total_cents"] == 20000
+
+
+@pytest.mark.asyncio
 async def test_payout_summary_points_rate_paycheck(
     client, db_session, test_family, test_parent_user, test_teen_user, parent_headers,
 ):
@@ -328,6 +396,26 @@ async def test_history_route_parent_only(client, test_teen_user, teen_headers):
         f"/api/bank/chore-paycheck/{test_teen_user.id}/history", headers=teen_headers
     )
     assert r.status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_outstanding_route_rejects_non_kid_target(
+    client, db_session, test_family, test_parent_user, parent_headers,
+):
+    """A parent targeting another PARENT's id must be rejected, not silently
+    create a spurious KidBankAccount row for a non-kid user."""
+    other_parent = User(
+        email=f"p{uuid4().hex[:8]}@t.com", name="Other Parent", role=UserRole.PARENT,
+        family_id=test_family.id, email_verified=True, cash_cents=0, points=0,
+        approval_status=APPROVAL_APPROVED, is_active=True,
+    )
+    db_session.add(other_parent)
+    await db_session.commit()
+
+    r = await client.get(
+        f"/api/bank/chore-paycheck/{other_parent.id}/outstanding", headers=parent_headers
+    )
+    assert r.status_code == 400
 
 
 @pytest.mark.asyncio

@@ -93,6 +93,22 @@ class PayoutTaskDetail(BaseModel):
     approval_notes: Optional[str] = None
 
 
+class PayoutPaycheckWeek(BaseModel):
+    """One chore-paycheck week for a kid — either a fully-elapsed unreleased
+    week, or the current week (in progress, or already released — the
+    current week always appears regardless of release status so the
+    dashboard never loses track of it). Same per-task shape as history."""
+
+    week_of: date
+    amount_cents: int
+    done_points: int
+    assigned_points: int
+    pct: int
+    is_current_week: bool
+    already_released: bool
+    tasks: list[PayoutTaskDetail] = []
+
+
 class PayoutSummaryKid(BaseModel):
     user_id: UUID
     name: str
@@ -106,16 +122,23 @@ class PayoutSummaryKid(BaseModel):
     pct: int = 0
     # Per-task breakdown of the week (empty on flat mode).
     tasks: list[PayoutTaskDetail] = []
+    # Every unreleased week (past + current), oldest first — empty on flat mode.
+    outstanding_weeks: list[PayoutPaycheckWeek] = []
 
 
 class PayoutSummary(BaseModel):
     """Everything a parent currently owes the kids: gig cash awaiting payout
-    plus this week's chore paychecks awaiting release."""
+    plus chore paychecks awaiting release. paycheck_total_cents/grand_total_cents
+    stay current-week-only (unchanged); outstanding_*_total_cents sum across
+    every outstanding week including past ones — the honest "what do I owe
+    right now" figure the payouts dashboard should show."""
 
     kids: list[PayoutSummaryKid]
     cash_total_cents: int
     paycheck_total_cents: int
     grand_total_cents: int
+    outstanding_paycheck_total_cents: int
+    outstanding_grand_total_cents: int
 
 
 class PayoutWeekHistory(BaseModel):
@@ -133,10 +156,17 @@ class PayoutHistoryResponse(BaseModel):
     has_more: bool
 
 
+class ChorePaycheckOutstandingResponse(BaseModel):
+    weeks: list[PayoutPaycheckWeek]
+
+
 class ChorePaycheckReleaseBody(BaseModel):
     """Optional parent adjustment (signed cents) added to the computed paycheck —
-    a bonus (positive) or dock (negative). Final amount floored at 0."""
+    a bonus (positive) or dock (negative). Final amount floored at 0. week_of
+    targets a specific week (any date in it; normalized to that week's Monday
+    server-side) — omit to release the current week, unchanged default."""
     adjustment_cents: int = Field(0, ge=-100000, le=100000)
+    week_of: Optional[date] = None
 
 
 class ChorePaycheckReleaseResult(BaseModel):

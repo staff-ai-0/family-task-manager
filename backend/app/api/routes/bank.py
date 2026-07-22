@@ -22,6 +22,7 @@ from app.schemas.bank import (
     BankRequestResponse,
     BankSettingsUpdate,
     BankTransferRequest,
+    ChorePaycheckOutstandingResponse,
     ChorePaycheckPreview,
     ChorePaycheckReleaseBody,
     ChorePaycheckReleaseResult,
@@ -220,9 +221,11 @@ async def release_chore_paycheck(
     current_user: User = Depends(require_parent_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Parent releases a teen's chore paycheck for the current (family-local)
-    week — credits allowance_cents × completion (± optional adjustment), split
-    into jars. Premium-gated (Family-Bank automation); idempotent per (kid, week)."""
+    """Parent releases a teen's chore paycheck for a given (family-local)
+    week — defaults to the current week when week_of is omitted, so any
+    existing caller is unaffected. Credits allowance_cents × completion (±
+    optional adjustment), split into jars. Premium-gated (Family-Bank
+    automation); idempotent per (kid, week)."""
     fam = to_uuid_required(current_user.family_id)
     target = await verify_user_in_family(db, user_id, fam)
     if target.role not in (UserRole.CHILD, UserRole.TEEN):
@@ -230,9 +233,13 @@ async def release_chore_paycheck(
             status_code=400, detail="Chore paycheck applies to CHILD/TEEN members only"
         )
     await require_feature("family_bank_automation", db, current_user)
-    week_of = await BankService._family_local_today(db, fam)
+    today = await BankService._family_local_today(db, fam)
+    week_of = (body.week_of if body and body.week_of else None) or today
+    week_monday = BankService._week_monday(week_of)
+    if week_monday > BankService._week_monday(today):
+        raise HTTPException(status_code=422, detail="week_of cannot be in the future")
     result = await BankService.release_chore_paycheck(
-        db, target, fam, week_of, entitled=True,
+        db, target, fam, week_monday, entitled=True,
         adjustment_cents=(body.adjustment_cents if body else 0),
         released_by=to_uuid_required(current_user.id),
     )
@@ -256,6 +263,26 @@ async def chore_paycheck_history(
     return PayoutHistoryResponse(
         **await BankService.chore_paycheck_history(db, target, fam, limit=limit)
     )
+
+
+@router.get(
+    "/chore-paycheck/{user_id}/outstanding", response_model=ChorePaycheckOutstandingResponse
+)
+async def chore_paycheck_outstanding(
+    user_id: UUID,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Every unreleased chore-paycheck week for a kid (oldest first),
+    including the current in-progress week. Parent only, read-only."""
+    fam = to_uuid_required(current_user.family_id)
+    target = await verify_user_in_family(db, user_id, fam)
+    if target.role not in (UserRole.CHILD, UserRole.TEEN):
+        raise HTTPException(
+            status_code=400, detail="Chore paycheck applies to CHILD/TEEN members only"
+        )
+    weeks = await BankService.list_outstanding_weeks(db, target, fam)
+    return ChorePaycheckOutstandingResponse(weeks=weeks)
 
 
 @router.post("/transfer", response_model=JarBalances)

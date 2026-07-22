@@ -44,6 +44,16 @@ async def _user(db, fam, role=UserRole.TEEN):
     return u
 
 
+async def _current_week_monday(db, family_id):
+    """Real current week (family-local), for tests whose assertions depend on
+    'today' rather than an arbitrary fixed reference date like WEEK — WEEK is
+    a fixed constant used elsewhere in this file only as an explicit week_of
+    argument, never as a stand-in for 'today' (clock-drift trap; see
+    test_payout_summary.py's identical helper)."""
+    today = await BankService._family_local_today(db, family_id)
+    return BankService._week_monday(today)
+
+
 async def _config(db, kid, **kw):
     acct = await BankService.ensure_account(db, kid)
     for k, v in kw.items():
@@ -189,6 +199,230 @@ async def test_release_records_week_of(db):
         )
     )).scalar_one()
     assert row.week_of == WEEK
+
+
+# ── outstanding weeks (the payout-backlog fix) ────────────────────────────
+
+@pytest.mark.asyncio
+async def test_outstanding_weeks_includes_unreleased_past_and_current(db):
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+
+    # Anchored to the real current week (not the fixed WEEK constant used
+    # elsewhere in this file) since list_outstanding_weeks derives "current"
+    # from _family_local_today.
+    current_week = await _current_week_monday(db, fam.id)
+    past_week = current_week - timedelta(days=7)
+    await _chore(db, fam, parent, kid, 100, AssignmentStatus.COMPLETED, week=past_week)
+    await _chore(db, fam, parent, kid, 50, AssignmentStatus.COMPLETED, week=current_week)
+
+    weeks = await BankService.list_outstanding_weeks(
+        db, kid, fam.id, lookback_weeks=4
+    )
+    by_week = {w["week_of"]: w for w in weeks}
+    assert past_week in by_week
+    assert by_week[past_week]["is_current_week"] is False
+    assert by_week[past_week]["amount_cents"] == 25000  # 100% of past_week's 100 pts
+    assert current_week in by_week
+    assert by_week[current_week]["is_current_week"] is True
+    # Oldest first.
+    assert [w["week_of"] for w in weeks] == sorted(by_week.keys())
+
+
+@pytest.mark.asyncio
+async def test_outstanding_weeks_excludes_already_released(db):
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+
+    past_week = WEEK - timedelta(days=7)
+    await _chore(db, fam, parent, kid, 100, AssignmentStatus.COMPLETED, week=past_week)
+    await BankService.release_chore_paycheck(db, kid, fam.id, past_week, entitled=True)
+
+    weeks = await BankService.list_outstanding_weeks(
+        db, kid, fam.id, lookback_weeks=4
+    )
+    assert past_week not in {w["week_of"] for w in weeks}
+
+
+@pytest.mark.asyncio
+async def test_outstanding_weeks_excludes_past_week_with_nothing_assigned(db):
+    fam = await _family(db)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    # No chores at all — only the current week (always included) should appear.
+    current_week = await _current_week_monday(db, fam.id)
+    weeks = await BankService.list_outstanding_weeks(
+        db, kid, fam.id, lookback_weeks=4
+    )
+    assert [w["week_of"] for w in weeks] == [current_week]
+
+
+@pytest.mark.asyncio
+async def test_release_targets_an_explicit_past_week_independent_of_current(db):
+    """Releasing an old week must pay THAT week's math and must not touch
+    the current (still in-progress) week's own eligibility."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+
+    past_week = WEEK - timedelta(days=14)
+    mid_week = WEEK - timedelta(days=7)
+    await _chore(db, fam, parent, kid, 100, AssignmentStatus.COMPLETED, week=past_week)  # 100%
+    await _chore(db, fam, parent, kid, 40, AssignmentStatus.COMPLETED, week=mid_week)    # will stay outstanding
+    await _chore(db, fam, parent, kid, 50, AssignmentStatus.COMPLETED, week=WEEK)        # current week
+
+    r = await BankService.release_chore_paycheck(db, kid, fam.id, past_week, entitled=True)
+    assert r["amount_cents"] == 25000
+    assert r["week_of"] == past_week
+
+    weeks = await BankService.list_outstanding_weeks(db, kid, fam.id, lookback_weeks=4)
+    remaining = {w["week_of"] for w in weeks}
+    assert past_week not in remaining          # just released
+    assert mid_week in remaining               # still outstanding
+    assert WEEK in remaining                   # current week, still shown
+
+
+@pytest.mark.asyncio
+async def test_out_of_order_release_does_not_allow_double_pay(db):
+    """Releasing an older backlog week AFTER the current week must not make
+    the current week payable again — the money-safety bug: a single-field
+    last_chore_paycheck_week comparison gets clobbered by an out-of-order
+    release, making an already-paid week look unreleased again."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+
+    older_week = WEEK - timedelta(days=7)
+    await _chore(db, fam, parent, kid, 120, AssignmentStatus.COMPLETED, week=WEEK)
+    await _chore(db, fam, parent, kid, 60, AssignmentStatus.COMPLETED, week=older_week)
+
+    await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    await BankService.release_chore_paycheck(db, kid, fam.id, older_week, entitled=True)
+
+    with pytest.raises(Exception) as ei:
+        await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    assert getattr(ei.value, "status_code", None) == 409
+
+    u = await db.get(User, kid.id)
+    assert u.cash_cents == 50000  # both weeks paid in full once each (100% each)
+    rows = (await db.execute(
+        select(CashTransaction).where(
+            CashTransaction.user_id == kid.id,
+            CashTransaction.type == CashTransactionType.ALLOWANCE,
+        )
+    )).scalars().all()
+    assert len(rows) == 2  # the third (rejected) attempt must not have written a row
+
+
+@pytest.mark.asyncio
+async def test_release_with_split_jars_does_not_crash_on_repeat_attempt(db):
+    """credit_split_rows writes one row per non-zero jar — a second release
+    attempt for a week paid across multiple jars must still 409 cleanly,
+    not crash on finding more than one matching ledger row."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(
+        db, kid, allowance_mode="chore_proportional", allowance_cents=25000,
+        split_spend_pct=50, split_save_pct=30, split_share_pct=20,
+    )
+    await _chore(db, fam, parent, kid, 120, AssignmentStatus.COMPLETED)  # 100%
+
+    await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    rows = (await db.execute(
+        select(CashTransaction).where(
+            CashTransaction.user_id == kid.id,
+            CashTransaction.type == CashTransactionType.ALLOWANCE,
+        )
+    )).scalars().all()
+    assert len(rows) == 3  # one row per non-zero jar (spend/save/share)
+
+    with pytest.raises(Exception) as ei:
+        await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    assert getattr(ei.value, "status_code", None) == 409  # clean 409, not a crash
+
+
+@pytest.mark.asyncio
+async def test_last_chore_paycheck_week_never_regresses(db):
+    """Releasing an older backlog week after the current week must not move
+    last_chore_paycheck_week backward — that field feeds chore_paycheck_preview
+    (kid's own meter) and the parent-reminder sweep, both of which would
+    otherwise treat the already-paid current week as still unreleased."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+
+    older_week = WEEK - timedelta(days=7)
+    await _chore(db, fam, parent, kid, 120, AssignmentStatus.COMPLETED, week=WEEK)
+    await _chore(db, fam, parent, kid, 60, AssignmentStatus.COMPLETED, week=older_week)
+
+    await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    await BankService.release_chore_paycheck(db, kid, fam.id, older_week, entitled=True)
+
+    acct = (await db.execute(
+        select(KidBankAccount).where(KidBankAccount.user_id == kid.id)
+    )).scalar_one()
+    assert acct.last_chore_paycheck_week == WEEK  # not clobbered back to older_week
+
+
+@pytest.mark.asyncio
+async def test_zero_amount_release_still_clears_from_outstanding(db):
+    """A week where nothing was done (or a chore_gated week that missed the
+    gate) still needs to be markable as handled — otherwise a genuinely
+    missed week nags forever, defeating the point of this feature."""
+    fam = await _family(db)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_gated", allowance_cents=25000)
+    # No chores at all this week -> gated payout is 0 (assigned=0 guard).
+
+    r = await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    assert r["amount_cents"] == 0
+
+    rows = (await db.execute(
+        select(CashTransaction).where(
+            CashTransaction.user_id == kid.id,
+            CashTransaction.type == CashTransactionType.ALLOWANCE,
+        )
+    )).scalars().all()
+    assert len(rows) == 1  # a $0 row was still written
+
+    # Re-releasing the same week is still correctly blocked (idempotent) —
+    # zero amount must not be treated as "never happened".
+    with pytest.raises(Exception) as ei:
+        await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    assert getattr(ei.value, "status_code", None) == 409
+
+
+@pytest.mark.asyncio
+async def test_outstanding_weeks_shows_released_current_week_with_actual_amount(db):
+    """The current week must not vanish from the list just because it was
+    released — a kid whose only relevant week is an already-paid current
+    week must not disappear from the payouts dashboard entirely."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    current_week = await _current_week_monday(db, fam.id)
+    await _chore(db, fam, parent, kid, 60, AssignmentStatus.COMPLETED, week=current_week)
+
+    await BankService.release_chore_paycheck(
+        db, kid, fam.id, current_week, entitled=True, adjustment_cents=5000,
+    )  # 25000 base (100% of 60/60) + 5000 bonus = 30000 actually paid
+
+    weeks = await BankService.list_outstanding_weeks(db, kid, fam.id, lookback_weeks=4)
+    by_week = {w["week_of"]: w for w in weeks}
+    assert current_week in by_week
+    current = by_week[current_week]
+    assert current["is_current_week"] is True
+    assert current["already_released"] is True
+    assert current["amount_cents"] == 30000  # actual paid, including the bonus
 
 
 @pytest.mark.asyncio

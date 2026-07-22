@@ -17,14 +17,17 @@ const { data: kidsData } = await apiFetch<any[]>("/api/cash/family", { token });
 const kids: any[] = Array.isArray(kidsData) ? kidsData : [];
 const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
-// Aggregate owed: gig cash pending + this week's chore paychecks to release.
+// Aggregate owed: gig cash pending + every unreleased chore-paycheck week
+// (not just this week's — outstanding_* totals include the full backlog).
 const { data: summary } = await apiFetch<any>("/api/bank/payout-summary", { token });
 const cashTotal = summary?.cash_total_cents ?? 0;
-const paycheckTotal = summary?.paycheck_total_cents ?? 0;
-const grandTotal = summary?.grand_total_cents ?? 0;
-// Kids on a parent-released allowance mode → weekly paycheck rows.
+const paycheckTotal = summary?.outstanding_paycheck_total_cents ?? 0;
+const grandTotal = summary?.outstanding_grand_total_cents ?? 0;
+// Kids with at least one outstanding week (current week is always present
+// for any chore-based mode, so this matches "not flat mode" in practice —
+// plus it naturally surfaces backlog weeks too).
 const paycheckKids: any[] = (summary?.kids ?? []).filter(
-    (k: any) => k.allowance_mode && k.allowance_mode !== "flat",
+    (k: any) => (k.outstanding_weeks ?? []).length > 0,
 );
 
 // Per-task chips under each paycheck row (hover/tap for details).
@@ -197,84 +200,98 @@ const dayLabel = (iso: string): string =>
         {paycheckKids.length > 0 && (
             <>
                 <h2 class="text-sm font-bold text-brand-ink pt-2">
-                    💵 {lang === "es" ? "Cheques de tareas · esta semana" : "Chore paychecks · this week"}
+                    💵 {lang === "es" ? "Cheques de tareas" : "Chore paychecks"}
                 </h2>
                 <p class="text-sm text-brand-ink-soft">
                     {lang === "es"
-                        ? "Revisa la semana y libera el pago; al liberarlo se abona al saldo del kid."
-                        : "Review the week and release the pay; it credits the kid's balance."}
+                        ? "Revisa cada semana y libera el pago; al liberarlo se abona al saldo del kid."
+                        : "Review each week and release the pay; it credits the kid's balance."}
                 </p>
                 <div class="space-y-3">
                     {paycheckKids.map((k) => (
-                        <div
-                            class="relative rounded-2xl border-2 border-brand-mint-deep/40 bg-brand-mint/10 p-4"
-                            data-paycheck-row
-                            data-kid-id={k.user_id}
-                            data-amount-cents={k.paycheck_cents}
-                        >
-                            <div class="flex items-center justify-between gap-3">
-                                <div>
-                                    <h3 class="font-bold text-brand-ink">{k.name}</h3>
-                                    <p class="text-xs text-brand-ink-soft">
-                                        {k.done_points}/{k.assigned_points} pts · {k.pct}%
-                                    </p>
-                                </div>
-                                <div class="text-right">
-                                    <p class="text-2xl font-extrabold text-brand-mint-deep">
-                                        {fmt(k.paycheck_cents)}
-                                    </p>
-                                    <div data-release-slot>
-                                        {k.paycheck_released ? (
-                                            <span class="text-xs font-bold text-brand-mint-deep">
-                                                {lang === "es" ? "Liberado ✓" : "Released ✓"}
-                                            </span>
-                                        ) : (
-                                            <button
-                                                type="button"
-                                                data-release
-                                                class="mt-1 px-3 py-1.5 bg-brand-mint-deep hover:opacity-90 text-white font-semibold text-xs rounded-lg transition-opacity"
-                                            >
-                                                {lang === "es" ? "Liberar pago" : "Release"}
-                                            </button>
+                        <div class="rounded-2xl border border-brand-ink/10 bg-brand-cream p-4" data-kid-paycheck-group data-kid-id={k.user_id}>
+                            <h3 class="font-bold text-brand-ink mb-2">{k.name}</h3>
+                            <div class="space-y-2">
+                                {k.outstanding_weeks.map((w: any) => (
+                                    <div
+                                        class={`relative rounded-xl border-2 p-3 ${w.is_current_week ? "border-brand-mint-deep/40 bg-brand-mint/10" : "border-amber-400/60 bg-amber-50"}`}
+                                        data-paycheck-row
+                                        data-kid-id={k.user_id}
+                                        data-week-of={w.week_of}
+                                        data-is-current-week={w.is_current_week ? "1" : "0"}
+                                        data-amount-cents={w.amount_cents}
+                                    >
+                                        <div class="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p class="text-xs font-bold text-brand-ink flex items-center gap-1.5">
+                                                    {!w.is_current_week && (
+                                                        <span title={lang === "es" ? "Semana pasada sin liberar" : "Unreleased past week"}>⚠️</span>
+                                                    )}
+                                                    {dayLabel(w.week_of)}
+                                                    {w.is_current_week && (
+                                                        <span class="text-[10px] font-semibold text-brand-ink-soft">
+                                                            ({lang === "es" ? "en curso" : "in progress"})
+                                                        </span>
+                                                    )}
+                                                </p>
+                                                <p class="text-xs text-brand-ink-soft">{w.done_points}/{w.assigned_points} pts · {w.pct}%</p>
+                                            </div>
+                                            <div class="text-right">
+                                                <p class="text-2xl font-extrabold text-brand-mint-deep">{fmt(w.amount_cents)}</p>
+                                                <div data-release-slot class="flex items-center gap-1.5 justify-end mt-1">
+                                                    {w.already_released ? (
+                                                        <span class="text-xs font-bold text-brand-mint-deep">
+                                                            {lang === "es" ? "Liberado ✓" : "Released ✓"}
+                                                        </span>
+                                                    ) : (
+                                                        <>
+                                                            <label class="text-[11px] text-brand-ink-soft">{lang === "es" ? "Ajuste $" : "Adj $"}</label>
+                                                            <input type="number" step="1" placeholder="0" data-adjust
+                                                                class="w-14 rounded-lg border border-brand-ink/20 bg-white px-1.5 py-1 text-xs text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep" />
+                                                            <button type="button" data-release
+                                                                class="px-3 py-1.5 bg-brand-mint-deep hover:opacity-90 text-white font-semibold text-xs rounded-lg transition-opacity">
+                                                                {lang === "es" ? "Liberar" : "Release"}
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {(w.tasks ?? []).length > 0 && (
+                                            <div class="flex flex-wrap gap-1.5 mt-3">
+                                                {w.tasks.map((t: any) => (
+                                                    <button
+                                                        type="button"
+                                                        class={`group px-2 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-brand-mint-deep/50 ${chipCls[t.status] ?? chipCls.not_done}`}
+                                                    >
+                                                        <span aria-hidden="true">{chipIcon[t.status] ?? "·"}</span>
+                                                        <span class="max-w-[9rem] truncate">{t.title}</span>
+                                                        <span class="opacity-70">{t.earned_points}/{t.points}</span>
+                                                        <span class="hidden group-hover:block group-focus:block pointer-events-none absolute left-2 right-2 bottom-full mb-1 z-[60] rounded-xl bg-brand-ink text-brand-cream text-left text-xs font-normal p-3 shadow-lg">
+                                                            <span class="block font-bold mb-0.5">{t.title}</span>
+                                                            <span class="block">{statusLabel(t)} · {t.earned_points}/{t.points} pts</span>
+                                                            <span class="block opacity-80">{dayLabel(t.assigned_date)}</span>
+                                                            {t.approval_notes && (
+                                                                <span class="block mt-1 opacity-90">📝 {t.approval_notes}</span>
+                                                            )}
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
                                         )}
+                                        <p class="hidden text-xs mt-2" data-msg></p>
                                     </div>
-                                </div>
+                                ))}
                             </div>
-                            {(k.tasks ?? []).length > 0 && (
-                                <div class="flex flex-wrap gap-1.5 mt-3">
-                                    {k.tasks.map((t: any) => (
-                                        <button
-                                            type="button"
-                                            class={`group px-2 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-brand-mint-deep/50 ${chipCls[t.status] ?? chipCls.not_done}`}
-                                        >
-                                            <span aria-hidden="true">{chipIcon[t.status] ?? "·"}</span>
-                                            <span class="max-w-[9rem] truncate">{t.title}</span>
-                                            <span class="opacity-70">{t.earned_points}/{t.points}</span>
-                                            {/* Detail panel — hover on desktop, tap/focus on touch. */}
-                                            {/* Above the row + z-[60] so BottomNav (z-50) never covers it. */}
-                                            <span class="hidden group-hover:block group-focus:block pointer-events-none absolute left-2 right-2 bottom-full mb-1 z-[60] rounded-xl bg-brand-ink text-brand-cream text-left text-xs font-normal p-3 shadow-lg">
-                                                <span class="block font-bold mb-0.5">{t.title}</span>
-                                                <span class="block">
-                                                    {statusLabel(t)} · {t.earned_points}/{t.points} pts
-                                                </span>
-                                                <span class="block opacity-80">{dayLabel(t.assigned_date)}</span>
-                                                {t.approval_notes && (
-                                                    <span class="block mt-1 opacity-90">📝 {t.approval_notes}</span>
-                                                )}
-                                            </span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
                             <button
                                 type="button"
                                 data-history-toggle
+                                data-kid-id={k.user_id}
                                 class="mt-3 text-xs font-semibold text-brand-mint-deep underline underline-offset-2"
                             >
                                 {lang === "es" ? "Ver historial" : "View history"}
                             </button>
-                            <div class="hidden mt-2 space-y-2" data-history-panel></div>
-                            <p class="hidden text-xs mt-2" data-msg></p>
+                            <div class="hidden mt-2 space-y-2" data-history-panel data-kid-id={k.user_id}></div>
                         </div>
                     ))}
                 </div>
@@ -361,22 +378,26 @@ const dayLabel = (iso: string): string =>
         payAllBtn.addEventListener("click", () => pay(currentBalanceCents()));
     });
 
-    // ── Release this week's chore paycheck ──────────────────────────────
+    // ── Release a specific outstanding week's chore paycheck ─────────────
     document.querySelectorAll("[data-paycheck-row]").forEach((row) => {
         const btn = row.querySelector("[data-release]");
         if (!btn) return;
-        const kidId = row.getAttribute("data-kid-id");
+        const weekOf = row.getAttribute("data-week-of");
+        const isCurrentWeek = row.getAttribute("data-is-current-week") === "1";
         const projected = parseInt(row.getAttribute("data-amount-cents") || "0", 10);
+        const kidId = row.getAttribute("data-kid-id");
+        const adjustEl = row.querySelector("[data-adjust]");
         const msgEl = row.querySelector("[data-msg]");
         const slot = row.querySelector("[data-release-slot]");
 
         btn.addEventListener("click", async () => {
+            const adjustCents = Math.round((parseFloat(adjustEl?.value || "0") || 0) * 100);
             btn.disabled = true;
             try {
                 const res = await fetch(`/api/bank/chore-paycheck/${kidId}/release`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({}),
+                    body: JSON.stringify({ week_of: weekOf, adjustment_cents: adjustCents }),
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
@@ -387,11 +408,16 @@ const dayLabel = (iso: string): string =>
                     return;
                 }
                 const amt = data.amount_cents || 0;
-                slot.innerHTML = `<span class="text-xs font-bold text-brand-mint-deep">${
-                    lang === "es" ? "Liberado ✓" : "Released ✓"
-                }</span>`;
-                // Paycheck bucket empties; the released amount lands in the
-                // kid's gig-cash balance (jars) and stays owed until paid.
+                if (isCurrentWeek) {
+                    // Matches prior UX: the current week's row stays visible
+                    // for the rest of the week, just flips to "Released".
+                    slot.innerHTML = `<span class="text-xs font-bold text-brand-mint-deep">${
+                        lang === "es" ? "Liberado ✓" : "Released ✓"
+                    }</span>`;
+                } else {
+                    // A past week is now historical — drop the row.
+                    row.remove();
+                }
                 adjustTotals(amt, -projected);
                 const bal = document.querySelector(
                     `[data-kid-card][data-kid-id="${kidId}"] [data-balance]`
@@ -409,10 +435,7 @@ const dayLabel = (iso: string): string =>
         });
     });
 
-    // ── Chore-paycheck history (lazy-fetched on first expand) ────────────
-    // Mirrors the current-week chip/tooltip pattern above — duplicated here
-    // (not imported) because these render client-side from a fetch, not
-    // server-side from Astro frontmatter.
+    // ── Chore-paycheck history (lazy-fetched on first expand, per kid) ───
     const histChipCls = {
         credited: "bg-brand-mint/20 border-brand-mint-deep/40 text-brand-mint-deep",
         pending_review: "bg-amber-100 border-amber-300 text-amber-800",
@@ -462,9 +485,8 @@ const dayLabel = (iso: string): string =>
     }
 
     document.querySelectorAll("[data-history-toggle]").forEach((btn) => {
-        const row = btn.closest("[data-paycheck-row]");
-        const kidId = row.getAttribute("data-kid-id");
-        const panel = row.querySelector("[data-history-panel]");
+        const kidId = btn.getAttribute("data-kid-id");
+        const panel = document.querySelector(`[data-history-panel][data-kid-id="${kidId}"]`);
         let loaded = false;
 
         btn.addEventListener("click", async () => {
