@@ -21,6 +21,12 @@ const { data: bank, ok: bankOk } = await apiFetch<any>("/api/bank/me", { token }
 // meter. Only shown when the parent put this kid on chore-proportional mode.
 const { data: paycheck } = await apiFetch<any>(`/api/bank/chore-paycheck/${user.id}`, { token });
 const choreMode = paycheck?.mode === "chore_proportional" && (paycheck?.cap_cents ?? 0) > 0;
+// Two-color bar for the teen meter: green = done (paycheck.pct), red = a
+// PARENT-graded loss (paycheck.discounted_pct). Rounding two independent
+// ratios from the same denominator can theoretically overshoot 100 by a
+// point — clamp so the two widths never exceed the track.
+const barPct = paycheck?.pct ?? 0;
+const barDiscountedPct = Math.max(0, Math.min(paycheck?.discounted_pct ?? 0, 100 - barPct));
 const pcFmt = (c: number) => `$${((c ?? 0) / 100).toFixed(2)}`;
 
 // Savings goal (P2) — tracked against the Save jar. null = kid has no goal.
@@ -111,20 +117,27 @@ function countdownText(): string {
                 <span class="text-sm font-extrabold text-brand-ink">{es ? "💵 Mi pago por tareas" : "💵 My chore paycheck"}</span>
                 <span class="text-xs text-brand-ink-soft">{es ? "esta semana" : "this week"}</span>
             </div>
-            <div class="flex items-baseline gap-1">
-                <span class="text-3xl font-extrabold text-brand-mint-deep">{pcFmt(paycheck.projected_cents)}</span>
-                <span class="text-sm text-brand-ink-soft">/ {pcFmt(paycheck.cap_cents)}</span>
-            </div>
-            <div class="h-3 rounded-full bg-brand-cream-deep overflow-hidden mt-2">
-                <div class="h-full bg-brand-mint-deep transition-all" style={`width:${paycheck.pct}%`}></div>
-            </div>
-            <p class="text-xs text-brand-ink-soft mt-2">
-                {paycheck.already_released
-                    ? (es ? "¡Pago liberado! 🎉" : "Paycheck released! 🎉")
-                    : (es
-                        ? `${paycheck.done_points}/${paycheck.assigned_points} pts hechos · termina todo para ganar ${pcFmt(paycheck.cap_cents)}`
-                        : `${paycheck.done_points}/${paycheck.assigned_points} pts done · finish all to earn ${pcFmt(paycheck.cap_cents)}`)}
-            </p>
+            {paycheck.already_released ? (
+                <p class="text-xs text-brand-ink-soft mt-2">
+                    {es ? "¡Pago liberado! 🎉" : "Paycheck released! 🎉"}
+                </p>
+            ) : (
+                <>
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-xs text-brand-ink-soft">{es ? "Meta de esta semana:" : "This week's goal:"}</span>
+                        <span class="text-lg font-extrabold text-brand-mint-deep">{pcFmt(paycheck.cap_cents)}</span>
+                    </div>
+                    <div class="h-3 rounded-full bg-brand-cream-deep overflow-hidden mt-2 flex">
+                        <div class="h-full bg-brand-mint-deep transition-all" style={`width:${barPct}%`}></div>
+                        <div class="h-full bg-red-400 transition-all" style={`width:${barDiscountedPct}%`}></div>
+                    </div>
+                    <p class="text-xs text-brand-ink-soft mt-2">
+                        {es
+                            ? "Tu pago depende de qué tan bien y cuánto completes tus tareas de esta semana."
+                            : "Your pay depends on how well and how much of your tasks you complete this week."}
+                    </p>
+                </>
+            )}
         </section>
     )}
 

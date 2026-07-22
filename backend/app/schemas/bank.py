@@ -74,6 +74,7 @@ class ChorePaycheckPreview(BaseModel):
     done_points: int
     assigned_points: int
     pct: int
+    discounted_pct: int
     projected_cents: int
     already_released: bool
 

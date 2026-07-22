@@ -108,10 +108,11 @@ async def test_chore_units_counts_only_completed_and_approved(db):
     await _chore(db, fam, parent, kid, 40, AssignmentStatus.CANCELLED)                           # excluded both
     await _chore(db, fam, parent, kid, 99, AssignmentStatus.COMPLETED, bonus=True)               # gig → excluded
 
-    done, assigned = await BankService._chore_units(db, fam.id, kid.id, WEEK)
+    done, assigned, lost = await BankService._chore_units(db, fam.id, kid.id, WEEK)
     # Units = points × pct (×100 for full credit).
     assert done == 3000         # (20 + 10) × 100
     assert assigned == 6000     # (20+10+10+10+10) × 100 — cancelled & gig out
+    assert lost == 1000         # the REJECTED 10-point task — full loss
 
 
 @pytest.mark.asyncio
@@ -130,9 +131,10 @@ async def test_chore_units_partial_grade_scales_credit(db):
     missed.completion_grade = "missed"
     await db.commit()
 
-    done, assigned = await BankService._chore_units(db, fam.id, kid.id, WEEK)
+    done, assigned, lost = await BankService._chore_units(db, fam.id, kid.id, WEEK)
     assert done == 2500         # 20×100 + 10×50 + 0
     assert assigned == 4000     # (20+10+10) × 100
+    assert lost == 1500         # half's un-credited 50% (10×50) + missed's full loss (10×100)
 
 
 # ── preview + release ─────────────────────────────────────────────────────
@@ -579,3 +581,77 @@ async def test_reminder_notifies_parent_once(db):
         select(Notification).where(Notification.user_id == parent.id)
     )).scalars().all()
     assert len(notes2) == 1
+
+
+# ── discounted_pct (teen meter's red segment) ────────────────────────────
+
+@pytest.mark.asyncio
+async def test_lost_units_zero_when_all_full_credit(db):
+    """No parent has graded anything negatively — nothing should be red."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _chore(db, fam, parent, kid, 20, AssignmentStatus.COMPLETED)
+    await _chore(db, fam, parent, kid, 10, AssignmentStatus.PENDING)  # not done, still time
+
+    done, assigned, lost = await BankService._chore_units(db, fam.id, kid.id, WEEK)
+    assert lost == 0
+
+@pytest.mark.asyncio
+async def test_lost_units_ignores_pending_review(db):
+    """Awaiting the parent's decision is NOT a loss yet — only a REJECTED or
+    partial-graded APPROVED decision counts."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _chore(db, fam, parent, kid, 15, AssignmentStatus.COMPLETED, ApprovalStatus.PENDING)
+
+    done, assigned, lost = await BankService._chore_units(db, fam.id, kid.id, WEEK)
+    assert done == 0
+    assert lost == 0
+    assert assigned == 1500
+
+@pytest.mark.asyncio
+async def test_discounted_pct_reflects_graded_loss(db):
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    full = await _chore(db, fam, parent, kid, 20, AssignmentStatus.COMPLETED, ApprovalStatus.APPROVED)
+    half = await _chore(db, fam, parent, kid, 10, AssignmentStatus.COMPLETED, ApprovalStatus.APPROVED)
+    missed = await _chore(db, fam, parent, kid, 10, AssignmentStatus.COMPLETED, ApprovalStatus.REJECTED)
+    full.completion_grade = "full"
+    half.completion_grade = "partial"
+    half.partial_credit_pct = 50
+    missed.completion_grade = "missed"
+    await db.commit()
+
+    p = await BankService.chore_paycheck_preview(db, kid, fam.id, week_of=WEEK)
+    # assigned = (20+10+10)*100 = 4000; done = 20*100 + 10*50 = 2500 → pct = 62 (banker's rounding of 62.5)
+    # lost = 10*50 (half's uncredited remainder) + 10*100 (missed) = 1500 → discounted_pct = 38 (banker's rounding of 37.5)
+    assert p["pct"] == 62
+    assert p["discounted_pct"] == 38
+
+@pytest.mark.asyncio
+async def test_lost_units_ignores_overdue_never_completed(db):
+    """An OVERDUE task (day passed, kid never completed it, no parent review
+    ever happened) stays neutral — red is reserved for an explicit parent
+    grading decision, not a passive timeout."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _chore(db, fam, parent, kid, 25, AssignmentStatus.OVERDUE)
+
+    done, assigned, lost = await BankService._chore_units(db, fam.id, kid.id, WEEK)
+    assert done == 0
+    assert lost == 0
+    assert assigned == 2500
+
+@pytest.mark.asyncio
+async def test_discounted_pct_zero_when_assigned_is_zero(db):
+    fam = await _family(db)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    p = await BankService.chore_paycheck_preview(db, kid, fam.id, week_of=WEEK)
+    assert p["assigned_points"] == 0
+    assert p["discounted_pct"] == 0

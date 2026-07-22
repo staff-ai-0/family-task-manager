@@ -371,10 +371,11 @@ class BankService:
     @staticmethod
     async def _chore_units(
         db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date
-    ) -> tuple[int, int]:
-        """(done_units, assigned_units) of a kid's NON-gig chores for the week,
-        where one unit = one template point × one percent (points × 100 = full
-        credit for one task). Integer math end to end — no float cents.
+    ) -> tuple[int, int, int]:
+        """(done_units, assigned_units, lost_units) of a kid's NON-gig chores
+        for the week, where one unit = one template point × one percent
+        (points × 100 = full credit for one task). Integer math end to end —
+        no float cents.
 
         assigned_units: every non-cancelled regular assignment at 100%.
         done_units: COMPLETED work that cleared quality review (approval_status
@@ -382,6 +383,13 @@ class BankService:
         'partial' contributes partial_credit_pct, everything else 100. PENDING
         (awaiting the parent) and REJECTED/missed contribute 0 — "de manera
         correcta". Gigs (is_bonus) pay their own cash and are excluded.
+        lost_units: the portion of assigned_units a PARENT has explicitly
+        graded away — REJECTED (full loss) or APPROVED+partial (the
+        un-credited remainder). A not-yet-reviewed or not-yet-due task never
+        contributes here — only an explicit grading decision creates a loss.
+        Feeds the teen meter's red segment; done_units and lost_units are
+        drawn from disjoint rows, so done_units + lost_units <= assigned_units
+        always.
         """
         from app.models.task_assignment import (
             TaskAssignment, AssignmentStatus, ApprovalStatus,
@@ -409,15 +417,22 @@ class BankService:
 
         done_units = 0
         assigned_units = 0
+        lost_units = 0
         for points, status, approval, grade, pct in rows:
             pts = int(points or 0)
             assigned_units += pts * 100
             if status != AssignmentStatus.COMPLETED:
                 continue
+            if approval == ApprovalStatus.REJECTED:
+                lost_units += pts * 100
+                continue
             if approval not in (ApprovalStatus.NONE, ApprovalStatus.APPROVED):
                 continue
-            done_units += pts * (int(pct or 50) if grade == "partial" else 100)
-        return done_units, assigned_units
+            credit_pct = int(pct or 50) if grade == "partial" else 100
+            done_units += pts * credit_pct
+            if grade == "partial":
+                lost_units += pts * (100 - credit_pct)
+        return done_units, assigned_units, lost_units
 
     @staticmethod
     async def _chore_week_tasks(
@@ -529,7 +544,7 @@ class BankService:
         current-week-biased) and list_outstanding_weeks (multi-week scan).
         Includes assigned_units (pre-scale) so callers can decide whether a
         week is worth surfacing without re-deriving it."""
-        done_u, assigned_u = await BankService._chore_units(
+        done_u, assigned_u, lost_u = await BankService._chore_units(
             db, family_id, acct.user_id, week_monday
         )
         cap = acct.allowance_cents
@@ -551,6 +566,7 @@ class BankService:
             "done_points": round(done_u / 100) if done_u else 0,
             "assigned_points": assigned_u // 100,
             "pct": round(100 * done_u / assigned_u) if assigned_u else 0,
+            "discounted_pct": round(100 * lost_u / assigned_u) if assigned_u else 0,
             "assigned_units": assigned_u,
         }
 
@@ -574,6 +590,7 @@ class BankService:
             "done_points": p["done_points"],
             "assigned_points": p["assigned_points"],
             "pct": p["pct"],
+            "discounted_pct": p["discounted_pct"],
             "projected_cents": p["amount_cents"],
             "already_released": acct.last_chore_paycheck_week == week_monday,
         }
@@ -797,7 +814,7 @@ class BankService:
                 status_code=409,
                 detail="chore paycheck already released for this week",
             )
-        done, assigned = await BankService._chore_units(
+        done, assigned, _ = await BankService._chore_units(
             db, family_id, user.id, week_monday
         )
         points_converted = 0
