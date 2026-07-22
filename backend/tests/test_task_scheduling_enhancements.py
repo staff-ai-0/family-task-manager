@@ -15,7 +15,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import select
 
-from app.models.task_assignment import TaskAssignment
+from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.task_template import AssignmentType
 from tests.test_task_forensic_fixes import (
     _direct_assignment,
@@ -158,6 +158,32 @@ class TestMidweekBalance:
         )
         assert len(assignments) == 1
         assert assignments[0].assigned_date >= saturday
+
+    async def test_reshuffle_preserves_stale_pending_row_on_past_day(
+        self, db_session, test_family, test_parent_user, test_child_user
+    ):
+        """A PENDING row on a day that's already past — but not yet flipped
+        to OVERDUE by the hourly sweep — must survive a same-week
+        re-shuffle. The delete must gate on the date itself, not depend on
+        the sweep having already run (prod gap: a reshuffle inside that
+        window used to silently delete it and never recreate it)."""
+        monday = _week_monday()
+        wednesday = monday + timedelta(days=2)
+        tmpl = await _template(
+            db_session, test_family.id, test_parent_user.id,
+            title="Daily Chore", interval_days=1,
+        )
+        stale = await _direct_assignment(
+            db_session, tmpl, test_child_user.id, test_family.id, monday,
+        )
+
+        await TaskAssignmentService.shuffle_tasks(
+            db_session, test_family.id, week_of=monday, today=wednesday
+        )
+
+        survived = await db_session.get(TaskAssignment, stale.id)
+        assert survived is not None
+        assert survived.status == AssignmentStatus.PENDING
 
 
 class TestAutoShuffle:
