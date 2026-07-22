@@ -6,6 +6,33 @@ Bienvenido a la guia oficial de **Family Task Manager**, la aplicacion para orga
 
 ---
 
+## Prologo
+
+Toda familia enfrenta la misma tension: los ninos necesitan aprender responsabilidad y el manejo del dinero, pero las herramientas tipicas para lograrlo — listas de pendientes, mesadas fijas, hojas de calculo — se sienten como tarea, no como algo que un nino quiera hacer por si mismo.
+
+Family Task Manager nacio de una pregunta simple: ¿que pasaria si las tareas del hogar y las finanzas familiares funcionaran como un juego justo, con reglas claras, en lugar de una lista de obligaciones? De ahi surgio una economia familiar completa — puntos por responsabilidad, dinero real por trabajo extra, premios que se ganan, consecuencias que se entienden, y un presupuesto que toda la familia puede ver y aprender a usar.
+
+Esta guia documenta esa aplicacion tal como existe hoy: cada modulo, cada pantalla, cada regla del sistema. Esta escrita para que un padre o madre sin experiencia tecnica pueda leerla de principio a fin y salir sabiendo exactamente como configurar, usar y sacarle provecho a la aplicacion con su familia.
+
+## Resumen Ejecutivo
+
+Family Task Manager combina, en una sola aplicacion multi-tenant (cada familia esta completamente aislada de las demas):
+
+- **Tareas gamificadas** — plantillas de quehaceres que se reparten automaticamente entre los miembros de la familia cada semana (o de forma manual), con rotacion, dificultad y puntos configurables.
+- **Economia de dos monedas** — los **puntos** se ganan completando tareas obligatorias y se canjean por privilegios en la Tienda de Premios; el **dinero real ($MXN)** se gana en el tablero de **gigs** (trabajos opcionales que un padre aprueba y paga) y se administra en el Banco Familiar.
+- **Premios y consecuencias** — una tienda de premios configurable por los padres, y un sistema de consecuencias para cuando no se cumplen las responsabilidades.
+- **Presupuesto familiar por sobres** — cuentas, transacciones, categorias, metas de ahorro, transacciones recurrentes, reportes de gastos y flujo de caja, con escaneo de recibos por IA e importacion bancaria por CSV.
+- **Jarvis, el copiloto con IA** — un asistente conversacional que los padres pueden usar para consultar y administrar la actividad de la familia.
+- **Modulos opcionales** — mascota virtual, plan de comidas, listas de compras, calendario familiar, chat, modo kiosco y analitica — cada uno se puede activar o desactivar por familia desde configuracion.
+
+Los capitulos siguientes cubren cada uno de estos modulos en detalle, paso a paso.
+
+## Objetivo
+
+El objetivo de Family Task Manager es ayudar a las familias a construir, desde temprana edad, habitos reales de responsabilidad y educacion financiera — no mediante una lista de pendientes mas, sino mediante una economia familiar completa, justa y transparente que los ninos aprenden a navegar mientras juegan, y que los padres pueden configurar y supervisar sin friccion.
+
+---
+
 ## Tabla de Contenidos
 
 1. [Capitulo 1: Primeros Pasos](#capitulo-1-primeros-pasos)
