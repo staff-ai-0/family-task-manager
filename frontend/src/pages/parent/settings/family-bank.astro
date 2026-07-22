@@ -48,13 +48,15 @@ const { data: membersRaw } = await apiFetch<any[]>("/api/families/members", { to
 const starMap: Record<string, boolean> = {};
 (Array.isArray(membersRaw) ? membersRaw : []).forEach((m: any) => { starMap[m.id] = !!m.star_mode; });
 
-// This week's chore paycheck per kid on any parent-released mode.
+// Outstanding chore-paycheck weeks per kid on any parent-released mode —
+// full release UI lives on /parent/payouts now; here we just show a count
+// + link so this settings page isn't duplicating that surface.
 const CHORE_MODES = ["chore_proportional", "chore_gated", "points_rate"];
-const paycheckMap: Record<string, any> = {};
+const outstandingMap: Record<string, any[]> = {};
 await Promise.all(
     kids.filter((k) => CHORE_MODES.includes(k.allowance_mode)).map(async (k) => {
-        const { data } = await apiFetch<any>(`/api/bank/chore-paycheck/${k.user_id}`, { token });
-        if (data) paycheckMap[k.user_id] = data;
+        const { data } = await apiFetch<any>(`/api/bank/chore-paycheck/${k.user_id}/outstanding`, { token });
+        if (data?.weeks) outstandingMap[k.user_id] = data.weeks;
     })
 );
 
@@ -332,40 +334,22 @@ const weekdays = es
                                 </div>
                             </div>
 
-                            {/* Chore paycheck — this week's review + release (parent-released modes) */}
-                            {CHORE_MODES.includes(k.allowance_mode) && paycheckMap[k.user_id] && (
+                            {/* Chore paycheck — outstanding-weeks summary; full release UI is on /parent/payouts */}
+                            {CHORE_MODES.includes(k.allowance_mode) && (outstandingMap[k.user_id] ?? []).length > 0 && (
                                 <div class="rounded-xl border-2 border-brand-mint-deep/40 bg-brand-mint/10 p-3" data-paycheck-card data-kid-user={k.user_id}>
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-xs font-bold text-brand-ink">{es ? "💵 Cheque de tareas · esta semana" : "💵 Chore paycheck · this week"}</span>
-                                        <span class="text-xs text-brand-ink-soft" data-pc-pct>{paycheckMap[k.user_id].pct}%</span>
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="text-xs font-bold text-brand-ink">
+                                            💵 {es
+                                                ? `${outstandingMap[k.user_id].length} semana(s) pendiente(s)`
+                                                : `${outstandingMap[k.user_id].length} week(s) pending`}
+                                        </span>
+                                        <span class="text-sm font-extrabold text-brand-mint-deep">
+                                            {fmt(outstandingMap[k.user_id].reduce((sum: number, w: any) => sum + w.amount_cents, 0))}
+                                        </span>
                                     </div>
-                                    <div class="flex items-baseline gap-1 mt-1">
-                                        <span class="text-2xl font-extrabold text-brand-mint-deep" data-pc-amount>{fmt(paycheckMap[k.user_id].projected_cents)}</span>
-                                        {k.allowance_mode === "points_rate"
-                                            ? <span class="text-xs text-brand-ink-soft">({fmt(pointValueCents)} {es ? "por punto" : "per point"})</span>
-                                            : <span class="text-xs text-brand-ink-soft">/ {fmt(paycheckMap[k.user_id].cap_cents)} {es ? "tope" : "cap"}</span>}
-                                    </div>
-                                    <div class="h-2 rounded-full bg-brand-cream-deep overflow-hidden mt-1">
-                                        <div class="h-full bg-brand-mint-deep transition-all" data-pc-bar style={`width:${paycheckMap[k.user_id].pct}%`}></div>
-                                    </div>
-                                    <div class="flex items-center justify-between mt-2 gap-2">
-                                        <span class="text-xs text-brand-ink-soft" data-pc-points>{paycheckMap[k.user_id].done_points}/{paycheckMap[k.user_id].assigned_points} pts</span>
-                                        {!paycheckMap[k.user_id].already_released && (
-                                            <div class="flex items-center gap-1.5">
-                                                <label class="text-[11px] text-brand-ink-soft">{es ? "Ajuste $" : "Adj $"}</label>
-                                                <input type="number" step="1" placeholder="0" data-pc-adjust data-kid-user={k.user_id}
-                                                    class="w-16 rounded-lg border border-brand-ink/20 bg-white px-2 py-1 text-xs text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep" />
-                                                <button type="button" data-release-paycheck data-kid-user={k.user_id} data-kid-name={k.name}
-                                                    disabled={automationLocked}
-                                                    class="rounded-lg bg-brand-mint-deep text-white text-xs font-bold px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                    {es ? "Liberar pago" : "Release"}
-                                                </button>
-                                            </div>
-                                        )}
-                                        {paycheckMap[k.user_id].already_released && (
-                                            <span class="text-xs font-bold text-brand-mint-deep">{es ? "Liberado ✓" : "Released ✓"}</span>
-                                        )}
-                                    </div>
+                                    <a href="/parent/payouts" class="mt-2 inline-block text-xs font-semibold text-brand-mint-deep underline underline-offset-2">
+                                        {es ? "Ir a Pagos →" : "Go to Payouts →"}
+                                    </a>
                                 </div>
                             )}
 
@@ -622,33 +606,6 @@ const weekdays = es
             });
             pvSave.disabled = false;
             if (res) showToast(es ? "Valor del punto guardado ⭐" : "Point value saved ⭐", "success");
-        });
-
-        // ── Release chore paycheck ───────────────────────────────────────
-        document.querySelectorAll<HTMLButtonElement>("[data-release-paycheck]").forEach((btn) => {
-            btn.addEventListener("click", async () => {
-                const kidId = btn.dataset.kidUser!;
-                const name = btn.dataset.kidName || "";
-                const adjInput = document.querySelector(`[data-pc-adjust][data-kid-user="${kidId}"]`) as HTMLInputElement | null;
-                const adjCents = Math.round((parseFloat(adjInput?.value || "0") || 0) * 100);
-                btn.disabled = true;
-                const res = await mutate(`/api/bank/chore-paycheck/${kidId}/release`, {
-                    method: "POST",
-                    body: { adjustment_cents: adjCents },
-                    errorFallback: es ? "No se pudo liberar el pago" : "Could not release paycheck",
-                });
-                if (res) {
-                    btn.textContent = es ? "Liberado ✓" : "Released ✓";
-                    const amt = (res as any)?.amount_cents ?? 0;
-                    showToast(
-                        es ? `Pago liberado: $${(amt / 100).toFixed(2)} para ${name} 🎉`
-                           : `Released $${(amt / 100).toFixed(2)} to ${name} 🎉`,
-                        "success",
-                    );
-                } else {
-                    btn.disabled = false;
-                }
-            });
         });
 
         // ── Parent move / settle modal ───────────────────────────────────
