@@ -27,7 +27,6 @@ from app.models.budget import (
     BudgetAccount,
     BudgetPayee,
     BudgetTransaction,
-    BudgetSyncState,
     BudgetTransactionItem,
 )
 from app.models.a2a import FamilyA2AWebhook, A2AWebhookDelivery
@@ -91,7 +90,6 @@ __all__ = [
     "BudgetAccount",
     "BudgetPayee",
     "BudgetTransaction",
-    "BudgetSyncState",
     "BudgetTransactionItem",
     # A2A webhook models
     "FamilyA2AWebhook",

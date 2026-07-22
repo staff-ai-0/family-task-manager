@@ -1,5 +1,8 @@
 # UX Audit — 2026-07-02
 
+> **ARCHIVED 2026-07-22** — all 10 waves (PRs #80-89) shipped and deployed; see
+> `docs/audit/2026-07-22-forensic/` for the current audit. Kept for history.
+
 Multi-agent audit (10 dimensions + completeness critic) of frontend UX. 77 findings, grounded in code with file paths. Impact: high/medium/low. Effort: S <1d, M 1-3d, L >3d.
 
 ## Navigation & Information Architecture

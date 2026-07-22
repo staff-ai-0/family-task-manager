@@ -150,14 +150,15 @@ Fully native to PostgreSQL (the external "Actual Budget" service was decommissio
 
 **Account list endpoint includes computed balance**: `GET /api/budget/accounts/` enriches every row with `balance_cents` + `cleared_balance_cents` (both `Optional[int]`, populated only by list endpoints — null on POST/PUT responses). Avoids N+1 calls from clients. `starting_balance` is the seed value at account creation; when non-zero `AccountService.create` auto-inserts a synthetic "Starting Balance" transaction so the computed balance is correct from day one.
 
-**17 budget models** in `backend/app/models/budget.py`:
+**16 budget models** in `backend/app/models/budget.py`:
 - Core: `BudgetCategoryGroup`, `BudgetCategory`, `BudgetAccount`, `BudgetPayee`, `BudgetTransaction`, `BudgetAllocation` (+ transaction items/splits)
 - Rules & Goals: `BudgetCategorizationRule`, `BudgetGoal`
 - Scheduling: `BudgetRecurringTransaction`
 - Organization: `BudgetSavedFilter`, `BudgetTag`, `BudgetTransactionTag`
 - Analytics: `BudgetCustomReport`
 - HITL: `BudgetReceiptDraft` — low-confidence scans pending human review
-- Sync (legacy table): `BudgetSyncState`
+
+(The dead `BudgetSyncState` sync-tracking table for the decommissioned external "Actual Budget" sync engine was dropped 2026-07-22 — see `drop_budget_sync_state` migration.)
 
 **23 budget sub-routes** (`backend/app/api/routes/budget/`):
 - Core CRUD: `categories`, `accounts`, `transactions`, `allocations`, `payees`, `transfers`
@@ -283,7 +284,7 @@ Key env vars (set in `.env` — local, and on the prod host; templates `.env.exa
 
 ## Database migrations
 
-Always use Alembic — never modify the DB schema with raw SQL. Test migrations locally before production. Single-head chain (102 revisions as of 2026-07-16); CI exercises upgrade → downgrade -1 → upgrade.
+Always use Alembic — never modify the DB schema with raw SQL. Test migrations locally before production. Single-head chain (107 revisions as of 2026-07-22); CI exercises upgrade → downgrade -1 → upgrade.
 
 ## Demo credentials (after seeding)
 

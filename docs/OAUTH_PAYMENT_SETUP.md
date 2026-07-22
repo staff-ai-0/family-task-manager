@@ -1,326 +1,64 @@
-# Google OAuth & PayPal Payment Integration Guide
+# Google OAuth & PayPal Setup
 
-This guide explains how to set up Google OAuth sign-in and PayPal payment processing for the Family Task Manager application.
+Rewritten 2026-07-22 against the actual implementation (the prior version described a generic one-off PayPal Payments flow and endpoints that never existed in this codebase).
 
-## Table of Contents
-1. [Google OAuth Setup](#google-oauth-setup)
-2. [PayPal API Setup](#paypal-api-setup)
-3. [Environment Configuration](#environment-configuration)
-4. [Testing](#testing)
-5. [Production Deployment](#production-deployment)
+## Google OAuth
 
----
-
-## Google OAuth Setup
-
-### 1. Create Google Cloud Project
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable the Google+ API:
-   - Navigate to "APIs & Services" > "Library"
-   - Search for "Google+ API"
-   - Click "Enable"
-
-### 2. Configure OAuth Consent Screen
-
-1. Go to "APIs & Services" > "OAuth consent screen"
-2. Choose "External" user type
-3. Fill in the required fields:
-   - App name: `Family Task Manager`
-   - User support email: Your email
-   - Developer contact information: Your email
-4. Add scopes:
-   - `./auth/userinfo.email`
-   - `./auth/userinfo.profile`
-   - `openid`
-5. Add test users (for development)
-6. Save and continue
-
-### 3. Create OAuth 2.0 Credentials
-
-1. Go to "APIs & Services" > "Credentials"
-2. Click "Create Credentials" > "OAuth client ID"
-3. Application type: "Web application"
-4. Name: `Family Task Manager Web Client`
-5. Authorized JavaScript origins:
-   - `http://localhost:3003` (development)
-   - `https://your-production-domain.com` (production)
-6. Authorized redirect URIs:
-   - `http://localhost:3003/login` (development)
-   - `https://your-production-domain.com/login` (production)
-7. Click "Create"
-8. **Save** the Client ID and Client Secret
-
-### 4. Update Environment Variables
-
-Add to `backend/.env`:
-```bash
-GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
-```
-
-### 5. Update Frontend Configuration
-
-In `frontend/src/pages/login.astro`, replace `YOUR_GOOGLE_CLIENT_ID` with your actual Google Client ID:
-
-```html
-<div 
-    id="g_id_onload"
-    data-client_id="YOUR_ACTUAL_GOOGLE_CLIENT_ID"
-    data-callback="handleGoogleLogin"
-    data-auto_prompt="false">
-</div>
-```
-
----
-
-## PayPal API Setup
-
-### 1. Create PayPal Developer Account
-
-1. Go to [PayPal Developer](https://developer.paypal.com/)
-2. Sign up or log in with your PayPal account
-3. Go to "Dashboard"
-
-### 2. Create Sandbox App (Development)
-
-1. Navigate to "Apps & Credentials"
-2. Select "Sandbox" tab
-3. Click "Create App"
-4. App Name: `Family Task Manager Sandbox`
-5. Click "Create App"
-6. **Save** the Client ID and Secret
-
-### 3. Create Live App (Production)
-
-1. Navigate to "Apps & Credentials"
-2. Select "Live" tab
-3. Click "Create App"
-4. App Name: `Family Task Manager`
-5. Click "Create App"
-6. **Save** the Client ID and Secret
-
-### 4. Configure Webhooks (Optional, for subscriptions)
-
-1. In your app settings, scroll to "Webhooks"
-2. Click "Add Webhook"
-3. Webhook URL: `https://your-domain.com/api/payment/webhook`
-4. Select events to listen for:
-   - `PAYMENT.SALE.COMPLETED`
-   - `PAYMENT.SALE.REFUNDED`
-   - `BILLING.SUBSCRIPTION.CREATED`
-   - `BILLING.SUBSCRIPTION.CANCELLED`
-5. Save and copy the Webhook ID
-
-### 5. Update Environment Variables
-
-Add to `backend/.env`:
-
-**Development (Sandbox):**
-```bash
-PAYPAL_CLIENT_ID=your-sandbox-client-id
-PAYPAL_CLIENT_SECRET=your-sandbox-client-secret
-PAYPAL_MODE=sandbox
-PAYPAL_WEBHOOK_ID=your-webhook-id
-```
-
-**Production (Live):**
-```bash
-PAYPAL_CLIENT_ID=your-live-client-id
-PAYPAL_CLIENT_SECRET=your-live-client-secret
-PAYPAL_MODE=live
-PAYPAL_WEBHOOK_ID=your-webhook-id
-```
-
----
-
-## Environment Configuration
-
-### Backend `.env` File
-
-Complete example of `backend/.env`:
+Config (`backend/.env`, read by `app/core/config.py`):
 
 ```bash
-# Database Configuration
-DATABASE_URL=postgresql://familyapp:familyapp123@db:5432/familyapp
-
-# Application Configuration
-DEBUG=True
-BASE_URL=http://localhost:8000
-ALLOWED_ORIGINS=http://localhost:3003,http://localhost:8000
-
-# Security
-SECRET_KEY=your-super-secret-key-change-this-in-production
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# Google OAuth Configuration
-GOOGLE_CLIENT_ID=123456789-abcdefghijklmnop.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-abc123def456
-GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
-
-# PayPal Configuration
-PAYPAL_CLIENT_ID=AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPp
-PAYPAL_CLIENT_SECRET=EE1234567890abcdefghijklmnopqrstuv
-PAYPAL_MODE=sandbox
-PAYPAL_WEBHOOK_ID=WH-1A2B3C4D5E6F7G8H9I0J
+GOOGLE_CLIENT_ID=your-web-client-id.apps.googleusercontent.com   # primary web client
+GOOGLE_CLIENT_IDS=id1.apps.googleusercontent.com,id2...          # optional: comma list of additional client IDs
+                                                                   # (native iOS/Android clients under the same Cloud project)
+GOOGLE_CLIENT_SECRET=your-client-secret
+GOOGLE_REDIRECT_URI=https://family.agent-ia.mx/auth/google/callback
 ```
 
-### Store Credentials in Vault
+`GoogleOAuthService.verify_google_token` (`backend/app/services/google_oauth_service.py`) skips the library's built-in `aud` check and validates the token against the union of `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_IDS` manually, so any client sharing the Cloud project (web, iOS, Android) can authenticate.
 
-For production, store these credentials in HashiCorp Vault:
+**Google Cloud Console**: create an OAuth 2.0 Web-application client, add authorized JavaScript origin + redirect URI matching `GOOGLE_REDIRECT_URI` above (both the local `http://localhost:3003` and prod `https://family.agent-ia.mx` variants).
+
+**Endpoints** (`backend/app/api/routes/oauth.py`, mounted at `/api/oauth`):
+- `POST /api/oauth/google` — login/register with a Google ID token; creates the user if new (needs `family_id` or `join_code`).
+- `POST /api/oauth/google/verify` — verify a Google token without creating an account.
+
+## PayPal (subscriptions, not one-off payments)
+
+This app bills via **PayPal subscriptions** (recurring Billing Plans), not the classic one-off Payments API — there is no `/api/payment/*` route group. PayPal only; no Stripe, no Mercado Pago.
+
+Config (`backend/.env`):
 
 ```bash
-# Google OAuth
-vault kv put secret/family-task-manager/oauth \
-  google_client_id="your-google-client-id" \
-  google_client_secret="your-google-client-secret"
+PAYPAL_CLIENT_ID=...
+PAYPAL_CLIENT_SECRET=...
+PAYPAL_MODE=sandbox   # or live
+PAYPAL_WEBHOOK_ID=...
 
-# PayPal
-vault kv put secret/family-task-manager/payment \
-  paypal_client_id="your-paypal-client-id" \
-  paypal_client_secret="your-paypal-client-secret" \
-  paypal_mode="live" \
-  paypal_webhook_id="your-webhook-id"
+# One PayPal Billing Plan ID per (tier x cycle) — provisioned via
+# backend/scripts/setup_paypal_plans.py, then pasted here:
+PAYPAL_PLAN_ID_PLUS_MONTHLY=...
+PAYPAL_PLAN_ID_PLUS_ANNUAL=...
+PAYPAL_PLAN_ID_PRO_MONTHLY=...
+PAYPAL_PLAN_ID_PRO_ANNUAL=...
 ```
 
----
+**Endpoints** (`backend/app/api/routes/subscriptions.py` + `subscriptions_webhook.py`, mounted at `/api/subscriptions`):
+- `GET /api/subscriptions/plans` — list tiers.
+- `GET /api/subscriptions/current` — the family's active subscription.
+- `GET /api/subscriptions/usage` — metered-feature usage against plan limits.
+- `POST /api/subscriptions/checkout` — creates a PayPal subscription for a plan+billing_cycle, returns an approval URL (redirects to `{PUBLIC_URL}/parent/settings/subscription/activate` on approve, `?cancelled=1` on cancel).
+- `POST /api/subscriptions/activate` — finalizes after PayPal approval redirect.
+- `POST /api/subscriptions/cancel` — cancels the family's subscription.
+- `POST /api/subscriptions/webhook` — PayPal webhook receiver; signature-verified via `PayPalService.verify_webhook_signature`.
 
-## Testing
+**PayPal Developer Dashboard**: create a Sandbox app for dev, a Live app for prod; under the app's Webhooks, point the webhook URL at `https://api-family.agent-ia.mx/api/subscriptions/webhook` and subscribe to the `BILLING.SUBSCRIPTION.*` events (activation/cancellation reconciliation — see `paypal_service.py` for the exact set consumed).
 
-### Test Google OAuth
+## Secrets in production
 
-1. Start the backend and frontend:
-   ```bash
-   docker-compose up -d
-   ```
+Current prod (10.1.0.91) does **not** set `VAULT_ADDR`/`VAULT_TOKEN` — all secrets above live directly in `.env` on the host, per `.env.onprem.example`. (`app/core/vault_bootstrap.py` still folds Vault KV into env if those two vars are ever set, but that path is unused today.)
 
-2. Navigate to `http://localhost:3003/login`
+## See also
 
-3. Click "Sign in with Google"
-
-4. You should see Google's OAuth consent screen
-
-5. After authorization, you'll be redirected back and logged in
-
-### Test PayPal Payments
-
-1. Navigate to `http://localhost:3003/payment`
-
-2. Click "Subscribe with PayPal" on any plan
-
-3. You'll be redirected to PayPal Sandbox
-
-4. Use sandbox test credentials to complete payment
-
-5. After approval, you'll be redirected to `/payment/success`
-
-### PayPal Sandbox Test Accounts
-
-1. Go to [PayPal Sandbox Accounts](https://developer.paypal.com/dashboard/accounts)
-2. Use the provided test accounts or create new ones
-3. Use these credentials when testing payments
-
----
-
-## Production Deployment
-
-### Checklist
-
-- [ ] Update `GOOGLE_CLIENT_ID` in frontend code
-- [ ] Set `PAYPAL_MODE=live` in production environment
-- [ ] Use production Google OAuth credentials
-- [ ] Use production PayPal credentials
-- [ ] Store all secrets in Vault (not in `.env` files)
-- [ ] Add production domains to Google OAuth authorized origins
-- [ ] Add production webhook URL to PayPal
-- [ ] Enable HTTPS for all endpoints
-- [ ] Test payment flow thoroughly
-- [ ] Set up webhook monitoring and error handling
-
-### Security Best Practices
-
-1. **Never commit secrets to version control**
-   - Use `.env` for local development only
-   - Use Vault or environment variables for production
-
-2. **Validate webhook signatures**
-   - The PayPal webhook handler includes signature verification
-   - Ensure `PAYPAL_WEBHOOK_ID` is correctly configured
-
-3. **Use HTTPS in production**
-   - PayPal requires HTTPS for live mode
-   - Google OAuth recommends HTTPS for security
-
-4. **Implement rate limiting**
-   - Add rate limiting to payment endpoints
-   - Prevent abuse of OAuth endpoints
-
-5. **Log all payment events**
-   - Monitor successful and failed payments
-   - Set up alerts for payment errors
-
----
-
-## API Endpoints
-
-### OAuth Endpoints
-
-- `POST /api/oauth/google` - Authenticate with Google
-- `POST /api/oauth/google/verify` - Verify Google token without creating account
-
-### Payment Endpoints
-
-- `POST /api/payment/create` - Create a PayPal payment
-- `POST /api/payment/execute` - Execute/confirm a payment
-- `GET /api/payment/details/{payment_id}` - Get payment details
-- `POST /api/payment/webhook` - Handle PayPal webhook events
-
-### Frontend Pages
-
-- `/login` - Login page with Google OAuth button
-- `/payment` - Payment plans selection
-- `/payment/success` - Payment success page
-- `/payment/cancel` - Payment cancellation page
-
----
-
-## Troubleshooting
-
-### Google OAuth Issues
-
-**Error: "redirect_uri_mismatch"**
-- Ensure the redirect URI in Google Console matches exactly
-- Check both JavaScript origins and redirect URIs
-
-**Error: "Invalid token"**
-- Verify `GOOGLE_CLIENT_ID` is correct in both backend and frontend
-- Check token expiration (Google tokens expire after 1 hour)
-
-### PayPal Issues
-
-**Error: "Payment creation failed"**
-- Verify `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`
-- Check `PAYPAL_MODE` is set correctly (sandbox/live)
-- Ensure amount is greater than 0
-
-**Webhook not receiving events**
-- Verify webhook URL is accessible from internet
-- Check webhook ID matches PayPal dashboard
-- Verify signature validation is working
-
----
-
-## Support
-
-For issues or questions:
-- Check the [FastAPI documentation](https://fastapi.tiangolo.com/)
-- Review [Google OAuth documentation](https://developers.google.com/identity/protocols/oauth2)
-- Review [PayPal REST API documentation](https://developer.paypal.com/docs/api/overview/)
-- Open an issue in the project repository
-
----
-
-**Last Updated:** 2026-02-27
+- `CLAUDE.md` — canonical env-var table, subscription/premium-gating architecture (`app/core/premium.py`), production layout.
+- `backend/app/services/google_oauth_service.py`, `backend/app/services/paypal_service.py` — implementation.
+- `backend/scripts/setup_paypal_plans.py` — provisions the PayPal Billing Plans and prints the `PAYPAL_PLAN_ID_*` values to paste into `.env`.

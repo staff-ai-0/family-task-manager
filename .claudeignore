@@ -28,7 +28,3 @@ package-lock.json
 frontend/package-lock.json
 e2e-tests/package-lock.json
 
-# Outdated docs (causes confusion — CLAUDE.md has current truth)
-actual/
-ARCHITECTURE.md
-.github/copilot-instructions.md

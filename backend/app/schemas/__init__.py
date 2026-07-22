@@ -87,13 +87,6 @@ __all__ = [
     "FamilyResponse",
     "FamilyWithMembers",
     "FamilyStats",
-    # Task schemas (legacy)
-    "TaskBase",
-    "TaskCreate",
-    "TaskUpdate",
-    "TaskComplete",
-    "TaskResponse",
-    "TaskWithDetails",
     # Task Template schemas
     "TaskTemplateBase",
     "TaskTemplateCreate",

@@ -1,5 +1,11 @@
 # Launch-Readiness Audit + Competitive Intel — 2026-07-07
 
+> **ARCHIVED 2026-07-22** — all 5 P0 code items shipped by 2026-07-09; only
+> operator config remains (Sentry DSN, offsite bucket, UptimeRobot, legal
+> placeholders — not code). `docs/specs/family-bank.md` still cites this doc
+> as roadmap source, so kept in place (not moved). See
+> `docs/audit/2026-07-22-forensic/` for the current audit.
+
 Master log. Read this first to resume (survives context reset / new session).
 
 Rendered report (artifact): https://claude.ai/code/artifact/ecaa3294-eaf0-4b89-a0c1-430da6cfc05c

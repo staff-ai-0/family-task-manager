@@ -249,25 +249,6 @@ class BudgetMonthHold(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
-class BudgetSyncState(Base):
-    """Tracks synchronization state between family points and budget system."""
-    
-    __tablename__ = "budget_sync_state"
-    
-    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
-    last_sync_to_budget: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Last time points were synced to budget")
-    last_sync_from_budget: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Last time budget transactions were synced")
-    synced_point_transactions: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default='{}', comment="Map of FTM transaction ID -> budget transaction ID")
-    synced_budget_transactions: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default='{}', comment="Map of budget transaction ID -> FTM transaction ID")
-    sync_errors: Mapped[list] = mapped_column(JSONB, nullable=False, server_default='[]', comment="Recent sync errors")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    
-    # Relationships
-    family: Mapped["Family"] = relationship("Family", back_populates="budget_sync_state")
-
-
 class BudgetCategorizationRule(Base):
     """Rules for automatically categorizing transactions based on payee or description patterns."""
     
