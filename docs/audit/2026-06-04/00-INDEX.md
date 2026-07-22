@@ -1,5 +1,8 @@
 # Production-Readiness & Tech-Debt Audit — 2026-06-04
 
+> **ARCHIVED 2026-07-22** — all tracks (A-D) shipped and deployed; see
+> `docs/audit/2026-07-22-forensic/` for the current audit. Kept for history.
+
 Master log. Survives context reset. Read this first to resume.
 
 ## Goals (from user)

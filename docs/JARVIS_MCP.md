@@ -6,7 +6,7 @@ family-scoped CRUD over the app's activity domains. It is reachable two ways:
 - **In-app** — Jarvis chat uses an in-memory MCP client; family scope comes from
   the caller's JWT. Always on.
 - **External HTTP** — a streamable-HTTP transport mounted at `/mcp`, behind a
-  per-family bearer token. Gated by `JARVIS_MCP_HTTP_ENABLED` (default `true`).
+  per-family bearer token. Gated by `JARVIS_MCP_HTTP_ENABLED` (default `false`).
 
 Destructive and money-moving tools are never executed inline: they create a
 `jarvis_pending_action` and emit an SSE `confirm` event for a parent to approve.
@@ -16,12 +16,12 @@ bound `McpContext` (JWT in-app, token on the HTTP path).
 ## External URL
 
 ```
-https://api-gcp-family.agent-ia.mx/mcp
+https://api-family.agent-ia.mx/mcp
 ```
 
-(The same backend that serves `/api/*`. Cloudflare Tunnel `gcp-family` already
-routes `api-gcp-family.agent-ia.mx` → `http://backend:8000`, so no new tunnel
-route is needed.)
+(The same backend that serves `/api/*`. Cloudflare Tunnel `family-onprem` already
+routes `api-family.agent-ia.mx` → `http://family_onprem_backend:8000`, so no new
+tunnel route is needed.)
 
 ## Tokens
 
@@ -41,16 +41,19 @@ tables. Migration `mcp_restricted_role` creates the role; one manual grant and
 one env var wire it up:
 
 ```bash
+# Run as jc, rootless podman, on the prod host (10.1.0.91) — never sudo podman.
+
 # 1. Run migrations (creates the NOLOGIN jarvis_mcp role + grants).
-sudo docker compose --env-file .env -f docker-compose.gcp.yml \
-  exec -T backend alembic upgrade head
+ssh jc@10.1.0.91 'podman compose --env-file .env -f docker-compose.onprem.yml \
+  exec -T backend alembic upgrade head'
 
 # 2. Allow the app role to assume it (NOT in the migration — app-role name
 #    varies per environment; it is `familyapp` in prod).
-sudo docker compose --env-file .env -f docker-compose.gcp.yml \
-  exec -T postgres psql -U familyapp familyapp -c "GRANT jarvis_mcp TO familyapp;"
+ssh jc@10.1.0.91 'podman compose --env-file .env -f docker-compose.onprem.yml \
+  exec -T postgres psql -U familyapp familyapp -c "GRANT jarvis_mcp TO familyapp;"'
 
-# 3. Point the HTTP transport at the restricted role, then redeploy/restart.
+# 3. Point the HTTP transport at the restricted role, then redeploy via
+#    ./scripts/deploy-onprem.sh (edit .env on the host first).
 echo 'JARVIS_MCP_DB_ROLE=jarvis_mcp' >> .env
 ```
 

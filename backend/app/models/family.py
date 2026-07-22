@@ -108,7 +108,6 @@ class Family(Base):
     budget_accounts = relationship("BudgetAccount", back_populates="family", cascade="all, delete-orphan")
     budget_payees = relationship("BudgetPayee", back_populates="family", cascade="all, delete-orphan")
     budget_transactions = relationship("BudgetTransaction", back_populates="family", cascade="all, delete-orphan")
-    budget_sync_state = relationship("BudgetSyncState", back_populates="family", uselist=False, cascade="all, delete-orphan")
     budget_categorization_rules = relationship("BudgetCategorizationRule", back_populates="family", cascade="all, delete-orphan")
     budget_goals = relationship("BudgetGoal", back_populates="family", cascade="all, delete-orphan")
     budget_recurring_transactions = relationship("BudgetRecurringTransaction", back_populates="family", cascade="all, delete-orphan")

@@ -492,7 +492,7 @@ class TestFamilyExport:
         # README documents the deliberate exclusions
         readme = zf.read("README.txt").decode()
         assert "a2a_webhook_deliveries" in readme
-        assert "budget_sync_state" in readme
+        assert "family_cup_seasons" in readme
 
     def test_every_family_scoped_table_is_exported_or_excluded(self):
         """Every family_id-bearing table must be covered by the export or be
