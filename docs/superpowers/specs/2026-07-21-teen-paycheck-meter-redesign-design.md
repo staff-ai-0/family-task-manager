@@ -67,9 +67,9 @@ transparency for parents.
    - No numbers are rendered on or near the bar. It's a pure visual proportion
      signal, matching "they just need to know their pay is proportional to
      quality and amount of completion."
-   - The **"¡Pago liberado! $X 🎉" reveal is unchanged** — once a week is
-     actually released the amount is a settled fact, not a moving projection,
-     so it's fine (and useful) for the teen to see the real number then.
+   - The **"¡Pago liberado! 🎉" reveal is unchanged, verbatim** — it already
+     shows no dollar figure today (plain celebratory text), so there's
+     nothing to touch here and no new data plumbing needed.
 
 3. **One new backend field**, no schema migration, no new endpoint:
    `ChorePaycheckPreview.discounted_pct: int` (0–100), computed in
@@ -125,4 +125,4 @@ transparency for parents.
 | `backend/app/schemas/bank.py` | Add `discounted_pct: int` to `ChorePaycheckPreview` |
 | `backend/app/services/bank_service.py` | Compute `lost_units`/`discounted_pct` alongside the existing `_chore_units`/`_paycheck_projection` math |
 | `backend/tests/test_chore_paycheck.py` (or new test file) | New tests per Testing section above |
-| `frontend/src/pages/bank.astro` | Replace the live meter (lines 108–129) with the static-goal + explanatory line + three-segment bar; keep the released-amount reveal |
+| `frontend/src/pages/bank.astro` | Replace the live meter (lines 108–129) with the static-goal + explanatory line + three-segment bar; keep the released reveal verbatim |
