@@ -7,8 +7,8 @@ Handles restoration, permanent deletion, and listing of deleted items.
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
-from typing import Optional, TypeVar
-from datetime import datetime, timezone
+from typing import Optional, Type, TypeVar
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from app.models.budget import (
@@ -20,6 +20,9 @@ from app.models.budget import (
 from app.core.exceptions import NotFoundException
 
 T = TypeVar('T')
+SoftDeletable = TypeVar(
+    'SoftDeletable', BudgetTransaction, BudgetAccount, BudgetCategory, BudgetCategoryGroup
+)
 
 
 class RecycleBinService:
@@ -138,28 +141,70 @@ class RecycleBinService:
         return result
     
     @staticmethod
+    async def _restore(
+        db: AsyncSession,
+        model: Type[SoftDeletable],
+        item_id: UUID,
+        family_id: UUID,
+        not_found_msg: str,
+    ) -> SoftDeletable:
+        """Shared restore body for every recycle-bin-eligible model."""
+        stmt = select(model).where(
+            model.id == item_id,
+            model.family_id == family_id,
+            model.deleted_at.is_not(None),
+        )
+        item = await db.scalar(stmt)
+
+        if not item:
+            raise NotFoundException(not_found_msg)
+
+        item.deleted_at = None
+        item.deleted_by_id = None
+        await db.commit()
+        # updated_at has an `onupdate=func.now()` SQL-computed default, which
+        # SQLAlchemy marks expired after flush regardless of expire_on_commit
+        # — every restore_* route reads it (`restored_at`) right after this
+        # returns, and an expired attribute accessed outside an await
+        # context 500s with MissingGreenlet. Refresh so it's already loaded.
+        await db.refresh(item)
+
+        return item
+
+    @staticmethod
+    async def _permanently_delete(
+        db: AsyncSession,
+        model: Type[SoftDeletable],
+        item_id: UUID,
+        family_id: UUID,
+        not_found_msg: str,
+    ) -> SoftDeletable:
+        """Shared hard-delete lookup+guard; caller commits (account cascades
+        its transactions into the same commit)."""
+        stmt = select(model).where(
+            model.id == item_id,
+            model.family_id == family_id,
+            model.deleted_at.is_not(None),
+        )
+        item = await db.scalar(stmt)
+
+        if not item:
+            raise NotFoundException(not_found_msg)
+
+        await db.delete(item)
+        return item
+
+    @staticmethod
     async def restore_transaction(
         db: AsyncSession,
         transaction_id: UUID,
         family_id: UUID,
     ) -> BudgetTransaction:
         """Restore a soft-deleted transaction from recycle bin"""
-        stmt = select(BudgetTransaction).where(
-            BudgetTransaction.id == transaction_id,
-            BudgetTransaction.family_id == family_id,
-            BudgetTransaction.deleted_at.is_not(None),
+        return await RecycleBinService._restore(
+            db, BudgetTransaction, transaction_id, family_id, "Deleted transaction not found"
         )
-        transaction = await db.scalar(stmt)
-        
-        if not transaction:
-            raise NotFoundException("Deleted transaction not found")
-        
-        transaction.deleted_at = None
-        transaction.deleted_by_id = None
-        await db.commit()
-        
-        return transaction
-    
+
     @staticmethod
     async def restore_account(
         db: AsyncSession,
@@ -167,22 +212,10 @@ class RecycleBinService:
         family_id: UUID,
     ) -> BudgetAccount:
         """Restore a soft-deleted account from recycle bin"""
-        stmt = select(BudgetAccount).where(
-            BudgetAccount.id == account_id,
-            BudgetAccount.family_id == family_id,
-            BudgetAccount.deleted_at.is_not(None),
+        return await RecycleBinService._restore(
+            db, BudgetAccount, account_id, family_id, "Deleted account not found"
         )
-        account = await db.scalar(stmt)
-        
-        if not account:
-            raise NotFoundException("Deleted account not found")
-        
-        account.deleted_at = None
-        account.deleted_by_id = None
-        await db.commit()
-        
-        return account
-    
+
     @staticmethod
     async def restore_category(
         db: AsyncSession,
@@ -190,22 +223,10 @@ class RecycleBinService:
         family_id: UUID,
     ) -> BudgetCategory:
         """Restore a soft-deleted category from recycle bin"""
-        stmt = select(BudgetCategory).where(
-            BudgetCategory.id == category_id,
-            BudgetCategory.family_id == family_id,
-            BudgetCategory.deleted_at.is_not(None),
+        return await RecycleBinService._restore(
+            db, BudgetCategory, category_id, family_id, "Deleted category not found"
         )
-        category = await db.scalar(stmt)
-        
-        if not category:
-            raise NotFoundException("Deleted category not found")
-        
-        category.deleted_at = None
-        category.deleted_by_id = None
-        await db.commit()
-        
-        return category
-    
+
     @staticmethod
     async def restore_category_group(
         db: AsyncSession,
@@ -213,22 +234,10 @@ class RecycleBinService:
         family_id: UUID,
     ) -> BudgetCategoryGroup:
         """Restore a soft-deleted category group from recycle bin"""
-        stmt = select(BudgetCategoryGroup).where(
-            BudgetCategoryGroup.id == group_id,
-            BudgetCategoryGroup.family_id == family_id,
-            BudgetCategoryGroup.deleted_at.is_not(None),
+        return await RecycleBinService._restore(
+            db, BudgetCategoryGroup, group_id, family_id, "Deleted category group not found"
         )
-        group = await db.scalar(stmt)
-        
-        if not group:
-            raise NotFoundException("Deleted category group not found")
-        
-        group.deleted_at = None
-        group.deleted_by_id = None
-        await db.commit()
-        
-        return group
-    
+
     @staticmethod
     async def permanently_delete_transaction(
         db: AsyncSession,
@@ -236,36 +245,22 @@ class RecycleBinService:
         family_id: UUID,
     ) -> None:
         """Permanently delete a soft-deleted transaction"""
-        stmt = select(BudgetTransaction).where(
-            BudgetTransaction.id == transaction_id,
-            BudgetTransaction.family_id == family_id,
-            BudgetTransaction.deleted_at.is_not(None),
+        await RecycleBinService._permanently_delete(
+            db, BudgetTransaction, transaction_id, family_id, "Deleted transaction not found"
         )
-        transaction = await db.scalar(stmt)
-        
-        if not transaction:
-            raise NotFoundException("Deleted transaction not found")
-        
-        await db.delete(transaction)
         await db.commit()
-    
+
     @staticmethod
     async def permanently_delete_account(
         db: AsyncSession,
         account_id: UUID,
         family_id: UUID,
     ) -> None:
-        """Permanently delete a soft-deleted account"""
-        stmt = select(BudgetAccount).where(
-            BudgetAccount.id == account_id,
-            BudgetAccount.family_id == family_id,
-            BudgetAccount.deleted_at.is_not(None),
+        """Permanently delete a soft-deleted account (and its deleted transactions)"""
+        await RecycleBinService._permanently_delete(
+            db, BudgetAccount, account_id, family_id, "Deleted account not found"
         )
-        account = await db.scalar(stmt)
-        
-        if not account:
-            raise NotFoundException("Deleted account not found")
-        
+
         # Permanently delete associated transactions too
         stmt_txns = select(BudgetTransaction).where(
             BudgetTransaction.account_id == account_id,
@@ -274,10 +269,9 @@ class RecycleBinService:
         transactions = await db.scalars(stmt_txns)
         for txn in transactions:
             await db.delete(txn)
-        
-        await db.delete(account)
+
         await db.commit()
-    
+
     @staticmethod
     async def permanently_delete_category(
         db: AsyncSession,
@@ -285,19 +279,11 @@ class RecycleBinService:
         family_id: UUID,
     ) -> None:
         """Permanently delete a soft-deleted category"""
-        stmt = select(BudgetCategory).where(
-            BudgetCategory.id == category_id,
-            BudgetCategory.family_id == family_id,
-            BudgetCategory.deleted_at.is_not(None),
+        await RecycleBinService._permanently_delete(
+            db, BudgetCategory, category_id, family_id, "Deleted category not found"
         )
-        category = await db.scalar(stmt)
-        
-        if not category:
-            raise NotFoundException("Deleted category not found")
-        
-        await db.delete(category)
         await db.commit()
-    
+
     @staticmethod
     async def permanently_delete_category_group(
         db: AsyncSession,
@@ -305,19 +291,11 @@ class RecycleBinService:
         family_id: UUID,
     ) -> None:
         """Permanently delete a soft-deleted category group"""
-        stmt = select(BudgetCategoryGroup).where(
-            BudgetCategoryGroup.id == group_id,
-            BudgetCategoryGroup.family_id == family_id,
-            BudgetCategoryGroup.deleted_at.is_not(None),
+        await RecycleBinService._permanently_delete(
+            db, BudgetCategoryGroup, group_id, family_id, "Deleted category group not found"
         )
-        group = await db.scalar(stmt)
-        
-        if not group:
-            raise NotFoundException("Deleted category group not found")
-        
-        await db.delete(group)
         await db.commit()
-    
+
     @staticmethod
     async def empty_recycle_bin(
         db: AsyncSession,
@@ -327,60 +305,38 @@ class RecycleBinService:
         """
         Permanently delete items older than specified days.
         Default 30 days to match requirements.
+
+        Filters the cutoff in SQL (WHERE deleted_at < cutoff) instead of
+        loading every soft-deleted row per family per entity type into
+        Python and filtering there — that scales badly for a family with a
+        large recycle bin.
         """
-        cutoff = datetime.now(timezone.utc).timestamp() - (days_old * 86400)
-        
-        # Count items to be deleted
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days_old)
+
         count = {
             'transactions': 0,
             'accounts': 0,
             'categories': 0,
             'category_groups': 0,
         }
-        
-        # Delete old transactions
-        stmt = select(BudgetTransaction).where(
-            BudgetTransaction.family_id == family_id,
-            BudgetTransaction.deleted_at.is_not(None),
-        )
-        old_transactions = await db.scalars(stmt)
-        for txn in old_transactions:
-            if txn.deleted_at and txn.deleted_at.timestamp() < cutoff:
-                await db.delete(txn)
-                count['transactions'] += 1
-        
-        # Delete old accounts
-        stmt = select(BudgetAccount).where(
-            BudgetAccount.family_id == family_id,
-            BudgetAccount.deleted_at.is_not(None),
-        )
-        old_accounts = await db.scalars(stmt)
-        for acc in old_accounts:
-            if acc.deleted_at and acc.deleted_at.timestamp() < cutoff:
-                await db.delete(acc)
-                count['accounts'] += 1
-        
-        # Delete old categories
-        stmt = select(BudgetCategory).where(
-            BudgetCategory.family_id == family_id,
-            BudgetCategory.deleted_at.is_not(None),
-        )
-        old_categories = await db.scalars(stmt)
-        for cat in old_categories:
-            if cat.deleted_at and cat.deleted_at.timestamp() < cutoff:
-                await db.delete(cat)
-                count['categories'] += 1
-        
-        # Delete old category groups
-        stmt = select(BudgetCategoryGroup).where(
-            BudgetCategoryGroup.family_id == family_id,
-            BudgetCategoryGroup.deleted_at.is_not(None),
-        )
-        old_groups = await db.scalars(stmt)
-        for grp in old_groups:
-            if grp.deleted_at and grp.deleted_at.timestamp() < cutoff:
-                await db.delete(grp)
-                count['category_groups'] += 1
-        
+        count_keys = {
+            BudgetTransaction: 'transactions',
+            BudgetAccount: 'accounts',
+            BudgetCategory: 'categories',
+            BudgetCategoryGroup: 'category_groups',
+        }
+
+        for model in RecycleBinService.SUPPORTED_MODELS.values():
+            stmt = select(model).where(
+                model.family_id == family_id,
+                model.deleted_at.is_not(None),
+                model.deleted_at < cutoff,
+            )
+            old_items = await db.scalars(stmt)
+            key = count_keys[model]
+            for item in old_items:
+                await db.delete(item)
+                count[key] += 1
+
         await db.commit()
         return count
