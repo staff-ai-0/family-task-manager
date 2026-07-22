@@ -1,5 +1,5 @@
 const ACCESS_MAX_AGE = 60 * 60;            // 1 hour
-const REFRESH_MAX_AGE = 60 * 60 * 24 * 7;  // 7 days
+const REFRESH_MAX_AGE = 60 * 60 * 24 * 30;  // 30 days (sliding: renewed on every use)
 
 function buildCookie(
     name: string,
