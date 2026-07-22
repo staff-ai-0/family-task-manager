@@ -286,3 +286,76 @@ class TestSendWelcomeIfNotSent:
         # is called "Test Family")
         assert "Family Task Manager" not in subject
         assert test_child_user.name in subject
+
+
+# ---------------------------------------------------------------------------
+# Admin signup alert
+# ---------------------------------------------------------------------------
+
+
+class TestNotifyAdminNewSignup:
+    @pytest.mark.asyncio
+    async def test_alert_sent_when_configured(
+        self, db_session, test_parent_user, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.services.email_service.settings.ADMIN_ALERT_EMAIL",
+            "ops@example.com",
+        )
+        with patch(
+            "app.services.email_service.EmailService._send",
+            new=AsyncMock(return_value=True),
+        ) as mock_send:
+            await EmailService.send_welcome_if_not_sent(
+                db=db_session, user=test_parent_user, base_url="https://x"
+            )
+
+        # Welcome email + admin alert = 2 calls
+        assert mock_send.call_count == 2
+        alert_call = mock_send.call_args_list[1].kwargs
+        assert alert_call["to"] == "ops@example.com"
+        assert test_parent_user.name in alert_call["subject"]
+
+    @pytest.mark.asyncio
+    async def test_no_alert_when_unconfigured(
+        self, db_session, test_parent_user, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.services.email_service.settings.ADMIN_ALERT_EMAIL", ""
+        )
+        with patch(
+            "app.services.email_service.EmailService._send",
+            new=AsyncMock(return_value=True),
+        ) as mock_send:
+            await EmailService.send_welcome_if_not_sent(
+                db=db_session, user=test_parent_user, base_url="https://x"
+            )
+
+        # Only the welcome email itself — no alert call.
+        assert mock_send.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_alert_failure_does_not_break_welcome_flow(
+        self, db_session, test_parent_user, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.services.email_service.settings.ADMIN_ALERT_EMAIL",
+            "ops@example.com",
+        )
+
+        async def fake_send(*, to, subject, html):
+            if to == "ops@example.com":
+                raise RuntimeError("alert transport down")
+            return True
+
+        with patch(
+            "app.services.email_service.EmailService._send",
+            new=AsyncMock(side_effect=fake_send),
+        ):
+            result = await EmailService.send_welcome_if_not_sent(
+                db=db_session, user=test_parent_user, base_url="https://x"
+            )
+
+        # Welcome flow must still succeed even though the alert blew up.
+        assert result is True
+        assert test_parent_user.welcome_email_sent is True
