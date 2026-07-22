@@ -80,7 +80,7 @@ async def restore_transaction(
     family_id = to_uuid_required(current_user.family_id)
     
     transaction = await RecycleBinService.restore_transaction(
-        db, family_id, transaction_id
+        db, transaction_id, family_id
     )
     
     return {
@@ -104,7 +104,7 @@ async def restore_account(
     family_id = to_uuid_required(current_user.family_id)
     
     account = await RecycleBinService.restore_account(
-        db, family_id, account_id
+        db, account_id, family_id
     )
     
     return {
@@ -129,7 +129,7 @@ async def restore_category(
     family_id = to_uuid_required(current_user.family_id)
     
     category = await RecycleBinService.restore_category(
-        db, family_id, category_id
+        db, category_id, family_id
     )
     
     return {
@@ -154,7 +154,7 @@ async def restore_category_group(
     family_id = to_uuid_required(current_user.family_id)
     
     group = await RecycleBinService.restore_category_group(
-        db, family_id, group_id
+        db, group_id, family_id
     )
     
     return {
@@ -179,7 +179,7 @@ async def permanently_delete_transaction(
     family_id = to_uuid_required(current_user.family_id)
     
     await RecycleBinService.permanently_delete_transaction(
-        db, family_id, transaction_id
+        db, transaction_id, family_id
     )
     
     return {
@@ -198,7 +198,7 @@ async def permanently_delete_account(
     family_id = to_uuid_required(current_user.family_id)
     
     await RecycleBinService.permanently_delete_account(
-        db, family_id, account_id
+        db, account_id, family_id
     )
     
     return {
@@ -217,7 +217,7 @@ async def permanently_delete_category(
     family_id = to_uuid_required(current_user.family_id)
     
     await RecycleBinService.permanently_delete_category(
-        db, family_id, category_id
+        db, category_id, family_id
     )
     
     return {
@@ -236,7 +236,7 @@ async def permanently_delete_category_group(
     family_id = to_uuid_required(current_user.family_id)
     
     await RecycleBinService.permanently_delete_category_group(
-        db, family_id, group_id
+        db, group_id, family_id
     )
     
     return {
