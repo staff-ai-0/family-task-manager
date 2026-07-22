@@ -28,7 +28,8 @@ router = APIRouter()
 # and granted to the FTM key, along with claude-haiku (naming-drift fix — the
 # key previously only granted "haiku"). claude-sonnet/gpt-4o stay out — their
 # Anthropic/OpenAI upstream fix was never confirmed end-to-end in that issue.
-ALLOWED_MODELS = {"gemini-2.5-flash", "qwen3", "claude-haiku"}
+# mistral-nemo (Ollama, 2026-07-22) added as a second local-GPU option alongside qwen3.
+ALLOWED_MODELS = {"gemini-2.5-flash", "qwen3", "claude-haiku", "mistral-nemo"}
 
 
 class ChatRequest(BaseModel):
