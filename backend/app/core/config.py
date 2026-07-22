@@ -133,6 +133,10 @@ class Settings(BaseSettings):
     EMAIL_FROM_NAME: str = "Family Task Manager"
     EMAIL_VERIFICATION_EXPIRE_MINUTES: int = 1440  # 24 hours
 
+    # Ops alert: BCC'd on every successful welcome-email dispatch (new user
+    # signup), across all families. Empty disables the alert entirely.
+    ADMIN_ALERT_EMAIL: str = ""
+
     # SMTP (Google Workspace via App Password). When set, takes precedence over
     # Resend. EMAIL_FROM must match SMTP_USER (or one of its verified aliases),
     # else Gmail rewrites/rejects the From header.

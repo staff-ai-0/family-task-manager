@@ -1024,6 +1024,32 @@ class EmailService:
         )
 
     @staticmethod
+    async def _notify_admin_new_signup(user: User, family_name: str) -> None:
+        """Best-effort ops alert on every new-user welcome dispatch. Never
+        raises — a failure here must not affect the signup/welcome flow."""
+        if not settings.ADMIN_ALERT_EMAIL:
+            return
+        try:
+            html = (
+                f"<p>Nuevo usuario registrado:</p>"
+                f"<ul>"
+                f"<li><b>Nombre:</b> {user.name}</li>"
+                f"<li><b>Email:</b> {user.email}</li>"
+                f"<li><b>Rol:</b> {user.role.value}</li>"
+                f"<li><b>Familia:</b> {family_name}</li>"
+                f"</ul>"
+            )
+            await EmailService._send(
+                to=settings.ADMIN_ALERT_EMAIL,
+                subject=f"Nuevo usuario: {user.name} ({family_name})",
+                html=html,
+            )
+        except Exception:
+            logger.warning(
+                "admin signup alert failed for %s", user.email, exc_info=True
+            )
+
+    @staticmethod
     async def send_welcome_if_not_sent(
         db: AsyncSession,
         user: User,
@@ -1088,6 +1114,7 @@ class EmailService:
                 await db.commit()
                 await db.refresh(user)
                 logger.info(f"welcome email sent to {user.email} ({lang}, {_welcome_variant(user)})")
+                await EmailService._notify_admin_new_signup(user, family_name)
                 return True
 
             logger.warning(f"welcome email dispatch returned False for {user.email}")
