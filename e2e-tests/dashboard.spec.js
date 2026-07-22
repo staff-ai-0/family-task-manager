@@ -90,6 +90,15 @@ test.describe('Dashboard', () => {
       .find((c) => c.name === 'lang')?.value;
     expect(langAfter).toBeTruthy();
     expect(langAfter).not.toBe(langBefore);
+
+    // Restore: /api/lang persists preferred_lang on the USER record (not just
+    // this cookie), and this test runs against the shared e2e-fresh account —
+    // leaving it flipped bleeds into every other spec file that logs in as
+    // e2e-fresh and runs alphabetically after this one (found failing
+    // members.spec.js and others with English-only text assertions). Restore
+    // via a direct API call, not another UI click — the welcome-tour overlay
+    // can intercept a second nav click right after this reload.
+    await page.request.post('/api/lang', { form: { lang: langBefore } });
   });
 
   // ── Responsive / visual ────────────────────────────────────────────────

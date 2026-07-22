@@ -12,7 +12,13 @@ test.describe('UX polish (#55)', () => {
   test('reports has no dead "vs Budget" sub-tab', async ({ page }) => {
     await page.goto(`${BASE_URL}/budget/reports`);
     await page.waitForLoadState('networkidle');
-    await expect(page.locator('.report-tab')).toHaveCount(3); // Spending/Cashflow/Net Worth
+    // 5 tabs now (Spending/Cashflow/Forecast/Net Worth/Budget vs Actual) —
+    // Forecast + a REAL "Budget vs Actual" report (commits 2e14a1b, 5e89a8e)
+    // were added after this test was written. The thing this test actually
+    // guards against — the old permanent "Coming soon" dead-end literally
+    // labeled "vs Budget"/"vs Presupuesto" (commit 32210a4) — is still gone;
+    // its replacement is labeled "Budget vs Actual"/"Plan vs Real" instead.
+    await expect(page.locator('.report-tab')).toHaveCount(5);
     await expect(page.getByText('vs Budget', { exact: true })).toHaveCount(0);
     await expect(page.getByText('vs Presupuesto', { exact: true })).toHaveCount(0);
   });

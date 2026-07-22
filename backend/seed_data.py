@@ -909,8 +909,11 @@ async def main():
         await create_demo_subscription(session, family, plans)
 
         # Dedicated E2E account (separate family) so the Playwright suite is
-        # reproducible after any re-seed.
-        await create_e2e_account(session)
+        # reproducible after any re-seed. On Plus (not Free) so AI-gated
+        # pages (Jarvis schedules, receipt scanner) are exercisable by the
+        # suite instead of always hitting the upgrade-lock screen.
+        e2e_family, _e2e_parent = await create_e2e_account(session)
+        await create_demo_subscription(session, e2e_family, plans)
 
     await engine.dispose()
 

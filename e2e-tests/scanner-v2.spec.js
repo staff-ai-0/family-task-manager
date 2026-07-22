@@ -5,7 +5,9 @@ test.describe('Scanner v2', () => {
   test('one-tap snap → confirm card', async ({ page }) => {
     await loginAsParent(page);
     await page.goto('/budget/scan-receipt');
-    await expect(page.locator('text=Snap receipt')).toBeVisible();
+    // App defaults to Spanish when no lang cookie is set — match both
+    // (frontend/src/pages/budget/scan-receipt.astro).
+    await expect(page.getByText(/Snap receipt|Tomar foto/i)).toBeVisible();
     // The native camera input cannot be driven; assert UI scaffolding.
     await expect(page.locator('#confirm-card.hidden')).toHaveCount(1);
   });
