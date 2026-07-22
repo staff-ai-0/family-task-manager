@@ -6,10 +6,9 @@ const { test, expect } = require('@playwright/test');
  *    dismissed after a reload (the onDestroyStarted/sendBeacon persistence fix);
  *  - the dashboard is kid-gated (the isKid-only push-enable button renders for a
  *    child — guards the lowercase-role fix in PR #60);
- *  - an eligible kid sees the green points-converter card.
+ *  - a kid sees their cash-from-gigs balance card on the dashboard.
  *
- * Requires the dev stack on :3003 with the current build + seeded demo data
- * (emma@demo.com is seeded with completed current-week tasks => eligible).
+ * Requires the dev stack on :3003 with the current build + seeded demo data.
  */
 test.describe('Kid onboarding', () => {
   const BASE_URL = process.env.BASE_URL || 'http://localhost:3003';
@@ -69,8 +68,14 @@ test.describe('Kid onboarding', () => {
     await expect(page.locator('.driver-popover')).toHaveCount(0);
   });
 
-  test('eligible kid sees the points converter', async ({ page }) => {
-    // emma is seeded eligible (completed current-week tasks + 150 pts).
+  test('kid dashboard shows the cash-from-gigs balance card', async ({ page }) => {
+    // The self-serve "convert points to money" flow was intentionally removed
+    // 2026-06-30 (commit 30d83c6, "removed dead PointsConverter") — the
+    // two-currency economy now pays gig-board cash via /parent/payouts and
+    // Family Bank allowance, not a kid-initiated points conversion. Points
+    // stay a separate privileges currency (see CLAUDE.md's two-currency
+    // economy section). This asserts the replacement: the kid dashboard's
+    // cash-balance card.
     await page.goto(`${BASE_URL}/login`);
     await page.fill('input[name="email"]', 'emma@demo.com');
     await page.fill('input[name="password"]', 'password123');
@@ -84,8 +89,7 @@ test.describe('Kid onboarding', () => {
       await page.waitForTimeout(300);
     }
 
-    await expect(page.locator('body')).toContainText(/Convert Points to Money/i, {
-      timeout: 10000,
-    });
+    await expect(page.locator('[data-cash-badge]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-cash-badge]')).toContainText(/MXN/);
   });
 });

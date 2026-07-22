@@ -280,14 +280,22 @@ test.describe('Reward Management', () => {
         return;
       }
 
+      // The redeem form is gated by a client-side window.confirm() (see
+      // rewards.astro's data-redeem-form handler) — without a handler,
+      // Playwright auto-dismisses it and the POST never fires.
+      page.on('dialog', (dialog) => dialog.accept());
       await redeemButton.click();
 
-      // Redeem is a server-side form POST that sets a flash banner
-      // ("Reward redeemed! Points deducted." / "¡Premio canjeado! Puntos
-      // descontados.") and redirects. Assert the success flash (either
-      // language); toBeVisible auto-waits for the navigation + SSR render.
+      // Redeem is a server-side form POST that sets a flash banner and
+      // redirects. Two valid outcomes (frontend/src/pages/rewards.astro):
+      // instant deduction ("Reward redeemed! Points deducted." / "¡Premio
+      // canjeado! Puntos descontados.") OR, for approval-gated rewards, a
+      // pending-approval banner ("Sent to a parent for approval" / "Enviado
+      // a tus papás para aprobación") — which reward gets clicked depends on
+      // seed data, so accept either. toBeVisible auto-waits for the
+      // navigation + SSR render.
       await expect(
-        page.getByText(/redeemed|deducted|canjeado|descontados/i).first()
+        page.getByText(/redeemed|deducted|canjeado|descontados|approval|aprobaci[oó]n/i).first()
       ).toBeVisible({ timeout: 10000 });
     });
   });

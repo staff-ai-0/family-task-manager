@@ -27,10 +27,13 @@ test.describe('Direct messages', () => {
   });
 
   test('thread list link reachable from BottomNav chat is /chat (not /dm)', async ({ page }) => {
-    // sanity: chat icon points to family chat, DM is separate page
+    // sanity: chat icon points to family chat, DM is separate page.
+    // For a parent, chat is not a direct BottomNav item — it lives inside
+    // the "More" sheet (MoreSheet.astro, a plain <div> dialog, not a <nav>).
     await login(page);
     await page.goto(`${BASE_URL}/dashboard`);
-    const chatLink = page.locator('nav a[href="/chat"]');
+    await page.locator('#more-nav-btn').click();
+    const chatLink = page.locator('#more-sheet a[href="/chat"]');
     await expect(chatLink).toBeVisible();
   });
 });

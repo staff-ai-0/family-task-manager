@@ -31,7 +31,9 @@ test.describe('Middleware security & 404 reachability', () => {
   test('anonymous /dashboard still redirects to /login with security headers', async ({ request }) => {
     const res = await request.get(`${BASE_URL}/dashboard`, { maxRedirects: 0 });
     expect(res.status()).toBe(302);
-    expect(res.headers()['location']).toBe('/login');
+    // Carries ?next= so login can resume at the original destination
+    // (frontend/src/middleware.ts) — /login itself validates+consumes it.
+    expect(res.headers()['location']).toBe('/login?next=%2Fdashboard');
     // withSecurityHeaders must wrap middleware-generated redirects too
     expect(res.headers()['x-content-type-options']).toBe('nosniff');
     expect(res.headers()['referrer-policy']).toBe('strict-origin-when-cross-origin');

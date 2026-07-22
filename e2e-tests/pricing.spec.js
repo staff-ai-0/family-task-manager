@@ -14,20 +14,20 @@ async function login(page) {
 }
 
 test.describe('Pricing / upgrade (PayPal)', () => {
-  test('page renders + shows tier cards', async ({ page }) => {
+  // /pricing/upgrade is a 301 redirect to /parent/settings/subscription (the
+  // canonical plans+billing surface) — see frontend/src/pages/pricing/upgrade.astro.
+  test('redirects to the canonical subscription settings page', async ({ page }) => {
     await login(page);
     await page.goto(`${BASE_URL}/pricing/upgrade`);
-    await expect(page.locator('h1')).toContainText(/Planes|Plans/i);
-    // At least one tier card visible
-    await expect(page.locator('h2').filter({ hasText: /plus|pro/i }).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/parent\/settings\/subscription$/);
+    await expect(page.locator('h1')).toContainText(/Subscription|Suscripci[oó]n/i);
   });
 
-  test('manage link routes to subscription settings', async ({ page }) => {
+  test('shows the plan comparison table with Plus/Pro tiers', async ({ page }) => {
     await login(page);
     await page.goto(`${BASE_URL}/pricing/upgrade`);
-    // Explicit href avoids matching ambiguity with other "Manage" links.
-    const manage = page.locator('a[href="/parent/settings/subscription"]');
-    await expect(manage).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('table th').filter({ hasText: /plus/i })).toBeVisible();
+    await expect(page.locator('table th').filter({ hasText: /pro/i })).toBeVisible();
   });
 });
 

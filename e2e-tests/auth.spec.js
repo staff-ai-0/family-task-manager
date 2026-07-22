@@ -155,18 +155,16 @@ test.describe('Authentication', () => {
       let accessToken = cookies.find(c => c.name === 'access_token');
       expect(accessToken).toBeDefined();
 
-      // Find and click logout button (typically in profile menu)
-      // Try to click profile/menu button
-      const profileButton = page.locator('button[aria-label*="profile"], a[href="/profile"]').first();
-      if (await profileButton.count() > 0) {
-        await profileButton.click();
-      }
-
-      // Look for logout link/button
-      const logoutButton = page.locator('button:has-text("Logout"), a:has-text("Logout"), button:has-text("Sign out"), a:has-text("Sign out")').first();
+      // Logout lives in the "More" bottom-sheet (MoreSheet.astro), not a top
+      // nav slot — open it first. It's a form submit gated by a
+      // window.confirm() ("Log out?"/"¿Cerrar sesión?"), so needs a dialog
+      // handler too.
+      await page.locator('#more-nav-btn').click();
+      page.on('dialog', (dialog) => dialog.accept());
+      const logoutButton = page.locator('form[data-logout-form] button');
       if (await logoutButton.count() > 0) {
         await logoutButton.click();
-        
+
         // Wait for redirect to login
         await page.waitForURL('**/login', { timeout: 5000 });
 
