@@ -38,9 +38,9 @@ const paidNames = paidRecently.map((k: any) => k.name).join(", ");
 
 // Money owed to the kids (gig cash pending + chore paychecks awaiting release).
 const { data: payoutSummary } = await apiFetch<any>("/api/bank/payout-summary", { token });
-const owedGrand = payoutSummary?.grand_total_cents ?? 0;
+const owedGrand = payoutSummary?.outstanding_grand_total_cents ?? 0;
 const owedCash = payoutSummary?.cash_total_cents ?? 0;
-const owedPaychecks = payoutSummary?.paycheck_total_cents ?? 0;
+const owedPaychecks = payoutSummary?.outstanding_paycheck_total_cents ?? 0;
 const fmtMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 // With the gigs module off there is no payouts page (middleware bounces it);
 // paychecks are released from the Family Bank settings surface instead.
