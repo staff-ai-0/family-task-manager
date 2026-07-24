@@ -25,9 +25,11 @@ lives on `/dashboard` and must not change.
    parent bounces to `/parent?module_off=1`, kid to `/dashboard?module_off=1`
    (role read from the same cached `meUser` already fetched there).
    `parent/index.astro` gets the dismissible module-off banner dashboard has.
-4. **Role-aware post-login redirects.** Login (password + Google) fallback
-   destination: parent → `/parent`, kid → `/dashboard` (role available in the
-   login/OAuth response). Explicit `?next=` still wins.
+4. **Post-login landing.** Implemented via the redirect in decision #1
+   rather than role-aware login logic: login keeps its `/dashboard`
+   fallback, and a parent takes one extra 302 hop to `/parent`. Chosen to
+   avoid duplicating role logic across the password and Google paths.
+   Explicit `?next=` still wins.
 5. **Link sweep.** Any parent-context link/redirect to `/dashboard` → `/parent`.
    Kid-bound redirects (`role !== "parent" → /dashboard`) stay unchanged.
 

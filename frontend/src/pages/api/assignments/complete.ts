@@ -19,9 +19,14 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         const proofImageRaw = formData.get("proof_image_url")?.toString();
         const proofImageUrl = proofImageRaw && proofImageRaw.trim().length > 0 ? proofImageRaw.trim() : null;
         // Where to land after completing — parents complete their own tasks
-        // from /parent, kids from /dashboard. Same-origin relative paths only.
+        // from /parent, kids from /dashboard. Same-origin relative paths only:
+        // reject protocol-relative (//) and backslashes (browsers normalize
+        // "\" to "/" in Location, so "/\evil.com" would become "//evil.com").
         const nextRaw = formData.get("next")?.toString() ?? "";
-        const returnTo = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/dashboard";
+        const returnTo =
+            nextRaw.startsWith("/") && !nextRaw.startsWith("//") && !nextRaw.includes("\\")
+                ? nextRaw
+                : "/dashboard";
 
         if (!assignmentId) {
             const headers = new Headers({ Location: returnTo });
