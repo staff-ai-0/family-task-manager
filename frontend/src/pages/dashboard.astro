@@ -7,6 +7,7 @@ import EnablePushButton from "../components/EnablePushButton.astro";
 import BossBattleBar from "../components/BossBattleBar.astro";
 import PetAvatar from "../components/pet/PetAvatar.astro";
 import { apiFetch } from "../lib/api";
+import { fmtDateTime } from "../lib/datetime";
 import { t } from "../lib/i18n";
 import { stageLabel } from "../lib/pet-art";
 
@@ -59,10 +60,9 @@ const overdueGroups = [...overdueByTemplate.values()].map((items) => {
 
 function fmtShortDate(iso: string | null | undefined): string {
     if (!iso) return "";
-    const s = String(iso);
-    const d = new Date(s.includes("T") ? s : `${s}T00:00:00`);
-    if (isNaN(d.getTime())) return "";
-    return d.toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
+    // fmtDateTime routes bare dates ("2026-07-24") through the tz-neutral
+    // calendar path and timestamps through the family-tz path.
+    return fmtDateTime(String(iso), lang, user.timezone, {
         weekday: "short",
         day: "numeric",
         month: "short",

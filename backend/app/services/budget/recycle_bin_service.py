@@ -6,7 +6,7 @@ Handles restoration, permanent deletion, and listing of deleted items.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, update as sql_update
 from typing import Optional, Type, TypeVar
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -200,10 +200,36 @@ class RecycleBinService:
         transaction_id: UUID,
         family_id: UUID,
     ) -> BudgetTransaction:
-        """Restore a soft-deleted transaction from recycle bin"""
-        return await RecycleBinService._restore(
-            db, BudgetTransaction, transaction_id, family_id, "Deleted transaction not found"
+        """Restore a soft-deleted transaction from recycle bin.
+
+        Split parents get their cascade-deleted children back too (matched
+        by the shared deleted_at timestamp, mirroring restore_account).
+        """
+        stmt = select(BudgetTransaction).where(
+            BudgetTransaction.id == transaction_id,
+            BudgetTransaction.family_id == family_id,
+            BudgetTransaction.deleted_at.is_not(None),
         )
+        txn = await db.scalar(stmt)
+        if not txn:
+            raise NotFoundException("Deleted transaction not found")
+
+        cascade_ts = txn.deleted_at
+        txn.deleted_at = None
+        txn.deleted_by_id = None
+        await db.execute(
+            sql_update(BudgetTransaction)
+            .where(
+                BudgetTransaction.parent_id == transaction_id,
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.deleted_at == cascade_ts,
+            )
+            .values(deleted_at=None, deleted_by_id=None)
+        )
+        await db.commit()
+        # See _restore: updated_at is SQL-computed and expired after flush.
+        await db.refresh(txn)
+        return txn
 
     @staticmethod
     async def restore_account(
@@ -211,10 +237,39 @@ class RecycleBinService:
         account_id: UUID,
         family_id: UUID,
     ) -> BudgetAccount:
-        """Restore a soft-deleted account from recycle bin"""
-        return await RecycleBinService._restore(
-            db, BudgetAccount, account_id, family_id, "Deleted account not found"
+        """Restore a soft-deleted account from recycle bin.
+
+        Also un-deletes the transactions that were cascade-soft-deleted WITH
+        the account (matched by the shared deleted_at timestamp stamped in
+        AccountService.delete_by_id) — but not transactions the user had
+        already deleted individually before the account went to the bin.
+        """
+        stmt = select(BudgetAccount).where(
+            BudgetAccount.id == account_id,
+            BudgetAccount.family_id == family_id,
+            BudgetAccount.deleted_at.is_not(None),
         )
+        account = await db.scalar(stmt)
+        if not account:
+            raise NotFoundException("Deleted account not found")
+
+        cascade_ts = account.deleted_at
+        account.deleted_at = None
+        account.deleted_by_id = None
+        await db.execute(
+            sql_update(BudgetTransaction)
+            .where(
+                BudgetTransaction.account_id == account_id,
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.deleted_at == cascade_ts,
+            )
+            .values(deleted_at=None, deleted_by_id=None)
+        )
+        await db.commit()
+        # See _restore: updated_at is SQL-computed and expired after flush —
+        # the route reads it immediately (restored_at).
+        await db.refresh(account)
+        return account
 
     @staticmethod
     async def restore_category(

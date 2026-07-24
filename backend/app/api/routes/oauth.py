@@ -38,6 +38,13 @@ class GoogleTokenRequest(BaseModel):
         description="Terms + privacy-notice consent. REQUIRED (true) when "
         "the signup creates a NEW family; recorded when true.",
     )
+    timezone: Optional[str] = Field(
+        None,
+        max_length=64,
+        description="Browser IANA timezone; applied to the family when this "
+        "sign-in creates a NEW one (invalid values fall back to UTC). Same "
+        "capture as the password signup path.",
+    )
 
 
 @router.post("/google", response_model=TokenResponse, status_code=status.HTTP_200_OK)
@@ -86,6 +93,7 @@ async def google_oauth_login(
         user, access_token, refresh_token, is_new_user = await GoogleOAuthService.authenticate_or_create_user(
             db, google_user_info, request.family_id, request.join_code, request.role,
             accept_terms=bool(request.accept_terms),
+            timezone=request.timezone,
         )
     except (OAuthConsentRequiredError, OAuthApprovalPendingError) as exc:
         # Structured, machine-readable contract (see docstring). Top-level

@@ -1,326 +1,308 @@
-"""
-E2E Tests for Budget Recycle Bin System
+"""E2E tests for the budget recycle-bin HTTP contract.
 
-Tests the full workflow of soft-deleting and restoring budget items.
+Soft-delete → list → restore → permanently-delete, exercised through the
+ROUTES (not the service layer) because that is where the recycle-bin has
+actually broken in production twice: the list endpoint 500'd on raw ORM
+objects, and restore/permanent-delete passed swapped arguments (PR #156).
+
+Contract locked here:
+- GET  /api/budget/recycle-bin/            → 200 {"data": [rows], "total": n}
+  row = {"id", "type", "name", "deleted_at"}; ?item_type= filters.
+- POST /api/budget/recycle-bin/<kind>/{id}/restore        → 200
+- DELETE /api/budget/recycle-bin/<kind>/{id}/permanently  → 200
+- DELETE /api/budget/recycle-bin/ (empty, >30d only)      → 200
+- Parents only (require_parent_role) → child gets 403.
 """
 
 import pytest
-from uuid import uuid4
-from datetime import datetime, timedelta
-from httpx import AsyncClient
+from datetime import date
 
-from app.models import Family, User, BudgetTransaction, BudgetAccount, BudgetCategory, BudgetCategoryGroup
-from app.schemas.budget import TransactionCreate, AccountCreate, CategoryCreate, CategoryGroupCreate
+from sqlalchemy import select
+
+from app.models.budget import (
+    BudgetAccount,
+    BudgetCategory,
+    BudgetCategoryGroup,
+    BudgetTransaction,
+)
 
 
-@pytest.mark.xfail(reason="Recycle bin E2E tests need debugging - API response format issues")
-@pytest.mark.asyncio
-class TestRecycleBinWorkflow:
-    """Test complete recycle bin workflow for all item types."""
+async def _login(client, email):
+    r = await client.post("/api/auth/login", json={
+        "email": email, "password": "password123",
+    })
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
-    @pytest.fixture
-    async def setup_data(self, client: AsyncClient, test_parent_user: User, test_family: Family):
-        """Setup test data for recycle bin tests."""
-        # Get auth token
-        login_response = await client.post(
-            "/api/auth/login",
-            json={"email": test_parent_user.email, "password": "password123"}
-        )
-        token = login_response.json()["access_token"]
 
-        # Create category group
-        group_response = await client.post(
-            "/api/budget/categories/groups",
-            json={"name": "Test Group", "description": "Test"},
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        group_id = group_response.json()["id"]
+async def _setup(client, headers) -> dict:
+    """Create group → category → account → transaction over the API."""
+    r = await client.post(
+        "/api/budget/categories/groups",
+        json={"name": "Bin Group"},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    group_id = r.json()["id"]
 
-        # Create category
-        cat_response = await client.post(
-            "/api/budget/categories/",
-            json={"name": "Test Category", "group_id": group_id},
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        category_id = cat_response.json()["id"]
+    r = await client.post(
+        "/api/budget/categories/",
+        json={"name": "Bin Category", "group_id": group_id},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    category_id = r.json()["id"]
 
-        # Create account
-        account_response = await client.post(
-            "/api/budget/accounts",
-            json={"name": "Test Account", "account_type": "checking", "balance": 1000},
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        account_id = account_response.json()["id"]
+    r = await client.post(
+        "/api/budget/accounts/",
+        json={"name": "Bin Account", "type": "checking"},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    account_id = r.json()["id"]
 
-        # Create transaction
-        tx_response = await client.post(
-            "/api/budget/transactions",
-            json={
-                "amount": 100,
-                "account_id": account_id,
-                "category_id": category_id,
-                "date": datetime.now().isoformat(),
-                "payee": "Test Payee"
-            },
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        transaction_id = tx_response.json()["id"]
-
-        return {
-            "token": token,
-            "group_id": group_id,
-            "category_id": category_id,
+    r = await client.post(
+        "/api/budget/transactions/",
+        json={
             "account_id": account_id,
-            "transaction_id": transaction_id,
-            "family_id": test_family.id
-        }
+            "date": date.today().isoformat(),
+            "amount": -12345,
+            "category_id": category_id,
+            "payee_name": "Bin Payee",
+        },
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    transaction_id = r.json()["id"]
 
-    async def test_soft_delete_transaction(self, client: AsyncClient, setup_data):
-        """Test soft-deleting a transaction."""
-        token = setup_data["token"]
-        transaction_id = setup_data["transaction_id"]
+    return {
+        "group_id": group_id,
+        "category_id": category_id,
+        "account_id": account_id,
+        "transaction_id": transaction_id,
+    }
 
-        # Delete transaction
-        response = await client.delete(
-            f"/api/budget/transactions/{transaction_id}",
-            headers={"Authorization": f"Bearer {token}"}
+
+async def _bin_rows(client, headers, item_type: str | None = None) -> list[dict]:
+    url = "/api/budget/recycle-bin/"
+    if item_type:
+        url += f"?item_type={item_type}"
+    r = await client.get(url, headers=headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total"] == len(body["data"])
+    return body["data"]
+
+
+class TestRecycleBinWorkflow:
+    @pytest.mark.asyncio
+    async def test_soft_delete_lands_each_kind_in_bin(
+        self, client, test_parent_user
+    ):
+        headers = await _login(client, test_parent_user.email)
+        ids = await _setup(client, headers)
+
+        r = await client.delete(
+            f"/api/budget/transactions/{ids['transaction_id']}", headers=headers
         )
-        assert response.status_code == 204
-
-        # Verify transaction is in recycle bin
-        recycle_response = await client.get(
-            "/api/budget/recycle-bin",
-            headers={"Authorization": f"Bearer {token}"}
+        assert r.status_code == 204, r.text
+        r = await client.delete(
+            f"/api/budget/accounts/{ids['account_id']}", headers=headers
         )
-        assert recycle_response.status_code == 200
-        items = recycle_response.json()["items"]
-        assert any(item["id"] == transaction_id and item["type"] == "transaction" for item in items)
-
-    async def test_soft_delete_account(self, client: AsyncClient, setup_data):
-        """Test soft-deleting an account."""
-        token = setup_data["token"]
-        account_id = setup_data["account_id"]
-
-        # Delete account
-        response = await client.delete(
-            f"/api/budget/accounts/{account_id}",
-            headers={"Authorization": f"Bearer {token}"}
+        assert r.status_code == 204, r.text
+        r = await client.delete(
+            f"/api/budget/categories/{ids['category_id']}", headers=headers
         )
-        assert response.status_code == 204
+        assert r.status_code == 204, r.text
 
-        # Verify account is in recycle bin
-        recycle_response = await client.get(
-            "/api/budget/recycle-bin",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        assert recycle_response.status_code == 200
-        items = recycle_response.json()["items"]
-        assert any(item["id"] == account_id and item["type"] == "account" for item in items)
+        rows = await _bin_rows(client, headers)
+        by_type = {(row["type"], row["id"]) for row in rows}
+        assert ("transaction", ids["transaction_id"]) in by_type
+        assert ("account", ids["account_id"]) in by_type
+        assert ("category", ids["category_id"]) in by_type
+        for row in rows:
+            assert row["deleted_at"] is not None
+            assert row["name"]
 
-    async def test_soft_delete_category(self, client: AsyncClient, setup_data):
-        """Test soft-deleting a category."""
-        token = setup_data["token"]
-        category_id = setup_data["category_id"]
+    @pytest.mark.asyncio
+    async def test_filter_by_item_type(self, client, test_parent_user):
+        headers = await _login(client, test_parent_user.email)
+        ids = await _setup(client, headers)
 
-        # Delete category
-        response = await client.delete(
-            f"/api/budget/categories/{category_id}",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        assert response.status_code == 204
-
-        # Verify category is in recycle bin
-        recycle_response = await client.get(
-            "/api/budget/recycle-bin",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        assert recycle_response.status_code == 200
-        items = recycle_response.json()["items"]
-        assert any(item["id"] == category_id and item["type"] == "category" for item in items)
-
-    async def test_restore_transaction(self, client: AsyncClient, setup_data):
-        """Test restoring a deleted transaction."""
-        token = setup_data["token"]
-        transaction_id = setup_data["transaction_id"]
-
-        # Delete transaction
         await client.delete(
-            f"/api/budget/transactions/{transaction_id}",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-
-        # Restore transaction
-        response = await client.post(
-            f"/api/budget/recycle-bin/transactions/{transaction_id}/restore",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        assert response.status_code == 200
-
-        # Verify transaction is no longer in recycle bin
-        recycle_response = await client.get(
-            "/api/budget/recycle-bin",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        items = recycle_response.json()["items"]
-        assert not any(item["id"] == transaction_id for item in items)
-
-    async def test_permanently_delete_transaction(self, client: AsyncClient, setup_data):
-        """Test permanently deleting a transaction from recycle bin."""
-        token = setup_data["token"]
-        transaction_id = setup_data["transaction_id"]
-
-        # Delete transaction
-        await client.delete(
-            f"/api/budget/transactions/{transaction_id}",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-
-        # Permanently delete
-        response = await client.delete(
-            f"/api/budget/recycle-bin/transactions/{transaction_id}/permanently",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        assert response.status_code == 204
-
-        # Verify transaction is completely gone
-        recycle_response = await client.get(
-            "/api/budget/recycle-bin",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        items = recycle_response.json()["items"]
-        assert not any(item["id"] == transaction_id for item in items)
-
-    async def test_filter_recycle_bin_by_type(self, client: AsyncClient, setup_data):
-        """Test filtering recycle bin items by type."""
-        token = setup_data["token"]
-        transaction_id = setup_data["transaction_id"]
-        account_id = setup_data["account_id"]
-
-        # Delete both items
-        await client.delete(
-            f"/api/budget/transactions/{transaction_id}",
-            headers={"Authorization": f"Bearer {token}"}
+            f"/api/budget/transactions/{ids['transaction_id']}", headers=headers
         )
         await client.delete(
-            f"/api/budget/accounts/{account_id}",
-            headers={"Authorization": f"Bearer {token}"}
+            f"/api/budget/accounts/{ids['account_id']}", headers=headers
         )
 
-        # Filter by transaction type
-        response = await client.get(
-            "/api/budget/recycle-bin?item_type=transaction",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        assert response.status_code == 200
-        items = response.json()["data"]["items"]
-        assert all(item["type"] == "transaction" for item in items)
-        assert any(item["id"] == transaction_id for item in items)
+        rows = await _bin_rows(client, headers, item_type="transaction")
+        assert rows, "filtered bin should not be empty"
+        assert all(row["type"] == "transaction" for row in rows)
+        assert any(row["id"] == ids["transaction_id"] for row in rows)
 
-    async def test_cascade_delete_validation(self, client: AsyncClient, setup_data):
-        """Test that category group cannot be deleted if it has active categories."""
-        token = setup_data["token"]
-        group_id = setup_data["group_id"]
-        category_id = setup_data["category_id"]
+    @pytest.mark.asyncio
+    async def test_restore_transaction(
+        self, client, db_session, test_parent_user
+    ):
+        headers = await _login(client, test_parent_user.email)
+        ids = await _setup(client, headers)
 
-        # Try to delete category group (should fail because category exists)
-        response = await client.delete(
-            f"/api/budget/categories/groups/{group_id}",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        assert response.status_code == 400
-        assert "Cannot delete category group" in response.json()["detail"]
-
-        # Delete the category first
         await client.delete(
-            f"/api/budget/categories/{category_id}",
-            headers={"Authorization": f"Bearer {token}"}
+            f"/api/budget/transactions/{ids['transaction_id']}", headers=headers
         )
-
-        # Now delete should succeed
-        response = await client.delete(
-            f"/api/budget/categories/groups/{group_id}",
-            headers={"Authorization": f"Bearer {token}"}
+        r = await client.post(
+            f"/api/budget/recycle-bin/transactions/{ids['transaction_id']}/restore",
+            headers=headers,
         )
-        assert response.status_code == 204
+        assert r.status_code == 200, r.text
 
-    async def test_empty_recycle_bin(self, client: AsyncClient, setup_data):
-        """Test emptying recycle bin (delete items > 30 days old)."""
-        token = setup_data["token"]
+        rows = await _bin_rows(client, headers)
+        assert not any(row["id"] == ids["transaction_id"] for row in rows)
 
-        # Delete multiple items
+        tx = (await db_session.execute(
+            select(BudgetTransaction).where(
+                BudgetTransaction.id == ids["transaction_id"]
+            )
+        )).scalar_one()
+        assert tx.deleted_at is None
+
+        # ...and it's back in the normal transaction list.
+        r = await client.get("/api/budget/transactions/", headers=headers)
+        assert r.status_code == 200, r.text
+        listed = str(r.json())
+        assert ids["transaction_id"] in listed
+
+    @pytest.mark.asyncio
+    async def test_restore_account_and_category(
+        self, client, db_session, test_parent_user
+    ):
+        headers = await _login(client, test_parent_user.email)
+        ids = await _setup(client, headers)
+
         await client.delete(
-            f"/api/budget/transactions/{setup_data['transaction_id']}",
-            headers={"Authorization": f"Bearer {token}"}
+            f"/api/budget/accounts/{ids['account_id']}", headers=headers
         )
         await client.delete(
-            f"/api/budget/accounts/{setup_data['account_id']}",
-            headers={"Authorization": f"Bearer {token}"}
+            f"/api/budget/categories/{ids['category_id']}", headers=headers
         )
 
-        # Empty recycle bin
-        response = await client.delete(
-            "/api/budget/recycle-bin",
-            headers={"Authorization": f"Bearer {token}"}
+        r = await client.post(
+            f"/api/budget/recycle-bin/accounts/{ids['account_id']}/restore",
+            headers=headers,
         )
-        assert response.status_code == 204
-
-        # Items deleted in current session should still be there
-        # (since they're < 30 days old)
-        recycle_response = await client.get(
-            "/api/budget/recycle-bin",
-            headers={"Authorization": f"Bearer {token}"}
+        assert r.status_code == 200, r.text
+        r = await client.post(
+            f"/api/budget/recycle-bin/categories/{ids['category_id']}/restore",
+            headers=headers,
         )
-        # The actual test depends on the implementation
-        # If items are < 30 days, they should still exist
+        assert r.status_code == 200, r.text
 
-    async def test_parent_only_access(self, client: AsyncClient, test_child_user: User, setup_data):
-        """Test that non-parent users cannot access recycle bin."""
-        # Try to access as non-parent
-        response = await client.get(
-            "/api/budget/recycle-bin",
-            headers={"Authorization": f"Bearer {setup_data['token']}"}
-        )
-        # Should be accessible by parent (token is parent's)
-        assert response.status_code == 200
+        acc = (await db_session.execute(
+            select(BudgetAccount).where(BudgetAccount.id == ids["account_id"])
+        )).scalar_one()
+        assert acc.deleted_at is None
+        cat = (await db_session.execute(
+            select(BudgetCategory).where(
+                BudgetCategory.id == ids["category_id"]
+            )
+        )).scalar_one()
+        assert cat.deleted_at is None
 
-        # Login as child
-        login_response = await client.post(
-            "/api/auth/login",
-            json={"email": test_child_user.email, "password": "password123"}
-        )
-        child_token = login_response.json()["access_token"]
+    @pytest.mark.asyncio
+    async def test_permanently_delete_transaction(
+        self, client, db_session, test_parent_user
+    ):
+        headers = await _login(client, test_parent_user.email)
+        ids = await _setup(client, headers)
 
-        # Child should not have access
-        response = await client.get(
-            "/api/budget/recycle-bin",
-            headers={"Authorization": f"Bearer {child_token}"}
-        )
-        assert response.status_code in [403, 401]  # Forbidden or Unauthorized
-
-    async def test_soft_deleted_items_excluded_from_queries(self, client: AsyncClient, setup_data):
-        """Test that soft-deleted items are excluded from regular queries."""
-        token = setup_data["token"]
-        transaction_id = setup_data["transaction_id"]
-
-        # Get transactions before delete
-        before_response = await client.get(
-            "/api/budget/transactions",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        before_count = len(before_response.json())
-
-        # Delete transaction
         await client.delete(
-            f"/api/budget/transactions/{transaction_id}",
-            headers={"Authorization": f"Bearer {token}"}
+            f"/api/budget/transactions/{ids['transaction_id']}", headers=headers
         )
-
-        # Get transactions after delete
-        after_response = await client.get(
-            "/api/budget/transactions",
-            headers={"Authorization": f"Bearer {token}"}
+        r = await client.delete(
+            f"/api/budget/recycle-bin/transactions/{ids['transaction_id']}/permanently",
+            headers=headers,
         )
-        after_count = len(after_response.json())
+        assert r.status_code == 200, r.text
 
-        # Transaction count should decrease
-        assert after_count == before_count - 1
+        rows = await _bin_rows(client, headers)
+        assert not any(row["id"] == ids["transaction_id"] for row in rows)
+
+        gone = (await db_session.execute(
+            select(BudgetTransaction).where(
+                BudgetTransaction.id == ids["transaction_id"]
+            )
+        )).scalar_one_or_none()
+        assert gone is None  # hard-deleted, not merely hidden
+
+    @pytest.mark.asyncio
+    async def test_group_delete_soft_cascades_to_categories(
+        self, client, db_session, test_parent_user
+    ):
+        """Deleting a group soft-deletes its categories too — both restorable
+        from the bin (the old hard CASCADE silently destroyed
+        categorization)."""
+        headers = await _login(client, test_parent_user.email)
+        ids = await _setup(client, headers)
+
+        r = await client.delete(
+            f"/api/budget/categories/groups/{ids['group_id']}", headers=headers
+        )
+        assert r.status_code == 204, r.text
+
+        rows = await _bin_rows(client, headers)
+        by_type = {(row["type"], row["id"]) for row in rows}
+        assert ("category_group", ids["group_id"]) in by_type
+        assert ("category", ids["category_id"]) in by_type
+
+        grp = (await db_session.execute(
+            select(BudgetCategoryGroup).where(
+                BudgetCategoryGroup.id == ids["group_id"]
+            )
+        )).scalar_one()
+        assert grp.deleted_at is not None
+
+    @pytest.mark.asyncio
+    async def test_empty_recycle_bin_spares_recent_items(
+        self, client, test_parent_user
+    ):
+        """Emptying the bin purges only items older than 30 days — a
+        just-deleted item must survive."""
+        headers = await _login(client, test_parent_user.email)
+        ids = await _setup(client, headers)
+
+        await client.delete(
+            f"/api/budget/transactions/{ids['transaction_id']}", headers=headers
+        )
+        r = await client.delete("/api/budget/recycle-bin/", headers=headers)
+        assert r.status_code == 200, r.text
+        assert r.json()["success"] is True
+
+        rows = await _bin_rows(client, headers)
+        assert any(row["id"] == ids["transaction_id"] for row in rows)
+
+    @pytest.mark.asyncio
+    async def test_parent_only_access(
+        self, client, test_parent_user, test_child_user
+    ):
+        headers = await _login(client, test_parent_user.email)
+        r = await client.get("/api/budget/recycle-bin/", headers=headers)
+        assert r.status_code == 200
+
+        child_headers = await _login(client, test_child_user.email)
+        r = await client.get("/api/budget/recycle-bin/", headers=child_headers)
+        assert r.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_soft_deleted_items_excluded_from_normal_queries(
+        self, client, test_parent_user
+    ):
+        headers = await _login(client, test_parent_user.email)
+        ids = await _setup(client, headers)
+
+        await client.delete(
+            f"/api/budget/transactions/{ids['transaction_id']}", headers=headers
+        )
+        r = await client.get("/api/budget/transactions/", headers=headers)
+        assert r.status_code == 200, r.text
+        assert ids["transaction_id"] not in str(r.json())

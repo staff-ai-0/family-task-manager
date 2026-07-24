@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
+import { dayKeyInTz, fmtTime } from "../lib/datetime";
 import { t } from "../lib/i18n";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -114,10 +115,11 @@ function eventColor(evt: any): string | null {
     return uid ? (memberColor.get(String(uid)) ?? null) : null;
 }
 
+const familyTz: string = user.timezone || "UTC";
+
 const groups = new Map<string, any[]>();
 for (const evt of events) {
-    const d = new Date(evt.start_ts);
-    const key = d.toISOString().slice(0, 10);
+    const key = dayKeyInTz(evt.start_ts, familyTz);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(evt);
 }
@@ -133,11 +135,7 @@ function formatDay(iso: string): string {
 
 function formatTime(iso: string, allDay: boolean): string {
     if (allDay) return lang === "es" ? "Todo el día" : "All day";
-    const d = new Date(iso);
-    return d.toLocaleTimeString(lang === "es" ? "es-MX" : "en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-    });
+    return fmtTime(iso, lang, familyTz);
 }
 
 const sortedDays = [...groups.entries()].sort((a, b) =>

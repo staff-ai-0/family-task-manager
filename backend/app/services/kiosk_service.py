@@ -515,6 +515,7 @@ class KioskService:
         return KioskSnapshot(
             family_name=fam_name,
             now_utc=datetime.now(timezone.utc),
+            timezone=str(tz.key if hasattr(tz, "key") else tz),
             members=members_out,
             tasks=tasks_out,
             events_today=events_today,

@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
+import { fmtDate } from "../../../lib/datetime";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -129,7 +130,7 @@ const upgradeUnavailable =
 const cancelAtPeriodEnd = Boolean(current?.cancel_at_period_end);
 const periodEndIso = current?.current_period_end ?? null;
 const periodEndLabel = periodEndIso
-    ? new Date(periodEndIso).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
+    ? fmtDate(periodEndIso, lang, user.timezone, {
         year: "numeric",
         month: "long",
         day: "numeric",

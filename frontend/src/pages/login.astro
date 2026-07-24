@@ -71,6 +71,10 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                         // when the sign-in creates a brand-new family and
                         // records consented_at + policy version.
                         accept_terms: true,
+                        // Browser IANA timezone — applied to the family when
+                        // this sign-in creates a new one (same capture as the
+                        // password signup form).
+                        timezone: (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return null; } })(),
                     }),
                 });
                 const data = await result.json();

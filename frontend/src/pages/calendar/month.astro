@@ -2,6 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import BottomNav from "../../components/BottomNav.astro";
 import { apiFetch } from "../../lib/api";
+import { dayKeyInTz, fmtTime } from "../../lib/datetime";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -35,18 +36,20 @@ const { data: eventsRaw } = await apiFetch<any[]>(
 );
 const events: any[] = Array.isArray(eventsRaw) ? eventsRaw : [];
 
-// Bucket events by YYYY-MM-DD
+const familyTz: string = user.timezone || "UTC";
+
+// Bucket events by YYYY-MM-DD in the FAMILY timezone (server-local day
+// parts on a UTC container filed evening events under the next day).
 const byDay = new Map<string, any[]>();
 for (const e of events) {
-    const d = new Date(e.start_ts);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const key = dayKeyInTz(e.start_ts, familyTz);
     if (!byDay.has(key)) byDay.set(key, []);
     byDay.get(key)!.push(e);
 }
 
 // Build 42 cells
 const cells: { date: Date; key: string; inMonth: boolean; isToday: boolean }[] = [];
-const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+const todayKey = dayKeyInTz(now, familyTz);
 for (let i = 0; i < 42; i++) {
     const d = new Date(gridStart);
     d.setDate(gridStart.getDate() + i);
@@ -85,10 +88,7 @@ const sourceColor = (src: string): string => ({
 
 function formatTime(iso: string, allDay: boolean): string {
     if (allDay) return lang === "es" ? "Todo el día" : "All day";
-    return new Date(iso).toLocaleTimeString(
-        lang === "es" ? "es-MX" : "en-US",
-        { hour: "numeric", minute: "2-digit" },
-    );
+    return fmtTime(iso, lang, familyTz);
 }
 
 const labels = {

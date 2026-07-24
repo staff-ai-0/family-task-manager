@@ -4,9 +4,9 @@ Account Service
 Business logic for budget account operations.
 """
 
-from datetime import date
+from datetime import date, datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, update as sql_update
 from typing import List, Optional, Dict
 from uuid import UUID
 
@@ -21,6 +21,35 @@ class AccountService(BaseFamilyService[BudgetAccount]):
     """Service for budget account operations"""
 
     model = BudgetAccount
+
+    @classmethod
+    async def delete_by_id(
+        cls,
+        db: AsyncSession,
+        entity_id: UUID,
+        family_id: UUID,
+    ) -> None:
+        """SOFT delete the account and cascade-soft-delete its live
+        transactions (same one-timestamp pattern as group→categories).
+
+        Overrides BaseService.delete_by_id, which hard-deletes — that made
+        DELETE /accounts/{id} destroy the account AND its transaction history
+        with no recycle-bin recovery. RecycleBinService.restore_account
+        un-deletes the cascaded transactions by matching this timestamp.
+        """
+        entity = await cls.get_by_id(db, entity_id, family_id)
+        now = datetime.now(timezone.utc)
+        entity.deleted_at = now
+        await db.execute(
+            sql_update(BudgetTransaction)
+            .where(
+                BudgetTransaction.account_id == entity.id,
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.deleted_at.is_(None),
+            )
+            .values(deleted_at=now)
+        )
+        await db.commit()
 
     @classmethod
     async def _existing_family_currency(

@@ -138,6 +138,9 @@ class KioskBoss(BaseModel):
 class KioskSnapshot(BaseModel):
     family_name: str
     now_utc: datetime
+    # Family IANA timezone so the (unauthenticated, token-gated) kiosk page
+    # can render event times in family-local time instead of server UTC.
+    timezone: str = "UTC"
     members: List[KioskMember]
     tasks: List[KioskTask]
     events_today: List[KioskEvent]
