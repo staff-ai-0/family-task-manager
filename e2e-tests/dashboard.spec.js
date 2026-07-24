@@ -117,3 +117,33 @@ test.describe('Dashboard', () => {
     expect(navBox.y + navBox.height).toBeGreaterThan(viewport.height - 80);
   });
 });
+
+// ── Parent "Mis tareas de hoy" proof flow (fix/parent-tasks-proof-flow) ────
+test.describe('Parent own-tasks proof flow', () => {
+  test('photo-required task opens proof modal instead of submitting blind', async ({ page }) => {
+    await login(page);
+    await page.goto(`${BASE_URL}/parent`);
+    await page.waitForLoadState('networkidle');
+    // Fresh context: the driver.js welcome tour overlay intercepts clicks —
+    // dismiss it first (same dance as more-sheet.spec.js).
+    const tourClose = page.locator('.driver-popover-close-btn');
+    if (await tourClose.isVisible().catch(() => false)) {
+      await tourClose.click();
+      await page.waitForTimeout(300);
+    }
+    const proofForm = page.locator('form[data-parent-complete][data-requires-proof="1"]').first();
+    if ((await proofForm.count()) === 0) {
+      test.skip(true, 'no photo-required parent task in this environment');
+      return;
+    }
+    await proofForm.locator('button[type=submit]').click();
+    const modal = page.locator('#parent-proof-modal');
+    await expect(modal).toBeVisible({ timeout: 5000 });
+    // Submitting without a file must NOT close the modal (photo enforced client-side)
+    await page.locator('#parent-proof-submit').click();
+    await expect(modal).toBeVisible();
+    await expect(page.locator('#parent-proof-status')).toContainText(/foto|photo/i);
+    await page.locator('#parent-proof-cancel').click();
+    await expect(modal).toBeHidden();
+  });
+});

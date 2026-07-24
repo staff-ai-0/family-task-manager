@@ -169,17 +169,33 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                                     </span>
                                 </div>
                                 {a.can_complete && (
-                                    <form method="POST" action="/api/assignments/complete">
+                                    <form
+                                        method="POST"
+                                        action="/api/assignments/complete"
+                                        data-parent-complete
+                                        data-requires-proof={a.template_requires_proof ? "1" : "0"}
+                                    >
                                         <input type="hidden" name="assignment_id" value={a.id} />
+                                        <input type="hidden" name="proof_text" value="" />
+                                        <input type="hidden" name="proof_image_url" value="" />
                                         <input type="hidden" name="next" value="/parent" />
                                         <button
                                             type="submit"
-                                            aria-label={lang === "es" ? "Completar" : "Complete"}
+                                            aria-label={a.template_requires_proof
+                                                ? (lang === "es" ? "Completar con foto" : "Complete with photo")
+                                                : (lang === "es" ? "Completar" : "Complete")}
                                             class="h-11 w-11 rounded-full bg-brand-cream-deep text-brand-sky-deep flex items-center justify-center hover:bg-brand-sky-deep hover:text-white transition-colors active:scale-95 flex-shrink-0 shadow-[var(--shadow-card)]"
                                         >
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                            </svg>
+                                            {a.template_requires_proof ? (
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                </svg>
+                                            ) : (
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            )}
                                         </button>
                                     </form>
                                 )}
@@ -760,9 +776,128 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                     </section>
                 )
             }
+    <dialog id="parent-proof-modal" class="rounded-2xl p-0 backdrop:bg-black/40 max-w-md w-full md:w-[28rem] border-2 border-brand-ink shadow-[var(--shadow-pop)] bg-brand-cream">
+        <div class="p-5 space-y-3">
+            <h3 class="text-lg font-bold text-brand-ink">
+                {lang === "es" ? "📸 Esta tarea requiere foto" : "📸 This task requires a photo"}
+            </h3>
+            <p class="text-sm text-brand-ink-soft">
+                {lang === "es"
+                    ? "Sube una foto del trabajo terminado para completarla."
+                    : "Upload a photo of the finished work to complete it."}
+            </p>
+            <input
+                id="parent-proof-image"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                class="block w-full text-sm text-brand-ink file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-brand-cream-deep file:text-brand-ink hover:file:bg-brand-mint/40"
+            />
+            <p id="parent-proof-status" class="text-xs text-brand-ink-soft"></p>
+            <div class="flex justify-end gap-2 pt-1">
+                <button type="button" id="parent-proof-cancel" class="px-4 py-2 rounded-lg bg-brand-cream-deep text-brand-ink font-semibold text-sm">
+                    {lang === "es" ? "Cancelar" : "Cancel"}
+                </button>
+                <button type="button" id="parent-proof-submit" class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)]">
+                    {lang === "es" ? "Completar" : "Complete"}
+                </button>
+            </div>
+        </div>
+    </dialog>
 </PageLayout>
 
 <script>
+    // "Mis tareas de hoy" completion. Photo-required chores open the proof
+    // modal (backend rejects completion without proof_image_url — same rule
+    // as the kid dashboard, whose modal this trims down); plain chores submit
+    // directly with an in-flight lock against double-taps.
+    {
+        const modal = document.getElementById("parent-proof-modal") as HTMLDialogElement | null;
+        const fileInput = document.getElementById("parent-proof-image") as HTMLInputElement | null;
+        const statusEl = document.getElementById("parent-proof-status");
+        let pendingForm: HTMLFormElement | null = null;
+
+        const markInFlight = (f: HTMLFormElement) => {
+            f.dataset.inflight = "1";
+            const btn = f.querySelector("button[type=submit]") as HTMLButtonElement | null;
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.add("opacity-50", "cursor-wait");
+            }
+        };
+
+        document.querySelectorAll<HTMLFormElement>("form[data-parent-complete]").forEach((f) => {
+            f.addEventListener("submit", (ev) => {
+                if (f.dataset.inflight === "1") {
+                    ev.preventDefault();
+                    return;
+                }
+                if (f.dataset.requiresProof !== "1") {
+                    markInFlight(f);
+                    return;
+                }
+                ev.preventDefault();
+                if (!modal) return;
+                pendingForm = f;
+                if (fileInput) fileInput.value = "";
+                if (statusEl) {
+                    statusEl.textContent = "";
+                    statusEl.classList.remove("text-red-600");
+                }
+                modal.showModal();
+            });
+        });
+
+        document.getElementById("parent-proof-cancel")?.addEventListener("click", () => {
+            pendingForm = null;
+            modal?.close();
+        });
+        modal?.addEventListener("click", (e) => {
+            if (e.target === modal) {
+                pendingForm = null;
+                modal.close();
+            }
+        });
+
+        document.getElementById("parent-proof-submit")?.addEventListener("click", async () => {
+            if (!pendingForm || !modal) {
+                modal?.close();
+                return;
+            }
+            const es = document.documentElement.lang === "es";
+            if (!fileInput?.files?.length) {
+                if (statusEl) {
+                    statusEl.textContent = es
+                        ? "📸 Elige una foto del trabajo terminado."
+                        : "📸 Choose a photo of the finished work.";
+                    statusEl.classList.add("text-red-600");
+                }
+                return;
+            }
+            if (statusEl) statusEl.textContent = es ? "Subiendo…" : "Uploading…";
+            let imageUrl = "";
+            try {
+                const fd = new FormData();
+                fd.append("file", fileInput.files[0]);
+                const r = await fetch("/api/assignments/proof-upload", { method: "POST", body: fd });
+                if (!r.ok) throw new Error(`Upload failed: ${r.status}`);
+                imageUrl = (await r.json()).proof_image_url ?? "";
+            } catch (err) {
+                if (statusEl) {
+                    statusEl.textContent = es ? `Error al subir: ${err}` : `Upload failed: ${err}`;
+                    statusEl.classList.add("text-red-600");
+                }
+                return;
+            }
+            const imageField = pendingForm.querySelector<HTMLInputElement>('input[name="proof_image_url"]');
+            if (imageField) imageField.value = imageUrl;
+            const submitting = pendingForm;
+            pendingForm = null;
+            modal.close();
+            markInFlight(submitting);
+            submitting.submit();
+        });
+    }
+
     document.getElementById("dismiss-onboarding")?.addEventListener("click", async () => {
         try {
             await fetch("/api/families/onboarding/dismiss", { method: "POST" });
