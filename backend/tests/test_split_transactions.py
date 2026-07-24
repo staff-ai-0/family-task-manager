@@ -143,11 +143,16 @@ async def test_delete_parent_cascades_children(db: AsyncSession, family_id):
 
     await TransactionService.delete_by_id(db, parent_id, family_id)
 
-    # Children should be gone via FK cascade (parent_id ondelete=CASCADE)
-    remaining = (await db.execute(
-        select(BudgetTransaction).where(BudgetTransaction.parent_id == parent_id)
+    # Soft-delete cascade: parent AND children stamped deleted_at (rows stay
+    # for recycle-bin restore; the old FK hard-CASCADE removed them).
+    rows = (await db.execute(
+        select(BudgetTransaction).where(
+            (BudgetTransaction.id == parent_id)
+            | (BudgetTransaction.parent_id == parent_id)
+        )
     )).scalars().all()
-    assert remaining == []
+    assert len(rows) == 3
+    assert all(r.deleted_at is not None for r in rows)
 
 
 @pytest.mark.asyncio

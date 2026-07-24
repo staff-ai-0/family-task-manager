@@ -23,6 +23,37 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
     model = BudgetTransaction
 
     @classmethod
+    async def delete_by_id(
+        cls,
+        db: AsyncSession,
+        entity_id: UUID,
+        family_id: UUID,
+    ) -> None:
+        """SOFT delete — the recycle bin's entry path.
+
+        Overrides BaseService.delete_by_id, which hard-deletes: that made
+        DELETE /transactions/{id} unrecoverable and meant the recycle bin
+        could never actually contain a transaction (restore/permanent-delete
+        404'd on rows that no longer existed).
+        """
+        entity = await cls.get_by_id(db, entity_id, family_id)
+        now = datetime.now(timezone.utc)
+        entity.deleted_at = now
+        # Split parents: cascade to live children with the same timestamp
+        # (the old hard delete removed them via FK ondelete=CASCADE; leaving
+        # them live would orphan split legs into lists and balances).
+        await db.execute(
+            sql_update(BudgetTransaction)
+            .where(
+                BudgetTransaction.parent_id == entity.id,
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.deleted_at.is_(None),
+            )
+            .values(deleted_at=now)
+        )
+        await db.commit()
+
+    @classmethod
     async def create(
         cls,
         db: AsyncSession,
@@ -815,8 +846,11 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         result = await db.execute(query)
         rows = list(result.scalars().all())
 
+        # Soft delete — bulk delete feeds the recycle bin exactly like the
+        # single-row path.
+        now = datetime.now(timezone.utc)
         for txn in rows:
-            await db.delete(txn)
+            txn.deleted_at = now
         await db.commit()
         return len(rows)
 

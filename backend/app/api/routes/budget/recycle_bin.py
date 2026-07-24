@@ -53,7 +53,10 @@ async def list_deleted_items(
 
     flat: list[dict] = []
     for t in deleted_items.get("transactions", []):
-        label = (t.description or "").strip() or "Transaction"
+        # BudgetTransaction has no `description` column — label from notes.
+        # (The old attribute access 500'd the whole listing the moment a
+        # transaction reached the bin.)
+        label = (t.notes or "").strip() or "Transaction"
         amount = (t.amount or 0) / 100
         flat.append(_row(t, "transaction", f"{label} (${amount:,.2f})"))
     for a in deleted_items.get("accounts", []):

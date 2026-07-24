@@ -33,7 +33,10 @@ async def test_approve_executes_once_reject_discards(db_session, family, parent_
 
     result = await PendingActionService.approve(db_session, pa.id, parent_user)
     assert result["ok"] is True
-    assert await db_session.get(BudgetAccount, acc.id) is None
+    # Account deletes are SOFT (recycle-bin restorable) — the row survives
+    # with deleted_at stamped; Jarvis-approved deletes stay recoverable.
+    await db_session.refresh(acc)
+    assert acc.deleted_at is not None
 
     # second approve is a no-op error (already resolved)
     with pytest.raises(Exception):
