@@ -15,7 +15,7 @@ async function login(page) {
   await page.fill('input[name="email"]', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
   await page.click('#login-submit-btn');
-  await page.waitForURL('**/dashboard', { timeout: 30000 });
+  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
 }
 
 async function loginFree(page) {
@@ -24,7 +24,7 @@ async function loginFree(page) {
   await page.fill('input[name="email"]', FREE_EMAIL);
   await page.fill('input[name="password"]', FREE_PASSWORD);
   await page.click('#login-submit-btn');
-  await page.waitForURL('**/dashboard', { timeout: 30000 });
+  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
 }
 
 test.describe('Jarvis copilot', () => {
@@ -70,7 +70,7 @@ async function loginDemo(page) {
   await page.fill('input[name="email"]', DEMO_EMAIL);
   await page.fill('input[name="password"]', DEMO_PASSWORD);
   await page.click('#login-submit-btn');
-  await page.waitForURL('**/dashboard', { timeout: 30000 });
+  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
 }
 
 test.describe('Jarvis chat error UX', () => {

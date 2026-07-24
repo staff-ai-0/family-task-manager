@@ -456,7 +456,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
             }
             const enabled = meUser?.enabled_modules;
             if (Array.isArray(enabled) && !enabled.includes(gated)) {
-                return withSecurityHeaders(redirect("/dashboard?module_off=1", 302));
+                // Role-aware home: parents land on /parent (their /dashboard
+                // view merged there), kids on /dashboard.
+                const home = String(meUser?.role ?? "").toLowerCase() === "parent"
+                    ? "/parent"
+                    : "/dashboard";
+                return withSecurityHeaders(redirect(`${home}?module_off=1`, 302));
             }
         }
     }

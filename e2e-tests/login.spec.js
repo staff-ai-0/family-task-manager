@@ -59,7 +59,7 @@ test.describe('Login Flow', () => {
     }
     
     // Wait for URL change or timeout
-    await page.waitForURL('**/dashboard', { timeout: 30000 }).catch(() => console.log('No redirect to dashboard'));
+    await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 }).catch(() => console.log('No redirect to dashboard'));
     
     // Take screenshot after submit
     await page.screenshot({ path: 'after-submit.png' });
@@ -110,6 +110,6 @@ test.describe('Login Flow', () => {
     
     // Assertions
     expect(accessToken, 'Access token should be set').toBeDefined();
-    expect(currentUrl, 'Should redirect to dashboard').toContain('/dashboard');
+    expect(currentUrl, 'Should redirect to dashboard').toMatch(/\/(dashboard|parent)/);
   });
 });

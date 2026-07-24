@@ -19,7 +19,7 @@ test('screenshot dashboard page', async ({ page }) => {
   await page.fill('input[name="email"]', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
   await page.click('#login-submit-btn');
-  await page.waitForURL('**/dashboard', { timeout: 30000 });
+  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
   await page.waitForLoadState('networkidle');
   await page.screenshot({ path: 'screenshot-dashboard.png', fullPage: true });
   console.log('Dashboard screenshot saved to screenshot-dashboard.png');

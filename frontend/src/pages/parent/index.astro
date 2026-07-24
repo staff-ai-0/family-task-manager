@@ -20,6 +20,22 @@ if (user.role !== "parent") return Astro.redirect("/dashboard");
 
 const { data: family } = await apiFetch<any>("/api/families/me", { token });
 
+// The parent's OWN assignments today — merged here from the old /dashboard
+// parent view (docs/superpowers/specs/2026-07-24-merge-parent-dashboard-design.md).
+// The section renders only when the parent actually has assignments.
+const { data: myProgress } = await apiFetch<any>("/api/task-assignments/progress", { token });
+const myTasks: any[] = (myProgress?.assignments ?? []).filter(
+    (a: any) => a.status !== "cancelled",
+);
+const myPending = myTasks.filter((a: any) => a.status === "pending");
+const myDone = myTasks.filter((a: any) => a.status === "completed");
+
+// Flash cookies set by /api/assignments/complete (next=/parent).
+const flash = Astro.cookies.get("flash")?.value;
+if (flash) Astro.cookies.delete("flash", { path: "/" });
+const flashError = Astro.cookies.get("flash_error")?.value;
+if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
+
 // Cooperative weekly boss battle (Family Cup) — points/analytics based, no pet.
 // Best-effort — a null just hides the bar.
 const { data: familyCup } = await apiFetch<any>("/api/family-cup/", { token });
@@ -106,6 +122,23 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
     </header>
 
     <Fragment slot="banner">
+        {Astro.url.searchParams.get("module_off") === "1" && (
+            <div class="mx-4 mt-3 rounded-xl border border-brand-ink/15 bg-brand-cream px-4 py-2.5 text-sm text-brand-ink-soft">
+                {lang === "es"
+                    ? "Esa sección está desactivada para tu familia. Puedes activarla en Ajustes → Módulos."
+                    : "That section is switched off for your family. You can enable it in Settings → Modules."}
+            </div>
+        )}
+        {flash && (
+            <div class="mx-4 mt-3 rounded-xl border border-brand-mint-deep/30 bg-brand-mint/15 px-4 py-2.5 text-sm font-semibold text-brand-mint-deep" data-flash-success>
+                {flash}
+            </div>
+        )}
+        {flashError && (
+            <div class="mx-4 mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700">
+                {flashError}
+            </div>
+        )}
         <GigsIntroBanner lang={lang} show={!user.acknowledged_gigs_intro} />
 
         <div class="px-4 mt-4 flex items-center">
@@ -115,6 +148,51 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
             <a href="/family-cup" class="block mb-6">
                 <BossBattleBar boss={boss} lang={lang} />
             </a>
+
+            {myTasks.length > 0 && (
+                <section class="mb-6">
+                    <div class="flex justify-between items-end mb-3 px-1">
+                        <h2 class="font-bold text-brand-ink text-base">
+                            {lang === "es" ? "Mis tareas de hoy" : "My tasks today"}
+                        </h2>
+                        <span class="text-sm text-brand-ink-soft">{myDone.length}/{myTasks.length}</span>
+                    </div>
+                    <div class="space-y-3">
+                        {myPending.map((a: any) => (
+                            <div class="bg-brand-cream rounded-2xl p-4 shadow-[var(--shadow-card)] border border-brand-ink/10 flex justify-between items-center gap-3">
+                                <div class="min-w-0 flex-1">
+                                    <h3 class="font-bold text-brand-ink truncate">
+                                        {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
+                                    </h3>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-brand-sky/20 text-brand-sky-deep mt-1">
+                                        +{a.template_points} pts
+                                    </span>
+                                </div>
+                                {a.can_complete && (
+                                    <form method="POST" action="/api/assignments/complete">
+                                        <input type="hidden" name="assignment_id" value={a.id} />
+                                        <input type="hidden" name="next" value="/parent" />
+                                        <button
+                                            type="submit"
+                                            aria-label={lang === "es" ? "Completar" : "Complete"}
+                                            class="h-11 w-11 rounded-full bg-brand-cream-deep text-brand-sky-deep flex items-center justify-center hover:bg-brand-sky-deep hover:text-white transition-colors active:scale-95 flex-shrink-0 shadow-[var(--shadow-card)]"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </button>
+                                    </form>
+                                )}
+                            </div>
+                        ))}
+                        {myPending.length === 0 && (
+                            <div class="bg-brand-mint/15 border border-brand-mint-deep/20 rounded-2xl p-4 text-sm text-brand-mint-deep font-semibold">
+                                {lang === "es" ? "¡Todas tus tareas de hoy están listas! ✅" : "All your tasks for today are done! ✅"}
+                            </div>
+                        )}
+                    </div>
+                </section>
+            )}
             {paidRecently.length > 0 && (
                 <a
                     href="/parent/settings/family-bank"
