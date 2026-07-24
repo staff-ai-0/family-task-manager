@@ -18,7 +18,7 @@ async function login(page) {
   await page.fill('input[name="email"]', 'mom@demo.com');
   await page.fill('input[name="password"]', 'password123');
   await page.click('#login-submit-btn');
-  await page.waitForURL('**/dashboard', { timeout: 30000 });
+  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
 }
 
 test('mission 1 advances when the task modal actually opens', async ({ page }) => {

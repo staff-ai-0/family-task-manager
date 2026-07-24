@@ -7,7 +7,7 @@ async function login(page, email, pw) {
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', pw);
   await page.click('#login-submit-btn');
-  await page.waitForURL('**/dashboard', { timeout: 30000 });
+  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
 }
 
 test('kid dashboard economy banner uses v2 copy (no "never become cash")', async ({ page }) => {

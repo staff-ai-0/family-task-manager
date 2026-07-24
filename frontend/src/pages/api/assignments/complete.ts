@@ -18,9 +18,13 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         const proofText = proofTextRaw && proofTextRaw.trim().length > 0 ? proofTextRaw.trim() : null;
         const proofImageRaw = formData.get("proof_image_url")?.toString();
         const proofImageUrl = proofImageRaw && proofImageRaw.trim().length > 0 ? proofImageRaw.trim() : null;
+        // Where to land after completing — parents complete their own tasks
+        // from /parent, kids from /dashboard. Same-origin relative paths only.
+        const nextRaw = formData.get("next")?.toString() ?? "";
+        const returnTo = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/dashboard";
 
         if (!assignmentId) {
-            const headers = new Headers({ Location: "/dashboard" });
+            const headers = new Headers({ Location: returnTo });
             headers.append("Set-Cookie", `flash_error=${encodeURIComponent("Assignment ID is required")}; Path=/`);
             return new Response(null, { status: 302, headers });
         }
@@ -35,7 +39,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
             body: JSON.stringify({ proof_text: proofText, proof_image_url: proofImageUrl }),
         });
 
-        const headers = new Headers({ Location: "/dashboard" });
+        const headers = new Headers({ Location: returnTo });
 
         if (!response.ok) {
             // Kid-facing page: never surface the raw backend `detail` (English,
