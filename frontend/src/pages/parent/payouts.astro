@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
+import { fmtDate as fmtTzDate } from "../../lib/datetime";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -148,10 +149,7 @@ const dayLabel = (iso: string): string =>
                                                 <span class="block">{fmt(g.amount_cents)}</span>
                                                 {g.approved_at && (
                                                     <span class="block opacity-80">
-                                                        {new Date(g.approved_at).toLocaleDateString(
-                                                            lang === "es" ? "es-MX" : "en-US",
-                                                            { weekday: "short", day: "numeric", month: "short" }
-                                                        )}
+                                                        {fmtTzDate(g.approved_at, lang, user.timezone, { weekday: "short", day: "numeric", month: "short" })}
                                                     </span>
                                                 )}
                                                 {g.approval_notes && (

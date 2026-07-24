@@ -205,9 +205,14 @@ async def get_current_user_info(
 
 
     resp = UserResponse.model_validate(current_user)
-    resp.enabled_modules = (await db.execute(
-        sa_select(Family.enabled_modules).where(Family.id == current_user.family_id)
-    )).scalar()
+    fam = (await db.execute(
+        sa_select(Family.enabled_modules, Family.timezone).where(
+            Family.id == current_user.family_id
+        )
+    )).first()
+    if fam is not None:
+        resp.enabled_modules = fam.enabled_modules
+        resp.timezone = fam.timezone or "UTC"
     return resp
 
 

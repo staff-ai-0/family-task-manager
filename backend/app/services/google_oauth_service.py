@@ -197,6 +197,7 @@ class GoogleOAuthService:
         join_code: Optional[str] = None,
         role: Optional[str] = None,
         accept_terms: bool = False,
+        timezone: Optional[str] = None,
     ) -> tuple[User, str, str, bool]:
         """
         Authenticate existing user or create new user from Google OAuth
@@ -328,9 +329,22 @@ class GoogleOAuthService:
                 raise OAuthConsentRequiredError()
 
             user_name = google_user_info.get('name', email.split('@')[0])
+            # Validate the browser-supplied IANA timezone; fall back to UTC
+            # (mirrors the password signup path in auth_service.register_family
+            # — this path previously never set it, leaving OAuth-founded
+            # families stuck on UTC).
+            fam_tz = "UTC"
+            if timezone:
+                try:
+                    from zoneinfo import ZoneInfo
+                    ZoneInfo(timezone)
+                    fam_tz = timezone
+                except Exception:
+                    fam_tz = "UTC"
             family = Family(
                 id=uuid4(),
                 name=f"{user_name}'s Family",
+                timezone=fam_tz,
             )
             db.add(family)
             await db.flush()

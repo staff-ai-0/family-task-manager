@@ -6,6 +6,7 @@
 
 import BudgetShell from "@components/ui/BudgetShell.astro";
 import { apiFetch } from "@lib/api";
+import { fmtDate } from "@lib/datetime";
 
 export const prerender = false;
 
@@ -141,7 +142,7 @@ const l = {
                             <!-- Card header -->
                             <div class="flex items-center justify-between px-5 py-3 border-b border-brand-ink/10 bg-brand-cream-deep">
                                 <span class="text-xs text-brand-ink-soft">
-                                    {new Date(draft.created_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", { dateStyle: "medium" })}
+                                    {fmtDate(draft.created_at, lang, user.timezone, { dateStyle: "medium" })}
                                     &nbsp;·&nbsp; {accountMap[draft.account_id] ?? "—"}
                                 </span>
                                 <span class={`text-xs font-semibold px-2 py-0.5 rounded-full ${confColor}`}>

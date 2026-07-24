@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
+import { fmtDate } from "../../lib/datetime";
 import { gigTerm } from "../../lib/gigTerm";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -90,7 +91,7 @@ const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
                                         {sl(claim.status)}
                                     </span>
                                     <p class="text-xs text-brand-ink-soft">
-                                        {lang === "es" ? "Reclamada" : "Claimed"}: {new Date(claim.created_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US")}
+                                        {lang === "es" ? "Reclamada" : "Claimed"}: {fmtDate(claim.created_at, lang, user.timezone)}
                                     </p>
                                 </div>
                                 {claim.status === "approved" && (

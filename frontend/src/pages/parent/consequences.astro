@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../lib/api";
+import { fmtDate } from "../../lib/datetime";
 import { t } from "../../lib/i18n";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -256,9 +257,7 @@ const members: any[] = family?.members ?? [];
                                             {c.end_date && (
                                                 <p class="text-xs text-brand-ink-soft mt-1">
                                                     {t(lang, "pc_until")}{" "}
-                                                    {new Date(
-                                                        c.end_date,
-                                                    ).toLocaleDateString(lang === "es" ? "es-MX" : "en-US")}
+                                                    {fmtDate(c.end_date, lang, user.timezone)}
                                                 </p>
                                             )}
                                         </div>

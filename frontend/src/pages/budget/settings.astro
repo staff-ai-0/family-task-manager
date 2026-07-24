@@ -6,6 +6,7 @@
 import BudgetShell from "@components/ui/BudgetShell.astro";
 import SettingsAccordion from "@components/SettingsAccordion.astro";
 import { apiFetch } from "@lib/api";
+import { fmtDate } from "@lib/datetime";
 import { formatCurrency } from "@lib/api/budget";
 
 const token = Astro.cookies.get("access_token")?.value;
@@ -477,7 +478,7 @@ const frequencyLabel = (freq: string) => {
                             {aiUsage.budget_reset_at && (
                                 <div class="flex justify-between">
                                     <span class="text-brand-ink-soft">{es ? "Reseteo" : "Resets"}</span>
-                                    <span class="text-brand-ink text-xs">{new Date(aiUsage.budget_reset_at).toLocaleDateString(es ? "es-MX" : "en-US")}</span>
+                                    <span class="text-brand-ink text-xs">{fmtDate(aiUsage.budget_reset_at, lang, user.timezone)}</span>
                                 </div>
                             )}
                             {aiUsage.models?.length > 0 && (

@@ -6,6 +6,7 @@
 // injects the bundled <link> into the <head> below at render time.
 import "../styles/global.css";
 import { apiFetch } from "../lib/api";
+import { fmtTime } from "../lib/datetime";
 
 const token = Astro.url.searchParams.get("token");
 if (!token) {
@@ -23,11 +24,7 @@ const lang = Astro.cookies.get("lang")?.value ?? "es";
 
 function formatTime(iso: string, allDay: boolean): string {
     if (allDay) return lang === "es" ? "Todo el día" : "All day";
-    const d = new Date(iso);
-    return d.toLocaleTimeString(lang === "es" ? "es-MX" : "en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-    });
+    return fmtTime(iso, lang, data.timezone);
 }
 
 const labels = {

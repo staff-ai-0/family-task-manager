@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
+import { fmtDate } from "../../../lib/datetime";
 
 const mcpBase = process.env.PUBLIC_API_BASE_URL || 'https://api-family.agent-ia.mx';
 const token = Astro.cookies.get("access_token")?.value;
@@ -128,7 +129,7 @@ const labels = {
                             <td class="px-4 py-3 font-mono text-brand-ink-soft">{tok.token_prefix}…</td>
                             <td class="px-4 py-3 text-brand-ink-soft">
                                 {tok.last_used_at
-                                    ? new Date(tok.last_used_at).toLocaleDateString(lang === "es" ? "es-MX" : "en-US")
+                                    ? fmtDate(tok.last_used_at, lang, user.timezone)
                                     : labels.never}
                             </td>
                             <td class="px-4 py-3">

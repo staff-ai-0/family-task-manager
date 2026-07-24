@@ -74,6 +74,10 @@ class UserResponse(EntityResponse):
     # without an extra fetch. None = all modules on. Only /auth/me populates
     # it — member-listing endpoints leave it None.
     enabled_modules: Optional[list[str]] = None
+    # Family IANA timezone, denormalized onto /auth/me (same rule as
+    # enabled_modules: only /auth/me populates it) so SSR pages can render
+    # timestamps in the family's timezone instead of the server's (UTC).
+    timezone: str = "UTC"
     # NB: users.birthdate is deliberately NOT serialized here. UserResponse
     # is returned by member-listing endpoints visible to CHILD/TEEN accounts,
     # and birthdates shouldn't be readable by every family member. The field

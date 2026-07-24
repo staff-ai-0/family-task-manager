@@ -10,6 +10,8 @@ export interface User {
     points: number;
     family_id: string;
     is_active: boolean;
+    /** Family IANA timezone — populated by /api/auth/me only. */
+    timezone?: string;
 }
 
 export interface LoginResponse {
