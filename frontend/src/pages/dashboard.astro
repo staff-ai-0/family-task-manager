@@ -27,6 +27,15 @@ if (!userOk) {
     return Astro.redirect("/login");
 }
 
+// Parents' home is /parent — their personal-tasks view lives there now
+// (docs/superpowers/specs/2026-07-24-merge-parent-dashboard-design.md).
+// Kids keep this page unchanged. module_off survives the hop so the
+// "section switched off" banner still shows.
+if (user.role === "parent") {
+    const moduleOff = Astro.url.searchParams.get("module_off") === "1";
+    return Astro.redirect(`/parent${moduleOff ? "?module_off=1" : ""}`);
+}
+
 // Cooperative weekly boss battle (points/analytics based, no pet). Best-effort —
 // a null just hides the bar.
 const boss = familyCup?.boss ?? null;

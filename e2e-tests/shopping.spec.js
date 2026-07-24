@@ -10,7 +10,7 @@ async function login(page) {
   await page.fill('input[name="email"]', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
   await page.click('#login-submit-btn');
-  await page.waitForURL('**/dashboard', { timeout: 30000 });
+  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
 }
 
 test.describe('Shopping list', () => {

@@ -10,7 +10,7 @@ async function login(page) {
   await page.fill('input[name="email"]', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
   await page.click('#login-submit-btn');
-  await page.waitForURL('**/dashboard', { timeout: 30000 });
+  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
 }
 
 test.describe('Dashboard', () => {
@@ -19,18 +19,24 @@ test.describe('Dashboard', () => {
   });
 
   // ── Page load ──────────────────────────────────────────────────────────
+  // The e2e account is a PARENT: since the /dashboard→/parent merge
+  // (spec 2026-07-24) they land on the parent hub. Layout tests below
+  // (nav, More sheet, lang toggle) are role-agnostic and run there.
 
-  test('renders header with user name and points', async ({ page }) => {
-    // Header greeting + points card always visible regardless of role
-    await expect(page.locator('header h1')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('header')).toContainText(/\d/); // points value
+  test('parent hitting /dashboard is redirected to /parent', async ({ page }) => {
+    await page.goto(`${BASE_URL}/dashboard`);
+    await page.waitForURL('**/parent', { timeout: 10000 });
+    await expect(page).toHaveURL(/\/parent$/);
   });
 
-  test('shows today section', async ({ page }) => {
-    const main = page.locator('main');
-    await expect(main).toBeVisible();
-    // Heading says "Today" (EN) or "Hoy" (ES)
-    await expect(page.locator('h2').first()).toContainText(/today|hoy/i);
+  test('parent /dashboard redirect preserves module_off banner', async ({ page }) => {
+    await page.goto(`${BASE_URL}/dashboard?module_off=1`);
+    await page.waitForURL(/\/parent\?module_off=1/, { timeout: 10000 });
+    await expect(page.locator('body')).toContainText(/desactivada|switched off/i);
+  });
+
+  test('renders parent hub header', async ({ page }) => {
+    await expect(page.locator('header h1')).toBeVisible({ timeout: 5000 });
   });
 
   // ── Bottom navigation ──────────────────────────────────────────────────

@@ -4,7 +4,7 @@ const { loginAsParent, BASE_URL } = require('./helpers/auth');
 test.describe('JWT access + refresh', () => {
   test('expired access token is transparently refreshed (no login bounce)', async ({ page, context }) => {
     await loginAsParent(page);
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).toHaveURL(/\/(dashboard|parent)/);
 
     // Simulate an expired/absent access token while keeping the refresh cookie:
     // drop only access_token, leave refresh_token in place.
@@ -16,7 +16,7 @@ test.describe('JWT access + refresh', () => {
 
     // Navigating to a protected page must refresh in middleware, not redirect.
     await page.goto(`${BASE_URL}/dashboard`);
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).toHaveURL(/\/(dashboard|parent)/);
 
     const after = await context.cookies();
     expect(after.find((c) => c.name === 'access_token')).toBeTruthy();

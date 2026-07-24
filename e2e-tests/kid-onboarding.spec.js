@@ -49,7 +49,7 @@ test.describe('Kid onboarding', () => {
     await page.fill('input[name="email"]', kidEmail);
     await page.fill('input[name="password"]', PASS);
     await page.click('#login-submit-btn');
-    await page.waitForURL('**/dashboard', { timeout: 30000 });
+    await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
 
     // Kid welcome tour auto-starts.
     const popover = page.locator('.driver-popover');
@@ -80,7 +80,7 @@ test.describe('Kid onboarding', () => {
     await page.fill('input[name="email"]', 'emma@demo.com');
     await page.fill('input[name="password"]', 'password123');
     await page.click('#login-submit-btn');
-    await page.waitForURL('**/dashboard', { timeout: 30000 });
+    await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
 
     // Dismiss the welcome tour if it shows (emma's first visit).
     const close = page.locator('.driver-popover-close-btn');

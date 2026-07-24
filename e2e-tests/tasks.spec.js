@@ -14,7 +14,7 @@ test.describe('Task Management', () => {
     await page.fill('input[name="email"]', DEMO_USER.email);
     await page.fill('input[name="password"]', DEMO_USER.password);
     await page.click('#login-submit-btn');
-    await page.waitForURL('**/dashboard', { timeout: 30000 });
+    await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
   });
 
   test.describe('Task Creation', () => {

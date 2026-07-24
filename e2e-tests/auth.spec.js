@@ -25,10 +25,10 @@ test.describe('Authentication', () => {
       await page.click('#login-submit-btn');
 
       // Wait for navigation to dashboard
-      await page.waitForURL('**/dashboard', { timeout: 30000 });
+      await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
 
       // Verify we're on dashboard
-      expect(page.url()).toContain('/dashboard');
+      expect(page.url()).toMatch(/\/(dashboard|parent)/);
 
       // Verify access token is set
       const cookies = await page.context().cookies();
@@ -148,7 +148,7 @@ test.describe('Authentication', () => {
       await page.fill('input[name="email"]', DEMO_USER.email);
       await page.fill('input[name="password"]', DEMO_USER.password);
       await page.click('#login-submit-btn');
-      await page.waitForURL('**/dashboard', { timeout: 30000 });
+      await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
 
       // Verify access token is set
       let cookies = await page.context().cookies();
@@ -193,11 +193,11 @@ test.describe('Authentication', () => {
       await page.fill('input[name="email"]', DEMO_USER.email);
       await page.fill('input[name="password"]', DEMO_USER.password);
       await page.click('#login-submit-btn');
-      await page.waitForURL('**/dashboard', { timeout: 30000 });
+      await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
 
       // Get the current URL (should be dashboard)
       const initialUrl = page.url();
-      expect(initialUrl).toContain('/dashboard');
+      expect(initialUrl).toMatch(/\/(dashboard|parent)/);
 
       // Navigate away and back
       await page.goto(`${BASE_URL}/rewards`);
@@ -209,7 +209,7 @@ test.describe('Authentication', () => {
       // Go back to dashboard
       await page.goto(`${BASE_URL}/dashboard`);
       await page.waitForLoadState('networkidle');
-      expect(page.url()).toContain('/dashboard');
+      expect(page.url()).toMatch(/\/(dashboard|parent)/);
     });
   });
 });

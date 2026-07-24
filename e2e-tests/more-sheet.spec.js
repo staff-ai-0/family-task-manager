@@ -12,7 +12,7 @@ async function openMoreSheet(page) {
   await page.fill('input[name="email"]', 'mom@demo.com');
   await page.fill('input[name="password"]', 'password123');
   await page.click('#login-submit-btn');
-  await page.waitForURL('**/dashboard', { timeout: 30000 });
+  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
   // The driver.js welcome tour auto-starts in a fresh context and its overlay
   // would intercept clicks — dismiss it if present before opening the sheet.
   const tourClose = page.locator('.driver-popover-close-btn');
