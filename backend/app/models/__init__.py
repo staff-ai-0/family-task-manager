@@ -59,6 +59,7 @@ from app.models.kid_bank import KidBankAccount
 from app.models.kid_savings_goal import KidSavingsGoal
 from app.models.referral import Referral
 from app.models.routine import Routine, RoutineStep, RoutineProgress
+from app.models.operator_audit import OperatorAuditLog  # noqa: F401
 
 __all__ = [
     "Base",
