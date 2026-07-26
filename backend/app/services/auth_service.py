@@ -422,6 +422,15 @@ class AuthService:
         if user.deleted_at is not None:
             raise UnauthorizedException("Account closed")
 
+        # Operator suspension: the family is locked out as a whole. Same 401
+        # as a deactivated account — deliberately indistinguishable to an
+        # attacker probing for valid emails.
+        family_active = await db.scalar(
+            select(Family.is_active).where(Family.id == user.family_id)
+        )
+        if family_active is False:
+            raise UnauthorizedException("Family suspended")
+
         # Join-code self-signups cannot log in until a parent approves.
         if getattr(user, "approval_status", APPROVAL_APPROVED) == APPROVAL_PENDING:
             raise ForbiddenException(

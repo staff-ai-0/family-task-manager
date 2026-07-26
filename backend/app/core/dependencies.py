@@ -10,6 +10,7 @@ from app.core.database import get_db
 from app.core.security import decode_token, oauth2_scheme
 from app.core.type_utils import to_uuid_required
 from app.core.exceptions import ForbiddenException, NotFoundException
+from app.models.family import Family
 from app.models.user import User, UserRole
 
 
@@ -51,6 +52,20 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Account closed",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Operator suspension. families.is_active was previously checked only at
+    # join-code lookup and registration, which meant a "suspended" family kept
+    # full access to the app. A valid access token must stop working the
+    # moment an operator suspends the family.
+    family_active = await db.scalar(
+        select(Family.is_active).where(Family.id == user.family_id)
+    )
+    if family_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Family suspended",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
