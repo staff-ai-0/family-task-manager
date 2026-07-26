@@ -4,6 +4,7 @@ from sqlalchemy import select
 from typing import Optional
 from uuid import UUID
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import decode_token, oauth2_scheme
 from app.core.type_utils import to_uuid_required
@@ -61,6 +62,26 @@ def require_parent_role(current_user: User = Depends(get_current_user)) -> User:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This operation requires parent privileges",
+        )
+    return current_user
+
+
+def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
+    """Platform operator. Requires BOTH the DB flag and the env allowlist.
+
+    Rejects with 404 rather than 403 so the admin surface is not
+    discoverable — a 403 confirms the route exists. Both conditions are
+    required on purpose: the DB flag alone would let a stolen dump mint an
+    operator, and the allowlist alone would hand platform powers to anyone
+    who gains control of a listed mailbox.
+    """
+    if not current_user.is_superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Not Found"
+        )
+    if (current_user.email or "").lower() not in settings.superadmin_emails_set:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Not Found"
         )
     return current_user
 

@@ -172,6 +172,12 @@ class Settings(BaseSettings):
         """
         return (self.PUBLIC_URL or self.BASE_URL).rstrip("/")
 
+    @property
+    def superadmin_emails_set(self) -> frozenset[str]:
+        """Normalized operator allowlist. Lower-cased at parse time so the
+        membership test is a plain lookup on an already-lowered email."""
+        return frozenset(self.SUPERADMIN_EMAILS)
+
     # Redis (Optional)
     REDIS_URL: str = "redis://redis:6379/0"
 
@@ -217,7 +223,13 @@ class Settings(BaseSettings):
     # Internal service-to-service token (for /api/internal/* endpoints).
     # If empty, all internal endpoints reject with 403.
     INTERNAL_API_TOKEN: str = ""
-    
+
+    # Platform-operator allowlist (comma-separated emails). A user is a
+    # super-admin only when users.is_superadmin is true AND their email is
+    # listed here. Empty — the default in local dev and CI — makes the entire
+    # /api/admin surface unreachable by anyone. It fails closed.
+    SUPERADMIN_EMAILS: Union[List[str], str] = []
+
     # Logging
     LOG_LEVEL: str = "INFO"
 
@@ -240,6 +252,15 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [i.strip() for i in v.split(',') if i.strip()]
         return v
+
+    @field_validator('SUPERADMIN_EMAILS', mode='before')
+    @classmethod
+    def parse_superadmin_emails(cls, v):
+        if v is None or v == "":
+            return []
+        if isinstance(v, str):
+            return [e.strip().lower() for e in v.split(',') if e.strip()]
+        return [str(e).strip().lower() for e in v if str(e).strip()]
 
     @model_validator(mode='after')
     def _enforce_production_secrets(self):

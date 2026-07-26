@@ -45,6 +45,14 @@ class User(Base):
     cash_cents = Column(Integer, default=0, nullable=False, server_default="0")
     token_version = Column(Integer, nullable=False, default=0, server_default="0")
     is_active = Column(Boolean, default=True, nullable=False)
+    # Platform-operator flag. NOT a family role — it grants cross-tenant read
+    # and a bounded set of write actions through /api/admin/*. Insufficient on
+    # its own: require_superadmin also demands the email be listed in
+    # settings.SUPERADMIN_EMAILS. There is deliberately no UI to set this;
+    # it is granted by a one-off UPDATE on the production host.
+    is_superadmin = Column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
     preferred_lang = Column(String(5), default="en", nullable=False, server_default="en")
     
     email_verified = Column(Boolean, default=False, nullable=False)

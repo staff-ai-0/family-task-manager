@@ -360,6 +360,8 @@ app.include_router(
 app.include_router(invitations.router, prefix="/api/invitations", tags=["Invitations"])
 app.include_router(budget_router, prefix="/api/budget", tags=["Budget"])
 app.include_router(gigs_router, prefix="/api/gigs", tags=["Gigs"])
+from app.api.routes.admin import router as admin_router  # noqa: E402
+app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
 app.include_router(oversight.router, prefix="/api/oversight", tags=["Oversight"])
 app.include_router(cash.router, prefix="/api/cash", tags=["Cash"])
 app.include_router(bank.router, prefix="/api/bank", tags=["Family Bank"])
