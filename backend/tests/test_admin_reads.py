@@ -498,3 +498,51 @@ async def test_family_directory_deleted_family_appears_in_items_via_outerjoin(
     assert body["total"] == 2
     names = {row["name"] for row in body["items"]}
     assert "Closed With No Sub" in names
+
+
+@pytest.mark.asyncio
+async def test_family_detail_returns_all_tabs(
+    client, superadmin_headers, test_family, test_parent_user, test_child_user
+):
+    resp = await client.get(
+        f"/api/admin/families/{test_family.id}", headers=superadmin_headers
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) >= {
+        "overview",
+        "members",
+        "economy",
+        "tasks",
+        "budget",
+        "billing",
+        "integrations",
+    }
+    assert body["overview"]["name"] == "Test Family"
+    # enabled_modules is NULL on a fresh family, which means ALL modules on.
+    assert body["overview"]["enabled_modules"] is None
+    emails = {m["email"] for m in body["members"]}
+    assert {"parent@test.com", "child@test.com"} <= emails
+
+
+@pytest.mark.asyncio
+async def test_family_detail_members_report_uppercase_enum_roles(
+    client, superadmin_headers, test_family, test_parent_user
+):
+    """Regression guard: users.role is a PG enum storing 'PARENT'. A query
+    comparing to the lowercase Python value silently returns nothing."""
+    resp = await client.get(
+        f"/api/admin/families/{test_family.id}", headers=superadmin_headers
+    )
+    roles = {m["role"] for m in resp.json()["members"]}
+    assert "parent" in roles
+
+
+@pytest.mark.asyncio
+async def test_family_detail_404_for_unknown_family(client, superadmin_headers):
+    from uuid import uuid4
+
+    resp = await client.get(
+        f"/api/admin/families/{uuid4()}", headers=superadmin_headers
+    )
+    assert resp.status_code == 404

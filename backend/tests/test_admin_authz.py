@@ -67,3 +67,46 @@ async def test_require_superadmin_rejects_plain_parent(
 async def test_require_superadmin_rejects_anonymous(client: AsyncClient):
     resp = await client.get("/api/admin/ping")
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_family_detail_never_leaks_other_family_members(
+    client, db_session, superadmin_headers, test_family
+):
+    """The operator asks for family A and gets ONLY family A."""
+    from app.core.security import get_password_hash
+    from app.models.family import Family
+    from app.models.user import User, UserRole
+
+    other = Family(name="Other Family")
+    db_session.add(other)
+    await db_session.commit()
+    await db_session.refresh(other)
+    db_session.add(
+        User(
+            email="outsider@test.com",
+            password_hash=get_password_hash("password123"),
+            name="Outsider",
+            role=UserRole.PARENT,
+            family_id=other.id,
+            email_verified=True,
+        )
+    )
+    await db_session.commit()
+
+    resp = await client.get(
+        f"/api/admin/families/{test_family.id}", headers=superadmin_headers
+    )
+    emails = {m["email"] for m in resp.json()["members"]}
+    assert "outsider@test.com" not in emails
+
+
+@pytest.mark.asyncio
+async def test_family_detail_rejects_parent_of_that_family(
+    client, auth_headers, test_family, allowlist_superadmin
+):
+    """A parent cannot read their OWN family through the admin surface."""
+    resp = await client.get(
+        f"/api/admin/families/{test_family.id}", headers=auth_headers
+    )
+    assert resp.status_code == 404

@@ -5,13 +5,16 @@ precisely so BaseFamilyService's family_id filters are never relaxed — that
 would silently widen roughly fifty family-scoped services.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.a2a import A2AWebhookDelivery
-from app.models.budget import BudgetReceiptDraft
+from app.models.a2a import A2AWebhookDelivery, FamilyA2AWebhook
+from app.models.budget import BudgetAccount, BudgetReceiptDraft, BudgetTransaction
+from app.models.cash_transaction import CashTransaction
 from app.models.family import Family
 from app.models.subscription import FamilySubscription, SubscriptionPlan
 from app.models.task_assignment import AssignmentStatus, TaskAssignment
@@ -208,4 +211,232 @@ class AdminReadService:
             "oldest_pending_at": (
                 oldest_pending.isoformat() if oldest_pending else None
             ),
+        }
+
+    @staticmethod
+    async def family_detail(db: AsyncSession, family_id: UUID) -> dict:
+        """Everything the support console shows for one family.
+
+        Metadata only — no message bodies, no images, no chat, no DMs. Those
+        wait for the moderation phase, which owns the redaction and consent
+        design.
+        """
+        family = await db.scalar(select(Family).where(Family.id == family_id))
+        if family is None:
+            # 404 here is indistinguishable from the 404 a non-operator gets,
+            # which is the point.
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Not Found"
+            )
+
+        members = (
+            await db.execute(
+                select(User)
+                .where(User.family_id == family_id)
+                .order_by(User.created_at.asc())
+            )
+        ).scalars().all()
+
+        assignment_counts = dict(
+            (
+                await db.execute(
+                    select(TaskAssignment.status, func.count())
+                    .where(TaskAssignment.family_id == family_id)
+                    .group_by(TaskAssignment.status)
+                )
+            ).all()
+        )
+
+        account_count = await db.scalar(
+            select(func.count())
+            .select_from(BudgetAccount)
+            .where(
+                BudgetAccount.family_id == family_id,
+                BudgetAccount.deleted_at.is_(None),
+            )
+        )
+        transaction_count = await db.scalar(
+            select(func.count())
+            .select_from(BudgetTransaction)
+            .where(
+                BudgetTransaction.family_id == family_id,
+                BudgetTransaction.deleted_at.is_(None),
+            )
+        )
+        drafts_pending = await db.scalar(
+            select(func.count())
+            .select_from(BudgetReceiptDraft)
+            .where(
+                BudgetReceiptDraft.family_id == family_id,
+                BudgetReceiptDraft.status == "pending",
+            )
+        )
+
+        sub_row = (
+            await db.execute(
+                select(FamilySubscription, SubscriptionPlan)
+                .outerjoin(
+                    SubscriptionPlan,
+                    FamilySubscription.plan_id == SubscriptionPlan.id,
+                )
+                .where(FamilySubscription.family_id == family_id)
+            )
+        ).first()
+
+        webhook = await db.scalar(
+            select(FamilyA2AWebhook).where(
+                FamilyA2AWebhook.family_id == family_id
+            )
+        )
+        deliveries = dict(
+            (
+                await db.execute(
+                    select(A2AWebhookDelivery.status, func.count())
+                    .where(A2AWebhookDelivery.family_id == family_id)
+                    .group_by(A2AWebhookDelivery.status)
+                )
+            ).all()
+        )
+
+        recent_cash = (
+            await db.execute(
+                select(CashTransaction)
+                .where(CashTransaction.family_id == family_id)
+                .order_by(CashTransaction.created_at.desc())
+                .limit(20)
+            )
+        ).scalars().all()
+
+        return {
+            "overview": {
+                "id": str(family.id),
+                "name": family.name,
+                "timezone": family.timezone,
+                "is_active": family.is_active,
+                "created_at": family.created_at.isoformat(),
+                "deleted_at": (
+                    family.deleted_at.isoformat() if family.deleted_at else None
+                ),
+                "purge_after": (
+                    (family.deleted_at + timedelta(days=30)).isoformat()
+                    if family.deleted_at
+                    else None
+                ),
+                "join_code": family.join_code,
+                "referral_code": family.referral_code,
+                "referral_bonus_until": (
+                    family.referral_bonus_until.isoformat()
+                    if family.referral_bonus_until
+                    else None
+                ),
+                # NULL means ALL modules on, not none. Rendered verbatim so
+                # the UI can say so explicitly rather than showing "0 modules".
+                "enabled_modules": family.enabled_modules,
+                "point_value_cents": family.point_value_cents,
+                "gig_term": family.gig_term,
+                "ai_processing_consent": family.ai_processing_consent,
+                "ai_processing_consent_at": (
+                    family.ai_processing_consent_at.isoformat()
+                    if family.ai_processing_consent_at
+                    else None
+                ),
+                "onboarding": {
+                    "child_invited": family.onboarding_child_invited,
+                    "task_created": family.onboarding_task_created,
+                    "reward_created": family.onboarding_reward_created,
+                    "points_awarded": family.onboarding_points_awarded,
+                    "dismissed": family.onboarding_dismissed,
+                },
+            },
+            "members": [
+                {
+                    "id": str(u.id),
+                    "email": u.email,
+                    "name": u.name,
+                    "role": u.role.value,
+                    "is_active": u.is_active,
+                    "email_verified": u.email_verified,
+                    "approval_status": u.approval_status,
+                    "oauth_provider": u.oauth_provider,
+                    "points": u.points,
+                    "cash_cents": u.cash_cents,
+                    "last_seen_at": (
+                        u.last_seen_at.isoformat() if u.last_seen_at else None
+                    ),
+                    "created_at": u.created_at.isoformat(),
+                    "deleted_at": (
+                        u.deleted_at.isoformat() if u.deleted_at else None
+                    ),
+                }
+                for u in members
+            ],
+            "economy": {
+                "recent_cash_transactions": [
+                    {
+                        "id": str(tx.id),
+                        "user_id": str(tx.user_id),
+                        "type": tx.type.value,
+                        "amount_cents": tx.amount_cents,
+                        "balance_after": tx.balance_after,
+                        "jar": tx.jar,
+                        "week_of": tx.week_of.isoformat() if tx.week_of else None,
+                        "created_at": tx.created_at.isoformat(),
+                    }
+                    for tx in recent_cash
+                ],
+            },
+            "tasks": {
+                "by_status": {
+                    s.value if hasattr(s, "value") else str(s): int(n)
+                    for s, n in assignment_counts.items()
+                },
+            },
+            "budget": {
+                "account_count": int(account_count or 0),
+                "transaction_count": int(transaction_count or 0),
+                "receipt_drafts_pending": int(drafts_pending or 0),
+            },
+            "billing": (
+                {
+                    "plan": sub_row[1].name if sub_row[1] else None,
+                    "currency": sub_row[1].currency if sub_row[1] else None,
+                    "status": sub_row[0].status,
+                    "billing_cycle": sub_row[0].billing_cycle,
+                    "paypal_subscription_id": sub_row[0].paypal_subscription_id,
+                    "current_period_end": (
+                        sub_row[0].current_period_end.isoformat()
+                        if sub_row[0].current_period_end
+                        else None
+                    ),
+                    "cancel_at_period_end": sub_row[0].cancel_at_period_end,
+                    "payment_failure_at": (
+                        sub_row[0].payment_failure_at.isoformat()
+                        if sub_row[0].payment_failure_at
+                        else None
+                    ),
+                    "needs_review": sub_row[0].needs_review,
+                    "review_reason": sub_row[0].review_reason,
+                }
+                if sub_row
+                else None
+            ),
+            "integrations": {
+                "a2a_webhook": (
+                    {
+                        "enabled": webhook.enabled,
+                        "failure_count": webhook.failure_count,
+                        "last_success_at": (
+                            webhook.last_success_at.isoformat()
+                            if webhook.last_success_at
+                            else None
+                        ),
+                        "last_error": webhook.last_error,
+                    }
+                    if webhook
+                    else None
+                ),
+                "deliveries_by_status": {
+                    k: int(v) for k, v in deliveries.items()
+                },
+            },
         }

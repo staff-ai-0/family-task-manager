@@ -1,6 +1,7 @@
 """Per-family operator reads."""
 
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,7 @@ from app.core.database import get_db
 from app.core.dependencies import require_superadmin
 from app.models.user import User
 from app.services.admin.admin_lookup_service import AdminLookupService
+from app.services.admin.admin_read_service import AdminReadService
 
 router = APIRouter()
 
@@ -26,3 +28,13 @@ async def list_families(
     return await AdminLookupService.search_families(
         db, q=q, include_deleted=include_deleted, limit=limit, offset=offset
     )
+
+
+@router.get("/families/{family_id}")
+async def family_detail(
+    family_id: UUID,
+    _operator: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Full support view of one family. Metadata only — never content."""
+    return await AdminReadService.family_detail(db, family_id)
