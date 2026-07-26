@@ -1,9 +1,11 @@
 """Cross-tenant operator surface.
 
-Every route here is guarded by require_superadmin and takes family_id as an
-explicit path parameter. Nothing in this package may use verify_family_id or
-get_family_user — both compare against the caller's own family_id and would
-reject every admin request.
+Every route here is guarded by require_superadmin. Routes that act on a
+single tenant take family_id as an explicit path parameter; cross-tenant
+aggregate reads (e.g. /overview) do not, since they deliberately span every
+family. Nothing in this package may use verify_family_id or get_family_user
+— both compare against the caller's own family_id and would reject every
+admin request.
 """
 
 from fastapi import APIRouter, Depends

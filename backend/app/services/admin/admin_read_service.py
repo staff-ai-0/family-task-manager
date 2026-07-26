@@ -29,7 +29,13 @@ class AdminReadService:
 
     @staticmethod
     async def platform_pulse(db: AsyncSession) -> dict:
-        """One-screen platform state. All counts exclude soft-deleted rows."""
+        """One-screen platform state.
+
+        Every actionable-queue or revenue figure excludes rows belonging to
+        a closed (soft-deleted) family: receipt_drafts_pending,
+        overdue_assignments, mrr, and a2a. The one deliberate exception is
+        billing_needs_review — see the comment at that query for why.
+        """
         families_total = await db.scalar(
             select(func.count())
             .select_from(Family)
@@ -61,6 +67,12 @@ class AdminReadService:
                 User.approval_status == APPROVAL_PENDING,
             )
         )
+        # Deliberately UNFILTERED by Family.deleted_at. An unresolved
+        # refund/chargeback dispute on a family that has since closed its
+        # account is exactly the case an operator must still see — soft
+        # delete does not settle a dispute, and filtering it out here would
+        # hide the disputes most likely to still cost money. Do not add a
+        # Family join to this query.
         billing_needs_review = await db.scalar(
             select(func.count())
             .select_from(FamilySubscription)
@@ -69,12 +81,20 @@ class AdminReadService:
         receipt_drafts_pending = await db.scalar(
             select(func.count())
             .select_from(BudgetReceiptDraft)
-            .where(BudgetReceiptDraft.status == "pending")
+            .join(Family, BudgetReceiptDraft.family_id == Family.id)
+            .where(
+                Family.deleted_at.is_(None),
+                BudgetReceiptDraft.status == "pending",
+            )
         )
         overdue_assignments = await db.scalar(
             select(func.count())
             .select_from(TaskAssignment)
-            .where(TaskAssignment.status == AssignmentStatus.OVERDUE)
+            .join(Family, TaskAssignment.family_id == Family.id)
+            .where(
+                Family.deleted_at.is_(None),
+                TaskAssignment.status == AssignmentStatus.OVERDUE,
+            )
         )
 
         return {
@@ -98,7 +118,10 @@ class AdminReadService:
         Not a time series and not reconstructible history: family_subscriptions
         holds one row per family, mutated in place, and plan prices are mutable
         list prices. Reported per currency — there is no stored FX rate, so a
-        single summed figure would be fiction.
+        single summed figure would be fiction. Excludes closed (soft-deleted)
+        families: revenue attributed to an account that has already closed is
+        simply wrong, even during the grace window before the purge sweep
+        flips its subscription status.
         """
         rows = (
             await db.execute(
@@ -115,7 +138,9 @@ class AdminReadService:
                     SubscriptionPlan,
                     FamilySubscription.plan_id == SubscriptionPlan.id,
                 )
+                .join(Family, FamilySubscription.family_id == Family.id)
                 .where(
+                    Family.deleted_at.is_(None),
                     FamilySubscription.status.in_(PAYING_STATUSES),
                     FamilySubscription.paypal_subscription_id.is_not(None),
                     SubscriptionPlan.name != "free",
@@ -142,29 +167,39 @@ class AdminReadService:
 
     @staticmethod
     async def a2a_health(db: AsyncSession) -> dict:
-        """Outbound bank-matcher webhook delivery health."""
+        """Outbound bank-matcher webhook delivery health.
+
+        Excludes closed (soft-deleted) families — a stuck delivery for an
+        account nobody can act on anymore is noise, not a queue to work.
+        """
         now = datetime.now(timezone.utc)
         by_status = dict(
             (
                 await db.execute(
-                    select(A2AWebhookDelivery.status, func.count()).group_by(
-                        A2AWebhookDelivery.status
-                    )
+                    select(A2AWebhookDelivery.status, func.count())
+                    .join(Family, A2AWebhookDelivery.family_id == Family.id)
+                    .where(Family.deleted_at.is_(None))
+                    .group_by(A2AWebhookDelivery.status)
                 )
             ).all()
         )
         overdue_retries = await db.scalar(
             select(func.count())
             .select_from(A2AWebhookDelivery)
+            .join(Family, A2AWebhookDelivery.family_id == Family.id)
             .where(
+                Family.deleted_at.is_(None),
                 A2AWebhookDelivery.status == "pending",
                 A2AWebhookDelivery.next_retry_at.is_not(None),
                 A2AWebhookDelivery.next_retry_at < now,
             )
         )
         oldest_pending = await db.scalar(
-            select(func.min(A2AWebhookDelivery.created_at)).where(
-                A2AWebhookDelivery.status == "pending"
+            select(func.min(A2AWebhookDelivery.created_at))
+            .join(Family, A2AWebhookDelivery.family_id == Family.id)
+            .where(
+                Family.deleted_at.is_(None),
+                A2AWebhookDelivery.status == "pending",
             )
         )
         return {
