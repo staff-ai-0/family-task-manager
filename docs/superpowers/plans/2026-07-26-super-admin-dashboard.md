@@ -3617,7 +3617,7 @@ const BACKEND_URL = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL 
  * rebuilding the path drops the trailing slash and FastAPI's 307 then breaks
  * the proxied POST body.
  */
-async function proxy({ request, params }: { request: Request; params: Record<string, string | undefined> }): Promise<Response> {
+async function proxy({ request }: { request: Request }): Promise<Response> {
     const url = new URL(request.url);
     const backendUrl = `${BACKEND_URL}${url.pathname}${url.search}`;
 
