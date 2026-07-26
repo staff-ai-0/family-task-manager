@@ -65,12 +65,30 @@ async def _touch_last_seen(db: AsyncSession, user: User) -> None:
     Issued as a targeted UPDATE rather than an ORM flush so it cannot drag
     unrelated pending state into the write. Any failure is swallowed: an
     instrumentation write must never break the request it is measuring.
+
+    Both the throttle comparison and the write are inside the try: a naive
+    (tzinfo-less) stored value is guarded explicitly below, but the try
+    also covers the comparison in case a bad value reaches it some other
+    way. On failure, `db.rollback()` unconditionally expires every object
+    in the session's identity map (NOT gated by expire_on_commit — that
+    flag only governs commit()'s expiry), so `db.refresh(user)` right
+    after is required to eagerly re-hydrate `user` before returning:
+    without it, the next synchronous attribute read downstream (a role
+    check, or UserResponse.model_validate(current_user) in GET
+    /api/auth/me) would trigger an implicit lazy-load, which raises
+    MissingGreenlet under AsyncSession instead of reloading.
     """
     now = datetime.now(timezone.utc)
-    throttle = timedelta(minutes=settings.LAST_SEEN_THROTTLE_MINUTES)
-    if user.last_seen_at is not None and now - user.last_seen_at < throttle:
-        return
     try:
+        last_seen = user.last_seen_at
+        if last_seen is not None and last_seen.tzinfo is None:
+            # Should never happen via SQLAlchemy, but a raw-SQL
+            # backfill/import could land a naive value here. Treat it as
+            # stale rather than let the subtraction below raise.
+            last_seen = None
+        throttle = timedelta(minutes=settings.LAST_SEEN_THROTTLE_MINUTES)
+        if last_seen is not None and now - last_seen < throttle:
+            return
         await db.execute(
             update(User).where(User.id == user.id).values(last_seen_at=now)
         )
@@ -78,6 +96,7 @@ async def _touch_last_seen(db: AsyncSession, user: User) -> None:
         user.last_seen_at = now
     except Exception:
         await db.rollback()
+        await db.refresh(user)
 
 
 def require_parent_role(current_user: User = Depends(get_current_user)) -> User:
