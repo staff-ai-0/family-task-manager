@@ -143,6 +143,8 @@ __all__ = [
     "JarvisPendingAction",
     # Jarvis MCP tokens
     "JarvisMcpToken",
+    # Operator audit log
+    "OperatorAuditLog",
     # Enums
     "UserRole",
     "AssignmentStatus",
