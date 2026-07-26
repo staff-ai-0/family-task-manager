@@ -164,3 +164,27 @@ async def test_last_seen_at_naive_stored_value_does_not_break_request(
 
     assert response.status_code == 200
     assert response.json()["email"] == test_parent_user.email
+
+
+@pytest.mark.asyncio
+async def test_platform_pulse_counts_exclude_soft_deleted(
+    client, db_session, superadmin_headers, test_family, test_parent_user
+):
+    from app.models.family import Family
+
+    gone = Family(name="Closed Family", deleted_at=datetime.now(timezone.utc))
+    db_session.add(gone)
+    await db_session.commit()
+
+    resp = await client.get("/api/admin/overview", headers=superadmin_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["families_total"] == 1
+    assert body["families_pending_purge"] == 1
+    assert body["users_total"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_platform_pulse_rejects_non_operator(client, auth_headers):
+    resp = await client.get("/api/admin/overview", headers=auth_headers)
+    assert resp.status_code == 404

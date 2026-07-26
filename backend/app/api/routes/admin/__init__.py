@@ -19,3 +19,8 @@ async def ping(_operator: User = Depends(require_superadmin)) -> dict:
     """Liveness probe for the admin surface. Exists so the authorization
     matrix has a stable, side-effect-free target."""
     return {"ok": True}
+
+
+from app.api.routes.admin import overview  # noqa: E402
+
+router.include_router(overview.router)
