@@ -62,34 +62,58 @@ async def get_current_user(
 async def _touch_last_seen(db: AsyncSession, user: User) -> None:
     """Throttled, best-effort activity stamp.
 
-    The write runs inside a SAVEPOINT (``begin_nested``) rather than a
-    plain session-level statement: a SAVEPOINT rollback only expires
-    ORM-dirty objects, and this function never mutates `user` before a
-    successful write, so `user` is never expired by a failure here — no
-    recovery read is needed. A bare ``db.rollback()`` would instead expire
-    every object in the identity map unconditionally, forcing an illegal
-    synchronous lazy-load on `user` in the caller. Any failure — from the
-    write or from the final commit — is swallowed: an instrumentation
-    write must never break the request it is measuring. The naive
-    (tzinfo-less) guard covers a value that reached the column outside
-    SQLAlchemy (e.g. a raw-SQL backfill).
+    Two failure points, two different recoveries — neither may ever raise
+    past this function, and `user` must stay usable and the session
+    committable either way (`get_db()` issues its own commit at the end of
+    every request on this same session):
+
+    * The write runs inside a SAVEPOINT (``begin_nested``). Its rollback on
+      failure only expires ORM-*dirty* objects; `user` is never mutated
+      before a successful write, so it survives untouched and the root
+      transaction stays healthy — no recovery needed.
+    * The follow-up ``db.commit()`` persists that SAVEPOINT immediately
+      (this write is meant to survive even if the rest of the request later
+      fails and rolls back). If the commit itself fails, the session can be
+      left in a ``PREPARED`` transaction state that accepts no further SQL
+      — including `get_db()`'s own end-of-request commit. A plain
+      ``db.rollback()`` clears that, but rollback at the *root* level
+      expires every object in the identity map unconditionally (confirmed
+      against the installed SQLAlchemy source and empirically — this is
+      not limited to dirty objects), so it must be paired with a refresh
+      to leave `user` usable again. Both steps are independently guarded.
     """
     now = datetime.now(timezone.utc)
+    last_seen = user.last_seen_at
+    if last_seen is not None and last_seen.tzinfo is None:
+        # Should never happen via SQLAlchemy, but guard against a value
+        # that reached the column some other way (e.g. a raw-SQL backfill).
+        last_seen = None
+    throttle = timedelta(minutes=settings.LAST_SEEN_THROTTLE_MINUTES)
+    if last_seen is not None and now - last_seen < throttle:
+        return
+
     try:
-        last_seen = user.last_seen_at
-        if last_seen is not None and last_seen.tzinfo is None:
-            last_seen = None
-        throttle = timedelta(minutes=settings.LAST_SEEN_THROTTLE_MINUTES)
-        if last_seen is not None and now - last_seen < throttle:
-            return
         async with db.begin_nested():
             await db.execute(
                 update(User).where(User.id == user.id).values(last_seen_at=now)
             )
-        await db.commit()
-        user.last_seen_at = now
     except Exception:
-        pass
+        return
+
+    try:
+        await db.commit()
+    except Exception:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        try:
+            await db.refresh(user)
+        except Exception:
+            pass
+        return
+
+    user.last_seen_at = now
 
 
 def require_parent_role(current_user: User = Depends(get_current_user)) -> User:

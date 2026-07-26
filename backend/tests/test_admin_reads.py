@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import Update, select
+from sqlalchemy.engine.base import Connection
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -90,6 +91,62 @@ async def test_last_seen_write_failure_does_not_break_request(
 
     assert response.status_code == 200
     assert response.json()["email"] == test_parent_user.email
+
+
+@pytest.mark.asyncio
+async def test_last_seen_commit_failure_leaves_session_committable(
+    client, db_session, auth_headers, test_parent_user, monkeypatch
+):
+    """A transient failure in _touch_last_seen's own outer db.commit() (a
+    connection-level DBAPI failure, not a full DB outage) must not leave
+    the session's transaction wedged in a PREPARED state: PREPARED blocks
+    ANY further SQL on that session — including get_db()'s own
+    end-of-request `await session.commit()` — which would 500 the request
+    for reasons unrelated to `last_seen_at` no matter which route was hit.
+
+    Patching AsyncSession.commit (as an earlier round's test did) is too
+    shallow: it bypasses SessionTransaction._prepare_impl(), which is what
+    flips the transaction to PREPARED before the real per-connection
+    commit runs. This test instead fault-injects at
+    Connection._commit_impl — the actual DBAPI commit boundary — so the
+    state transition that causes the wedge is genuinely exercised.
+
+    Both invariants must hold: (a) the response is 200 with the expected
+    body (user stayed usable for route/response-model attribute reads),
+    and (b) the shared session can still run a further query and commit
+    afterward — the direct equivalent of get_db()'s own post-yield commit
+    succeeding rather than raising PendingRollbackError/InvalidRequestError.
+    """
+    original_commit_impl = Connection._commit_impl
+    fail_once = {"armed": True}
+
+    def poisoned_commit_impl(self):
+        if fail_once["armed"]:
+            fail_once["armed"] = False
+            raise RuntimeError("simulated transient DBAPI commit failure")
+        return original_commit_impl(self)
+
+    monkeypatch.setattr(Connection, "_commit_impl", poisoned_commit_impl)
+
+    response = await client.get("/api/auth/me", headers=auth_headers)
+
+    # Invariant (a).
+    assert response.status_code == 200
+    assert response.json()["email"] == test_parent_user.email
+
+    # Invariant (b): the session must still accept further SQL and commit —
+    # exactly what get_db() does at the end of every real request on this
+    # same session. A PREPARED-wedged session raises here instead.
+    result = await db_session.execute(
+        select(User).where(User.id == test_parent_user.id)
+    )
+    assert result.scalar_one().email == test_parent_user.email
+    await db_session.commit()
+
+    # Belt-and-suspenders: the session should also be fully usable for a
+    # subsequent, unrelated request (not just a bare query/commit).
+    response2 = await client.get("/api/auth/me", headers=auth_headers)
+    assert response2.status_code == 200
 
 
 @pytest.mark.asyncio
