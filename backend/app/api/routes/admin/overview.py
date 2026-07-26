@@ -37,7 +37,7 @@ async def pending_deletions(
     _operator: User = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
-    """Families inside the 30-day recovery window."""
+    """Families inside the recovery window."""
     return await AdminReadService.pending_purge_queue(db)
 
 

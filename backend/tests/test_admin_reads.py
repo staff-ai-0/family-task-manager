@@ -594,10 +594,44 @@ async def test_billing_review_queue_lists_flagged_subscriptions(
 async def test_deletions_queue_shows_purge_date(
     client, db_session, superadmin_headers
 ):
+    """Also locks in the member-count aggregate: User.deleted_at is stamped
+    atomically with Family.deleted_at by FamilyDeletionService.delete_family,
+    so both seeded members here carry deleted_at. A `deleted_at IS NULL`
+    filter on the member-count subquery — the exact defect Task 5's review
+    caught — would silently report 0 here instead of 2."""
+    from app.core.security import get_password_hash
     from app.models.family import Family
+    from app.models.user import User, UserRole
 
     closed_at = datetime.now(timezone.utc)
-    db_session.add(Family(name="Closing", deleted_at=closed_at))
+    family = Family(name="Closing", deleted_at=closed_at)
+    db_session.add(family)
+    await db_session.flush()
+
+    db_session.add_all(
+        [
+            User(
+                email="parent@closing.test",
+                password_hash=get_password_hash("password123"),
+                name="Closing Parent",
+                role=UserRole.PARENT,
+                family_id=family.id,
+                email_verified=True,
+                points=0,
+                deleted_at=closed_at,
+            ),
+            User(
+                email="child@closing.test",
+                password_hash=get_password_hash("password123"),
+                name="Closing Child",
+                role=UserRole.CHILD,
+                family_id=family.id,
+                email_verified=True,
+                points=0,
+                deleted_at=closed_at,
+            ),
+        ]
+    )
     await db_session.commit()
 
     resp = await client.get("/api/admin/deletions", headers=superadmin_headers)
@@ -605,6 +639,61 @@ async def test_deletions_queue_shows_purge_date(
     assert len(rows) == 1
     assert rows[0]["name"] == "Closing"
     assert rows[0]["purge_after"] is not None
+    assert rows[0]["member_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_billing_review_queue_includes_closed_family(
+    client, db_session, superadmin_headers
+):
+    """Locks in the ruling from Task 4: billing_needs_review (the tile) is
+    deliberately unfiltered by Family.deleted_at, because an unresolved
+    refund/chargeback on a family that has since closed its account is
+    exactly what an operator must still see. This queue is the drill-down
+    for that same tile and must stay consistent with it — a soft-deleted
+    family's needs_review subscription must still surface here."""
+    from app.models.family import Family
+    from app.models.subscription import FamilySubscription, SubscriptionPlan
+
+    plan = SubscriptionPlan(
+        name="plus",
+        display_name="Plus",
+        display_name_es="Plus",
+        currency="USD",
+        price_monthly_cents=500,
+        price_annual_cents=5000,
+        limits={},
+    )
+    db_session.add(plan)
+    await db_session.flush()
+
+    closed_family = Family(
+        name="Closed Billing Dispute", deleted_at=datetime.now(timezone.utc)
+    )
+    db_session.add(closed_family)
+    await db_session.flush()
+
+    db_session.add(
+        FamilySubscription(
+            family_id=closed_family.id,
+            plan_id=plan.id,
+            billing_cycle="monthly",
+            status="active",
+            paypal_subscription_id="I-CLOSED-DISPUTE",
+            needs_review=True,
+            review_reason="chargeback after account closed",
+        )
+    )
+    await db_session.commit()
+
+    resp = await client.get(
+        "/api/admin/billing-review", headers=superadmin_headers
+    )
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 1
+    assert rows[0]["family_name"] == "Closed Billing Dispute"
+    assert rows[0]["review_reason"] == "chargeback after account closed"
 
 
 @pytest.mark.asyncio
@@ -637,3 +726,54 @@ async def test_audit_log_read_is_filterable(
         headers=superadmin_headers,
     )
     assert resp.json()["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_audit_log_includes_row_for_purged_family(
+    client, db_session, superadmin_headers, test_superadmin_user
+):
+    """operator_audit_log deliberately has NO foreign keys (see the model),
+    precisely so a target_family_id surviving past the family's own hard
+    purge is never silently dropped. Uses a target_family_id that matches
+    no row in `families` at all — stronger than a merely soft-deleted
+    family — to prove audit_log never joins to `families`."""
+    from uuid import uuid4
+
+    from app.services.admin.operator_audit_service import OperatorAuditService
+
+    orphan_family_id = uuid4()
+    OperatorAuditService.record(
+        db_session,
+        actor=test_superadmin_user,
+        action="family.purge",
+        target_family_id=orphan_family_id,
+    )
+    await db_session.commit()
+
+    resp = await client.get(
+        f"/api/admin/audit?family_id={orphan_family_id}",
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["action"] == "family.purge"
+    assert body["items"][0]["target_family_id"] == str(orphan_family_id)
+
+
+@pytest.mark.asyncio
+async def test_billing_review_rejects_non_operator(client, auth_headers):
+    resp = await client.get("/api/admin/billing-review", headers=auth_headers)
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_deletions_rejects_non_operator(client, auth_headers):
+    resp = await client.get("/api/admin/deletions", headers=auth_headers)
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_audit_log_rejects_non_operator(client, auth_headers):
+    resp = await client.get("/api/admin/audit", headers=auth_headers)
+    assert resp.status_code == 404
