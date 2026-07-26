@@ -19,6 +19,7 @@ from app.models.family import Family
 from app.models.subscription import FamilySubscription, SubscriptionPlan
 from app.models.task_assignment import AssignmentStatus, TaskAssignment
 from app.models.user import APPROVAL_PENDING, User
+from app.services.family_deletion_service import FamilyDeletionService
 
 # Subscription statuses that represent a live entitlement backed by PayPal.
 # 'past_due' and 'payment_failed' are inside the billing grace window and are
@@ -318,7 +319,10 @@ class AdminReadService:
                     family.deleted_at.isoformat() if family.deleted_at else None
                 ),
                 "purge_after": (
-                    (family.deleted_at + timedelta(days=30)).isoformat()
+                    (
+                        family.deleted_at
+                        + timedelta(days=FamilyDeletionService.PURGE_RETENTION_DAYS)
+                    ).isoformat()
                     if family.deleted_at
                     else None
                 ),
