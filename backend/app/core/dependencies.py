@@ -31,12 +31,22 @@ async def get_current_user(
     if user_id is None:
         raise credentials_exception
 
-    # Get user from database
-    result = await db.execute(select(User).filter(User.id == user_id))
-    user = result.scalar_one_or_none()
+    # Get user from database, joined to the family's is_active flag in the
+    # same round trip (users.family_id is a non-nullable FK, so an inner join
+    # is safe — the only way it misses is corrupt data, e.g. an orphaned user
+    # row, and that must fail closed exactly like "user not found" below, not
+    # 500).
+    result = await db.execute(
+        select(User, Family.is_active)
+        .join(Family, Family.id == User.family_id)
+        .filter(User.id == user_id)
+    )
+    row = result.one_or_none()
 
-    if user is None:
+    if row is None:
         raise credentials_exception
+
+    user, family_active = row
 
     # A still-valid access token must stop working once the account is
     # deactivated. Login already gates is_active; mirror it on every request.
@@ -58,10 +68,8 @@ async def get_current_user(
     # Operator suspension. families.is_active was previously checked only at
     # join-code lookup and registration, which meant a "suspended" family kept
     # full access to the app. A valid access token must stop working the
-    # moment an operator suspends the family.
-    family_active = await db.scalar(
-        select(Family.is_active).where(Family.id == user.family_id)
-    )
+    # moment an operator suspends the family. family_active came back from the
+    # join above, so this costs no extra query.
     if family_active is False:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
