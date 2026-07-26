@@ -487,13 +487,21 @@ class AuthService:
         return user
 
     @staticmethod
-    async def deactivate_user(db: AsyncSession, user_id: UUID) -> User:
+    async def deactivate_user(
+        db: AsyncSession, user_id: UUID, commit: bool = True
+    ) -> User:
         """Deactivate a user account.
 
         Open task assignments (pending/claimed/overdue) are cancelled in the
         same transaction — a deactivated member can never complete them, and
         leaving them alive rots the parent week grid with ghost rows that the
         sweep keeps flipping OVERDUE.
+
+        ``commit=False`` lets a caller fold this mutation (and the bulk
+        assignment cancellation) into a larger transaction of its own — e.g.
+        the admin action service, which must land this mutation and its
+        operator-audit row atomically. The caller becomes responsible for
+        committing (and, if it fails, for rolling back).
         """
         from sqlalchemy import update as sql_update
         from app.models.task_assignment import (
@@ -518,19 +526,27 @@ class AuthService:
             .values(status=AssignmentStatus.CANCELLED)
         )
 
-        await db.commit()
-        await db.refresh(user)
+        if commit:
+            await db.commit()
+            await db.refresh(user)
         return user
 
     @staticmethod
-    async def activate_user(db: AsyncSession, user_id: UUID) -> User:
-        """Activate a user account"""
+    async def activate_user(
+        db: AsyncSession, user_id: UUID, commit: bool = True
+    ) -> User:
+        """Activate a user account.
+
+        ``commit=False`` lets a caller fold this into a larger transaction —
+        see ``deactivate_user`` for why the admin action service needs this.
+        """
         user = await AuthService.get_user_by_id(db, user_id)
         user.is_active = True
         user.updated_at = datetime.now(timezone.utc)
-        
-        await db.commit()
-        await db.refresh(user)
+
+        if commit:
+            await db.commit()
+            await db.refresh(user)
         return user
 
     @staticmethod

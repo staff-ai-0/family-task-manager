@@ -150,6 +150,43 @@ async def test_set_modules_persists_registry_and_audits(
     await db_session.refresh(test_family)
     assert set(test_family.enabled_modules) == {"budget", "chat"}
 
+    row = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "family.set_modules"
+            )
+        )
+    ).scalar_one()
+    assert row.target_family_id == test_family.id
+    assert row.result == "ok"
+    assert set(row.params["enabled_modules"]) == {"budget", "chat"}
+
+
+@pytest.mark.asyncio
+async def test_set_modules_rejects_unknown_module_key(
+    client, db_session, superadmin_headers, test_family
+):
+    """The rejection path (unknown keys against TOGGLABLE_MODULES) had zero
+    coverage — this pins the 422 and confirms nothing was written."""
+    resp = await client.post(
+        f"/api/admin/families/{test_family.id}/modules",
+        json={"enabled_modules": ["budget", "not_a_real_module"], "reason": "x"},
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 422
+
+    await db_session.refresh(test_family)
+    assert test_family.enabled_modules is None
+
+    rows = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "family.set_modules"
+            )
+        )
+    ).scalars().all()
+    assert rows == []
+
 
 @pytest.mark.asyncio
 async def test_password_reset_bumps_token_version(
@@ -209,7 +246,7 @@ async def test_failed_action_writes_error_audit_row(
 
 @pytest.mark.asyncio
 async def test_deactivate_user_audits_and_flags_asymmetry(
-    client, db_session, superadmin_headers, test_child_user
+    client, db_session, superadmin_headers, test_child_user, test_family
 ):
     resp = await client.post(
         f"/api/admin/users/{test_child_user.id}/active",
@@ -220,3 +257,76 @@ async def test_deactivate_user_audits_and_flags_asymmetry(
     assert resp.json()["warning"]
     await db_session.refresh(test_child_user)
     assert test_child_user.is_active is False
+
+    row = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "user.deactivate"
+            )
+        )
+    ).scalar_one()
+    assert row.target_family_id == test_family.id
+    assert row.target_user_id == test_child_user.id
+    assert row.result == "ok"
+
+
+@pytest.mark.asyncio
+async def test_deactivate_user_is_atomic_with_its_audit_row(
+    client, db_session, superadmin_headers, test_child_user, monkeypatch
+):
+    """Proves the Task 9 fix, not just an already-correct path.
+
+    A prior version called AuthService.deactivate_user with its OWN internal
+    commit, so the member mutation (and its bulk assignment-cancellation)
+    landed in a transaction separate from — and earlier than — the audit
+    row. If staging/committing the audit row then failed, the member stayed
+    permanently deactivated with zero audit trail.
+
+    This forces exactly that failure window: OperatorAuditService.record is
+    made to raise on its first call, which happens AFTER
+    AuthService.deactivate_user(..., commit=False) has mutated the user
+    in-session but BEFORE the single shared commit. A row-exists assertion
+    cannot distinguish the fixed (atomic) behaviour from the old (split)
+    one; only checking that the mutation ALSO rolled back can. The second
+    call to record() (the error-path logging in the except block) is let
+    through so the failure is still auditable.
+    """
+    from app.services.admin.operator_audit_service import (
+        OperatorAuditService as OAS,
+    )
+
+    real_record = OAS.record
+    call_count = {"n": 0}
+
+    def _raise_once_then_record(db, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise RuntimeError("audit staging exploded")
+        return real_record(db, **kwargs)
+
+    monkeypatch.setattr(OAS, "record", staticmethod(_raise_once_then_record))
+
+    resp = await client.post(
+        f"/api/admin/users/{test_child_user.id}/active",
+        json={"active": False, "reason": "force failure"},
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 500
+
+    # The mutation must NOT have survived — this is the assertion that
+    # actually proves atomicity. Against the pre-fix code (AuthService
+    # committing internally before the audit row was staged) this would be
+    # False: the deactivation would already be durably committed.
+    await db_session.refresh(test_child_user)
+    assert test_child_user.is_active is True
+
+    rows = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "user.deactivate"
+            )
+        )
+    ).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].result == "error"
+    assert "audit staging exploded" in rows[0].error
