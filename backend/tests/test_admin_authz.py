@@ -240,3 +240,23 @@ async def test_family_detail_rejects_parent_of_that_family(
         f"/api/admin/families/{test_family.id}", headers=auth_headers
     )
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_every_action_route_404s_for_non_operator(
+    client, auth_headers, test_family, test_parent_user, allowlist_superadmin
+):
+    """A parent must not reach ANY operator action, on their own family or
+    anyone else's."""
+    fid, uid = test_family.id, test_parent_user.id
+    calls = [
+        (f"/api/admin/families/{fid}/comp-plus", {"reason": "x", "days": 30}),
+        (f"/api/admin/families/{fid}/suspend", {"reason": "x", "suspended": True}),
+        (f"/api/admin/families/{fid}/modules", {"reason": "x"}),
+        (f"/api/admin/users/{uid}/active", {"reason": "x", "active": False}),
+        (f"/api/admin/users/{uid}/resend-verification", {"reason": "x"}),
+        (f"/api/admin/users/{uid}/password-reset", {"reason": "x"}),
+    ]
+    for path, body in calls:
+        resp = await client.post(path, json=body, headers=auth_headers)
+        assert resp.status_code == 404, path
