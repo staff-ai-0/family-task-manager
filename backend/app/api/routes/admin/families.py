@@ -1,0 +1,28 @@
+"""Per-family operator reads."""
+
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.core.dependencies import require_superadmin
+from app.models.user import User
+from app.services.admin.admin_lookup_service import AdminLookupService
+
+router = APIRouter()
+
+
+@router.get("/families")
+async def list_families(
+    q: Optional[str] = Query(None, description="name, join code, id, or member email"),
+    include_deleted: bool = Query(False),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    _operator: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Family directory with search."""
+    return await AdminLookupService.search_families(
+        db, q=q, include_deleted=include_deleted, limit=limit, offset=offset
+    )

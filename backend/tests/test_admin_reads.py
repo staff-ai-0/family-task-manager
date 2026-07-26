@@ -354,3 +354,63 @@ async def test_platform_pulse_mrr_excludes_comped_counts_only_paypal_backed(
     mxn_bucket = next(b for b in body["mrr"] if b["currency"] == "MXN")
     assert mxn_bucket["subscriptions"] == 1
     assert mxn_bucket["cents"] == 15000
+
+
+@pytest.mark.asyncio
+async def test_family_directory_lists_active_families(
+    client, superadmin_headers, test_family, test_parent_user
+):
+    resp = await client.get("/api/admin/families", headers=superadmin_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    row = body["items"][0]
+    assert row["name"] == "Test Family"
+    assert row["member_count"] >= 1
+    assert row["deleted_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_family_directory_search_by_member_email(
+    client, superadmin_headers, test_family, test_parent_user
+):
+    resp = await client.get(
+        "/api/admin/families?q=parent@test.com", headers=superadmin_headers
+    )
+    assert resp.json()["total"] == 1
+
+    resp = await client.get(
+        "/api/admin/families?q=nobody@example.com", headers=superadmin_headers
+    )
+    assert resp.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_family_directory_search_by_join_code(
+    client, db_session, superadmin_headers, test_family
+):
+    test_family.join_code = "ABC234"
+    await db_session.commit()
+    resp = await client.get(
+        "/api/admin/families?q=abc234", headers=superadmin_headers
+    )
+    assert resp.json()["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_family_directory_excludes_deleted_unless_requested(
+    client, db_session, superadmin_headers, test_family
+):
+    from app.models.family import Family
+
+    gone = Family(name="Closed", deleted_at=datetime.now(timezone.utc))
+    db_session.add(gone)
+    await db_session.commit()
+
+    resp = await client.get("/api/admin/families", headers=superadmin_headers)
+    assert resp.json()["total"] == 1
+
+    resp = await client.get(
+        "/api/admin/families?include_deleted=true", headers=superadmin_headers
+    )
+    assert resp.json()["total"] == 2

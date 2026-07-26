@@ -26,3 +26,7 @@ async def ping(_operator: User = Depends(require_superadmin)) -> dict:
 from app.api.routes.admin import overview  # noqa: E402
 
 router.include_router(overview.router)
+
+from app.api.routes.admin import families  # noqa: E402
+
+router.include_router(families.router)
