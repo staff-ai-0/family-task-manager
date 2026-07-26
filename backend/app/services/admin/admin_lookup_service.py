@@ -43,15 +43,23 @@ class AdminLookupService:
 
         if q:
             needle = q.strip().lower()
-            like = f"%{needle}%"
+            # Escape LIKE's own wildcards so a literal `%` or `_` in the
+            # search term (e.g. an email containing `_`) is matched
+            # literally instead of acting as a SQL wildcard — otherwise a
+            # search for one family's member could silently match another
+            # family's unrelated row.
+            escaped = (
+                needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
+            like = f"%{escaped}%"
             member_match = (
                 select(User.family_id)
-                .where(func.lower(User.email).like(like))
+                .where(func.lower(User.email).like(like, escape="\\"))
                 .scalar_subquery()
             )
             terms = [
-                func.lower(Family.name).like(like),
-                func.lower(Family.join_code).like(like),
+                func.lower(Family.name).like(like, escape="\\"),
+                func.lower(Family.join_code).like(like, escape="\\"),
                 Family.id.in_(member_match),
             ]
             as_uuid = _as_uuid(needle)
@@ -63,9 +71,17 @@ class AdminLookupService:
             select(func.count()).select_from(Family).where(*conditions)
         )
 
+        # Deliberately unfiltered by User.deleted_at, same as `last_seen`
+        # below. User.deleted_at is only ever stamped atomically alongside
+        # Family.deleted_at (FamilyDeletionService.delete_family) when a
+        # whole family closes — so for every ACTIVE family (the default
+        # view) no member has deleted_at set and this is a no-op. Filtering
+        # it out would make member_count permanently 0 for every closed
+        # family surfaced via include_deleted=true — a degenerate value
+        # that erases exactly the information an operator opens that flag
+        # to see. Do not "restore consistency" with an is_(None) filter here.
         member_counts = (
             select(User.family_id, func.count().label("member_count"))
-            .where(User.deleted_at.is_(None))
             .group_by(User.family_id)
             .subquery()
         )

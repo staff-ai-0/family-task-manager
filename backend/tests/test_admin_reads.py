@@ -414,3 +414,87 @@ async def test_family_directory_excludes_deleted_unless_requested(
         "/api/admin/families?include_deleted=true", headers=superadmin_headers
     )
     assert resp.json()["total"] == 2
+
+
+@pytest.mark.asyncio
+async def test_family_directory_rejects_non_operator(client, auth_headers):
+    resp = await client.get("/api/admin/families", headers=auth_headers)
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_family_directory_search_escapes_like_wildcards(
+    client, db_session, superadmin_headers
+):
+    """A literal ``_`` in a search term must not act as a SQL LIKE
+    single-character wildcard. Without escaping, searching for
+    "abc_def@test.com" would also match "abcXdef@test.com" for any X in
+    an unrelated family — silently widening a support search across
+    tenants. Two separate families are seeded so an over-match is
+    observable as an extra family in the results, not just an extra user
+    within the same family."""
+    from app.core.security import get_password_hash
+    from app.models.family import Family
+    from app.models.user import User, UserRole
+
+    target = Family(name="Underscore Fam")
+    decoy = Family(name="Decoy Fam")
+    db_session.add_all([target, decoy])
+    await db_session.flush()
+
+    db_session.add_all(
+        [
+            User(
+                email="abc_def@test.com",
+                password_hash=get_password_hash("password123"),
+                name="Target Member",
+                role=UserRole.PARENT,
+                family_id=target.id,
+                email_verified=True,
+                points=0,
+            ),
+            User(
+                email="abcXdef@test.com",
+                password_hash=get_password_hash("password123"),
+                name="Decoy Member",
+                role=UserRole.PARENT,
+                family_id=decoy.id,
+                email_verified=True,
+                points=0,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    resp = await client.get(
+        "/api/admin/families?q=abc_def@test.com", headers=superadmin_headers
+    )
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["name"] == "Underscore Fam"
+
+
+@pytest.mark.asyncio
+async def test_family_directory_deleted_family_appears_in_items_via_outerjoin(
+    client, db_session, superadmin_headers, test_family
+):
+    """The subscription/plan/member-count/last-seen joins must all be LEFT
+    (outer) joins, not INNER joins. A closed family with zero members and
+    no subscription row is the sharpest probe for this: it has no matching
+    row on any of the four joined relations, so an INNER join anywhere in
+    the chain drops it from `items` entirely even though `total` (a
+    separate, join-free count) still counts it — exactly the
+    total/rows-drift failure mode called out for this endpoint."""
+    from app.models.family import Family
+
+    gone = Family(name="Closed With No Sub", deleted_at=datetime.now(timezone.utc))
+    db_session.add(gone)
+    await db_session.commit()
+
+    resp = await client.get(
+        "/api/admin/families?include_deleted=true", headers=superadmin_headers
+    )
+    body = resp.json()
+    assert body["total"] == 2
+    names = {row["name"] for row in body["items"]}
+    assert "Closed With No Sub" in names
