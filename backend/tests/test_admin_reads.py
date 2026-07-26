@@ -546,3 +546,94 @@ async def test_family_detail_404_for_unknown_family(client, superadmin_headers):
         f"/api/admin/families/{uuid4()}", headers=superadmin_headers
     )
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_billing_review_queue_lists_flagged_subscriptions(
+    client, db_session, superadmin_headers, test_family
+):
+    from app.models.subscription import FamilySubscription, SubscriptionPlan
+
+    plan = SubscriptionPlan(
+        name="plus",
+        display_name="Plus",
+        display_name_es="Plus",
+        currency="USD",
+        price_monthly_cents=500,
+        price_annual_cents=5000,
+        limits={},
+    )
+    db_session.add(plan)
+    await db_session.commit()
+    await db_session.refresh(plan)
+
+    db_session.add(
+        FamilySubscription(
+            family_id=test_family.id,
+            plan_id=plan.id,
+            billing_cycle="monthly",
+            status="active",
+            paypal_subscription_id="I-TEST",
+            needs_review=True,
+            review_reason="refund received",
+        )
+    )
+    await db_session.commit()
+
+    resp = await client.get(
+        "/api/admin/billing-review", headers=superadmin_headers
+    )
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 1
+    assert rows[0]["review_reason"] == "refund received"
+    assert rows[0]["family_name"] == "Test Family"
+
+
+@pytest.mark.asyncio
+async def test_deletions_queue_shows_purge_date(
+    client, db_session, superadmin_headers
+):
+    from app.models.family import Family
+
+    closed_at = datetime.now(timezone.utc)
+    db_session.add(Family(name="Closing", deleted_at=closed_at))
+    await db_session.commit()
+
+    resp = await client.get("/api/admin/deletions", headers=superadmin_headers)
+    rows = resp.json()
+    assert len(rows) == 1
+    assert rows[0]["name"] == "Closing"
+    assert rows[0]["purge_after"] is not None
+
+
+@pytest.mark.asyncio
+async def test_audit_log_read_is_filterable(
+    client, db_session, superadmin_headers, test_superadmin_user, test_family
+):
+    from app.services.admin.operator_audit_service import OperatorAuditService
+
+    OperatorAuditService.record(
+        db_session,
+        actor=test_superadmin_user,
+        action="family.suspend",
+        target_family_id=test_family.id,
+    )
+    OperatorAuditService.record(
+        db_session, actor=test_superadmin_user, action="user.password_reset"
+    )
+    await db_session.commit()
+
+    resp = await client.get("/api/admin/audit", headers=superadmin_headers)
+    assert resp.json()["total"] == 2
+
+    resp = await client.get(
+        "/api/admin/audit?action=family.suspend", headers=superadmin_headers
+    )
+    assert resp.json()["total"] == 1
+
+    resp = await client.get(
+        f"/api/admin/audit?family_id={test_family.id}",
+        headers=superadmin_headers,
+    )
+    assert resp.json()["total"] == 1

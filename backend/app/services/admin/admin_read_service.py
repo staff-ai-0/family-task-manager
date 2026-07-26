@@ -16,6 +16,7 @@ from app.models.a2a import A2AWebhookDelivery, FamilyA2AWebhook
 from app.models.budget import BudgetAccount, BudgetReceiptDraft, BudgetTransaction
 from app.models.cash_transaction import CashTransaction
 from app.models.family import Family
+from app.models.operator_audit import OperatorAuditLog
 from app.models.subscription import FamilySubscription, SubscriptionPlan
 from app.models.task_assignment import AssignmentStatus, TaskAssignment
 from app.models.user import APPROVAL_PENDING, User
@@ -443,4 +444,119 @@ class AdminReadService:
                     k: int(v) for k, v in deliveries.items()
                 },
             },
+        }
+
+    @staticmethod
+    async def billing_review_queue(db: AsyncSession) -> list[dict]:
+        """Subscriptions a webhook refused to act on automatically.
+
+        Written by subscription_state.mark_for_review — refunds, reversals,
+        and the failed-cancel case that risks double billing. The highest
+        signal-to-effort queue in the app.
+        """
+        rows = (
+            await db.execute(
+                select(FamilySubscription, SubscriptionPlan, Family)
+                .outerjoin(
+                    SubscriptionPlan,
+                    FamilySubscription.plan_id == SubscriptionPlan.id,
+                )
+                .join(Family, FamilySubscription.family_id == Family.id)
+                .where(FamilySubscription.needs_review.is_(True))
+                .order_by(FamilySubscription.updated_at.desc())
+            )
+        ).all()
+        return [
+            {
+                "family_id": str(fam.id),
+                "family_name": fam.name,
+                "plan": plan.name if plan else None,
+                "status": sub.status,
+                "paypal_subscription_id": sub.paypal_subscription_id,
+                "review_reason": sub.review_reason,
+                "updated_at": sub.updated_at.isoformat(),
+            }
+            for sub, plan, fam in rows
+        ]
+
+    @staticmethod
+    async def pending_purge_queue(db: AsyncSession) -> list[dict]:
+        """Families inside the recovery window, oldest first."""
+        member_counts = (
+            select(User.family_id, func.count().label("n"))
+            .group_by(User.family_id)
+            .subquery()
+        )
+        rows = (
+            await db.execute(
+                select(Family, member_counts.c.n)
+                .outerjoin(member_counts, member_counts.c.family_id == Family.id)
+                .where(Family.deleted_at.is_not(None))
+                .order_by(Family.deleted_at.asc())
+            )
+        ).all()
+        return [
+            {
+                "id": str(fam.id),
+                "name": fam.name,
+                "deleted_at": fam.deleted_at.isoformat(),
+                "purge_after": (
+                    fam.deleted_at
+                    + timedelta(days=FamilyDeletionService.PURGE_RETENTION_DAYS)
+                ).isoformat(),
+                "member_count": int(n or 0),
+            }
+            for fam, n in rows
+        ]
+
+    @staticmethod
+    async def audit_log(
+        db: AsyncSession,
+        *,
+        family_id: UUID | None = None,
+        action: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict:
+        """Operator audit trail, newest first."""
+        conditions = []
+        if family_id is not None:
+            conditions.append(OperatorAuditLog.target_family_id == family_id)
+        if action:
+            conditions.append(OperatorAuditLog.action == action)
+
+        total = await db.scalar(
+            select(func.count()).select_from(OperatorAuditLog).where(*conditions)
+        )
+        rows = (
+            await db.execute(
+                select(OperatorAuditLog)
+                .where(*conditions)
+                .order_by(OperatorAuditLog.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+        ).scalars().all()
+        return {
+            "total": int(total or 0),
+            "limit": limit,
+            "offset": offset,
+            "items": [
+                {
+                    "id": str(r.id),
+                    "actor_email": r.actor_email,
+                    "action": r.action,
+                    "target_family_id": (
+                        str(r.target_family_id) if r.target_family_id else None
+                    ),
+                    "target_user_id": (
+                        str(r.target_user_id) if r.target_user_id else None
+                    ),
+                    "params": r.params,
+                    "result": r.result,
+                    "error": r.error,
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in rows
+            ],
         }
