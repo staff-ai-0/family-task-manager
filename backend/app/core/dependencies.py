@@ -1,8 +1,9 @@
 from fastapi import Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from typing import Optional
 from uuid import UUID
+from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -53,7 +54,30 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    await _touch_last_seen(db, user)
+
     return user
+
+
+async def _touch_last_seen(db: AsyncSession, user: User) -> None:
+    """Throttled, best-effort activity stamp.
+
+    Issued as a targeted UPDATE rather than an ORM flush so it cannot drag
+    unrelated pending state into the write. Any failure is swallowed: an
+    instrumentation write must never break the request it is measuring.
+    """
+    now = datetime.now(timezone.utc)
+    throttle = timedelta(minutes=settings.LAST_SEEN_THROTTLE_MINUTES)
+    if user.last_seen_at is not None and now - user.last_seen_at < throttle:
+        return
+    try:
+        await db.execute(
+            update(User).where(User.id == user.id).values(last_seen_at=now)
+        )
+        await db.commit()
+        user.last_seen_at = now
+    except Exception:
+        await db.rollback()
 
 
 def require_parent_role(current_user: User = Depends(get_current_user)) -> User:

@@ -230,6 +230,10 @@ class Settings(BaseSettings):
     # /api/admin surface unreachable by anyone. It fails closed.
     SUPERADMIN_EMAILS: Union[List[str], str] = []
 
+    # Minimum gap between users.last_seen_at writes for one user. Guards the
+    # hot path: without it every authenticated request would issue an UPDATE.
+    LAST_SEEN_THROTTLE_MINUTES: int = 15
+
     # Logging
     LOG_LEVEL: str = "INFO"
 

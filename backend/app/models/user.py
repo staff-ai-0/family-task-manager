@@ -130,6 +130,12 @@ class User(Base):
     # the family after the grace window. Not indexed — always reached by user PK.
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Throttled activity stamp, written by get_current_user at most once per
+    # settings.LAST_SEEN_THROTTLE_MINUTES. Best-effort: a failed write never
+    # fails the request. Not indexed — the admin directory reaches it via
+    # family_id, and a per-user index would cost every request a write to it.
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
+
     # Relationships
     family = relationship("Family", back_populates="members")
     # Template/assignment relationships
