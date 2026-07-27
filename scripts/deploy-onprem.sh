@@ -102,7 +102,12 @@ recreate_stack() {
 
 wait_healthy() { # poll all containers to healthy; returns non-zero if any fail
   local fail=0 c
-  for c in family_onprem_db family_onprem_redis family_onprem_backend family_onprem_frontend family_onprem_tunnel; do
+  # Deliberately NOT family_onprem_tunnel: this function is the sole input to
+  # the automatic image-rollback decision, and the tunnel's health reflects the
+  # connector's link to Cloudflare's edge, not the image we just built. Letting
+  # an ingress fault in here would retag images (a second outage) to "fix"
+  # something retagging cannot fix. The tunnel is gated by verify_public below.
+  for c in family_onprem_db family_onprem_redis family_onprem_backend family_onprem_frontend; do
     if ! rssh "for i in \$(seq 1 40); do \
       s=\$(podman inspect --format '{{.State.Health.Status}}' $c 2>/dev/null); \
       [ \"\$s\" = healthy ] && { echo '$c healthy'; break; }; sleep 3; done; \
@@ -236,10 +241,10 @@ COMPOSE_TAG=latest"
     echo
     echo "════════════════════════════════════════════════════════════════"
     echo "  ROLLED BACK — stack is healthy on image tag :$PREV_TAG."
-    [[ "$public_ok" == "1" ]] && \
+    if [[ "$public_ok" == "1" ]]; then
       echo "  ⚠️ but the PUBLIC endpoints are still failing — ingress fault"
-    [[ "$public_ok" == "1" ]] && \
       echo "     (check family_onprem_tunnel logs + the frontend net DNS pin)."
+    fi
     echo "  Remember the DB-schema warning above if migrations had run."
     echo "════════════════════════════════════════════════════════════════"
     exit 0
