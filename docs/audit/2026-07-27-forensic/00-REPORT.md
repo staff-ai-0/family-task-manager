@@ -1,5 +1,11 @@
 # Forensic Code Review — 2026-07-27
 
+> **Status — all five P0s are fixed and deployed** (PR #164, squashed as `27449dc`, deployed to 10.1.0.91 on 2026-07-27). Verified live on prod: receipt write/read/delete round-trips through the new local backend, `RECEIPT_STORAGE_BACKEND=local`, the OAuth limiter returns 429 on the 11th call, the tunnel healthcheck settles healthy, both public URLs 200.
+>
+> An adversarial review of that fix branch found two real defects in the fixes themselves — the receipt-storage migration had moved only one of **two** upload sites (missing the more commonly hit dedup path), and the deploy commit had put the tunnel in `wait_healthy`, which is the automatic-rollback gate it argued should never see an ingress fault. Both fixed in the same PR.
+>
+> **Everything below P0 is still open.**
+
 Scope requested: code quality · industry best practices · tech-debt elimination · code dedup · enhancement opportunities · UX enhancement · production-readiness for launch.
 
 Method: 7 parallel dimension reviewers over `backend/app` (279 py files, 87 services, 64 route modules) and `frontend/src` (91 pages, 49 components), each required to cite verified `file:line` evidence. 59 raw findings → deduped → all 15 `high` findings put through an adversarial verifier whose job was to **refute** them. 9 verified by agent, 6 verified by hand after a session-limit interruption. Raw agent output preserved in `raw-findings.json`.
