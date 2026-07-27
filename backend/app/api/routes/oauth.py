@@ -4,13 +4,14 @@ OAuth routes
 Handles Google OAuth authentication.
 """
 
-from fastapi import APIRouter, Depends, status, Body
+from fastapi import APIRouter, Depends, Request, status, Body
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.rate_limiter import AUTH_LIMIT, limiter
 from app.services.google_oauth_service import (
     GoogleOAuthService,
     OAuthApprovalPendingError,
@@ -48,8 +49,10 @@ class GoogleTokenRequest(BaseModel):
 
 
 @router.post("/google", response_model=TokenResponse, status_code=status.HTTP_200_OK)
+@limiter.limit(AUTH_LIMIT)
 async def google_oauth_login(
-    request: GoogleTokenRequest = Body(...),
+    request: Request,
+    data: GoogleTokenRequest = Body(...),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -85,15 +88,15 @@ async def google_oauth_login(
     logger = logging.getLogger(__name__)
 
     # Verify Google token
-    google_user_info = await GoogleOAuthService.verify_google_token(request.token)
-    logger.info(f"Google OAuth login attempt: email={google_user_info.get('email')}, join_code={request.join_code}")
+    google_user_info = await GoogleOAuthService.verify_google_token(data.token)
+    logger.info(f"Google OAuth login attempt: email={google_user_info.get('email')}, join_code={data.join_code}")
 
     # Authenticate or create user
     try:
         user, access_token, refresh_token, is_new_user = await GoogleOAuthService.authenticate_or_create_user(
-            db, google_user_info, request.family_id, request.join_code, request.role,
-            accept_terms=bool(request.accept_terms),
-            timezone=request.timezone,
+            db, google_user_info, data.family_id, data.join_code, data.role,
+            accept_terms=bool(data.accept_terms),
+            timezone=data.timezone,
         )
     except (OAuthConsentRequiredError, OAuthApprovalPendingError) as exc:
         # Structured, machine-readable contract (see docstring). Top-level
@@ -103,7 +106,7 @@ async def google_oauth_login(
         # web login page and native clients both read that shape.
         logger.info(
             f"Google OAuth blocked ({exc.code}): "
-            f"email={google_user_info.get('email')}, join_code={request.join_code}"
+            f"email={google_user_info.get('email')}, join_code={data.join_code}"
         )
         return JSONResponse(
             status_code=exc.status_code,
@@ -126,15 +129,17 @@ async def google_oauth_login(
 
 
 @router.post("/google/verify", status_code=status.HTTP_200_OK)
+@limiter.limit(AUTH_LIMIT)
 async def verify_google_token(
-    request: GoogleTokenRequest = Body(...),
+    request: Request,
+    data: GoogleTokenRequest = Body(...),
 ):
     """
     Verify Google token and return user info without creating account
-    
+
     Useful for checking if user exists before registration
     """
-    google_user_info = await GoogleOAuthService.verify_google_token(request.token)
+    google_user_info = await GoogleOAuthService.verify_google_token(data.token)
     
     return {
         "email": google_user_info["email"],

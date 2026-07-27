@@ -3,6 +3,11 @@ Google OAuth Service
 
 Handles Google OAuth authentication flow.
 """
+import asyncio
+import re
+import time
+from threading import Lock
+
 from fastapi import HTTPException, status as http_status
 from google.oauth2 import id_token
 from google.auth.transport import requests
@@ -22,6 +27,79 @@ from app.core.exceptions import (
     NotFoundException,
 )
 from app.services.family_service import FamilyService
+
+
+# google-auth's ``_fetch_certs`` re-downloads Google's signing certs on EVERY
+# verify call with no cache, and does it BEFORE the signature is checked — so a
+# garbage token still costs one outbound HTTPS GET. Its default timeout is 120s,
+# which on this host (documented-fragile netavark egress DNS) means a slow
+# googleapis.com can occupy a request slot for two minutes. Cache the bundle for
+# the lifetime Google advertises and bound the fetch.
+_CERT_FETCH_TIMEOUT = 10.0
+_CERT_TTL_FALLBACK = 3600.0
+_MAX_AGE_RE = re.compile(r"max-age\s*=\s*(\d+)", re.IGNORECASE)
+
+_cert_cache: Dict[str, tuple] = {}
+_cert_cache_lock = Lock()
+
+
+class _CachedResponse:
+    """Minimal google.auth.transport.Response: ``_fetch_certs`` reads .status/.data."""
+
+    def __init__(self, status: int, data: bytes):
+        self.status = status
+        self.data = data
+        self.headers: Dict[str, str] = {}
+
+
+class _CachingCertsTransport:
+    """google-auth transport that memoizes cert GETs across verify calls."""
+
+    def __init__(self) -> None:
+        self._inner = requests.Request()
+
+    def __call__(self, url, method="GET", body=None, headers=None, timeout=None, **kwargs):
+        if method != "GET" or body is not None:
+            return self._inner(
+                url, method=method, body=body, headers=headers,
+                timeout=timeout or _CERT_FETCH_TIMEOUT, **kwargs
+            )
+
+        now = time.monotonic()
+        with _cert_cache_lock:
+            cached = _cert_cache.get(url)
+            if cached is not None and cached[0] > now:
+                return _CachedResponse(cached[1], cached[2])
+
+        response = self._inner(
+            url, method=method, body=body, headers=headers,
+            timeout=timeout or _CERT_FETCH_TIMEOUT, **kwargs
+        )
+        if response.status == 200:
+            ttl = _parse_max_age(getattr(response, "headers", None)) or _CERT_TTL_FALLBACK
+            with _cert_cache_lock:
+                _cert_cache[url] = (now + ttl, response.status, response.data)
+        return _CachedResponse(response.status, response.data)
+
+
+def _parse_max_age(headers) -> Optional[float]:
+    """Seconds from a Cache-Control max-age directive, or None."""
+    if not headers:
+        return None
+    try:
+        cache_control = headers.get("Cache-Control") or headers.get("cache-control")
+    except AttributeError:
+        return None
+    if not cache_control:
+        return None
+    match = _MAX_AGE_RE.search(cache_control)
+    if not match:
+        return None
+    seconds = int(match.group(1))
+    return float(seconds) if seconds > 0 else None
+
+
+_certs_transport = _CachingCertsTransport()
 
 
 class OAuthConsentRequiredError(ValidationException):
@@ -120,10 +198,13 @@ class GoogleOAuthService:
             # audience=None → library skips the aud check; we do it below
             # against our multi-client allow-list. Signature, expiration,
             # and issuer checks still run as normal.
-            idinfo = id_token.verify_oauth2_token(
+            # Runs off the event loop: verify_oauth2_token is synchronous and
+            # performs network I/O (cert fetch) before validating anything.
+            idinfo = await asyncio.to_thread(
+                id_token.verify_oauth2_token,
                 token,
-                requests.Request(),
-                audience=None,
+                _certs_transport,
+                None,
             )
 
             # Issuer check (library also does this but we re-assert)
