@@ -26,7 +26,7 @@ from app.schemas.family import (
     FamilyWithMembers,
     FamilyStats,
 )
-from app.schemas.user import UserResponse
+from app.schemas.user import UserResponse, strip_superadmin_flag
 from app.models import User
 
 router = APIRouter()
@@ -49,7 +49,10 @@ async def get_my_family(
         db, to_uuid_required(current_user.family_id)
     )
     return FamilyWithMembers(
-        **family.__dict__, members=[UserResponse.model_validate(m) for m in members]
+        **family.__dict__,
+        members=[
+            strip_superadmin_flag(UserResponse.model_validate(m)) for m in members
+        ],
     )
 
 
@@ -72,10 +75,17 @@ async def get_my_family_members(
     db: AsyncSession = Depends(get_db),
 ):
     """Members of caller's own family. Path before /{family_id} so 'members'
-    isn't parsed as a UUID."""
-    return await FamilyService.get_family_members(
+    isn't parsed as a UUID.
+
+    is_superadmin is stripped from every member here — CHILD/TEEN accounts
+    can call this, and only /auth/me should ever report the flag truthfully
+    (see schemas.user.strip_superadmin_flag)."""
+    members = await FamilyService.get_family_members(
         db, to_uuid_required(current_user.family_id)
     )
+    return [
+        strip_superadmin_flag(UserResponse.model_validate(m)) for m in members
+    ]
 
 
 @router.get("/export")
@@ -175,9 +185,15 @@ async def get_family_members(
     family_id: UUID = Depends(verify_family_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get all family members"""
+    """Get all family members.
+
+    is_superadmin is stripped from every member here — CHILD/TEEN accounts
+    can call this, and only /auth/me should ever report the flag truthfully
+    (see schemas.user.strip_superadmin_flag)."""
     members = await FamilyService.get_family_members(db, family_id)
-    return members
+    return [
+        strip_superadmin_flag(UserResponse.model_validate(m)) for m in members
+    ]
 
 
 @router.get("/{family_id}/stats", response_model=FamilyStats)

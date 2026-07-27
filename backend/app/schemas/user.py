@@ -91,6 +91,24 @@ class UserResponse(EntityResponse):
     # it to a parent-only schema if the members page ever needs to show it.
 
 
+def strip_superadmin_flag(resp: UserResponse) -> UserResponse:
+    """Force is_superadmin False on a UserResponse built for anything other
+    than the caller's own GET /api/auth/me.
+
+    Unlike enabled_modules/timezone above (denormalized onto /auth/me only
+    because they are NOT ORM columns — every other UserResponse leaves them
+    at their model default), is_superadmin IS a real column on users
+    (models/user.py). model_validate() therefore picks up the true value
+    automatically on EVERY UserResponse, including ones built for member
+    listing/detail endpoints that are reachable by other family members —
+    down to CHILD/TEEN accounts on some routes. Call this on any
+    UserResponse describing a user other than "myself, via /auth/me" so the
+    flag never leaks sideways to a sibling or co-parent.
+    """
+    resp.is_superadmin = False
+    return resp
+
+
 class UserWithStats(UserResponse):
     """User response with additional statistics"""
 

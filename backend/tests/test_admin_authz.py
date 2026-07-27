@@ -288,3 +288,70 @@ async def test_auth_me_exposes_is_superadmin(
 
     parent = await client.get("/api/auth/me", headers=auth_headers)
     assert parent.json()["is_superadmin"] is False
+
+
+@pytest.mark.asyncio
+async def test_family_members_hide_is_superadmin_from_child(
+    client: AsyncClient, test_family, test_superadmin_user, test_child_user
+):
+    """is_superadmin is a REAL ORM column (unlike enabled_modules/timezone),
+    so UserResponse.model_validate() picks it up on every response — not
+    just /auth/me. A CHILD listing family members (or fetching a specific
+    member by id) must never see is_superadmin: true for a member who
+    actually has the flag; only GET /api/auth/me may report it truthfully.
+    """
+    resp = await client.post(
+        "/api/auth/login",
+        json={"email": "child@test.com", "password": "password123"},
+    )
+    assert resp.status_code == 200
+    headers = {"Authorization": f"Bearer {resp.json()['access_token']}"}
+
+    # GET /api/families/members — caller's own family.
+    members_resp = await client.get("/api/families/members", headers=headers)
+    assert members_resp.status_code == 200
+    members = members_resp.json()
+    operator_row = next(
+        m for m in members if m["email"] == "superadmin@test.com"
+    )
+    assert operator_row["is_superadmin"] is False
+
+    # GET /api/families/{family_id}/members — same data, different route.
+    fam_members_resp = await client.get(
+        f"/api/families/{test_family.id}/members", headers=headers
+    )
+    assert fam_members_resp.status_code == 200
+    fam_operator_row = next(
+        m for m in fam_members_resp.json() if m["email"] == "superadmin@test.com"
+    )
+    assert fam_operator_row["is_superadmin"] is False
+
+    # GET /api/families/me — family-with-members view.
+    my_family_resp = await client.get("/api/families/me", headers=headers)
+    assert my_family_resp.status_code == 200
+    my_family_row = next(
+        m
+        for m in my_family_resp.json()["members"]
+        if m["email"] == "superadmin@test.com"
+    )
+    assert my_family_row["is_superadmin"] is False
+
+    # GET /api/users/{user_id} — single-member detail endpoint. Reachable by
+    # any family member (get_family_user only checks family membership, not
+    # role), so a CHILD can fetch a co-parent's profile directly.
+    detail_resp = await client.get(
+        f"/api/users/{test_superadmin_user.id}", headers=headers
+    )
+    assert detail_resp.status_code == 200
+    assert detail_resp.json()["is_superadmin"] is False
+
+    # Sanity: the operator's OWN /auth/me still reports the flag truthfully.
+    operator_login = await client.post(
+        "/api/auth/login",
+        json={"email": "superadmin@test.com", "password": "password123"},
+    )
+    operator_headers = {
+        "Authorization": f"Bearer {operator_login.json()['access_token']}"
+    }
+    operator_me = await client.get("/api/auth/me", headers=operator_headers)
+    assert operator_me.json()["is_superadmin"] is True

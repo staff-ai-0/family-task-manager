@@ -12,7 +12,7 @@ from typing import List
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_parent_role, get_family_user
 from app.services import AuthService, PointsService
-from app.schemas.user import UserResponse
+from app.schemas.user import UserResponse, strip_superadmin_flag
 from app.schemas.points import (
     PointsSummary,
     PointTransactionResponse,
@@ -97,8 +97,13 @@ async def get_member_colors(
 async def get_user(
     user: User = Depends(get_family_user),
 ):
-    """Get user by ID (must be in same family)"""
-    return user
+    """Get user by ID (must be in same family).
+
+    is_superadmin is stripped here — get_family_user only checks family
+    membership, not role, so a CHILD/TEEN can fetch a co-parent's profile.
+    Only /auth/me should ever report the flag truthfully (see
+    schemas.user.strip_superadmin_flag)."""
+    return strip_superadmin_flag(UserResponse.model_validate(user))
 
 
 @router.get("/{user_id}/points", response_model=PointsSummary)
