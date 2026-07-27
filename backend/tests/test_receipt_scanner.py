@@ -14,9 +14,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from unittest.mock import patch, MagicMock, AsyncMock
 from datetime import date
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from app.models.budget import BudgetAccount, BudgetPayee
+from app.models.budget import BudgetAccount, BudgetPayee, BudgetTransaction
 from app.services.budget.receipt_scanner_service import (
     ScannedReceipt,
     scan_receipt,
@@ -371,21 +371,25 @@ class TestScanAndCreateTransaction:
         assert payee is not None
 
 
-class TestGcsPersistFailureIsNonFatal:
-    """H4 (verified false-positive): persisting the receipt image to GCS is
-    best-effort and runs AFTER the scan is committed. A GCS failure must be
+class TestImagePersistFailureIsNonFatal:
+    """H4 (verified false-positive): persisting the receipt image is
+    best-effort and runs AFTER the scan is committed. A storage failure must be
     swallowed so the scan still succeeds, and the session must stay usable.
 
-    Note: the audit recommended adding ``db.rollback()`` in the GCS except, but
-    that regresses this path — a rollback expires the already-committed ORM
+    Note: the audit recommended adding ``db.rollback()`` in the storage except,
+    but that regresses this path — a rollback expires the already-committed ORM
     objects and the downstream best-effort steps then hit MissingGreenlet on
     lazy attribute access. A swallowed failure does not poison the session in
     this SQLAlchemy 2.0 / asyncpg stack, so the except correctly does nothing
-    but log. This test guards the non-fatal contract."""
+    but log. This test guards the non-fatal contract.
+
+    Patches ``ReceiptStorage.upload`` — the abstraction the scan path actually
+    calls. Patching the GCS class instead would make this vacuous, since the
+    default backend is local and never reaches GCS at all."""
 
     @pytest.mark.asyncio
-    async def test_gcs_upload_failure_is_non_fatal(
-        self, db_session, test_family, budget_account
+    async def test_image_upload_failure_is_non_fatal(
+        self, db_session, test_family, budget_account, tmp_path, monkeypatch
     ):
         from sqlalchemy import select
 
@@ -403,8 +407,8 @@ class TestGcsPersistFailureIsNonFatal:
             "app.services.budget.receipt_scanner_service.scan_receipt",
             return_value=mock_receipt,
         ), patch(
-            "app.services.storage.gcs_receipt_service.GCSReceiptStorage.upload",
-            side_effect=RuntimeError("GCS unavailable"),
+            "app.services.storage.receipt_storage.ReceiptStorage.upload",
+            side_effect=RuntimeError("storage unavailable"),
         ):
             result = await scan_and_create_transaction(
                 db=db_session,
@@ -421,6 +425,17 @@ class TestGcsPersistFailureIsNonFatal:
         await db_session.execute(
             select(BudgetAccount).where(BudgetAccount.family_id == test_family.id)
         )
+        # Proves the except branch was actually taken rather than the upload
+        # quietly succeeding (which is what made the GCS-patched version pass
+        # for the wrong reason).
+        txn = (
+            await db_session.execute(
+                select(BudgetTransaction).where(
+                    BudgetTransaction.id == UUID(result["transaction_id"])
+                )
+            )
+        ).scalar_one()
+        assert txn.receipt_image_path is None
 
 
 class TestScanReceiptAPI:

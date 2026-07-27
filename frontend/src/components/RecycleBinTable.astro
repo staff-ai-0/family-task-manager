@@ -2,9 +2,9 @@
 /**
  * RecycleBinTable Component
  * Displays deleted items (transactions, accounts, categories) with restore/delete options
- * 
- * Props:
- * - session: Session - authenticated user session with token
+ *
+ * Takes no props: its client script calls the same-origin /api/budget/recycle-bin
+ * proxy routes, which attach the caller's credentials from the httpOnly cookie.
  */
 
 interface DeletedItem {
@@ -15,16 +15,6 @@ interface DeletedItem {
   deleted_by_id: string;
   details?: string;
 }
-
-interface Session {
-  token: string;
-}
-
-interface Props {
-  session: Session;
-}
-
-const { session } = Astro.props;
 ---
 
 <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)]">
@@ -188,7 +178,9 @@ const { session } = Astro.props;
   </div>
 </div>
 
-<script define:vars={{ token: session.token }}>
+<!-- is:inline keeps this script untranspiled, exactly as it was when the
+     (now-removed) define:vars attribute forced inline treatment. -->
+<script is:inline>
   document.addEventListener('astro:page-load', () => {
   const dateLocale = document.documentElement.lang === "es" ? "es-MX" : "en-US";
   let allItems = [];
@@ -206,7 +198,6 @@ const { session } = Astro.props;
     try {
       const query = currentFilter ? `?item_type=${currentFilter}` : "";
       const response = await fetch(`/api/budget/recycle-bin${query}`, {
-        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!response.ok) throw new Error("Failed to load deleted items");
@@ -349,7 +340,6 @@ const { session } = Astro.props;
     try {
       const response = await fetch("/api/budget/recycle-bin", {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) throw new Error("Failed to empty bin");
       emptyBinModal.classList.add("hidden");
@@ -377,7 +367,6 @@ const { session } = Astro.props;
 
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!response.ok) throw new Error("Action failed");

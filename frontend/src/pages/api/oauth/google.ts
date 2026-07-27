@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import type { LoginResponse, ApiError } from "../../../types/api";
 import { authCookies } from "../../../lib/auth-cookies";
+import { clientIpHeaders } from "../../../lib/client-ip";
 
 /**
  * POST /api/oauth/google
@@ -23,7 +24,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         console.log(`[OAuth Google] Using API URL: ${apiUrl}`);
         const response = await fetch(`${apiUrl}/api/oauth/google`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...clientIpHeaders(request) },
             body: JSON.stringify({ token, family_id, join_code, role, accept_terms, timezone }),
         });
 

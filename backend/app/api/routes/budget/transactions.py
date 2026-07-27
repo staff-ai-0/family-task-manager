@@ -5,6 +5,7 @@ CRUD endpoints for budget transactions.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query, File, UploadFile, Form
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
@@ -237,13 +238,13 @@ async def get_receipt_image(
 ):
     """Stream the receipt image through the backend.
 
-    Auth-bound (transaction must belong to caller's family). We can't use a
-    GCS signed URL because Compute Engine ADC doesn't carry a private key —
-    streaming through the backend is the simplest auth-bound read path and
-    same-region GCS egress to the VM is free.
+    Auth-bound (transaction must belong to caller's family). Streaming through
+    the backend is the simplest auth-bound read path, and it is backend-agnostic:
+    ReceiptStorage dispatches on the stored path, so images written to the local
+    uploads volume and legacy GCS objects both stay readable.
     """
     from fastapi.responses import Response
-    from app.services.storage.gcs_receipt_service import GCSReceiptStorage
+    from app.services.storage.receipt_storage import ReceiptStorage
     from sqlalchemy import select
     from app.models.budget import BudgetTransaction
 
@@ -257,7 +258,12 @@ async def get_receipt_image(
         raise HTTPException(404, "transaction not found")
     if not txn.receipt_image_path:
         raise HTTPException(404, "no receipt image")
-    data, content_type = GCSReceiptStorage.download_bytes(txn.receipt_image_path)
+    try:
+        data, content_type = await run_in_threadpool(
+            ReceiptStorage.download_bytes, txn.receipt_image_path
+        )
+    except FileNotFoundError:
+        raise HTTPException(404, "no receipt image")
     # Browser-cache for 15 min — the bytes are immutable per object key.
     return Response(
         content=data,

@@ -344,6 +344,7 @@ register_exception_handlers(app)
 import os
 try:
     os.makedirs(os.path.join(settings.UPLOADS_ROOT, "gig-proofs"), exist_ok=True)
+    os.makedirs(os.path.join(settings.UPLOADS_ROOT, "receipts"), exist_ok=True)
 except OSError:
     # Non-container environments (e.g. running the test suite on the host)
     # have no writable /app; the uploads routes are container-only anyway.

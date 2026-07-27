@@ -56,13 +56,12 @@ const { data: cfg } = a2aLocked
   <BottomNav lang={lang} role={user?.role} active="parent" />
 </Layout>
 
-<script type="module" define:vars={{ token, lang }}>
+<script type="module" define:vars={{ lang }}>
   document.getElementById("form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const resp = await fetch("/api/budget/a2a-webhook", {
       method: "PUT",
-      headers: { "Content-Type": "application/json",
-                 "Authorization": `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         url: document.getElementById("url").value,
         enabled: document.getElementById("enabled").checked,

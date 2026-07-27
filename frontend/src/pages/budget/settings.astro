@@ -575,7 +575,7 @@ const frequencyLabel = (freq: string) => {
 <div id="settings-toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-[var(--shadow-pop)] transition-all"></div>
     </Fragment>
 
-<script define:vars={{ token, accountsData: accounts, allCategoriesData: allCategories, es, aiModelsData: aiModels }}>
+<script define:vars={{ accountsData: accounts, allCategoriesData: allCategories, es, aiModelsData: aiModels }}>
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function showToast(msg, type = "success") {
@@ -632,7 +632,7 @@ function setModalSaveHandler(fn) {
 async function apiCall(url, method, body) {
     const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: body ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) {
@@ -659,7 +659,6 @@ document.getElementById("export-btn")?.addEventListener("click", async () => {
     btn.textContent = es ? "Exportando…" : "Exporting…";
     try {
         const res = await fetch("/api/budget/export", {
-            headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error(`Error ${res.status}`);
         const blob = await res.blob();
@@ -1114,7 +1113,7 @@ window.restoreBackup = async function() {
     try {
         const res = await fetch("/api/budget/import-backup", {
             method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
+            
             body: fd,
         });
         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || e.detail || `Error ${res.status}`); }
@@ -1526,7 +1525,6 @@ document.getElementById("ai-usage-refresh-btn")?.addEventListener("click", async
     panel.innerHTML = `<p class="text-brand-ink-soft text-xs text-center py-2">${es ? "Cargando…" : "Loading…"}</p>`;
     try {
         const res = await fetch("/api/budget/ai-settings/usage", {
-            headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error(`Error ${res.status}`);
         const d = await res.json();

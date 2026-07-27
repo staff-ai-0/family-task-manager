@@ -603,7 +603,7 @@ initFilters();
 document.addEventListener("astro:after-swap", initFilters);
 </script>
 
-<script define:vars={{ token, lang }}>
+<script define:vars={{ lang }}>
 (function initEditModal() {
     const backdrop = document.getElementById("edit-backdrop");
     const modal = document.getElementById("edit-modal");
@@ -681,7 +681,7 @@ document.addEventListener("astro:after-swap", initFilters);
             // the backend split endpoint creates a NEW parent+children.
             const res = await fetch("/api/budget/transactions/split", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     account_id: accountSelect.value,
                     date: dateInput.value,
@@ -696,7 +696,6 @@ document.addEventListener("astro:after-swap", initFilters);
             }
             await fetch(`/api/budget/transactions/${currentTxId}`, {
                 method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` },
             });
             window.location.reload();
         } catch (e) {
@@ -889,7 +888,7 @@ document.addEventListener("astro:after-swap", initFilters);
 
             const res = await fetch(`/api/budget/transactions/${currentTxId}`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body),
             });
 
@@ -927,7 +926,6 @@ document.addEventListener("astro:after-swap", initFilters);
         try {
             const res = await fetch(`/api/budget/transactions/${currentTxId}`, {
                 method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` },
             });
             if (!res.ok) throw new Error(`Error ${res.status}`);
             window.queueUndo?.(

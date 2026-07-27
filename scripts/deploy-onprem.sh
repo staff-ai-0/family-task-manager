@@ -102,6 +102,11 @@ recreate_stack() {
 
 wait_healthy() { # poll all containers to healthy; returns non-zero if any fail
   local fail=0 c
+  # Deliberately NOT family_onprem_tunnel: this function is the sole input to
+  # the automatic image-rollback decision, and the tunnel's health reflects the
+  # connector's link to Cloudflare's edge, not the image we just built. Letting
+  # an ingress fault in here would retag images (a second outage) to "fix"
+  # something retagging cannot fix. The tunnel is gated by verify_public below.
   for c in family_onprem_db family_onprem_redis family_onprem_backend family_onprem_frontend; do
     if ! rssh "for i in \$(seq 1 40); do \
       s=\$(podman inspect --format '{{.State.Health.Status}}' $c 2>/dev/null); \
@@ -160,14 +165,28 @@ db_schema_warning() {
 EOF
 }
 
-verify_public() {
+verify_public() { # assert both public URLs answer <400; non-zero if either does not
   section "Verify public"
   if [[ "$DRY_RUN" == "1" ]]; then echo "[dry-run] skipping public endpoint checks"; return 0; fi
-  local url code
+  local url code fail=0
   for url in https://family.agent-ia.mx https://api-family.agent-ia.mx/health; do
-    code=$(curl -s -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || echo 000)
-    echo "$url → $code"
+    code=000
+    # Retry: the tunnel needs a few seconds to re-register its routes with the
+    # Cloudflare edge after a stack recreate, so a single early curl can 530
+    # against a stack that is actually fine.
+    for _ in $(seq 1 10); do
+      code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' "$url" 2>/dev/null || echo 000)
+      [[ "$code" =~ ^[123] ]] && break
+      sleep 6
+    done
+    if [[ "$code" =~ ^[123] ]]; then
+      echo "$url → $code"
+    else
+      echo "❌ $url → $code"
+      fail=1
+    fi
   done
+  return $fail
 }
 
 # ── Pre-flight ────────────────────────────────────────────────────────────
@@ -216,10 +235,16 @@ COMPOSE_TAG=latest"
   section "Health"
   if wait_healthy; then
     write_state "$PREV_TAG" "$PREV_TAG"
-    verify_public
+    # Guarded: a public-check failure must not abort (set -e) before the
+    # operator is told the rollback itself succeeded.
+    public_ok=0; verify_public || public_ok=1
     echo
     echo "════════════════════════════════════════════════════════════════"
     echo "  ROLLED BACK — stack is healthy on image tag :$PREV_TAG."
+    if [[ "$public_ok" == "1" ]]; then
+      echo "  ⚠️ but the PUBLIC endpoints are still failing — ingress fault"
+      echo "     (check family_onprem_tunnel logs + the frontend net DNS pin)."
+    fi
     echo "  Remember the DB-schema warning above if migrations had run."
     echo "════════════════════════════════════════════════════════════════"
     exit 0
@@ -417,5 +442,24 @@ if ! wait_healthy; then
   exit 1
 fi
 
-verify_public
+# Public reachability is a real gate, not a printout: containers can all be
+# healthy while the site is down (cloudflared 530 after the egress-net DNS pin
+# is lost). Deliberately NOT auto-rollback — healthy containers plus a dead
+# public URL is an ingress problem, and retagging images would not fix it.
+if ! verify_public; then
+  echo
+  echo "════════════════════════════════════════════════════════════════"
+  echo "  ⚠️ DEPLOYED BUT NOT PUBLICLY REACHABLE."
+  echo "  Containers are healthy on :$NEW_TAG — this is an INGRESS fault,"
+  echo "  so no automatic rollback was attempted (retagging cannot fix it)."
+  echo "  Check, in order:"
+  echo "    ssh $SSH_TARGET 'podman logs --tail 50 family_onprem_tunnel'"
+  echo "    ssh $SSH_TARGET 'podman network inspect ${COMPOSE_PROJECT}_frontend --format {{.NetworkDNSServers}}'"
+  echo "      → must list 1.1.1.1 (aardvark cannot forward via the host's"
+  echo "        IPv6 link-local upstream; without it the connector 530s)"
+  echo "    Cloudflare Zero Trust → tunnel 'family-onprem' → public hostnames"
+  echo "      → routes must target family_onprem_frontend / family_onprem_backend"
+  echo "════════════════════════════════════════════════════════════════"
+  exit 1
+fi
 echo "Deploy complete. (deployed :$NEW_TAG, rollback point :${PREV_TAG:-<none>} — ./scripts/deploy-onprem.sh --rollback)"
