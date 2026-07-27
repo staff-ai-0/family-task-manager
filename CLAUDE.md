@@ -195,6 +195,7 @@ Uses Claude Vision via LiteLLM proxy to extract transaction data from receipt ph
 - Frontend: `/budget/scan-receipt` (camera capture + file upload + drag-drop; accepts JPEG/PNG/WebP/PDF)
 - Routes through LiteLLM proxy (`LITELLM_API_BASE` / `LITELLM_API_KEY`) using model alias `claude-haiku`
 - PDFs are rasterized to JPEG (first page only, capped at 3000px, quality 85) via PyMuPDF before sending to vision API
+- **Original-image persistence** goes through `app/services/storage/receipt_storage.py`, which picks a backend from `RECEIPT_STORAGE_BACKEND`: `local` (default — writes to `UPLOADS_ROOT/receipts`, on the already-backed-up `receipt_uploads` volume) or `gcs` (opt-in, needs real Google credentials). Reads dispatch on the stored path, not on config: `local:`-prefixed keys are local, bare keys are legacy GCS objects. This was GCS-only until 2026-07-27, which meant every on-prem scan silently discarded its image (no ADC in the container, failure swallowed by the best-effort `except`).
 
 ### HITL Receipt Review Queue
 

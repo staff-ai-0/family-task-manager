@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
+from functools import partial
 from uuid import UUID
 
 import httpx
@@ -859,33 +860,45 @@ async def scan_and_create_transaction(
     await db.commit()
     await db.refresh(txn)
 
-    # Persist the original image to GCS for audit / replay. Best-effort:
+    # Persist the original image for audit / replay. Best-effort:
     # an upload failure does NOT roll back the scan — the transaction stands
     # without an image rather than losing the user's work.
     try:
-        from app.services.storage.gcs_receipt_service import GCSReceiptStorage
-        gcs_path = GCSReceiptStorage.upload(
-            family_id=family_id,
-            transaction_id=txn.id,
-            image_bytes=image_bytes,
-            content_type=media_type,
+        from app.services.storage.receipt_storage import ReceiptStorage
+        stored_path = await run_in_threadpool(
+            partial(
+                ReceiptStorage.upload,
+                family_id=family_id,
+                transaction_id=txn.id,
+                image_bytes=image_bytes,
+                content_type=media_type,
+            )
         )
-        txn.receipt_image_path = gcs_path
+        txn.receipt_image_path = stored_path
         await db.commit()
     except Exception:
         # Best-effort image persistence: the scan itself was already committed
         # above, so we deliberately do NOT roll back here. The common failure —
-        # GCSReceiptStorage.upload() raising before the image-path commit —
+        # ReceiptStorage.upload() raising before the image-path commit —
         # leaves the session clean (verified: a rollback there instead *expires*
         # the committed ORM objects and the downstream best-effort steps then
         # hit MissingGreenlet on lazy attribute access).
-        # Caveat: if the image-path commit on line 806 itself fails at the DB
-        # layer, the session could be left needing a rollback and the unguarded
+        # Caveat: if the image-path commit above itself fails at the DB layer,
+        # the session could be left needing a rollback and the unguarded
         # post-commit reads (trends, account lookup) would 500. That path is not
-        # reproduced/tested; it's an accepted low-risk edge for a best-effort,
-        # cosmetic image-path write. Revisit by splitting the upload from the
-        # path commit if it ever bites.
-        logger.exception("GCS upload skipped for txn %s", txn.id)
+        # reproduced/tested; it's an accepted low-risk edge for a best-effort
+        # image-path write. Revisit by splitting the upload from the path commit
+        # if it ever bites.
+        #
+        # Logged at ERROR with the configured backend because this failing
+        # silently for every scan is exactly how on-prem lost every receipt
+        # image between the 2026-07-05 cutover and 2026-07-27.
+        logger.exception(
+            "receipt image NOT persisted for txn %s (backend=%s) — "
+            "transaction saved without an image",
+            txn.id,
+            settings.RECEIPT_STORAGE_BACKEND,
+        )
 
     # (7a) Shopping auto-check ----------------------------------------------
     shopping_auto_checked: list[str] = []

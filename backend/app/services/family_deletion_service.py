@@ -17,17 +17,18 @@ synchronous with the DELETE /api/families/me request:
     session store exists. NO data is deleted — every row survives so the
     compliance export taken beforehand stays valid and a mistaken deletion is
     recoverable until the purge.
- 4. Uploaded files on disk + GCS receipt blobs are deliberately NOT touched
+ 4. Uploaded files on disk + stored receipt images are deliberately NOT touched
     here — that cleanup happens at purge time.
 
 Phase 2 — HARD purge (``purge_expired`` → ``_hard_purge_family``), run by the
 daily purge sweep (scheduler leader only) once ``deleted_at`` is older than
 ``PURGE_RETENTION_DAYS``:
  5. Collect the family's uploaded files on disk (gig/task proofs, receipt
-    drafts) AND its scanned-receipt object keys in GCS
-    (BudgetTransaction.receipt_image_path) BEFORE the rows disappear, then
-    remove them after the DB delete. GCS removal is best-effort — an unset
-    bucket or a GCS error never blocks the purge.
+    drafts) AND its scanned-receipt storage paths
+    (BudgetTransaction.receipt_image_path — a ``local:`` uploads-volume key or
+    a legacy GCS object key) BEFORE the rows disappear, then remove them after
+    the DB delete. Removal is best-effort — a storage error never blocks the
+    purge; unreachable legacy GCS keys are logged, not silently counted.
  6. Delete the family row. ORM cascade (Family.members et al.) removes users
     and their owned rows; DB-level ON DELETE CASCADE covers the rest.
     family_invitations is the one table with NO delete rule on its FKs
@@ -204,14 +205,14 @@ class FamilyDeletionService:
         return paths
 
     @staticmethod
-    async def _collect_gcs_receipt_paths(
+    async def _collect_receipt_image_paths(
         db: AsyncSession, family_id: UUID
     ) -> List[str]:
-        """GCS object keys of the family's scanned receipt images.
+        """Storage paths of the family's scanned receipt images.
 
-        BudgetTransaction.receipt_image_path stores the object key
-        (``<family_id>/<txn_id>.<ext>``) under GCS_RECEIPT_BUCKET. Collected
-        BEFORE the DB rows are deleted.
+        BudgetTransaction.receipt_image_path holds either a ``local:``-prefixed
+        uploads-volume key or a bare legacy GCS object key. Collected BEFORE the
+        DB rows are deleted.
         """
         return list(
             (
@@ -225,32 +226,41 @@ class FamilyDeletionService:
         )
 
     @staticmethod
-    def _delete_gcs_receipts(paths: List[str]) -> int:
-        """Best-effort blob deletion of scanned receipts (sync — threadpool it).
+    def _delete_receipt_images(paths: List[str]) -> int:
+        """Best-effort deletion of scanned receipts (sync — threadpool it).
 
-        If GCS_RECEIPT_BUCKET is unset (e.g. on-prem), the keys point at
-        nothing reachable from this environment; skip without failing.
+        Local images are always removable. Bare (legacy GCS) keys are only
+        reachable when a bucket is configured; when it is not, they are logged
+        rather than silently counted as deleted, because leaving a deleted
+        family's receipts behind is a privacy problem worth surfacing.
         """
         if not paths:
             return 0
-        if not settings.GCS_RECEIPT_BUCKET:
-            logger.warning(
-                "Family deletion: %d receipt image(s) referenced in GCS but "
-                "GCS_RECEIPT_BUCKET is not configured; skipping blob deletion.",
-                len(paths),
-            )
-            return 0
 
-        from app.services.storage.gcs_receipt_service import GCSReceiptStorage
+        from app.services.storage.local_receipt_service import LOCAL_PREFIX
+        from app.services.storage.receipt_storage import ReceiptStorage
+
+        unreachable = [
+            p for p in paths
+            if not p.startswith(LOCAL_PREFIX) and not settings.GCS_RECEIPT_BUCKET
+        ]
+        if unreachable:
+            logger.warning(
+                "Family deletion: %d receipt image(s) reference GCS objects but "
+                "GCS_RECEIPT_BUCKET is not configured; they were NOT deleted.",
+                len(unreachable),
+            )
 
         removed = 0
         for path in paths:
+            if path in unreachable:
+                continue
             try:
-                GCSReceiptStorage.delete(path)
+                ReceiptStorage.delete(path)
                 removed += 1
             except Exception as exc:  # best-effort: deletion must proceed
                 logger.warning(
-                    "GCS receipt delete failed during family deletion (%s): %s",
+                    "Receipt image delete failed during family deletion (%s): %s",
                     path,
                     exc,
                 )
@@ -390,7 +400,7 @@ class FamilyDeletionService:
         ).scalar() or 0
 
         upload_paths = await cls._collect_upload_paths(db, family_id)
-        gcs_receipt_paths = await cls._collect_gcs_receipt_paths(db, family_id)
+        receipt_image_paths = await cls._collect_receipt_image_paths(db, family_id)
 
         # family_invitations FKs (families.id, users.id) carry NO delete rule
         # in the deployed schema — remove them explicitly so neither the ORM
@@ -405,17 +415,17 @@ class FamilyDeletionService:
 
         # Only after the DB commit succeeded do the files go away.
         removed = cls._delete_files(upload_paths)
-        gcs_removed = await asyncio.to_thread(
-            cls._delete_gcs_receipts, gcs_receipt_paths
+        receipts_removed = await asyncio.to_thread(
+            cls._delete_receipt_images, receipt_image_paths
         )
 
         logger.info(
             "family_purged family_id=%s members=%d uploads_removed=%d "
-            "gcs_receipts_removed=%d",
+            "receipt_images_removed=%d",
             family_id,
             member_count,
             removed,
-            gcs_removed,
+            receipts_removed,
         )
 
     @classmethod

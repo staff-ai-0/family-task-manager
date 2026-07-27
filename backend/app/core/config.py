@@ -214,10 +214,15 @@ class Settings(BaseSettings):
     # Anthropic API (for receipt scanning via Claude Vision)
     ANTHROPIC_API_KEY: str = ""
 
-    # Google Cloud Storage bucket for receipt image persistence. When
-    # empty (default in local dev / tests), the scanner skips the
-    # upload step and transactions are stored without an image.
-    # In production the VM .env sets this to `family-prod-receipts`.
+    # Where scanned receipt images are persisted: "local" (default) writes to
+    # the uploads volume under UPLOADS_ROOT/receipts; "gcs" uses
+    # GCS_RECEIPT_BUCKET. GCS is opt-in on purpose — a leftover bucket name in
+    # a .env must not route writes at a deployment with no Google credentials,
+    # which is exactly how every on-prem receipt image was silently discarded.
+    RECEIPT_STORAGE_BACKEND: str = "local"
+
+    # Google Cloud Storage bucket for receipt image persistence. Only consulted
+    # when RECEIPT_STORAGE_BACKEND="gcs".
     GCS_RECEIPT_BUCKET: str = ""
 
     # Internal service-to-service token (for /api/internal/* endpoints).
