@@ -10,22 +10,37 @@ Each renew/release is guarded by the leader's own token (compare-and-expire /
 compare-and-delete via a Lua script) so a worker can NEVER refresh or delete a
 lock that a different worker took over after this worker's TTL lapsed.
 
-Fail-open: if Redis is unreachable we return leader=True so a single-instance
-deploy with no Redis still runs its jobs.
+Fail-CLOSED by default: if Redis stays unreachable after retries we return
+leader=False. It used to fail open, which is unsafe with `--workers 2` (prod):
+a Redis blip while both workers boot — realistic during the scoped down/up of a
+deploy, when redis may still be starting — made BOTH workers leader, so every
+cron fired twice concurrently, including the payday and recurring-post sweeps
+that move family money. Set ``SCHEDULER_FAIL_OPEN=true`` for a single-instance
+deploy that genuinely runs without Redis.
 
 NOTE: non-leader workers do not re-poll for leadership while running; if the
 leader process dies, its lock expires after TTL and the jobs pause until a worker
 restarts (acceptable for the daily/5-min sweeps here, and a deploy restarts all
 workers). Promote to a periodic re-acquire loop if jobs become latency-critical.
 """
+import asyncio
+import logging
 import os
 import socket
 from typing import Optional, Tuple
 
 import redis.asyncio as aioredis
 
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
 LEADER_KEY = "ftm:scheduler:leader"
 LEADER_TTL_SECONDS = 120
+# Redis is briefly unavailable during a deploy's scoped down/up, so a single
+# failed connect must not decide leadership either way.
+ACQUIRE_ATTEMPTS = 5
+ACQUIRE_BACKOFF_SECONDS = 6
 
 # Only act if WE still hold the lock (stored value == our token).
 _RENEW_LUA = (
@@ -54,24 +69,46 @@ async def try_acquire_scheduler_leadership(
     owns ``client`` + ``token`` and must renew/release with them (both are None in
     the fail-open case). When False the caller must not run scheduled jobs.
     """
-    try:
-        client = aioredis.from_url(redis_url)
-    except Exception:
-        return True, None, None  # fail-open: no Redis -> run jobs (single instance)
+    token = _worker_token()
+    last_error: Optional[Exception] = None
 
-    try:
-        token = _worker_token()
-        acquired = await client.set(key, token, nx=True, ex=ttl)
-        if acquired:
-            return True, client, token
-        await client.aclose()
-        return False, None, None
-    except Exception:
+    for attempt in range(1, ACQUIRE_ATTEMPTS + 1):
+        client = None
         try:
+            client = aioredis.from_url(redis_url)
+            acquired = await client.set(key, token, nx=True, ex=ttl)
+            if acquired:
+                return True, client, token
+            # A healthy Redis said someone else holds the lock. That is a
+            # definitive answer, not an error — do not retry, do not fail open.
             await client.aclose()
-        except Exception:
-            pass
-        return True, None, None  # fail-open on Redis error
+            return False, None, None
+        except Exception as exc:  # connection/protocol failure only
+            last_error = exc
+            if client is not None:
+                try:
+                    await client.aclose()
+                except Exception:
+                    pass
+            if attempt < ACQUIRE_ATTEMPTS:
+                await asyncio.sleep(ACQUIRE_BACKOFF_SECONDS)
+
+    if settings.SCHEDULER_FAIL_OPEN:
+        logger.warning(
+            "Scheduler leadership: Redis unreachable after %d attempts (%s); "
+            "SCHEDULER_FAIL_OPEN is set, so this worker will run scheduled jobs. "
+            "With more than one worker this can double-fire money-moving sweeps.",
+            ACQUIRE_ATTEMPTS, last_error,
+        )
+        return True, None, None
+
+    logger.error(
+        "Scheduler leadership: Redis unreachable after %d attempts (%s); "
+        "declining leadership so concurrent workers cannot both run the sweeps. "
+        "Scheduled jobs are PAUSED until a worker restarts with Redis reachable.",
+        ACQUIRE_ATTEMPTS, last_error,
+    )
+    return False, None, None
 
 
 async def renew_scheduler_leadership(
@@ -80,14 +117,23 @@ async def renew_scheduler_leadership(
     *,
     key: str = LEADER_KEY,
     ttl: int = LEADER_TTL_SECONDS,
-) -> None:
-    """Refresh the lock TTL, but only if we still hold it (token match)."""
+) -> bool:
+    """Refresh the lock TTL, but only if we still hold it (token match).
+
+    Returns True while this worker still holds the lock. A False return means
+    another worker has taken over (our TTL lapsed) and the caller must stop
+    running scheduled jobs — otherwise two workers run them at once, which is
+    the exact failure the lock exists to prevent.
+    """
     if client is None or token is None:
-        return
+        return False
     try:
-        await client.eval(_RENEW_LUA, 1, key, token, ttl)
+        renewed = await client.eval(_RENEW_LUA, 1, key, token, ttl)
     except Exception:
-        pass
+        # A transient Redis error is not proof the lock was lost; keep running
+        # and let the next tick decide.
+        return True
+    return bool(renewed)
 
 
 async def release_scheduler_leadership(

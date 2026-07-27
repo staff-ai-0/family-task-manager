@@ -56,8 +56,10 @@ class TokenService:
         Updates ``last_used_at`` on a valid hit.
         """
         token_hash = _hash(secret)
-        # Join Family and require it not soft-deleted — fail closed on a
-        # closed account during the 30-day grace window.
+        # Join Family and require it usable — fail closed on a closed account
+        # during the 30-day grace window AND on operator suspension. Without
+        # the is_active filter a family-scoped MCP bearer kept full CRUD
+        # (including money-moving tools) on a suspended family.
         result = await db.execute(
             select(JarvisMcpToken)
             .join(Family, Family.id == JarvisMcpToken.family_id)
@@ -65,6 +67,7 @@ class TokenService:
                 JarvisMcpToken.token_hash == token_hash,
                 JarvisMcpToken.revoked_at.is_(None),
                 Family.deleted_at.is_(None),
+                Family.is_active.is_(True),
             )
         )
         row = result.scalar_one_or_none()

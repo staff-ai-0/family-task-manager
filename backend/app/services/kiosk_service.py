@@ -25,6 +25,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models import User
 from app.models.calendar_event import CalendarEvent
+from app.core.family_guards import assert_family_usable
 from app.models.family import Family
 from app.models.gig import GigClaim, GigClaimStatus, GigOffering
 from app.models.kiosk_device import KioskDevice
@@ -214,8 +215,7 @@ class KioskService:
 
         # Today's chores for this member (family timezone).
         family = await db.get(Family, family_id)
-        if family is not None and family.deleted_at is not None:
-            raise HTTPException(status_code=401, detail="Account closed")
+        assert_family_usable(family)
         tz = _family_timezone(family)
         today_local = datetime.now(tz).date()
 
@@ -335,8 +335,7 @@ class KioskService:
 
         family_id = device.family_id
         family = await db.get(Family, family_id)
-        if family is not None and family.deleted_at is not None:
-            raise HTTPException(status_code=401, detail="Account closed")
+        assert_family_usable(family)
         fam_name = family.name if family else ""
 
         # Today/tomorrow window in family timezone

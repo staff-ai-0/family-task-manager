@@ -352,12 +352,25 @@ class GoogleOAuthService:
                 select(User).where(User.email == email)
             )).scalar_one_or_none()
             
-            # If found by email, link the Google account
+            # If found by email, link the Google account.
+            #
+            # Only when Google says the address is VERIFIED. Without this, any
+            # Google identity carrying a victim's email address — which a
+            # Workspace/Cloud Identity admin can mint with email_verified=false
+            # — was silently bound to the existing account and handed tokens
+            # with that account's role and family_id. The claim was previously
+            # read only to upgrade our own flag, never as a precondition for the
+            # link itself, which is the classic pre-hijacking pattern.
             if user:
+                if not google_user_info.get('email_verified'):
+                    raise UnauthorizedException(
+                        "Google has not verified this email address, so it "
+                        "cannot be linked to an existing account. Sign in with "
+                        "your password instead."
+                    )
                 user.oauth_provider = "google"
                 user.oauth_id = google_id
-                if google_user_info.get('email_verified'):
-                    user.email_verified = True
+                user.email_verified = True
                 await db.commit()
                 await db.refresh(user)
         

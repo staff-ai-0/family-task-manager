@@ -207,6 +207,13 @@ class Settings(BaseSettings):
     # when set via /api/budget/ai-settings/models.
     RECEIPT_MODEL: str = "gemini-2.5-flash"
 
+    # Whether a worker may run scheduled jobs when Redis (the leader lock) is
+    # unreachable. Default False: prod runs `--workers 2`, and failing open
+    # there makes BOTH workers leader, double-firing the payday and
+    # recurring-post sweeps that move family money. Set true only for a
+    # single-instance deploy that genuinely has no Redis.
+    SCHEDULER_FAIL_OPEN: bool = False
+
     # Root of the uploads volume. /app/uploads inside the backend container;
     # override (e.g. to a temp dir) when running the suite outside a container.
     UPLOADS_ROOT: str = "/app/uploads"
