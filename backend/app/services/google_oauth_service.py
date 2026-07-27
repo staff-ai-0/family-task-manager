@@ -76,14 +76,23 @@ class _CachingCertsTransport:
             timeout=timeout or _CERT_FETCH_TIMEOUT, **kwargs
         )
         if response.status == 200:
-            ttl = _parse_max_age(getattr(response, "headers", None)) or _CERT_TTL_FALLBACK
-            with _cert_cache_lock:
-                _cert_cache[url] = (now + ttl, response.status, response.data)
+            ttl = _cache_ttl(getattr(response, "headers", None))
+            if ttl is not None:
+                with _cert_cache_lock:
+                    _cert_cache[url] = (now + ttl, response.status, response.data)
         return _CachedResponse(response.status, response.data)
 
 
 def _parse_max_age(headers) -> Optional[float]:
-    """Seconds from a Cache-Control max-age directive, or None."""
+    """Cache lifetime in seconds from Cache-Control.
+
+    Returns None when the response must not be cached at all — either because
+    Google said so (``no-store`` / ``no-cache`` / ``max-age=0``) or because the
+    directive is unusable. Only a *missing* Cache-Control falls back to the
+    default TTL; honouring an explicit no-store matters because pinning a
+    rotated-away cert bundle for an hour would reject every real token until it
+    expired, with no way to self-heal.
+    """
     if not headers:
         return None
     try:
@@ -92,11 +101,28 @@ def _parse_max_age(headers) -> Optional[float]:
         return None
     if not cache_control:
         return None
+    lowered = cache_control.lower()
+    if "no-store" in lowered or "no-cache" in lowered:
+        return None
     match = _MAX_AGE_RE.search(cache_control)
     if not match:
         return None
     seconds = int(match.group(1))
     return float(seconds) if seconds > 0 else None
+
+
+def _cache_ttl(headers) -> Optional[float]:
+    """TTL to apply, or None to skip caching this response."""
+    try:
+        has_directive = bool(
+            headers
+            and (headers.get("Cache-Control") or headers.get("cache-control"))
+        )
+    except AttributeError:
+        has_directive = False
+    if has_directive:
+        return _parse_max_age(headers)
+    return _CERT_TTL_FALLBACK
 
 
 _certs_transport = _CachingCertsTransport()

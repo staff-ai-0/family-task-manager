@@ -151,6 +151,43 @@ class TestCertCaching:
     def test_max_age_parsing(self, header, expected):
         assert svc._parse_max_age(header) == expected
 
+    @pytest.mark.parametrize(
+        "header,expected",
+        [
+            # Explicit no-cache directives must NOT fall back to the default TTL:
+            # pinning a rotated-away cert bundle for an hour would reject every
+            # real token until it expired, with no way to self-heal.
+            ({"Cache-Control": "no-store"}, None),
+            ({"Cache-Control": "no-cache"}, None),
+            ({"Cache-Control": "max-age=0"}, None),
+            ({"Cache-Control": "max-age=600"}, 600.0),
+            # Only a MISSING directive falls back.
+            ({}, svc._CERT_TTL_FALLBACK),
+            (None, svc._CERT_TTL_FALLBACK),
+        ],
+    )
+    def test_cache_ttl_honours_no_store(self, header, expected):
+        assert svc._cache_ttl(header) == expected
+
+    def test_no_store_response_is_refetched(self):
+        calls = []
+
+        class _Resp:
+            status = 200
+            data = b'{"keys": []}'
+            headers = {"Cache-Control": "no-store"}
+
+        def _inner(url, **kw):
+            calls.append(url)
+            return _Resp()
+
+        transport = svc._CachingCertsTransport()
+        transport._inner = _inner
+        transport("https://certs")
+        transport("https://certs")
+
+        assert len(calls) == 2, "a no-store cert response must not be cached"
+
 
 class TestVerificationOffEventLoop:
     @pytest.mark.asyncio
