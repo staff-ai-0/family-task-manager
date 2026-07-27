@@ -12,6 +12,8 @@ export interface User {
     is_active: boolean;
     /** Family IANA timezone — populated by /api/auth/me only. */
     timezone?: string;
+    /** Platform-operator flag. UX guard only — the backend re-checks. */
+    is_superadmin?: boolean;
 }
 
 export interface LoginResponse {

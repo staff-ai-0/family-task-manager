@@ -276,3 +276,15 @@ async def test_every_action_route_404s_for_non_operator(
     for path, body in calls:
         resp = await client.post(path, json=body, headers=auth_headers)
         assert resp.status_code == 404, path
+
+
+@pytest.mark.asyncio
+async def test_auth_me_exposes_is_superadmin(
+    client, superadmin_headers, auth_headers
+):
+    """The frontend middleware gates /admin on this field."""
+    operator = await client.get("/api/auth/me", headers=superadmin_headers)
+    assert operator.json()["is_superadmin"] is True
+
+    parent = await client.get("/api/auth/me", headers=auth_headers)
+    assert parent.json()["is_superadmin"] is False

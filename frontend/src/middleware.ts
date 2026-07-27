@@ -334,6 +334,37 @@ export const onRequest = defineMiddleware(async (context, next) => {
         ));
     }
 
+    // ── Super-admin surface: fail CLOSED ────────────────────────────────
+    // /admin pages and /api/admin proxy calls are 404 for everyone who is
+    // not a platform operator. 404 rather than 403 so the surface is not
+    // discoverable. Resolved with its own /auth/me call (locals.user is not
+    // populated yet at this point) — the cost lands only on admin paths.
+    // Any doubt — fetch failure, missing field — is a 404, never a pass.
+    if (path === "/admin" || path.startsWith("/admin/") || path.startsWith("/api/admin/")) {
+        let isOperator = false;
+        try {
+            const apiUrl = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
+            const meRes = await fetch(`${apiUrl}/api/auth/me`, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            if (meRes.ok) {
+                const me = await meRes.json();
+                isOperator = me?.is_superadmin === true;
+            }
+        } catch {
+            isOperator = false;
+        }
+        if (!isOperator) {
+            if (path.startsWith("/api/")) {
+                return withSecurityHeaders(new Response(
+                    JSON.stringify({ detail: "Not Found" }),
+                    { status: 404, headers: { "Content-Type": "application/json" } }
+                ));
+            }
+            return withSecurityHeaders(new Response(null, { status: 404 }));
+        }
+    }
+
     // Verify token is valid by checking with backend for API routes
     // For page routes, we'll let the page components handle token validation
     if (path.startsWith("/api/") && path !== "/api/auth/login") {

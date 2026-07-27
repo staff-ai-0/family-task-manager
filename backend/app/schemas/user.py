@@ -69,6 +69,12 @@ class UserResponse(EntityResponse):
     # Parental-approval state: 'approved' everywhere except join-code
     # self-signups, which start 'pending' until a parent approves.
     approval_status: str = "approved"
+    # Platform-operator flag, denormalized onto every UserResponse so the
+    # frontend middleware can 404 the /admin route group without an extra
+    # fetch. This is a UX guard only — require_superadmin on the backend is
+    # the real boundary, and it also checks the env allowlist, which never
+    # leaves the server.
+    is_superadmin: bool = False
     # Family module registry, denormalized onto /auth/me so every SSR page
     # (middleware caches the payload into Astro.locals.user) can gate nav
     # without an extra fetch. None = all modules on. Only /auth/me populates
