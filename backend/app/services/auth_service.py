@@ -401,13 +401,21 @@ class AuthService:
         login_data: UserLogin,
     ) -> tuple[User, str, str]:
         """Authenticate user and return (user, access_token, refresh_token)."""
-        # Find user by email
-        user = (await db.execute(
-            select(User).where(User.email == login_data.email)
-        )).scalar_one_or_none()
+        # Find user by email, joined to the family's is_active flag in the
+        # same round trip (users.family_id is a non-nullable FK, so an inner
+        # join is safe — the only way it misses is corrupt data, e.g. an
+        # orphaned user row, and that must fail closed with the same generic
+        # message as "no such user", never a 500).
+        row = (await db.execute(
+            select(User, Family.is_active)
+            .join(Family, Family.id == User.family_id)
+            .where(User.email == login_data.email)
+        )).one_or_none()
 
-        if not user:
+        if row is None:
             raise UnauthorizedException("Invalid email or password")
+
+        user, family_active = row
 
         # Verify password
         if not verify_password(login_data.password, user.password_hash):
@@ -421,6 +429,16 @@ class AuthService:
         # survive the purge grace window. Same 401 as a deactivated account.
         if user.deleted_at is not None:
             raise UnauthorizedException("Account closed")
+
+        # Operator suspension: the family is locked out as a whole. Same 401
+        # as a deactivated account — deliberately indistinguishable to an
+        # attacker probing for valid emails. family_active came back from the
+        # join above, so this costs no extra query. Password verification
+        # above still runs first, so a wrong password on a suspended family's
+        # account still returns the generic "Invalid email or password" —
+        # suspension is never leaked to an unauthenticated prober.
+        if family_active is False:
+            raise UnauthorizedException("Family suspended")
 
         # Join-code self-signups cannot log in until a parent approves.
         if getattr(user, "approval_status", APPROVAL_APPROVED) == APPROVAL_PENDING:
@@ -469,13 +487,21 @@ class AuthService:
         return user
 
     @staticmethod
-    async def deactivate_user(db: AsyncSession, user_id: UUID) -> User:
+    async def deactivate_user(
+        db: AsyncSession, user_id: UUID, commit: bool = True
+    ) -> User:
         """Deactivate a user account.
 
         Open task assignments (pending/claimed/overdue) are cancelled in the
         same transaction — a deactivated member can never complete them, and
         leaving them alive rots the parent week grid with ghost rows that the
         sweep keeps flipping OVERDUE.
+
+        ``commit=False`` lets a caller fold this mutation (and the bulk
+        assignment cancellation) into a larger transaction of its own — e.g.
+        the admin action service, which must land this mutation and its
+        operator-audit row atomically. The caller becomes responsible for
+        committing (and, if it fails, for rolling back).
         """
         from sqlalchemy import update as sql_update
         from app.models.task_assignment import (
@@ -500,19 +526,27 @@ class AuthService:
             .values(status=AssignmentStatus.CANCELLED)
         )
 
-        await db.commit()
-        await db.refresh(user)
+        if commit:
+            await db.commit()
+            await db.refresh(user)
         return user
 
     @staticmethod
-    async def activate_user(db: AsyncSession, user_id: UUID) -> User:
-        """Activate a user account"""
+    async def activate_user(
+        db: AsyncSession, user_id: UUID, commit: bool = True
+    ) -> User:
+        """Activate a user account.
+
+        ``commit=False`` lets a caller fold this into a larger transaction —
+        see ``deactivate_user`` for why the admin action service needs this.
+        """
         user = await AuthService.get_user_by_id(db, user_id)
         user.is_active = True
         user.updated_at = datetime.now(timezone.utc)
-        
-        await db.commit()
-        await db.refresh(user)
+
+        if commit:
+            await db.commit()
+            await db.refresh(user)
         return user
 
     @staticmethod

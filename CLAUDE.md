@@ -114,6 +114,11 @@ npm run test:headed           # With visible browser
 
 Every model with family data **must** have `family_id` as a non-nullable FK to `families.id`. Every service query **must** filter by `family_id` from the authenticated user's JWT. Never expose data across families.
 
+The **only** sanctioned exception is `app/services/admin/`, reached exclusively
+through `require_superadmin`. Never relax `family_id` filtering anywhere else,
+and never use `verify_family_id` or `get_family_user` in an admin route — both
+compare against the caller's own `family_id`.
+
 ### Clean architecture layers
 
 ```
@@ -216,6 +221,7 @@ Fully wired (routes + services + models + frontend), multi-tenant by `family_id`
 | **Analytics** | `/api/analytics` | Family "PUP" snapshots / progress analytics. |
 | **Gigs / Cash / Bank** | `/api/gigs`, `/api/cash`, `/api/bank` | Two-currency economy: chores+bonus → points; gig BOARD → cash ($MXN). Family Bank (match/interest/allowance payday sweep). Allowance modes per kid: `flat` · `chore_proportional` (points-weighted) · `chore_gated` · `points_rate` (grade-scaled chore points × `families.point_value_cents`, parent-released; converted points deducted). Paycheck math is grade-aware (`_chore_units`: points×pct integer units). |
 | **Consequences / Rewards / Points** | `/api/consequences`, `/api/rewards`, `/api/points-conversion` | Discipline + reward economy on top of the points system. |
+| **Admin** (operator console) | `/api/admin` | Cross-tenant operator surface: family directory, per-family support views, ten bounded write actions, append-only `operator_audit_log`. Gated by `require_superadmin` — `users.is_superadmin` **AND** `SUPERADMIN_EMAILS`, 404 on failure. Frontend at `/admin/*` behind a Cloudflare Access path policy. Metadata only: no message bodies, no images. See `docs/superpowers/specs/2026-07-26-super-admin-dashboard-design.md`. |
 
 Production-readiness audits live in `docs/audit/` (2026-06-04 techdebt, 2026-07-02 UX, 2026-07-07 launch gaps).
 

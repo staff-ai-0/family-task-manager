@@ -264,6 +264,17 @@ class GoogleOAuthService:
             if user.deleted_at is not None:
                 raise UnauthorizedException("Account closed")
 
+            # Operator suspension: mirror the password-login and
+            # get_current_user checks. Without this, a member of a suspended
+            # family can still complete Google sign-in and land on a
+            # dashboard where every subsequent call 401s "Family suspended" —
+            # this is the login door most users actually use.
+            family_active = (await db.execute(
+                select(Family.is_active).where(Family.id == user.family_id)
+            )).scalar_one_or_none()
+            if family_active is False:
+                raise UnauthorizedException("Family suspended")
+
             # Pending join-code signups must not bypass parental approval by
             # signing in with Google using the same email.
             from app.models.user import APPROVAL_PENDING

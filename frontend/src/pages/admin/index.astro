@@ -1,0 +1,110 @@
+---
+import AdminShell from "@components/ui/AdminShell.astro";
+import { apiFetch } from "../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const { data } = await apiFetch<any>("/api/admin/overview", { token });
+// The middleware already 404s non-operators, so a null body here means the
+// backend is down, not that the caller lacks permission.
+const pulse = data ?? null;
+
+const money = (cents: number, currency: string) =>
+    `${(cents / 100).toFixed(2)} ${currency}`;
+
+const TILES: [string, number, string][] = pulse
+    ? [
+          ["Families", pulse.families_total, "not soft-deleted (includes suspended)"],
+          ["Suspended", pulse.families_suspended, "locked out by an operator"],
+          ["Pending purge", pulse.families_pending_purge, "inside the 30-day window"],
+          ["Users", pulse.users_total, "not soft-deleted"],
+          ["Verified", pulse.users_verified, "email confirmed"],
+          ["Awaiting approval", pulse.users_pending_approval, "join-code signups"],
+          ["Billing review", pulse.billing_needs_review, "webhook flagged for a human"],
+          ["Receipt drafts", pulse.receipt_drafts_pending, "low-confidence scans"],
+          ["Overdue tasks", pulse.overdue_assignments, "across all families"],
+      ]
+    : [];
+---
+
+<AdminShell title="Overview" active="overview">
+    {!pulse && (
+        <p class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            Could not load platform state. The backend may be restarting.
+        </p>
+    )}
+
+    {pulse && (
+        <>
+            <div class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+                {TILES.map(([label, value, hint]) => (
+                    <div class="rounded-lg border border-slate-200 bg-white p-4">
+                        <div class="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+                        <div class="num mt-1 text-2xl font-semibold">{value}</div>
+                        <div class="mt-1 text-xs text-slate-400">{hint}</div>
+                    </div>
+                ))}
+            </div>
+
+            <section class="mt-8">
+                <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    Current-state MRR
+                </h2>
+                <p class="mb-3 max-w-3xl text-xs text-slate-500">
+                    Implied by today's subscription rows — not a time series, and not
+                    reconstructible history. Reported per currency because no FX rate is
+                    stored; a single summed figure would be fiction.
+                </p>
+                {pulse.mrr.length === 0 ? (
+                    <p class="text-sm text-slate-500">No paying subscriptions.</p>
+                ) : (
+                    <table class="w-full max-w-md border-collapse text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-left text-slate-500">
+                                <th class="py-2">Currency</th>
+                                <th class="py-2">Subscriptions</th>
+                                <th class="py-2 text-right">MRR</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {pulse.mrr.map((row: any) => (
+                                <tr class="border-b border-slate-100">
+                                    <td class="py-2">{row.currency}</td>
+                                    <td class="num py-2">{row.subscriptions}</td>
+                                    <td class="num py-2 text-right">
+                                        {money(row.cents, row.currency)}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </section>
+
+            <section class="mt-8">
+                <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    Bank-matcher webhook health
+                </h2>
+                <dl class="flex flex-wrap gap-6 text-sm">
+                    <div>
+                        <dt class="text-slate-500">By status</dt>
+                        <dd class="num">
+                            {Object.entries(pulse.a2a.by_status)
+                                .map(([k, v]) => `${k}: ${v}`)
+                                .join(" · ") || "no deliveries"}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500">Overdue retries</dt>
+                        <dd class="num">{pulse.a2a.overdue_retries}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-slate-500">Oldest pending</dt>
+                        <dd class="num">{pulse.a2a.oldest_pending_at ?? "—"}</dd>
+                    </div>
+                </dl>
+            </section>
+        </>
+    )}
+</AdminShell>

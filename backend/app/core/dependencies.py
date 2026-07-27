@@ -1,13 +1,16 @@
 from fastapi import Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from typing import Optional
 from uuid import UUID
+from datetime import datetime, timedelta, timezone
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import decode_token, oauth2_scheme
 from app.core.type_utils import to_uuid_required
 from app.core.exceptions import ForbiddenException, NotFoundException
+from app.models.family import Family
 from app.models.user import User, UserRole
 
 
@@ -28,12 +31,22 @@ async def get_current_user(
     if user_id is None:
         raise credentials_exception
 
-    # Get user from database
-    result = await db.execute(select(User).filter(User.id == user_id))
-    user = result.scalar_one_or_none()
+    # Get user from database, joined to the family's is_active flag in the
+    # same round trip (users.family_id is a non-nullable FK, so an inner join
+    # is safe — the only way it misses is corrupt data, e.g. an orphaned user
+    # row, and that must fail closed exactly like "user not found" below, not
+    # 500).
+    result = await db.execute(
+        select(User, Family.is_active)
+        .join(Family, Family.id == User.family_id)
+        .filter(User.id == user_id)
+    )
+    row = result.one_or_none()
 
-    if user is None:
+    if row is None:
         raise credentials_exception
+
+    user, family_active = row
 
     # A still-valid access token must stop working once the account is
     # deactivated. Login already gates is_active; mirror it on every request.
@@ -52,7 +65,78 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Operator suspension. families.is_active was previously checked only at
+    # join-code lookup and registration, which meant a "suspended" family kept
+    # full access to the app. A valid access token must stop working the
+    # moment an operator suspends the family. family_active came back from the
+    # join above, so this costs no extra query.
+    if family_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Family suspended",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    await _touch_last_seen(db, user)
+
     return user
+
+
+async def _touch_last_seen(db: AsyncSession, user: User) -> None:
+    """Throttled, best-effort activity stamp.
+
+    Two failure points, two different recoveries — neither may ever raise
+    past this function, and `user` must stay usable and the session
+    committable either way (`get_db()` issues its own commit at the end of
+    every request on this same session):
+
+    * The write runs inside a SAVEPOINT (``begin_nested``). Its rollback on
+      failure only expires ORM-*dirty* objects; `user` is never mutated
+      before a successful write, so it survives untouched and the root
+      transaction stays healthy — no recovery needed.
+    * The follow-up ``db.commit()`` persists that SAVEPOINT immediately
+      (this write is meant to survive even if the rest of the request later
+      fails and rolls back). If the commit itself fails, the session can be
+      left in a ``PREPARED`` transaction state that accepts no further SQL
+      — including `get_db()`'s own end-of-request commit. A plain
+      ``db.rollback()`` clears that, but rollback at the *root* level
+      expires every object in the identity map unconditionally (confirmed
+      against the installed SQLAlchemy source and empirically — this is
+      not limited to dirty objects), so it must be paired with a refresh
+      to leave `user` usable again. Both steps are independently guarded.
+    """
+    now = datetime.now(timezone.utc)
+    last_seen = user.last_seen_at
+    if last_seen is not None and last_seen.tzinfo is None:
+        # Should never happen via SQLAlchemy, but guard against a value
+        # that reached the column some other way (e.g. a raw-SQL backfill).
+        last_seen = None
+    throttle = timedelta(minutes=settings.LAST_SEEN_THROTTLE_MINUTES)
+    if last_seen is not None and now - last_seen < throttle:
+        return
+
+    try:
+        async with db.begin_nested():
+            await db.execute(
+                update(User).where(User.id == user.id).values(last_seen_at=now)
+            )
+    except Exception:
+        return
+
+    try:
+        await db.commit()
+    except Exception:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        try:
+            await db.refresh(user)
+        except Exception:
+            pass
+        return
+
+    user.last_seen_at = now
 
 
 def require_parent_role(current_user: User = Depends(get_current_user)) -> User:
@@ -61,6 +145,26 @@ def require_parent_role(current_user: User = Depends(get_current_user)) -> User:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This operation requires parent privileges",
+        )
+    return current_user
+
+
+def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
+    """Platform operator. Requires BOTH the DB flag and the env allowlist.
+
+    Rejects with 404 rather than 403 so the admin surface is not
+    discoverable — a 403 confirms the route exists. Both conditions are
+    required on purpose: the DB flag alone would let a stolen dump mint an
+    operator, and the allowlist alone would hand platform powers to anyone
+    who gains control of a listed mailbox.
+    """
+    if not current_user.is_superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Not Found"
+        )
+    if (current_user.email or "").lower() not in settings.superadmin_emails_set:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Not Found"
         )
     return current_user
 

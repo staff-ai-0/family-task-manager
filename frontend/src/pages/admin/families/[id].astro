@@ -1,0 +1,585 @@
+---
+import AdminShell from "@components/ui/AdminShell.astro";
+import { apiFetch } from "../../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const familyId = Astro.params.id!;
+const { data, status } = await apiFetch<any>(
+    `/api/admin/families/${familyId}`,
+    { token }
+);
+// 404 means the family genuinely doesn't exist (or was purged) — bounce to
+// the directory. Any other failure (backend down, network error, 5xx) also
+// returns data:null (frontend/src/lib/api.ts:76,84-89,95) but must NOT be
+// collapsed into the same redirect: that would silently bounce an operator
+// to the directory and look exactly like "this family doesn't exist" when
+// the real problem is the backend is unreachable. Keep the two distinguishable
+// the same way families.astro / deletions.astro already do.
+if (status === 404) return Astro.redirect("/admin/families");
+
+let overview: any = null;
+let members: any[] = [];
+let economy: any = null;
+let tasks: any = null;
+let budget: any = null;
+let billing: any = null;
+let integrations: any = null;
+let kids: any[] = [];
+let moduleSummary = "";
+
+if (data) {
+    ({ overview, members, economy, tasks, budget, billing, integrations } = data);
+    kids = members.filter((m: any) => m.role !== "parent");
+
+    // NULL means every module is on. Rendered explicitly so the operator never
+    // reads an empty list as "no modules".
+    moduleSummary =
+        overview.enabled_modules === null
+            ? "all modules on (default)"
+            : overview.enabled_modules.join(", ") || "all optional modules off";
+}
+
+const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+const shortDT = (iso: string | null) =>
+    iso ? iso.slice(0, 16).replace("T", " ") : "—";
+---
+
+<AdminShell title={overview?.name ?? "Family unavailable"} active="families">
+    <div class="mb-4 flex flex-wrap gap-3 text-sm">
+        <a class="underline" href="/admin/families">← All families</a>
+        {data && (
+            <>
+                <span class="text-slate-400">·</span>
+                <span class="num text-slate-500">{overview.id}</span>
+            </>
+        )}
+    </div>
+
+    {!data && (
+        <p class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            Could not load this family. The backend may be restarting.
+        </p>
+    )}
+
+    {data && (
+        <>
+        {overview.deleted_at && (
+            <div class="mb-5 rounded border border-amber-300 bg-amber-50 p-4 text-sm">
+                <strong>Closed {overview.deleted_at.slice(0, 10)}.</strong> Purges after
+                {" "}{overview.purge_after?.slice(0, 10)}. Reinstating restores the data but
+                <strong> not</strong> billing — the PayPal subscription was cancelled at closure.
+                <button
+                    class="ml-3 rounded bg-amber-700 px-2 py-1 text-white"
+                    data-action={`/api/admin/families/${familyId}/cancel-deletion`}
+                >
+                    Cancel deletion
+                </button>
+            </div>
+        )}
+
+        {!overview.is_active && (
+            <div class="mb-5 rounded border border-red-300 bg-red-50 p-4 text-sm">
+                <strong>Suspended.</strong> Every member is locked out of the app.
+                <button
+                    class="ml-3 rounded bg-red-700 px-2 py-1 text-white"
+                    data-action={`/api/admin/families/${familyId}/suspend`}
+                    data-payload={JSON.stringify({ suspended: false })}
+                >
+                    Reinstate
+                </button>
+            </div>
+        )}
+
+        <section class="mb-8 grid gap-4 md:grid-cols-2">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    Overview
+                </h2>
+                <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                    <dt class="text-slate-500">Timezone</dt><dd>{overview.timezone}</dd>
+                    <dt class="text-slate-500">Created</dt><dd class="num">{overview.created_at.slice(0, 10)}</dd>
+                    <dt class="text-slate-500">Join code</dt><dd class="num">{overview.join_code ?? "—"}</dd>
+                    <dt class="text-slate-500">Modules</dt><dd>{moduleSummary}</dd>
+                    <dt class="text-slate-500">Point value</dt><dd class="num">{money(overview.point_value_cents)}</dd>
+                    <dt class="text-slate-500">Comped until</dt>
+                    <dd class="num">{overview.referral_bonus_until?.slice(0, 10) ?? "—"}</dd>
+                    <dt class="text-slate-500">AI consent</dt>
+                    <dd>{overview.ai_processing_consent ? "granted" : "not granted"}</dd>
+                </dl>
+                <p class="mt-3 text-xs text-slate-400">
+                    AI consent covers proof-photo validation and Jarvis chat reads only —
+                    not the calendar or receipt scanners.
+                </p>
+            </div>
+
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    Billing
+                </h2>
+                {billing ? (
+                    <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                        <dt class="text-slate-500">Plan</dt><dd>{billing.plan} ({billing.currency})</dd>
+                        <dt class="text-slate-500">Status</dt><dd>{billing.status}</dd>
+                        <dt class="text-slate-500">Cycle</dt><dd>{billing.billing_cycle}</dd>
+                        <dt class="text-slate-500">PayPal id</dt><dd class="num">{billing.paypal_subscription_id ?? "—"}</dd>
+                        <dt class="text-slate-500">Period ends</dt><dd class="num">{billing.current_period_end?.slice(0, 10) ?? "—"}</dd>
+                        <dt class="text-slate-500">Payment failed</dt><dd class="num">{billing.payment_failure_at?.slice(0, 10) ?? "—"}</dd>
+                    </dl>
+                ) : (
+                    <p class="text-sm text-slate-500">No subscription row (free tier).</p>
+                )}
+                {billing?.needs_review && (
+                    <p class="mt-3 rounded bg-amber-50 p-2 text-sm text-amber-900">
+                        Flagged for review: {billing.review_reason}
+                    </p>
+                )}
+            </div>
+        </section>
+
+        <section class="mb-8">
+            <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Members
+            </h2>
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[900px] border-collapse text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-200 text-left text-slate-500">
+                            <th class="py-2">Name</th>
+                            <th class="py-2">Email</th>
+                            <th class="py-2">Role</th>
+                            <th class="py-2">Verified</th>
+                            <th class="py-2">Approval</th>
+                            <th class="py-2">Points</th>
+                            <th class="py-2">Cash</th>
+                            <th class="py-2">Last seen</th>
+                            <th class="py-2">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {members.map((m: any) => (
+                            <tr class="border-b border-slate-100">
+                                <td class="py-2">{m.name}</td>
+                                <td class="py-2">{m.email}</td>
+                                <td class="py-2">{m.role}</td>
+                                <td class="py-2">{m.email_verified ? "yes" : "no"}</td>
+                                <td class="py-2">{m.approval_status}</td>
+                                <td class="num py-2">{m.points}</td>
+                                <td class="num py-2">{money(m.cash_cents)}</td>
+                                <td class="num py-2">{shortDT(m.last_seen_at)}</td>
+                                <td class="py-2">
+                                    <div class="flex flex-wrap gap-1">
+                                        <button
+                                            class="rounded border border-slate-300 px-2 py-1 text-xs"
+                                            data-action={`/api/admin/users/${m.id}/resend-verification`}
+                                        >
+                                            Resend verification
+                                        </button>
+                                        <button
+                                            class="rounded border border-slate-300 px-2 py-1 text-xs"
+                                            data-action={`/api/admin/users/${m.id}/password-reset`}
+                                            data-confirm="This also invalidates all of this user's active sessions. Continue?"
+                                        >
+                                            Reset password
+                                        </button>
+                                        <button
+                                            class="rounded border border-slate-300 px-2 py-1 text-xs"
+                                            data-action={`/api/admin/users/${m.id}/active`}
+                                            data-payload={JSON.stringify({ active: !m.is_active })}
+                                            data-confirm={
+                                                m.is_active
+                                                    ? "Deactivating also cancels this user's pending, claimed and overdue assignments. Reactivating does NOT restore them. Continue?"
+                                                    : undefined
+                                            }
+                                        >
+                                            {m.is_active ? "Deactivate" : "Reactivate"}
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="mb-8 grid gap-4 md:grid-cols-3">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Tasks</h2>
+                <dl class="grid grid-cols-[auto_1fr] gap-x-4 text-sm">
+                    {Object.entries(tasks.by_status).map(([k, v]) => (
+                        <>
+                            <dt class="text-slate-500">{k}</dt>
+                            <dd class="num">{v}</dd>
+                        </>
+                    ))}
+                </dl>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Budget</h2>
+                <dl class="grid grid-cols-[auto_1fr] gap-x-4 text-sm">
+                    <dt class="text-slate-500">Accounts</dt><dd class="num">{budget.account_count}</dd>
+                    <dt class="text-slate-500">Transactions</dt><dd class="num">{budget.transaction_count}</dd>
+                    <dt class="text-slate-500">Drafts pending</dt><dd class="num">{budget.receipt_drafts_pending}</dd>
+                </dl>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+                <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    Bank-matcher
+                </h2>
+                {integrations.a2a_webhook ? (
+                    <dl class="grid grid-cols-[auto_1fr] gap-x-4 text-sm">
+                        <dt class="text-slate-500">Enabled</dt>
+                        <dd>{integrations.a2a_webhook.enabled ? "yes" : "no"}</dd>
+                        <dt class="text-slate-500">Failures</dt>
+                        <dd class="num">{integrations.a2a_webhook.failure_count}</dd>
+                        <dt class="text-slate-500">Last success</dt>
+                        <dd class="num">{shortDT(integrations.a2a_webhook.last_success_at)}</dd>
+                    </dl>
+                ) : (
+                    <p class="text-sm text-slate-500">Not configured.</p>
+                )}
+            </div>
+        </section>
+
+        <section class="mb-8">
+            <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Recent cash movements
+            </h2>
+            {economy.recent_cash_transactions.length === 0 ? (
+                <p class="text-sm text-slate-500">No cash transactions.</p>
+            ) : (
+                <table class="w-full max-w-4xl border-collapse text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-200 text-left text-slate-500">
+                            <th class="py-2">When</th>
+                            <th class="py-2">Type</th>
+                            <th class="py-2">Jar</th>
+                            <th class="py-2">Week</th>
+                            <th class="py-2 text-right">Amount</th>
+                            <th class="py-2 text-right">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {economy.recent_cash_transactions.map((tx: any) => (
+                            <tr class="border-b border-slate-100">
+                                <td class="num py-2">{shortDT(tx.created_at)}</td>
+                                <td class="py-2">{tx.type}</td>
+                                <td class="py-2">{tx.jar}</td>
+                                <td class="num py-2">{tx.week_of ?? "—"}</td>
+                                <td class="num py-2 text-right">{money(tx.amount_cents)}</td>
+                                <td class="num py-2 text-right">{money(tx.balance_after)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
+        </section>
+
+        <section class="rounded-lg border border-slate-200 bg-white p-4">
+            <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Family actions
+            </h2>
+            <div class="flex flex-wrap gap-2">
+                <button
+                    class="rounded border border-slate-300 px-3 py-2 text-sm"
+                    data-action={`/api/admin/families/${familyId}/comp-plus`}
+                    data-payload={JSON.stringify({ days: 30 })}
+                >
+                    Comp 30 days of Plus
+                </button>
+                {overview.is_active && (
+                    <button
+                        class="rounded border border-red-300 px-3 py-2 text-sm text-red-700"
+                        data-action={`/api/admin/families/${familyId}/suspend`}
+                        data-payload={JSON.stringify({ suspended: true })}
+                        data-confirm="Suspending locks every member out of the app immediately. Continue?"
+                    >
+                        Suspend family
+                    </button>
+                )}
+            </div>
+            <p class="mt-3 max-w-3xl text-xs text-slate-500">
+                Comping sets an absolute expiry (now + 30 days). Repeating it does not stack.
+                Points and cash adjustments are deliberately absent — an operator has no
+                member identity to attribute them to, and faking one would put a change in a
+                child's ledger that their parent never made.
+            </p>
+        </section>
+
+        <section class="mt-6 rounded-lg border border-slate-200 bg-white p-4">
+            <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Operator tools
+            </h2>
+            <div class="grid gap-6 lg:grid-cols-2">
+                <form data-action={`/api/admin/families/${familyId}/modules`} class="space-y-2">
+                    <h3 class="text-sm font-medium">Module registry</h3>
+                    <p class="text-xs text-slate-500">
+                        Leave every box unchecked and tick "restore default" to go back to
+                        NULL, which means all modules on.
+                    </p>
+                    <div class="flex flex-wrap gap-3 text-sm">
+                        {["meals", "shopping", "calendar", "pet", "chat", "budget", "gigs"].map((m) => (
+                            <label class="flex items-center gap-1">
+                                <input
+                                    type="checkbox"
+                                    name="enabled_modules"
+                                    value={m}
+                                    checked={
+                                        overview.enabled_modules === null ||
+                                        overview.enabled_modules.includes(m)
+                                    }
+                                />
+                                {m}
+                            </label>
+                        ))}
+                    </div>
+                    <label class="flex items-center gap-1 text-sm">
+                        <input type="checkbox" name="__null_modules" value="true" />
+                        restore default (all on)
+                    </label>
+                    <button class="rounded border border-slate-300 px-3 py-2 text-sm">
+                        Save modules
+                    </button>
+                </form>
+
+                <form
+                    data-action={`/api/admin/families/${familyId}/release-paycheck`}
+                    data-confirm="Releasing credits real money to the kid's jars. It is idempotent per kid and week, but it cannot be undone from here. Preview first. Continue?"
+                    class="space-y-2"
+                >
+                    <h3 class="text-sm font-medium">Release a stuck chore paycheck</h3>
+                    <p class="text-xs text-slate-500">
+                        Preview the projection and the kid's unreleased weeks first — the
+                        preview link beside each kid opens the raw JSON.
+                    </p>
+                    <div class="flex flex-wrap items-end gap-2 text-sm">
+                        <label class="flex flex-col">
+                            <span class="text-xs text-slate-500">Kid</span>
+                            <select name="kid_id" class="rounded border border-slate-300 px-2 py-1">
+                                {kids.map((kid: any) => (
+                                    <option value={kid.id}>{kid.name}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label class="flex flex-col">
+                            <span class="text-xs text-slate-500">Week (any day in it)</span>
+                            <input
+                                type="date"
+                                name="week_of"
+                                required
+                                class="rounded border border-slate-300 px-2 py-1"
+                            />
+                        </label>
+                        <button class="rounded border border-slate-300 px-3 py-2">Release</button>
+                    </div>
+                    <ul class="space-y-1 text-xs">
+                        {kids.map((kid: any) => (
+                            <li>
+                                <a
+                                    class="underline"
+                                    href={`/api/admin/families/${familyId}/paycheck-preview/${kid.id}`}
+                                    target="_blank"
+                                    rel="noopener"
+                                >
+                                    Preview {kid.name}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </form>
+
+                <form
+                    data-template={`/api/admin/families/${familyId}/assignments/{assignment_id}/undo-approval`}
+                    data-confirm="This claws back the points this approval awarded and clears its grade. Continue?"
+                    class="space-y-2"
+                >
+                    <h3 class="text-sm font-medium">Undo a chore approval</h3>
+                    <p class="text-xs text-slate-500">
+                        Claws the points back and clears the grade. Refuses bonus and gig
+                        reversals — those must go through the parent's own review screen.
+                    </p>
+                    <div class="flex flex-wrap items-end gap-2 text-sm">
+                        <label class="flex flex-col">
+                            <span class="text-xs text-slate-500">Assignment id</span>
+                            <input
+                                type="text"
+                                name="assignment_id"
+                                data-path-param="true"
+                                required
+                                class="w-80 rounded border border-slate-300 px-2 py-1"
+                            />
+                        </label>
+                        <button class="rounded border border-slate-300 px-3 py-2">Undo</button>
+                    </div>
+                </form>
+
+                <form data-action={`/api/admin/families/${familyId}/restore`} class="space-y-2">
+                    <h3 class="text-sm font-medium">Restore from the budget recycle bin</h3>
+                    <div class="flex flex-wrap items-end gap-2 text-sm">
+                        <label class="flex flex-col">
+                            <span class="text-xs text-slate-500">Type</span>
+                            <select name="item_type" class="rounded border border-slate-300 px-2 py-1">
+                                <option value="transaction">transaction</option>
+                                <option value="account">account</option>
+                                <option value="category">category</option>
+                                <option value="category_group">category_group</option>
+                            </select>
+                        </label>
+                        <label class="flex flex-col">
+                            <span class="text-xs text-slate-500">Item id</span>
+                            <input
+                                type="text"
+                                name="item_id"
+                                required
+                                class="w-80 rounded border border-slate-300 px-2 py-1"
+                            />
+                        </label>
+                        <button class="rounded border border-slate-300 px-3 py-2">Restore</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+        </>
+    )}
+</AdminShell>
+
+<script>
+    import { normalizeErrorDetail } from "../../../lib/errors";
+
+    // Every operator action requires a typed reason, which is recorded in the
+    // audit log alongside the change. Failures surface the backend's actual
+    // message verbatim — nothing is swallowed.
+    //
+    // The backend has THREE distinct error-body shapes an operator action can
+    // come back with, and only reading `body.detail` (as this used to do)
+    // misses two of them:
+    //   1. FastAPI HTTPException            -> { detail: "<string>" }
+    //   2. FastAPI RequestValidationError    -> { detail: [{loc, msg}, ...] }
+    //      (a malformed UUID/date in a form field, e.g. week_of or item_id)
+    //   3. This codebase's FamilyAppException handlers (NotFoundException,
+    //      ValidationException/ForbiddenException, etc. — see
+    //      backend/app/core/exception_handlers.py) -> { error, message,
+    //      status_code } — there is NO "detail" key at all. This is exactly
+    //      the shape `undo-approval`'s bonus/gig refusal and `restore`'s
+    //      not-found/wrong-family refusal come back as, so without this
+    //      fallback those refusals rendered as "unknown error".
+    // The same shape (`{ error, message }`) is also what the /api/admin/*
+    // proxy itself returns on a 502 when the backend is unreachable, so this
+    // fallback doubles as "backend down" surfacing for every action too.
+    // `normalizeErrorDetail` (frontend/src/lib/errors.ts) already handles
+    // shapes 1 and 2; only the top-level `message` fallback for shape 3 is
+    // added here.
+    function errorMessageFrom(body: any): string {
+        return (
+            normalizeErrorDetail(body?.detail) ??
+            (typeof body?.message === "string" ? body.message : null) ??
+            "unknown error"
+        );
+    }
+
+    async function submitAction(
+        url: string,
+        payload: Record<string, unknown>,
+        confirmMsg: string | undefined,
+        control: HTMLButtonElement | null,
+    ) {
+        if (confirmMsg && !window.confirm(confirmMsg)) return;
+        const reason = window.prompt("Reason for this action (recorded in the audit log):");
+        if (!reason || reason.trim().length < 3) return;
+
+        const original = control?.textContent ?? "";
+        if (control) {
+            control.disabled = true;
+            control.textContent = "Working…";
+        }
+        try {
+            const res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ...payload, reason: reason.trim() }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                window.alert(`Failed (${res.status}): ${errorMessageFrom(body)}`);
+                return;
+            }
+            if (body.warning) window.alert(body.warning);
+            window.location.reload();
+        } catch (e) {
+            window.alert(`Request failed: ${e}`);
+        } finally {
+            if (control) {
+                control.disabled = false;
+                control.textContent = original;
+            }
+        }
+    }
+
+    // Simple one-shot buttons carry their whole payload in data-payload.
+    document
+        .querySelectorAll<HTMLButtonElement>("button[data-action]")
+        .forEach((btn) => {
+            btn.addEventListener("click", () =>
+                submitAction(
+                    btn.dataset.action!,
+                    JSON.parse(btn.dataset.payload || "{}"),
+                    btn.dataset.confirm,
+                    btn,
+                ),
+            );
+        });
+
+    // Forms build their payload from their own fields. A field marked
+    // data-path-param is substituted into data-template instead of being sent
+    // in the body — that is how the assignment id reaches its path segment.
+    // The undo-approval form has no data-action at all (its URL only exists
+    // once the assignment id is substituted into data-template), so both
+    // attributes are matched here rather than just data-action.
+    document
+        .querySelectorAll<HTMLFormElement>("form[data-action], form[data-template]")
+        .forEach((form) => {
+            form.addEventListener("submit", (ev) => {
+                ev.preventDefault();
+                const fd = new FormData(form);
+                const payload: Record<string, unknown> = {};
+
+                // Checkbox groups collapse to arrays; everything else is scalar.
+                for (const key of new Set(fd.keys())) {
+                    if (key.startsWith("__")) continue;
+                    const values = fd.getAll(key).map(String);
+                    const isGroup =
+                        form.querySelectorAll(`[name="${key}"]`).length > 1;
+                    payload[key] = isGroup ? values : values[0];
+                }
+
+                // The module form's explicit "restore default" wins: null, not [].
+                if (fd.get("__null_modules") === "true") payload.enabled_modules = null;
+                else if (form.querySelector('[name="enabled_modules"]') && !payload.enabled_modules)
+                    payload.enabled_modules = [];
+
+                // data-action is absent on the undo-approval form (it has no
+                // URL until data-template below is resolved), so this can't
+                // use a non-null assertion the way the button handler does.
+                let url = form.dataset.action ?? "";
+                const template = form.dataset.template;
+                if (template) {
+                    url = template;
+                    form
+                        .querySelectorAll<HTMLInputElement>("[data-path-param]")
+                        .forEach((input) => {
+                            url = url.replace(`{${input.name}}`, encodeURIComponent(input.value));
+                            delete payload[input.name];
+                        });
+                }
+
+                submitAction(
+                    url,
+                    payload,
+                    form.dataset.confirm,
+                    form.querySelector("button"),
+                );
+            });
+        });
+</script>

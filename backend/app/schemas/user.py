@@ -69,6 +69,12 @@ class UserResponse(EntityResponse):
     # Parental-approval state: 'approved' everywhere except join-code
     # self-signups, which start 'pending' until a parent approves.
     approval_status: str = "approved"
+    # Platform-operator flag, denormalized onto every UserResponse so the
+    # frontend middleware can 404 the /admin route group without an extra
+    # fetch. This is a UX guard only — require_superadmin on the backend is
+    # the real boundary, and it also checks the env allowlist, which never
+    # leaves the server.
+    is_superadmin: bool = False
     # Family module registry, denormalized onto /auth/me so every SSR page
     # (middleware caches the payload into Astro.locals.user) can gate nav
     # without an extra fetch. None = all modules on. Only /auth/me populates
@@ -83,6 +89,24 @@ class UserResponse(EntityResponse):
     # and birthdates shouldn't be readable by every family member. The field
     # is write-only for now (collected at signup for future age gating); add
     # it to a parent-only schema if the members page ever needs to show it.
+
+
+def strip_superadmin_flag(resp: UserResponse) -> UserResponse:
+    """Force is_superadmin False on a UserResponse built for anything other
+    than the caller's own GET /api/auth/me.
+
+    Unlike enabled_modules/timezone above (denormalized onto /auth/me only
+    because they are NOT ORM columns — every other UserResponse leaves them
+    at their model default), is_superadmin IS a real column on users
+    (models/user.py). model_validate() therefore picks up the true value
+    automatically on EVERY UserResponse, including ones built for member
+    listing/detail endpoints that are reachable by other family members —
+    down to CHILD/TEEN accounts on some routes. Call this on any
+    UserResponse describing a user other than "myself, via /auth/me" so the
+    flag never leaks sideways to a sibling or co-parent.
+    """
+    resp.is_superadmin = False
+    return resp
 
 
 class UserWithStats(UserResponse):

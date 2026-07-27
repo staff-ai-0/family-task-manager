@@ -280,6 +280,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
         return withSecurityHeaders(await next());
     }
 
+    // Path test for the super-admin surface, computed once and shared by the
+    // zero-token short-circuit below and the token-present guard further down
+    // (after the refresh/missing-token handling) — see both for why this
+    // needs two checks instead of one.
+    const isAdminSurface = path === "/admin" || path.startsWith("/admin/") || path === "/api/admin" || path.startsWith("/api/admin/");
+
     // Check authentication for protected routes
     let accessToken = cookies.get("access_token")?.value;
     const refreshToken = cookies.get("refresh_token")?.value;
@@ -303,6 +309,25 @@ export const onRequest = defineMiddleware(async (context, next) => {
                 maxAge: 3600,
             });
         }
+    }
+
+    // Zero-token requests to the super-admin surface must ALSO 404, not
+    // redirect-to-login or 401 — the generic !accessToken handling right
+    // below would otherwise reveal the surface exists (302 to /login for
+    // pages, 401 JSON for API) to an unauthenticated prober, which is exactly
+    // what the fail-closed rule forbids. This is a distinct, EARLIER check
+    // for the "no token at all" case; it does not replace the real guard
+    // further down (which actually calls /auth/me) — that one still runs for
+    // the token-present case.
+    if (isAdminSurface && !accessToken) {
+        console.log(`Admin surface probed with no access_token: ${path}`);
+        if (path.startsWith("/api/")) {
+            return withSecurityHeaders(new Response(
+                JSON.stringify({ detail: "Not Found" }),
+                { status: 404, headers: { "Content-Type": "application/json" } }
+            ));
+        }
+        return withSecurityHeaders(new Response(null, { status: 404 }));
     }
 
     if (!accessToken) {
@@ -332,6 +357,51 @@ export const onRequest = defineMiddleware(async (context, next) => {
             JSON.stringify({ detail: "Unauthorized" }),
             { status: 401, headers }
         ));
+    }
+
+    // ── Super-admin surface: fail CLOSED ────────────────────────────────
+    // /admin pages and /api/admin proxy calls are 404 for everyone who is
+    // not a platform operator. 404 rather than 403 so the surface is not
+    // discoverable. Resolved with its own /auth/me call (locals.user is not
+    // populated yet at this point) — the cost lands only on admin paths.
+    // Any doubt — fetch failure, missing field — is a 404, never a pass.
+    // (The zero-token case is handled earlier, above the !accessToken block,
+    // so accessToken is guaranteed present here.)
+    if (isAdminSurface) {
+        let isOperator = false;
+        let probedBy = "unknown";
+        try {
+            const apiUrl = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
+            const meRes = await fetch(`${apiUrl}/api/auth/me`, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            if (meRes.ok) {
+                const me: User = await meRes.json();
+                probedBy = me?.email ?? "unknown";
+                isOperator = me?.is_superadmin === true;
+                // Cache the result so the token-verification block just below
+                // (which runs for every /api/* request, including
+                // /api/admin/*) does not repeat this exact /auth/me fetch a
+                // second time for the same request.
+                if (isOperator) {
+                    const cacheKey = AUTH_CACHE_TTL_MS > 0 ? authCacheKey(accessToken) : null;
+                    if (cacheKey) authCacheSet(cacheKey, me, null);
+                }
+            }
+        } catch {
+            isOperator = false;
+        }
+        if (!isOperator) {
+            // A sensitive surface should leave a trace of who probed it.
+            console.log(`Admin surface denied for ${path} (user: ${probedBy})`);
+            if (path.startsWith("/api/")) {
+                return withSecurityHeaders(new Response(
+                    JSON.stringify({ detail: "Not Found" }),
+                    { status: 404, headers: { "Content-Type": "application/json" } }
+                ));
+            }
+            return withSecurityHeaders(new Response(null, { status: 404 }));
+        }
     }
 
     // Verify token is valid by checking with backend for API routes

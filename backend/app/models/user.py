@@ -45,6 +45,14 @@ class User(Base):
     cash_cents = Column(Integer, default=0, nullable=False, server_default="0")
     token_version = Column(Integer, nullable=False, default=0, server_default="0")
     is_active = Column(Boolean, default=True, nullable=False)
+    # Platform-operator flag. NOT a family role — it grants cross-tenant read
+    # and a bounded set of write actions through /api/admin/*. Insufficient on
+    # its own: require_superadmin also demands the email be listed in
+    # settings.SUPERADMIN_EMAILS. There is deliberately no UI to set this;
+    # it is granted by a one-off UPDATE on the production host.
+    is_superadmin = Column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
     preferred_lang = Column(String(5), default="en", nullable=False, server_default="en")
     
     email_verified = Column(Boolean, default=False, nullable=False)
@@ -121,6 +129,12 @@ class User(Base):
     # token_version bump that kills outstanding refresh tokens). Hard-purged with
     # the family after the grace window. Not indexed — always reached by user PK.
     deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Throttled activity stamp, written by get_current_user at most once per
+    # settings.LAST_SEEN_THROTTLE_MINUTES. Best-effort: a failed write never
+    # fails the request. Not indexed — the admin directory reaches it via
+    # family_id, and a per-user index would cost every request a write to it.
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     family = relationship("Family", back_populates="members")

@@ -255,6 +255,12 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
+    # FastAPI defaults openapi_url to "/openapi.json" regardless of docs_url/
+    # redoc_url. In prod (DEBUG=false) that's a public, unauthenticated route
+    # (no global auth middleware) enumerating every /api/admin/* path and
+    # request model — verified nothing in this repo consumes the schema
+    # (frontend API types are hand-written, no codegen step).
+    openapi_url="/openapi.json" if settings.DEBUG else None,
 )
 
 # CORS Middleware - Allow frontend to connect
@@ -360,6 +366,8 @@ app.include_router(
 app.include_router(invitations.router, prefix="/api/invitations", tags=["Invitations"])
 app.include_router(budget_router, prefix="/api/budget", tags=["Budget"])
 app.include_router(gigs_router, prefix="/api/gigs", tags=["Gigs"])
+from app.api.routes.admin import router as admin_router  # noqa: E402
+app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
 app.include_router(oversight.router, prefix="/api/oversight", tags=["Oversight"])
 app.include_router(cash.router, prefix="/api/cash", tags=["Cash"])
 app.include_router(bank.router, prefix="/api/bank", tags=["Family Bank"])

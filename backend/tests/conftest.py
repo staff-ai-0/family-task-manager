@@ -265,6 +265,55 @@ async def auth_headers(client: AsyncClient, test_parent_user) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+@pytest_asyncio.fixture
+def allowlist_superadmin(monkeypatch):
+    """Put superadmin@test.com on the operator allowlist for one test.
+
+    settings is a module-level singleton; monkeypatch restores the original
+    list at teardown so the allowlist never leaks between tests.
+    """
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "SUPERADMIN_EMAILS", ["superadmin@test.com"])
+    return ["superadmin@test.com"]
+
+
+@pytest_asyncio.fixture
+async def test_superadmin_user(db_session: AsyncSession, test_family):
+    """A platform operator. Belongs to test_family, but admin routes must
+    never rely on that — they read other families by explicit family_id."""
+    from app.models.user import User, UserRole
+    from app.core.security import get_password_hash
+
+    user = User(
+        email="superadmin@test.com",
+        password_hash=get_password_hash("password123"),
+        name="Test Superadmin",
+        role=UserRole.PARENT,
+        family_id=test_family.id,
+        email_verified=True,
+        is_superadmin=True,
+        points=0,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def superadmin_headers(
+    client: AsyncClient, test_superadmin_user, allowlist_superadmin
+) -> dict:
+    """Authorization headers for a fully-empowered operator."""
+    response = await client.post(
+        "/api/auth/login",
+        json={"email": "superadmin@test.com", "password": "password123"},
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 @pytest.fixture(autouse=True)
 def _disable_rate_limiter():
     """Disable the global rate limiter by default so its in-memory counters don't

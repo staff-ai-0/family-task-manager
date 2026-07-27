@@ -1,0 +1,36 @@
+"""Cross-tenant operator surface.
+
+Every route here is guarded by require_superadmin. Routes that act on a
+single tenant take family_id as an explicit path parameter; cross-tenant
+aggregate reads (e.g. /overview) do not, since they deliberately span every
+family. Nothing in this package may use verify_family_id or get_family_user
+— both compare against the caller's own family_id and would reject every
+admin request.
+"""
+
+from fastapi import APIRouter, Depends
+
+from app.core.dependencies import require_superadmin
+from app.models.user import User
+
+router = APIRouter()
+
+
+@router.get("/ping")
+async def ping(_operator: User = Depends(require_superadmin)) -> dict:
+    """Liveness probe for the admin surface. Exists so the authorization
+    matrix has a stable, side-effect-free target."""
+    return {"ok": True}
+
+
+from app.api.routes.admin import overview  # noqa: E402
+
+router.include_router(overview.router)
+
+from app.api.routes.admin import families  # noqa: E402
+
+router.include_router(families.router)
+
+from app.api.routes.admin import actions  # noqa: E402
+
+router.include_router(actions.router)
