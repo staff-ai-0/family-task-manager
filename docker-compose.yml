@@ -77,8 +77,8 @@ services:
     # the host .env file. Order of precedence inside the container:
     # explicit `environment:` (below) > `env_file:` > Vault bootstrap >
     # pydantic defaults. So infra config stays compose-owned while
-    # SECRET_KEY, JWT_SECRET_KEY, GOOGLE_CLIENT_*, PAYPAL_*, RESEND_API_KEY,
-    # ANTHROPIC_API_KEY, LITELLM_API_*, BASE_URL, GOOGLE_REDIRECT_URI, etc.
+    # SECRET_KEY (signs the JWTs), GOOGLE_CLIENT_*, PAYPAL_*, RESEND_API_KEY,
+    # LITELLM_API_*, BASE_URL, GOOGLE_REDIRECT_URI, etc.
     # all come from .env. Vault is still consulted for keys NOT in either.
     env_file:
       # required: false lets the stack come up on a fresh clone with no

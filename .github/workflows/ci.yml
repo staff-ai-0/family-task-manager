@@ -160,3 +160,43 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # Nothing was watching the dependency pins or scanning for committed secrets.
+  # This repo handles PayPal, LiteLLM, SMTP and OAuth credentials, and shipped
+  # authlib 1.3.0 (CVE-2024-37568, imported nowhere) for months unnoticed.
+  #
+  # Non-blocking on purpose for now: the pins are known-stale (fastapi, redis,
+  # alembic and the mcp->starlette chain), so making this required today would
+  # wedge every PR behind an upgrade project. It reports, and the report is the
+  # input to that project. Flip to blocking once the backlog is cleared.
+  supply-chain:
+    name: Supply chain (audit + secrets)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks needs history to scan commits, not just the tip tree.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: pip-audit (backend)
+        run: |
+          pip install pip-audit
+          pip-audit --requirement backend/requirements.txt --desc
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: npm audit (frontend, prod deps)
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,31 @@
+# Nothing was watching the pins. authlib sat in the production image for months
+# at 1.3.0 — imported nowhere, and predating the CVE-2024-37568 fix — because no
+# automation ever flagged it. Weekly so the noise stays reviewable.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # The web stack moves together: mcp pins sse-starlette, which caps
+      # starlette, which caps fastapi. Separate PRs for those would each fail.
+      web-stack:
+        patterns:
+          - fastapi
+          - starlette
+          - sse-starlette
+          - mcp
+          - uvicorn
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
