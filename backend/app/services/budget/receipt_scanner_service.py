@@ -691,14 +691,17 @@ async def scan_and_create_transaction(
             if not dup.existing_has_image:
                 existing = dup.existing_transaction
                 try:
-                    from app.services.storage.gcs_receipt_service import GCSReceiptStorage
-                    gcs_path = GCSReceiptStorage.upload(
-                        family_id=family_id,
-                        transaction_id=existing.id,
-                        image_bytes=image_bytes,
-                        content_type=media_type,
+                    from app.services.storage.receipt_storage import ReceiptStorage
+                    stored_path = await run_in_threadpool(
+                        partial(
+                            ReceiptStorage.upload,
+                            family_id=family_id,
+                            transaction_id=existing.id,
+                            image_bytes=image_bytes,
+                            content_type=media_type,
+                        )
                     )
-                    existing.receipt_image_path = gcs_path
+                    existing.receipt_image_path = stored_path
                     # Enrich notes with scanned items if existing notes are sparse.
                     richer_notes = _build_notes(receipt.payee_name, receipt.items, receipt.currency)
                     if richer_notes and len(richer_notes) > len(existing.notes or ""):
@@ -706,8 +709,14 @@ async def scan_and_create_transaction(
                     await db.commit()
                     await db.refresh(existing)
                 except Exception:
-                    logger.exception("GCS upgrade failed for txn %s", existing.id)
-                    await db.rollback()
+                    # No rollback here: it would expire the ORM objects and the
+                    # `existing.id` read below would then hit MissingGreenlet.
+                    # Same rationale as the main persistence path.
+                    logger.exception(
+                        "receipt image upgrade failed for txn %s (backend=%s)",
+                        existing.id,
+                        settings.RECEIPT_STORAGE_BACKEND,
+                    )
                 return {
                     "success": True,
                     "transaction_id": str(existing.id),

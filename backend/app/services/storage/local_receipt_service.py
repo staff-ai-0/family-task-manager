@@ -6,8 +6,10 @@ the same volume as gig proofs and receipt drafts, which `scripts/backup-db.sh`
 already archives.
 """
 
+import glob
 import logging
 import os
+import tempfile
 from typing import Optional
 from uuid import UUID
 
@@ -65,11 +67,21 @@ class LocalReceiptStorage:
         dest = cls._resolve(key)
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         # Write-then-rename so a crash mid-write cannot leave a truncated image
-        # that later reads would serve as a valid (but corrupt) receipt.
-        tmp = f"{dest}.tmp"
-        with open(tmp, "wb") as fh:
-            fh.write(image_bytes)
-        os.replace(tmp, dest)
+        # that later reads would serve as a valid (but corrupt) receipt. The
+        # temp name is unique (two scans can target the same transaction id via
+        # the dedup upgrade path) and is unlinked on failure, so a failed write
+        # cannot strand receipt bytes that would then survive a family purge.
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(dest), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(image_bytes)
+            os.replace(tmp, dest)
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
         return f"{LOCAL_PREFIX}{key}"
 
     @classmethod
@@ -94,12 +106,20 @@ class LocalReceiptStorage:
             os.remove(target)
         except FileNotFoundError:
             pass
-        except OSError:
-            logger.warning("local receipt delete failed for %s", path)
-            return
-        # Drop the family directory once its last receipt is gone.
+        # Any other OSError propagates: the purge caller counts only what it
+        # could actually delete, and a receipt it failed to remove must not be
+        # reported as gone.
+
+        # Drop the family directory once its last receipt is gone. Reap stray
+        # .tmp files first — an interrupted write could otherwise keep the
+        # directory (and real receipt bytes) alive past a family purge.
         parent: Optional[str] = os.path.dirname(target)
         if parent and os.path.realpath(parent) != os.path.realpath(RECEIPTS_DIR):
+            for stray in glob.glob(os.path.join(parent, "*.tmp")):
+                try:
+                    os.unlink(stray)
+                except OSError:
+                    pass
             try:
                 os.rmdir(parent)
             except OSError:

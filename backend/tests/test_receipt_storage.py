@@ -199,3 +199,65 @@ def test_family_deletion_reports_unreachable_legacy_gcs_keys(monkeypatch, caplog
 
     assert removed == 0
     assert "NOT deleted" in caplog.text
+
+
+def test_failed_write_leaves_no_orphan_temp_file(receipts_root, monkeypatch):
+    """An interrupted write must not strand receipt bytes on the volume.
+
+    An orphan .tmp also blocks the directory prune on delete, so a purged
+    family's real receipt bytes would survive the purge and every backup taken
+    afterwards.
+    """
+    family_id = uuid4()
+    real_replace = os.replace
+
+    def _boom(src, dst):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(os, "replace", _boom)
+
+    with pytest.raises(OSError):
+        LocalReceiptStorage.upload(
+            family_id=family_id,
+            transaction_id=uuid4(),
+            image_bytes=JPEG,
+            content_type="image/jpeg",
+        )
+
+    monkeypatch.setattr(os, "replace", real_replace)
+    leftovers = list((receipts_root / str(family_id)).glob("*.tmp"))
+    assert leftovers == [], f"orphaned temp files: {leftovers}"
+
+
+def test_concurrent_writes_to_same_transaction_do_not_collide(receipts_root):
+    """The dedup upgrade path can write under an existing transaction id."""
+    family_id, txn_id = uuid4(), uuid4()
+
+    first = LocalReceiptStorage.upload(
+        family_id=family_id, transaction_id=txn_id,
+        image_bytes=b"first", content_type="image/jpeg",
+    )
+    second = LocalReceiptStorage.upload(
+        family_id=family_id, transaction_id=txn_id,
+        image_bytes=b"second", content_type="image/jpeg",
+    )
+
+    assert first == second
+    assert LocalReceiptStorage.download_bytes(second)[0] == b"second"
+    assert list((receipts_root / str(family_id)).glob("*.tmp")) == []
+
+
+def test_undeletable_receipt_is_not_reported_as_removed(receipts_root, monkeypatch):
+    """The purge audit line must not claim a receipt it could not delete."""
+    path = LocalReceiptStorage.upload(
+        family_id=uuid4(), transaction_id=uuid4(),
+        image_bytes=JPEG, content_type="image/jpeg",
+    )
+
+    def _boom(_p):
+        raise PermissionError("read-only volume")
+
+    monkeypatch.setattr(os, "remove", _boom)
+
+    with pytest.raises(OSError):
+        LocalReceiptStorage.delete(path)

@@ -192,6 +192,80 @@ async def test_pipeline_returns_dup_warning_without_committing(
 
 
 @pytest.mark.asyncio
+async def test_dup_upgrade_path_persists_through_receipt_storage(
+    db, family, user, account_factory, payee,
+    transaction_factory_with_payee, monkeypatch, tmp_path,
+):
+    """The dedup "attach image to the existing row" branch must use the
+    configured storage backend, not hardcoded GCS.
+
+    This branch is reached whenever a scan matches an existing transaction that
+    has no image — which on a deployment that never managed to store one is
+    every transaction. It kept calling GCSReceiptStorage directly after the main
+    scan path had been migrated, so on a credential-less host it went on
+    discarding exactly the images the migration was meant to save.
+    """
+    monkeypatch.setattr(
+        "app.services.storage.local_receipt_service.RECEIPTS_DIR", str(tmp_path)
+    )
+    monkeypatch.setattr(
+        "app.services.storage.receipt_storage.settings.RECEIPT_STORAGE_BACKEND",
+        "local",
+    )
+
+    def _no_gcs(*_a, **_kw):
+        raise AssertionError(
+            "dedup upgrade path reached GCS despite RECEIPT_STORAGE_BACKEND=local"
+        )
+
+    monkeypatch.setattr("app.services.storage.receipt_storage._gcs", _no_gcs)
+
+    await account_factory(
+        family.id, name="MC MXN", card_last4="9222", currency="MXN",
+    )
+    # No receipt_image_path → the guard takes the upgrade branch.
+    existing = await transaction_factory_with_payee(
+        family.id, payee.id, amount=-72040, date=date(2026, 5, 28),
+    )
+
+    fake_receipt = _fake_receipt(card_last4="9222", payee_name=payee.name)
+
+    async def fake_scan(_b, _t, model=None, category_hints=None):
+        return fake_receipt
+
+    monkeypatch.setattr(
+        "app.services.budget.receipt_scanner_service.scan_receipt", fake_scan,
+    )
+
+    result = await scan_and_create_transaction(
+        db=db,
+        family_id=family.id,
+        user_id=user.id,
+        account_id=None,
+        image_bytes=b"receipt-bytes",
+        media_type="image/jpeg",
+        force=False,
+    )
+
+    # Reading transaction_id is itself part of the contract: a rollback in the
+    # failure branch would expire the ORM objects and blow up right here.
+    assert result["success"] is True
+    assert result["transaction_id"] == str(existing.id)
+
+    await db.refresh(existing)
+    assert existing.receipt_image_path is not None
+    assert existing.receipt_image_path.startswith("local:")
+
+    from app.services.storage.local_receipt_service import LocalReceiptStorage
+
+    data, content_type = LocalReceiptStorage.download_bytes(
+        existing.receipt_image_path
+    )
+    assert data == b"receipt-bytes"
+    assert content_type == "image/jpeg"
+
+
+@pytest.mark.asyncio
 async def test_force_true_bypasses_duplicate_guard(
     db, family, user, account_factory, payee,
     transaction_factory_with_payee, monkeypatch,
