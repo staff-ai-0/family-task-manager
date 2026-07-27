@@ -176,7 +176,21 @@ class AdminActionService:
         Deliberately NOT implemented via the soft-delete tombstone: that would
         conflate abuse suspension with account closure and arm the 30-day
         purge sweep against a family the operator may want to reinstate.
+
+        Refuses to suspend the OPERATOR's OWN family: per CLAUDE.md the sole
+        superadmin is a PARENT in the real production family, and the
+        families list puts his own family in the same table as everyone
+        else's, one click from Suspend. There is no in-app recovery from
+        that — the frontend guard 404s /admin and password login refuses —
+        recovery would need psql on the prod host. Reinstating (suspended=
+        False) is always allowed; it's the recovery direction.
         """
+        if suspended and family_id == operator.family_id:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "cannot suspend your own family — this would lock you out "
+                "with no in-app recovery",
+            )
         operator_id, operator_email = operator.id, operator.email
         family = await _load_family(db, family_id)
         family.is_active = not suspended
@@ -276,7 +290,18 @@ class AdminActionService:
         local variables up front, before any rollback can happen — see
         ``_record_failure`` for why the failure path must not re-read
         attributes off `user` or `operator` themselves.
+
+        Refuses to deactivate the OPERATOR's OWN account, for the same
+        no-in-app-recovery reason as ``set_family_active`` refusing to
+        suspend the operator's own family. Reactivating (active=True) is
+        always allowed; it's the recovery direction.
         """
+        if not active and user_id == operator.id:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "cannot deactivate your own account — this would lock you "
+                "out with no in-app recovery",
+            )
         from app.services.auth_service import AuthService
 
         user = await _load_user(db, user_id)
@@ -322,32 +347,42 @@ class AdminActionService:
     ) -> dict:
         """Send a fresh email-verification link.
 
-        NOTE on the missing rollback here: EmailService.create_verification_
-        token commits internally (for every caller, not just this one) before
-        the network send is even attempted, so by the time send_verification_
-        email can raise, that token row is already durably committed on its
-        own — a deliberate, pre-existing split outside this task's scope, not
-        an oversight. There is nothing uncommitted on this session left to
-        roll back at the point of failure, so staging the error audit row and
-        committing it directly (no rollback first) is correct here.
+        Routed through ``_record_failure`` on error, same as every other
+        action, so the recovery (stage error row + commit) is guarded rather
+        than a bare, unguarded ``db.commit()``: if the exception that landed
+        us here WAS itself a DBAPI error (e.g. the internal commit inside
+        EmailService.create_verification_token failed), the session is
+        already in a failed transaction state and a second bare commit
+        raises PendingRollbackError — turning the intended 502 into an
+        unrelated 500 and losing the audit row with it.
+
+        ``_record_failure`` opens with ``await db.rollback()`` before
+        staging the error row. That is safe here even though the
+        verification token is committed in ITS OWN, separate transaction
+        (see create_verification_token): if the token's commit is what
+        failed, the rollback is exactly the cleanup needed before the
+        session can commit again; if instead the token committed fine and
+        only the later network send raised, the rollback has nothing
+        pending to discard and the already-durable token row is untouched.
         """
         user = await _load_user(db, user_id)
+        user_family_id = user.family_id
+        operator_id, operator_email = operator.id, operator.email
         try:
             sent = await EmailService.send_verification_email(
                 db, user, base_url=settings.email_link_base
             )
         except Exception as exc:
-            OperatorAuditService.record(
+            await _record_failure(
                 db,
-                actor=operator,
+                operator_id=operator_id,
+                operator_email=operator_email,
                 action="user.resend_verification",
-                target_family_id=user.family_id,
-                target_user_id=user.id,
+                target_family_id=user_family_id,
+                target_user_id=user_id,
                 params={"reason": reason},
-                result="error",
-                error=str(exc),
+                exc=exc,
             )
-            await db.commit()
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY, f"email send failed: {exc}"
             ) from exc
@@ -376,31 +411,39 @@ class AdminActionService:
         leave a compromised session alive, which is usually the whole reason
         support is resetting the password.
 
-        NOTE on the missing rollback here: same as resend_verification —
-        EmailService.create_password_reset_token commits internally, for
-        every caller, before the network send is attempted. That is a
-        pre-existing, out-of-scope split, not an oversight: nothing is left
-        uncommitted on this session at the point send_password_reset_email
-        can raise, so there is nothing to roll back before staging the error
-        audit row.
+        Routed through ``_record_failure`` on error, same as resend_
+        verification and every other action — see its docstring for why a
+        bare, unguarded ``db.commit()`` here is unsafe (a DBAPI error from
+        the internal commit inside EmailService.create_password_reset_token
+        would leave the session in a failed transaction state) and why
+        ``_record_failure``'s leading ``await db.rollback()`` is still
+        correct even though the reset token itself commits in ITS OWN,
+        separate transaction. The second-order consequence of the bug this
+        fixes: without a guarded recovery, a failure here could leave a live
+        reset link (its token already committed and mailed) with
+        token_version un-bumped and no audit trail — the token_version bump
+        below only ever runs on the success path, so that gap is closed by
+        making sure the FAILURE path is always durably recorded, not by
+        moving the bump.
         """
         user = await _load_user(db, user_id)
+        user_family_id = user.family_id
+        operator_id, operator_email = operator.id, operator.email
         try:
             sent = await EmailService.send_password_reset_email(
                 db, user, base_url=settings.email_link_base
             )
         except Exception as exc:
-            OperatorAuditService.record(
+            await _record_failure(
                 db,
-                actor=operator,
+                operator_id=operator_id,
+                operator_email=operator_email,
                 action="user.password_reset",
-                target_family_id=user.family_id,
-                target_user_id=user.id,
+                target_family_id=user_family_id,
+                target_user_id=user_id,
                 params={"reason": reason},
-                result="error",
-                error=str(exc),
+                exc=exc,
             )
-            await db.commit()
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY, f"email send failed: {exc}"
             ) from exc

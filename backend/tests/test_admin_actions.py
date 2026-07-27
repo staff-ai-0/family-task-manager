@@ -65,6 +65,31 @@ async def test_audit_record_redacts_secret_params(
 
 
 @pytest.mark.asyncio
+async def test_audit_record_truncates_long_error_strings(
+    db_session, test_superadmin_user
+):
+    """A DBAPIError's str() can embed the SQL statement AND its bound
+    parameters — for create_verification_token / create_password_reset_
+    token that means a freshly-minted token. The audit log is append-only
+    and rendered verbatim on /admin/audit, so `error` is capped, same as
+    `params` is redacted, rather than persisted unbounded."""
+    from app.services.admin.operator_audit_service import _ERROR_MAX_LEN
+
+    long_error = "x" * (_ERROR_MAX_LEN + 200)
+    OperatorAuditService.record(
+        db_session,
+        actor=test_superadmin_user,
+        action="user.password_reset",
+        result="error",
+        error=long_error,
+    )
+    await db_session.commit()
+    row = (await db_session.execute(select(OperatorAuditLog))).scalar_one()
+    assert len(row.error) == _ERROR_MAX_LEN
+    assert row.error == long_error[:_ERROR_MAX_LEN]
+
+
+@pytest.mark.asyncio
 async def test_comp_plus_month_extends_referral_bonus_and_audits(
     client, db_session, superadmin_headers, test_family
 ):
@@ -118,16 +143,19 @@ async def test_comp_plus_month_sets_absolute_expiry_not_stacked(
 
 @pytest.mark.asyncio
 async def test_suspend_family_sets_is_active_false_and_audits(
-    client, db_session, superadmin_headers, test_family
+    client, db_session, superadmin_headers, other_family
 ):
+    """Targets other_family, NOT test_family: test_superadmin_user belongs
+    to test_family, and suspending the operator's own family is refused
+    (see test_cannot_suspend_own_family_or_deactivate_own_account below)."""
     resp = await client.post(
-        f"/api/admin/families/{test_family.id}/suspend",
+        f"/api/admin/families/{other_family.id}/suspend",
         json={"suspended": True, "reason": "abuse report"},
         headers=superadmin_headers,
     )
     assert resp.status_code == 200
-    await db_session.refresh(test_family)
-    assert test_family.is_active is False
+    await db_session.refresh(other_family)
+    assert other_family.is_active is False
 
     row = (
         await db_session.execute(
@@ -137,6 +165,120 @@ async def test_suspend_family_sets_is_active_false_and_audits(
         )
     ).scalar_one()
     assert row.params["reason"] == "abuse report"
+
+
+@pytest.mark.asyncio
+async def test_cannot_suspend_own_family(
+    client, db_session, superadmin_headers, test_family, test_superadmin_user
+):
+    """test_superadmin_user belongs to test_family. Suspending it would lock
+    the operator out with no in-app recovery — the frontend guard 404s
+    /admin and password login refuses; recovery would need psql on the prod
+    host. Must refuse with 422, not silently no-op or 500."""
+    resp = await client.post(
+        f"/api/admin/families/{test_family.id}/suspend",
+        json={"suspended": True, "reason": "oops, wrong row"},
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 422
+    await db_session.refresh(test_family)
+    assert test_family.is_active is True
+
+    rows = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "family.suspend"
+            )
+        )
+    ).scalars().all()
+    assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_can_still_reinstate_own_family(
+    db_session, test_family, test_superadmin_user
+):
+    """The refusal only blocks the SUSPEND direction — reinstating (which
+    can only ever help, never lock anyone out) must still work.
+
+    Exercised at the SERVICE layer, not through the HTTP client: suspending
+    test_family also suspends test_superadmin_user's own session (family.
+    is_active gates every request in get_current_user), so a client.post
+    with that operator's own token would 401 "Family suspended" before ever
+    reaching the route — an artifact of self-locking the test's own actor,
+    not of the guard being tested here.
+    """
+    from app.services.admin.admin_action_service import AdminActionService
+
+    test_family.is_active = False
+    await db_session.commit()
+
+    result = await AdminActionService.set_family_active(
+        db_session,
+        operator=test_superadmin_user,
+        family_id=test_family.id,
+        suspended=False,
+        reason="reinstating",
+    )
+    assert result == {"is_active": True}
+    await db_session.refresh(test_family)
+    assert test_family.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_cannot_deactivate_own_account(
+    client, db_session, superadmin_headers, test_superadmin_user
+):
+    """Deactivating the operator's own account would lock them out with no
+    in-app recovery. Must refuse with 422."""
+    resp = await client.post(
+        f"/api/admin/users/{test_superadmin_user.id}/active",
+        json={"active": False, "reason": "oops, wrong row"},
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 422
+    await db_session.refresh(test_superadmin_user)
+    assert test_superadmin_user.is_active is True
+
+    rows = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "user.deactivate"
+            )
+        )
+    ).scalars().all()
+    assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_can_still_reactivate_own_account(
+    db_session, test_superadmin_user
+):
+    """The refusal only blocks the DEACTIVATE direction — reactivating
+    (which can only ever help) must still work.
+
+    Exercised at the SERVICE layer, not through the HTTP client, for the
+    same reason as test_can_still_reinstate_own_family: a deactivated
+    account can't authenticate at all (get_current_user checks is_active on
+    every request), so there is no way to demonstrate this through the
+    operator's own HTTP session — that IS the no-in-app-recovery problem
+    this whole fix exists to prevent one from causing.
+    """
+    from app.services.admin.admin_action_service import AdminActionService
+
+    test_superadmin_user.is_active = False
+    await db_session.commit()
+
+    result = await AdminActionService.set_user_active(
+        db_session,
+        operator=test_superadmin_user,
+        user_id=test_superadmin_user.id,
+        active=True,
+        reason="reactivating",
+    )
+    assert result["is_active"] is True
+    await db_session.refresh(test_superadmin_user)
+    assert test_superadmin_user.is_active is True
 
 
 @pytest.mark.asyncio
@@ -682,6 +824,126 @@ async def test_release_paycheck_through_route_credits_audits_and_is_idempotent(
     assert len(ledger_rows_after) == 1
     await db_session.refresh(test_child_user)
     assert test_child_user.cash_cents == cash_after_first
+
+
+@pytest.mark.asyncio
+async def test_release_paycheck_is_atomic_with_its_audit_row(
+    client, db_session, superadmin_headers, test_family, test_child_user,
+    mandatory_template_factory, monkeypatch,
+):
+    """Fault-injection guard for the "stage-first" mechanism release_paycheck
+    relies on. The audit "ok" row is staged (db.add, no commit) BEFORE
+    calling BankService.release_chore_paycheck; that sub-service is
+    documented to commit EXACTLY ONCE, at the very end, after every one of
+    its mutations, so its single internal commit is what actually persists
+    the staged row and the money mutation together, atomically. Nothing in
+    the type system enforces that "commits exactly once, at the end"
+    contract — this test is the enforcement.
+
+    Forces PointTransaction.create_parent_adjustment — called from inside
+    release_chore_paycheck's points_rate branch, AFTER CashService.
+    credit_split_rows has already staged its ledger row on the session but
+    BEFORE the function's one legitimate `await db.commit()` — to raise.
+    Under the current, correct implementation nothing has been committed at
+    that point, so rolling back must erase both the staged "ok" audit row
+    and the partial CashTransaction row together with it (same rule as
+    test_deactivate_user_is_atomic_with_its_audit_row above, applied to the
+    money action). The explicit db_session.rollback() below reproduces what
+    the real get_db dependency does on any uncaught exception in
+    production — the test client's override_get_db (conftest.py) yields
+    db_session directly and skips that cleanup, so without it this same,
+    still-open session would show its own uncommitted, pending writes as if
+    they had survived, which would prove nothing.
+
+    Verified this actually discriminates (not just passes vacuously):
+    temporarily inserted `await db.commit()` in
+    backend/app/services/bank_service.py's release_chore_paycheck right
+    after the `CashService.credit_split_rows(...)` call (before the
+    points-conversion block) — an early commit that would durably persist
+    the staged "ok" row and the partial ledger row before this test's
+    injected failure even fires. With that break in place this test's
+    `assert ok_rows == []` failed (a real "ok" row was found). Reverted
+    before committing.
+    """
+    from app.models.cash_transaction import CashTransaction, CashTransactionType
+    from app.models.operator_audit import OperatorAuditLog
+    from app.models.point_transaction import PointTransaction
+    from app.models.task_assignment import AssignmentStatus, TaskAssignment
+    from app.services.bank_service import BankService
+
+    family_id = test_family.id
+    kid_id = test_child_user.id
+    today = date.today()
+    week_monday = today - timedelta(days=today.weekday())
+
+    # points_rate mode is the only allowance mode whose release path writes
+    # a SECOND mutation (the points-conversion PointTransaction) after the
+    # cash ledger row and before the final commit — exactly the window this
+    # test needs to inject a fault into.
+    acct = await BankService.ensure_account(db_session, test_child_user)
+    acct.allowance_mode = "points_rate"
+    acct.allowance_cents = 0
+    test_child_user.points = 50
+    await db_session.commit()
+
+    template = await mandatory_template_factory(family=test_family, points=30)
+    assignment = TaskAssignment(
+        template_id=template.id,
+        family_id=family_id,
+        assigned_to=kid_id,
+        status=AssignmentStatus.COMPLETED,
+        assigned_date=today,
+        week_of=week_monday,
+    )
+    db_session.add(assignment)
+    await db_session.commit()
+
+    def _boom(cls, **kwargs):
+        raise RuntimeError("simulated failure between partial mutation and final commit")
+
+    monkeypatch.setattr(PointTransaction, "create_parent_adjustment", classmethod(_boom))
+
+    # release_paycheck's except clause only catches HTTPException (the
+    # domain-validation failures release_chore_paycheck raises BEFORE any
+    # mutation) — a plain RuntimeError injected mid-mutation is NOT caught
+    # there, so it is never routed through _record_failure either. It
+    # propagates all the way out; the default `client` fixture's transport
+    # re-raises app exceptions rather than turning them into a response
+    # (see no_raise_client in test_request_id_catchall.py for the opposite
+    # choice), so it surfaces here instead of on a status code.
+    with pytest.raises(RuntimeError, match="simulated failure"):
+        await client.post(
+            f"/api/admin/families/{family_id}/release-paycheck",
+            json={
+                "kid_id": str(kid_id),
+                "week_of": week_monday.isoformat(),
+                "reason": "fault-injection: atomicity check",
+            },
+            headers=superadmin_headers,
+        )
+
+    await db_session.rollback()
+
+    ok_rows = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "bank.release_paycheck",
+                OperatorAuditLog.result == "ok",
+            )
+        )
+    ).scalars().all()
+    assert ok_rows == []
+
+    ledger_rows = (
+        await db_session.execute(
+            select(CashTransaction).where(
+                CashTransaction.user_id == kid_id,
+                CashTransaction.type == CashTransactionType.ALLOWANCE,
+                CashTransaction.week_of == week_monday,
+            )
+        )
+    ).scalars().all()
+    assert ledger_rows == []
 
 
 @pytest.mark.asyncio

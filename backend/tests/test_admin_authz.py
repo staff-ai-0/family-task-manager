@@ -6,11 +6,9 @@ must return 404 (not 403) so the surface is not discoverable.
 """
 
 import pytest
-from fastapi import Depends, FastAPI
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
 from app.core.config import settings
-from app.core.dependencies import require_superadmin
 from app.models.user import User
 
 

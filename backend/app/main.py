@@ -255,6 +255,12 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
+    # FastAPI defaults openapi_url to "/openapi.json" regardless of docs_url/
+    # redoc_url. In prod (DEBUG=false) that's a public, unauthenticated route
+    # (no global auth middleware) enumerating every /api/admin/* path and
+    # request model — verified nothing in this repo consumes the schema
+    # (frontend API types are hand-written, no codegen step).
+    openapi_url="/openapi.json" if settings.DEBUG else None,
 )
 
 # CORS Middleware - Allow frontend to connect

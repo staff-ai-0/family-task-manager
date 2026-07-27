@@ -116,15 +116,29 @@ async def refresh_tokens(
     payload = decode_token(token, expected_type="refresh")
     user_id = payload.get("sub")
     ver = payload.get("ver")
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    # Joined to the family's is_active flag in the same round trip, same
+    # pattern as AuthService.authenticate_user.
+    result = await db.execute(
+        select(User, Family.is_active)
+        .join(Family, Family.id == User.family_id)
+        .where(User.id == user_id)
+    )
+    row = result.one_or_none()
+    user, family_active = row if row is not None else (None, None)
     # A soft-deleted (closed) account must not mint fresh tokens. The soft-delete
     # bumps token_version so `ver != user.token_version` already trips here; the
     # explicit deleted_at check is belt-and-suspenders.
+    #
+    # Operator suspension: without this, a suspended family's member keeps
+    # minting fresh (if useless — get_current_user rejects them) access
+    # tokens forever, because the frontend's transparent-refresh middleware
+    # keeps succeeding here and the user never gets bounced to /login where
+    # they'd see the suspension message.
     if (
         user is None
         or ver != user.token_version
         or user.deleted_at is not None
+        or family_active is False
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

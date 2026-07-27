@@ -13,6 +13,19 @@ _SECRET_KEYS = frozenset(
     {"password", "new_password", "token", "secret", "access_token", "refresh_token"}
 )
 
+# Every `error=` value is truncated to this many characters before it is
+# persisted. `error` is normally `str(exc)` from a bare `except Exception`
+# (see AdminActionService._record_failure) — for a DBAPIError raised inside
+# EmailService.create_verification_token / create_password_reset_token,
+# that string includes the SQL statement AND its bound parameters, i.e. the
+# freshly-minted verification/reset token, which would otherwise live
+# forever in an append-only, human-readable audit log. A hard length cap is
+# a blunt instrument (it does not guarantee the token never falls inside
+# the kept prefix), but it bounds the blast radius without needing this
+# service to understand every exception type's string shape, and it caps
+# what gets rendered verbatim on /admin/audit either way.
+_ERROR_MAX_LEN = 500
+
 
 def _redact(params: dict[str, Any]) -> dict[str, Any]:
     """Replace secret-looking values with a fixed marker.
@@ -26,7 +39,14 @@ def _redact(params: dict[str, Any]) -> dict[str, Any]:
 
 
 class OperatorAuditService:
-    """Writes the append-only operator trail."""
+    """Writes the append-only operator trail.
+
+    ``error`` is truncated (not just ``params``) — see ``_ERROR_MAX_LEN``.
+    The truncation happens HERE, once, rather than at each call site: call
+    sites pass whatever `str(exc)` gives them, and every one of them is
+    covered automatically, including future ones that forget this rule
+    exists.
+    """
 
     @staticmethod
     def record(
@@ -55,7 +75,7 @@ class OperatorAuditService:
             target_user_id=target_user_id,
             params=_redact(params or {}),
             result=result,
-            error=error,
+            error=error[:_ERROR_MAX_LEN] if error else error,
         )
         db.add(row)
         return row

@@ -284,7 +284,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // zero-token short-circuit below and the token-present guard further down
     // (after the refresh/missing-token handling) — see both for why this
     // needs two checks instead of one.
-    const isAdminSurface = path === "/admin" || path.startsWith("/admin/") || path.startsWith("/api/admin/");
+    const isAdminSurface = path === "/admin" || path.startsWith("/admin/") || path === "/api/admin" || path.startsWith("/api/admin/");
 
     // Check authentication for protected routes
     let accessToken = cookies.get("access_token")?.value;

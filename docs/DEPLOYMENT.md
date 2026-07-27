@@ -95,8 +95,23 @@ can't even tell the surface exists.
    receives a session cookie and can never authenticate. Don't "simplify"
    this into a subdomain later.
 
-Revoking access means pulling grant 1 *or* grant 2 — either alone is
-sufficient to lock the operator out, since `require_superadmin` needs both.
+   This Access policy is a **page-level** gate only: it fronts the `/admin*`
+   HTML pages, not the API. Every XHR those pages make goes to
+   `api-family.agent-ia.mx/api/admin/...` — a different hostname, outside
+   the `/admin*` path pattern, and not covered by this policy at all. That
+   is not a hole: `frontend/src/middleware.ts` blocks unauthenticated/non-
+   operator requests to both `/admin*` and `/api/admin*` before they reach
+   the backend, and the backend's own `require_superadmin` dependency
+   (checked independently, per request) is what actually authorizes every
+   `/api/admin/*` call. Cloudflare Access is an extra, coarse, network-edge
+   layer in front of the pages — not the mechanism protecting the API.
+
+Revoking access means pulling grant 1, grant 2, *or* the Cloudflare Access
+policy — any one alone is sufficient to lock the operator out of the parts
+it covers: pulling grant 1 or grant 2 blocks `require_superadmin` entirely
+(both the pages and every `/api/admin/*` call, since the backend check does
+not depend on Access), while pulling the Access policy only blocks loading
+the `/admin*` pages themselves — see the page-level-gate note above.
 Every action taken through the console is recorded in `operator_audit_log`
 (`backend/app/models/operator_audit.py`), which carries no foreign keys and
 therefore survives the purge of any family it describes.

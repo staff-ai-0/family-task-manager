@@ -6,6 +6,10 @@ lookup and registration), so a "suspended" family kept using the entire app.
 
 import pytest
 
+from app.core.exceptions import UnauthorizedException
+from app.core.security import create_refresh_token
+from app.services.google_oauth_service import GoogleOAuthService
+
 
 @pytest.mark.asyncio
 async def test_suspended_family_cannot_log_in(
@@ -97,3 +101,54 @@ async def test_unsuspending_restores_access(
     test_family.is_active = True
     await db_session.commit()
     assert (await client.get("/api/auth/me", headers=auth_headers)).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_suspended_family_cannot_google_sign_in(
+    db_session, test_family, test_parent_user
+):
+    """Google sign-in is the login door most users actually use. A member of
+    a suspended family must be rejected here too, not just at password login
+    and get_current_user — otherwise they'd complete OAuth, get valid
+    cookies, and land on a dashboard where every call 401s.
+    """
+    test_family.is_active = False
+    await db_session.commit()
+
+    google_user_info = {
+        "google_id": "google-suspended-test-id",
+        "email": test_parent_user.email,
+        "email_verified": True,
+        "name": test_parent_user.name,
+    }
+
+    with pytest.raises(UnauthorizedException) as exc_info:
+        await GoogleOAuthService.authenticate_or_create_user(
+            db_session, google_user_info
+        )
+    # Same exact message as the password-login and get_current_user paths so
+    # the frontend can key on one string.
+    assert str(exc_info.value) == "Family suspended"
+
+
+@pytest.mark.asyncio
+async def test_suspended_family_cannot_refresh_tokens(
+    client, db_session, test_family, test_parent_user
+):
+    """A suspended family's member must not be able to keep minting fresh
+    (if useless) access tokens via /api/auth/refresh — otherwise the
+    frontend's transparent-refresh middleware keeps succeeding and the user
+    never gets bounced to /login where they'd see the suspension message.
+    """
+    refresh = create_refresh_token(
+        str(test_parent_user.id), version=test_parent_user.token_version
+    )
+
+    test_family.is_active = False
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/auth/refresh",
+        headers={"Authorization": f"Bearer {refresh}"},
+    )
+    assert resp.status_code == 401, resp.text
