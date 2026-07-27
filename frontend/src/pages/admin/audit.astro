@@ -1,0 +1,73 @@
+---
+import AdminShell from "@components/ui/AdminShell.astro";
+import { apiFetch } from "../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const action = Astro.url.searchParams.get("action") ?? "";
+const offset = Number(Astro.url.searchParams.get("offset") ?? "0") || 0;
+const LIMIT = 100;
+
+const params = new URLSearchParams({ limit: String(LIMIT), offset: String(offset) });
+if (action) params.set("action", action);
+
+const { data } = await apiFetch<any>(`/api/admin/audit?${params}`, { token });
+const result = data ?? { total: 0, items: [] };
+---
+
+<AdminShell title="Audit log" active="audit">
+    <form method="get" class="mb-4 flex items-center gap-3">
+        <input
+            type="text"
+            name="action"
+            value={action}
+            placeholder="filter by action, e.g. family.suspend"
+            class="w-80 rounded border border-slate-300 px-3 py-2 text-sm"
+        />
+        <button class="rounded bg-slate-900 px-3 py-2 text-sm text-white">Filter</button>
+        <span class="num text-sm text-slate-500">{result.total} entries</span>
+    </form>
+
+    <div class="overflow-x-auto">
+        <table class="w-full min-w-[1000px] border-collapse text-sm">
+            <thead>
+                <tr class="border-b border-slate-200 text-left text-slate-500">
+                    <th class="py-2">When</th>
+                    <th class="py-2">Operator</th>
+                    <th class="py-2">Action</th>
+                    <th class="py-2">Family</th>
+                    <th class="py-2">Result</th>
+                    <th class="py-2">Params</th>
+                </tr>
+            </thead>
+            <tbody>
+                {result.items.map((row: any) => (
+                    <tr class="border-b border-slate-100 align-top">
+                        <td class="num py-2 whitespace-nowrap">
+                            {row.created_at.slice(0, 19).replace("T", " ")}
+                        </td>
+                        <td class="py-2">{row.actor_email}</td>
+                        <td class="py-2 font-medium">{row.action}</td>
+                        <td class="py-2">
+                            {row.target_family_id ? (
+                                <a class="underline" href={`/admin/families/${row.target_family_id}`}>
+                                    {row.target_family_id.slice(0, 8)}
+                                </a>
+                            ) : (
+                                "—"
+                            )}
+                        </td>
+                        <td class={`py-2 ${row.result === "error" ? "text-red-700" : ""}`}>
+                            {row.result}
+                            {row.error && <div class="text-xs text-red-600">{row.error}</div>}
+                        </td>
+                        <td class="py-2 text-xs text-slate-500">
+                            {JSON.stringify(row.params ?? {})}
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+</AdminShell>

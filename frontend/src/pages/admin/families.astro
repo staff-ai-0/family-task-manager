@@ -1,0 +1,106 @@
+---
+import AdminShell from "@components/ui/AdminShell.astro";
+import { apiFetch } from "../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const q = Astro.url.searchParams.get("q") ?? "";
+const includeDeleted = Astro.url.searchParams.get("include_deleted") === "true";
+const offset = Number(Astro.url.searchParams.get("offset") ?? "0") || 0;
+const LIMIT = 50;
+
+const params = new URLSearchParams({
+    limit: String(LIMIT),
+    offset: String(offset),
+});
+if (q) params.set("q", q);
+if (includeDeleted) params.set("include_deleted", "true");
+
+const { data } = await apiFetch<any>(`/api/admin/families?${params}`, { token });
+const result = data ?? { total: 0, items: [] };
+const shortDate = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
+---
+
+<AdminShell title="Families" active="families">
+    <form method="get" class="mb-4 flex flex-wrap items-center gap-3">
+        <input
+            type="search"
+            name="q"
+            value={q}
+            placeholder="name, join code, family id, or member email"
+            class="w-96 max-w-full rounded border border-slate-300 px-3 py-2 text-sm"
+        />
+        <label class="flex items-center gap-2 text-sm text-slate-600">
+            <input
+                type="checkbox"
+                name="include_deleted"
+                value="true"
+                checked={includeDeleted}
+            />
+            include deleted
+        </label>
+        <button class="rounded bg-slate-900 px-3 py-2 text-sm text-white">Search</button>
+        <span class="num text-sm text-slate-500">{result.total} match(es)</span>
+    </form>
+
+    <div class="overflow-x-auto">
+        <table class="w-full min-w-[900px] border-collapse text-sm">
+            <thead>
+                <tr class="border-b border-slate-200 text-left text-slate-500">
+                    <th class="py-2">Family</th>
+                    <th class="py-2">Plan</th>
+                    <th class="py-2">Status</th>
+                    <th class="py-2">Members</th>
+                    <th class="py-2">Created</th>
+                    <th class="py-2">Last seen</th>
+                    <th class="py-2">Join code</th>
+                </tr>
+            </thead>
+            <tbody>
+                {result.items.map((row: any) => (
+                    <tr class="border-b border-slate-100 hover:bg-slate-50">
+                        <td class="py-2">
+                            <a class="font-medium underline" href={`/admin/families/${row.id}`}>
+                                {row.name}
+                            </a>
+                        </td>
+                        <td class="py-2">{row.plan}</td>
+                        <td class="py-2">
+                            {row.deleted_at
+                                ? "deleted"
+                                : row.is_active
+                                  ? (row.subscription_status ?? "free")
+                                  : "suspended"}
+                        </td>
+                        <td class="num py-2">{row.member_count}</td>
+                        <td class="num py-2">{shortDate(row.created_at)}</td>
+                        <td class="num py-2">{shortDate(row.last_seen_at)}</td>
+                        <td class="num py-2">{row.join_code ?? "—"}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+
+    {result.total > LIMIT && (
+        <div class="mt-4 flex gap-3 text-sm">
+            {offset > 0 && (
+                <a
+                    class="underline"
+                    href={`/admin/families?${new URLSearchParams({ q, offset: String(Math.max(0, offset - LIMIT)) })}`}
+                >
+                    ← Previous
+                </a>
+            )}
+            {offset + LIMIT < result.total && (
+                <a
+                    class="underline"
+                    href={`/admin/families?${new URLSearchParams({ q, offset: String(offset + LIMIT) })}`}
+                >
+                    Next →
+                </a>
+            )}
+        </div>
+    )}
+</AdminShell>
