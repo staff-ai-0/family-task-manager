@@ -9,7 +9,6 @@
  * - lang: 'en' | 'es' - language code
  * - t: translation function
  * - formatCurrency: currency formatter function
- * - token: string - authentication token (optional, for inline edit calls)
  * - allExpenseCategories: Category[] - all expense categories for transfer modal dropdown
  * - goalsByCategory: Record<string, any> - map of category_id → goal object (optional)
  */
@@ -39,7 +38,6 @@ interface Props {
     lang: 'en' | 'es';
     t: (lang: string, key: string) => string;
     formatCurrency: (amount: number) => string;
-    token?: string;
     allExpenseCategories?: any[];
     goalsByCategory?: Record<string, any>;
 }
@@ -50,7 +48,6 @@ const {
     lang, 
     t, 
     formatCurrency,
-    token,
     allExpenseCategories = [],
     goalsByCategory = {},
 } = Astro.props;

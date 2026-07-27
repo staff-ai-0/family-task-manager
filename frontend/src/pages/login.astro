@@ -56,7 +56,7 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
       module below; this inline stub only has to exist on window so GIS
       accepts the config.
     */}
-    <script is:inline define:vars={{ API_URL: "/api/oauth/google", NEXT_PATH: nextPath }}>
+    <script is:inline define:vars={{ API_URL: "/api/oauth/google", NEXT_PATH: nextPath, LANG: lang }}>
         window.handleGoogleLogin = async function (response) {
             try {
                 const result = await fetch(API_URL, {
@@ -83,7 +83,14 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                     // set one (validated server-side in the frontmatter).
                     window.location.href = NEXT_PATH || "/dashboard";
                 } else {
-                    const msg = data.message || data.detail || "Login failed";
+                    // slowapi's 429 body carries no message/detail, so without
+                    // this a throttled sign-in reads as "Login failed" and the
+                    // user just retries into the same limit.
+                    const msg = result.status === 429
+                        ? (LANG === "es"
+                            ? "Demasiados intentos. Espera un momento e inténtalo de nuevo."
+                            : "Too many attempts. Wait a moment and try again.")
+                        : (data.message || data.detail || "Login failed");
                     // Toast library is loaded by the module script below;
                     // if it hasn't arrived yet, fall back to alert.
                     if (window.__showToast) {
