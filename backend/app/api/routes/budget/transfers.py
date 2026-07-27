@@ -37,13 +37,6 @@ class CategoryTransferRequest(BaseModel):
     notes: str | None = Field(None, description="Optional notes")
 
 
-class CoverOverspendingRequest(BaseModel):
-    """Request to cover overspending in a category"""
-    category_id: UUID = Field(..., description="Overspent category to cover")
-    source_category_id: UUID = Field(..., description="Category to take money from")
-    month: str = Field(..., description="Month (YYYY-MM-DD, first day of month)")
-
-
 @router.post("/accounts", response_model=list[TransactionResponse], status_code=status.HTTP_201_CREATED)
 async def transfer_between_accounts(
     transfer: AccountTransferRequest,
@@ -90,27 +83,5 @@ async def transfer_between_categories(
         amount=transfer.amount,
         month=transfer.month,
         notes=transfer.notes,
-    )
-    return result
-
-
-@router.post("/cover-overspending", status_code=status.HTTP_200_OK)
-async def cover_overspending(
-    request: CoverOverspendingRequest,
-    current_user: User = Depends(require_parent_role),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Cover overspending in a category by pulling from another category (parent only)
-    
-    Automatically calculates the overspent amount and transfers just enough
-    to bring the category back to zero.
-    """
-    result = await TransferService.cover_overspending(
-        db=db,
-        family_id=to_uuid_required(current_user.family_id),
-        overspent_category_id=request.category_id,
-        source_category_id=request.source_category_id,
-        month=request.month,
     )
     return result

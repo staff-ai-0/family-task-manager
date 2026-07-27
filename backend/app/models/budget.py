@@ -28,6 +28,19 @@ class BudgetCategoryGroup(Base):
     """Category groups organize budget categories (e.g., 'Mandado', 'Servicios', 'Entretenimiento')."""
 
     __tablename__ = "budget_category_groups"
+    __table_args__ = (
+        # Partial unique: the deployed schema enforces one live name per
+        # scope, but the ORM did not declare it, so duplicate names were
+        # only rejected in production. WHERE deleted_at IS NULL keeps a
+        # recycled name reusable.
+        Index(
+            "ux_budget_groups_family_name",
+            "family_id",
+            "name",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -49,7 +62,20 @@ class BudgetCategory(Base):
     """Individual budget categories within a group."""
     
     __tablename__ = "budget_categories"
-    
+    __table_args__ = (
+        # Partial unique: the deployed schema enforces one live name per
+        # scope, but the ORM did not declare it, so duplicate names were
+        # only rejected in production. WHERE deleted_at IS NULL keeps a
+        # recycled name reusable.
+        Index(
+            "ux_budget_categories_group_name",
+            "group_id",
+            "name",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
+
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     family_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True)
     group_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_category_groups.id", ondelete="CASCADE"), nullable=False)
@@ -199,6 +225,17 @@ class BudgetTransaction(Base):
     parent_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_transactions.id", ondelete="CASCADE"), nullable=True, comment="For split transactions")
     is_parent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, comment="Is this a split parent transaction?")
     transfer_account_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("budget_accounts.id", ondelete="SET NULL"), nullable=True, comment="Target account for transfers")
+    transfer_pair_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True),
+        nullable=True,
+        index=True,
+        comment=(
+            "Shared id joining the two legs of an account transfer. "
+            "transfer_account_id points at the ACCOUNT, so before this column "
+            "existed nothing could find a leg's sibling — deleting or editing "
+            "one leg silently unbalanced the family's books."
+        ),
+    )
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True, comment="Soft delete timestamp")
     deleted_by_id: Mapped[Optional[UUID]] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, comment="User who deleted this transaction")
     created_by_id: Mapped[Optional[UUID]] = mapped_column(

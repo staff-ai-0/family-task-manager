@@ -79,6 +79,16 @@ class TaskTemplate(Base):
             "effort_level BETWEEN 1 AND 3",
             name="chk_effort_level_range",
         ),
+        # Present in the deployed schema, previously absent here — so the test
+        # database enforced neither.
+        CheckConstraint(
+            "gig_mode IN ('claim','rotation','competition','collaboration')",
+            name="chk_gig_mode_valid",
+        ),
+        CheckConstraint(
+            "late_duration_days >= 1 AND late_duration_days <= 30",
+            name="chk_late_duration_positive",
+        ),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
