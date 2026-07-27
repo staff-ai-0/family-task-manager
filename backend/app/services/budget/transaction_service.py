@@ -51,6 +51,23 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
             )
             .values(deleted_at=now)
         )
+        # Transfer legs: a transfer is one movement written as two rows, so
+        # deleting one leg alone leaves the other behind and the family's books
+        # stop balancing (verified: deleting a withdrawal leg moved the total
+        # on-budget balance from 0 to +10000, minting money that was never
+        # received). Cascade to the sibling, which the recycle bin then restores
+        # together because it shares the deletion timestamp.
+        if entity.transfer_pair_id is not None:
+            await db.execute(
+                sql_update(BudgetTransaction)
+                .where(
+                    BudgetTransaction.transfer_pair_id == entity.transfer_pair_id,
+                    BudgetTransaction.family_id == family_id,
+                    BudgetTransaction.id != entity.id,
+                    BudgetTransaction.deleted_at.is_(None),
+                )
+                .values(deleted_at=now)
+            )
         await db.commit()
 
     @classmethod
@@ -169,6 +186,23 @@ class TransactionService(BaseFamilyService[BudgetTransaction]):
         
         update_data = data.model_dump(exclude_unset=True)
         payee_name = update_data.pop("payee_name", None)
+
+        # A transfer is one movement stored as two mirrored rows. Editing the
+        # amount or the account of a single leg breaks that mirror and the
+        # family's books stop balancing, with nothing to detect it afterwards
+        # (verified: a PUT of amount=-3000 on one leg moved the total on-budget
+        # balance off zero). Categorising, clearing, or annotating a leg stays
+        # allowed — only the fields that define the movement are frozen.
+        if existing_txn.transfer_pair_id is not None:
+            frozen = {"amount", "account_id", "transfer_account_id", "date"}
+            attempted = frozen.intersection(update_data)
+            if attempted:
+                raise ValidationError(
+                    "Cannot edit "
+                    + ", ".join(sorted(attempted))
+                    + " on one leg of a transfer — delete the transfer and "
+                    "re-create it instead."
+                )
 
         # Verify new account if provided
         if "account_id" in update_data:

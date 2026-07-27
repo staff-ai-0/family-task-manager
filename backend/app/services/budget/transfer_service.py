@@ -4,7 +4,10 @@ Transfer Service
 Business logic for transferring money between accounts and categories.
 """
 
-from datetime import date, datetime
+# Aliased: transfer_between_accounts takes a `date: str` parameter that would
+# otherwise shadow the class inside that function's body.
+from datetime import date as date_cls
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID, uuid4
 
@@ -16,8 +19,10 @@ from app.models.budget import (
     BudgetAccount,
     BudgetAllocation,
     BudgetCategory,
+    BudgetCategoryGroup,
     BudgetTransaction,
 )
+from app.services.budget.month_locking_service import MonthLockingService
 
 
 class TransferService:
@@ -53,6 +58,21 @@ class TransferService:
         Returns:
             List of two created transactions
         """
+        # Defence in depth: the route schema enforces gt=0, but the service is
+        # a public entry point for anything that does not go through it (Jarvis
+        # MCP tools call services directly). A negative amount silently REVERSES
+        # the transfer; zero writes two junk rows.
+        if amount <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Transfer amount must be greater than zero",
+            )
+        if from_account_id == to_account_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot transfer to the same account",
+            )
+
         # Validate accounts exist and belong to family
         from_account_result = await db.execute(
             select(BudgetAccount).where(
@@ -86,6 +106,15 @@ class TransferService:
                 detail="Destination account not found"
             )
         
+        # A closed account is excluded from every balance total, so moving money
+        # into one makes it vanish from the budget.
+        for account, label in ((from_account, "Source"), (to_account, "Destination")):
+            if account.closed:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"{label} account is closed",
+                )
+
         # Parse date
         try:
             transfer_date = datetime.strptime(date, "%Y-%m-%d").date()  # noqa: DTZ007 — date-only parse, tz irrelevant
@@ -94,6 +123,15 @@ class TransferService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid date format. Use YYYY-MM-DD"
             )
+
+        # Closing a month is meant to freeze it; every other write path honours
+        # this, so transfers must not be a back door into a closed month.
+        await MonthLockingService.validate_month_not_closed(
+            db, family_id, date_cls(transfer_date.year, transfer_date.month, 1)
+        )
+
+        # Shared id so the two legs can be found and handled as one unit.
+        pair_id = uuid4()
         
         # Create transfer note
         transfer_notes = notes or f"Transfer from {from_account.name} to {to_account.name}"
@@ -107,6 +145,7 @@ class TransferService:
             amount=-amount,  # Negative for withdrawal
             notes=transfer_notes,
             transfer_account_id=to_account_id,
+            transfer_pair_id=pair_id,
             cleared=True,  # Transfers are auto-cleared
             created_by_id=user_id,
         )
@@ -121,6 +160,7 @@ class TransferService:
             amount=amount,  # Positive for deposit
             notes=transfer_notes,
             transfer_account_id=from_account_id,
+            transfer_pair_id=pair_id,
             cleared=True,  # Transfers are auto-cleared
             created_by_id=user_id,
         )
@@ -161,6 +201,17 @@ class TransferService:
         Returns:
             Dict with updated allocations
         """
+        if amount <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Transfer amount must be greater than zero",
+            )
+        if from_category_id == to_category_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot transfer to the same category",
+            )
+
         # Validate categories exist and belong to family
         from_category_result = await db.execute(
             select(BudgetCategory).where(
@@ -194,21 +245,44 @@ class TransferService:
                 detail="Destination category not found"
             )
         
+        # Ready-to-Assign counts only EXPENSE budgeted amounts, so moving money
+        # into an income category un-assigns it with no audit trail (and out of
+        # one conjures assignable money from nothing).
+        group_ids = [from_category.group_id, to_category.group_id]
+        income_groups = (
+            await db.execute(
+                select(BudgetCategoryGroup.id).where(
+                    BudgetCategoryGroup.id.in_(group_ids),
+                    BudgetCategoryGroup.is_income.is_(True),
+                )
+            )
+        ).scalars().all()
+        if income_groups:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot transfer budgeted money to or from an income category",
+            )
+
         # Parse month
         try:
             month_date = datetime.strptime(month, "%Y-%m-%d").date()  # noqa: DTZ007 — date-only parse, tz irrelevant
             # Ensure it's first day of month
-            month_date = date(month_date.year, month_date.month, 1)
+            month_date = date_cls(month_date.year, month_date.month, 1)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid month format. Use YYYY-MM-DD"
             )
-        
+
+        await MonthLockingService.validate_month_not_closed(
+            db, family_id, month_date
+        )
+
         # Get or create source allocation
         from_allocation_result = await db.execute(
             select(BudgetAllocation).where(
                 and_(
+                    BudgetAllocation.family_id == family_id,
                     BudgetAllocation.category_id == from_category_id,
                     BudgetAllocation.month == month_date
                 )
@@ -225,17 +299,32 @@ class TransferService:
             )
             db.add(from_allocation)
         
-        # Check if source has enough budget
-        if from_allocation.budgeted_amount < amount:
+        # Guard on the envelope's AVAILABLE amount, not on what was budgeted this
+        # month. Budgeted ignores both spending and rollover, so the old check
+        # let an already-spent envelope be emptied again (manufacturing an
+        # overspend out of nothing) while refusing to move money a category had
+        # genuinely carried over — the exact figure the UI shows the user.
+        from app.services.budget.allocation_service import AllocationService
+
+        source_state = await AllocationService.get_category_available_amount(
+            db, family_id, from_category_id, month_date
+        )
+        source_available = int(source_state["available"])
+        if source_available < amount:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Insufficient budget in source category. Available: ${from_allocation.budgeted_amount/100:.2f}, Requested: ${amount/100:.2f}"
+                detail=(
+                    "Insufficient funds in source category. "
+                    f"Available: ${source_available/100:.2f}, "
+                    f"Requested: ${amount/100:.2f}"
+                ),
             )
         
         # Get or create destination allocation
         to_allocation_result = await db.execute(
             select(BudgetAllocation).where(
                 and_(
+                    BudgetAllocation.family_id == family_id,
                     BudgetAllocation.category_id == to_category_id,
                     BudgetAllocation.month == month_date
                 )
@@ -280,78 +369,3 @@ class TransferService:
             },
             "amount_transferred": amount,
         }
-    
-    @staticmethod
-    async def cover_overspending(
-        db: AsyncSession,
-        family_id: UUID,
-        overspent_category_id: UUID,
-        source_category_id: UUID,
-        month: str,
-    ) -> dict:
-        """
-        Cover overspending in a category by transferring from another category.
-        
-        Calculates the negative amount and transfers just enough to bring it to zero.
-        
-        Args:
-            db: Database session
-            family_id: Family ID
-            overspent_category_id: Category that is overspent (negative available)
-            source_category_id: Category to pull money from
-            month: Month (YYYY-MM-DD, first day of month)
-        
-        Returns:
-            Dict with transfer details
-        """
-        # Parse month
-        try:
-            month_date = datetime.strptime(month, "%Y-%m-%d").date()  # noqa: DTZ007 — date-only parse, tz irrelevant
-            month_date = date(month_date.year, month_date.month, 1)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid month format. Use YYYY-MM-DD"
-            )
-        
-        # Get overspent category allocation
-        overspent_alloc_result = await db.execute(
-            select(BudgetAllocation).where(
-                and_(
-                    BudgetAllocation.category_id == overspent_category_id,
-                    BudgetAllocation.month == month_date
-                )
-            )
-        )
-        overspent_alloc = overspent_alloc_result.scalar_one_or_none()
-        
-        if not overspent_alloc:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Overspent category allocation not found"
-            )
-        
-        # Calculate how much is needed (transactions - budgeted)
-        # TODO: In a full implementation, we'd calculate actual spending from transactions
-        # For now, we'll use a simple approach
-        
-        # If budgeted amount is already positive or zero, nothing to cover
-        if overspent_alloc.budgeted_amount >= 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Category is not overspent"
-            )
-        
-        # Amount needed is the negative of budgeted (to bring to zero)
-        amount_needed = abs(overspent_alloc.budgeted_amount)
-        
-        # Transfer the amount
-        return await TransferService.transfer_between_categories(
-            db=db,
-            family_id=family_id,
-            from_category_id=source_category_id,
-            to_category_id=overspent_category_id,
-            amount=amount_needed,
-            month=month,
-            notes="Cover overspending",
-        )
