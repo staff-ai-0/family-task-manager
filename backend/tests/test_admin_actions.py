@@ -167,13 +167,24 @@ async def test_set_modules_rejects_unknown_module_key(
     client, db_session, superadmin_headers, test_family
 ):
     """The rejection path (unknown keys against TOGGLABLE_MODULES) had zero
-    coverage — this pins the 422 and confirms nothing was written."""
+    coverage — this pins the 422 and confirms nothing was written.
+
+    ``reason`` must satisfy ReasonRequest's own min_length=3 — a too-short
+    reason (e.g. "x") also 422s, but from Pydantic body validation before
+    the route ever runs, which would make this test pass even if the
+    TOGGLABLE_MODULES check were deleted. Asserting the detail string pins
+    it to the actual rejection path in admin_action_service.set_modules.
+    """
     resp = await client.post(
         f"/api/admin/families/{test_family.id}/modules",
-        json={"enabled_modules": ["budget", "not_a_real_module"], "reason": "x"},
+        json={
+            "enabled_modules": ["budget", "not_a_real_module"],
+            "reason": "support",
+        },
         headers=superadmin_headers,
     )
     assert resp.status_code == 422
+    assert "unknown modules" in resp.json()["detail"]
 
     await db_session.refresh(test_family)
     assert test_family.enabled_modules is None
@@ -314,9 +325,20 @@ async def test_deactivate_user_is_atomic_with_its_audit_row(
     assert resp.status_code == 500
 
     # The mutation must NOT have survived — this is the assertion that
-    # actually proves atomicity. Against the pre-fix code (AuthService
-    # committing internally before the audit row was staged) this would be
-    # False: the deactivation would already be durably committed.
+    # actually proves atomicity. Verified empirically (not just by
+    # construction) against the actual pre-fix code at commit 097d088: run
+    # there, this test doesn't even reach this assertion. Pre-fix,
+    # AuthService.deactivate_user committed internally and
+    # AdminActionService had no try/except around OperatorAuditService.record
+    # at all, so the injected RuntimeError propagates unhandled straight
+    # through the route, FastAPI/Starlette's middleware stack, and out
+    # through httpx — the test FAILS at the `client.post(...)` call above
+    # with a raw `RuntimeError: audit staging exploded`, never reaching a
+    # response object at all. Post-fix, the same failure is caught, the
+    # transaction (mutation + attempted "ok" row) is rolled back, a
+    # result="error" row is committed on its own, and the route returns a
+    # clean 500 — which is what makes it meaningful to assert on
+    # `is_active` and the audit row below at all.
     await db_session.refresh(test_child_user)
     assert test_child_user.is_active is True
 
@@ -330,3 +352,87 @@ async def test_deactivate_user_is_atomic_with_its_audit_row(
     assert len(rows) == 1
     assert rows[0].result == "error"
     assert "audit staging exploded" in rows[0].error
+
+
+@pytest.mark.asyncio
+async def test_error_audit_row_written_even_when_refresh_would_fail(
+    client, db_session, superadmin_headers, test_family, monkeypatch
+):
+    """Proves the round-2 Critical fix: the error-audit path must not
+    depend on being able to re-query ANY ORM object (in particular, the
+    operator) after the db.rollback() the failure handler issues.
+
+    A prior version called ``await db.refresh(operator)`` in exactly this
+    window, to work around rollback() expiring the operator object loaded
+    earlier by require_superadmin. That refresh is itself a real, unguarded
+    round of IO — on a dead connection or a concurrently-deleted operator
+    row it raises, and since it ran BEFORE OperatorAuditService.record and
+    the recovery commit, its failure meant record() was never reached and
+    the mutating action failed with ZERO audit trail: precisely the
+    "silent failure" outcome the whole error-path-audit requirement exists
+    to prevent, for the exact class of failure (an IO error under load)
+    where the trail matters most.
+
+    The fix removed the refresh entirely (capturing operator.id/.email into
+    locals before the try, and passing a detached stand-in to record()
+    instead). This test proves that removal rather than merely trusting the
+    diff: it patches AsyncSession.refresh to explode on ANY call, forces
+    the same "exception between mutation and commit" window as the
+    atomicity test above, and asserts the audit row is STILL written
+    correctly and the client still gets the intended message. If a
+    regression reintroduced `db.refresh(operator)` on this path, the patched
+    refresh would raise inside `_record_failure`'s own recovery try/except —
+    which swallows it (by design, see `_record_failure`'s docstring) — so
+    the regression would surface here as a MISSING audit row, not as the
+    injected exception bubbling up; the assertions below cover exactly
+    that.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession as AsyncSessionCls
+
+    async def _refresh_must_not_be_called(self, *args, **kwargs):
+        raise RuntimeError(
+            "AsyncSession.refresh must not be called on the admin-action "
+            "error-audit path — this is the defect the fix removed"
+        )
+
+    monkeypatch.setattr(AsyncSessionCls, "refresh", _refresh_must_not_be_called)
+
+    real_record = OperatorAuditService.record
+    call_count = {"n": 0}
+
+    def _raise_once_then_record(db, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise RuntimeError("comp plus exploded")
+        return real_record(db, **kwargs)
+
+    monkeypatch.setattr(
+        OperatorAuditService, "record", staticmethod(_raise_once_then_record)
+    )
+
+    resp = await client.post(
+        f"/api/admin/families/{test_family.id}/comp-plus",
+        json={"days": 30, "reason": "force failure"},
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 500
+    assert "comp plus failed" in resp.json()["detail"]
+
+    # Restore the real refresh()/record() before using db_session ourselves
+    # to verify final state below.
+    monkeypatch.undo()
+
+    await db_session.refresh(test_family)
+    assert test_family.referral_bonus_until is None
+
+    rows = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "family.comp_plus"
+            )
+        )
+    ).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].result == "error"
+    assert "comp plus exploded" in rows[0].error
+    assert rows[0].actor_email == "superadmin@test.com"

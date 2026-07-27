@@ -8,10 +8,13 @@ undoing the mutation together with the audit row that was staged alongside
 it — and a best-effort "error" audit row is staged and committed in its
 place. So a rolled-back action can never leave an "ok" audit row behind, and
 a failed action still leaves a record of the failure rather than nothing at
-all.
+all. "Best-effort" is deliberate: see ``_record_failure`` — if the recovery
+attempt itself fails, the client still gets the original error, not a crash.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Optional
 from uuid import UUID
 
@@ -25,6 +28,8 @@ from app.models.family import Family
 from app.models.user import User
 from app.services.admin.operator_audit_service import OperatorAuditService
 from app.services.email_service import EmailService
+
+logger = logging.getLogger(__name__)
 
 # Deactivating a user also bulk-cancels their PENDING/CLAIMED/OVERDUE
 # assignments; reactivating does NOT restore them. Surfaced to the operator
@@ -49,6 +54,65 @@ async def _load_user(db: AsyncSession, user_id: UUID) -> User:
     return user
 
 
+async def _record_failure(
+    db: AsyncSession,
+    *,
+    operator_id: UUID,
+    operator_email: str,
+    action: str,
+    target_family_id: Optional[UUID],
+    target_user_id: Optional[UUID],
+    params: dict,
+    exc: Exception,
+) -> None:
+    """Roll back the failed action, then best-effort stage+commit an
+    ``error`` audit row for it.
+
+    ``operator_id``/``operator_email`` must be plain values captured BEFORE
+    the caller's try block — never the live ``operator`` ORM object.
+    ``db.rollback()`` expires every object on this session (not just the
+    ones the failed mutation touched), so `operator` — loaded earlier, on
+    this same session, by ``require_superadmin`` — is expired too by the
+    time we get here. Re-reading an expired attribute on an async ORM
+    object outside an explicit awaited refresh raises
+    ``sqlalchemy.exc.MissingGreenlet``; refreshing it would add a second
+    unguarded round of IO with its own failure modes (a dead connection, or
+    the operator row itself being concurrently deleted) that could pre-empt
+    the audit write entirely. Passing a detached stand-in with just the two
+    fields ``OperatorAuditService.record`` actually reads avoids all of
+    that — no second query, nothing left to expire.
+
+    This whole recovery sequence is itself best-effort: if the rollback, the
+    staging, or the recovery commit fails too (e.g. the connection is
+    genuinely gone), that secondary failure is logged and swallowed rather
+    than raised — the caller still raises the ORIGINAL exception to the
+    client either way, so a broken audit write never turns a clear 500 into
+    a confusing, unrelated one. The trade-off is explicit: in that
+    (rare, catastrophic) case there is no audit row, but the operator still
+    gets a coherent error response, and the failure is on the server log.
+    """
+    try:
+        await db.rollback()
+        OperatorAuditService.record(
+            db,
+            actor=SimpleNamespace(id=operator_id, email=operator_email),
+            action=action,
+            target_family_id=target_family_id,
+            target_user_id=target_user_id,
+            params=params,
+            result="error",
+            error=str(exc),
+        )
+        await db.commit()
+    except Exception:
+        logger.error(
+            "admin action %s: failed to write error-audit row after %r",
+            action,
+            exc,
+            exc_info=True,
+        )
+
+
 class AdminActionService:
     """Operator write actions."""
 
@@ -68,6 +132,7 @@ class AdminActionService:
         private, does not commit, stacks +30d per invocation, and is Plus-only.
         An operator comp must be idempotent in intent: "Plus until date X".
         """
+        operator_id, operator_email = operator.id, operator.email
         family = await _load_family(db, family_id)
         until = datetime.now(timezone.utc) + timedelta(days=days)
         family.referral_bonus_until = until
@@ -81,24 +146,16 @@ class AdminActionService:
             )
             await db.commit()
         except Exception as exc:
-            # rollback() expires every object loaded on this session,
-            # including `operator` (loaded earlier by require_superadmin on
-            # the SAME session) — record() reads operator.id/.email, and an
-            # expired attribute access triggers an implicit lazy-load that
-            # the async driver cannot service outside an awaited call
-            # (MissingGreenlet). Explicitly refresh it first.
-            await db.rollback()
-            await db.refresh(operator)
-            OperatorAuditService.record(
+            await _record_failure(
                 db,
-                actor=operator,
+                operator_id=operator_id,
+                operator_email=operator_email,
                 action="family.comp_plus",
                 target_family_id=family_id,
+                target_user_id=None,
                 params={"days": days, "reason": reason},
-                result="error",
-                error=str(exc),
+                exc=exc,
             )
-            await db.commit()
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR, f"comp plus failed: {exc}"
             ) from exc
@@ -119,6 +176,7 @@ class AdminActionService:
         conflate abuse suspension with account closure and arm the 30-day
         purge sweep against a family the operator may want to reinstate.
         """
+        operator_id, operator_email = operator.id, operator.email
         family = await _load_family(db, family_id)
         family.is_active = not suspended
         action = "family.suspend" if suspended else "family.unsuspend"
@@ -132,21 +190,16 @@ class AdminActionService:
             )
             await db.commit()
         except Exception as exc:
-            # See comp_plus_month for why refresh(operator) is required
-            # here: rollback() expires it too, and record() reads its
-            # attributes.
-            await db.rollback()
-            await db.refresh(operator)
-            OperatorAuditService.record(
+            await _record_failure(
                 db,
-                actor=operator,
+                operator_id=operator_id,
+                operator_email=operator_email,
                 action=action,
                 target_family_id=family_id,
+                target_user_id=None,
                 params={"reason": reason},
-                result="error",
-                error=str(exc),
+                exc=exc,
             )
-            await db.commit()
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR, f"suspend failed: {exc}"
             ) from exc
@@ -172,6 +225,7 @@ class AdminActionService:
                     status.HTTP_422_UNPROCESSABLE_ENTITY,
                     f"unknown modules: {sorted(unknown)}",
                 )
+        operator_id, operator_email = operator.id, operator.email
         family = await _load_family(db, family_id)
         family.enabled_modules = enabled_modules
         try:
@@ -184,21 +238,16 @@ class AdminActionService:
             )
             await db.commit()
         except Exception as exc:
-            # See comp_plus_month for why refresh(operator) is required
-            # here: rollback() expires it too, and record() reads its
-            # attributes.
-            await db.rollback()
-            await db.refresh(operator)
-            OperatorAuditService.record(
+            await _record_failure(
                 db,
-                actor=operator,
+                operator_id=operator_id,
+                operator_email=operator_email,
                 action="family.set_modules",
                 target_family_id=family_id,
+                target_user_id=None,
                 params={"enabled_modules": enabled_modules, "reason": reason},
-                result="error",
-                error=str(exc),
+                exc=exc,
             )
-            await db.commit()
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR, f"set modules failed: {exc}"
             ) from exc
@@ -221,16 +270,17 @@ class AdminActionService:
         it — lands in the SAME transaction as the audit row below. An
         earlier version let AuthService commit on its own before the audit
         row was even staged: if the second (audit) commit then failed, the
-        member stayed permanently deactivated with zero audit trail. Capture
-        the user's identifying fields into local variables up front, before
-        any rollback can happen — a rolled-back session expires ORM
-        attributes, and re-reading them on an expired async-ORM object
-        outside an explicit refresh is not safe.
+        member stayed permanently deactivated with zero audit trail.
+        `user_family_id`/`operator_id`/`operator_email` are captured into
+        local variables up front, before any rollback can happen — see
+        ``_record_failure`` for why the failure path must not re-read
+        attributes off `user` or `operator` themselves.
         """
         from app.services.auth_service import AuthService
 
         user = await _load_user(db, user_id)
         user_family_id = user.family_id
+        operator_id, operator_email = operator.id, operator.email
         action = "user.activate" if active else "user.deactivate"
         try:
             if active:
@@ -247,28 +297,16 @@ class AdminActionService:
             )
             await db.commit()
         except Exception as exc:
-            # rollback() expires every object loaded on this session,
-            # including `operator` (loaded earlier by require_superadmin on
-            # the SAME session) and — unlike the other three actions — also
-            # `user`, which is why user_family_id/user_id were captured into
-            # local variables before the try block instead of being re-read
-            # from `user` here. record() reads operator.id/.email, and an
-            # expired attribute access triggers an implicit lazy-load the
-            # async driver can't service outside an awaited call
-            # (MissingGreenlet), so operator must be explicitly refreshed.
-            await db.rollback()
-            await db.refresh(operator)
-            OperatorAuditService.record(
+            await _record_failure(
                 db,
-                actor=operator,
+                operator_id=operator_id,
+                operator_email=operator_email,
                 action=action,
                 target_family_id=user_family_id,
                 target_user_id=user_id,
                 params={"reason": reason},
-                result="error",
-                error=str(exc),
+                exc=exc,
             )
-            await db.commit()
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR, f"set active failed: {exc}"
             ) from exc
