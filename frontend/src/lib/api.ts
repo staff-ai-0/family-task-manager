@@ -4,6 +4,12 @@
  */
 
 import type { ApiResponse } from "../types/api";
+import { normalizeErrorDetail } from "./errors";
+
+// Re-exported for existing callers (e.g. pages/api/invitations/send.ts) —
+// the implementation now lives in ./errors so it can also be imported
+// safely from browser <script> blocks. See errors.ts for why.
+export { normalizeErrorDetail };
 
 // Use runtime environment variable (process.env works in Astro SSR)
 export const FALLBACK_API_BASE_URL = process.env.API_BASE_URL || process.env.PUBLIC_API_BASE_URL || "http://localhost:8002";
@@ -14,39 +20,6 @@ export interface ApiFetchOptions extends RequestInit {
     /** UI language ("es"/"en") used to pick bilingual error copy. Falls back
      *  to the lang cookie when running in the browser. */
     lang?: string;
-}
-
-/**
- * Normalize a FastAPI error `detail` payload to a human-readable string.
- * Handles the three shapes the backend emits:
- * - plain string
- * - Pydantic validation errors (array of {loc, msg})
- * - structured dicts like {error, message, message_es} (e.g. the 403
- *   email_not_verified guard) — picks message_es/message by lang so the
- *   bilingual copy shows instead of "[object Object]".
- */
-export function normalizeErrorDetail(detail: unknown, lang?: string): string | null {
-    if (detail == null) return null;
-    if (typeof detail === "string") return detail;
-    if (Array.isArray(detail)) {
-        return detail
-            .map((err: any) => `${err.loc?.join('.')}: ${err.msg}`)
-            .join(', ');
-    }
-    if (typeof detail === "object") {
-        const d = detail as Record<string, unknown>;
-        const message = lang === "es"
-            ? (d.message_es ?? d.message)
-            : (d.message ?? d.message_es);
-        if (typeof message === "string") return message;
-        if (typeof d.error === "string") return d.error;
-        try {
-            return JSON.stringify(detail);
-        } catch {
-            return String(detail);
-        }
-    }
-    return String(detail);
 }
 
 /** Read the lang cookie when running in a browser context (client scripts). */

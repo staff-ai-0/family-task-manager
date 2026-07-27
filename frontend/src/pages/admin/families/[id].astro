@@ -391,8 +391,8 @@ const shortDT = (iso: string | null) =>
                 </form>
 
                 <form
-                    data-action={`/api/admin/families/${familyId}/undo-approval-form`}
                     data-template={`/api/admin/families/${familyId}/assignments/{assignment_id}/undo-approval`}
+                    data-confirm="This claws back the points this approval awarded and clears its grade. Continue?"
                     class="space-y-2"
                 >
                     <h3 class="text-sm font-medium">Undo a chore approval</h3>
@@ -446,9 +446,39 @@ const shortDT = (iso: string | null) =>
 </AdminShell>
 
 <script>
+    import { normalizeErrorDetail } from "../../../lib/errors";
+
     // Every operator action requires a typed reason, which is recorded in the
     // audit log alongside the change. Failures surface the backend's actual
     // message verbatim — nothing is swallowed.
+    //
+    // The backend has THREE distinct error-body shapes an operator action can
+    // come back with, and only reading `body.detail` (as this used to do)
+    // misses two of them:
+    //   1. FastAPI HTTPException            -> { detail: "<string>" }
+    //   2. FastAPI RequestValidationError    -> { detail: [{loc, msg}, ...] }
+    //      (a malformed UUID/date in a form field, e.g. week_of or item_id)
+    //   3. This codebase's FamilyAppException handlers (NotFoundException,
+    //      ValidationException/ForbiddenException, etc. — see
+    //      backend/app/core/exception_handlers.py) -> { error, message,
+    //      status_code } — there is NO "detail" key at all. This is exactly
+    //      the shape `undo-approval`'s bonus/gig refusal and `restore`'s
+    //      not-found/wrong-family refusal come back as, so without this
+    //      fallback those refusals rendered as "unknown error".
+    // The same shape (`{ error, message }`) is also what the /api/admin/*
+    // proxy itself returns on a 502 when the backend is unreachable, so this
+    // fallback doubles as "backend down" surfacing for every action too.
+    // `normalizeErrorDetail` (frontend/src/lib/errors.ts) already handles
+    // shapes 1 and 2; only the top-level `message` fallback for shape 3 is
+    // added here.
+    function errorMessageFrom(body: any): string {
+        return (
+            normalizeErrorDetail(body?.detail) ??
+            (typeof body?.message === "string" ? body.message : null) ??
+            "unknown error"
+        );
+    }
+
     async function submitAction(
         url: string,
         payload: Record<string, unknown>,
@@ -472,7 +502,7 @@ const shortDT = (iso: string | null) =>
             });
             const body = await res.json().catch(() => ({}));
             if (!res.ok) {
-                window.alert(`Failed (${res.status}): ${body.detail ?? "unknown error"}`);
+                window.alert(`Failed (${res.status}): ${errorMessageFrom(body)}`);
                 return;
             }
             if (body.warning) window.alert(body.warning);
@@ -504,44 +534,52 @@ const shortDT = (iso: string | null) =>
     // Forms build their payload from their own fields. A field marked
     // data-path-param is substituted into data-template instead of being sent
     // in the body — that is how the assignment id reaches its path segment.
-    document.querySelectorAll<HTMLFormElement>("form[data-action]").forEach((form) => {
-        form.addEventListener("submit", (ev) => {
-            ev.preventDefault();
-            const fd = new FormData(form);
-            const payload: Record<string, unknown> = {};
+    // The undo-approval form has no data-action at all (its URL only exists
+    // once the assignment id is substituted into data-template), so both
+    // attributes are matched here rather than just data-action.
+    document
+        .querySelectorAll<HTMLFormElement>("form[data-action], form[data-template]")
+        .forEach((form) => {
+            form.addEventListener("submit", (ev) => {
+                ev.preventDefault();
+                const fd = new FormData(form);
+                const payload: Record<string, unknown> = {};
 
-            // Checkbox groups collapse to arrays; everything else is scalar.
-            for (const key of new Set(fd.keys())) {
-                if (key.startsWith("__")) continue;
-                const values = fd.getAll(key).map(String);
-                const isGroup =
-                    form.querySelectorAll(`[name="${key}"]`).length > 1;
-                payload[key] = isGroup ? values : values[0];
-            }
+                // Checkbox groups collapse to arrays; everything else is scalar.
+                for (const key of new Set(fd.keys())) {
+                    if (key.startsWith("__")) continue;
+                    const values = fd.getAll(key).map(String);
+                    const isGroup =
+                        form.querySelectorAll(`[name="${key}"]`).length > 1;
+                    payload[key] = isGroup ? values : values[0];
+                }
 
-            // The module form's explicit "restore default" wins: null, not [].
-            if (fd.get("__null_modules") === "true") payload.enabled_modules = null;
-            else if (form.querySelector('[name="enabled_modules"]') && !payload.enabled_modules)
-                payload.enabled_modules = [];
+                // The module form's explicit "restore default" wins: null, not [].
+                if (fd.get("__null_modules") === "true") payload.enabled_modules = null;
+                else if (form.querySelector('[name="enabled_modules"]') && !payload.enabled_modules)
+                    payload.enabled_modules = [];
 
-            let url = form.dataset.action!;
-            const template = form.dataset.template;
-            if (template) {
-                url = template;
-                form
-                    .querySelectorAll<HTMLInputElement>("[data-path-param]")
-                    .forEach((input) => {
-                        url = url.replace(`{${input.name}}`, encodeURIComponent(input.value));
-                        delete payload[input.name];
-                    });
-            }
+                // data-action is absent on the undo-approval form (it has no
+                // URL until data-template below is resolved), so this can't
+                // use a non-null assertion the way the button handler does.
+                let url = form.dataset.action ?? "";
+                const template = form.dataset.template;
+                if (template) {
+                    url = template;
+                    form
+                        .querySelectorAll<HTMLInputElement>("[data-path-param]")
+                        .forEach((input) => {
+                            url = url.replace(`{${input.name}}`, encodeURIComponent(input.value));
+                            delete payload[input.name];
+                        });
+                }
 
-            submitAction(
-                url,
-                payload,
-                form.dataset.confirm,
-                form.querySelector("button"),
-            );
+                submitAction(
+                    url,
+                    payload,
+                    form.dataset.confirm,
+                    form.querySelector("button"),
+                );
+            });
         });
-    });
 </script>
