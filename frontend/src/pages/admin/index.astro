@@ -15,7 +15,7 @@ const money = (cents: number, currency: string) =>
 
 const TILES: [string, number, string][] = pulse
     ? [
-          ["Families", pulse.families_total, "active tenants"],
+          ["Families", pulse.families_total, "not soft-deleted (includes suspended)"],
           ["Suspended", pulse.families_suspended, "locked out by an operator"],
           ["Pending purge", pulse.families_pending_purge, "inside the 30-day window"],
           ["Users", pulse.users_total, "not soft-deleted"],

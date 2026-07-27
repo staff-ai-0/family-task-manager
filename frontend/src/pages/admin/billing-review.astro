@@ -6,7 +6,12 @@ const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 
 const { data } = await apiFetch<any[]>("/api/admin/billing-review", { token });
-const rows = data ?? [];
+// null means the backend call failed (down / network / non-2xx) — see
+// frontend/src/lib/api.ts. A genuine zero-result response is `[]` with
+// ok:true. This page exists to catch unresolved chargebacks, so collapsing
+// "backend unreachable" into the same "nothing to review" copy as a real
+// empty queue is the wrong failure mode — keep them visually distinct.
+const rows = data;
 ---
 
 <AdminShell title="Billing review" active="billing">
@@ -16,7 +21,13 @@ const rows = data ?? [];
         downgrade happens for these; a human decides.
     </p>
 
-    {rows.length === 0 ? (
+    {!rows && (
+        <p class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            Could not load the billing review queue. The backend may be restarting.
+        </p>
+    )}
+
+    {rows && (rows.length === 0 ? (
         <p class="text-sm text-slate-500">Nothing awaiting review.</p>
     ) : (
         <div class="overflow-x-auto">
@@ -49,5 +60,5 @@ const rows = data ?? [];
                 </tbody>
             </table>
         </div>
-    )}
+    ))}
 </AdminShell>

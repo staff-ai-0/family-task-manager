@@ -13,7 +13,20 @@ const params = new URLSearchParams({ limit: String(LIMIT), offset: String(offset
 if (action) params.set("action", action);
 
 const { data } = await apiFetch<any>(`/api/admin/audit?${params}`, { token });
-const result = data ?? { total: 0, items: [] };
+// null means the backend call failed (down / network / non-2xx) — see
+// frontend/src/lib/api.ts. A genuine zero-result response is
+// { total: 0, items: [] } with ok:true. Keep the two distinguishable instead
+// of collapsing both into the same empty table.
+const result = data;
+
+// Pagination links carry every current query param forward (action, and
+// anything added later) by cloning Astro.url.searchParams rather than
+// rebuilding a fresh object from a hand-picked subset of fields.
+const pageHref = (newOffset: number) => {
+    const p = new URLSearchParams(Astro.url.searchParams);
+    p.set("offset", String(newOffset));
+    return `/admin/audit?${p}`;
+};
 ---
 
 <AdminShell title="Audit log" active="audit">
@@ -23,51 +36,77 @@ const result = data ?? { total: 0, items: [] };
             name="action"
             value={action}
             placeholder="filter by action, e.g. family.suspend"
+            aria-label="Filter audit log by action"
             class="w-80 rounded border border-slate-300 px-3 py-2 text-sm"
         />
         <button class="rounded bg-slate-900 px-3 py-2 text-sm text-white">Filter</button>
-        <span class="num text-sm text-slate-500">{result.total} entries</span>
+        {result && <span class="num text-sm text-slate-500">{result.total} entries</span>}
     </form>
 
-    <div class="overflow-x-auto">
-        <table class="w-full min-w-[1000px] border-collapse text-sm">
-            <thead>
-                <tr class="border-b border-slate-200 text-left text-slate-500">
-                    <th class="py-2">When</th>
-                    <th class="py-2">Operator</th>
-                    <th class="py-2">Action</th>
-                    <th class="py-2">Family</th>
-                    <th class="py-2">Result</th>
-                    <th class="py-2">Params</th>
-                </tr>
-            </thead>
-            <tbody>
-                {result.items.map((row: any) => (
-                    <tr class="border-b border-slate-100 align-top">
-                        <td class="num py-2 whitespace-nowrap">
-                            {row.created_at.slice(0, 19).replace("T", " ")}
-                        </td>
-                        <td class="py-2">{row.actor_email}</td>
-                        <td class="py-2 font-medium">{row.action}</td>
-                        <td class="py-2">
-                            {row.target_family_id ? (
-                                <a class="underline" href={`/admin/families/${row.target_family_id}`}>
-                                    {row.target_family_id.slice(0, 8)}
-                                </a>
-                            ) : (
-                                "—"
-                            )}
-                        </td>
-                        <td class={`py-2 ${row.result === "error" ? "text-red-700" : ""}`}>
-                            {row.result}
-                            {row.error && <div class="text-xs text-red-600">{row.error}</div>}
-                        </td>
-                        <td class="py-2 text-xs text-slate-500">
-                            {JSON.stringify(row.params ?? {})}
-                        </td>
-                    </tr>
-                ))}
-            </tbody>
-        </table>
-    </div>
+    {!result && (
+        <p class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            Could not load the audit log. The backend may be restarting.
+        </p>
+    )}
+
+    {result && (
+        <>
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[1000px] border-collapse text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-200 text-left text-slate-500">
+                            <th class="py-2">When</th>
+                            <th class="py-2">Operator</th>
+                            <th class="py-2">Action</th>
+                            <th class="py-2">Family</th>
+                            <th class="py-2">Result</th>
+                            <th class="py-2">Params</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {result.items.map((row: any) => (
+                            <tr class="border-b border-slate-100 align-top">
+                                <td class="num py-2 whitespace-nowrap">
+                                    {row.created_at.slice(0, 19).replace("T", " ")}
+                                </td>
+                                <td class="py-2">{row.actor_email}</td>
+                                <td class="py-2 font-medium">{row.action}</td>
+                                <td class="py-2">
+                                    {row.target_family_id ? (
+                                        <a class="underline" href={`/admin/families/${row.target_family_id}`}>
+                                            {row.target_family_id.slice(0, 8)}
+                                        </a>
+                                    ) : (
+                                        "—"
+                                    )}
+                                </td>
+                                <td class={`py-2 ${row.result === "error" ? "text-red-700" : ""}`}>
+                                    {row.result}
+                                    {row.error && <div class="text-xs text-red-600">{row.error}</div>}
+                                </td>
+                                <td class="py-2 text-xs text-slate-500">
+                                    {JSON.stringify(row.params ?? {})}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {result.total > LIMIT && (
+                <div class="mt-4 flex gap-3 text-sm">
+                    {offset > 0 && (
+                        <a class="underline" href={pageHref(Math.max(0, offset - LIMIT))}>
+                            ← Previous
+                        </a>
+                    )}
+                    {offset + LIMIT < result.total && (
+                        <a class="underline" href={pageHref(offset + LIMIT)}>
+                            Next →
+                        </a>
+                    )}
+                </div>
+            )}
+        </>
+    )}
 </AdminShell>

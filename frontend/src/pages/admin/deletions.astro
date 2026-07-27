@@ -6,7 +6,11 @@ const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 
 const { data } = await apiFetch<any[]>("/api/admin/deletions", { token });
-const rows = data ?? [];
+// null means the backend call failed (down / network / non-2xx) — see
+// frontend/src/lib/api.ts. A genuine zero-result response is `[]` with
+// ok:true. Keep the two distinguishable instead of collapsing both into the
+// same "nothing pending" copy.
+const rows = data;
 ---
 
 <AdminShell title="Pending deletions" active="deletions">
@@ -16,7 +20,13 @@ const rows = data ?? [];
         closure and the family must re-subscribe.
     </p>
 
-    {rows.length === 0 ? (
+    {!rows && (
+        <p class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            Could not load pending deletions. The backend may be restarting.
+        </p>
+    )}
+
+    {rows && (rows.length === 0 ? (
         <p class="text-sm text-slate-500">No families pending purge.</p>
     ) : (
         <table class="w-full max-w-4xl border-collapse text-sm">
@@ -41,5 +51,5 @@ const rows = data ?? [];
                 ))}
             </tbody>
         </table>
-    )}
+    ))}
 </AdminShell>
