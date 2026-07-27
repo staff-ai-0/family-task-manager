@@ -235,7 +235,7 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
         </div>
 </BudgetShell>
 
-<script define:vars={{ lang, token }}>
+<script define:vars={{ lang }}>
     document.addEventListener("astro:page-load", () => {
         const camInput = document.getElementById("cam-input");
         const upInput = document.getElementById("up-input");
@@ -298,7 +298,6 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
             const resp = await fetch(url, {
                 method: "POST",
                 body: form,
-                headers: { "Authorization": `Bearer ${token}` },
             });
             const body = await resp.json().catch(() => ({}));
             return { status: resp.status, body };
@@ -457,7 +456,6 @@ const title = lang === "es" ? "Escanear ticket" : "Scan receipt";
                     try {
                         await fetch(`/api/budget/transactions/${body.transaction_id}`, {
                             method: "DELETE",
-                            headers: { "Authorization": `Bearer ${token}` },
                         });
                     } catch (_) {
                         // swallow — reload regardless so user can re-try

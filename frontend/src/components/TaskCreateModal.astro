@@ -10,11 +10,10 @@ import { TASK_PRESETS } from "@lib/task-presets";
 
 interface Props {
     lang: "en" | "es";
-    token: string;
     memberList: Array<{ id: string; name: string; role: string }>;
 }
 
-const { lang, token, memberList } = Astro.props;
+const { lang, memberList } = Astro.props;
 
 const customPreset = { emoji: "✏️", title: "", title_es: "", effort_level: 1, interval_days: 1 };
 
@@ -408,7 +407,7 @@ const dowLabels = lang === "es"
     </div>
 </div>
 
-<script define:vars={{ token, lang }}>
+<script define:vars={{ lang }}>
 (function initTaskCreateModal() {
     const isEs = lang === "es";
     const backdrop = document.getElementById("tcm-backdrop");
@@ -753,7 +752,7 @@ const dowLabels = lang === "es"
             try {
                 const tRes = await fetch("/api/task-templates/translate-text", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                    headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ title, description, source_lang: uiLang, target_lang: otherLang }),
                     signal: ac.signal,
                 });
@@ -804,10 +803,7 @@ const dowLabels = lang === "es"
         try {
             const res = await fetch("/api/task-templates/", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`,
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
 
@@ -833,7 +829,6 @@ const dowLabels = lang === "es"
     async function refreshTemplateList() {
         try {
             const res = await fetch("/api/task-templates/", {
-                headers: { "Authorization": `Bearer ${token}` },
             });
             if (!res.ok) return;
             const templates = await res.json();
