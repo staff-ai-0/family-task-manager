@@ -130,9 +130,21 @@ services:
     image: cloudflare/cloudflared@sha256:6d91c121b803126f7a5344005d17a9324788fc09d305b6e2560ec6040a7ae283
     container_name: family_onprem_tunnel
     restart: unless-stopped
-    command: tunnel --no-autoupdate run
+    # --metrics is pinned so the healthcheck below has a fixed address to probe
+    # (unpinned, cloudflared picks the first free port of a 5-port range).
+    command: tunnel --no-autoupdate --metrics 127.0.0.1:20241 run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    # The image is distroless (no shell, no curl), so this uses cloudflared's
+    # own `tunnel ready` subcommand, which calls /ready and exits non-zero when
+    # the connector has no active edge connection — the HTTP 530 failure mode
+    # this host has produced before, which no health gate previously caught.
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:20241", "ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     depends_on:
       frontend:
         condition: service_healthy
