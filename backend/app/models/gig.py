@@ -65,6 +65,17 @@ class GigOffering(Base):
             "payout_cadence IN ('immediate','weekly','biweekly','monthly')",
             name="ck_gig_offerings_payout_cadence",
         ),
+        # These two exist in the deployed schema but were missing here, so the
+        # ORM-built test database never enforced them. That is not academic:
+        # app/mcp/schemas/gigs.py declares bare `points: int` / `difficulty: int`
+        # (unlike the HTTP route, which bounds both), so an MCP tool call could
+        # create an offering with points=-500, difficulty=99 and only fail in
+        # production.
+        CheckConstraint("points > 0", name="chk_gig_points_positive"),
+        CheckConstraint(
+            "difficulty >= 1 AND difficulty <= 3",
+            name="chk_gig_difficulty_range",
+        ),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)

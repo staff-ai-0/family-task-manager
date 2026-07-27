@@ -102,6 +102,25 @@ jobs:
           alembic downgrade -1
           alembic upgrade head
 
+      - name: Schema parity (migrations vs ORM models)
+        # The step above builds the schema from the migration chain, then
+        # conftest.py drops it and rebuilds from Base.metadata.create_all — so
+        # every test runs against the ORM schema and never the one production
+        # has. Anything enforced on only one side is invisible: when this gate
+        # was added, four CHECK constraints and two partial unique indexes
+        # existed in production but not in the models, and an MCP tool call
+        # could create a gig with points=-500 that only production refused.
+        #
+        # Runs BEFORE pytest, while the DB is still migration-derived. Compares
+        # constraints/columns/enums by definition rather than by name; alembic's
+        # own `check` does not diff CHECK constraints at all, which is exactly
+        # where this repo's drift lives.
+        env:
+          DATABASE_URL: postgresql+asyncpg://familyapp:familyapp123@localhost:5432/familyapp_test
+          ORM_DATABASE_URL: postgresql://familyapp:familyapp123@localhost:5432/familyapp_ormparity
+          PYTHONPATH: .
+        run: python scripts/check_schema_parity.py
+
       - name: Run tests
         env:
           TEST_DATABASE_URL: postgresql+asyncpg://familyapp:familyapp123@localhost:5432/familyapp_test
