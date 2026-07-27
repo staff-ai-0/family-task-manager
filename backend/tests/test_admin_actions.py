@@ -561,3 +561,223 @@ async def test_undo_chore_approval_rejects_bonus_assignment(
     ).scalar_one()
     assert row.result == "error"
     assert "already approved and paid out" in row.error
+
+
+@pytest.mark.asyncio
+async def test_release_paycheck_through_route_credits_audits_and_is_idempotent(
+    client, db_session, superadmin_headers, test_family, test_child_user,
+    mandatory_template_factory,
+):
+    """Exercises release_paycheck through the actual admin route (previously
+    untested at this layer — the money path). A double-release must 409 on
+    the second attempt, write an error audit row, and NOT credit twice.
+
+    ``family_id``/``kid_id`` are captured as locals up front, and every
+    later reference uses them instead of re-reading ``test_family.id``/
+    ``test_child_user.id`` — the second (409) call's error path calls
+    ``_record_failure``, which rolls back and expires every object on this
+    shared session (same rule this task's production fix applies): reading
+    an ORM attribute off `test_family`/`test_child_user` after that without
+    an explicit ``await ... .refresh()`` raises ``MissingGreenlet``, which is
+    exactly what an earlier draft of this test did.
+    """
+    from app.models.cash_transaction import CashTransaction, CashTransactionType
+    from app.models.task_assignment import AssignmentStatus, TaskAssignment
+    from app.services.bank_service import BankService
+
+    family_id = test_family.id
+    kid_id = test_child_user.id
+    today = date.today()
+    week_monday = today - timedelta(days=today.weekday())
+
+    # Chore-proportional allowance, funded and fully earned this week so the
+    # release actually moves money (not just a $0 ledger row).
+    acct = await BankService.ensure_account(db_session, test_child_user)
+    acct.allowance_mode = "chore_proportional"
+    acct.allowance_cents = 10000
+    await db_session.commit()
+
+    template = await mandatory_template_factory(family=test_family, points=10)
+    assignment = TaskAssignment(
+        template_id=template.id,
+        family_id=family_id,
+        assigned_to=kid_id,
+        status=AssignmentStatus.COMPLETED,
+        assigned_date=today,
+        week_of=week_monday,
+    )
+    db_session.add(assignment)
+    await db_session.commit()
+
+    resp = await client.post(
+        f"/api/admin/families/{family_id}/release-paycheck",
+        json={
+            "kid_id": str(kid_id),
+            "week_of": week_monday.isoformat(),
+            "reason": "kid never got Sunday's paycheck",
+        },
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["amount_cents"] == 10000
+
+    ok_row = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "bank.release_paycheck",
+                OperatorAuditLog.result == "ok",
+            )
+        )
+    ).scalar_one()
+    assert ok_row.target_user_id == kid_id
+    assert ok_row.params["week_of"] == week_monday.isoformat()
+
+    ledger_rows = (
+        await db_session.execute(
+            select(CashTransaction).where(
+                CashTransaction.user_id == kid_id,
+                CashTransaction.type == CashTransactionType.ALLOWANCE,
+                CashTransaction.week_of == week_monday,
+            )
+        )
+    ).scalars().all()
+    assert len(ledger_rows) == 1
+    await db_session.refresh(test_child_user)
+    cash_after_first = test_child_user.cash_cents
+    assert cash_after_first == 10000
+
+    # Second release for the same (kid, week) — BankService's own idempotency
+    # check must 409, and that failure must be audited too.
+    resp2 = await client.post(
+        f"/api/admin/families/{family_id}/release-paycheck",
+        json={
+            "kid_id": str(kid_id),
+            "week_of": week_monday.isoformat(),
+            "reason": "double-checking",
+        },
+        headers=superadmin_headers,
+    )
+    assert resp2.status_code == 409
+
+    error_row = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "bank.release_paycheck",
+                OperatorAuditLog.result == "error",
+            )
+        )
+    ).scalar_one()
+    assert "already released" in error_row.error
+
+    # No second credit: same single ledger row, same cash balance.
+    ledger_rows_after = (
+        await db_session.execute(
+            select(CashTransaction).where(
+                CashTransaction.user_id == kid_id,
+                CashTransaction.type == CashTransactionType.ALLOWANCE,
+                CashTransaction.week_of == week_monday,
+            )
+        )
+    ).scalars().all()
+    assert len(ledger_rows_after) == 1
+    await db_session.refresh(test_child_user)
+    assert test_child_user.cash_cents == cash_after_first
+
+
+@pytest.mark.asyncio
+async def test_restore_recycled_through_route_audits_ok_and_error_paths(
+    client, db_session, superadmin_headers, test_family,
+):
+    """Exercises restore_recycled through the actual admin route (previously
+    untested at this layer): a happy-path restore, an unknown item_type
+    (422, never reaches a restorer), and a downstream NotFoundException from
+    the restorer itself (item already restored / wrong id) — all three must
+    be audited.
+
+    ``family_id``/``item_id`` are captured as locals up front and reused for
+    every request — see the release_paycheck test above for why: the 422 and
+    404 requests each trigger ``_record_failure``'s rollback, which expires
+    `test_family` (and `txn`) on this shared session, so re-reading
+    `test_family.id`/`txn.id` afterward raises ``MissingGreenlet``.
+    """
+    from app.models.budget import BudgetAccount, BudgetTransaction
+
+    family_id = test_family.id
+    account = BudgetAccount(
+        family_id=family_id, name="Cash", type="checking", currency="MXN"
+    )
+    db_session.add(account)
+    await db_session.commit()
+    await db_session.refresh(account)
+
+    txn = BudgetTransaction(
+        family_id=family_id, account_id=account.id, date=date.today(),
+        amount=-500,
+    )
+    db_session.add(txn)
+    await db_session.commit()
+    await db_session.refresh(txn)
+    item_id = txn.id
+    txn.deleted_at = datetime.now(timezone.utc)
+    await db_session.commit()
+
+    # Happy path.
+    resp = await client.post(
+        f"/api/admin/families/{family_id}/restore",
+        json={
+            "reason": "parent asked us to bring it back",
+            "item_type": "transaction",
+            "item_id": str(item_id),
+        },
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"restored": True, "item_type": "transaction"}
+
+    ok_row = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "budget.restore",
+                OperatorAuditLog.result == "ok",
+            )
+        )
+    ).scalar_one()
+    assert ok_row.params["item_id"] == str(item_id)
+
+    # Unknown item_type — 422, never reaches a restorer, still audited.
+    resp = await client.post(
+        f"/api/admin/families/{family_id}/restore",
+        json={
+            "reason": "typo test",
+            "item_type": "not_a_real_type",
+            "item_id": str(item_id),
+        },
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 422
+
+    # Same item again — it's already live (deleted_at is now NULL), so the
+    # restorer itself raises NotFoundException. Also the realistic
+    # "operator targets an item that's already live" failure mode.
+    resp = await client.post(
+        f"/api/admin/families/{family_id}/restore",
+        json={
+            "reason": "already restored",
+            "item_type": "transaction",
+            "item_id": str(item_id),
+        },
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 404
+
+    error_rows = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "budget.restore",
+                OperatorAuditLog.result == "error",
+            )
+        )
+    ).scalars().all()
+    assert len(error_rows) == 2
+    assert any("unknown item_type" in (r.error or "") for r in error_rows)
+    assert any("not found" in (r.error or "").lower() for r in error_rows)

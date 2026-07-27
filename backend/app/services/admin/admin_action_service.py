@@ -431,6 +431,13 @@ class AdminActionService:
         see ``_record_failure``'s docstring: db.rollback() expires `operator`
         (loaded earlier, on this same session, by require_superadmin), so
         reading `.id`/`.email` off it after rollback raises MissingGreenlet.
+
+        FamilyDeletionService.cancel_deletion itself raises HTTPException for
+        its own domain checks (not-pending / retention-window), but the
+        FamilyService.get_family lookup it calls first raises NotFoundException
+        (a FamilyAppException, not HTTPException) for a nonexistent family_id —
+        the same HTTPException/FamilyAppException split as undo_chore_approval,
+        so both are caught here too.
         """
         from app.services.family_deletion_service import FamilyDeletionService
 
@@ -439,7 +446,7 @@ class AdminActionService:
             result = await FamilyDeletionService.cancel_deletion(
                 db, family_id=family_id
             )
-        except HTTPException as exc:
+        except (HTTPException, FamilyAppException) as exc:
             await _record_failure(
                 db,
                 operator_id=operator_id,
@@ -479,10 +486,19 @@ class AdminActionService:
         ON DELETE SET NULL, so a cross-family actor is valid at the DB level
         and truthful in the ledger.
 
-        ``operator_id``/``operator_email`` are captured into locals BEFORE
-        the try, and the error path uses ``_record_failure`` — see
-        ``cancel_deletion`` above / ``_record_failure``'s docstring for why
-        reading `operator.id`/`.email` after a rollback is unsafe.
+        BankService.release_chore_paycheck commits exactly once, at the very
+        end, after every mutation (verified: its ledger-writing helpers —
+        CashService.credit_split_rows / credit_single_jar — are documented
+        "no commit, caller commits"; PointsService.award_assignment_completion
+        is not on this path). So the audit row is staged BEFORE calling it,
+        not after: that single internal commit then persists the mutation and
+        the audit row together, atomically, with no separate commit needed
+        here. If release_chore_paycheck raises before reaching its commit,
+        nothing (mutation or staged row) is durable, the except below rolls
+        back and stages a fresh "error" row instead — there is no window
+        where an "ok" row survives a failed release. ``operator_id``/
+        ``operator_email`` are captured into locals BEFORE the try for the
+        same reason as ``cancel_deletion`` above.
         """
         from app.services.bank_service import BankService
 
@@ -490,7 +506,16 @@ class AdminActionService:
         if kid.family_id != family_id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
         operator_id, operator_email = operator.id, operator.email
+        params = {"week_of": week_of.isoformat(), "reason": reason}
         try:
+            OperatorAuditService.record(
+                db,
+                actor=operator,
+                action="bank.release_paycheck",
+                target_family_id=family_id,
+                target_user_id=kid_id,
+                params=params,
+            )
             result = await BankService.release_chore_paycheck(
                 db,
                 kid,
@@ -507,20 +532,11 @@ class AdminActionService:
                 action="bank.release_paycheck",
                 target_family_id=family_id,
                 target_user_id=kid_id,
-                params={"week_of": week_of.isoformat(), "reason": reason},
+                params=params,
                 exc=exc,
             )
             raise
 
-        OperatorAuditService.record(
-            db,
-            actor=operator,
-            action="bank.release_paycheck",
-            target_family_id=family_id,
-            target_user_id=kid_id,
-            params={"week_of": week_of.isoformat(), "reason": reason},
-        )
-        await db.commit()
         return result
 
     @staticmethod
@@ -549,17 +565,41 @@ class AdminActionService:
         re-raised as-is and the existing global handler for its exact type
         maps it to the right status code for the client.
 
+        patch_assignment commits exactly once, at the very end, after every
+        mutation (its points clawback — PointsService.award_assignment_
+        completion — is documented "caller commits", i.e. no commit of its
+        own). So, like release_paycheck, the audit row is staged BEFORE
+        calling patch_assignment: its single internal commit then persists
+        the mutation and the audit row together. The one value the OK row
+        needs that isn't known from the request — target_user_id, i.e. who
+        the assignment belongs to — is fetched with a cheap read-only lookup
+        BEFORE staging (pre-existing data, not something the mutation
+        computes), rather than deferred to patch_assignment's return value,
+        which would arrive only after its commit has already happened.
         ``operator_id``/``operator_email`` are captured into locals BEFORE
-        the try, and the error path uses ``_record_failure`` — see
-        ``cancel_deletion`` above / ``_record_failure``'s docstring for why
-        reading `operator.id`/`.email` after a rollback is unsafe.
+        the try for the same reason as ``cancel_deletion`` above.
         """
-        from app.models.task_assignment import AssignmentStatus
+        from app.models.task_assignment import AssignmentStatus, TaskAssignment
         from app.services.task_assignment_service import TaskAssignmentService
 
         operator_id, operator_email = operator.id, operator.email
+        assigned_to = await db.scalar(
+            select(TaskAssignment.assigned_to).where(
+                TaskAssignment.id == assignment_id,
+                TaskAssignment.family_id == family_id,
+            )
+        )
+        params = {"assignment_id": str(assignment_id), "reason": reason}
         try:
-            assignment = await TaskAssignmentService.patch_assignment(
+            OperatorAuditService.record(
+                db,
+                actor=operator,
+                action="assignment.undo_approval",
+                target_family_id=family_id,
+                target_user_id=assigned_to,
+                params=params,
+            )
+            await TaskAssignmentService.patch_assignment(
                 db,
                 assignment_id,
                 family_id,
@@ -572,21 +612,12 @@ class AdminActionService:
                 operator_email=operator_email,
                 action="assignment.undo_approval",
                 target_family_id=family_id,
-                target_user_id=None,
-                params={"assignment_id": str(assignment_id), "reason": reason},
+                target_user_id=assigned_to,
+                params=params,
                 exc=exc,
             )
             raise
 
-        OperatorAuditService.record(
-            db,
-            actor=operator,
-            action="assignment.undo_approval",
-            target_family_id=family_id,
-            target_user_id=assignment.assigned_to,
-            params={"assignment_id": str(assignment_id), "reason": reason},
-        )
-        await db.commit()
         return {"assignment_id": str(assignment_id), "status": "pending"}
 
     @staticmethod
@@ -599,7 +630,21 @@ class AdminActionService:
         item_id: UUID,
         reason: str,
     ) -> dict:
-        """Restore one soft-deleted budget row from the recycle bin."""
+        """Restore one soft-deleted budget row from the recycle bin.
+
+        Every RecycleBinService.restore_* commits exactly once, at the very
+        end, after its mutations (each ends in ``await db.commit()`` followed
+        only by a read-only ``db.refresh()``) — so, like release_paycheck and
+        undo_chore_approval, the audit row is staged BEFORE calling the
+        restorer and needs no separate commit of its own: the restorer's
+        commit persists both together. The realistic failure mode here is an
+        operator typo — an unknown item_type, or an item_id that doesn't
+        exist / belongs to another family / is already live — and both are
+        now audited: the unknown-item_type 422 never reaches a restorer (no
+        mutation is possible), so it is recorded directly via
+        ``_record_failure``; a downstream NotFoundException from any restorer
+        is caught the same way.
+        """
         from app.services.budget.recycle_bin_service import RecycleBinService
 
         restorers = {
@@ -608,23 +653,46 @@ class AdminActionService:
             "category": RecycleBinService.restore_category,
             "category_group": RecycleBinService.restore_category_group,
         }
+        operator_id, operator_email = operator.id, operator.email
+        params = {"item_type": item_type, "item_id": str(item_id), "reason": reason}
         restore = restorers.get(item_type)
         if restore is None:
-            raise HTTPException(
+            exc = HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 f"unknown item_type: {item_type}",
             )
-        await restore(db, item_id, family_id)
-        OperatorAuditService.record(
-            db,
-            actor=operator,
-            action="budget.restore",
-            target_family_id=family_id,
-            params={
-                "item_type": item_type,
-                "item_id": str(item_id),
-                "reason": reason,
-            },
-        )
-        await db.commit()
+            await _record_failure(
+                db,
+                operator_id=operator_id,
+                operator_email=operator_email,
+                action="budget.restore",
+                target_family_id=family_id,
+                target_user_id=None,
+                params=params,
+                exc=exc,
+            )
+            raise exc
+
+        try:
+            OperatorAuditService.record(
+                db,
+                actor=operator,
+                action="budget.restore",
+                target_family_id=family_id,
+                params=params,
+            )
+            await restore(db, item_id, family_id)
+        except (HTTPException, FamilyAppException) as exc:
+            await _record_failure(
+                db,
+                operator_id=operator_id,
+                operator_email=operator_email,
+                action="budget.restore",
+                target_family_id=family_id,
+                target_user_id=None,
+                params=params,
+                exc=exc,
+            )
+            raise
+
         return {"restored": True, "item_type": item_type}
