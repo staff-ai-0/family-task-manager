@@ -138,6 +138,15 @@ async def _mcp_dispatch(
         return {"ok": False, "error": "tool returned no parseable result"}
 
 
+
+class JarvisQuotaExceeded(ValidationError):
+    """The family's daily message cap is spent — a quota state, not an outage."""
+
+
+class JarvisUpstreamError(ValidationError):
+    """The upstream LLM call failed — the only genuinely 502 condition here."""
+
+
 class JarvisService:
     @staticmethod
     async def _build_context(db: AsyncSession, family_id: UUID) -> str:
@@ -372,7 +381,7 @@ class JarvisService:
         """
         try:
             if not settings.LITELLM_API_KEY:
-                raise ValidationError("Jarvis not configured. Set LITELLM_API_KEY.")
+                raise JarvisUpstreamError("Jarvis not configured. Set LITELLM_API_KEY.")
             msg = (message or "").strip()
             if not msg:
                 raise ValidationError("Message is empty.")
@@ -571,7 +580,7 @@ class JarvisService:
         role: str = "PARENT",
     ) -> dict:
         if not settings.LITELLM_API_KEY:
-            raise ValidationError(
+            raise JarvisUpstreamError(
                 "Jarvis not configured. Set LITELLM_API_KEY."
             )
         message = (message or "").strip()
@@ -582,7 +591,7 @@ class JarvisService:
         if cap > 0:
             sent_today = await JarvisService._today_message_count(db, family_id)
             if sent_today >= cap:
-                raise ValidationError(
+                raise JarvisQuotaExceeded(
                     f"Daily Jarvis cap reached ({cap}). Try again tomorrow."
                 )
 
@@ -640,7 +649,7 @@ class JarvisService:
                     )
                 )
             except Exception as exc:
-                raise ValidationError(f"Jarvis chat failed: {exc}")
+                raise JarvisUpstreamError(f"Jarvis chat failed: {exc}")
 
             choice = completion.choices[0].message
             tool_calls = getattr(choice, "tool_calls", None) or []

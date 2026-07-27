@@ -23,7 +23,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import FamilyAppException
 from app.core.modules import TOGGLABLE_MODULES
 from app.models.family import Family
 from app.models.user import User
@@ -489,7 +488,7 @@ class AdminActionService:
             result = await FamilyDeletionService.cancel_deletion(
                 db, family_id=family_id
             )
-        except (HTTPException, FamilyAppException) as exc:
+        except Exception as exc:
             await _record_failure(
                 db,
                 operator_id=operator_id,
@@ -567,7 +566,7 @@ class AdminActionService:
                 entitled=True,
                 released_by=operator.id,
             )
-        except HTTPException as exc:
+        except Exception as exc:
             await _record_failure(
                 db,
                 operator_id=operator_id,
@@ -648,7 +647,7 @@ class AdminActionService:
                 family_id,
                 status=AssignmentStatus.PENDING,
             )
-        except (HTTPException, FamilyAppException) as exc:
+        except Exception as exc:
             await _record_failure(
                 db,
                 operator_id=operator_id,
@@ -725,7 +724,7 @@ class AdminActionService:
                 params=params,
             )
             await restore(db, item_id, family_id)
-        except (HTTPException, FamilyAppException) as exc:
+        except Exception as exc:
             await _record_failure(
                 db,
                 operator_id=operator_id,

@@ -11,6 +11,9 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
+import ipaddress
+import socket
+
 import httpx
 from fastapi.concurrency import run_in_threadpool
 from openai import OpenAI
@@ -53,6 +56,44 @@ class ImportedRecipe:
     source_url: str
 
 
+# The backend can reach the container network, the LAN, and cloud metadata
+# endpoints that a browser cannot. Without this, "import a recipe from a URL"
+# is a server-side request forgery primitive: any authenticated parent could
+# probe internal services and read the response back through the error/preview.
+MAX_REDIRECTS = 5
+
+_BLOCKED_PORTS = {22, 23, 25, 445, 3306, 5432, 6379, 9200, 11211, 27017}
+
+
+def _assert_public_url(url: str) -> None:
+    """Refuse URLs that resolve to anything but a public address."""
+    parsed = httpx.URL(url)
+    host = parsed.host
+    if not host:
+        raise ValidationError("Invalid URL — no host")
+    if parsed.port in _BLOCKED_PORTS:
+        raise ValidationError("Refusing to fetch that port")
+
+    try:
+        infos = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))
+    except socket.gaierror:
+        raise ValidationError(f"Could not resolve host: {host}")
+
+    for info in infos:
+        addr = ipaddress.ip_address(info[4][0])
+        if (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_reserved
+            or addr.is_multicast
+            or addr.is_unspecified
+        ):
+            raise ValidationError(
+                "Refusing to fetch a private or internal address"
+            )
+
+
 def _strip_html(html: str) -> str:
     """Remove script/style and collapse whitespace. Cheap, not perfect."""
     # Drop script + style blocks first (greedy was a bug source elsewhere — use non-greedy).
@@ -79,12 +120,26 @@ async def import_recipe_from_url(url: str) -> ImportedRecipe:
     url = (url or "").strip()
     if not url or not url.startswith(("http://", "https://")):
         raise ValidationError("Invalid URL — must start with http(s)://")
+    _assert_public_url(url)
 
     try:
+        # follow_redirects is off: a public URL can 302 to 127.0.0.1 or a
+        # link-local address, which would defeat the check above. Redirects are
+        # followed manually so every hop is validated.
         async with httpx.AsyncClient(
-            timeout=FETCH_TIMEOUT_SECONDS, follow_redirects=True
+            timeout=FETCH_TIMEOUT_SECONDS, follow_redirects=False
         ) as client:
             resp = await client.get(url)
+            for _ in range(MAX_REDIRECTS):
+                if resp.status_code not in (301, 302, 303, 307, 308):
+                    break
+                location = resp.headers.get("location")
+                if not location:
+                    break
+                next_url = str(httpx.URL(url).join(location))
+                _assert_public_url(next_url)
+                url = next_url
+                resp = await client.get(url)
             resp.raise_for_status()
     except httpx.HTTPError as exc:
         raise ValidationError(f"Could not fetch URL: {exc}")

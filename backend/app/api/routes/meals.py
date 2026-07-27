@@ -4,11 +4,12 @@ from datetime import date as date_t
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.rate_limiter import AI_LIMIT, limiter
 from app.core.dependencies import get_current_user
 from app.core.exceptions import ValidationError
 from app.core.premium import require_feature
@@ -109,7 +110,9 @@ class RecipeImportResponse(BaseModel):
 
 
 @router.post("/recipes/import", response_model=RecipeImportResponse)
+@limiter.limit(AI_LIMIT)
 async def import_recipe(
+    request: Request,
     data: RecipeImportRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

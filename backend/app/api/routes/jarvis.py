@@ -16,7 +16,11 @@ from app.core.premium import require_feature
 from app.core.rate_limiter import limiter, AI_LIMIT
 from app.core.type_utils import to_uuid_required
 from app.models import User
-from app.services.jarvis_service import JarvisService
+from app.services.jarvis_service import (
+    JarvisQuotaExceeded,
+    JarvisService,
+    JarvisUpstreamError,
+)
 from app.services.jarvis_pending_action_service import PendingActionService
 from app.services.jarvis_mcp_token_service import TokenService
 
@@ -76,8 +80,15 @@ async def chat(
             preferred_lang=(current_user.preferred_lang or "en"),
             role=current_user.role,
         )
-    except ValidationError as exc:
+    except JarvisQuotaExceeded as exc:
+        # A spent quota is not a gateway failure. Returning 502 made routine
+        # cap-hits look like an outage to the client and to any 5xx alerting.
+        raise HTTPException(status_code=429, detail=str(exc))
+    except JarvisUpstreamError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+    except ValidationError as exc:
+        # Empty message, unconfigured key: the caller's problem, not ours.
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.post("/chat-stream")
