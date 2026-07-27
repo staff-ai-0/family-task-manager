@@ -1,5 +1,6 @@
 """Operator write actions. Every route audits."""
 
+from datetime import date
 from typing import Optional
 from uuid import UUID
 
@@ -36,6 +37,20 @@ class ModulesRequest(ReasonRequest):
 
 class ActiveRequest(ReasonRequest):
     active: bool
+
+
+class CancelDeletionRequest(ReasonRequest):
+    pass
+
+
+class ReleasePaycheckRequest(ReasonRequest):
+    kid_id: UUID
+    week_of: date
+
+
+class RestoreRequest(ReasonRequest):
+    item_type: str
+    item_id: UUID
 
 
 @router.post("/families/{family_id}/comp-plus")
@@ -129,4 +144,75 @@ async def password_reset(
     """Send a reset link and invalidate outstanding sessions."""
     return await AdminActionService.trigger_password_reset(
         db, operator=operator, user_id=user_id, reason=body.reason
+    )
+
+
+@router.post("/families/{family_id}/cancel-deletion")
+async def cancel_deletion(
+    family_id: UUID,
+    body: CancelDeletionRequest,
+    operator: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Reinstate a family inside its 30-day recovery window.
+
+    Billing is NOT restored — the PayPal subscription was cancelled at
+    soft-delete time and the family must re-subscribe.
+    """
+    return await AdminActionService.cancel_deletion(
+        db, operator=operator, family_id=family_id, reason=body.reason
+    )
+
+
+@router.post("/families/{family_id}/release-paycheck")
+async def release_paycheck(
+    family_id: UUID,
+    body: ReleasePaycheckRequest,
+    operator: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Force-release a stuck chore paycheck. Idempotent per (kid, week)."""
+    return await AdminActionService.release_paycheck(
+        db,
+        operator=operator,
+        family_id=family_id,
+        kid_id=body.kid_id,
+        week_of=body.week_of,
+        reason=body.reason,
+    )
+
+
+@router.post("/families/{family_id}/assignments/{assignment_id}/undo-approval")
+async def undo_approval(
+    family_id: UUID,
+    assignment_id: UUID,
+    body: ReasonRequest,
+    operator: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Revert a mistakenly-approved chore. Refuses bonus and gig reversals."""
+    return await AdminActionService.undo_chore_approval(
+        db,
+        operator=operator,
+        family_id=family_id,
+        assignment_id=assignment_id,
+        reason=body.reason,
+    )
+
+
+@router.post("/families/{family_id}/restore")
+async def restore_recycled(
+    family_id: UUID,
+    body: RestoreRequest,
+    operator: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Restore one budget row from the family's recycle bin."""
+    return await AdminActionService.restore_recycled(
+        db,
+        operator=operator,
+        family_id=family_id,
+        item_type=body.item_type,
+        item_id=body.item_id,
+        reason=body.reason,
     )

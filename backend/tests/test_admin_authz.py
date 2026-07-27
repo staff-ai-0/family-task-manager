@@ -256,6 +256,22 @@ async def test_every_action_route_404s_for_non_operator(
         (f"/api/admin/users/{uid}/active", {"reason": "x", "active": False}),
         (f"/api/admin/users/{uid}/resend-verification", {"reason": "x"}),
         (f"/api/admin/users/{uid}/password-reset", {"reason": "x"}),
+        # Task 10 actions — added here (not in the task-10 brief, which did
+        # not touch this file) because this is the one test guarding the
+        # "admin routes 404, never 403, for a non-operator" constraint that
+        # Task 10's own brief restates; without this addition a future
+        # operator route could forget Depends(require_superadmin) and leak
+        # via 403 with nothing here to catch it.
+        (f"/api/admin/families/{fid}/cancel-deletion", {"reason": "x"}),
+        (
+            f"/api/admin/families/{fid}/release-paycheck",
+            {"reason": "x", "kid_id": str(uid), "week_of": "2026-07-20"},
+        ),
+        (f"/api/admin/families/{fid}/assignments/{uid}/undo-approval", {"reason": "x"}),
+        (
+            f"/api/admin/families/{fid}/restore",
+            {"reason": "x", "item_type": "transaction", "item_id": str(uid)},
+        ),
     ]
     for path, body in calls:
         resp = await client.post(path, json=body, headers=auth_headers)

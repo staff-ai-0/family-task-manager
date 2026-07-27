@@ -1,5 +1,7 @@
 """Operator actions and their audit trail."""
 
+from datetime import date, datetime, timedelta, timezone
+
 import pytest
 from sqlalchemy import select
 
@@ -436,3 +438,126 @@ async def test_error_audit_row_written_even_when_refresh_would_fail(
     assert rows[0].result == "error"
     assert "comp plus exploded" in rows[0].error
     assert rows[0].actor_email == "superadmin@test.com"
+
+
+@pytest.mark.asyncio
+async def test_cancel_deletion_clears_tombstones_and_audits(
+    client, db_session, superadmin_headers, test_family, test_parent_user
+):
+    now = datetime.now(timezone.utc)
+    test_family.deleted_at = now
+    test_parent_user.deleted_at = now
+    await db_session.commit()
+
+    resp = await client.post(
+        f"/api/admin/families/{test_family.id}/cancel-deletion",
+        json={"reason": "closed by mistake"},
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["billing_restored"] is False
+
+    await db_session.refresh(test_family)
+    await db_session.refresh(test_parent_user)
+    assert test_family.deleted_at is None
+    assert test_parent_user.deleted_at is None
+
+    row = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "family.cancel_deletion"
+            )
+        )
+    ).scalar_one()
+    assert row.result == "ok"
+
+
+@pytest.mark.asyncio
+async def test_cancel_deletion_refuses_past_retention_window(
+    client, db_session, superadmin_headers, test_family
+):
+    test_family.deleted_at = datetime.now(timezone.utc) - timedelta(days=45)
+    await db_session.commit()
+
+    resp = await client.post(
+        f"/api/admin/families/{test_family.id}/cancel-deletion",
+        json={"reason": "too late"},
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_cancel_deletion_on_live_family_is_a_noop_409(
+    client, superadmin_headers, test_family
+):
+    resp = await client.post(
+        f"/api/admin/families/{test_family.id}/cancel-deletion",
+        json={"reason": "nothing to undo"},
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_undo_chore_approval_rejects_bonus_assignment(
+    client, db_session, superadmin_headers, test_family, test_child_user,
+    gig_template_factory,
+):
+    """patch_assignment refuses bonus/gig reversals. The operator route must
+    surface that refusal rather than fail opaquely.
+
+    Deviation from the task-10 brief (see task-10-report.md): the brief's
+    version of this test omitted ``family=test_family`` on the factory call
+    (a required kwarg — TypeError), omitted
+    ``approval_status=ApprovalStatus.APPROVED`` on the assignment (without
+    it, TaskAssignmentService.patch_assignment does not refuse the reversal
+    at all — verified empirically against the real logic at
+    backend/app/services/task_assignment_service.py:2254, which only refuses
+    a bonus/gig reversal when approval_status is APPROVED, "already approved
+    and paid out"), and omitted ``assigned_date``/``week_of``
+    (task_assignments has NOT NULL constraints on both, neither has a
+    default). All four are fixed here so the test actually exercises the
+    refusal path it documents.
+    """
+    from app.models.task_assignment import (
+        ApprovalStatus,
+        AssignmentStatus,
+        TaskAssignment,
+    )
+
+    today = date.today()
+    template = await gig_template_factory(family=test_family)
+    assignment = TaskAssignment(
+        template_id=template.id,
+        family_id=test_family.id,
+        assigned_to=test_child_user.id,
+        status=AssignmentStatus.COMPLETED,
+        approval_status=ApprovalStatus.APPROVED,
+        assigned_date=today,
+        week_of=today - timedelta(days=today.weekday()),
+    )
+    db_session.add(assignment)
+    await db_session.commit()
+    await db_session.refresh(assignment)
+
+    resp = await client.post(
+        f"/api/admin/families/{test_family.id}/assignments/{assignment.id}/undo-approval",
+        json={"reason": "approved by mistake"},
+        headers=superadmin_headers,
+    )
+    assert resp.status_code in (400, 422)
+    # A bare 4xx would also pass if undo_chore_approval swallowed
+    # patch_assignment's refusal and returned some other 4xx (e.g. a
+    # generic validation error) — assert the operator actually sees
+    # patch_assignment's own refusal message, verbatim, not an opaque one.
+    assert "already approved and paid out" in resp.json()["message"]
+    row = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "assignment.undo_approval"
+            )
+        )
+    ).scalar_one()
+    assert row.result == "error"
+    assert "already approved and paid out" in row.error

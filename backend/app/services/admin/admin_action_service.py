@@ -13,7 +13,7 @@ attempt itself fails, the client still gets the original error, not a crash.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Optional
 from uuid import UUID
@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.exceptions import FamilyAppException
 from app.core.modules import TOGGLABLE_MODULES
 from app.models.family import Family
 from app.models.user import User
@@ -417,3 +418,213 @@ class AdminActionService:
         )
         await db.commit()
         return {"sent": bool(sent), "sessions_invalidated": True}
+
+    @staticmethod
+    async def cancel_deletion(
+        db: AsyncSession, *, operator: User, family_id: UUID, reason: str
+    ) -> dict:
+        """Reinstate a family inside its 30-day recovery window.
+
+        ``operator_id``/``operator_email`` are captured into locals BEFORE the
+        try, and the error path uses ``_record_failure`` rather than a
+        hand-rolled ``OperatorAuditService.record(db, actor=operator, ...)`` —
+        see ``_record_failure``'s docstring: db.rollback() expires `operator`
+        (loaded earlier, on this same session, by require_superadmin), so
+        reading `.id`/`.email` off it after rollback raises MissingGreenlet.
+        """
+        from app.services.family_deletion_service import FamilyDeletionService
+
+        operator_id, operator_email = operator.id, operator.email
+        try:
+            result = await FamilyDeletionService.cancel_deletion(
+                db, family_id=family_id
+            )
+        except HTTPException as exc:
+            await _record_failure(
+                db,
+                operator_id=operator_id,
+                operator_email=operator_email,
+                action="family.cancel_deletion",
+                target_family_id=family_id,
+                target_user_id=None,
+                params={"reason": reason},
+                exc=exc,
+            )
+            raise
+
+        OperatorAuditService.record(
+            db,
+            actor=operator,
+            action="family.cancel_deletion",
+            target_family_id=family_id,
+            params={"reason": reason},
+        )
+        await db.commit()
+        return result
+
+    @staticmethod
+    async def release_paycheck(
+        db: AsyncSession,
+        *,
+        operator: User,
+        family_id: UUID,
+        kid_id: UUID,
+        week_of: date,
+        reason: str,
+    ) -> dict:
+        """Force-release a stuck chore paycheck for one kid and week.
+
+        Idempotent per (kid, week) inside BankService. released_by carries the
+        OPERATOR's id — cash_transactions.created_by is a nullable FK with
+        ON DELETE SET NULL, so a cross-family actor is valid at the DB level
+        and truthful in the ledger.
+
+        ``operator_id``/``operator_email`` are captured into locals BEFORE
+        the try, and the error path uses ``_record_failure`` — see
+        ``cancel_deletion`` above / ``_record_failure``'s docstring for why
+        reading `operator.id`/`.email` after a rollback is unsafe.
+        """
+        from app.services.bank_service import BankService
+
+        kid = await _load_user(db, kid_id)
+        if kid.family_id != family_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
+        operator_id, operator_email = operator.id, operator.email
+        try:
+            result = await BankService.release_chore_paycheck(
+                db,
+                kid,
+                family_id,
+                week_of,
+                entitled=True,
+                released_by=operator.id,
+            )
+        except HTTPException as exc:
+            await _record_failure(
+                db,
+                operator_id=operator_id,
+                operator_email=operator_email,
+                action="bank.release_paycheck",
+                target_family_id=family_id,
+                target_user_id=kid_id,
+                params={"week_of": week_of.isoformat(), "reason": reason},
+                exc=exc,
+            )
+            raise
+
+        OperatorAuditService.record(
+            db,
+            actor=operator,
+            action="bank.release_paycheck",
+            target_family_id=family_id,
+            target_user_id=kid_id,
+            params={"week_of": week_of.isoformat(), "reason": reason},
+        )
+        await db.commit()
+        return result
+
+    @staticmethod
+    async def undo_chore_approval(
+        db: AsyncSession,
+        *,
+        operator: User,
+        family_id: UUID,
+        assignment_id: UUID,
+        reason: str,
+    ) -> dict:
+        """Revert a mistakenly-approved CHORE back to PENDING.
+
+        TaskAssignmentService.patch_assignment claws the points back and
+        clears the grade — which matters, because a leftover `partial` grade
+        keeps haircutting the kid's payday math. It REFUSES bonus and gig
+        reversals; that refusal is surfaced to the operator verbatim.
+
+        patch_assignment signals that refusal (and any other domain rule
+        violation — cross-family reassignment, an unknown assignment) via
+        FamilyAppException subclasses (ValidationException/ForbiddenException/
+        NotFoundException from app.core.exceptions), NOT FastAPI's
+        HTTPException — those two exception families are unrelated in this
+        codebase (see app/core/exception_handlers.py), so both are caught
+        here to guarantee the audit row; the original exception is
+        re-raised as-is and the existing global handler for its exact type
+        maps it to the right status code for the client.
+
+        ``operator_id``/``operator_email`` are captured into locals BEFORE
+        the try, and the error path uses ``_record_failure`` — see
+        ``cancel_deletion`` above / ``_record_failure``'s docstring for why
+        reading `operator.id`/`.email` after a rollback is unsafe.
+        """
+        from app.models.task_assignment import AssignmentStatus
+        from app.services.task_assignment_service import TaskAssignmentService
+
+        operator_id, operator_email = operator.id, operator.email
+        try:
+            assignment = await TaskAssignmentService.patch_assignment(
+                db,
+                assignment_id,
+                family_id,
+                status=AssignmentStatus.PENDING,
+            )
+        except (HTTPException, FamilyAppException) as exc:
+            await _record_failure(
+                db,
+                operator_id=operator_id,
+                operator_email=operator_email,
+                action="assignment.undo_approval",
+                target_family_id=family_id,
+                target_user_id=None,
+                params={"assignment_id": str(assignment_id), "reason": reason},
+                exc=exc,
+            )
+            raise
+
+        OperatorAuditService.record(
+            db,
+            actor=operator,
+            action="assignment.undo_approval",
+            target_family_id=family_id,
+            target_user_id=assignment.assigned_to,
+            params={"assignment_id": str(assignment_id), "reason": reason},
+        )
+        await db.commit()
+        return {"assignment_id": str(assignment_id), "status": "pending"}
+
+    @staticmethod
+    async def restore_recycled(
+        db: AsyncSession,
+        *,
+        operator: User,
+        family_id: UUID,
+        item_type: str,
+        item_id: UUID,
+        reason: str,
+    ) -> dict:
+        """Restore one soft-deleted budget row from the recycle bin."""
+        from app.services.budget.recycle_bin_service import RecycleBinService
+
+        restorers = {
+            "transaction": RecycleBinService.restore_transaction,
+            "account": RecycleBinService.restore_account,
+            "category": RecycleBinService.restore_category,
+            "category_group": RecycleBinService.restore_category_group,
+        }
+        restore = restorers.get(item_type)
+        if restore is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"unknown item_type: {item_type}",
+            )
+        await restore(db, item_id, family_id)
+        OperatorAuditService.record(
+            db,
+            actor=operator,
+            action="budget.restore",
+            target_family_id=family_id,
+            params={
+                "item_type": item_type,
+                "item_id": str(item_id),
+                "reason": reason,
+            },
+        )
+        await db.commit()
+        return {"restored": True, "item_type": item_type}

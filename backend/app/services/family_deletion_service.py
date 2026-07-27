@@ -44,6 +44,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -416,3 +417,40 @@ class FamilyDeletionService:
             removed,
             gcs_removed,
         )
+
+    @classmethod
+    async def cancel_deletion(cls, db: AsyncSession, *, family_id: UUID) -> dict:
+        """Undo a soft delete, inside the retention window.
+
+        The 30-day recovery window has been documented since the deletion
+        feature shipped, but nothing anywhere cleared deleted_at — this is
+        that missing half.
+
+        Billing is NOT restored: delete_family cancels the family's PayPal
+        subscription at soft-delete time, and there is no API to un-cancel it.
+        A reinstated family must re-subscribe. The caller must say so.
+        """
+        family = await FamilyService.get_family(db, family_id)
+        if family.deleted_at is None:
+            raise HTTPException(
+                status_code=409, detail="family is not pending deletion"
+            )
+
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            days=cls.PURGE_RETENTION_DAYS
+        )
+        if family.deleted_at < cutoff:
+            raise HTTPException(
+                status_code=409,
+                detail="retention window has expired; data may already be purged",
+            )
+
+        family.deleted_at = None
+        # Mirror of the soft-delete statement: clear the denormalized tombstone
+        # on every member. token_version is deliberately NOT rolled back —
+        # deletion invalidated those refresh tokens and reinstating the family
+        # must not resurrect them.
+        await db.execute(
+            update(User).where(User.family_id == family_id).values(deleted_at=None)
+        )
+        return {"family_id": str(family_id), "billing_restored": False}
