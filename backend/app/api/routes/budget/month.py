@@ -99,7 +99,7 @@ async def get_month_budget(
         )
     )
     income_result = await db.execute(income_query)
-    result["totals"]["income"] = income_result.scalar() or 0
+    result["totals"]["income"] = int(income_result.scalar() or 0)
 
     # Compute every category's budgeted/activity/available in a fixed number of
     # grouped queries instead of ~5 per category (was an N+1 over the whole month).
@@ -145,12 +145,11 @@ async def get_month_budget(
             group_data["total_available"] += category_data["available"]
         
         result["category_groups"].append(group_data)
-        
-        # Track income for totals reporting
-        if group.is_income:
-            result["totals"]["income"] += group_data["total_activity"]
-        else:
-            # Add to grand totals
+
+        # Income-group activity is already counted by the account-level income
+        # query above (it is a subset of it), so it must not be added again here.
+        # Only non-income groups feed the spending grand totals.
+        if not group.is_income:
             result["totals"]["budgeted"] += group_data["total_budgeted"]
             result["totals"]["activity"] += group_data["total_activity"]
             result["totals"]["available"] += group_data["total_available"]
