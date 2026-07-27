@@ -1,0 +1,64 @@
+---
+/**
+ * Chrome for the operator console.
+ *
+ * Wraps Layout.astro DIRECTLY. Not PageLayout or BudgetShell — their
+ * BottomNav is hard-wired with no opt-out prop and fires four backend calls
+ * per render, none of which mean anything here.
+ *
+ * Two deliberate departures from the family-facing shells: a wider container
+ * (every other shell caps at lg:max-w-6xl, which is too narrow for tabular
+ * operator data) and English-only copy, kept in each page's local dict rather
+ * than lib/i18n.ts, which is scoped to family-facing strings.
+ */
+import Layout from "../../layouts/Layout.astro";
+
+interface Props {
+    title: string;
+    /** Nav key of the current page, for the active-link highlight. */
+    active?: "overview" | "families" | "billing" | "deletions" | "audit";
+}
+const { title, active } = Astro.props;
+
+const NAV = [
+    { key: "overview", href: "/admin", label: "Overview" },
+    { key: "families", href: "/admin/families", label: "Families" },
+    { key: "billing", href: "/admin/billing-review", label: "Billing review" },
+    { key: "deletions", href: "/admin/deletions", label: "Deletions" },
+    { key: "audit", href: "/admin/audit", label: "Audit log" },
+] as const;
+---
+
+<Layout title={`Admin · ${title}`} theme="light" noindex>
+    <div class="min-h-screen bg-slate-50 text-slate-900">
+        <header class="border-b border-slate-200 bg-white">
+            <div class="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+                <a href="/admin" class="text-sm font-semibold tracking-tight">
+                    Operator console
+                </a>
+                <nav class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                    {NAV.map((item) => (
+                        <a
+                            href={item.href}
+                            class={`rounded px-2 py-1 hover:bg-slate-100 ${
+                                active === item.key
+                                    ? "bg-slate-900 text-white hover:bg-slate-900"
+                                    : "text-slate-600"
+                            }`}
+                        >
+                            {item.label}
+                        </a>
+                    ))}
+                </nav>
+                <a href="/parent" class="ml-auto text-sm text-slate-500 hover:text-slate-900">
+                    Back to app
+                </a>
+            </div>
+        </header>
+
+        <main class="mx-auto max-w-[1400px] px-4 py-6">
+            <h1 class="mb-5 text-xl font-semibold tracking-tight">{title}</h1>
+            <slot />
+        </main>
+    </div>
+</Layout>
