@@ -161,6 +161,48 @@ jobs:
       - name: Build
         run: npm run build
 
+  # A compose value that is valid YAML can still be invalid to podman. A
+  # generated `max-size: \"20m\"` (literal backslashes) passed yaml.safe_load
+  # and then took production down: podman answered
+  # `strconv.ParseFloat: parsing "\"20": invalid syntax`, the deploy's `down`
+  # had already run, and every service failed to come back up.
+  compose-lint:
+    name: Compose files parse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate compose YAML and scalar values
+        run: |
+          pip install pyyaml
+          python - <<'PY'
+          import sys, yaml, pathlib
+          bad = []
+          for name in ("docker-compose.yml", "docker-compose.onprem.yml"):
+              path = pathlib.Path(name)
+              if not path.exists():
+                  continue
+              doc = yaml.safe_load(path.read_text())
+              for svc, cfg in (doc.get("services") or {}).items():
+                  for key, val in ((cfg.get("logging") or {}).get("options") or {}).items():
+                      text = str(val)
+                      # The exact shape that broke prod: quotes that survived
+                      # into the value itself rather than being YAML syntax.
+                      if '"' in text or "\\" in text:
+                          bad.append(f"{name}:{svc}: logging option {key}={text!r} contains quoting podman will reject")
+                  for key in ("mem_limit", "stop_grace_period"):
+                      if key in cfg and ('"' in str(cfg[key]) or "\\" in str(cfg[key])):
+                          bad.append(f"{name}:{svc}: {key}={cfg[key]!r} contains stray quoting")
+          if bad:
+              print("Compose value check FAILED:")
+              for line in bad:
+                  print("  -", line)
+              sys.exit(1)
+          print("compose files parse and scalar values are clean")
+          PY
+
   # Nothing was watching the dependency pins or scanning for committed secrets.
   # This repo handles PayPal, LiteLLM, SMTP and OAuth credentials, and shipped
   # authlib 1.3.0 (CVE-2024-37568, imported nowhere) for months unnoticed.
