@@ -1,21 +1,14 @@
 const { test, expect } = require('@playwright/test');
+const { loginAsParent } = require('./helpers/auth');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3003';
 const EMAIL = process.env.E2E_EMAIL || 'e2e-fresh@example.com';
 const PASSWORD = process.env.E2E_PASSWORD || 'fresh1234';
 
-async function login(page) {
-  await page.goto(`${BASE_URL}/login`);
-  await page.waitForLoadState('networkidle');
-  await page.fill('input[name="email"]', EMAIL);
-  await page.fill('input[name="password"]', PASSWORD);
-  await page.click('#login-submit-btn');
-  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
-}
 
 test.describe('Family chat', () => {
   test('post message + render bubble', async ({ page }) => {
-    await login(page);
+    await loginAsParent(page);
     await page.goto(`${BASE_URL}/chat`);
     await expect(page.locator('h1')).toContainText(/Chat|chat/i);
 
@@ -31,7 +24,7 @@ test.describe('Family chat', () => {
   });
 
   test('chat is reachable from the nav More sheet', async ({ page }) => {
-    await login(page);
+    await loginAsParent(page);
     await page.goto(`${BASE_URL}/dashboard`);
     // Chat lives in the More sheet for parents (a top nav item for kids); the
     // sheet path works for both roles.

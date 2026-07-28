@@ -1,21 +1,14 @@
 const { test, expect } = require('@playwright/test');
+const { loginAsParent } = require('./helpers/auth');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3003';
 const EMAIL = process.env.E2E_EMAIL || 'e2e-fresh@example.com';
 const PASSWORD = process.env.E2E_PASSWORD || 'fresh1234';
 
-async function login(page) {
-  await page.goto(`${BASE_URL}/login`);
-  await page.waitForLoadState('networkidle');
-  await page.fill('input[name="email"]', EMAIL);
-  await page.fill('input[name="password"]', PASSWORD);
-  await page.click('#login-submit-btn');
-  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
-}
 
 test.describe('Calendar', () => {
   test('agenda → month nav, create event', async ({ page }) => {
-    await login(page);
+    await loginAsParent(page);
     await page.goto(`${BASE_URL}/calendar`);
     await expect(page.locator('h1')).toContainText(/Calendar|Calendario/i);
 

@@ -1,21 +1,14 @@
 const { test, expect } = require('@playwright/test');
+const { loginAsParent } = require('./helpers/auth');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3003';
 const EMAIL = process.env.E2E_EMAIL || 'e2e-fresh@example.com';
 const PASSWORD = process.env.E2E_PASSWORD || 'fresh1234';
 
-async function login(page) {
-  await page.goto(`${BASE_URL}/login`);
-  await page.waitForLoadState('networkidle');
-  await page.fill('input[name="email"]', EMAIL);
-  await page.fill('input[name="password"]', PASSWORD);
-  await page.click('#login-submit-btn');
-  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
-}
 
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page);
+    await loginAsParent(page);
   });
 
   // ── Page load ──────────────────────────────────────────────────────────
@@ -121,7 +114,7 @@ test.describe('Dashboard', () => {
 // ── Parent "Mis tareas de hoy" proof flow (fix/parent-tasks-proof-flow) ────
 test.describe('Parent own-tasks proof flow', () => {
   test('photo-required task opens proof modal instead of submitting blind', async ({ page }) => {
-    await login(page);
+    await loginAsParent(page);
     await page.goto(`${BASE_URL}/parent`);
     await page.waitForLoadState('networkidle');
     // Fresh context: the driver.js welcome tour overlay intercepts clicks —
