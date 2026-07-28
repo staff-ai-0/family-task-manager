@@ -17,13 +17,13 @@ services:
     image: postgres:15-alpine
     container_name: family_onprem_db
     mem_limit: 1g
-    # Give postgres time to checkpoint on stop instead of crash-recovering.
-    stop_grace_period: 30s
     logging:
       driver: json-file
       options:
-        max-size: \"20m\"
-        max-file: \"5\"
+        max-size: 20m
+        max-file: 5
+    # Give postgres time to checkpoint on stop instead of crash-recovering.
+    stop_grace_period: 30s
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -47,8 +47,8 @@ services:
     logging:
       driver: json-file
       options:
-        max-size: \"20m\"
-        max-file: \"5\"
+        max-size: 20m
+        max-file: 5
     restart: unless-stopped
     # volatile-lru (NOT allkeys-lru): kiosk member prefs (colors + PIN
     # hashes, family_settings:*:member_prefs) are persistent no-TTL keys —
@@ -121,14 +121,14 @@ services:
     # 10.1.0.91 is shared with school-admin/medical/platform/vault: an unbounded
     # leak here gets a NEIGHBOUR OOM-killed, since the kernel picks the victim.
     mem_limit: 1g
-    # The default 10s SIGTERM->SIGKILL window hard-kills uvicorn while
-    # scheduler.shutdown(wait=True) is draining a money-moving sweep.
-    stop_grace_period: 30s
     logging:
       driver: json-file
       options:
-        max-size: "20m"
-        max-file: "5"
+        max-size: 20m
+        max-file: 5
+    # The default 10s SIGTERM->SIGKILL window hard-kills uvicorn while
+    # scheduler.shutdown(wait=True) is draining a money-moving sweep.
+    stop_grace_period: 30s
 
   frontend:
     build:
@@ -156,12 +156,12 @@ services:
       retries: 3
       start_period: 30s
     mem_limit: 512m
-    stop_grace_period: 15s
     logging:
       driver: json-file
       options:
-        max-size: "20m"
-        max-file: "5"
+        max-size: 20m
+        max-file: 5
+    stop_grace_period: 15s
 
   tunnel:
     image: cloudflare/cloudflared@sha256:6d91c121b803126f7a5344005d17a9324788fc09d305b6e2560ec6040a7ae283
@@ -170,8 +170,8 @@ services:
     logging:
       driver: json-file
       options:
-        max-size: "20m"
-        max-file: "5"
+        max-size: 20m
+        max-file: 5
     restart: unless-stopped
     # --metrics is pinned so the healthcheck below has a fixed address to probe
     # (unpinned, cloudflared picks the first free port of a 5-port range).
