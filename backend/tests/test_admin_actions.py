@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.models.operator_audit import OperatorAuditLog
 from app.services.admin.operator_audit_service import OperatorAuditService
+from conftest import current_week_monday, family_local_today
 
 
 @pytest.mark.asyncio
@@ -668,7 +669,7 @@ async def test_undo_chore_approval_rejects_bonus_assignment(
         TaskAssignment,
     )
 
-    today = date.today()
+    today = await family_local_today(db_session, test_family.id)
     template = await gig_template_factory(family=test_family)
     assignment = TaskAssignment(
         template_id=template.id,
@@ -677,7 +678,7 @@ async def test_undo_chore_approval_rejects_bonus_assignment(
         status=AssignmentStatus.COMPLETED,
         approval_status=ApprovalStatus.APPROVED,
         assigned_date=today,
-        week_of=today - timedelta(days=today.weekday()),
+        week_of=await current_week_monday(db_session, test_family.id),
     )
     db_session.add(assignment)
     await db_session.commit()
@@ -729,8 +730,11 @@ async def test_release_paycheck_through_route_credits_audits_and_is_idempotent(
 
     family_id = test_family.id
     kid_id = test_child_user.id
-    today = date.today()
-    week_monday = today - timedelta(days=today.weekday())
+    # Family-local, never date.today(): the money path resolves "this week" in
+    # the family's timezone, so a runner-clock week can name a different bucket
+    # than the one BankService counts chore units in (see conftest).
+    today = await family_local_today(db_session, family_id)
+    week_monday = await current_week_monday(db_session, family_id)
 
     # Chore-proportional allowance, funded and fully earned this week so the
     # release actually moves money (not just a $0 ledger row).
@@ -873,8 +877,8 @@ async def test_release_paycheck_is_atomic_with_its_audit_row(
 
     family_id = test_family.id
     kid_id = test_child_user.id
-    today = date.today()
-    week_monday = today - timedelta(days=today.weekday())
+    today = await family_local_today(db_session, family_id)
+    week_monday = await current_week_monday(db_session, family_id)
 
     # points_rate mode is the only allowance mode whose release path writes
     # a SECOND mutation (the points-conversion PointTransaction) after the

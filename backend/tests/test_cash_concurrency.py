@@ -7,7 +7,6 @@ Regression tests for the code-review findings:
    double-award points.
 """
 import asyncio
-from datetime import date
 
 import pytest
 from sqlalchemy import select, func
@@ -20,6 +19,7 @@ from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.services.cash_service import CashService
 from app.services.task_assignment_service import TaskAssignmentService
 from app.core.exceptions import ValidationException
+from conftest import current_week_monday, family_local_today
 
 
 @pytest.mark.asyncio
@@ -63,8 +63,10 @@ async def test_concurrent_mandatory_complete_awards_points_once(
     await db_session.commit()
     tmpl = await mandatory_template_factory(family=test_family, points=10)
     a = TaskAssignment(template_id=tmpl.id, family_id=test_family.id,
-                       assigned_to=test_child_user.id, assigned_date=date.today(),
-                       week_of=date.today(), status=AssignmentStatus.PENDING)
+                       assigned_to=test_child_user.id,
+                       assigned_date=await family_local_today(db_session, test_family.id),
+                       week_of=await current_week_monday(db_session, test_family.id),
+                       status=AssignmentStatus.PENDING)
     db_session.add(a)
     await db_session.commit()
     await db_session.refresh(a)

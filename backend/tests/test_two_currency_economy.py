@@ -5,12 +5,12 @@ mandatory-chore points award, and the gig→cash switch.
 """
 
 import pytest
-from datetime import date
 
 from app.schemas.task_template import TaskTemplateCreate
 from app.models.task_template import TaskTemplate
 from app.models.user import User, UserRole
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
+from conftest import current_week_monday, family_local_today
 
 
 # ── Task 2: mandatory tasks may carry points ─────────────────────────────────
@@ -99,8 +99,10 @@ async def test_mandatory_completion_awards_effective_points(
     await db.refresh(kid)
     tmpl = await mandatory_template_factory(family=family, points=10)  # effort 1 → 10
     a = TaskAssignment(template_id=tmpl.id, family_id=family.id,
-                       assigned_to=kid.id, assigned_date=date.today(),
-                       week_of=date.today(), status=AssignmentStatus.PENDING)
+                       assigned_to=kid.id,
+                       assigned_date=await family_local_today(db, family.id),
+                       week_of=await current_week_monday(db, family.id),
+                       status=AssignmentStatus.PENDING)
     db.add(a)
     await db.commit()
     await db.refresh(a)
@@ -129,8 +131,10 @@ async def test_bonus_task_completion_awards_points_not_cash(
     await db.refresh(kid)
     tmpl = await gig_template_factory(family=family, points=20)  # effort 1 → 20 pts
     a = TaskAssignment(template_id=tmpl.id, family_id=family.id,
-                       assigned_to=kid.id, assigned_date=date.today(),
-                       week_of=date.today(), status=AssignmentStatus.PENDING)
+                       assigned_to=kid.id,
+                       assigned_date=await family_local_today(db, family.id),
+                       week_of=await current_week_monday(db, family.id),
+                       status=AssignmentStatus.PENDING)
     db.add(a)
     await db.commit()
     await db.refresh(a)

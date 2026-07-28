@@ -158,6 +158,13 @@ jobs:
         # Green locally (0 errors / 0 warnings, hints only) — kept blocking.
         run: npm run check
 
+      - name: Unit tests (vitest)
+        # middleware.ts owns the CSRF origin check, the public-route list and
+        # the admin-surface match. Until these existed the check could have been
+        # inverted and every signal here would have stayed green — the only
+        # coverage was an e2e spec that does not run in CI.
+        run: npm test
+
       - name: Build
         run: npm run build
 
@@ -207,14 +214,13 @@ jobs:
   # This repo handles PayPal, LiteLLM, SMTP and OAuth credentials, and shipped
   # authlib 1.3.0 (CVE-2024-37568, imported nowhere) for months unnoticed.
   #
-  # Non-blocking on purpose for now: the pins are known-stale (fastapi, redis,
-  # alembic and the mcp->starlette chain), so making this required today would
-  # wedge every PR behind an upgrade project. It reports, and the report is the
-  # input to that project. Flip to blocking once the backlog is cleared.
+  # Now BLOCKING. It was advisory while the backlog existed: pip-audit found 36
+  # advisories on the old web stack and npm audit found 14 on astro 5. Both are
+  # at zero after the dependency chain and the astro 7 migration, so the check
+  # can hold that line instead of being a red badge everyone learns to ignore.
   supply-chain:
     name: Supply chain (audit + secrets)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:

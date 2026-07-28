@@ -18,7 +18,7 @@ async function logout(page, context) {
 }
 
 test.describe('Gigs lifecycle', () => {
-  test('child submits gig with proof, parent approves, points credit', async ({ page, context }) => {
+  test('child submits gig with proof, parent approves, points credit', { tag: '@smoke' }, async ({ page, context }) => {
     // ─── Child path ───
     await login(page, CHILD);
     await page.goto(`${BASE_URL}/dashboard`);

@@ -7,10 +7,20 @@ extend-exclude = ["migrations", "venv", ".venv"]
 # DTZ (flake8-datetimez): every datetime here must be timezone-aware — naive
 # values on timestamptz columns get reinterpreted in the SESSION timezone
 # (the 2026-07-16/17 bug class). Enforced in CI.
-extend-select = ["DTZ"]
+#
+# ASYNC (flake8-async): blocking calls inside `async def` stall the single
+# event-loop thread, so one multi-megabyte receipt/proof upload freezes every
+# other in-flight request. Blocking filesystem work belongs in
+# `app/core/async_fs.py` (threadpool hop); network/CPU work in
+# `run_in_threadpool` / `asyncio.to_thread`. Enforced in CI.
+extend-select = ["DTZ", "ASYNC"]
 # E712: SQLAlchemy filters use `== True` / `== False` on purpose — `is True`
 # would break query compilation.
-ignore = ["E712"]
+# ASYNC109: "take no `timeout` parameter, use a cancel scope" is trio/anyio
+# structured-concurrency advice. This app is asyncio-native and its one hit
+# (`message_bus.wait_for_event`) forwards the value straight to redis-py's
+# `get_message(timeout=...)`, where it is a real protocol argument.
+ignore = ["E712", "ASYNC109"]
 
 [lint.per-file-ignores]
 # Package __init__ files re-export for the public API surface.

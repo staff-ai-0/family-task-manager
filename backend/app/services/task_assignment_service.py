@@ -21,6 +21,7 @@ from app.core.exceptions import (
     ForbiddenException,
     ValidationException,
 )
+from app.core.grading import grade_credit_points
 from app.core.time_utils import utc_today
 from app.services.base_service import (
     BaseFamilyService,
@@ -1714,8 +1715,11 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         from app.services.points_service import PointsService
 
         if (template.gig_mode or "claim") != "collaboration":
-            # Integer half-up partial-credit scaling (grade from parent review).
-            pts = (template.award_points_per_completer * award_pct + 50) // 100
+            # Partial-credit scaling from the parent's grade (app.core.grading
+            # owns the rounding — the payouts dashboard reads the same helper).
+            pts = grade_credit_points(
+                template.award_points_per_completer, award_pct
+            )
             await PointsService.award_gig_points(
                 db, user_id, assignment.family_id, assignment.id, pts
             )
@@ -2039,9 +2043,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 # auto-approval after enough consecutive approvals.
                 child.gig_trust_streak += 1
             else:
-                # Integer half-up so partial credit never silently floors away
-                # a point (25 pts × 50% → 13, not 12).
-                pts = (assignment.template.effective_points * award_pct + 50) // 100
+                pts = grade_credit_points(
+                    assignment.template.effective_points, award_pct
+                )
                 await PointsService.award_assignment_completion(
                     db, assignment.assigned_to, family_id, assignment.id, pts
                 )

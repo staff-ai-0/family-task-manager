@@ -288,10 +288,24 @@ async def test_a2a_webhook_put_plus_allowed(
     assert r.status_code == 200, r.text
 
 
-def _a2a_sig(message: bytes) -> str:
-    return "sha256=" + hmac.new(
+_BANK_SYNC_CREATE_PATH = "/api/budget/bank-sync/transactions"
+
+
+def _a2a_headers(family_id, body: bytes, path: str = _BANK_SYNC_CREATE_PATH) -> dict:
+    """Signed a2a headers — method, path and timestamp are inside the HMAC
+    (see app/api/routes/budget/bank_sync.py)."""
+    from app.core.time_utils import utcnow
+
+    ts = str(int(utcnow().timestamp()))
+    message = b"\n".join((b"POST", path.encode(), ts.encode(), body))
+    sig = "sha256=" + hmac.new(
         A2A_SECRET.encode(), message, hashlib.sha256
     ).hexdigest()
+    return {
+        "X-A2A-Family": str(family_id),
+        "X-A2A-Timestamp": ts,
+        "X-A2A-Signature": sig,
+    }
 
 
 @pytest_asyncio.fixture
@@ -338,12 +352,9 @@ async def test_bank_sync_create_skips_ai_for_free(
 
     body = _bank_alert_body()
     r = await client.post(
-        "/api/budget/bank-sync/transactions",
+        _BANK_SYNC_CREATE_PATH,
         content=body,
-        headers={
-            "X-A2A-Family": str(a2a_webhook_row.id),
-            "X-A2A-Signature": _a2a_sig(body),
-        },
+        headers=_a2a_headers(a2a_webhook_row.id, body),
     )
     assert r.status_code == 200, r.text
     assert suggest.await_count == 0
@@ -430,12 +441,9 @@ async def test_bank_sync_create_uses_ai_for_plus(
 
     body = _bank_alert_body()
     r = await client.post(
-        "/api/budget/bank-sync/transactions",
+        _BANK_SYNC_CREATE_PATH,
         content=body,
-        headers={
-            "X-A2A-Family": str(a2a_webhook_row.id),
-            "X-A2A-Signature": _a2a_sig(body),
-        },
+        headers=_a2a_headers(a2a_webhook_row.id, body),
     )
     assert r.status_code == 200, r.text
     assert suggest.await_count == 1

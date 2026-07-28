@@ -1,5 +1,9 @@
 """add_password_reset_tokens_table
 
+NO-OP despite the name — `password_reset_tokens` is really created by
+revision a6d655cbc18c (add_assignment_type_to_task_templates). Kept, empty,
+because deployed alembic histories already record it.
+
 Revision ID: 8d23a3796561
 Revises: fab16872eb7e
 Create Date: 2025-12-12 08:15:30.264655

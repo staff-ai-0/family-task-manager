@@ -1175,21 +1175,22 @@ async def _route_to_drafts(
     try:
         from starlette.concurrency import run_in_threadpool
 
+        from app.core import async_fs
         from app.core.thumbnails import make_webp_thumbnail, thumb_filename
 
-        os.makedirs(RECEIPT_UPLOADS_DIR, exist_ok=True)
         img_name = f"{draft.id}.jpg"
-        img_path = os.path.join(RECEIPT_UPLOADS_DIR, img_name)
-        with open(img_path, "wb") as f:
-            f.write(image_bytes)
+        # Multi-megabyte receipt photo — written from a worker thread (which
+        # also creates RECEIPT_UPLOADS_DIR) so the loop stays free.
+        await async_fs.write_bytes(
+            os.path.join(RECEIPT_UPLOADS_DIR, img_name), image_bytes
+        )
         # ~200px WebP thumb alongside the original so the review queue loads
         # fast; failures are non-fatal (queue falls back to the full image).
         thumb = await run_in_threadpool(make_webp_thumbnail, image_bytes)
         if thumb:
-            with open(
-                os.path.join(RECEIPT_UPLOADS_DIR, thumb_filename(img_name)), "wb"
-            ) as f:
-                f.write(thumb)
+            await async_fs.write_bytes(
+                os.path.join(RECEIPT_UPLOADS_DIR, thumb_filename(img_name)), thumb
+            )
         draft.image_url = f"/api/budget/receipt-drafts/{draft.id}/image"
         await db.commit()
     except Exception:

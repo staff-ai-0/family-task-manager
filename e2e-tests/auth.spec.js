@@ -13,7 +13,7 @@ test.describe('Authentication', () => {
   };
 
   test.describe('Login Flow', () => {
-    test('should login with valid credentials and redirect to dashboard', async ({ page }) => {
+    test('should login with valid credentials and redirect to dashboard', { tag: '@smoke' }, async ({ page }) => {
       await page.goto(`${BASE_URL}/login`);
       await page.waitForLoadState('networkidle');
 

@@ -18,7 +18,7 @@ test.describe('Task Management', () => {
   });
 
   test.describe('Task Creation', () => {
-    test('should create a new task with valid data', async ({ page }) => {
+    test('should create a new task with valid data', { tag: '@smoke' }, async ({ page }) => {
       await page.goto(`${BASE_URL}/parent/tasks`);
       await page.waitForLoadState('networkidle');
 

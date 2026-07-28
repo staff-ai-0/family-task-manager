@@ -17,6 +17,7 @@ from typing import Optional
 import httpx
 from fastapi.concurrency import run_in_threadpool
 
+from app.core import async_fs
 from app.core.config import settings
 from app.core.llm import RECEIPT_MODEL, get_llm_client
 from app.core.metrics import record_llm_call
@@ -54,9 +55,10 @@ def _strip_local_prefix(url: str) -> Optional[str]:
 async def _load_image_bytes(url: str) -> tuple[bytes, str]:
     """Return (bytes, media_type) for either a local /uploads URL or a remote URL."""
     local_path = _strip_local_prefix(url)
-    if local_path and os.path.exists(local_path):
-        with open(local_path, "rb") as f:
-            data = f.read()
+    # Proof photos are phone-sized; the existence check and the read share one
+    # worker-thread hop so neither runs on the event loop.
+    data = await async_fs.read_bytes_or_none(local_path) if local_path else None
+    if data is not None:
         # naive type detection from suffix
         ext = local_path.rsplit(".", 1)[-1].lower()
         media_type = {
