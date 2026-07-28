@@ -128,6 +128,12 @@ async def get_budget_vs_actual(
             sa_func.coalesce(
                 select(sa_func.sum(BudgetAllocation.budgeted_amount))
                 .where(
+                    # family_id is redundant while the write path guarantees a
+                    # category is only ever referenced by its own family — but
+                    # the repo's rule is that every family-scoped query filters
+                    # on it, so the guarantee is enforced here rather than
+                    # assumed.
+                    BudgetAllocation.family_id == family_id,
                     BudgetAllocation.category_id == BudgetCategory.id,
                     BudgetAllocation.month == month_start,
                 ).scalar_subquery(), 0,
@@ -135,6 +141,7 @@ async def get_budget_vs_actual(
             sa_func.coalesce(
                 select(sa_func.sum(BudgetTransaction.amount))
                 .where(
+                    BudgetTransaction.family_id == family_id,
                     BudgetTransaction.category_id == BudgetCategory.id,
                     BudgetTransaction.date >= month_start,
                     BudgetTransaction.date < month_end,

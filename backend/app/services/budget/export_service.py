@@ -9,10 +9,12 @@ import json
 import zipfile
 from datetime import date, datetime, timezone
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
+
+from app.core.exceptions import ValidationError
 
 from app.models.budget import (
     BudgetAccount,
@@ -25,6 +27,11 @@ from app.models.budget import (
     BudgetRecurringTransaction,
     BudgetTransaction,
 )
+
+BACKUP_MEMBER = "budget_data.json"
+# A real export of a large family is a few MB of JSON; 200 MB is generous while
+# still refusing an archive engineered to exhaust memory on decompression.
+MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
 
 
 def _serialize_value(v: Any) -> Any:
@@ -150,7 +157,28 @@ class ExportService:
         """
         buf = io.BytesIO(zip_bytes)
         with zipfile.ZipFile(buf, "r") as zf:
-            data_str = zf.read("budget_data.json").decode("utf-8")
+            # Only the COMPRESSED upload was capped (25 MB). DEFLATE reaches
+            # ~1000:1 on repetitive input, so that bound allowed tens of GB to
+            # be decompressed into memory before any of our code looked at it.
+            try:
+                info = zf.getinfo(BACKUP_MEMBER)
+            except KeyError:
+                raise ValidationError(
+                    f"Backup archive is missing {BACKUP_MEMBER}"
+                )
+            if info.file_size > MAX_UNCOMPRESSED_BYTES:
+                raise ValidationError(
+                    "Backup archive is too large once decompressed "
+                    f"({info.file_size // (1024 * 1024)} MB, limit "
+                    f"{MAX_UNCOMPRESSED_BYTES // (1024 * 1024)} MB)."
+                )
+            total = sum(i.file_size for i in zf.infolist())
+            if total > MAX_UNCOMPRESSED_BYTES:
+                raise ValidationError(
+                    "Backup archive expands to more than "
+                    f"{MAX_UNCOMPRESSED_BYTES // (1024 * 1024)} MB in total."
+                )
+            data_str = zf.read(BACKUP_MEMBER).decode("utf-8")
             budget_data = json.loads(data_str)
 
         # Clear existing budget data (order matters for FK constraints)
@@ -183,20 +211,88 @@ class ExportService:
             ("transactions", BudgetTransaction),
         ]
 
+        # Primary keys and foreign keys arrive from an untrusted file. Reusing
+        # them verbatim let a crafted archive point this family's rows at ANOTHER
+        # family's account/category/payee — the FK constraints reference the
+        # global tables, so such a row inserts cleanly. Every id is reminted and
+        # every reference is remapped through this map; anything that does not
+        # resolve WITHIN the archive is rejected rather than silently dropped.
+        id_map: dict[str, UUID] = {}
+        # column name -> the archive section whose ids it points at
+        fk_sources = {
+            "account_id": "accounts",
+            "transfer_account_id": "accounts",
+            "group_id": "category_groups",
+            "category_id": "categories",
+            "payee_id": "payees",
+            "parent_id": "transactions",
+        }
+
+        def _remap(item: dict, model_cls: Any, key: str) -> None:
+            columns = {c.name for c in model_cls.__table__.columns}
+            for column, _source in fk_sources.items():
+                if column not in columns:
+                    continue
+                raw = item.get(column)
+                if raw in (None, ""):
+                    item[column] = None
+                    continue
+                mapped = id_map.get(str(raw))
+                if mapped is None:
+                    raise ValidationError(
+                        f"Backup archive is inconsistent: {key}.{column} "
+                        f"references {raw}, which is not in the archive."
+                    )
+                item[column] = mapped
+
         for key, model_cls in _import_map:
             items = budget_data.get(key, [])
             count = 0
+            deferred_parents: list[tuple[Any, str]] = []
             for item_dict in items:
-                # Override family_id to current family
+                item_dict = dict(item_dict)
+                old_id = str(item_dict.get("id") or "")
+                # Never trust a client-supplied primary key.
+                item_dict.pop("id", None)
                 item_dict["family_id"] = family_id
-                # Convert UUID strings back
                 _convert_uuids(item_dict, model_cls)
-                # Convert dates/datetimes back
                 _convert_dates(item_dict, model_cls)
 
+                # A split child may appear before its parent, so parent_id is
+                # resolved after the whole section is mapped.
+                parent_ref = None
+                if "parent_id" in item_dict and item_dict.get("parent_id"):
+                    parent_ref = str(item_dict["parent_id"])
+                    item_dict["parent_id"] = None
+                _remap(item_dict, model_cls, key)
+
+                # transfer_pair_id is a shared id, not an FK; reminting it keeps
+                # both legs joined without colliding with a live pair.
+                if item_dict.get("transfer_pair_id"):
+                    pair_key = f"pair:{item_dict['transfer_pair_id']}"
+                    if pair_key not in id_map:
+                        id_map[pair_key] = uuid4()
+                    item_dict["transfer_pair_id"] = id_map[pair_key]
+
                 obj = model_cls(**item_dict)
+                obj.id = uuid4()
+                if old_id:
+                    id_map[old_id] = obj.id
                 db.add(obj)
+                if parent_ref:
+                    deferred_parents.append((obj, parent_ref))
                 count += 1
+
+            for obj, parent_ref in deferred_parents:
+                mapped = id_map.get(parent_ref)
+                if mapped is None:
+                    raise ValidationError(
+                        f"Backup archive is inconsistent: {key}.parent_id "
+                        f"references {parent_ref}, which is not in the archive."
+                    )
+                obj.parent_id = mapped
+
+            await db.flush()
             stats[key] = count
 
         await db.commit()

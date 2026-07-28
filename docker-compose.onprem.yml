@@ -16,6 +16,14 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: family_onprem_db
+    mem_limit: 1g
+    # Give postgres time to checkpoint on stop instead of crash-recovering.
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: \"20m\"
+        max-file: \"5\"
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -35,6 +43,12 @@ services:
   redis:
     image: redis:7-alpine
     container_name: family_onprem_redis
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: \"20m\"
+        max-file: \"5\"
     restart: unless-stopped
     # volatile-lru (NOT allkeys-lru): kiosk member prefs (colors + PIN
     # hashes, family_settings:*:member_prefs) are persistent no-TTL keys —
@@ -93,12 +107,28 @@ services:
     # CF-Connecting-IP instead (edge-set, spoof-proof through the tunnel) —
     # see backend/app/core/rate_limiter.py.
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers
+    # Probes /ready, not /health: /health only proves the process is up and is
+    # documented as "does NOT touch dependencies". Since this healthcheck is the
+    # sole input to deploy-onprem.sh's automatic rollback, a build that cannot
+    # reach the DB or Redis used to report every container healthy, skip the
+    # rollback, and then 500 on real traffic.
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:8000/health\", timeout=3).status==200 else 1)'"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://localhost:8000/ready\", timeout=5).status==200 else 1)'"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
+    # 10.1.0.91 is shared with school-admin/medical/platform/vault: an unbounded
+    # leak here gets a NEIGHBOUR OOM-killed, since the kernel picks the victim.
+    mem_limit: 1g
+    # The default 10s SIGTERM->SIGKILL window hard-kills uvicorn while
+    # scheduler.shutdown(wait=True) is draining a money-moving sweep.
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   frontend:
     build:
@@ -125,10 +155,23 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    mem_limit: 512m
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   tunnel:
     image: cloudflare/cloudflared@sha256:6d91c121b803126f7a5344005d17a9324788fc09d305b6e2560ec6040a7ae283
     container_name: family_onprem_tunnel
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     restart: unless-stopped
     # --metrics is pinned so the healthcheck below has a fixed address to probe
     # (unpinned, cloudflared picks the first free port of a 5-port range).

@@ -29,6 +29,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.family_guards import assert_family_usable
+from app.models.family import Family
 from app.core.database import get_db
 from app.models.budget import BudgetAccount, BudgetTransaction
 from app.services.budget.a2a_webhook_service import A2AWebhookService
@@ -46,6 +48,11 @@ async def _family_and_secret(db: AsyncSession, family_hdr: str) -> tuple[UUID, s
     cfg = await A2AWebhookService.get_config(db, family_id)
     if cfg is None or not cfg.enabled:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "family not registered")
+    # This path checked only `cfg.enabled`, so the bank-email-matcher agent kept
+    # creating and reconciling budget transactions for a family that had been
+    # suspended by an operator — or soft-deleted entirely.
+    family = await db.get(Family, family_id)
+    assert_family_usable(family)
     return family_id, cfg.secret
 
 
