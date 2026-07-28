@@ -190,7 +190,8 @@ Fully native to PostgreSQL (the external "Actual Budget" service was decommissio
 
 Uses Claude Vision via LiteLLM proxy to extract transaction data from receipt photos/PDFs.
 
-- Service: `backend/app/services/budget/receipt_scanner_service.py` (also exports the shared `LLM_TIMEOUT` used by every LLM call site)
+- Service: `backend/app/services/budget/receipt_scanner_service.py`
+- **The LLM client is built in exactly one place**: `backend/app/core/llm.py` — `get_llm_client()` plus `LLM_TIMEOUT` (5s connect / 60s read) and the `RECEIPT_MODEL` / `CATEGORIZER_MODEL` aliases. Every call site (Jarvis ×2, calendar scanner, recipe importer, proof validator, category AI, receipt scanner) goes through it; never hand-roll `OpenAI(...)` in a service. Tests mock `app.core.llm.OpenAI`, not the service module.
 - Endpoint: `POST /api/budget/transactions/scan-receipt` (parent only, premium gated)
 - Frontend: `/budget/scan-receipt` (camera capture + file upload + drag-drop; accepts JPEG/PNG/WebP/PDF)
 - Routes through LiteLLM proxy (`LITELLM_API_BASE` / `LITELLM_API_KEY`) using model alias `claude-haiku`

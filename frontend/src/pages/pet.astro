@@ -138,7 +138,7 @@ const nextStageName = stage < MAX_STAGE ? stageLabel(stage + 1, lang) : "";
         </form>
     ) : (
         <>
-            <!-- Evolution hero -->
+            {/* Evolution hero */}
             <div class="bg-brand-cream rounded-[var(--radius-card)] p-6 border-2 border-brand-ink shadow-[var(--shadow-pop)] text-center">
                 <div class="flex justify-center mb-2">
                     <PetAvatar species={pet.species} stage={stage} status={pet.status_label} equipped={equipped} size="xl" reactId="pet-hero-face" />
@@ -148,7 +148,7 @@ const nextStageName = stage < MAX_STAGE ? stageLabel(stage + 1, lang) : "";
                     {L.stage_word} {stage + 1}/{MAX_STAGE + 1} · {stageLabel(stage, lang)} · {L.level} <span data-pet-level>{pet.level}</span>
                 </p>
 
-                <!-- XP → next stage -->
+                {/* XP → next stage */}
                 <div class="mt-4 text-left">
                     <div class="flex justify-between text-xs text-brand-ink-soft mb-1">
                         <span>⭐ {L.evolution}</span>
@@ -167,7 +167,7 @@ const nextStageName = stage < MAX_STAGE ? stageLabel(stage + 1, lang) : "";
                 </div>
             </div>
 
-            <!-- Mood + hunger meters -->
+            {/* Mood + hunger meters */}
             <div class="bg-brand-cream rounded-[var(--radius-card)] p-4 border-2 border-brand-ink shadow-[var(--shadow-card)] space-y-3">
                 <div>
                     <div class="flex justify-between text-xs text-brand-ink-soft mb-1">
@@ -193,7 +193,7 @@ const nextStageName = stage < MAX_STAGE ? stageLabel(stage + 1, lang) : "";
                 </div>
             </div>
 
-            <!-- Care actions -->
+            {/* Care actions */}
             <section
                 class="bg-brand-cream rounded-[var(--radius-card)] p-4 border-2 border-brand-ink shadow-[var(--shadow-card)]"
                 data-care-root
@@ -230,7 +230,7 @@ const nextStageName = stage < MAX_STAGE ? stageLabel(stage + 1, lang) : "";
                 </div>
             </section>
 
-            <!-- Nav: quest mode + shop -->
+            {/* Nav: quest mode + shop */}
             <div class="grid grid-cols-2 gap-3">
                 <a href="/pet/quests" class="flex flex-col gap-1 p-4 rounded-[var(--radius-card)] border-2 border-brand-ink bg-brand-sky text-brand-ink shadow-[var(--shadow-card)] hover:-translate-y-0.5 transition-transform">
                     <span class="text-2xl">🗺️</span>
@@ -244,7 +244,7 @@ const nextStageName = stage < MAX_STAGE ? stageLabel(stage + 1, lang) : "";
                 </a>
             </div>
 
-            <!-- Toast -->
+            {/* Toast */}
             <div data-pet-toast class="fixed left-1/2 -translate-x-1/2 bottom-24 z-50 hidden px-4 py-2 rounded-full bg-brand-ink text-brand-cream text-sm font-semibold shadow-[var(--shadow-card)]"></div>
         </>
     )}

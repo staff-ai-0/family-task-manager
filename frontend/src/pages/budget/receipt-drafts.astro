@@ -139,7 +139,7 @@ const l = {
                             class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 overflow-hidden"
                             data-draft-id={draft.id}
                         >
-                            <!-- Card header -->
+                            {/* Card header */}
                             <div class="flex items-center justify-between px-5 py-3 border-b border-brand-ink/10 bg-brand-cream-deep">
                                 <span class="text-xs text-brand-ink-soft">
                                     {fmtDate(draft.created_at, lang, user.timezone, { dateStyle: "medium" })}
@@ -150,7 +150,7 @@ const l = {
                                 </span>
                             </div>
 
-                            <!-- Receipt image (thumbnail inline; click opens the full image) -->
+                            {/* Receipt image (thumbnail inline; click opens the full image) */}
                             {draft.image_url && (
                                 <div class="px-5 pt-4">
                                     <a
@@ -169,7 +169,7 @@ const l = {
                                 </div>
                             )}
 
-                            <!-- AI-extracted preview -->
+                            {/* AI-extracted preview */}
                             <div class="px-5 pt-4 pb-2">
                                 <p class="text-[11px] uppercase tracking-wide text-brand-ink-soft font-medium mb-2">{l.scannedData}</p>
                                 <div class="grid grid-cols-3 gap-3 text-sm">
@@ -203,7 +203,7 @@ const l = {
                                 )}
                             </div>
 
-                            <!-- Override form -->
+                            {/* Override form */}
                             <form
                                 class="draft-form px-5 py-4 border-t border-brand-ink/10 space-y-3"
                                 data-draft-id={draft.id}
@@ -270,7 +270,7 @@ const l = {
                                     >{prefillNotes}</textarea>
                                 </div>
 
-                                <!-- Actions -->
+                                {/* Actions */}
                                 <div class="flex gap-2 pt-1">
                                     <button
                                         type="submit"
@@ -286,7 +286,7 @@ const l = {
                                     </button>
                                 </div>
 
-                                <!-- Status message -->
+                                {/* Status message */}
                                 <p class="status-msg hidden text-sm text-center pt-1"></p>
                             </form>
                         </div>

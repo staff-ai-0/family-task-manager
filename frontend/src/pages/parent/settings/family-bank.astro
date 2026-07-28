@@ -155,7 +155,7 @@ const weekdays = es
         </div>
     ) : (
         <div class="space-y-6">
-            <!-- Family-wide point value (drives the "Por puntos" payment model) -->
+            {/* Family-wide point value (drives the "Por puntos" payment model) */}
             <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] px-5 py-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div class="min-w-0">
@@ -191,7 +191,7 @@ const weekdays = es
                 const starOn = starMap[k.user_id] ?? false;
                 return (
                     <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] overflow-hidden" data-kid-card data-kid-id={k.user_id} data-kid-name={k.name}>
-                        <!-- Kid header + jar balances -->
+                        {/* Kid header + jar balances */}
                         <div class="bg-brand-cream-deep px-5 py-4 border-b-2 border-brand-ink">
                             <div class="flex items-center justify-between mb-3">
                                 <div class="flex items-center gap-3">
@@ -230,7 +230,7 @@ const weekdays = es
                             </div>
                         </div>
 
-                        <!-- Savings goal + Star Mode (P2 — free, not gated) -->
+                        {/* Savings goal + Star Mode (P2 — free, not gated) */}
                         <div class="px-5 py-4 border-b-2 border-brand-ink/10 space-y-3">
                             {/* Savings goal */}
                             {goal ? (
@@ -287,7 +287,7 @@ const weekdays = es
                             </label>
                         </div>
 
-                        <!-- Automation config -->
+                        {/* Automation config */}
                         <div class="p-5 space-y-4" data-automation-body>
                             {/* Weekly allowance */}
                             <div>
