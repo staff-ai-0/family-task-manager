@@ -54,8 +54,7 @@ redis==5.0.1
 httpx==0.28.1
 
 # OAuth & Payment Integration
-google-auth==2.27.0
-google-auth-oauthlib==1.2.0
+google-auth==2.56.2
 
 # AI / Vision
 # OpenAI SDK — used by receipt_scanner_service to call LiteLLM proxy's
@@ -97,7 +96,7 @@ python-dateutil==2.8.2
 # Google Cloud Storage — receipt image persistence. VM service account
 # has roles/storage.objectAdmin on the bucket; no JSON key files needed
 # (ADC via metadata server). See gcs_receipt_service.py.
-google-cloud-storage>=2.18
+google-cloud-storage==3.13.0
 
 # Rate limiting (B1) — auth + AI endpoint abuse protection
 slowapi==0.1.9
