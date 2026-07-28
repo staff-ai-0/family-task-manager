@@ -111,10 +111,10 @@ const groupBorderColor = isIncome ? 'border-brand-mint' : 'border-brand-ink/10';
                     data-previous-balance={category.previous_balance || 0}
                     data-is-income={isIncome ? "1" : "0"}
                 >
-                    <!-- Row top: name | available -->
+                    {/* Row top: name | available */}
                     <div class="flex items-center justify-between mb-1">
                         <span class="text-sm font-medium text-brand-ink">{category.name}</span>
-                        <!-- Available balance — clickable for transfers (income categories don't show available button) -->
+                        {/* Available balance — clickable for transfers (income categories don't show available button) */}
                         {!isIncome && (
                             <button
                                 class="available-btn text-sm font-bold rounded-lg px-2 py-0.5 transition hover:ring-2 focus:outline-none focus:ring-2 focus:ring-offset-1"

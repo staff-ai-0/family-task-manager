@@ -444,7 +444,7 @@ if (!joinCodeOk && joinCodeError) {
               </span>
             </div>
 
-            <!-- 1-tap points (W4.5): tap a chip → instant award/deduct -->
+            {/* 1-tap points (W4.5): tap a chip → instant award/deduct */}
             {String(m.role).toLowerCase() !== "parent" && (
               <div class="mb-3 flex items-center gap-1.5 flex-wrap" data-quick-points data-member-id={m.id} data-member-name={m.name}>
                 <span class="text-xs text-brand-ink-soft mr-0.5" title={lang === "es" ? "Puntos rápidos" : "Quick points"}>⚡</span>

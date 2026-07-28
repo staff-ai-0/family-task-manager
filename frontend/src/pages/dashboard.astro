@@ -552,7 +552,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                         ))}
                     </div>
 
-                    <!-- Completed required tasks (collapsible) -->
+                    {/* Completed required tasks (collapsible) */}
                     {completedRequired.length > 0 && (
                         <details class="mt-3 group">
                             <summary class="flex justify-between items-center px-1 mb-2 cursor-pointer list-none">
@@ -657,8 +657,8 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                         </span>
                     </div>
 
+                    <!-- Locked state -->
                     {!bonusUnlocked ? (
-                        <!-- Locked state -->
                         <div class="bg-brand-sun/20 rounded-2xl p-5 border border-brand-sun text-center">
                             <div class="w-12 h-12 bg-brand-sun/20 rounded-full flex items-center justify-center mx-auto mb-3">
                                 <svg class="w-6 h-6 text-brand-sun-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -680,8 +680,8 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                 </>
                             )}
                         </div>
+                    <!-- Unlocked bonus tasks -->
                     ) : (
-                        <!-- Unlocked bonus tasks -->
                         <div>
                             <div class="mb-3 px-1">
                                 <p class="text-xs text-brand-mint-deep font-medium">{t(lang, "dashboard_bonus_unlocked")}</p>
@@ -726,7 +726,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                 ))}
                             </div>
 
-                            <!-- Gigs awaiting parent approval -->
+                            {/* Gigs awaiting parent approval */}
                             {awaitingApprovalBonus.length > 0 && (
                                 <div class="mt-4 space-y-2">
                                     <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider px-1">
@@ -755,7 +755,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                 </div>
                             )}
 
-                            <!-- Completed bonus tasks -->
+                            {/* Completed bonus tasks */}
                             {completedBonus.length > 0 && (
                                 <details class="mt-3 group">
                                     <summary class="flex justify-between items-center px-1 mb-2 cursor-pointer list-none">
