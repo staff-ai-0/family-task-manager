@@ -620,6 +620,16 @@ class JarvisService:
                 msgs.append({"role": h.role, "content": h.content})
         msgs.append({"role": "user", "content": message})
 
+        # Release the pooled connection before the completion loop. Loading the
+        # history and context above leaves a read transaction open, and the loop
+        # below runs up to MAX_TOOL_HOPS + 1 sequential completions at 60s each
+        # — so a single chat could hold one connection idle-in-transaction for
+        # ~5 minutes. Tool dispatch and the final persist re-acquire as needed.
+        # (chat_stream already owns a short-lived session for this reason;
+        # this non-stream path was missed. expire_on_commit=False, so nothing
+        # loaded above is invalidated.)
+        await db.commit()
+
         client = OpenAI(
             base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
             api_key=settings.LITELLM_API_KEY,

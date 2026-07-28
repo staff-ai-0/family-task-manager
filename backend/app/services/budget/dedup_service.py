@@ -41,6 +41,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.budget import BudgetTransaction, BudgetTransactionItem
+from app.services.budget._matching import AMOUNT_TOLERANCE, within_tolerance
 
 logger = logging.getLogger(__name__)
 
@@ -63,22 +64,13 @@ def _score(txn: BudgetTransaction, item_count: int) -> int:
 
 class DeduplicateService:
 
-    AMOUNT_TOLERANCE = 0.01
+    # Shared with DuplicateGuardService so the scan-time warning and the batch
+    # merge cannot drift into two different definitions of "same amount".
+    AMOUNT_TOLERANCE = AMOUNT_TOLERANCE
 
     @classmethod
     def _within_tolerance(cls, a_amount: int, b_amount: int) -> bool:
-        """Symmetric amount match.
-
-        The window is derived from the LARGER magnitude of the two so the
-        relation does not depend on which row happens to be scanned first — an
-        order-dependent window made "are these duplicates?" answerable two
-        different ways for the same pair of rows. No minimum floor: a 1-cent
-        floor made every pair of zero-amount rows duplicates of each other, and
-        made a 0 a duplicate of a real 1-cent transaction.
-        """
-        scale = max(abs(a_amount), abs(b_amount))
-        tol = int(scale * cls.AMOUNT_TOLERANCE)
-        return abs(a_amount - b_amount) <= tol
+        return within_tolerance(a_amount, b_amount, cls.AMOUNT_TOLERANCE)
 
     @classmethod
     async def run(

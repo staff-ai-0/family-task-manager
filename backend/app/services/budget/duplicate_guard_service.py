@@ -23,12 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.budget import BudgetTransaction
 from app.schemas.budget import DupWarning
+from app.services.budget._matching import AMOUNT_TOLERANCE, amount_tolerance_cents
 
 
 class DuplicateGuardService:
 
     WINDOW_DAYS = 7
-    AMOUNT_TOLERANCE = 0.01
+    # See _matching: one definition shared with DeduplicateService.
+    AMOUNT_TOLERANCE = AMOUNT_TOLERANCE
 
     @classmethod
     async def check(
@@ -41,7 +43,7 @@ class DuplicateGuardService:
         account_id: Optional[UUID] = None,
     ) -> Optional["DupMatch"]:
         """Return a DupMatch if a likely duplicate exists, else None."""
-        tol = max(1, int(abs(amount_cents) * cls.AMOUNT_TOLERANCE))
+        tol = amount_tolerance_cents(amount_cents, cls.AMOUNT_TOLERANCE)
         amount_range = BudgetTransaction.amount.between(amount_cents - tol, amount_cents + tol)
         base = and_(
             BudgetTransaction.family_id == family_id,
