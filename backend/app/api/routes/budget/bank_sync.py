@@ -198,7 +198,7 @@ async def create_from_alert(
             ).order_by(BudgetAccount.sort_order).limit(1)
         )).scalar_one_or_none()
     if account_id is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "family has no account")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "family has no account")
 
     # Resolve / create payee.
     payee_id = None
