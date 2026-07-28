@@ -22,12 +22,15 @@ if (!ok || !data) {
 
 const lang = Astro.cookies.get("lang")?.value ?? "es";
 
+// Only called from the template, i.e. after `labels` below is initialized.
 function formatTime(iso: string, allDay: boolean): string {
-    if (allDay) return lang === "es" ? "Todo el día" : "All day";
+    if (allDay) return labels.all_day;
     return fmtTime(iso, lang, data.timezone);
 }
 
 const labels = {
+    all_day: lang === "es" ? "Todo el día" : "All day",
+    offline: lang === "es" ? "Sin conexión — datos de hace un rato" : "Offline — showing older data",
     today: lang === "es" ? "Hoy" : "Today",
     tomorrow: lang === "es" ? "Mañana" : "Tomorrow",
     tasks: lang === "es" ? "Tareas" : "Tasks",
@@ -71,6 +74,14 @@ const maxWeekPoints = Math.max(
     1,
     ...((data.leaderboard ?? []).map((e: any) => e.points_week)),
 );
+
+// The boss section always renders (hidden when inactive) so the 60s refresh
+// can reveal/hide it by toggling a class instead of building the markup twice.
+const boss = data.boss ?? null;
+const bossActive = !!(boss && boss.active);
+const bossHpPct = boss && boss.max_hp
+    ? Math.max(4, Math.round((boss.current_hp / boss.max_hp) * 100))
+    : 0;
 ---
 
 <html lang={lang} class="bg-slate-950 text-white">
@@ -103,8 +114,11 @@ const maxWeekPoints = Math.max(
     <body class="bg-slate-950 text-white">
         <div class="board">
             <header class="col-span-full flex items-baseline justify-between gap-3 border-b border-white/10 pb-2 flex-wrap">
-                <h1 class="text-3xl font-bold">{data.family_name}</h1>
+                <h1 id="family-name" class="text-3xl font-bold">{data.family_name}</h1>
                 <div class="flex items-center gap-4">
+                    <span id="stale-badge" class="hidden text-xs font-semibold text-amber-300 bg-amber-500/15 rounded-full px-3 py-1">
+                        ⚠️ {labels.offline}
+                    </span>
                     <a
                         href="/calendar/scan"
                         class="flex items-center gap-2 bg-fuchsia-600/80 hover:bg-fuchsia-500 rounded-xl px-3 py-1.5 text-sm font-semibold"
@@ -119,121 +133,116 @@ const maxWeekPoints = Math.max(
 
             <section class="bg-white/5 rounded-xl p-4 overflow-auto">
                 <h2 class="text-xl font-semibold mb-3 text-sky-300">📅 {labels.today}</h2>
-                {data.events_today.length === 0 ? (
-                    <p class="text-white/50 text-sm">{labels.no_events}</p>
-                ) : (
-                    <ul class="space-y-2">
-                        {data.events_today.map((e: any) => (
-                            <li class="flex items-baseline gap-3">
-                                <span class="text-amber-300 font-mono text-sm w-20 flex-shrink-0">
-                                    {formatTime(e.start_ts, e.all_day)}
-                                </span>
-                                <div class="flex-1">
-                                    <p class="font-medium">{e.title}</p>
-                                    {e.location && (
-                                        <p class="text-white/50 text-xs">{e.location}</p>
-                                    )}
-                                </div>
+                <p id="events-today-empty" class={`text-white/50 text-sm${data.events_today.length ? " hidden" : ""}`}>
+                    {labels.no_events}
+                </p>
+                <ul id="events-today" class={`space-y-2${data.events_today.length ? "" : " hidden"}`}>
+                    {data.events_today.map((e: any) => (
+                        <li class="flex items-baseline gap-3">
+                            <span class="text-amber-300 font-mono text-sm w-20 flex-shrink-0">
+                                {formatTime(e.start_ts, e.all_day)}
+                            </span>
+                            <div class="flex-1">
+                                <p class="font-medium">{e.title}</p>
+                                {e.location && (
+                                    <p class="text-white/50 text-xs">{e.location}</p>
+                                )}
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+                <div
+                    id="events-tomorrow-wrap"
+                    class={`mt-4 pt-3 border-t border-white/10${data.events_tomorrow.length ? "" : " hidden"}`}
+                >
+                    <h3 class="text-sm font-semibold text-white/60 mb-2">📅 {labels.tomorrow}</h3>
+                    <ul id="events-tomorrow" class="space-y-1">
+                        {data.events_tomorrow.slice(0, 3).map((e: any) => (
+                            <li class="text-sm">
+                                <span class="text-amber-300">{formatTime(e.start_ts, e.all_day)}</span>
+                                <span class="ml-2">{e.title}</span>
                             </li>
                         ))}
                     </ul>
-                )}
-                {data.events_tomorrow.length > 0 && (
-                    <div class="mt-4 pt-3 border-t border-white/10">
-                        <h3 class="text-sm font-semibold text-white/60 mb-2">📅 {labels.tomorrow}</h3>
-                        <ul class="space-y-1">
-                            {data.events_tomorrow.slice(0, 3).map((e: any) => (
-                                <li class="text-sm">
-                                    <span class="text-amber-300">{formatTime(e.start_ts, e.all_day)}</span>
-                                    <span class="ml-2">{e.title}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
+                </div>
             </section>
 
             <section class="bg-white/5 rounded-xl p-4 overflow-auto">
                 <h2 class="text-xl font-semibold mb-3 text-emerald-300">✅ {labels.tasks}</h2>
-                {data.tasks.length === 0 ? (
-                    <p class="text-white/50 text-sm">{labels.no_tasks}</p>
-                ) : (
-                    <ul class="space-y-2">
-                        {data.tasks.map((t: any) => (
-                            <li class={`flex items-center gap-3 py-1 ${t.is_done ? "opacity-50" : ""}`}>
-                                <span class={`w-5 h-5 rounded border-2 ${t.is_done ? "bg-emerald-400 border-emerald-400" : "border-white/30"} flex-shrink-0`}>
-                                    {t.is_done && (
-                                        <svg class="w-full h-full text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    )}
-                                </span>
-                                <span class={`flex-1 ${t.is_done ? "line-through" : ""}`}>
-                                    {t.is_bonus && "⭐ "}{t.title}
-                                </span>
-                                <span
-                                    class="text-sm font-semibold px-2 py-0.5 rounded-full"
-                                    style={`background-color: ${t.user_color}22; color: ${t.user_color};`}
-                                >
-                                    {t.user_name}
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
-                )}
+                <p id="tasks-empty" class={`text-white/50 text-sm${data.tasks.length ? " hidden" : ""}`}>
+                    {labels.no_tasks}
+                </p>
+                <ul id="tasks-list" class={`space-y-2${data.tasks.length ? "" : " hidden"}`}>
+                    {data.tasks.map((t: any) => (
+                        <li class={`flex items-center gap-3 py-1 ${t.is_done ? "opacity-50" : ""}`}>
+                            <span class={`w-5 h-5 rounded border-2 ${t.is_done ? "bg-emerald-400 border-emerald-400" : "border-white/30"} flex-shrink-0`}>
+                                {t.is_done && (
+                                    <svg class="w-full h-full text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                )}
+                            </span>
+                            <span class={`flex-1 ${t.is_done ? "line-through" : ""}`}>
+                                {t.is_bonus && "⭐ "}{t.title}
+                            </span>
+                            <span
+                                class="text-sm font-semibold px-2 py-0.5 rounded-full"
+                                style={`background-color: ${t.user_color}22; color: ${t.user_color};`}
+                            >
+                                {t.user_name}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
             </section>
 
-            {data.boss && data.boss.active && (
-                <section class="col-span-full bg-white/5 rounded-xl p-4">
-                    <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
-                        <h2 class="text-xl font-semibold text-rose-300">
-                            {data.boss.emoji} {labels.boss_title}: <span class="text-white">{lang === "es" ? data.boss.name_es : data.boss.name_en}</span>
-                        </h2>
-                        <span class="font-mono text-lg font-bold text-white/70">
-                            {data.boss.defeated ? labels.boss_defeated : `${data.boss.current_hp} / ${data.boss.max_hp} ${labels.hp}`}
-                        </span>
-                    </div>
-                    <div class="w-full bg-white/10 rounded-full h-7 overflow-hidden border border-white/10">
-                        <div
-                            class="h-7 rounded-full transition-all"
-                            style={`width: ${data.boss.defeated ? 0 : Math.max(4, Math.round((data.boss.current_hp / data.boss.max_hp) * 100))}%; background-color: ${data.boss.defeated ? "#5DD4A8" : "#FF8A65"};`}
-                        ></div>
-                    </div>
-                    <p class="text-white/50 text-xs mt-2">
-                        <span class="font-bold text-rose-300">{data.boss.percent_defeated}%</span> {labels.defeated_word} · {labels.boss_hint}
-                    </p>
-                </section>
-            )}
+            <section id="boss-section" class={`col-span-full bg-white/5 rounded-xl p-4${bossActive ? "" : " hidden"}`}>
+                <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                    <h2 class="text-xl font-semibold text-rose-300">
+                        <span id="boss-emoji">{boss?.emoji}</span> {labels.boss_title}: <span id="boss-name" class="text-white">{lang === "es" ? boss?.name_es : boss?.name_en}</span>
+                    </h2>
+                    <span id="boss-hp" class="font-mono text-lg font-bold text-white/70">
+                        {boss?.defeated ? labels.boss_defeated : `${boss?.current_hp} / ${boss?.max_hp} ${labels.hp}`}
+                    </span>
+                </div>
+                <div class="w-full bg-white/10 rounded-full h-7 overflow-hidden border border-white/10">
+                    <div
+                        id="boss-bar"
+                        class="h-7 rounded-full transition-all"
+                        style={`width: ${boss?.defeated ? 0 : bossHpPct}%; background-color: ${boss?.defeated ? "#5DD4A8" : "#FF8A65"};`}
+                    ></div>
+                </div>
+                <p class="text-white/50 text-xs mt-2">
+                    <span id="boss-pct" class="font-bold text-rose-300">{boss?.percent_defeated}%</span> {labels.defeated_word} · {labels.boss_hint}
+                </p>
+            </section>
 
             <section class="col-span-full bg-white/5 rounded-xl p-4 overflow-auto">
                 <h2 class="text-xl font-semibold mb-3 text-amber-300">🏆 {labels.leaderboard}</h2>
-                {(data.leaderboard ?? []).length === 0 ? (
-                    <p class="text-white/50 text-sm">—</p>
-                ) : (
-                    <ul class="space-y-2">
-                        {(data.leaderboard ?? []).map((e: any, i: number) => (
-                            <li class="flex items-center gap-3">
-                                <span class="text-2xl w-9 text-center flex-shrink-0">{medals[i] ?? "🏅"}</span>
-                                <span class="font-bold text-lg w-32 truncate flex-shrink-0" style={`color: ${e.color_hex};`}>
-                                    {e.name}
-                                </span>
-                                <div class="flex-1 bg-white/10 rounded-full h-6 overflow-hidden">
-                                    <div
-                                        class="h-6 rounded-full transition-all"
-                                        style={`width: ${Math.max(4, Math.round((e.points_week / maxWeekPoints) * 100))}%; background-color: ${e.color_hex};`}
-                                    ></div>
-                                </div>
-                                <span class="font-mono text-xl font-bold w-16 text-right flex-shrink-0">{e.points_week}</span>
-                                <span class="text-white/40 text-[10px] w-20 flex-shrink-0">{labels.week_points}</span>
-                            </li>
-                        ))}
-                    </ul>
-                )}
+                <p id="leaderboard-empty" class={`text-white/50 text-sm${(data.leaderboard ?? []).length ? " hidden" : ""}`}>—</p>
+                <ul id="leaderboard" class={`space-y-2${(data.leaderboard ?? []).length ? "" : " hidden"}`}>
+                    {(data.leaderboard ?? []).map((e: any, i: number) => (
+                        <li class="flex items-center gap-3">
+                            <span class="text-2xl w-9 text-center flex-shrink-0">{medals[i] ?? "🏅"}</span>
+                            <span class="font-bold text-lg w-32 truncate flex-shrink-0" style={`color: ${e.color_hex};`}>
+                                {e.name}
+                            </span>
+                            <div class="flex-1 bg-white/10 rounded-full h-6 overflow-hidden">
+                                <div
+                                    class="h-6 rounded-full transition-all"
+                                    style={`width: ${Math.max(4, Math.round((e.points_week / maxWeekPoints) * 100))}%; background-color: ${e.color_hex};`}
+                                ></div>
+                            </div>
+                            <span class="font-mono text-xl font-bold w-16 text-right flex-shrink-0">{e.points_week}</span>
+                            <span class="text-white/40 text-[10px] w-20 flex-shrink-0">{labels.week_points}</span>
+                        </li>
+                    ))}
+                </ul>
             </section>
 
             <section class="col-span-full bg-white/5 rounded-xl p-4 overflow-auto">
                 <p class="text-white/40 text-xs mb-2">👆 {labels.tap_avatar}</p>
-                <div class="flex flex-wrap gap-3">
+                <div id="members-list" class="flex flex-wrap gap-3">
                     {data.members.map((m: any) => (
                         <button
                             type="button"
@@ -258,17 +267,18 @@ const maxWeekPoints = Math.max(
                         </button>
                     ))}
                 </div>
-                {data.shopping.length > 0 && (
-                    <div class="mt-3 pt-3 border-t border-white/10 flex flex-wrap gap-2">
-                        <span class="text-sm text-white/60">🛒 {labels.shopping}:</span>
-                        {data.shopping.map((l: any) => (
-                            <span class="text-sm">
-                                <span class="font-semibold">{l.name}</span>
-                                <span class="ml-1 text-rose-300">{l.pending}</span>
-                            </span>
-                        ))}
-                    </div>
-                )}
+                <div
+                    id="shopping-wrap"
+                    class={`mt-3 pt-3 border-t border-white/10 flex flex-wrap gap-2${data.shopping.length ? "" : " hidden"}`}
+                >
+                    <span class="text-sm text-white/60">🛒 {labels.shopping}:</span>
+                    {data.shopping.map((l: any) => (
+                        <span class="text-sm" data-shopping-row>
+                            <span class="font-semibold">{l.name}</span>
+                            <span class="ml-1 text-rose-300">{l.pending}</span>
+                        </span>
+                    ))}
+                </div>
             </section>
         </div>
 
@@ -352,11 +362,194 @@ const maxWeekPoints = Math.max(
                 !pinOverlay.classList.contains("hidden") ||
                 !kidOverlay.classList.contains("hidden");
 
-            // Auto-refresh every 60s to pull the latest snapshot, but never
-            // while a kid is mid-PIN or reading their view.
-            setInterval(() => {
-                if (!overlayOpen()) location.reload();
-            }, 60_000);
+            // ── Live board refresh ───────────────────────────────────────
+            // This is an always-on wall display, so refreshing via
+            // location.reload() was a liability: a reload landing during a
+            // wifi blip, tunnel hiccup or deploy paints the browser's error
+            // page, which takes this script (and its interval) with it — the
+            // kiosk then stays dead until a human walks over. Fetching the
+            // same snapshot JSON and patching the DOM keeps the last good
+            // board on screen through an outage, retries on the next tick,
+            // and drops the white flash every 60s.
+            const REFRESH_MS = 60_000;
+            const STALE_AFTER_FAILURES = 3;
+            let failures = 0;
+
+            const NAIVE_ISO = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+            const CHECK_SVG =
+                '<svg class="w-full h-full text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>';
+            const MEDALS = ["🥇", "🥈", "🥉"];
+
+            function node(tag, className, text) {
+                const n = document.createElement(tag);
+                if (className) n.className = className;
+                if (text !== undefined && text !== null) n.textContent = String(text);
+                return n;
+            }
+
+            function show(id, visible) {
+                document.getElementById(id).classList.toggle("hidden", !visible);
+            }
+
+            // Mirrors lib/datetime.fmtTime — offset-less backend timestamps are
+            // UTC, but JS would otherwise read them as browser-local.
+            function fmtEventTime(iso, allDay, tz) {
+                if (allDay) return labels.all_day;
+                if (!iso) return "";
+                const d = new Date(NAIVE_ISO.test(iso) ? iso.replace(" ", "T") + "Z" : iso);
+                if (isNaN(d.getTime())) return "";
+                const locale = lang === "es" ? "es-MX" : "en-US";
+                const opts = { hour: "numeric", minute: "2-digit" };
+                try {
+                    return d.toLocaleString(locale, { ...opts, timeZone: tz || "UTC" });
+                } catch {
+                    return d.toLocaleString(locale, { ...opts, timeZone: "UTC" });
+                }
+            }
+
+            function patchBoard(s) {
+                const tz = s.timezone || "UTC";
+
+                document.getElementById("family-name").textContent = s.family_name;
+                document.title = `${s.family_name} — Kiosk`;
+
+                const today = s.events_today ?? [];
+                document.getElementById("events-today").replaceChildren(...today.map((e) => {
+                    const li = node("li", "flex items-baseline gap-3");
+                    li.append(node("span", "text-amber-300 font-mono text-sm w-20 flex-shrink-0", fmtEventTime(e.start_ts, e.all_day, tz)));
+                    const body = node("div", "flex-1");
+                    body.append(node("p", "font-medium", e.title));
+                    if (e.location) body.append(node("p", "text-white/50 text-xs", e.location));
+                    li.append(body);
+                    return li;
+                }));
+                show("events-today", today.length > 0);
+                show("events-today-empty", today.length === 0);
+
+                const tomorrow = (s.events_tomorrow ?? []).slice(0, 3);
+                document.getElementById("events-tomorrow").replaceChildren(...tomorrow.map((e) => {
+                    const li = node("li", "text-sm");
+                    li.append(node("span", "text-amber-300", fmtEventTime(e.start_ts, e.all_day, tz)));
+                    li.append(node("span", "ml-2", e.title));
+                    return li;
+                }));
+                show("events-tomorrow-wrap", tomorrow.length > 0);
+
+                const tasks = s.tasks ?? [];
+                document.getElementById("tasks-list").replaceChildren(...tasks.map((t) => {
+                    const li = node("li", `flex items-center gap-3 py-1 ${t.is_done ? "opacity-50" : ""}`);
+                    const box = node("span", `w-5 h-5 rounded border-2 ${t.is_done ? "bg-emerald-400 border-emerald-400" : "border-white/30"} flex-shrink-0`);
+                    if (t.is_done) box.innerHTML = CHECK_SVG;
+                    li.append(box);
+                    li.append(node("span", `flex-1 ${t.is_done ? "line-through" : ""}`, (t.is_bonus ? "⭐ " : "") + t.title));
+                    const who = node("span", "text-sm font-semibold px-2 py-0.5 rounded-full", t.user_name);
+                    who.style.backgroundColor = `${t.user_color}22`;
+                    who.style.color = t.user_color;
+                    li.append(who);
+                    return li;
+                }));
+                show("tasks-list", tasks.length > 0);
+                show("tasks-empty", tasks.length === 0);
+
+                const boss = s.boss;
+                show("boss-section", !!(boss && boss.active));
+                if (boss) {
+                    document.getElementById("boss-emoji").textContent = boss.emoji;
+                    document.getElementById("boss-name").textContent = lang === "es" ? boss.name_es : boss.name_en;
+                    document.getElementById("boss-hp").textContent = boss.defeated
+                        ? labels.boss_defeated
+                        : `${boss.current_hp} / ${boss.max_hp} ${labels.hp}`;
+                    const bar = document.getElementById("boss-bar");
+                    bar.style.width = boss.defeated || !boss.max_hp
+                        ? "0%"
+                        : `${Math.max(4, Math.round((boss.current_hp / boss.max_hp) * 100))}%`;
+                    bar.style.backgroundColor = boss.defeated ? "#5DD4A8" : "#FF8A65";
+                    document.getElementById("boss-pct").textContent = `${boss.percent_defeated}%`;
+                }
+
+                const board = s.leaderboard ?? [];
+                const maxWeek = Math.max(1, ...board.map((e) => e.points_week));
+                document.getElementById("leaderboard").replaceChildren(...board.map((e, i) => {
+                    const li = node("li", "flex items-center gap-3");
+                    li.append(node("span", "text-2xl w-9 text-center flex-shrink-0", MEDALS[i] ?? "🏅"));
+                    const name = node("span", "font-bold text-lg w-32 truncate flex-shrink-0", e.name);
+                    name.style.color = e.color_hex;
+                    li.append(name);
+                    const track = node("div", "flex-1 bg-white/10 rounded-full h-6 overflow-hidden");
+                    const fill = node("div", "h-6 rounded-full transition-all");
+                    fill.style.width = `${Math.max(4, Math.round((e.points_week / maxWeek) * 100))}%`;
+                    fill.style.backgroundColor = e.color_hex;
+                    track.append(fill);
+                    li.append(track);
+                    li.append(node("span", "font-mono text-xl font-bold w-16 text-right flex-shrink-0", e.points_week));
+                    li.append(node("span", "text-white/40 text-[10px] w-20 flex-shrink-0", labels.week_points));
+                    return li;
+                }));
+                show("leaderboard", board.length > 0);
+                show("leaderboard-empty", board.length === 0);
+
+                const members = s.members ?? [];
+                document.getElementById("members-list").replaceChildren(...members.map((m) => {
+                    const btn = node("button", "kiosk-member bg-white/10 hover:bg-white/20 active:scale-95 transition-all rounded-xl px-3 py-2 flex-1 min-w-[120px] flex items-center gap-3 text-left");
+                    btn.type = "button";
+                    btn.dataset.userId = m.id;
+                    btn.dataset.name = m.name;
+                    btn.dataset.color = m.color_hex;
+                    btn.dataset.hasPin = m.has_pin ? "1" : "0";
+                    const avatar = node("span", "w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-slate-900 flex-shrink-0", (m.name || "?").charAt(0).toUpperCase());
+                    avatar.style.backgroundColor = m.color_hex;
+                    const stack = node("span", "min-w-0");
+                    stack.append(node("span", "block text-sm font-semibold truncate", m.has_pin ? `${m.name} 🔒` : m.name));
+                    stack.append(node("span", "block text-xs text-white/60", `${m.tasks_done}/${m.tasks_today} ${labels.tasks.toLowerCase()}`));
+                    btn.append(avatar, stack);
+                    return btn;
+                }));
+
+                const shopping = s.shopping ?? [];
+                const shoppingRows = shopping.map((l) => {
+                    const row = node("span", "text-sm");
+                    row.setAttribute("data-shopping-row", "");
+                    row.append(node("span", "font-semibold", l.name));
+                    row.append(node("span", "ml-1 text-rose-300", l.pending));
+                    return row;
+                });
+                const shoppingWrap = document.getElementById("shopping-wrap");
+                shoppingWrap.querySelectorAll("[data-shopping-row]").forEach((r) => r.remove());
+                shoppingWrap.append(...shoppingRows);
+                show("shopping-wrap", shopping.length > 0);
+            }
+
+            async function refreshBoard() {
+                // Never redraw under a kid mid-PIN or reading their own view.
+                if (overlayOpen()) return;
+                let snapshot;
+                try {
+                    const res = await fetch(
+                        `/api/kiosk/snapshot?token=${encodeURIComponent(token)}`,
+                        { cache: "no-store" },
+                    );
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    snapshot = await res.json();
+                } catch (err) {
+                    failures += 1;
+                    show("stale-badge", failures >= STALE_AFTER_FAILURES);
+                    console.warn("[kiosk] snapshot refresh failed, retrying next tick", err);
+                    return;
+                }
+                failures = 0;
+                show("stale-badge", false);
+                try {
+                    patchBoard(snapshot);
+                } catch (err) {
+                    console.error("[kiosk] board patch failed", err);
+                }
+            }
+
+            setInterval(refreshBoard, REFRESH_MS);
+            // Don't make the wall wait out the rest of a 60s tick after the
+            // network comes back.
+            window.addEventListener("online", refreshBoard);
 
             // ── Per-kid PIN flow ─────────────────────────────────────────
             let pinDigits = "";
@@ -401,14 +594,16 @@ const maxWeekPoints = Math.max(
                 idleTimer = setTimeout(fn, ms);
             }
 
-            document.querySelectorAll(".kiosk-member").forEach((btn) => {
-                btn.addEventListener("click", () => {
-                    openPinPad({
-                        id: btn.dataset.userId,
-                        name: btn.dataset.name || "",
-                        color: btn.dataset.color || "#4FB8E6",
-                        hasPin: btn.dataset.hasPin === "1",
-                    });
+            // Delegated: the 60s refresh replaces these buttons, so per-element
+            // listeners would die on the first patch.
+            document.getElementById("members-list").addEventListener("click", (ev) => {
+                const btn = ev.target.closest?.(".kiosk-member");
+                if (!btn) return;
+                openPinPad({
+                    id: btn.dataset.userId,
+                    name: btn.dataset.name || "",
+                    color: btn.dataset.color || "#4FB8E6",
+                    hasPin: btn.dataset.hasPin === "1",
                 });
             });
 

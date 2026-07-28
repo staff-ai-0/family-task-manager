@@ -75,7 +75,7 @@ class TestImport:
         client = MagicMock()
         client.chat.completions.create.return_value = completion
         monkeypatch.setattr(
-            "app.services.recipe_importer.OpenAI", lambda *a, **kw: client
+            "app.core.llm.OpenAI", lambda *a, **kw: client
         )
 
         result = await import_recipe_from_url("https://example.com/tortilla")
@@ -106,7 +106,7 @@ class TestImport:
         client = MagicMock()
         client.chat.completions.create.return_value = completion
         monkeypatch.setattr(
-            "app.services.recipe_importer.OpenAI", lambda *a, **kw: client
+            "app.core.llm.OpenAI", lambda *a, **kw: client
         )
 
         with pytest.raises(ValidationError):

@@ -44,11 +44,13 @@ def _monday(d):
 
 
 async def _add_points(db, user_id, points, when, *, balance_before=0):
+    owner = await db.get(User, user_id)
     db.add(
         PointTransaction(
             type=TransactionType.TASK_COMPLETED,
             points=points,
             user_id=user_id,
+            family_id=owner.family_id,
             balance_before=balance_before,
             balance_after=balance_before + points,
             created_at=when,
@@ -112,6 +114,7 @@ async def test_leaderboard_window_and_winner(
             type=TransactionType.REWARD_REDEEMED,
             points=-50,
             user_id=test_child_user.id,
+            family_id=test_family.id,
             balance_before=100,
             balance_after=50,
             created_at=in_window,

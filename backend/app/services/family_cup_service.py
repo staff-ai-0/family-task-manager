@@ -110,8 +110,8 @@ class FamilyCupService:
     ) -> dict:
         """Points earned per member in the given family-local Mon-Sun window.
 
-        Family isolation: point_transactions has no family_id, so the window SUM
-        is scoped to THIS family's member ids — another family's ledger can never
+        Family isolation: the window SUM filters on point_transactions.family_id
+        as well as this family's member ids — another family's ledger can never
         leak in. Only positive transactions count (redemptions/penalties don't
         subtract from a cup standing). The top scorer (points > 0) is the winner.
         """
@@ -148,6 +148,7 @@ class FamilyCupService:
                 )
                 .where(
                     and_(
+                        PointTransaction.family_id == family_id,
                         PointTransaction.user_id.in_(user_ids),
                         PointTransaction.points > 0,
                         PointTransaction.created_at >= week_start_dt,

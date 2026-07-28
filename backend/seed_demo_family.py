@@ -411,7 +411,8 @@ async def create_points(session: AsyncSession, family, parent, members, complete
     for kid in (teen, child):
         for assignment, pts in completed_bonus.get(kid.id, []):
             _earn(session, kid, lambda bal, _a=assignment, _p=pts: PointTransaction.create_assignment_completion(
-                user_id=_a.assigned_to, assignment_id=_a.id, points=_p, balance_before=bal,
+                user_id=_a.assigned_to, family_id=family.id, assignment_id=_a.id,
+                points=_p, balance_before=bal,
             ))
 
     # Teen redeems the cheapest affordable reward.
@@ -419,19 +420,20 @@ async def create_points(session: AsyncSession, family, parent, members, complete
     if affordable and _balances.get(teen.id, 0) >= affordable[0].points_cost:
         r = affordable[0]
         _earn(session, teen, lambda bal, _r=r: PointTransaction.create_reward_redemption(
-            user_id=teen.id, reward_id=_r.id, points_cost=_r.points_cost, balance_before=bal,
+            user_id=teen.id, family_id=family.id, reward_id=_r.id,
+            points_cost=_r.points_cost, balance_before=bal,
         ))
 
     # Parent bonus for the child; a small penalty for the teen only when it
     # won't drive the balance negative (keeps points == sum(transactions)).
     _earn(session, child, lambda bal: PointTransaction(
-        type=TransactionType.BONUS, user_id=child.id, points=50,
+        type=TransactionType.BONUS, user_id=child.id, family_id=family.id, points=50,
         balance_before=bal, balance_after=bal + 50, created_by=parent.id,
         description="Bonus for helping a neighbor",
     ))
     if _balances.get(teen.id, 0) >= 20:
         _earn(session, teen, lambda bal: PointTransaction(
-            type=TransactionType.PENALTY, user_id=teen.id, points=-20,
+            type=TransactionType.PENALTY, user_id=teen.id, family_id=family.id, points=-20,
             balance_before=bal, balance_after=bal - 20, created_by=parent.id,
             description="Left room messy after a warning",
         ))

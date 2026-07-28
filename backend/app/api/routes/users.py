@@ -31,7 +31,9 @@ async def get_my_points_summary(
     db: AsyncSession = Depends(get_db),
 ):
     """Get my points summary"""
-    summary = await PointsService.get_points_summary(db, current_user.id)
+    summary = await PointsService.get_points_summary(
+        db, current_user.id, current_user.family_id
+    )
     return summary
 
 
@@ -47,7 +49,8 @@ async def get_my_points_history(
     parent types on an adjustment is stored in `description`.
     """
     return await PointsService.get_transaction_history(
-        db, current_user.id, limit=min(max(limit, 1), 200)
+        db, current_user.id, current_user.family_id,
+        limit=min(max(limit, 1), 200),
     )
 
 
@@ -109,10 +112,13 @@ async def get_user(
 @router.get("/{user_id}/points", response_model=PointsSummary)
 async def get_user_points_summary(
     user: User = Depends(get_family_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Get user points summary (must be in same family)"""
-    summary = await PointsService.get_points_summary(db, user.id)
+    summary = await PointsService.get_points_summary(
+        db, user.id, current_user.family_id
+    )
     return summary
 
 

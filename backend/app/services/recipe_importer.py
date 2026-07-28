@@ -16,12 +16,11 @@ import socket
 
 import httpx
 from fastapi.concurrency import run_in_threadpool
-from openai import OpenAI
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
+from app.core.llm import RECEIPT_MODEL, get_llm_client
 from app.core.metrics import record_llm_call
-from app.services.budget.receipt_scanner_service import LLM_TIMEOUT, RECEIPT_MODEL
 
 
 # Strip cap so we keep the prompt comfortably under the model's context.
@@ -148,11 +147,7 @@ async def import_recipe_from_url(url: str) -> ImportedRecipe:
     if not text_block:
         raise ValidationError("Page returned no readable text.")
 
-    client = OpenAI(
-        base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
-        api_key=settings.LITELLM_API_KEY,
-        timeout=LLM_TIMEOUT,  # connect fails fast; read capped at 60s
-    )
+    client = get_llm_client()
     try:
         # Sync OpenAI client (blocking I/O) — offload to a worker thread so a
         # slow provider can't stall the async event loop.

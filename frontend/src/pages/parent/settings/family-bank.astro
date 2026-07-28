@@ -449,11 +449,13 @@ const weekdays = es
     )}
 
     <!-- Parent move / settle modal -->
-    <div id="pb-modal" class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+    <div id="pb-modal" role="dialog" aria-modal="true" aria-labelledby="pb-modal-title"
+        class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
         <div class="bg-brand-cream rounded-t-3xl sm:rounded-[var(--radius-card)] w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 max-h-[90dvh] overflow-y-auto border-2 border-brand-ink shadow-[var(--shadow-pop)]">
             <div class="flex justify-between items-center mb-2">
                 <h2 id="pb-modal-title" class="text-lg font-bold text-brand-ink"></h2>
-                <button id="pb-modal-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
+                <button id="pb-modal-close" type="button" aria-label={es ? "Cerrar" : "Close"}
+                    class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none p-2 -m-2">&times;</button>
             </div>
             <p id="pb-modal-kid" class="text-xs text-brand-ink-soft mb-4"></p>
             <div id="pb-jar-row" class="grid grid-cols-2 gap-2 mb-3">
@@ -487,11 +489,13 @@ const weekdays = es
     </div>
 
     <!-- Parent: set a savings goal for a kid -->
-    <div id="goal-modal" class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+    <div id="goal-modal" role="dialog" aria-modal="true" aria-labelledby="goal-modal-title"
+        class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
         <div class="bg-brand-cream rounded-t-3xl sm:rounded-[var(--radius-card)] w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 max-h-[90dvh] overflow-y-auto border-2 border-brand-ink shadow-[var(--shadow-pop)]">
             <div class="flex justify-between items-center mb-2">
-                <h2 class="text-lg font-bold text-brand-ink">🎯 {es ? "Meta de ahorro" : "Savings goal"}</h2>
-                <button id="goal-modal-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
+                <h2 id="goal-modal-title" class="text-lg font-bold text-brand-ink">🎯 {es ? "Meta de ahorro" : "Savings goal"}</h2>
+                <button id="goal-modal-close" type="button" aria-label={es ? "Cerrar" : "Close"}
+                    class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none p-2 -m-2">&times;</button>
             </div>
             <p id="goal-modal-kid" class="text-xs text-brand-ink-soft mb-4"></p>
             <label class="block text-sm font-medium text-brand-ink mb-1">{es ? "¿Para qué ahorra?" : "Saving for what?"}</label>
@@ -514,6 +518,7 @@ const weekdays = es
 <script>
     import { mutate } from "../../../lib/mutate";
     import { showToast } from "../../../lib/toast";
+    import { createDialog } from "../../../lib/dialog";
 
     document.addEventListener("astro:page-load", () => {
         const es = document.documentElement.lang === "es";
@@ -626,6 +631,12 @@ const weekdays = es
         let mode: "transfer" | "settle-share" = "transfer";
         let activeCard: HTMLElement | null = null;
 
+        const dialog = createDialog(modal, {
+            closeTriggers: [document.getElementById("pb-modal-close")],
+            initialFocus: () => amountEl,
+            onClose: () => { activeCard = null; },
+        });
+
         function openModal(card: HTMLElement, m: "transfer" | "settle-share") {
             activeCard = card;
             mode = m;
@@ -645,17 +656,14 @@ const weekdays = es
                 const shareCents = shareEl ? Math.round(parseFloat(shareEl.textContent!.replace(/[^0-9.]/g, "")) * 100) : 0;
                 amountEl.value = (shareCents / 100).toFixed(2);
             }
-            modal!.classList.remove("hidden");
-            setTimeout(() => amountEl.focus(), 50);
+            dialog.open();
         }
-        function closeModal() { modal!.classList.add("hidden"); activeCard = null; }
+        const closeModal = () => dialog.close();
 
         document.querySelectorAll<HTMLElement>("[data-kid-move]").forEach((b) =>
             b.addEventListener("click", () => openModal(b.closest("[data-kid-card]") as HTMLElement, "transfer")));
         document.querySelectorAll<HTMLElement>("[data-kid-settle-share]").forEach((b) =>
             b.addEventListener("click", () => openModal(b.closest("[data-kid-card]") as HTMLElement, "settle-share")));
-        document.getElementById("pb-modal-close")?.addEventListener("click", closeModal);
-        modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
 
         const setCardJar = (card: HTMLElement, jar: string, cents: number) => {
             const el = card.querySelector<HTMLElement>(`[data-jar-balance="${jar}"]`);
@@ -721,6 +729,7 @@ const weekdays = es
 <script>
     import { mutate } from "../../../lib/mutate";
     import { showToast } from "../../../lib/toast";
+    import { createDialog } from "../../../lib/dialog";
 
     // Star Mode toggle + savings-goal set/approve/clear (parent).
     document.addEventListener("astro:page-load", () => {
@@ -792,6 +801,12 @@ const weekdays = es
         const gSubmit = document.getElementById("goal-submit") as HTMLButtonElement;
         let targetKid = "";
 
+        const dialog = createDialog(goalModal, {
+            closeTriggers: [document.getElementById("goal-modal-close")],
+            initialFocus: () => gName,
+            onClose: () => { targetKid = ""; },
+        });
+
         function openGoal(userId: string, name: string) {
             targetKid = userId;
             gName.value = "";
@@ -799,16 +814,12 @@ const weekdays = es
             gErr.classList.add("hidden");
             gSubmit.disabled = false;
             gKid.textContent = name;
-            goalModal!.classList.remove("hidden");
-            setTimeout(() => gName.focus(), 50);
+            dialog.open();
         }
-        function closeGoal() { goalModal!.classList.add("hidden"); targetKid = ""; }
 
         document.querySelectorAll<HTMLElement>("[data-goal-set]").forEach((btn) => {
             btn.addEventListener("click", () => openGoal(btn.dataset.kidUser!, btn.dataset.kidName || ""));
         });
-        document.getElementById("goal-modal-close")?.addEventListener("click", closeGoal);
-        goalModal.addEventListener("click", (e) => { if (e.target === goalModal) closeGoal(); });
 
         gSubmit.addEventListener("click", async () => {
             const name = gName.value.trim();

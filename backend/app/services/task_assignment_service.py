@@ -1561,7 +1561,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             assignment.completed_at = datetime.now(timezone.utc)
             from app.services.points_service import PointsService
             await PointsService.award_assignment_completion(
-                db, user_id, assignment.id, template.effective_points
+                db, user_id, family_id, assignment.id, template.effective_points
             )
             from app.services.pet_service import PetService
             await PetService.on_task_completed(db, user_id, is_bonus=False)
@@ -1716,7 +1716,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         if (template.gig_mode or "claim") != "collaboration":
             # Integer half-up partial-credit scaling (grade from parent review).
             pts = (template.award_points_per_completer * award_pct + 50) // 100
-            await PointsService.award_gig_points(db, user_id, assignment.id, pts)
+            await PointsService.award_gig_points(
+                db, user_id, assignment.family_id, assignment.id, pts
+            )
             return pts
         # Collaboration: _resolve_grade guarantees award_pct == 100 here.
         return await TaskAssignmentService._settle_collaboration(db, assignment, template)
@@ -1784,6 +1786,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     select(func.coalesce(func.sum(PointTransaction.points), 0))
                     .where(
                         and_(
+                            PointTransaction.family_id == template.family_id,
                             PointTransaction.assignment_id == completer.id,
                             PointTransaction.type == TransactionType.GIG_APPROVED,
                         )
@@ -1795,6 +1798,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 await PointsService.award_gig_points(
                     db,
                     completer.assigned_to,
+                    completer.family_id,
                     completer.id,
                     delta,
                     description=(
@@ -2039,7 +2043,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 # a point (25 pts × 50% → 13, not 12).
                 pts = (assignment.template.effective_points * award_pct + 50) // 100
                 await PointsService.award_assignment_completion(
-                    db, assignment.assigned_to, assignment.id, pts
+                    db, assignment.assigned_to, family_id, assignment.id, pts
                 )
             from app.services.notification_service import NotificationService
             from app.services.pet_service import PetService
@@ -2269,6 +2273,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     await PointsService.award_assignment_completion(
                         db,
                         assignment.assigned_to,
+                        family_id,
                         assignment.id,
                         -template.effective_points,
                     )

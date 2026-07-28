@@ -38,7 +38,14 @@ class PointTransaction(Base):
     
     # User linkage
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    
+    # Tenancy. Denormalized from users.family_id so aggregates can be scoped at
+    # the data layer instead of trusting every caller to have resolved the user
+    # through get_family_user first.
+    family_id = Column(
+        UUID(as_uuid=True), ForeignKey("families.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+
     # Balance tracking
     balance_before = Column(Integer, nullable=False, default=0)
     balance_after = Column(Integer, nullable=False)
@@ -63,11 +70,12 @@ class PointTransaction(Base):
         return f"<PointTransaction(id={self.id}, type={self.type.value}, points={self.points})>"
 
     @classmethod
-    def create_task_completion(cls, user_id: UUID, points: int, balance_before: int):
+    def create_task_completion(cls, user_id: UUID, family_id: UUID, points: int, balance_before: int):
         """Create transaction for a completed task/chore"""
         return cls(
             type=TransactionType.TASK_COMPLETED,
             user_id=user_id,
+            family_id=family_id,
             points=points,
             balance_before=balance_before,
             balance_after=balance_before + points,
@@ -75,11 +83,12 @@ class PointTransaction(Base):
         )
 
     @classmethod
-    def create_assignment_completion(cls, user_id: UUID, assignment_id: UUID, points: int, balance_before: int):
+    def create_assignment_completion(cls, user_id: UUID, family_id: UUID, assignment_id: UUID, points: int, balance_before: int):
         """Create transaction for assignment completion"""
         return cls(
             type=TransactionType.TASK_COMPLETED,
             user_id=user_id,
+            family_id=family_id,
             assignment_id=assignment_id,
             points=points,
             balance_before=balance_before,
@@ -88,10 +97,11 @@ class PointTransaction(Base):
         )
 
     @classmethod
-    def create_gig_approval(cls, user_id, assignment_id, points: int, balance_before: int, description: str | None = None):
+    def create_gig_approval(cls, user_id, family_id, assignment_id, points: int, balance_before: int, description: str | None = None):
         return cls(
             type=TransactionType.GIG_APPROVED,
             user_id=user_id,
+            family_id=family_id,
             assignment_id=assignment_id,
             points=points,
             balance_before=balance_before,
@@ -100,10 +110,11 @@ class PointTransaction(Base):
         )
 
     @classmethod
-    def create_gig_claim_approval(cls, user_id, gig_claim_id, points: int, balance_before: int):
+    def create_gig_claim_approval(cls, user_id, family_id, gig_claim_id, points: int, balance_before: int):
         return cls(
             type=TransactionType.GIG_APPROVED,
             user_id=user_id,
+            family_id=family_id,
             gig_claim_id=gig_claim_id,
             points=points,
             balance_before=balance_before,
@@ -112,11 +123,12 @@ class PointTransaction(Base):
         )
 
     @classmethod
-    def create_reward_redemption(cls, user_id: UUID, reward_id: UUID, points_cost: int, balance_before: int):
+    def create_reward_redemption(cls, user_id: UUID, family_id: UUID, reward_id: UUID, points_cost: int, balance_before: int):
         """Create transaction for reward redemption"""
         return cls(
             type=TransactionType.REWARD_REDEEMED,
             user_id=user_id,
+            family_id=family_id,
             reward_id=reward_id,
             points=-points_cost,
             balance_before=balance_before,
@@ -125,11 +137,12 @@ class PointTransaction(Base):
         )
 
     @classmethod
-    def create_parent_adjustment(cls, user_id: UUID, points: int, balance_before: int, reason: str, created_by: UUID):
+    def create_parent_adjustment(cls, user_id: UUID, family_id: UUID, points: int, balance_before: int, reason: str, created_by: UUID):
         """Create transaction for manual parent adjustment"""
         return cls(
             type=TransactionType.PARENT_ADJUSTMENT,
             user_id=user_id,
+            family_id=family_id,
             points=points,
             balance_before=balance_before,
             balance_after=balance_before + points,

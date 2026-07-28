@@ -93,13 +93,12 @@ class RedemptionAdapter(ServiceAdapter):
 
     async def list(self, ctx: McpContext) -> list[dict]:
         from sqlalchemy import select
-        from app.models import PointTransaction, User
+        from app.models import PointTransaction
         from app.models.point_transaction import TransactionType
         stmt = (
             select(PointTransaction)
-            .join(User, User.id == PointTransaction.user_id)
             .where(
-                User.family_id == ctx.family_id,
+                PointTransaction.family_id == ctx.family_id,
                 PointTransaction.type == TransactionType.REWARD_REDEEMED,
             )
             .order_by(PointTransaction.created_at.desc())

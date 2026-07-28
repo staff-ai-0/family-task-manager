@@ -358,7 +358,7 @@ async def create_point_transactions(session: AsyncSession, family, mom, emma, lu
     for a in emma_completed[:5]:
         pts = 20
         t = PointTransaction(
-            user_id=emma.id, assignment_id=a.id, points=pts,
+            user_id=emma.id, family_id=family.id, assignment_id=a.id, points=pts,
             type=TransactionType.TASK_COMPLETED, balance_before=balance,
             balance_after=balance + pts, description=f"Completed task and earned {pts} points",
         )
@@ -369,7 +369,7 @@ async def create_point_transactions(session: AsyncSession, family, mom, emma, lu
     if rewards:
         cost = rewards[0].points_cost
         t = PointTransaction(
-            user_id=emma.id, reward_id=rewards[0].id, points=-cost,
+            user_id=emma.id, family_id=family.id, reward_id=rewards[0].id, points=-cost,
             type=TransactionType.REWARD_REDEEMED, balance_before=balance,
             balance_after=balance - cost, description=f"Redeemed reward for {cost} points",
         )
@@ -378,7 +378,7 @@ async def create_point_transactions(session: AsyncSession, family, mom, emma, lu
 
     # Parent adjustment — bonus for good behavior
     t = PointTransaction(
-        user_id=emma.id, points=50,
+        user_id=emma.id, family_id=family.id, points=50,
         type=TransactionType.PARENT_ADJUSTMENT, balance_before=balance,
         balance_after=balance + 50, description="Bonus for helping grandma",
         created_by=mom.id,
@@ -389,7 +389,7 @@ async def create_point_transactions(session: AsyncSession, family, mom, emma, lu
     # Penalty for Lucas
     lucas_balance = 280
     t = PointTransaction(
-        user_id=lucas.id, points=-30,
+        user_id=lucas.id, family_id=family.id, points=-30,
         type=TransactionType.PENALTY, balance_before=lucas_balance,
         balance_after=lucas_balance - 30, description="Left room messy after warning",
         created_by=mom.id,
@@ -399,7 +399,7 @@ async def create_point_transactions(session: AsyncSession, family, mom, emma, lu
 
     # Bonus for Lucas
     t = PointTransaction(
-        user_id=lucas.id, points=100,
+        user_id=lucas.id, family_id=family.id, points=100,
         type=TransactionType.BONUS, balance_before=lucas_balance,
         balance_after=lucas_balance + 100, description="Perfect week — all tasks completed!",
         created_by=mom.id,
@@ -412,7 +412,7 @@ async def create_point_transactions(session: AsyncSession, family, mom, emma, lu
     for a in lucas_completed[:4]:
         pts = 25
         t = PointTransaction(
-            user_id=lucas.id, assignment_id=a.id, points=pts,
+            user_id=lucas.id, family_id=family.id, assignment_id=a.id, points=pts,
             type=TransactionType.TASK_COMPLETED, balance_before=lucas_balance,
             balance_after=lucas_balance + pts, description=f"Completed task and earned {pts} points",
         )

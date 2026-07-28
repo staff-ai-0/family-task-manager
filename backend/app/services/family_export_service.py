@@ -146,6 +146,10 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
     for model in (
         # exported directly by this service
         User,
+        # The points ledger was already exported (see the `points` block below)
+        # but was invisible to this registry until point_transactions gained a
+        # family_id — before that it was scoped through a JOIN on users.
+        PointTransaction,
         TaskTemplate,
         TaskAssignment,
         GigOffering,
@@ -290,8 +294,7 @@ class FamilyExportService:
         counts.append(
             select(func.count())
             .select_from(PointTransaction)
-            .join(User, PointTransaction.user_id == User.id)
-            .where(User.family_id == family_id)
+            .where(PointTransaction.family_id == family_id)
             .scalar_subquery()
         )
         counts.append(
@@ -327,13 +330,7 @@ class FamilyExportService:
         offerings = await _rows(db, fam(GigOffering))
         claims = await _rows(db, fam(GigClaim))
         claim_comments = await _rows(db, fam(GigClaimComment))
-        # PointTransaction has no family_id — it is user-scoped.
-        points = await _rows(
-            db,
-            select(PointTransaction)
-            .join(User, PointTransaction.user_id == User.id)
-            .where(User.family_id == family_id),
-        )
+        points = await _rows(db, fam(PointTransaction))
         cash = await _rows(db, fam(CashTransaction))
         bank_accounts = await _rows(db, fam(KidBankAccount))
         savings_goals = await _rows(db, fam(KidSavingsGoal))

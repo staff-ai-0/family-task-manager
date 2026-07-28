@@ -267,7 +267,8 @@ async def test_scan_receipt_prompt_includes_fewshot_and_parses_suggested_categor
     mock_client.chat.completions.create.return_value = _mock_completion(model_json)
 
     with patch("app.services.budget.receipt_scanner_service.settings") as mock_settings, \
-         patch("app.services.budget.receipt_scanner_service.OpenAI") as mock_openai:
+         patch("app.core.llm.settings", mock_settings), \
+         patch("app.core.llm.OpenAI") as mock_openai:
         mock_settings.LITELLM_API_KEY = "sk-fake"
         mock_settings.LITELLM_API_BASE = "http://proxy"
         mock_openai.return_value = mock_client
@@ -298,7 +299,8 @@ async def test_scan_receipt_no_hints_leaves_prompt_clean():
     mock_client.chat.completions.create.return_value = _mock_completion(model_json)
 
     with patch("app.services.budget.receipt_scanner_service.settings") as mock_settings, \
-         patch("app.services.budget.receipt_scanner_service.OpenAI") as mock_openai:
+         patch("app.core.llm.settings", mock_settings), \
+         patch("app.core.llm.OpenAI") as mock_openai:
         mock_settings.LITELLM_API_KEY = "sk-fake"
         mock_settings.LITELLM_API_BASE = "http://proxy"
         mock_openai.return_value = mock_client

@@ -299,6 +299,7 @@ class TestSnapshotEnrichment:
             type=TransactionType.BONUS,
             points=25,
             user_id=test_child_user.id,
+            family_id=test_family.id,
             balance_before=100,
             balance_after=125,
             created_at=datetime.now(timezone.utc),

@@ -296,11 +296,13 @@ function countdownText(): string {
     </section>
 
     <!-- Move / request modal -->
-    <div id="bank-modal" class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+    <div id="bank-modal" role="dialog" aria-modal="true" aria-labelledby="bank-modal-title"
+        class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
         <div class="bg-brand-cream rounded-t-3xl sm:rounded-[var(--radius-card)] w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 max-h-[90dvh] overflow-y-auto border-2 border-brand-ink shadow-[var(--shadow-pop)]">
             <div class="flex justify-between items-center mb-2">
                 <h2 id="bank-modal-title" class="text-lg font-bold text-brand-ink"></h2>
-                <button id="bank-modal-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
+                <button id="bank-modal-close" type="button" aria-label={es ? "Cerrar" : "Close"}
+                    class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none p-2 -m-2">&times;</button>
             </div>
             <p id="bank-modal-desc" class="text-xs text-brand-ink-soft mb-4"></p>
             <label class="block text-sm font-medium text-brand-ink mb-1">{es ? "Cantidad ($MXN)" : "Amount ($MXN)"}</label>
@@ -322,11 +324,13 @@ function countdownText(): string {
     </div>
 
     <!-- Savings-goal create modal -->
-    <div id="goal-modal" class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+    <div id="goal-modal" role="dialog" aria-modal="true" aria-labelledby="goal-modal-title"
+        class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
         <div class="bg-brand-cream rounded-t-3xl sm:rounded-[var(--radius-card)] w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 max-h-[90dvh] overflow-y-auto border-2 border-brand-ink shadow-[var(--shadow-pop)]">
             <div class="flex justify-between items-center mb-2">
-                <h2 class="text-lg font-bold text-brand-ink">🎯 {es ? "Mi meta de ahorro" : "My savings goal"}</h2>
-                <button id="goal-modal-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
+                <h2 id="goal-modal-title" class="text-lg font-bold text-brand-ink">🎯 {es ? "Mi meta de ahorro" : "My savings goal"}</h2>
+                <button id="goal-modal-close" type="button" aria-label={es ? "Cerrar" : "Close"}
+                    class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none p-2 -m-2">&times;</button>
             </div>
             <p class="text-xs text-brand-ink-soft mb-4">
                 {es ? "Elige algo para ahorrar. Tus papás la aprobarán." : "Pick something to save for. Your parents will approve it."}
@@ -357,6 +361,7 @@ function countdownText(): string {
 <script>
     import { mutate } from "../lib/mutate";
     import { showToast } from "../lib/toast";
+    import { createDialog } from "../lib/dialog";
 
     document.addEventListener("astro:page-load", () => {
         const modal = document.getElementById("bank-modal");
@@ -418,6 +423,13 @@ function countdownText(): string {
         const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
         const setJar = (jar: string, cents: number) => { const el = jarEl(jar); if (el) el.textContent = fmt(cents); };
 
+        const dialog = createDialog(modal, {
+            closeTriggers: [document.getElementById("bank-modal-close")],
+            initialFocus: () => amountEl,
+            onClose: () => { current = null; },
+        });
+        const closeModal = () => dialog.close();
+
         function openModal(key: string) {
             const cfg = ACTIONS[key];
             if (!cfg) return;
@@ -429,19 +441,12 @@ function countdownText(): string {
             reasonWrap.classList.toggle("hidden", !cfg.reason);
             errEl.classList.add("hidden");
             submitBtn.disabled = false;
-            modal!.classList.remove("hidden");
-            setTimeout(() => amountEl.focus(), 50);
-        }
-        function closeModal() {
-            modal!.classList.add("hidden");
-            current = null;
+            dialog.open();
         }
 
         document.querySelectorAll<HTMLElement>("[data-bank-action]").forEach((btn) => {
             btn.addEventListener("click", () => openModal(btn.dataset.bankAction!));
         });
-        document.getElementById("bank-modal-close")?.addEventListener("click", closeModal);
-        modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
 
         function showError(msg: string) {
             errEl.textContent = msg;
@@ -507,6 +512,7 @@ function countdownText(): string {
 <script>
     import { mutate } from "../lib/mutate";
     import { showToast } from "../lib/toast";
+    import { createDialog } from "../lib/dialog";
 
     // Savings-goal card: propose a goal (kid → pending) + change (cancel).
     document.addEventListener("astro:page-load", () => {
@@ -520,6 +526,11 @@ function countdownText(): string {
         const submitBtn = document.getElementById("goal-submit") as HTMLButtonElement;
         let selectedEmoji = "🎯";
 
+        const dialog = createDialog(goalModal, {
+            closeTriggers: [document.getElementById("goal-modal-close")],
+            initialFocus: () => nameEl,
+        });
+
         function openGoal() {
             nameEl.value = "";
             amountEl.value = "";
@@ -527,10 +538,8 @@ function countdownText(): string {
             submitBtn.disabled = false;
             selectedEmoji = "🎯";
             highlightEmoji();
-            goalModal!.classList.remove("hidden");
-            setTimeout(() => nameEl.focus(), 50);
+            dialog.open();
         }
-        function closeGoal() { goalModal!.classList.add("hidden"); }
 
         function highlightEmoji() {
             document.querySelectorAll<HTMLElement>("[data-goal-emoji]").forEach((b) => {
@@ -544,8 +553,6 @@ function countdownText(): string {
         });
 
         document.querySelector<HTMLElement>("[data-goal-new]")?.addEventListener("click", openGoal);
-        document.getElementById("goal-modal-close")?.addEventListener("click", closeGoal);
-        goalModal.addEventListener("click", (e) => { if (e.target === goalModal) closeGoal(); });
 
         submitBtn.addEventListener("click", async () => {
             const name = nameEl.value.trim();

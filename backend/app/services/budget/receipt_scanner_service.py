@@ -28,15 +28,14 @@ from typing import Optional
 from functools import partial
 from uuid import UUID
 
-import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from openai import OpenAI
 from fastapi.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
+from app.core.llm import RECEIPT_MODEL, get_llm_client
 from app.core.metrics import record_llm_call
 from app.core.premium import FEATURE_MIN_PLAN, PLAN_ORDER, get_family_plan
 from app.models.budget import (
@@ -49,24 +48,9 @@ from app.services.budget.categorization_rule_service import CategorizationRuleSe
 from app.services.budget.receipt_draft_service import ReceiptDraftService
 from app.core.time_utils import utc_today
 
-# Hard ceiling for any single LiteLLM/vision request. A hung or slow provider
-# must never block the event loop indefinitely.
-LLM_REQUEST_TIMEOUT_SECONDS = 60.0
-# Shared client timeout for every LLM call site in the app: fail fast (5s)
-# when the LiteLLM proxy is unreachable, while giving a healthy provider the
-# full read window to produce a response. Import this wherever an OpenAI
-# client is built (jarvis, calendar scanner, recipe importer, proof
-# validator, category AI) so the connect/read split stays consistent.
-LLM_TIMEOUT = httpx.Timeout(LLM_REQUEST_TIMEOUT_SECONDS, connect=5.0)
-
 
 logger = logging.getLogger(__name__)
 
-
-# Fallback model alias when no per-family override is stored in Redis.
-# settings.RECEIPT_MODEL is the env-configured default (gemini-2.5-flash).
-# Alternatives: "qwen-vl", "claude-haiku", "claude-sonnet", "gpt-4o".
-RECEIPT_MODEL = settings.RECEIPT_MODEL
 
 RECEIPT_UPLOADS_DIR = os.path.join(settings.UPLOADS_ROOT, "receipt-drafts")
 
@@ -267,14 +251,7 @@ async def scan_receipt(
         image_bytes = await run_in_threadpool(_pdf_first_page_to_png, image_bytes)
         media_type = "image/jpeg"  # rasterizer outputs JPEG for size
 
-    # OpenAI SDK pointed at LiteLLM's /v1 endpoint. The proxy handles
-    # authentication, request translation to the provider's native
-    # format, budget enforcement, and spend logging.
-    client = OpenAI(
-        base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
-        api_key=settings.LITELLM_API_KEY,
-        timeout=LLM_TIMEOUT,
-    )
+    client = get_llm_client()
 
     image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
     # OpenAI vision content format: data-URI in image_url field.

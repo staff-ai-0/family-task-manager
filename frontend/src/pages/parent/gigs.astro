@@ -408,11 +408,13 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 </PageLayout>
 
 <!-- Create/Edit Gig Modal -->
-<div id="gig-modal" data-term-one={gt.One} class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+<div id="gig-modal" data-term-one={gt.One} role="dialog" aria-modal="true" aria-labelledby="modal-title"
+    class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
     <div class="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center mb-5">
             <h2 id="modal-title" class="text-lg font-bold text-brand-ink"></h2>
-            <button id="close-modal" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
+            <button id="close-modal" type="button" aria-label={lang === "es" ? "Cerrar" : "Close"}
+                class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none p-2 -m-2">&times;</button>
         </div>
         <form id="gig-form" class="space-y-4">
             <input type="hidden" id="edit-gig-id" name="gig_id" value="" />
@@ -493,6 +495,8 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 </div>
 
 <script>
+import { createDialog } from "../../lib/dialog";
+
 const lang = document.cookie.split(";").find(c => c.trim().startsWith("lang="))?.split("=")[1] ?? "es";
 const modal = document.getElementById("gig-modal")!;
 const modalTitle = document.getElementById("modal-title")!;
@@ -502,15 +506,20 @@ const editIdInput = document.getElementById("edit-gig-id") as HTMLInputElement;
 // a data attribute since this hoisted script has no access to gigTerm().
 const termOne = modal.dataset.termOne || "Gig";
 
+const dialog = createDialog(modal, {
+    closeTriggers: [document.getElementById("close-modal")],
+    initialFocus: () => document.getElementById("f-title"),
+    onClose: () => {
+        form.reset();
+        editIdInput.value = "";
+    },
+});
+
 const openModal = (title: string) => {
     modalTitle.textContent = title;
-    modal.classList.remove("hidden");
+    dialog.open();
 };
-const closeModal = () => {
-    modal.classList.add("hidden");
-    form.reset();
-    editIdInput.value = "";
-};
+const closeModal = () => dialog.close();
 
 document.getElementById("new-gig-btn")!.addEventListener("click", () => {
     openModal(lang === "es" ? `Nueva ${termOne}` : `New ${termOne}`);
@@ -518,8 +527,6 @@ document.getElementById("new-gig-btn")!.addEventListener("click", () => {
     // additive only (mirrors TaskCreateModal's task-modal-open pattern).
     window.dispatchEvent(new CustomEvent("ftm:mission", { detail: { signal: "gig-modal-open" } }));
 });
-document.getElementById("close-modal")!.addEventListener("click", closeModal);
-modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
 
 const cadenceSelect = document.getElementById("f-cadence") as HTMLSelectElement;
 cadenceSelect?.addEventListener("change", () => {

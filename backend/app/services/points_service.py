@@ -23,15 +23,23 @@ class PointsService:
     """Service for point-related operations"""
 
     @staticmethod
-    async def _get_user_locked(db: AsyncSession, user_id: UUID) -> User:
-        """Load the user row under SELECT ... FOR UPDATE.
+    async def _get_user_locked(
+        db: AsyncSession, user_id: UUID, family_id: UUID
+    ) -> User:
+        """Load the user row under SELECT ... FOR UPDATE, scoped to the family.
 
         Every award path does read-modify-write on user.points; without a row
         lock two concurrent awards read the same balance and one credit is
         lost. All award/deduct helpers below go through this.
+
+        The family_id predicate is what makes a cross-family award impossible
+        at the data layer rather than at the caller's discretion: a user who is
+        not in `family_id` simply does not exist here.
         """
         user = (await db.execute(
-            select(User).where(User.id == user_id).with_for_update()
+            select(User)
+            .where(and_(User.id == user_id, User.family_id == family_id))
+            .with_for_update()
         )).scalar_one_or_none()
         if user is None:
             raise NotFoundException("User not found")
@@ -47,6 +55,7 @@ class PointsService:
     async def award_points_for_task(
         db: AsyncSession,
         user_id: UUID,
+        family_id: UUID,
         points: int,
     ) -> PointTransaction:
         """
@@ -55,17 +64,19 @@ class PointsService:
         Args:
             db: Database session
             user_id: ID of user receiving points
+            family_id: Family the user (and the ledger row) belongs to
             points: Number of points to award
 
         Returns:
             Created PointTransaction
         """
         # Get user (row-locked: concurrent awards must serialize)
-        user = await PointsService._get_user_locked(db, user_id)
+        user = await PointsService._get_user_locked(db, user_id, family_id)
 
         # Create transaction
         transaction = PointTransaction.create_task_completion(
             user_id=user_id,
+            family_id=family_id,
             points=points,
             balance_before=user.points,
         )
@@ -83,6 +94,7 @@ class PointsService:
     async def award_gig_points(
         db: AsyncSession,
         user_id: UUID,
+        family_id: UUID,
         assignment_id: UUID,
         points: int,
         description: Optional[str] = None,
@@ -92,9 +104,10 @@ class PointsService:
         `points` may be negative — used to claw back over-awarded points when a
         collaboration gig is re-split among more completers.
         """
-        user = await PointsService._get_user_locked(db, user_id)
+        user = await PointsService._get_user_locked(db, user_id, family_id)
         transaction = PointTransaction.create_gig_approval(
             user_id=user_id,
+            family_id=family_id,
             assignment_id=assignment_id,
             points=points,
             balance_before=user.points,
@@ -108,6 +121,7 @@ class PointsService:
     async def award_assignment_completion(
         db: AsyncSession,
         user_id: UUID,
+        family_id: UUID,
         assignment_id,
         points: int,
     ) -> PointTransaction:
@@ -116,9 +130,10 @@ class PointsService:
         Caller commits. Mirrors award_gig_points (no commit) so it composes
         inside complete_assignment's single transaction.
         """
-        user = await PointsService._get_user_locked(db, user_id)
+        user = await PointsService._get_user_locked(db, user_id, family_id)
         transaction = PointTransaction.create_assignment_completion(
             user_id=user_id,
+            family_id=family_id,
             assignment_id=assignment_id,
             points=points,
             balance_before=user.points,
@@ -131,6 +146,7 @@ class PointsService:
     async def deduct_points_for_reward(
         db: AsyncSession,
         user_id: UUID,
+        family_id: UUID,
         reward_id: UUID,
         points_cost: int,
         commit: bool = True,
@@ -141,6 +157,7 @@ class PointsService:
         Args:
             db: Database session
             user_id: ID of user redeeming reward
+            family_id: Family the user (and the ledger row) belongs to
             reward_id: ID of reward being redeemed
             points_cost: Number of points to deduct
             commit: Commit here (default). Pass False to fold the deduction into
@@ -154,7 +171,7 @@ class PointsService:
             ValidationException: If user has insufficient points
         """
         # Get user (row-locked: deduction races with concurrent awards)
-        user = await PointsService._get_user_locked(db, user_id)
+        user = await PointsService._get_user_locked(db, user_id, family_id)
 
         # Check if user has enough points
         if user.points < points_cost:
@@ -165,6 +182,7 @@ class PointsService:
         # Create transaction
         transaction = PointTransaction.create_reward_redemption(
             user_id=user_id,
+            family_id=family_id,
             reward_id=reward_id,
             points_cost=points_cost,
             balance_before=user.points,
@@ -186,11 +204,17 @@ class PointsService:
     async def get_transaction_history(
         db: AsyncSession,
         user_id: UUID,
+        family_id: UUID,
         limit: int = 50,
         transaction_type: Optional[TransactionType] = None,
     ) -> List[PointTransaction]:
         """Get transaction history for a user"""
-        query = select(PointTransaction).where(PointTransaction.user_id == user_id)
+        query = select(PointTransaction).where(
+            and_(
+                PointTransaction.user_id == user_id,
+                PointTransaction.family_id == family_id,
+            )
+        )
 
         if transaction_type:
             query = query.where(PointTransaction.type == transaction_type)
@@ -216,6 +240,7 @@ class PointsService:
         # Create transaction
         transaction = PointTransaction.create_parent_adjustment(
             user_id=adjustment.user_id,
+            family_id=family_id,
             points=adjustment.points,
             balance_before=user.points,
             reason=adjustment.reason,
@@ -256,6 +281,7 @@ class PointsService:
         debit_transaction = PointTransaction(
             type=TransactionType.TRANSFER,
             user_id=transfer.from_user_id,
+            family_id=family_id,
             points=-transfer.points,
             balance_before=from_user.points,
             balance_after=from_user.points - transfer.points,
@@ -265,6 +291,7 @@ class PointsService:
         credit_transaction = PointTransaction(
             type=TransactionType.TRANSFER,
             user_id=transfer.to_user_id,
+            family_id=family_id,
             points=transfer.points,
             balance_before=to_user.points,
             balance_after=to_user.points + transfer.points,
@@ -284,38 +311,46 @@ class PointsService:
         return (debit_transaction, credit_transaction)
 
     @staticmethod
-    async def get_total_earned(db: AsyncSession, user_id: UUID) -> int:
+    async def get_total_earned(
+        db: AsyncSession, user_id: UUID, family_id: UUID
+    ) -> int:
         """Get total points earned by user (all positive transactions)"""
         query = select(func.sum(PointTransaction.points)).where(
             and_(
                 PointTransaction.user_id == user_id,
+                PointTransaction.family_id == family_id,
                 PointTransaction.points > 0,
             )
         )
         result = await db.execute(query)
-        return result.scalar() or 0
+        return int(result.scalar() or 0)
 
     @staticmethod
-    async def get_total_spent(db: AsyncSession, user_id: UUID) -> int:
+    async def get_total_spent(
+        db: AsyncSession, user_id: UUID, family_id: UUID
+    ) -> int:
         """Get total points spent by user (all negative transactions)"""
         query = select(func.sum(PointTransaction.points)).where(
             and_(
                 PointTransaction.user_id == user_id,
+                PointTransaction.family_id == family_id,
                 PointTransaction.points < 0,
             )
         )
         result = await db.execute(query)
-        return abs(result.scalar() or 0)
+        return abs(int(result.scalar() or 0))
 
     @staticmethod
-    async def get_points_summary(db: AsyncSession, user_id: UUID) -> dict:
+    async def get_points_summary(
+        db: AsyncSession, user_id: UUID, family_id: UUID
+    ) -> dict:
         """Get comprehensive points summary for user"""
-        user = await get_user_by_id(db, user_id)
+        user = await verify_user_in_family(db, user_id, family_id)
 
-        total_earned = await PointsService.get_total_earned(db, user_id)
-        total_spent = await PointsService.get_total_spent(db, user_id)
+        total_earned = await PointsService.get_total_earned(db, user_id, family_id)
+        total_spent = await PointsService.get_total_spent(db, user_id, family_id)
         recent_transactions = await PointsService.get_transaction_history(
-            db, user_id, limit=10
+            db, user_id, family_id, limit=10
         )
 
         return {

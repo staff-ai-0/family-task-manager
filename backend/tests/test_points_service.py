@@ -27,6 +27,7 @@ class TestAwardPointsForTask:
         transaction = await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             points=points_to_award,
         )
 
@@ -47,6 +48,7 @@ class TestAwardPointsForTask:
         await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             points=points_to_award,
         )
 
@@ -64,6 +66,7 @@ class TestAwardPointsForTask:
         transaction = await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             points=0,
         )
 
@@ -81,6 +84,7 @@ class TestAwardPointsForTask:
         transaction = await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             points=points_to_award,
         )
 
@@ -96,6 +100,7 @@ class TestAwardPointsForTask:
             await PointsService.award_points_for_task(
                 db=db_session,
                 user_id=non_existent_user_id,
+                family_id=uuid4(),
                 points=50,
             )
 
@@ -109,6 +114,7 @@ class TestAwardPointsForTask:
         await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             points=30,
         )
 
@@ -119,6 +125,7 @@ class TestAwardPointsForTask:
         await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             points=20,
         )
 
@@ -146,6 +153,7 @@ class TestDeductPointsForReward:
         transaction = await PointsService.deduct_points_for_reward(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             reward_id=test_reward.id,
             points_cost=points_to_deduct,
         )
@@ -172,6 +180,7 @@ class TestDeductPointsForReward:
         await PointsService.deduct_points_for_reward(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             reward_id=test_reward.id,
             points_cost=points_to_deduct,
         )
@@ -193,6 +202,7 @@ class TestDeductPointsForReward:
             await PointsService.deduct_points_for_reward(
                 db=db_session,
                 user_id=test_child_user.id,
+                family_id=test_child_user.family_id,
                 reward_id=test_reward.id,
                 points_cost=50,
             )
@@ -214,6 +224,7 @@ class TestDeductPointsForReward:
         transaction = await PointsService.deduct_points_for_reward(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             reward_id=test_reward.id,
             points_cost=points_amount,
         )
@@ -230,6 +241,7 @@ class TestDeductPointsForReward:
             await PointsService.deduct_points_for_reward(
                 db=db_session,
                 user_id=non_existent_user_id,
+                family_id=test_reward.family_id,
                 reward_id=test_reward.id,
                 points_cost=50,
             )
@@ -244,6 +256,7 @@ class TestDeductPointsForReward:
         transaction = await PointsService.deduct_points_for_reward(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             reward_id=test_reward.id,
             points_cost=0,
         )
@@ -262,6 +275,7 @@ class TestDeductPointsForReward:
         await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             points=100,
         )
 
@@ -272,6 +286,7 @@ class TestDeductPointsForReward:
         await PointsService.deduct_points_for_reward(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             reward_id=test_reward.id,
             points_cost=60,
         )
@@ -292,11 +307,13 @@ class TestPointsHistoryRoute:
         await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             points=25,
         )
         await PointsService.award_points_for_task(
             db=db_session,
             user_id=test_child_user.id,
+            family_id=test_child_user.family_id,
             points=10,
         )
 
@@ -326,7 +343,8 @@ class TestPointsHistoryRoute:
 
         for _ in range(3):
             await PointsService.award_points_for_task(
-                db=db_session, user_id=test_child_user.id, points=5
+                db=db_session, user_id=test_child_user.id,
+                family_id=test_child_user.family_id, points=5
             )
         token = create_access_token(
             data={

@@ -164,6 +164,7 @@ class PetService:
             PointTransaction(
                 type=TransactionType.REWARD_REDEEMED,
                 user_id=user_id,
+                family_id=user.family_id,
                 points=-cost,
                 balance_before=before,
                 balance_after=user.points,
@@ -236,6 +237,7 @@ class PetService:
         db.add(PointTransaction(
             type=TransactionType.REWARD_REDEEMED,
             user_id=user_id,
+            family_id=user.family_id,
             points=-treat["cost"],
             balance_before=before,
             balance_after=user.points,

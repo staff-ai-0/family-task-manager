@@ -43,8 +43,7 @@ async def test_scan_extracts_card_last4_iva_and_items(monkeypatch):
     })
     fake_client = MagicMock()
     fake_client.chat.completions.create = MagicMock(return_value=fake)
-    with patch("app.services.budget.receipt_scanner_service.OpenAI",
-               return_value=fake_client):
+    with patch("app.core.llm.OpenAI", return_value=fake_client):
         result = await scan_receipt(b"jpegbytes", "image/jpeg")
 
     assert result.card_last4 == "9222"
