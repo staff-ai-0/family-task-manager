@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from uuid import UUID
 
+from app.core import async_fs
 from app.core.database import get_db
 from app.core.dependencies import require_parent_role
 from app.core.thumbnails import thumb_filename
@@ -74,7 +75,7 @@ async def get_receipt_draft_image(
 
     if size == "thumb":
         thumb_path = os.path.join(RECEIPT_UPLOADS_DIR, thumb_filename(f"{draft_id}.jpg"))
-        if os.path.exists(thumb_path):
+        if await async_fs.exists(thumb_path):
             return FileResponse(
                 thumb_path,
                 media_type="image/webp",
@@ -82,7 +83,7 @@ async def get_receipt_draft_image(
             )
 
     img_path = os.path.join(RECEIPT_UPLOADS_DIR, f"{draft_id}.jpg")
-    if not os.path.exists(img_path):
+    if not await async_fs.exists(img_path):
         raise HTTPException(status_code=404, detail="Image file not found")
     return FileResponse(
         img_path,

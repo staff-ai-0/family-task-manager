@@ -23,6 +23,11 @@ from fastapi import HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.grading import (
+    grade_credit_points,
+    grade_credit_units,
+    units_to_points,
+)
 from app.models.cash_transaction import CashTransaction, CashTransactionType
 from app.models.family import Family
 from app.models.kid_bank import KidBankAccount
@@ -373,9 +378,10 @@ class BankService:
         db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date
     ) -> tuple[int, int, int]:
         """(done_units, assigned_units, lost_units) of a kid's NON-gig chores
-        for the week, where one unit = one template point × one percent
-        (points × 100 = full credit for one task). Integer math end to end —
-        no float cents.
+        for the week, in the ×100 credit units of app.core.grading (one unit =
+        one template point × one percent). Integer math end to end — no float
+        cents. Summing before rounding is the point of the scale: collapse to
+        display points only at the edge, via units_to_points.
 
         assigned_units: every non-cancelled regular assignment at 100%.
         done_units: COMPLETED work that cleared quality review (approval_status
@@ -420,18 +426,18 @@ class BankService:
         lost_units = 0
         for points, status, approval, grade, pct in rows:
             pts = int(points or 0)
-            assigned_units += pts * 100
+            assigned_units += grade_credit_units(pts, 100)
             if status != AssignmentStatus.COMPLETED:
                 continue
             if approval == ApprovalStatus.REJECTED:
-                lost_units += pts * 100
+                lost_units += grade_credit_units(pts, 100)
                 continue
             if approval not in (ApprovalStatus.NONE, ApprovalStatus.APPROVED):
                 continue
             credit_pct = int(pct or 50) if grade == "partial" else 100
-            done_units += pts * credit_pct
+            done_units += grade_credit_units(pts, credit_pct)
             if grade == "partial":
-                lost_units += pts * (100 - credit_pct)
+                lost_units += grade_credit_units(pts, 100 - credit_pct)
         return done_units, assigned_units, lost_units
 
     @staticmethod
@@ -478,8 +484,9 @@ class BankService:
                 bucket, earned = "not_done", 0
             elif approval in (ApprovalStatus.NONE, ApprovalStatus.APPROVED):
                 credit_pct = int(pct or 50) if grade == "partial" else 100
-                # Same display rounding as done_points in the preview.
-                bucket, earned = "credited", round(pts * credit_pct / 100)
+                # Must equal what the review actually credited the kid, so it
+                # goes through the same helper the award path uses.
+                bucket, earned = "credited", grade_credit_points(pts, credit_pct)
             elif approval == ApprovalStatus.PENDING:
                 bucket, earned = "pending_review", 0
             else:  # REJECTED — parent graded it missed
@@ -563,8 +570,8 @@ class BankService:
             "week_of": week_monday,
             "cap_cents": cap,
             "amount_cents": amount,
-            "done_points": round(done_u / 100) if done_u else 0,
-            "assigned_points": assigned_u // 100,
+            "done_points": units_to_points(done_u),
+            "assigned_points": units_to_points(assigned_u),
             "pct": round(100 * done_u / assigned_u) if assigned_u else 0,
             "discounted_pct": round(100 * lost_u / assigned_u) if assigned_u else 0,
             "assigned_units": assigned_u,
@@ -826,7 +833,9 @@ class BankService:
             )
             # The paid points were pending cash — deduct them so they aren't
             # spendable twice (floored at the available balance; ledger row
-            # below keeps the history auditable).
+            # below keeps the history auditable). Deliberately floors rather
+            # than using units_to_points: a debit against the kid must never
+            # round UP past what the cash actually paid for.
             points_converted = min(done // 100, max(0, int(user.points or 0)))
         else:
             base = BankService._chore_paycheck_cents(acct.allowance_cents, done, assigned)
@@ -873,8 +882,8 @@ class BankService:
             "user_id": user.id,
             "week_of": week_monday,
             # Units → display points (grade-scaled ×100 internally).
-            "done_points": round(done / 100) if done else 0,
-            "assigned_points": assigned // 100,
+            "done_points": units_to_points(done),
+            "assigned_points": units_to_points(assigned),
             "amount_cents": amount,
             "points_converted": points_converted,
         }

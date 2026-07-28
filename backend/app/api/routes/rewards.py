@@ -10,8 +10,11 @@ from typing import List, Optional
 from uuid import UUID
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user, require_parent_role
-from app.core.exceptions import ForbiddenException
+from app.core.dependencies import (
+    get_current_user,
+    require_kid_role,
+    require_parent_role,
+)
 from app.core.type_utils import to_uuid_required
 from app.models.user import UserRole
 from app.services import RewardService
@@ -68,6 +71,8 @@ async def get_reward_goal(
     db: AsyncSession = Depends(get_db),
 ):
     """Current kid/teen's active goal with live progress. Returns null for parents."""
+    # Not require_kid_role: a parent gets null here, not a 403 — the shared
+    # header widget calls this for every role.
     if current_user.role == UserRole.PARENT:
         return None
     return await RewardGoalService.get_active_goal(
@@ -80,12 +85,10 @@ async def get_reward_goal(
 @router.put("/goal", response_model=GoalProgress)
 async def set_reward_goal(
     data: GoalSet,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_kid_role),
     db: AsyncSession = Depends(get_db),
 ):
     """Set active reward goal. CHILD/TEEN only."""
-    if current_user.role == UserRole.PARENT:
-        raise ForbiddenException("Parents cannot set a reward goal")
     await RewardGoalService.set_goal(
         user_id=to_uuid_required(current_user.id),
         family_id=to_uuid_required(current_user.family_id),
@@ -101,12 +104,10 @@ async def set_reward_goal(
 
 @router.delete("/goal", status_code=status.HTTP_204_NO_CONTENT)
 async def clear_reward_goal(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_kid_role),
     db: AsyncSession = Depends(get_db),
 ):
     """Clear active reward goal."""
-    if current_user.role == UserRole.PARENT:
-        raise ForbiddenException("Parents cannot clear a reward goal")
     await RewardGoalService.clear_goal(
         user_id=to_uuid_required(current_user.id),
         family_id=to_uuid_required(current_user.family_id),

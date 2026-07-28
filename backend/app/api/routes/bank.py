@@ -13,7 +13,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user, require_parent_role
+from app.core.dependencies import (
+    get_current_user,
+    require_kid_role,
+    require_parent_role,
+)
 from app.core.premium import require_feature
 from app.core.type_utils import to_uuid_required
 from app.models import User
@@ -64,17 +68,14 @@ def _payload_enables_automation(data: dict) -> bool:
     return False
 
 
-def _require_kid(user: User) -> None:
-    if user.role not in (UserRole.CHILD, UserRole.TEEN):
-        raise HTTPException(status_code=403, detail="Only kids have a Family Bank")
-
-
 @router.get("/me", response_model=KidBankView)
 async def my_bank(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Kid's own jars + split config + payday countdown + pending-match preview."""
+    # Not require_kid_role: a parent gets a 400 that names the screen they
+    # actually want, which is more useful here than a flat 403.
     if current_user.role == UserRole.PARENT:
         raise HTTPException(
             status_code=400,
@@ -123,6 +124,7 @@ async def my_envelopes(
     db: AsyncSession = Depends(get_db),
 ):
     """The kid's own budget envelopes (their three jars + savings goal)."""
+    # Not require_kid_role — same deliberate 400-with-a-pointer as /me.
     if current_user.role == UserRole.PARENT:
         raise HTTPException(
             status_code=400,
@@ -150,6 +152,8 @@ async def kid_envelopes(
 ):
     """A specific kid's envelopes. Parent: any kid in-family (404 otherwise).
     Kid: only their own (403 on a sibling / anyone else)."""
+    # Not require_kid_role: parents are legitimate callers here — the branch
+    # below is an ownership check, not a role gate.
     fam = to_uuid_required(current_user.family_id)
     if current_user.role == UserRole.PARENT:
         kid = await verify_user_in_family(db, user_id, fam)  # 404 if outside family
@@ -198,6 +202,7 @@ async def chore_paycheck_preview(
 ):
     """Projected weekly chore paycheck. Parent: any kid in-family. Kid: own only.
     No premium gate — it's a read-only projection of the free ledger."""
+    # Not require_kid_role: parents read this too (ownership check, not a gate).
     fam = to_uuid_required(current_user.family_id)
     if current_user.role == UserRole.PARENT:
         kid = await verify_user_in_family(db, user_id, fam)
@@ -293,6 +298,7 @@ async def transfer(
 ):
     """Move money between jars. Kid: spend→save/share anytime; save→spend
     depends on the approval toggle. Parent: any direction, any kid in-family."""
+    # Not require_kid_role: parents may move any kid's money in any direction.
     fam = to_uuid_required(current_user.family_id)
     if current_user.role == UserRole.PARENT:
         await verify_user_in_family(db, body.user_id, fam)
@@ -335,11 +341,10 @@ async def transfer(
 @router.post("/requests/save-withdrawal", response_model=BankRequestResponse)
 async def request_save_withdrawal(
     body: SaveWithdrawalRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_kid_role),
     db: AsyncSession = Depends(get_db),
 ):
     """Kid asks a parent to approve a Save withdrawal (stateless notification)."""
-    _require_kid(current_user)
     n = await BankService.request_save_withdrawal(
         db, current_user, body.amount_cents, body.reason
     )
@@ -349,11 +354,10 @@ async def request_save_withdrawal(
 @router.post("/requests/payout", response_model=BankRequestResponse)
 async def request_payout(
     body: PayoutRequestBody,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_kid_role),
     db: AsyncSession = Depends(get_db),
 ):
     """Kid asks to be paid out (stateless notification to all parents)."""
-    _require_kid(current_user)
     amount = body.amount_cents
     if not amount:
         acct = await BankService.ensure_account(db, current_user)
@@ -378,6 +382,8 @@ async def my_goal(
 
     Fires the one-time 'goal reached' celebration when the Save jar first crosses
     target. Parents have no personal goal → always null."""
+    # Not require_kid_role: this one answers a parent with null, not a 403 —
+    # the parent home page calls it unconditionally.
     if current_user.role == UserRole.PARENT:
         return None
     goal = await SavingsGoalService.get_active(db, current_user, notify=True)
@@ -402,6 +408,7 @@ async def create_goal(
 ):
     """Create a savings goal. A PARENT sets one for a kid (body.user_id, created
     active). A KID proposes one for themselves (created pending until approved)."""
+    # Not require_kid_role: both roles may call this, with different semantics.
     if current_user.role == UserRole.PARENT:
         if body.user_id is None:
             raise HTTPException(

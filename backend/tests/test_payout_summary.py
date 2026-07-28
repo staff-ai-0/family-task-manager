@@ -20,6 +20,7 @@ from app.models.task_assignment import (
 from app.models.task_template import AssignmentType, TaskTemplate
 from app.models.user import APPROVAL_APPROVED, User, UserRole
 from app.services.bank_service import BankService
+from conftest import current_week_monday
 
 
 @pytest_asyncio.fixture
@@ -38,11 +39,6 @@ async def teen_headers(client: AsyncClient, test_teen_user) -> dict:
         json={"email": test_teen_user.email, "password": "password123"},
     )
     return {"Authorization": f"Bearer {res.json()['access_token']}"}
-
-
-async def _current_week_monday(db, family_id):
-    today = await BankService._family_local_today(db, family_id)
-    return BankService._week_monday(today)
 
 
 async def _bank_config(db, kid, **kw):
@@ -125,7 +121,7 @@ async def test_payout_summary_includes_proportional_paycheck(
         db_session, test_teen_user,
         allowance_mode="chore_proportional", allowance_cents=20000,
     )
-    week = await _current_week_monday(db_session, test_family.id)
+    week = await current_week_monday(db_session, test_family.id)
     await _approved_chore(
         db_session, test_family.id, test_parent_user.id, test_teen_user.id, 10, week
     )
@@ -157,7 +153,7 @@ async def test_payout_summary_outstanding_weeks_includes_backlog(
         db_session, test_teen_user,
         allowance_mode="chore_proportional", allowance_cents=20000,
     )
-    current_week = await _current_week_monday(db_session, test_family.id)
+    current_week = await current_week_monday(db_session, test_family.id)
     past_week = current_week - timedelta(days=7)
     await _approved_chore(
         db_session, test_family.id, test_parent_user.id, test_teen_user.id, 10, past_week
@@ -191,7 +187,7 @@ async def test_payout_summary_excludes_released_current_week_from_total(
         db_session, test_teen_user,
         allowance_mode="chore_proportional", allowance_cents=20000,
     )
-    current_week = await _current_week_monday(db_session, test_family.id)
+    current_week = await current_week_monday(db_session, test_family.id)
     await _approved_chore(
         db_session, test_family.id, test_parent_user.id, test_teen_user.id, 10, current_week
     )
@@ -221,7 +217,7 @@ async def test_payout_summary_points_rate_paycheck(
 ):
     test_family.point_value_cents = 200
     await _bank_config(db_session, test_teen_user, allowance_mode="points_rate")
-    week = await _current_week_monday(db_session, test_family.id)
+    week = await current_week_monday(db_session, test_family.id)
     await _approved_chore(
         db_session, test_family.id, test_parent_user.id, test_teen_user.id, 10, week
     )
@@ -237,7 +233,7 @@ async def test_payout_summary_points_rate_paycheck(
 async def test_payout_summary_released_week_is_zero(
     client, db_session, test_family, test_parent_user, test_teen_user, parent_headers,
 ):
-    week = await _current_week_monday(db_session, test_family.id)
+    week = await current_week_monday(db_session, test_family.id)
     await _bank_config(
         db_session, test_teen_user,
         allowance_mode="chore_proportional", allowance_cents=20000,
@@ -289,7 +285,7 @@ async def test_payout_summary_task_details_status_buckets(
         db_session, test_teen_user,
         allowance_mode="chore_proportional", allowance_cents=10000,
     )
-    week = await _current_week_monday(db_session, test_family.id)
+    week = await current_week_monday(db_session, test_family.id)
     fam, par, kid = test_family.id, test_parent_user.id, test_teen_user.id
 
     await _chore(db_session, fam, par, kid, 10, week, title="Full", grade="full")
@@ -354,7 +350,7 @@ async def test_payout_summary_task_details_exclusions(
         db_session, test_teen_user,
         allowance_mode="chore_proportional", allowance_cents=10000,
     )
-    week = await _current_week_monday(db_session, test_family.id)
+    week = await current_week_monday(db_session, test_family.id)
     fam, par, kid = test_family.id, test_parent_user.id, test_teen_user.id
 
     await _chore(db_session, fam, par, kid, 10, week, title="Keep")
@@ -376,7 +372,7 @@ async def test_payout_summary_task_details_exclusions(
 async def test_payout_summary_flat_mode_has_no_task_list(
     client, db_session, test_family, test_parent_user, test_child_user, parent_headers,
 ):
-    week = await _current_week_monday(db_session, test_family.id)
+    week = await current_week_monday(db_session, test_family.id)
     await _chore(
         db_session, test_family.id, test_parent_user.id, test_child_user.id, 10, week,
     )
@@ -426,7 +422,7 @@ async def test_history_route_returns_past_releases(
         db_session, test_teen_user,
         allowance_mode="chore_proportional", allowance_cents=10000,
     )
-    week = await _current_week_monday(db_session, test_family.id)
+    week = await current_week_monday(db_session, test_family.id)
     await _chore(db_session, test_family.id, test_parent_user.id, test_teen_user.id, 10, week)
     await BankService.release_chore_paycheck(
         db_session, test_teen_user, test_family.id, week, entitled=True,

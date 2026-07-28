@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import async_fs
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
@@ -95,7 +96,7 @@ async def serve_gig_proof(
     # have no thumb — fall back to the full original so nothing 404s.
     if size == "thumb":
         thumb_path = os.path.join(GIG_PROOFS_DIR, thumb_filename(filename))
-        if os.path.isfile(thumb_path):
+        if await async_fs.is_file(thumb_path):
             return FileResponse(
                 thumb_path,
                 media_type="image/webp",
@@ -106,7 +107,7 @@ async def serve_gig_proof(
             )
 
     path = os.path.join(GIG_PROOFS_DIR, filename)
-    if not os.path.isfile(path):
+    if not await async_fs.is_file(path):
         raise HTTPException(status_code=404, detail="Not found")
 
     return FileResponse(

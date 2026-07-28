@@ -1155,15 +1155,17 @@ class EmailService:
         
         # Load and render HTML template
         import os
+
+        from app.core import async_fs
+
         template_path = os.path.join(
             os.path.dirname(__file__),
             "email_templates",
             "invitation.html"
         )
-        
+
         try:
-            with open(template_path, "r", encoding="utf-8") as f:
-                html_template = f.read()
+            html_template = await async_fs.read_text(template_path)
         except FileNotFoundError:
             # Fallback if template not found
             html_template = """<html><body>

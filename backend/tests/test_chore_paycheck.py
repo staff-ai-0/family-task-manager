@@ -20,7 +20,11 @@ from app.models.task_assignment import (
 from app.models.task_template import AssignmentType, TaskTemplate
 from app.models.user import APPROVAL_APPROVED, User, UserRole
 from app.services.bank_service import BankService
+from conftest import current_week_monday
 
+# An explicit, arbitrary week — only ever passed as an explicit `week_of`
+# argument, never as a stand-in for "today". Anything whose assertion depends
+# on the real current week must use current_week_monday() (see conftest).
 WEEK = date(2026, 7, 13)  # a Monday
 
 
@@ -42,16 +46,6 @@ async def _user(db, fam, role=UserRole.TEEN):
     await db.commit()
     await db.refresh(u)
     return u
-
-
-async def _current_week_monday(db, family_id):
-    """Real current week (family-local), for tests whose assertions depend on
-    'today' rather than an arbitrary fixed reference date like WEEK — WEEK is
-    a fixed constant used elsewhere in this file only as an explicit week_of
-    argument, never as a stand-in for 'today' (clock-drift trap; see
-    test_payout_summary.py's identical helper)."""
-    today = await BankService._family_local_today(db, family_id)
-    return BankService._week_monday(today)
 
 
 async def _config(db, kid, **kw):
@@ -215,7 +209,7 @@ async def test_outstanding_weeks_includes_unreleased_past_and_current(db):
     # Anchored to the real current week (not the fixed WEEK constant used
     # elsewhere in this file) since list_outstanding_weeks derives "current"
     # from _family_local_today.
-    current_week = await _current_week_monday(db, fam.id)
+    current_week = await current_week_monday(db, fam.id)
     past_week = current_week - timedelta(days=7)
     await _chore(db, fam, parent, kid, 100, AssignmentStatus.COMPLETED, week=past_week)
     await _chore(db, fam, parent, kid, 50, AssignmentStatus.COMPLETED, week=current_week)
@@ -256,7 +250,7 @@ async def test_outstanding_weeks_excludes_past_week_with_nothing_assigned(db):
     kid = await _user(db, fam)
     await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
     # No chores at all — only the current week (always included) should appear.
-    current_week = await _current_week_monday(db, fam.id)
+    current_week = await current_week_monday(db, fam.id)
     weeks = await BankService.list_outstanding_weeks(
         db, kid, fam.id, lookback_weeks=4
     )
@@ -411,7 +405,7 @@ async def test_outstanding_weeks_shows_released_current_week_with_actual_amount(
     parent = await _user(db, fam, UserRole.PARENT)
     kid = await _user(db, fam)
     await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
-    current_week = await _current_week_monday(db, fam.id)
+    current_week = await current_week_monday(db, fam.id)
     await _chore(db, fam, parent, kid, 60, AssignmentStatus.COMPLETED, week=current_week)
 
     await BankService.release_chore_paycheck(

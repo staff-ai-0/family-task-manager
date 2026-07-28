@@ -18,7 +18,7 @@ test.describe('Budget & Finance Management', () => {
   });
 
   test.describe('Budget Dashboard', () => {
-    test('should display budget overview page', async ({ page }) => {
+    test('should display budget overview page', { tag: '@smoke' }, async ({ page }) => {
       // /parent/finances now 301-redirects to the canonical /budget home.
       await page.goto(`${BASE_URL}/parent/finances`);
       await page.waitForLoadState('networkidle');

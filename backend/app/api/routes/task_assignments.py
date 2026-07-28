@@ -200,6 +200,7 @@ async def upload_gig_proof(
 
     from starlette.concurrency import run_in_threadpool
 
+    from app.core import async_fs
     from app.core.config import settings
     from app.core.thumbnails import make_webp_thumbnail, thumb_filename
     from app.core.upload_validation import (
@@ -220,10 +221,10 @@ async def upload_gig_proof(
     ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[real_type]
     fname = f"{_uuid.uuid4().hex}.{ext}"
     dest_dir = _os.path.join(settings.UPLOADS_ROOT, "gig-proofs")
-    _os.makedirs(dest_dir, exist_ok=True)
-    dest = _os.path.join(dest_dir, fname)
-    with open(dest, "wb") as fh:
-        fh.write(body)
+    # Up to MAX_PROOF_BYTES of phone-camera JPEG — writing it inline would stall
+    # the event loop for every other request, so it goes to a worker thread
+    # (which also creates dest_dir).
+    await async_fs.write_bytes(_os.path.join(dest_dir, fname), body)
 
     # Generate a ~200px WebP thumbnail alongside the original so list/approval
     # views load fast. CPU-bound → run off the event loop. A malformed image
@@ -231,8 +232,9 @@ async def upload_gig_proof(
     # the full image.
     thumb = await run_in_threadpool(make_webp_thumbnail, body)
     if thumb:
-        with open(_os.path.join(dest_dir, thumb_filename(fname)), "wb") as fh:
-            fh.write(thumb)
+        await async_fs.write_bytes(
+            _os.path.join(dest_dir, thumb_filename(fname)), thumb
+        )
 
     return {"proof_image_url": f"/uploads/gig-proofs/{fname}"}
 

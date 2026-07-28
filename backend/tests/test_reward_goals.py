@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.reward_goal import UserRewardGoal
 from app.services.reward_goal_service import RewardGoalService
 from app.core.exceptions import NotFoundException
+from conftest import current_week_monday, family_local_today
 
 
 # ── Core service tests ────────────────────────────────────────────────────────
@@ -378,7 +379,6 @@ async def test_task_auto_approve_triggers_nudge(
     db_session, test_family, test_child_user, test_parent_user, test_reward
 ):
     """Auto-approved bonus task crossing goal threshold fires GOAL_REACHED."""
-    from datetime import date, timedelta
     from app.models.task_template import TaskTemplate
     from app.models.task_assignment import TaskAssignment, AssignmentStatus, ApprovalStatus
     from app.services.task_assignment_service import TaskAssignmentService
@@ -399,8 +399,11 @@ async def test_task_auto_approve_triggers_nudge(
     await db_session.commit()
     await db_session.refresh(template)
 
-    today = date.today()
-    week_monday = today - timedelta(days=today.weekday())
+    # complete_assignment refuses a future-dated occurrence using the FAMILY's
+    # local today — deriving these from the runner clock instead is the flake
+    # that keeps coming back (see conftest).
+    today = await family_local_today(db_session, test_family.id)
+    week_monday = await current_week_monday(db_session, test_family.id)
     assignment = TaskAssignment(
         family_id=test_family.id,
         template_id=template.id,

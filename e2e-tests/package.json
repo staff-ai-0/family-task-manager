@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "playwright test",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:no-smoke": "playwright test --grep-invert @smoke",
     "test:debug": "playwright test --debug",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
@@ -13,7 +15,9 @@
     "test:rewards": "playwright test rewards",
     "test:assignments": "playwright test assignments",
     "test:members": "playwright test members",
-    "test:budget": "playwright test budget"
+    "test:budget": "playwright test budget",
+    "test:admin": "playwright test /admin.spec",
+    "test:bank": "playwright test /bank.spec"
   },
   "keywords": [],
   "author": "",

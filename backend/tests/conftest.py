@@ -4,6 +4,7 @@ Pytest configuration and fixtures for Family Task Manager tests
 
 import pytest
 import pytest_asyncio
+from datetime import date
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
@@ -13,6 +14,38 @@ import asyncpg
 
 from app.main import app
 from app.core.database import Base, get_db
+from app.services.bank_service import BankService
+
+
+# ---------------------------------------------------------------------------
+# Clock helpers — build every week_of / "today" in a test with these.
+# ---------------------------------------------------------------------------
+# No service reads the runner's clock: they all resolve "today" in the FAMILY's
+# timezone (BankService._family_local_today / TaskAssignmentService.
+# _family_local_today), and the fixtures' families default to UTC. A local
+# `date.today() - timedelta(days=today.weekday())` therefore names a different
+# week than the service does whenever the runner is not on UTC — every evening
+# on the UTC-6 dev box, where a Sunday-evening run drops money-bearing rows
+# into the *previous* week's bucket and the paycheck math then finds nothing
+# to pay. Root-caused twice already (commits 6a78b74, 170057c); import these
+# instead of re-deriving it a third time:
+#
+#     from conftest import current_week_monday, family_local_today
+#
+# (`tests/` is on sys.path during a pytest run and pytest binds the module name
+# `conftest` to the innermost conftest.py it has loaded — this one.)
+
+
+async def family_local_today(db: AsyncSession, family_id) -> date:
+    """Today as the FAMILY sees it — the exact read every service does."""
+    return await BankService._family_local_today(db, family_id)
+
+
+async def current_week_monday(db: AsyncSession, family_id) -> date:
+    """Monday of the family's CURRENT week: the bucket `week_of` has to land
+    in for a row to count as "this week" to BankService."""
+    return BankService._week_monday(await family_local_today(db, family_id))
+
 
 # Test database URL
 TEST_DATABASE_URL = os.getenv(

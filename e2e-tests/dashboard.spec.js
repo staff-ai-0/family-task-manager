@@ -23,7 +23,7 @@ test.describe('Dashboard', () => {
   // (spec 2026-07-24) they land on the parent hub. Layout tests below
   // (nav, More sheet, lang toggle) are role-agnostic and run there.
 
-  test('parent hitting /dashboard is redirected to /parent', async ({ page }) => {
+  test('parent hitting /dashboard is redirected to /parent', { tag: '@smoke' }, async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard`);
     await page.waitForURL('**/parent', { timeout: 10000 });
     await expect(page).toHaveURL(/\/parent$/);
@@ -35,7 +35,7 @@ test.describe('Dashboard', () => {
     await expect(page.locator('body')).toContainText(/desactivada|switched off/i);
   });
 
-  test('renders parent hub header', async ({ page }) => {
+  test('renders parent hub header', { tag: '@smoke' }, async ({ page }) => {
     await expect(page.locator('header h1')).toBeVisible({ timeout: 5000 });
   });
 

@@ -1,5 +1,9 @@
 """add_email_verification_tokens_table
 
+NO-OP despite the name — `email_verification_tokens` is really created by
+revision a6d655cbc18c (add_assignment_type_to_task_templates). Kept, empty,
+because deployed alembic histories already record it.
+
 Revision ID: fab16872eb7e
 Revises: 079b00e9dddc
 Create Date: 2025-12-12 08:11:49.011775

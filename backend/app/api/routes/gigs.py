@@ -6,7 +6,11 @@ from uuid import UUID
 from datetime import date, datetime
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user, require_parent_role
+from app.core.dependencies import (
+    get_current_user,
+    require_kid_role,
+    require_parent_role,
+)
 from app.core.type_utils import to_uuid_required
 from app.models import User
 from app.services.gig_offering_service import GigOfferingService
@@ -207,17 +211,12 @@ async def deactivate_offering(
 @router.post("/offerings/propose", response_model=GigOfferingResponse, status_code=status.HTTP_201_CREATED)
 async def propose_offering(
     data: GigProposalCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_kid_role),
     db: AsyncSession = Depends(get_db),
 ):
     """TEEN/CHILD proposes a gig. Lands as a DRAFT awaiting parent review —
-    parents are notified; it is not claimable until approved."""
-    from app.models.user import UserRole
-    if current_user.role == UserRole.PARENT:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Los padres crean gigs directamente, no propuestas",
-        )
+    parents are notified; it is not claimable until approved. Parents create
+    gigs directly (POST /offerings), so a parent here is a plain 403."""
     offering = await GigOfferingService.propose(
         db,
         family_id=to_uuid_required(current_user.family_id),
@@ -286,12 +285,10 @@ async def review_proposal(
 @router.post("/offerings/{offering_id}/claim", response_model=GigClaimResponse, status_code=status.HTTP_201_CREATED)
 async def claim_offering(
     offering_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_kid_role),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.models.user import UserRole
-    if current_user.role == UserRole.PARENT:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Padres no pueden reclamar gigs")
+    """A kid claims a gig off the board. Parents never claim — plain 403."""
     try:
         claim = await GigClaimService.claim(
             db,

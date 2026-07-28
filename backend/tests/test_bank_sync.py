@@ -9,14 +9,35 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 
+from app.api.routes.budget.bank_sync import A2A_MAX_SKEW_SECONDS
+from app.core.time_utils import utcnow
 from app.models.a2a import FamilyA2AWebhook
 from app.models.budget import BudgetAccount, BudgetTransaction
 
 SECRET = "test-secret-bank-sync-0123456789"
 
+CANDIDATES_PATH = "/api/budget/bank-sync/candidates"
+RECONCILE_PATH = "/api/budget/bank-sync/reconcile"
+TRANSACTIONS_PATH = "/api/budget/bank-sync/transactions"
 
-def _sig(message: bytes) -> str:
-    return "sha256=" + hmac.new(SECRET.encode(), message, hashlib.sha256).hexdigest()
+
+def _now() -> str:
+    return str(int(utcnow().timestamp()))
+
+
+def _headers(family_id, method: str, path: str, payload: bytes, *, ts: str = None) -> dict:
+    """Sign exactly as the bank-email-matcher agent must: method, path,
+    timestamp and payload, newline-joined."""
+    ts = ts or _now()
+    message = b"\n".join((
+        method.upper().encode(), path.encode(), ts.encode(), payload,
+    ))
+    sig = "sha256=" + hmac.new(SECRET.encode(), message, hashlib.sha256).hexdigest()
+    return {
+        "X-A2A-Family": str(family_id),
+        "X-A2A-Timestamp": ts,
+        "X-A2A-Signature": sig,
+    }
 
 
 @pytest_asyncio.fixture
@@ -44,8 +65,12 @@ async def account(db_session, test_family):
 @pytest.mark.asyncio
 async def test_candidates_requires_valid_signature(client: AsyncClient, a2a_family):
     r = await client.get(
-        "/api/budget/bank-sync/candidates?days=35",
-        headers={"X-A2A-Family": str(a2a_family.id), "X-A2A-Signature": "sha256=bad"},
+        f"{CANDIDATES_PATH}?days=35",
+        headers={
+            "X-A2A-Family": str(a2a_family.id),
+            "X-A2A-Timestamp": _now(),
+            "X-A2A-Signature": "sha256=bad",
+        },
     )
     assert r.status_code == 401
 
@@ -59,8 +84,8 @@ async def test_candidates_returns_recent(client: AsyncClient, a2a_family, accoun
     await db_session.commit()
 
     r = await client.get(
-        "/api/budget/bank-sync/candidates?days=35",
-        headers={"X-A2A-Family": str(a2a_family.id), "X-A2A-Signature": _sig(b"candidates:35")},
+        f"{CANDIDATES_PATH}?days=35",
+        headers=_headers(a2a_family.id, "GET", CANDIDATES_PATH, b"candidates:35"),
     )
     assert r.status_code == 200
     txns = r.json()["transactions"]
@@ -84,9 +109,9 @@ async def test_reconcile_marks_cleared(client: AsyncClient, a2a_family, account,
         separators=(",", ":"), sort_keys=True,
     ).encode()
     r = await client.post(
-        "/api/budget/bank-sync/reconcile",
+        RECONCILE_PATH,
         content=body,
-        headers={"X-A2A-Family": str(a2a_family.id), "X-A2A-Signature": _sig(body)},
+        headers=_headers(a2a_family.id, "POST", RECONCILE_PATH, body),
     )
     assert r.status_code == 200
     await db_session.refresh(txn)
@@ -106,18 +131,20 @@ async def test_create_from_alert_and_idempotent(client: AsyncClient, a2a_family,
         "external_id": "bankalert:BBVA:2026-05-29:84678",
     }
     body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
-    headers = {"X-A2A-Family": str(a2a_family.id), "X-A2A-Signature": _sig(body)}
+    headers = _headers(a2a_family.id, "POST", TRANSACTIONS_PATH, body)
 
     # AI categorize disabled by no key — patch suggest to None for determinism.
     from unittest.mock import patch
     with patch("app.services.budget.category_ai_service.CategoryAIService.suggest", return_value=None):
-        r1 = await client.post("/api/budget/bank-sync/transactions", content=body, headers=headers)
+        r1 = await client.post(TRANSACTIONS_PATH, content=body, headers=headers)
         assert r1.status_code == 200, r1.text
         assert r1.json()["status"] == "created"
         tid = r1.json()["transaction_id"]
 
-        # Same external_id → idempotent, returns existing.
-        r2 = await client.post("/api/budget/bank-sync/transactions", content=body, headers=headers)
+        # Same external_id → idempotent, returns existing. Replaying inside the
+        # freshness window is expected to be harmless: imported_id is what keeps
+        # the ledger clean, the timestamp only bounds how long a capture lives.
+        r2 = await client.post(TRANSACTIONS_PATH, content=body, headers=headers)
         assert r2.json()["status"] == "exists"
         assert r2.json()["transaction_id"] == tid
 
@@ -130,7 +157,64 @@ async def test_create_from_alert_and_idempotent(client: AsyncClient, a2a_family,
 @pytest.mark.asyncio
 async def test_unregistered_family_rejected(client: AsyncClient, test_family):
     r = await client.get(
-        "/api/budget/bank-sync/candidates?days=35",
-        headers={"X-A2A-Family": str(test_family.id), "X-A2A-Signature": _sig(b"candidates:35")},
+        f"{CANDIDATES_PATH}?days=35",
+        headers=_headers(test_family.id, "GET", CANDIDATES_PATH, b"candidates:35"),
     )
     assert r.status_code == 404  # no enabled webhook config
+
+
+# ── Replay protection ────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_legacy_unstamped_signature_rejected(client: AsyncClient, a2a_family):
+    """Hard cutover: the pre-timestamp signing scheme no longer authenticates."""
+    legacy_sig = "sha256=" + hmac.new(
+        SECRET.encode(), b"candidates:35", hashlib.sha256
+    ).hexdigest()
+    r = await client.get(
+        f"{CANDIDATES_PATH}?days=35",
+        headers={"X-A2A-Family": str(a2a_family.id), "X-A2A-Signature": legacy_sig},
+    )
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_stale_timestamp_rejected(client: AsyncClient, a2a_family):
+    """A capture stops working once it falls out of the skew window."""
+    old = str(int(utcnow().timestamp()) - A2A_MAX_SKEW_SECONDS - 60)
+    r = await client.get(
+        f"{CANDIDATES_PATH}?days=35",
+        headers=_headers(
+            a2a_family.id, "GET", CANDIDATES_PATH, b"candidates:35", ts=old
+        ),
+    )
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_future_timestamp_rejected(client: AsyncClient, a2a_family):
+    """Drift is bounded in both directions — a future stamp would otherwise
+    mint a capture that stays valid for as long as the attacker chose."""
+    ahead = str(int(utcnow().timestamp()) + A2A_MAX_SKEW_SECONDS + 60)
+    r = await client.get(
+        f"{CANDIDATES_PATH}?days=35",
+        headers=_headers(
+            a2a_family.id, "GET", CANDIDATES_PATH, b"candidates:35", ts=ahead
+        ),
+    )
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signature_is_bound_to_the_endpoint(client: AsyncClient, a2a_family, account):
+    """A signature minted for /reconcile must not be usable on /transactions."""
+    payload = {
+        "merchant": "X", "amount_cents": 100, "direction": "debit",
+        "date": date.today().isoformat(), "external_id": "cross-path-replay",
+    }
+    body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    headers = _headers(a2a_family.id, "POST", RECONCILE_PATH, body)
+
+    r = await client.post(TRANSACTIONS_PATH, content=body, headers=headers)
+    assert r.status_code == 401

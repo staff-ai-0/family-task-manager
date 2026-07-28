@@ -4,12 +4,32 @@ Machine-to-machine, authenticated by per-family HMAC (the same secret as the
 price-checker integration, stored in family_a2a_webhooks). No user session —
 the agent signs requests with the family's secret.
 
-Signature scheme (mirrors price-checker):
+Signature scheme:
     X-A2A-Family:    <family_id>
+    X-A2A-Timestamp: <unix epoch seconds>
     X-A2A-Signature: sha256=<hmac_sha256(secret, message)>
-  - GET  /candidates    message = "candidates:<days>"
-  - POST /reconcile     message = raw JSON body
-  - POST /transactions  message = raw JSON body
+
+    message = b"<METHOD>\\n<path>\\n<timestamp>\\n<payload>"
+  - GET  /candidates    payload = "candidates:<days>"
+  - POST /reconcile     payload = raw JSON body
+  - POST /transactions  payload = raw JSON body
+
+The timestamp is inside the signed message and must be within
+A2A_MAX_SKEW_SECONDS of server time, so a captured request stops working
+after ~5 minutes instead of being replayable forever; the method and path
+are inside it too, so a signature lifted from one endpoint cannot be aimed
+at another.
+
+BREAKING — no backward compatibility on purpose. This is a private,
+single-consumer integration (the bank-email-matcher agent, see
+`project_bank_email_matcher`), so accepting unsigned-timestamp requests
+during a grace period would leave the replay hole open for exactly as long
+as the grace period. The agent MUST be updated to send X-A2A-Timestamp and
+sign the message above; until it is, every one of its calls gets a 401.
+
+Only the INBOUND scheme here changes. The outbound price-checker call in
+price_comparison.py signs its own (unrelated) message with the same secret
+and is deliberately left alone — it is a different peer's contract.
 
 Endpoints:
   GET  /candidates    → recent transactions the agent matches alerts against
@@ -34,10 +54,15 @@ from app.models.family import Family
 from app.core.database import get_db
 from app.models.budget import BudgetAccount, BudgetTransaction
 from app.services.budget.a2a_webhook_service import A2AWebhookService
-from app.core.time_utils import utc_today
+from app.core.time_utils import utc_today, utcnow
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# How far a request's own timestamp may drift from server time. The agent runs
+# on the same LAN under NTP, so 5 minutes is already generous; it is the window
+# in which a captured request stays replayable, so it should not grow.
+A2A_MAX_SKEW_SECONDS = 300
 
 
 async def _family_and_secret(db: AsyncSession, family_hdr: str) -> tuple[UUID, str]:
@@ -56,7 +81,33 @@ async def _family_and_secret(db: AsyncSession, family_hdr: str) -> tuple[UUID, s
     return family_id, cfg.secret
 
 
-def _verify(secret: str, message: bytes, signature: str) -> None:
+def _signed_message(request: Request, timestamp: str, payload: bytes) -> bytes:
+    """The exact bytes the HMAC covers — method, path, timestamp, payload."""
+    return b"\n".join((
+        request.method.upper().encode("utf-8"),
+        request.url.path.encode("utf-8"),
+        timestamp.encode("utf-8"),
+        payload,
+    ))
+
+
+def _assert_fresh(timestamp: str) -> None:
+    """Bound the replay window. Rejects both directions of drift — a
+    future-dated timestamp would otherwise buy an attacker an arbitrarily
+    long-lived capture."""
+    try:
+        sent_at = int(timestamp)
+    except (TypeError, ValueError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing or invalid timestamp")
+    if abs(int(utcnow().timestamp()) - sent_at) > A2A_MAX_SKEW_SECONDS:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "stale timestamp")
+
+
+def _verify(
+    secret: str, request: Request, timestamp: str, payload: bytes, signature: str
+) -> None:
+    _assert_fresh(timestamp)
+    message = _signed_message(request, timestamp, payload)
     expected = "sha256=" + hmac.new(secret.encode("utf-8"), message, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, signature or ""):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bad signature")
@@ -64,14 +115,19 @@ def _verify(secret: str, message: bytes, signature: str) -> None:
 
 @router.get("/candidates")
 async def list_candidates(
+    request: Request,
     days: int = Query(35, ge=1, le=120),
     x_a2a_family: str = Header(default=""),
+    x_a2a_timestamp: str = Header(default=""),
     x_a2a_signature: str = Header(default=""),
     db: AsyncSession = Depends(get_db),
 ):
     """Recent non-deleted transactions for the agent to match alerts against."""
     family_id, secret = await _family_and_secret(db, x_a2a_family)
-    _verify(secret, f"candidates:{days}".encode("utf-8"), x_a2a_signature)
+    _verify(
+        secret, request, x_a2a_timestamp,
+        f"candidates:{days}".encode("utf-8"), x_a2a_signature,
+    )
 
     from app.models.budget import BudgetPayee
     cutoff = utc_today() - timedelta(days=days)
@@ -110,13 +166,14 @@ class ReconcileBody(BaseModel):
 async def reconcile_transaction(
     request: Request,
     x_a2a_family: str = Header(default=""),
+    x_a2a_timestamp: str = Header(default=""),
     x_a2a_signature: str = Header(default=""),
     db: AsyncSession = Depends(get_db),
 ):
     """Mark a matched transaction as cleared (bank confirmed it)."""
     raw = await request.body()
     family_id, secret = await _family_and_secret(db, x_a2a_family)
-    _verify(secret, raw, x_a2a_signature)
+    _verify(secret, request, x_a2a_timestamp, raw, x_a2a_signature)
 
     import json
     try:
@@ -157,13 +214,14 @@ class CreateBody(BaseModel):
 async def create_from_alert(
     request: Request,
     x_a2a_family: str = Header(default=""),
+    x_a2a_timestamp: str = Header(default=""),
     x_a2a_signature: str = Header(default=""),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a transaction from an unmatched bank alert (idempotent)."""
     raw = await request.body()
     family_id, secret = await _family_and_secret(db, x_a2a_family)
-    _verify(secret, raw, x_a2a_signature)
+    _verify(secret, request, x_a2a_timestamp, raw, x_a2a_signature)
 
     import json
     try:

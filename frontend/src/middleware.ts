@@ -1,6 +1,20 @@
 import { createHash } from "node:crypto";
 import { defineMiddleware } from "astro:middleware";
 import type { User } from "./types/api";
+// Pure request-classification rules (public routes, CSRF origins, admin
+// surface, module gating, JWT expiry) live in their own module so they are
+// unit-testable without the astro:middleware virtual module — see
+// frontend/test/request-guards.test.ts (rules) and test/middleware.test.ts
+// (this handler, driven with a fake context).
+import {
+    isAdminSurface as isAdminSurfacePath,
+    isAllowedOrigin,
+    isJwtExpired,
+    isPublicRoute as isPublicRoutePath,
+    moduleForPath,
+    moduleRedirectTarget,
+    requiresCsrfCheck,
+} from "./lib/security/request-guards";
 
 // ---------------------------------------------------------------------------
 // Security headers (WS-F1). Starter CSP notes:
@@ -73,24 +87,6 @@ function authCacheSet(key: string, user: User, plan: unknown): void {
     authCache.set(key, { user, plan, expires: Date.now() + AUTH_CACHE_TTL_MS });
 }
 
-/** Page-prefix → togglable module key (families.enabled_modules). Only these
- *  prefixes are module-gated; settings/core surfaces never appear here. */
-function moduleForPath(p: string): string | null {
-    if (p.startsWith("/meals")) return "meals";
-    if (p.startsWith("/shopping")) return "shopping";
-    if (p.startsWith("/calendar")) return "calendar";
-    if (p.startsWith("/pet")) return "pet";
-    if (p.startsWith("/chat") || p.startsWith("/dm")) return "chat";
-    if (p.startsWith("/budget") || p.startsWith("/envelopes")) return "budget";
-    if (
-        p.startsWith("/gigs") ||
-        p.startsWith("/bank") ||
-        p.startsWith("/parent/gigs") ||
-        p.startsWith("/parent/payouts")
-    ) return "gigs";
-    return null;
-}
-
 function withSecurityHeaders(response: Response): Response {
     const h = response.headers;
     h.set("X-Content-Type-Options", "nosniff");
@@ -107,24 +103,6 @@ function withSecurityHeaders(response: Response): Response {
 }
 
 /**
- * Decode a JWT locally and decide whether it is expired (or unusable).
- * Refreshes 30s early to avoid edge races near the boundary.
- */
-function isExpired(jwt: string | undefined): boolean {
-    if (!jwt) return true;
-    const parts = jwt.split(".");
-    if (parts.length !== 3) return true;
-    try {
-        const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-        if (!payload.exp) return true;
-        // Refresh 30s early to avoid edge races.
-        return Date.now() / 1000 >= payload.exp - 30;
-    } catch {
-        return true;
-    }
-}
-
-/**
  * Middleware for authentication checks and request logging
  */
 export const onRequest = defineMiddleware(async (context, next) => {
@@ -137,45 +115,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
 
     // CSRF Protection for state-changing requests
-    // Check CSRF BEFORE authentication check for all non-GET API requests
-    if (request.method !== "GET" && path.startsWith("/api/")) {
+    // Check CSRF BEFORE authentication check for all non-GET API requests.
+    // A null Origin (server-side requests from our own Astro API routes) skips
+    // the check only — the auth checks below still apply.
+    if (requiresCsrfCheck(request.method, path)) {
         const origin = request.headers.get("origin");
         const host = request.headers.get("host");
-        
-        // Allow null origin for server-side requests (Astro API routes calling backend)
-        // This happens when our own API routes make server-to-server requests
-        // We only skip the CSRF check; auth checks below still apply
-        if (origin !== null) {
-            // In development, allow localhost origins
-            if (import.meta.env.DEV) {
-                const devOrigins = [
-                    `http://${host}`,
-                    `https://${host}`,
-                    "http://localhost:3000",
-                    "http://localhost:3003",
-                    "http://127.0.0.1:3000",
-                    "http://127.0.0.1:3003"
-                ];
-                if (!devOrigins.includes(origin)) {
-                    console.error(`CSRF violation in dev: origin ${origin} not in allowed list for ${path}`);
-                    return withSecurityHeaders(new Response(
-                        JSON.stringify({ detail: "CSRF validation failed" }),
-                        { status: 403, headers: { "Content-Type": "application/json" } }
-                    ));
-                }
-            } else {
-                // In production, strictly enforce same-origin or allowed hosts
-                const allowedHosts = ["family.agent-ia.mx", host];
-                const originHost = origin.replace(/^https?:\/\//, "");
-                
-                if (!allowedHosts.includes(originHost)) {
-                    console.error(`CSRF violation: origin ${origin} (host: ${originHost}) does not match allowed hosts: ${allowedHosts.join(', ')}`);
-                    return withSecurityHeaders(new Response(
-                        JSON.stringify({ detail: "CSRF validation failed" }),
-                        { status: 403, headers: { "Content-Type": "application/json" } }
-                    ));
-                }
-            }
+        if (!isAllowedOrigin(origin, host, import.meta.env.DEV)) {
+            console.error(`CSRF violation: origin ${origin} (host: ${host}) not allowed for ${path}`);
+            return withSecurityHeaders(new Response(
+                JSON.stringify({ detail: "CSRF validation failed" }),
+                { status: 403, headers: { "Content-Type": "application/json" } }
+            ));
         }
     }
 
@@ -212,43 +163,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
         });
     }
 
-    // Public routes that don't require authentication
-    const publicRoutes = [
-        "/",
-        "/login",
-        "/register",
-        "/forgot-password",
-        "/verify-email",
-        "/reset-password",
-        "/accept-invitation",
-        "/help",   // English user guide — linked from welcome email
-        "/ayuda",  // Spanish user guide — linked from welcome email
-        "/privacidad",  // Aviso de Privacidad (bilingual) — legal, must be public
-        "/terminos",    // Términos y Condiciones (bilingual) — legal, must be public
-        "/tdah",        // TDAH/rutinas content landing — marketing, must be crawlable
-        "/rutinas",     // ES keyword alias → 301s to /tdah (still needs to be public)
-        "/sitemap.xml", // SEO — crawlable without auth
-        "/robots.txt",  // SEO — crawlable without auth
-        "/api/auth/login",
-        "/api/auth/refresh",  // BFF refresh route — callable even when the access token is dead
-        "/api/auth/register",  // Frontend API route for registration (calls backend /api/auth/register-family)
-        "/api/auth/register-family",  // Backend API route (for direct calls)
-        "/api/auth/verify-email",
-        "/api/auth/resend-verification",
-        "/api/auth/forgot-password",
-        "/api/auth/reset-password",
-        "/api/auth/check-methods",  // Used by login form to detect Google-only accounts before prompting for password
-        "/api/oauth/google",
-        "/api/lang",
-        "/api/oauth/google/",
-        "/api/invitations/accept", // Only public endpoint is accepting an invitation (no auth needed)
-        "/kiosk",  // Wall display — token gated via ?token=...
-        "/api/kiosk/snapshot",
-        "/api/kiosk/pin-view",  // Kiosk per-kid PIN view — device token in body, PIN-scoped
-    ];
-    const isPublicRoute = publicRoutes.some(route => path === route || path.startsWith("/api/translate"));
-
-    if (isPublicRoute) {
+    // Public routes that don't require authentication (list in
+    // lib/security/request-guards.ts).
+    if (isPublicRoutePath(path)) {
         const response = await next();
         // /login uses Google Identity Services popup sign-in. Chrome's
         // default COOP (`unsafe-none` or no header) can still block the
@@ -284,7 +201,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // zero-token short-circuit below and the token-present guard further down
     // (after the refresh/missing-token handling) — see both for why this
     // needs two checks instead of one.
-    const isAdminSurface = path === "/admin" || path.startsWith("/admin/") || path === "/api/admin" || path.startsWith("/api/admin/");
+    const isAdminSurface = isAdminSurfacePath(path);
 
     // Check authentication for protected routes
     let accessToken = cookies.get("access_token")?.value;
@@ -294,7 +211,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // Transparently refresh the access token when it's missing/expired but a
     // refresh cookie is present. Runs BEFORE the missing-token guard so a dead
     // access token does not bounce the user to /login if the refresh succeeds.
-    if (isExpired(accessToken) && refreshToken) {
+    if (isJwtExpired(accessToken) && refreshToken) {
         const { refreshAccessToken } = await import("./lib/server/refresh");
         const r = await refreshAccessToken(refreshToken);
         if (r.ok) {
@@ -524,15 +441,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
                     // fail open
                 }
             }
-            const enabled = meUser?.enabled_modules;
-            if (Array.isArray(enabled) && !enabled.includes(gated)) {
-                // Role-aware home: parents land on /parent (their /dashboard
-                // view merged there), kids on /dashboard.
-                const home = String(meUser?.role ?? "").toLowerCase() === "parent"
-                    ? "/parent"
-                    : "/dashboard";
-                return withSecurityHeaders(redirect(`${home}?module_off=1`, 302));
-            }
+            const target = moduleRedirectTarget(path, meUser);
+            if (target) return withSecurityHeaders(redirect(target, 302));
         }
     }
 
