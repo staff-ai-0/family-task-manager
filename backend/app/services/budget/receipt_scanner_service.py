@@ -537,6 +537,15 @@ async def scan_and_create_transaction(
     except Exception:
         logger.exception("few-shot assembly failed for family %s", family_id)
 
+    # Release the pooled connection before the vision call. Every query above
+    # leaves a read transaction open, and the call below can take the full
+    # 60s LLM_TIMEOUT — so the connection would sit idle-in-transaction for a
+    # minute per concurrent scan. The streaming paths were fixed for exactly
+    # this (family_chat_service documents the pool exhaustion -> app-wide 502
+    # incident); this non-stream path was missed. expire_on_commit=False, so
+    # nothing loaded above is invalidated by the commit.
+    await db.commit()
+
     # (1) Vision extract -----------------------------------------------------
     receipt = await scan_receipt(
         image_bytes, media_type, model=family_model, category_hints=category_hints,

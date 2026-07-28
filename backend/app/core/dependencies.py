@@ -149,6 +149,22 @@ def require_parent_role(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
+def require_kid_role(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency that requires a kid role (CHILD or TEEN).
+
+    The symmetric counterpart to require_parent_role, which existed while every
+    kid-only route reinvented the check inline — bank.py alone had it written
+    out at seven sites plus a local helper. Note that some routes deliberately
+    answer a parent differently (a 400 pointing at the parent-facing screen, or
+    a null result) rather than a flat 403; those keep their bespoke handling.
+    """
+    if current_user.role == UserRole.PARENT:
+        raise ForbiddenException(
+            "This operation is for kid accounts"
+        )
+    return current_user
+
+
 def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
     """Platform operator. Requires BOTH the DB flag and the env allowlist.
 
