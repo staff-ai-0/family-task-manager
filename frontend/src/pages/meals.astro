@@ -150,6 +150,7 @@ const jarvisTemplate = {
     cron_expr: "0 18 * * 0",
     channel: "notification",
 };
+import { serializeForClient } from "@lib/safe-vars";
 ---
 
 <PageLayout
@@ -320,7 +321,28 @@ const jarvisTemplate = {
     </details>
 </PageLayout>
 
-<script define:vars={{ lang, jarvisTemplate, jarvisTemplateNames, jarvisLabels: { done: labels.jarvis_done, exists: labels.jarvis_exists, error: labels.jarvis_error, view: labels.jarvis_view, working: labels.jarvis_working } }}>
+<!-- User-authored strings reach this script (see lib/safe-vars.ts):
+     define:vars only escapes the exact `</script>` sequence, so a name
+     containing `</SCRIPT >` splits the block and injects script. Attribute
+     escaping is not affected, so the payload ships as data instead. -->
+<div id="meals-data" data-json={serializeForClient({
+    lang,
+    jarvisTemplate,
+    jarvisTemplateNames,
+    jarvisLabels: {
+        done: labels.jarvis_done,
+        exists: labels.jarvis_exists,
+        error: labels.jarvis_error,
+        view: labels.jarvis_view,
+        working: labels.jarvis_working,
+    },
+})} hidden></div>
+<script define:vars={{}}>
+    const { lang, jarvisTemplate, jarvisTemplateNames, jarvisLabels } = (() => {
+        const el = document.getElementById("meals-data");
+        try { return JSON.parse(el?.getAttribute("data-json") || "{}"); }
+        catch { return {}; }
+    })();
     document.addEventListener("astro:page-load", () => {
         // One-click Jarvis weekly meal-plan schedule (parents only; button
         // only renders for parents). Reuses the existing schedules API.

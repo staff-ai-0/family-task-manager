@@ -92,6 +92,7 @@ const labels = {
     send: lang === "es" ? "Enviar" : "Send",
     empty: lang === "es" ? "Sin mensajes aún." : "No messages yet.",
 };
+import { serializeForClient } from "@lib/safe-vars";
 ---
 
 <ChatShell
@@ -216,7 +217,24 @@ const labels = {
 <ImageLightbox />
 </ChatShell>
 
-<script define:vars={{ currentUserId: user.id, currentRole: user.role, memberMap: Object.fromEntries(memberLookup), memberColors: Object.fromEntries(memberColorLookup), lang }}>
+<!-- Member names are user-authored and reach this script. define:vars only
+     escapes the exact `</script>` sequence, so a name containing `</SCRIPT >`
+     terminates the block and injects script into every family member's browser
+     (astro <= 7.0.9, GHSA-j687-52p2-xcff). Attribute escaping is unaffected. -->
+<div id="chat-data" data-json={serializeForClient({
+    currentUserId: user.id,
+    currentRole: user.role,
+    memberMap: Object.fromEntries(memberLookup),
+    memberColors: Object.fromEntries(memberColorLookup),
+    lang,
+})} hidden></div>
+<script define:vars={{}}>
+    const { currentUserId, currentRole, memberMap, memberColors, lang } =
+        (() => {
+            const el = document.getElementById("chat-data");
+            try { return JSON.parse(el?.getAttribute("data-json") || "{}"); }
+            catch { return {}; }
+        })();
     document.addEventListener("astro:page-load", () => {
         const feed = document.getElementById("chat-feed");
         if (!feed) return;

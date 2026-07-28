@@ -58,6 +58,7 @@ const L = {
     pet_fed: lang === "es" ? "🐾 ¡Alimentaste a tu mascota!" : "🐾 You fed your pet!",
     err: lang === "es" ? "Algo salió mal. Intenta de nuevo." : "Something went wrong. Try again.",
 };
+import { serializeForClient } from "@lib/safe-vars";
 ---
 
 <PageLayout
@@ -168,7 +169,17 @@ const L = {
     <div id="routines-toast" class="fixed left-1/2 -translate-x-1/2 bottom-24 z-[60] hidden px-4 py-2 rounded-full bg-brand-ink text-brand-cream text-sm font-semibold shadow-[var(--shadow-card)]"></div>
 </PageLayout>
 
-<script define:vars={{ routines, lang, kidColor, L }}>
+<!-- User-authored strings reach this script (see lib/safe-vars.ts):
+     define:vars only escapes the exact `</script>` sequence, so a name
+     containing `</SCRIPT >` splits the block and injects script. Attribute
+     escaping is not affected, so the payload ships as data instead. -->
+<div id="routines-data" data-json={serializeForClient({ routines, lang, kidColor, L })} hidden></div>
+<script define:vars={{}}>
+    const { routines, lang, kidColor, L } = (() => {
+        const el = document.getElementById("routines-data");
+        try { return JSON.parse(el?.getAttribute("data-json") || "{}"); }
+        catch { return {}; }
+    })();
     function initRoutines() {
         const runner = document.getElementById("runner");
         if (!runner) return;

@@ -58,6 +58,7 @@ const labels = {
     empty: lang === "es" ? "Sin mensajes." : "No messages.",
     back: lang === "es" ? "← Mensajes" : "← Inbox",
 };
+import { serializeForClient } from "@lib/safe-vars";
 ---
 
 <ChatShell
@@ -123,7 +124,22 @@ const labels = {
     </form>
 </ChatShell>
 
-<script define:vars={{ currentUserId: user.id, threadId, memberMap: Object.fromEntries(memberMap), lang }}>
+<!-- User-authored strings reach this script (see lib/safe-vars.ts):
+     define:vars only escapes the exact `</script>` sequence, so a name
+     containing `</SCRIPT >` splits the block and injects script. Attribute
+     escaping is not affected, so the payload ships as data instead. -->
+<div id="dm-data" data-json={serializeForClient({
+    currentUserId: user.id,
+    threadId,
+    memberMap: Object.fromEntries(memberMap),
+    lang,
+})} hidden></div>
+<script define:vars={{}}>
+    const { currentUserId, threadId, memberMap, lang } = (() => {
+        const el = document.getElementById("dm-data");
+        try { return JSON.parse(el?.getAttribute("data-json") || "{}"); }
+        catch { return {}; }
+    })();
     document.addEventListener("astro:page-load", () => {
         const feed = document.getElementById("dm-feed");
         if (!feed) return;
