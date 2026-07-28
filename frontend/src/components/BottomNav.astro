@@ -24,6 +24,11 @@ let pendingApprovals = 0;
 // Per-family module registry (families.enabled_modules via /auth/me).
 // null = all modules on — also the fail-open value on any fetch error.
 let enabledModules: string[] | null = null;
+// Read straight off the /auth/me this component already fetches, rather than
+// threading a prop through all five layout shells and every page they wrap.
+// The backend only ever reports this true for the caller themselves
+// (strip_superadmin_flag), so it cannot leak to a co-parent or a kid.
+let isSuperadmin = false;
 if (token) {
     try {
         const [unread, taskPending, gigPending, me] = await Promise.all([
@@ -39,6 +44,7 @@ if (token) {
         unreadCount = unread.data?.unread ?? 0;
         pendingApprovals = (taskPending.data?.length ?? 0) + (gigPending.data?.length ?? 0);
         enabledModules = me.data?.enabled_modules ?? null;
+        isSuperadmin = me.data?.is_superadmin === true;
     } catch {
         unreadCount = 0;
         pendingApprovals = 0;
@@ -136,7 +142,7 @@ const itemActive = "bg-brand-coral text-brand-ink border-2 border-brand-ink shad
     </div>
 </nav>
 
-<MoreSheet role={role} lang={lang} unread={unreadCount} modules={enabledModules} />
+<MoreSheet role={role} lang={lang} unread={unreadCount} modules={enabledModules} isSuperadmin={isSuperadmin} />
 
 <script>
     const ACTIVE = "bg-brand-coral text-brand-ink border-2 border-brand-ink shadow-[2px_2px_0_var(--color-brand-ink)]";
