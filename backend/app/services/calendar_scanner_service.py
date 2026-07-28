@@ -17,16 +17,12 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi.concurrency import run_in_threadpool
-from openai import OpenAI
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
+from app.core.llm import RECEIPT_MODEL, get_llm_client
 from app.core.metrics import record_llm_call
-from app.services.budget.receipt_scanner_service import (
-    LLM_TIMEOUT,
-    RECEIPT_MODEL,
-    _pdf_first_page_to_png,
-)
+from app.services.budget.receipt_scanner_service import _pdf_first_page_to_png
 
 
 CALENDAR_PROMPT = """Analyze this document image (school flyer, sport schedule, invitation, permission slip, etc.) and extract every dated event into a structured list. Return ONLY valid JSON, no markdown or explanation.
@@ -94,11 +90,7 @@ async def scan_calendar_document(
         image_bytes = await run_in_threadpool(_pdf_first_page_to_png, image_bytes)
         media_type = "image/jpeg"
 
-    client = OpenAI(
-        base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
-        api_key=settings.LITELLM_API_KEY,
-        timeout=LLM_TIMEOUT,  # connect fails fast; read capped at 60s
-    )
+    client = get_llm_client()
 
     image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
     data_uri = f"data:{media_type};base64,{image_b64}"

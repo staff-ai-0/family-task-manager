@@ -78,7 +78,7 @@ async def test_award_assignment_completion_no_commit_credits_points(db, family):
     db.add(u)
     await db.commit()
     await db.refresh(u)
-    tx = await PointsService.award_assignment_completion(db, u.id, None, 10)
+    tx = await PointsService.award_assignment_completion(db, u.id, family.id, None, 10)
     await db.commit()
     await db.refresh(u)
     assert u.points == 15

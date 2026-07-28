@@ -46,7 +46,7 @@ const { data: cfg } = a2aLocked
         {lang === "es" ? "Último éxito" : "Last success"}: {cfg?.last_success_at ?? "—"}<br/>
         {lang === "es" ? "Fallas" : "Failures"}: {cfg?.failure_count ?? 0}
       </div>
-      <button class="brand-btn brand-btn-primary w-full">
+      <button id="a2a-save" type="submit" class="brand-btn brand-btn-primary w-full">
         {lang === "es" ? "Guardar" : "Save"}
       </button>
       <pre id="secret-out" class="hidden text-xs bg-fg/5 p-2 rounded"></pre>
@@ -56,33 +56,51 @@ const { data: cfg } = a2aLocked
   <BottomNav lang={lang} role={user?.role} active="parent" />
 </Layout>
 
-<script type="module" define:vars={{ lang }}>
-  document.getElementById("form")?.addEventListener("submit", async (e) => {
+<script>
+  const es = document.documentElement.lang === "es";
+  const form = document.getElementById("form") as HTMLFormElement | null;
+  const saveBtn = document.getElementById("a2a-save") as HTMLButtonElement | null;
+  const rotate = document.getElementById("rotate") as HTMLInputElement | null;
+
+  form?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const resp = await fetch("/api/budget/a2a-webhook", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: document.getElementById("url").value,
-        enabled: document.getElementById("enabled").checked,
-        rotate_secret: document.getElementById("rotate").checked,
-      }),
-    });
-    const body = await resp.json();
-    if (!resp.ok) {
-      const detail = body?.detail;
-      const msg = detail?.error === "upgrade_required"
-        ? (lang === "es" ? "Requiere plan Plus — ve a Suscripción." : "Requires the Plus plan — see Subscription.")
-        : (typeof detail === "string" ? detail : (lang === "es" ? "Error al guardar." : "Save failed."));
-      alert(msg);
-      return;
-    }
-    if (body.secret) {
-      const out = document.getElementById("secret-out");
-      out.classList.remove("hidden");
-      out.textContent = (lang === "es" ? "Secreto nuevo (cópialo): " : "New secret (copy now): ") + body.secret;
-    } else {
-      alert(lang === "es" ? "Guardado." : "Saved.");
+    // Every save with "rotate secret" ticked mints a NEW secret and only the
+    // response carries it — a second in-flight request would strand the user
+    // with a secret they never saw. Hence the disable, and the untick below.
+    if (saveBtn?.disabled) return;
+    const label = saveBtn?.textContent ?? "";
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "…"; }
+    try {
+      const resp = await fetch("/api/budget/a2a-webhook", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: (document.getElementById("url") as HTMLInputElement).value,
+          enabled: (document.getElementById("enabled") as HTMLInputElement).checked,
+          rotate_secret: !!rotate?.checked,
+        }),
+      });
+      const body = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        const detail = body?.detail;
+        const msg = detail?.error === "upgrade_required"
+          ? (es ? "Requiere plan Plus — ve a Suscripción." : "Requires the Plus plan — see Subscription.")
+          : (typeof detail === "string" ? detail : (es ? "Error al guardar." : "Save failed."));
+        alert(msg);
+        return;
+      }
+      if (body?.secret) {
+        const out = document.getElementById("secret-out")!;
+        out.classList.remove("hidden");
+        out.textContent = (es ? "Secreto nuevo (cópialo): " : "New secret (copy now): ") + body.secret;
+        if (rotate) rotate.checked = false;
+      } else {
+        alert(es ? "Guardado." : "Saved.");
+      }
+    } catch {
+      alert(es ? "Error de conexión. Intenta de nuevo." : "Connection error. Please try again.");
+    } finally {
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = label; }
     }
   });
 </script>

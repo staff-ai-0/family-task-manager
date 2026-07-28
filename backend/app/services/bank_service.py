@@ -847,6 +847,7 @@ class BankService:
 
             db.add(PointTransaction.create_parent_adjustment(
                 user_id=user.id,
+                family_id=family_id,
                 points=-points_converted,
                 balance_before=user.points,
                 reason=f"Puntos convertidos a efectivo (semana {week_monday.isoformat()})",

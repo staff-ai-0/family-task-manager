@@ -20,12 +20,12 @@ from uuid import UUID
 
 from fastapi.concurrency import run_in_threadpool
 from mcp.shared.memory import create_connected_server_and_client_session
-from openai import OpenAI
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import ValidationError
+from app.core.llm import RECEIPT_MODEL, get_llm_client
 from app.core.metrics import record_llm_call
 from app.mcp.confirm import is_destructive
 from app.mcp.context import McpContext, use_context
@@ -36,7 +36,6 @@ from app.models.kid_pet import KidPet
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.user import User, UserRole
 from app.services.analytics_service import AnalyticsService
-from app.services.budget.receipt_scanner_service import LLM_TIMEOUT, RECEIPT_MODEL
 from app.services.jarvis_pending_action_service import PendingActionService
 from app.core.time_utils import utc_today
 
@@ -418,11 +417,7 @@ class JarvisService:
                     msgs.append({"role": h.role, "content": h.content})
             msgs.append({"role": "user", "content": msg})
 
-            client = OpenAI(
-                base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
-                api_key=settings.LITELLM_API_KEY,
-                timeout=LLM_TIMEOUT,  # connect fails fast; read capped at 60s
-            )
+            client = get_llm_client()
 
             actions_taken: list[str] = []
             reply = ""
@@ -630,11 +625,7 @@ class JarvisService:
         # loaded above is invalidated.)
         await db.commit()
 
-        client = OpenAI(
-            base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
-            api_key=settings.LITELLM_API_KEY,
-            timeout=LLM_TIMEOUT,  # connect fails fast; read capped at 60s
-        )
+        client = get_llm_client()
 
         actions_taken: list[str] = []
         reply = ""

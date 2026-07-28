@@ -222,6 +222,7 @@ class TestReceiptScannerResilience:
         """A hung LiteLLM/vision provider must not block the event loop forever:
         the OpenAI client must be constructed with a finite timeout (A3)."""
         from unittest.mock import patch, MagicMock
+        from app.core import llm
         from app.services.budget import receipt_scanner_service as svc
 
         mock_client = MagicMock()
@@ -232,7 +233,8 @@ class TestReceiptScannerResilience:
         with patch.object(svc, "settings") as mock_settings:
             mock_settings.LITELLM_API_KEY = "sk-fake"
             mock_settings.LITELLM_API_BASE = "http://proxy:4000"
-            with patch.object(svc, "OpenAI") as mock_openai:
+            with patch.object(llm, "settings", mock_settings), \
+                 patch.object(llm, "OpenAI") as mock_openai:
                 mock_openai.return_value = mock_client
                 try:
                     await svc.scan_receipt(b"fakebytes", "image/jpeg")

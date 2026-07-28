@@ -634,7 +634,8 @@ document.addEventListener("astro:after-swap", initFilters);
             <input type="number" step="0.01" min="0" placeholder="0.00"
                 class="split-amt w-24 py-1.5 px-2 border border-brand-ink/10 rounded-lg text-xs text-right"
                 value="${amountCents ? (amountCents/100).toFixed(2) : ""}">
-            <button type="button" class="split-del text-red-400 hover:text-red-600 text-sm">✕</button>`;
+            <button type="button" class="split-del text-red-400 hover:text-red-600 text-sm p-2.5 -m-1"
+                aria-label="${es ? "Quitar división" : "Remove split"}">✕</button>`;
         row.querySelector(".split-del").addEventListener("click", () => { row.remove(); updateRemaining(); });
         row.querySelector(".split-amt").addEventListener("input", updateRemaining);
         splitRows.appendChild(row);
@@ -1251,9 +1252,12 @@ function initPowerTools() {
                     window.location.href = "/budget/transactions?" + params.toString();
                 });
                 const del = document.createElement("button");
-                del.className = "text-[10px] text-brand-ink-soft hover:text-red-600 -ml-1";
+                del.className = "text-[10px] text-brand-ink-soft hover:text-red-600 -ml-1 p-2.5 -my-1";
                 del.textContent = "✕";
                 del.title = es ? "Borrar filtro" : "Delete filter";
+                // title is only the last-resort accessible name and never shows
+                // on touch — name the chip it belongs to explicitly.
+                del.setAttribute("aria-label", es ? `Borrar filtro ${f.name}` : `Delete filter ${f.name}`);
                 del.addEventListener("click", async () => {
                     if (!confirm(es ? `¿Borrar filtro "${f.name}"?` : `Delete filter "${f.name}"?`)) return;
                     await fetch(`/api/budget/saved-filters/${f.id}`, { method: "DELETE" });

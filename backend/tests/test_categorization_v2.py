@@ -83,8 +83,9 @@ async def test_ai_suggest_maps_index_to_category(db_session, test_family):
     class _Resp:
         choices = [_Choice()]
 
-    with patch("app.services.budget.category_ai_service.OpenAI") as mock_openai, \
-         patch("app.services.budget.category_ai_service.settings") as mock_settings:
+    with patch("app.services.budget.category_ai_service.settings") as mock_settings, \
+         patch("app.core.llm.settings", mock_settings), \
+         patch("app.core.llm.OpenAI") as mock_openai:
         mock_settings.LITELLM_API_KEY = "sk-test"
         mock_settings.LITELLM_API_BASE = "http://proxy"
         mock_openai.return_value.chat.completions.create.return_value = _Resp()
@@ -108,8 +109,9 @@ async def test_ai_suggest_null_index_returns_none(db_session, test_family):
     class _Resp:
         choices = [_Choice()]
 
-    with patch("app.services.budget.category_ai_service.OpenAI") as mock_openai, \
-         patch("app.services.budget.category_ai_service.settings") as mock_settings:
+    with patch("app.services.budget.category_ai_service.settings") as mock_settings, \
+         patch("app.core.llm.settings", mock_settings), \
+         patch("app.core.llm.OpenAI") as mock_openai:
         mock_settings.LITELLM_API_KEY = "sk-test"
         mock_settings.LITELLM_API_BASE = "http://proxy"
         mock_openai.return_value.chat.completions.create.return_value = _Resp()

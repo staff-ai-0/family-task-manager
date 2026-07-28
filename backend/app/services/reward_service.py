@@ -256,6 +256,7 @@ class RewardService(BaseFamilyService[Reward]):
         transaction = await PointsService.deduct_points_for_reward(
             db=db,
             user_id=user_id,
+            family_id=family_id,
             reward_id=reward.id,
             points_cost=reward.points_cost,
         )
@@ -398,6 +399,7 @@ class RewardService(BaseFamilyService[Reward]):
             transaction = await PointsService.deduct_points_for_reward(
                 db=db,
                 user_id=redemption.user_id,
+                family_id=family_id,
                 reward_id=redemption.reward_id,
                 points_cost=redemption.points_cost,
                 commit=False,
@@ -450,7 +452,7 @@ class RewardService(BaseFamilyService[Reward]):
 
     @staticmethod
     async def get_user_redemption_count(
-        db: AsyncSession, user_id: UUID, reward_id: UUID
+        db: AsyncSession, user_id: UUID, reward_id: UUID, family_id: UUID
     ) -> int:
         """Get number of times user has redeemed a specific reward"""
         query = (
@@ -459,6 +461,7 @@ class RewardService(BaseFamilyService[Reward]):
             .where(
                 and_(
                     PointTransaction.user_id == user_id,
+                    PointTransaction.family_id == family_id,
                     PointTransaction.reward_id == reward_id,
                 )
             )

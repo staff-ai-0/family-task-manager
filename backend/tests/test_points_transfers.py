@@ -340,7 +340,7 @@ class TestTransactionHistory:
     async def test_get_empty_transaction_history(self, db_session, test_child_user):
         """Test getting history for user with no transactions"""
         history = await PointsService.get_transaction_history(
-            db_session, test_child_user.id
+            db_session, test_child_user.id, test_child_user.family_id
         )
 
         assert history == []
@@ -351,14 +351,14 @@ class TestTransactionHistory:
         """Test getting transaction history after some transactions"""
         # Create some transactions
         await PointsService.award_points_for_task(
-            db_session, test_child_user.id, 50
+            db_session, test_child_user.id, test_child_user.family_id, 50
         )
         await PointsService.award_points_for_task(
-            db_session, test_child_user.id, 30
+            db_session, test_child_user.id, test_child_user.family_id, 30
         )
 
         history = await PointsService.get_transaction_history(
-            db_session, test_child_user.id
+            db_session, test_child_user.id, test_child_user.family_id
         )
 
         assert len(history) == 2
@@ -373,11 +373,11 @@ class TestTransactionHistory:
         # Create multiple transactions
         for i in range(10):
             await PointsService.award_points_for_task(
-                db_session, test_child_user.id, 10
+                db_session, test_child_user.id, test_child_user.family_id, 10
             )
 
         history = await PointsService.get_transaction_history(
-            db_session, test_child_user.id, limit=5
+            db_session, test_child_user.id, test_child_user.family_id, limit=5
         )
 
         assert len(history) == 5

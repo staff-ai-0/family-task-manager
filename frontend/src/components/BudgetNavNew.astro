@@ -187,7 +187,8 @@ if (!(window as any).__budgetUndo) {
         toast.className = "fixed bottom-20 left-1/2 -translate-x-1/2 z-[95] bg-brand-ink text-brand-cream rounded-xl px-4 py-2.5 shadow-xl flex items-center gap-3 text-sm";
         toast.innerHTML = `<span>${data.label}</span>
             <button id="undo-do" class="font-bold underline text-brand-sky whitespace-nowrap">${es ? "Deshacer" : "Undo"}</button>
-            <button id="undo-x" class="text-brand-cream/60">✕</button>`;
+            <button id="undo-x" type="button" class="text-brand-cream/60 p-2.5 -m-1"
+                aria-label="${es ? "Descartar" : "Dismiss"}">✕</button>`;
         document.body.appendChild(toast);
 
         const remove = () => { toast.remove(); sessionStorage.removeItem(KEY); };

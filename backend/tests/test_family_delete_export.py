@@ -141,6 +141,7 @@ async def seeded(db_session: AsyncSession):
     db_session.add(
         PointTransaction(
             type=TransactionType.BONUS, points=10, user_id=child_a.id,
+            family_id=fam_a.id,
             balance_before=0, balance_after=10, description="alpha points",
         )
     )
@@ -973,15 +974,7 @@ class TestFamilyPurge:
         assert await _count(db_session, FamilyInvitation, fam_a_id) == 0
         assert await _count(db_session, FamilySubscription, fam_a_id) == 0
 
-        pt_count = (
-            await db_session.execute(
-                select(func.count())
-                .select_from(PointTransaction)
-                .join(User, PointTransaction.user_id == User.id)
-                .where(User.family_id == fam_a_id)
-            )
-        ).scalar()
-        assert pt_count == 0
+        assert await _count(db_session, PointTransaction, fam_a_id) == 0
 
         # Upload files removed at purge time.
         assert not os.path.exists(proof_path)

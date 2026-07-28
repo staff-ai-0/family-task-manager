@@ -16,11 +16,10 @@ from typing import Optional
 
 import httpx
 from fastapi.concurrency import run_in_threadpool
-from openai import OpenAI
 
 from app.core.config import settings
+from app.core.llm import RECEIPT_MODEL, get_llm_client
 from app.core.metrics import record_llm_call
-from app.services.budget.receipt_scanner_service import LLM_TIMEOUT, RECEIPT_MODEL
 
 
 PROOF_PROMPT = """You are validating photo proof that a household chore or task was completed by a child or teen.
@@ -104,11 +103,7 @@ async def validate_proof_photo(
         task_description_line=desc_line,
     )
 
-    client = OpenAI(
-        base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
-        api_key=settings.LITELLM_API_KEY,
-        timeout=LLM_TIMEOUT,  # connect fails fast; read capped at 60s
-    )
+    client = get_llm_client()
 
     image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
     data_uri = f"data:{media_type};base64,{image_b64}"

@@ -71,7 +71,7 @@ class TestSSEStream:
         client = MagicMock()
         client.chat.completions.create.return_value = completion
         monkeypatch.setattr(
-            "app.services.jarvis_service.OpenAI", lambda *a, **kw: client
+            "app.core.llm.OpenAI", lambda *a, **kw: client
         )
 
         events = await _collect_events(
@@ -100,7 +100,7 @@ class TestSSEStream:
         client = MagicMock()
         client.chat.completions.create.side_effect = [first, second]
         monkeypatch.setattr(
-            "app.services.jarvis_service.OpenAI", lambda *a, **kw: client
+            "app.core.llm.OpenAI", lambda *a, **kw: client
         )
 
         events = await _collect_events(
@@ -136,7 +136,7 @@ class TestSSEStream:
         client = MagicMock()
         client.chat.completions.create.return_value = completion
         monkeypatch.setattr(
-            "app.services.jarvis_service.OpenAI", lambda *a, **kw: client
+            "app.core.llm.OpenAI", lambda *a, **kw: client
         )
 
         await _collect_events(
@@ -180,7 +180,7 @@ class TestSSEStream:
         client = MagicMock()
         client.chat.completions.create.side_effect = [first, second]
         monkeypatch.setattr(
-            "app.services.jarvis_service.OpenAI", lambda *a, **kw: client
+            "app.core.llm.OpenAI", lambda *a, **kw: client
         )
 
         events = await _collect_events(
@@ -210,7 +210,7 @@ class TestTeenSelfCoach:
         client = MagicMock()
         client.chat.completions.create.return_value = completion
         monkeypatch.setattr(
-            "app.services.jarvis_service.OpenAI", lambda *a, **kw: client
+            "app.core.llm.OpenAI", lambda *a, **kw: client
         )
 
         events = await _collect_events(
@@ -251,7 +251,7 @@ class TestTeenSelfCoach:
         client = MagicMock()
         client.chat.completions.create.return_value = _mk_message(content="ok")
         monkeypatch.setattr(
-            "app.services.jarvis_service.OpenAI", lambda *a, **kw: client
+            "app.core.llm.OpenAI", lambda *a, **kw: client
         )
 
         # Parent turn (shared family-wide thread) then a teen turn (private).

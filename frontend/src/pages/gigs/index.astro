@@ -244,13 +244,15 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                 </div>
             )}
     <!-- Propose-a-gig modal (kid → parent review) -->
-    <div id="propose-modal" class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+    <div id="propose-modal" role="dialog" aria-modal="true" aria-labelledby="propose-modal-title"
+        class="hidden fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4">
         <div class="bg-brand-cream rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-bold text-brand-ink">
+                <h2 id="propose-modal-title" class="text-lg font-bold text-brand-ink">
                     💡 {lang === "es" ? `Proponer una ${gt.one}` : `Propose a ${gt.one}`}
                 </h2>
-                <button id="propose-close" type="button" class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none">&times;</button>
+                <button id="propose-close" type="button" aria-label={lang === "es" ? "Cerrar" : "Close"}
+                    class="text-brand-ink-soft hover:text-brand-ink text-2xl leading-none p-2 -m-2">&times;</button>
             </div>
             <p class="text-xs text-brand-ink-soft mb-4">
                 {lang === "es"
@@ -290,6 +292,7 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
 <script>
 import { mutate } from "../../lib/mutate";
 import { showToast } from "../../lib/toast";
+import { createDialog, type Dialog } from "../../lib/dialog";
 
 const _lang = document.cookie.split(";").find(c => c.trim().startsWith("lang="))?.split("=")[1] ?? "es";
 const es = _lang === "es";
@@ -315,15 +318,19 @@ function awaitingHTML(): string {
 // ── Propose-a-gig modal (W4.4) ──────────────────────────────────────
 const proposeModal = document.getElementById("propose-modal");
 const proposeForm = document.getElementById("propose-form") as HTMLFormElement | null;
-const openPropose = () => proposeModal?.classList.remove("hidden");
-const closePropose = () => {
-    proposeModal?.classList.add("hidden");
-    proposeForm?.reset();
-    document.getElementById("pf-error")?.classList.add("hidden");
-};
-document.getElementById("propose-gig-btn")?.addEventListener("click", openPropose);
-document.getElementById("propose-close")?.addEventListener("click", closePropose);
-proposeModal?.addEventListener("click", (e) => { if (e.target === proposeModal) closePropose(); });
+let proposeDialog: Dialog | null = null;
+if (proposeModal) {
+    proposeDialog = createDialog(proposeModal, {
+        closeTriggers: [document.getElementById("propose-close")],
+        initialFocus: () => document.getElementById("pf-title"),
+        onClose: () => {
+            proposeForm?.reset();
+            document.getElementById("pf-error")?.classList.add("hidden");
+        },
+    });
+}
+const closePropose = () => proposeDialog?.close();
+document.getElementById("propose-gig-btn")?.addEventListener("click", () => proposeDialog?.open());
 
 proposeForm?.addEventListener("submit", async (e) => {
     e.preventDefault();

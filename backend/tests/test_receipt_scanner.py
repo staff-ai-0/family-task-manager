@@ -3,8 +3,8 @@ Tests for Receipt Scanner Service
 
 Tests the receipt scanning endpoint and service logic.
 Note: the scanner routes through the LiteLLM proxy via the OpenAI
-SDK, so the mock target is openai.OpenAI (which lives as the
-`OpenAI` symbol inside receipt_scanner_service). No real network
+SDK, built in one place (`app.core.llm.get_llm_client`), so the mock
+target is the `OpenAI` symbol inside app.core.llm. No real network
 calls ever leave the test container.
 """
 
@@ -77,8 +77,8 @@ class TestScanReceipt:
         ) as mock_settings:
             mock_settings.LITELLM_API_KEY = "sk-fake-virtual-key"
             mock_settings.LITELLM_API_BASE = "http://10.1.0.99:4000"
-            with patch(
-                "app.services.budget.receipt_scanner_service.OpenAI"
+            with patch("app.core.llm.settings", mock_settings), patch(
+                "app.core.llm.OpenAI"
             ) as mock_openai:
                 mock_openai.return_value = mock_client
                 result = await scan_receipt(b"fake-image-bytes", "image/jpeg")
@@ -118,8 +118,8 @@ class TestScanReceipt:
         ) as mock_settings:
             mock_settings.LITELLM_API_KEY = ""
             mock_settings.LITELLM_API_BASE = "http://10.1.0.99:4000"
-            with patch(
-                "app.services.budget.receipt_scanner_service.OpenAI"
+            with patch("app.core.llm.settings", mock_settings), patch(
+                "app.core.llm.OpenAI"
             ) as mock_openai:
                 with pytest.raises(ValidationError, match="not configured"):
                     await scan_receipt(b"fake-image", "image/jpeg")
@@ -141,8 +141,8 @@ class TestScanReceipt:
         ) as mock_settings:
             mock_settings.LITELLM_API_KEY = "sk-fake"
             mock_settings.LITELLM_API_BASE = "http://10.1.0.99:4000"
-            with patch(
-                "app.services.budget.receipt_scanner_service.OpenAI"
+            with patch("app.core.llm.settings", mock_settings), patch(
+                "app.core.llm.OpenAI"
             ) as mock_openai:
                 mock_openai.return_value = mock_client
                 with pytest.raises(ValidationError, match="LiteLLM failed|budget exceeded"):
@@ -170,7 +170,9 @@ class TestScanReceipt:
         with patch(
             "app.services.budget.receipt_scanner_service.settings"
         ) as mock_settings, patch(
-            "app.services.budget.receipt_scanner_service.OpenAI"
+            "app.core.llm.settings", mock_settings
+        ), patch(
+            "app.core.llm.OpenAI"
         ) as mock_openai, patch(
             "app.services.budget.receipt_scanner_service._pdf_first_page_to_png",
             return_value=fake_png_bytes,
@@ -205,7 +207,9 @@ class TestScanReceipt:
         with patch(
             "app.services.budget.receipt_scanner_service.settings"
         ) as mock_settings, patch(
-            "app.services.budget.receipt_scanner_service.OpenAI"
+            "app.core.llm.settings", mock_settings
+        ), patch(
+            "app.core.llm.OpenAI"
         ) as mock_openai:
             mock_settings.LITELLM_API_KEY = "sk-fake"
             mock_settings.LITELLM_API_BASE = "http://10.1.0.99:4000"

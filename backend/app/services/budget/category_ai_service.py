@@ -18,24 +18,20 @@ must treat categorization as best-effort.
 
 import json
 import logging
-import os
 import re
 from typing import Optional
 from uuid import UUID
 
 from fastapi.concurrency import run_in_threadpool
-from openai import OpenAI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.llm import CATEGORIZER_MODEL, get_llm_client
 from app.core.metrics import record_llm_call
 from app.models.budget import BudgetCategory, BudgetCategoryGroup, BudgetPayee, BudgetTransaction
-from app.services.budget.receipt_scanner_service import LLM_TIMEOUT
 
 logger = logging.getLogger(__name__)
-
-CATEGORIZER_MODEL = os.environ.get("CATEGORIZER_MODEL", "gemini-2.5-flash")
 
 
 class CategoryAIService:
@@ -111,11 +107,7 @@ class CategoryAIService:
         )
 
         try:
-            client = OpenAI(
-                base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
-                api_key=settings.LITELLM_API_KEY,
-                timeout=LLM_TIMEOUT,  # connect fails fast; read capped at 60s
-            )
+            client = get_llm_client()
             # Sync OpenAI client (blocking I/O) — offload to a worker thread
             # so a slow provider can't stall the async event loop.
             record_llm_call()  # best-effort outbound-LLM counter

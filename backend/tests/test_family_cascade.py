@@ -34,6 +34,7 @@ async def test_delete_family_cascades_members_and_invitations(
     # A user-owned row exercises the recursive User -> children cascade.
     txn = PointTransaction(
         user_id=test_child_user.id,
+        family_id=test_family.id,
         type=TransactionType.BONUS,
         points=10,
         balance_before=0,

@@ -44,7 +44,7 @@ class TestCalendarScanner:
           "confidence": 0.92
         }"""
         with patch(
-            "app.services.calendar_scanner_service.OpenAI"
+            "app.core.llm.OpenAI"
         ) as mock_openai:
             client = MagicMock()
             client.chat.completions.create.return_value = _mock_completion(payload)
@@ -66,7 +66,7 @@ class TestCalendarScanner:
           ],
           "confidence": 0.4
         }"""
-        with patch("app.services.calendar_scanner_service.OpenAI") as mock_openai:
+        with patch("app.core.llm.OpenAI") as mock_openai:
             client = MagicMock()
             client.chat.completions.create.return_value = _mock_completion(payload)
             mock_openai.return_value = client
@@ -75,7 +75,7 @@ class TestCalendarScanner:
         assert result.events[0].title == "Has date"
 
     async def test_bad_json_raises(self):
-        with patch("app.services.calendar_scanner_service.OpenAI") as mock_openai:
+        with patch("app.core.llm.OpenAI") as mock_openai:
             client = MagicMock()
             client.chat.completions.create.return_value = _mock_completion(
                 "not json at all"

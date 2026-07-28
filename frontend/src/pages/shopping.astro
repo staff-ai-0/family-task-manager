@@ -11,6 +11,8 @@ let errorMsg = "";
 if (Astro.request.method === "POST") {
     const data = await Astro.request.formData();
     const action = data.get("action");
+    const selected = Astro.url.searchParams.get("list");
+    let redirectTo = "/shopping" + (selected ? `?list=${encodeURIComponent(selected)}` : "");
 
     if (action === "create_list") {
         const name = String(data.get("name") || "").trim();
@@ -41,39 +43,48 @@ if (Astro.request.method === "POST") {
         const itemId = data.get("item_id");
         const checked = data.get("checked") === "true";
         if (itemId) {
-            await apiFetch(`/api/shopping/items/${itemId}`, {
+            const { ok, error } = await apiFetch(`/api/shopping/items/${itemId}`, {
                 method: "PATCH",
                 token,
                 body: JSON.stringify({ is_checked: !checked }),
             });
+            if (!ok) errorMsg = error || "Error";
         }
     } else if (action === "delete_item") {
         const itemId = data.get("item_id");
         if (itemId) {
-            await apiFetch(`/api/shopping/items/${itemId}`, {
+            const { ok, error } = await apiFetch(`/api/shopping/items/${itemId}`, {
                 method: "DELETE",
                 token,
             });
+            if (!ok) errorMsg = error || "Error";
         }
     } else if (action === "archive_list") {
         const listId = data.get("list_id");
         if (listId) {
-            await apiFetch(`/api/shopping/lists/${listId}`, {
+            const { ok, error } = await apiFetch(`/api/shopping/lists/${listId}`, {
                 method: "PATCH",
                 token,
                 body: JSON.stringify({ is_archived: true }),
             });
+            if (!ok) errorMsg = error || "Error";
+            // ?list= now points at a list that left the active set.
+            else redirectTo = "/shopping";
         }
     } else if (action === "delete_list") {
         const listId = data.get("list_id");
         if (listId) {
-            await apiFetch(`/api/shopping/lists/${listId}`, {
+            const { ok, error } = await apiFetch(`/api/shopping/lists/${listId}`, {
                 method: "DELETE",
                 token,
             });
+            if (!ok) errorMsg = error || "Error";
+            else redirectTo = "/shopping";
         }
     }
-    return Astro.redirect("/shopping" + (Astro.url.searchParams.get("list") ? `?list=${Astro.url.searchParams.get("list")}` : ""));
+    // Post/Redirect/Get only on success — redirecting after a failure threw
+    // errorMsg away and made every failed write look like it worked.
+    if (!errorMsg) return Astro.redirect(redirectTo);
 }
 
 const [{ data: user }, { data: listsRaw }] = await Promise.all([
@@ -118,6 +129,8 @@ const labels = {
     archive: lang === "es" ? "Archivar" : "Archive",
     delete: lang === "es" ? "Eliminar" : "Delete",
     confirm_delete: lang === "es" ? "¿Borrar lista?" : "Delete list?",
+    err_toggle: lang === "es" ? "No se pudo actualizar" : "Could not update",
+    err_delete: lang === "es" ? "No se pudo eliminar" : "Could not delete",
 };
 ---
 
@@ -171,11 +184,14 @@ const labels = {
                             }`}
                         >
                             {l.name}
-                            {l.pending_count > 0 && (
-                                <span class="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-brand-coral text-white">
-                                    {l.pending_count}
-                                </span>
-                            )}
+                            <span
+                                id={l.id === selectedId ? "chip-pending" : undefined}
+                                class={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-brand-coral text-white${
+                                    l.pending_count > 0 ? "" : " hidden"
+                                }`}
+                            >
+                                {l.pending_count}
+                            </span>
                         </a>
                     ))}
                 </div>
@@ -187,7 +203,8 @@ const labels = {
                         <div>
                             <h2 class="font-bold text-brand-ink text-lg">{detail.name}</h2>
                             <p class="text-xs text-brand-ink-soft">
-                                {detail.item_count} · {detail.pending_count} {labels.pending}
+                                <span id="item-count">{detail.item_count}</span> ·
+                                <span id="pending-count">{detail.pending_count}</span> {labels.pending}
                             </p>
                         </div>
                         <div class="flex gap-1">
@@ -240,55 +257,186 @@ const labels = {
                         </button>
                     </form>
 
-                    {detail.items.length === 0 ? (
-                        <p class="text-brand-ink-soft text-sm text-center py-8">
-                            {labels.empty_items}
-                        </p>
-                    ) : (
-                        <ul class="divide-y divide-brand-ink/10">
-                            {detail.items.map((item: any) => (
-                                <li class="flex items-center gap-2 p-3">
-                                    <form method="POST" class="flex-1 flex items-center gap-3">
-                                        <input type="hidden" name="action" value="toggle_item" />
-                                        <input type="hidden" name="item_id" value={item.id} />
-                                        <input type="hidden" name="checked" value={String(item.is_checked)} />
-                                        <button
-                                            type="submit"
-                                            class={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                                                item.is_checked
-                                                    ? "bg-brand-mint border-brand-mint-deep text-brand-ink"
-                                                    : "border-brand-ink/30 hover:border-brand-ink"
-                                            }`}
-                                            aria-label={item.is_checked ? "Uncheck" : "Check"}
-                                        >
-                                            {item.is_checked && (
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                                                </svg>
-                                            )}
-                                        </button>
-                                        <div class={`flex-1 text-sm ${item.is_checked ? "line-through text-brand-ink-soft" : "text-brand-ink"}`}>
-                                            <span class="font-medium">{item.name}</span>
-                                            {item.qty && (
-                                                <span class="ml-2 text-xs text-brand-ink-soft">· {item.qty}</span>
-                                            )}
-                                        </div>
-                                    </form>
-                                    <form method="POST">
-                                        <input type="hidden" name="action" value="delete_item" />
-                                        <input type="hidden" name="item_id" value={item.id} />
-                                        <button
-                                            type="submit"
-                                            class="text-brand-ink-soft hover:text-red-600 text-lg leading-none px-2"
-                                            aria-label="Delete"
-                                        >
-                                            ×
-                                        </button>
-                                    </form>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                    <!-- Both states always render: the island toggles them when
+                         the last item is deleted, instead of reloading. -->
+                    <p
+                        id="items-empty"
+                        class={`text-brand-ink-soft text-sm text-center py-8${detail.items.length ? " hidden" : ""}`}
+                    >
+                        {labels.empty_items}
+                    </p>
+                    <ul
+                        id="items-list"
+                        class={`divide-y divide-brand-ink/10${detail.items.length ? "" : " hidden"}`}
+                    >
+                        {detail.items.map((item: any) => (
+                            <li
+                                class="flex items-center gap-2 p-3"
+                                data-item-id={item.id}
+                                data-checked={String(item.is_checked)}
+                            >
+                                <form method="POST" data-toggle-form class="flex-1 flex items-center gap-3">
+                                    <input type="hidden" name="action" value="toggle_item" />
+                                    <input type="hidden" name="item_id" value={item.id} />
+                                    <input type="hidden" name="checked" data-checked-field value={String(item.is_checked)} />
+                                    <button
+                                        type="submit"
+                                        data-check-btn
+                                        class={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                            item.is_checked
+                                                ? "bg-brand-mint border-brand-mint-deep text-brand-ink"
+                                                : "border-brand-ink/30 hover:border-brand-ink"
+                                        }`}
+                                        aria-label={item.is_checked ? "Uncheck" : "Check"}
+                                    >
+                                        {item.is_checked && (
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        )}
+                                    </button>
+                                    <div
+                                        data-item-label
+                                        class={`flex-1 text-sm ${item.is_checked ? "line-through text-brand-ink-soft" : "text-brand-ink"}`}
+                                    >
+                                        <span class="font-medium">{item.name}</span>
+                                        {item.qty && (
+                                            <span class="ml-2 text-xs text-brand-ink-soft">· {item.qty}</span>
+                                        )}
+                                    </div>
+                                </form>
+                                <form method="POST" data-delete-item-form>
+                                    <input type="hidden" name="action" value="delete_item" />
+                                    <input type="hidden" name="item_id" value={item.id} />
+                                    <button
+                                        type="submit"
+                                        class="text-brand-ink-soft hover:text-red-600 text-lg leading-none px-2"
+                                        aria-label="Delete"
+                                    >
+                                        ×
+                                    </button>
+                                </form>
+                            </li>
+                        ))}
+                    </ul>
                 </section>
             )}
 </PageLayout>
+
+<script>
+/**
+ * Check-off and delete run optimistically. In the store this is the most
+ * repeated interaction in the app, and the form POST → redirect → SSR
+ * round-trip cost a full reload (and the scroll position) per tap.
+ *
+ * The forms stay in the markup and keep working without JS — this island only
+ * intercepts `submit`, so a failed hydration degrades to the old behaviour.
+ */
+import { mutate } from "../lib/mutate";
+
+const es = (document.cookie.match(/(?:^|;\s*)lang=([^;]+)/)?.[1] ?? "es") === "es";
+const ERR_TOGGLE = es ? "No se pudo actualizar" : "Could not update";
+const ERR_DELETE = es ? "No se pudo eliminar" : "Could not delete";
+
+const CHECK_SVG =
+    '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>';
+
+/** Adjust a rendered integer. `hideAtZero` is for the list chip badge, which
+ *  the server omits entirely when nothing is pending. */
+function bump(el: HTMLElement | null, delta: number, hideAtZero = false): void {
+    if (!el) return;
+    const n = Math.max(0, (parseInt(el.textContent ?? "", 10) || 0) + delta);
+    el.textContent = String(n);
+    if (hideAtZero) el.classList.toggle("hidden", n === 0);
+}
+
+function bumpPending(delta: number): void {
+    bump(document.getElementById("pending-count"), delta);
+    bump(document.getElementById("chip-pending"), delta, true);
+}
+
+function syncEmptyState(): void {
+    const list = document.getElementById("items-list");
+    const empty = document.getElementById("items-empty");
+    const has = (list?.childElementCount ?? 0) > 0;
+    list?.classList.toggle("hidden", !has);
+    empty?.classList.toggle("hidden", has);
+}
+
+function paintItem(li: HTMLElement, checked: boolean): void {
+    li.dataset.checked = String(checked);
+    const btn = li.querySelector<HTMLButtonElement>("[data-check-btn]");
+    if (btn) {
+        btn.className =
+            "w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all " +
+            (checked
+                ? "bg-brand-mint border-brand-mint-deep text-brand-ink"
+                : "border-brand-ink/30 hover:border-brand-ink");
+        btn.innerHTML = checked ? CHECK_SVG : "";
+        btn.setAttribute("aria-label", checked ? "Uncheck" : "Check");
+    }
+    const label = li.querySelector<HTMLElement>("[data-item-label]");
+    if (label) {
+        label.className =
+            "flex-1 text-sm " +
+            (checked ? "line-through text-brand-ink-soft" : "text-brand-ink");
+    }
+    // The POST fallback sends the PRE-toggle state; keep it truthful so a
+    // later no-JS submit of this same row still flips the right way.
+    const field = li.querySelector<HTMLInputElement>("[data-checked-field]");
+    if (field) field.value = String(checked);
+}
+
+document.addEventListener("submit", async (e) => {
+    const form = (e.target as HTMLElement)?.closest?.("form");
+    if (!form) return;
+    const isToggle = form.matches("[data-toggle-form]");
+    if (!isToggle && !form.matches("[data-delete-item-form]")) return;
+
+    const li = form.closest<HTMLElement>("[data-item-id]");
+    const itemId = li?.dataset.itemId;
+    if (!li || !itemId) return;
+    e.preventDefault();
+
+    const wasChecked = li.dataset.checked === "true";
+
+    if (isToggle) {
+        const next = !wasChecked;
+        await mutate(`/api/shopping/items/${itemId}`, {
+            method: "PATCH",
+            body: { is_checked: next },
+            optimistic: () => {
+                paintItem(li, next);
+                bumpPending(next ? -1 : 1);
+            },
+            revert: () => {
+                paintItem(li, wasChecked);
+                bumpPending(next ? 1 : -1);
+            },
+            errorFallback: ERR_TOGGLE,
+        });
+        return;
+    }
+
+    // Captured before removal so the revert can put the row back in place.
+    const parent = li.parentElement;
+    const after = li.nextElementSibling;
+    await mutate(`/api/shopping/items/${itemId}`, {
+        method: "DELETE",
+        optimistic: () => {
+            li.remove();
+            bump(document.getElementById("item-count"), -1);
+            if (!wasChecked) bumpPending(-1);
+            syncEmptyState();
+        },
+        revert: () => {
+            parent?.insertBefore(li, after);
+            bump(document.getElementById("item-count"), 1);
+            if (!wasChecked) bumpPending(1);
+            syncEmptyState();
+        },
+        errorFallback: ERR_DELETE,
+    });
+});
+</script>

@@ -3,8 +3,6 @@ MCP ServiceAdapter subclasses for points-domain entities:
   ledger (list/get), adjust (create), transfer (create).
 
 Family scope comes from McpContext; never from adapter arguments.
-PointTransaction has no family_id column — scope is enforced by joining
-through the users table (user.family_id) in the list query.
 """
 from __future__ import annotations
 
@@ -36,19 +34,13 @@ def _ser_txn(t) -> dict:
 # ── ledger ─────────────────────────────────────────────────────────────────
 
 class LedgerAdapter(ServiceAdapter):
-    """Read-only view of PointTransaction rows scoped to the family.
-
-    PointTransaction has no family_id column; scope is enforced by joining
-    through the User table so we only return rows belonging to users of
-    the caller's family.
-    """
+    """Read-only view of PointTransaction rows scoped to the family."""
 
     async def list(self, ctx: McpContext) -> list[dict]:
-        from app.models import PointTransaction, User
+        from app.models import PointTransaction
         stmt = (
             select(PointTransaction)
-            .join(User, User.id == PointTransaction.user_id)
-            .where(User.family_id == ctx.family_id)
+            .where(PointTransaction.family_id == ctx.family_id)
             .order_by(PointTransaction.created_at.desc())
             .limit(200)
         )
@@ -57,14 +49,13 @@ class LedgerAdapter(ServiceAdapter):
         return [_ser_txn(r) for r in rows]
 
     async def get(self, ctx: McpContext, entity_id: UUID) -> dict:
-        from app.models import PointTransaction, User
+        from app.models import PointTransaction
         from app.core.exceptions import NotFoundException
         stmt = (
             select(PointTransaction)
-            .join(User, User.id == PointTransaction.user_id)
             .where(
                 PointTransaction.id == entity_id,
-                User.family_id == ctx.family_id,
+                PointTransaction.family_id == ctx.family_id,
             )
         )
         result = await ctx.db.execute(stmt)

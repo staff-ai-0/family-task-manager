@@ -402,9 +402,7 @@ class KioskService:
         ]
 
         # Weekly leaderboard: positive point transactions since Monday
-        # 00:00 (family tz), summed per member. point_transactions has no
-        # family_id, so scope through the member list we already filtered
-        # by family.
+        # 00:00 (family tz), summed per member.
         week_start_local = today_local - timedelta(days=today_local.weekday())
         week_start_dt = datetime.combine(
             week_start_local, datetime.min.time(), tzinfo=tz
@@ -419,6 +417,7 @@ class KioskService:
                 )
                 .where(
                     and_(
+                        PointTransaction.family_id == family_id,
                         PointTransaction.user_id.in_(user_ids),
                         PointTransaction.points > 0,
                         PointTransaction.created_at >= week_start_dt,

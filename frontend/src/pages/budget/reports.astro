@@ -151,7 +151,8 @@ const reportsLocked = planName === "free";
             <div id="cr-output" class="hidden mt-3 bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] p-4">
                 <div class="flex items-center justify-between mb-2">
                     <h3 id="cr-output-title" class="font-bold text-brand-ink text-sm"></h3>
-                    <button id="cr-output-close" class="text-brand-ink-soft hover:text-brand-ink text-sm">✕</button>
+                    <button id="cr-output-close" type="button" aria-label={es ? "Cerrar reporte" : "Close report"}
+                        class="text-brand-ink-soft hover:text-brand-ink text-sm p-2.5 -m-1">✕</button>
                 </div>
                 <div id="cr-output-body" class="text-sm overflow-x-auto"></div>
             </div>
@@ -697,8 +698,10 @@ function initCustomReports() {
                     if (d.ok) renderData(r.name, await d.json());
                 });
                 const del = document.createElement("button");
-                del.className = "cr-del text-[10px] text-brand-ink-soft hover:text-red-600 -ml-1";
+                del.className = "cr-del text-[10px] text-brand-ink-soft hover:text-red-600 -ml-1 p-2.5 -my-1";
                 del.textContent = "✕";
+                // ✕ alone announces as a bare "button" — name the report it deletes.
+                del.setAttribute("aria-label", es ? `Borrar reporte ${r.name}` : `Delete report ${r.name}`);
                 del.addEventListener("click", async () => {
                     if (!confirm(es ? `¿Borrar reporte "${r.name}"?` : `Delete report "${r.name}"?`)) return;
                     await fetch(`/api/budget/custom-reports/${r.id}`, { method: "DELETE" });

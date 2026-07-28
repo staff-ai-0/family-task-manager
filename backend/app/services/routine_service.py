@@ -574,6 +574,7 @@ class RoutineService:
                 PointTransaction(
                     type=TransactionType.BONUS,
                     user_id=user.id,
+                    family_id=fresh.family_id,
                     points=points,
                     balance_before=before,
                     balance_after=fresh.points,
