@@ -312,7 +312,7 @@ class FamilyExportService:
         estimated_rows = await cls._estimated_row_count(db, family_id)
         if estimated_rows > EXPORT_MAX_ROWS:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=_EXPORT_TOO_LARGE_DETAIL,
             )
 
@@ -561,7 +561,7 @@ class FamilyExportService:
         # JSON/Text payloads): never ship an archive past the byte cap.
         if len(data) > EXPORT_MAX_BYTES:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=_EXPORT_TOO_LARGE_DETAIL,
             )
         return data

@@ -186,7 +186,7 @@ class AdminActionService:
         """
         if suspended and family_id == operator.family_id:
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 "cannot suspend your own family — this would lock you out "
                 "with no in-app recovery",
             )
@@ -236,7 +236,7 @@ class AdminActionService:
             unknown = set(enabled_modules) - set(TOGGLABLE_MODULES)
             if unknown:
                 raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
                     f"unknown modules: {sorted(unknown)}",
                 )
         operator_id, operator_email = operator.id, operator.email
@@ -297,7 +297,7 @@ class AdminActionService:
         """
         if not active and user_id == operator.id:
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 "cannot deactivate your own account — this would lock you "
                 "out with no in-app recovery",
             )
@@ -700,7 +700,7 @@ class AdminActionService:
         restore = restorers.get(item_type)
         if restore is None:
             exc = HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 f"unknown item_type: {item_type}",
             )
             await _record_failure(
