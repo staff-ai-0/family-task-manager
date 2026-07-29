@@ -41,6 +41,39 @@ async function loginAs(page, user) {
   await page.fill('input[name="password"]', user.password);
   await page.click('#login-submit-btn');
   await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
+  await dismissModuleTours(page);
+}
+
+/**
+ * Mark every per-module tour done for the account that just logged in.
+ *
+ * A module tour auto-runs on the user's first visit to its page and covers the
+ * page with a driver.js overlay, so any spec that lands on /budget,
+ * /parent/tasks, /parent/gigs, /gigs or /rewards would fail its next click.
+ * Worse, it would fail ORDER-DEPENDENTLY: the first spec to reach a page runs
+ * the tour and acks it, so which test breaks depends on the order the suite
+ * happens to run in, and on whether the database is fresh.
+ *
+ * Acking here makes every spec start from "this user has already seen the
+ * tours", which is the state a returning user is in. The first-visit behaviour
+ * is not skipped, just moved: module-tours.spec.js registers a brand-new
+ * family precisely so it can assert what a first visit really does.
+ */
+async function dismissModuleTours(page) {
+  const tours = [
+    'budget-parent',
+    'gigs-parent',
+    'gigs-kid',
+    'chores-parent',
+    'rewards-kid',
+  ];
+  await Promise.all(
+    tours.map((id) =>
+      page.request
+        .post(`${BASE_URL}/api/onboarding/tours/${id}/complete`)
+        .catch(() => {}),
+    ),
+  );
 }
 
 /**
@@ -59,4 +92,5 @@ module.exports = {
   OPERATOR_USER,
   loginAs,
   loginAsParent,
+  dismissModuleTours,
 };
