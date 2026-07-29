@@ -1,0 +1,83 @@
+---
+/**
+ * Per-module walkthrough, rendered by the page the tour is about.
+ *
+ * Runs once, on the user's first visit to that page, and never again: the
+ * backend list (users.completed_tours) is the cross-device record and a
+ * per-user, per-tour localStorage key is the instant local guard. A card in the
+ * hub on /help replays it with ?tour=<id>, which overrides both — an explicit
+ * replay is not a first visit.
+ *
+ * Two overlays at once would be unusable, so this stands down while the welcome
+ * tour is running (window.__ftmTourStarted, set by WelcomeTour).
+ *
+ * @prop tourId    which tour (must exist in MODULE_TOUR_IDS and in the backend allowlist)
+ * @prop lang      "en" | "es"
+ * @prop userKey   user id — makes the local guard per-user on a shared device
+ * @prop completed the viewer's completed_tours from /auth/me
+ */
+import { buildModuleTour } from "../lib/tourSteps";
+import type { ModuleTourId } from "../lib/tourSteps";
+
+interface Props {
+    tourId: ModuleTourId;
+    lang?: "en" | "es";
+    userKey?: string;
+    completed?: string[] | null;
+}
+const { tourId, lang = "es", userKey, completed } = Astro.props;
+
+const data = buildModuleTour(tourId, lang, userKey);
+const payload = {
+    ...data,
+    // Server-side answer to "has this user already seen it?", so the client
+    // never has to fetch /auth/me just to decide whether to start.
+    done: Array.isArray(completed) && completed.includes(tourId),
+};
+const json = JSON.stringify(payload).replace(/</g, "\\u003c");
+---
+
+<script type="application/json" class="ftm-module-tour" set:html={json}></script>
+
+<script>
+    import { replayTour, runTour, tourGuardSet } from "../lib/tour";
+
+    function maybeStartModuleTour() {
+        const el = document.querySelector("script.ftm-module-tour");
+        if (!el?.textContent) return;
+
+        let data: any;
+        try {
+            data = JSON.parse(el.textContent);
+        } catch {
+            return;
+        }
+        if (!data?.steps?.length) return;
+        if ((window as any).__ftmModuleTourStarted === data.id) return;
+
+        // An explicit replay from the hub beats both guards.
+        const replay = new URLSearchParams(window.location.search).get("tour") === data.id;
+        if (!replay) {
+            // Never stack two overlays: the welcome tour owns a first session.
+            if ((window as any).__ftmTourStarted) return;
+            if (data.done) return;
+            if (tourGuardSet(data.guardKey)) return;
+        }
+
+        (window as any).__ftmModuleTourStarted = data.id;
+        // Let the nav, header and any async panels paint before highlighting.
+        setTimeout(() => {
+            if (replay) {
+                replayTour(data.steps, data.btn, data.guardKey, data.ackUrl);
+            } else {
+                runTour(data.steps, data.btn, "tour_started", data.guardKey, data.ackUrl);
+            }
+        }, 450);
+    }
+
+    document.addEventListener("astro:page-load", maybeStartModuleTour);
+    // The one-shot astro:page-load fires on DOMContentLoaded; a module that
+    // executes after that would miss it. The __ftmModuleTourStarted guard keeps
+    // this idempotent.
+    if (document.readyState !== "loading") maybeStartModuleTour();
+</script>

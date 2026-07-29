@@ -8,6 +8,19 @@
 import GuideShell from "../components/GuideShell.astro";
 // docs/ is mounted read-only at /app/docs inside the frontend container via
 // docker-compose. From src/pages/ that's ../../docs.
+import TourHub from "../components/TourHub.astro";
+import { apiFetch } from "../lib/api";
+
+// Both guide pages are public. A signed-in reader also gets the replay hub, so
+// resolve the viewer when a token is present and fall back to null otherwise —
+// a failed lookup must not take the public guide down with it.
+const token = Astro.cookies.get("access_token")?.value;
+let tourUser: any = null;
+if (token) {
+    const { data, ok } = await apiFetch<any>("/api/auth/me", { token });
+    if (ok) tourUser = data;
+}
+
 import { Content as GuideContent } from "../../docs/USER_GUIDE_EN.md";
 ---
 
@@ -31,5 +44,6 @@ import { Content as GuideContent } from "../../docs/USER_GUIDE_EN.md";
     termsLabel="Terms of Service"
     supportLabel="Contact support"
 >
+    <TourHub slot="before-content" lang="en" user={tourUser} />
     <GuideContent />
 </GuideShell>

@@ -71,6 +71,10 @@ const {
                 aria-label={searchAria}
             />
         </header>
+        <!-- Rendered ABOVE the table of contents and outside <article class="guide">
+             on purpose: the TOC is auto-generated from headings inside .guide,
+             so anything placed there would show up as a phantom guide section. -->
+        <slot name="before-content" />
         <details class="guide-toc-wrap" open>
             <summary>{contentsLabel}</summary>
             <nav id="guide-toc" class="guide-toc" aria-label={tocAria}></nav>

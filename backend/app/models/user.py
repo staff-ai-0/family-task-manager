@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Integer, Boolean, Date, DateTime, ForeignKey, Enum as SQLEnum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 import uuid
@@ -78,6 +78,16 @@ class User(Base):
     # the frontend can gate auto-start on it (exposed via UserResponse).
     completed_welcome_tour = Column(
         Boolean, default=False, nullable=False, server_default="false"
+    )
+
+    # Ids of the per-module tours (budget, gigs, chores, rewards) this user has
+    # finished or skipped. A list rather than a column per tour: the set grows
+    # with the product, and a tour is a UX affordance, not a permission. The
+    # welcome tour keeps its own boolean above — it predates this and has its
+    # own endpoint. Written only through TOUR_IDS in the onboarding route, so
+    # the column can never accumulate arbitrary client strings.
+    completed_tours = Column(
+        JSONB, default=list, nullable=False, server_default="[]"
     )
 
     # Consecutive approved-gig count. Hits the GIG_AUTO_APPROVE_STREAK

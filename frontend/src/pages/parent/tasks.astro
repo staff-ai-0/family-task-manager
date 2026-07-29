@@ -6,6 +6,7 @@ import TaskCreateModal from "../../components/TaskCreateModal.astro";
 import DifficultyChip from "../../components/DifficultyChip.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
+import ModuleTour from "@components/ModuleTour.astro";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -559,4 +560,11 @@ function freqLabel(tmpl: any): string {
         });
     </script>
     <TaskCreateModal lang={lang} memberList={memberList} />
+
+    <ModuleTour
+        tourId="chores-parent"
+        lang={lang}
+        userKey={user.id}
+        completed={user.completed_tours}
+    />
 </PageLayout>

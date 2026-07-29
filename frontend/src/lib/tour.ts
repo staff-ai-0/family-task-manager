@@ -29,6 +29,8 @@ export interface TourButtons {
 }
 
 const GUARD_KEY = "ftm_tour_done";
+/** Welcome-tour ack. Module tours pass their own per-tour endpoint. */
+const ACK_URL = "/api/auth/ack-tour";
 
 /**
  * Mark the tour finished. Runs SYNCHRONOUSLY (no await) so the localStorage
@@ -37,7 +39,7 @@ const GUARD_KEY = "ftm_tour_done";
  * so the request survives the page navigation/unload that a fetch() would lose
  * (fetch falls back with keepalive when sendBeacon is unavailable).
  */
-function ackTour(guardKey: string): void {
+function ackTour(guardKey: string, ackUrl: string = ACK_URL): void {
     try {
         localStorage.setItem(guardKey, "1");
     } catch {
@@ -45,9 +47,9 @@ function ackTour(guardKey: string): void {
     }
     try {
         if (typeof navigator !== "undefined" && navigator.sendBeacon) {
-            navigator.sendBeacon("/api/auth/ack-tour");
+            navigator.sendBeacon(ackUrl);
         } else {
-            void fetch("/api/auth/ack-tour", { method: "POST", keepalive: true });
+            void fetch(ackUrl, { method: "POST", keepalive: true });
         }
     } catch {
         /* offline — the localStorage guard prevents an immediate re-show */
@@ -91,6 +93,7 @@ export function runTour(
     btn: TourButtons,
     startEvent = "tour_started",
     guardKey: string = GUARD_KEY,
+    ackUrl: string = ACK_URL,
 ): void {
     // Keep element-less steps (centered modals); for targeted steps, require the
     // element to be present AND actually visible — a nav item collapsed at the
@@ -130,7 +133,7 @@ export function runTour(
             const idx = (d as any).getActiveIndex?.();
             const completed =
                 typeof idx === "number" && idx >= present.length - 1;
-            ackTour(guardKey);
+            ackTour(guardKey, ackUrl);
             recordEvent(completed ? "tour_completed" : "tour_skipped", idx);
             d.destroy();
         },
@@ -143,13 +146,14 @@ export function replayTour(
     steps: TourStep[],
     btn: TourButtons,
     guardKey: string = GUARD_KEY,
+    ackUrl: string = ACK_URL,
 ): void {
     try {
         localStorage.removeItem(guardKey);
     } catch {
         /* ignore */
     }
-    runTour(steps, btn, "tour_replayed", guardKey);
+    runTour(steps, btn, "tour_replayed", guardKey, ackUrl);
 }
 
 /** True if the tour was already finished/skipped on this device. */
