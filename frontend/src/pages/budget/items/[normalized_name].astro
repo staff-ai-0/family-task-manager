@@ -41,7 +41,10 @@ const { data: trend } = await apiFetch<any>(
     <ul class="divide-y divide-fg/10">
       {(items || []).map(it => (
         <li class="py-2 flex justify-between">
-          <a href={`/budget/transactions/${it.transaction_id}`} class="flex-1">
+          {/* /budget/transactions/<id> is not a route — only the list page
+              and /new exist, so this used to 404. ?tx=<id> opens the edit
+              sheet for that transaction, which is the real destination. */}
+          <a href={`/budget/transactions?tx=${encodeURIComponent(it.transaction_id)}`} class="flex-1">
             <div class="text-sm">{it.name}</div>
             <div class="text-xs text-fg/60">{it.qty ?? 1} × ${(it.unit_price_cents ?? it.total_cents) / 100}</div>
           </a>

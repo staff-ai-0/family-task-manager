@@ -7,6 +7,7 @@ CRUD endpoints for budget transactions.
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query, File, UploadFile, Form
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
 from datetime import date
@@ -43,6 +44,7 @@ from app.schemas.budget import (
     SplitTransactionResponse,
 )
 from app.models import User
+from app.models.budget import BudgetTransactionItem
 
 router = APIRouter()
 
@@ -81,6 +83,42 @@ def _raise_upgrade_required(feature: str, limit: int) -> None:
     )
 
 
+async def _with_item_counts(
+    db: AsyncSession,
+    family_id: UUID,
+    transactions: list,
+) -> List[TransactionResponse]:
+    """Attach item_count to each row in one grouped query, not one per row.
+
+    Line items are the receipt breakdown the scanner captured. Without a count
+    on the list, a client has no way to tell which transactions have one short
+    of opening every row — which is why the breakdown was effectively
+    write-only after the scan confirm card was dismissed.
+    """
+    rows = [TransactionResponse.model_validate(t) for t in transactions]
+    if not rows:
+        return rows
+
+    result = await db.execute(
+        select(
+            BudgetTransactionItem.transaction_id,
+            func.count(BudgetTransactionItem.id),
+        )
+        .where(
+            BudgetTransactionItem.family_id == family_id,
+            BudgetTransactionItem.transaction_id.in_([r.id for r in rows]),
+        )
+        .group_by(BudgetTransactionItem.transaction_id)
+    )
+    # int() on the aggregate: asyncpg hands back a Decimal for COUNT, and
+    # Pydantic v2 would serialize that as a JSON string even though the field
+    # is typed int — which strict mobile decoders reject. See CLAUDE.md.
+    counts = {tx_id: int(n) for tx_id, n in result.all()}
+    for row in rows:
+        row.item_count = counts.get(row.id, 0)
+    return rows
+
+
 @router.get("/", response_model=List[TransactionResponse])
 async def list_transactions(
     current_user: User = Depends(get_current_user),
@@ -113,7 +151,7 @@ async def list_transactions(
     if not include_split_children:
         transactions = [t for t in transactions if t.parent_id is None]
 
-    return transactions
+    return await _with_item_counts(db, family_id, transactions)
 
 
 @router.post("/", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)

@@ -1,7 +1,8 @@
 /**
  * Mark the per-module tours done for the accounts the suite logs in as.
  *
- * A module tour auto-runs on a user's first visit to its page (/budget,
+ * A tour — the welcome one on a role's home page, or a module tour on
+ * first visit to its page (/budget,
  * /parent/tasks, /parent/gigs, /gigs, /rewards) and covers that page with a
  * driver.js overlay, so the next click in any spec that lands there times out.
  *
@@ -61,6 +62,18 @@ async function ackToursFor(account) {
             headers: { Cookie: cookie, Origin: BASE_URL },
         }).catch(() => {});
     }
+
+    // The welcome tour has its own flag and its own endpoint, and the same
+    // driver.js overlay. It is what was intercepting clicks in more-sheet.spec
+    // ("X button still closes" failed with driver-overlay swallowing the
+    // pointer) — order-dependently, because whichever spec ran first acked it
+    // for the rest. welcome-tour.spec.js is unaffected: it registers its own
+    // new family to assert the auto-start.
+    await fetch(`${BASE_URL}/api/auth/ack-tour`, {
+        method: 'POST',
+        headers: { Cookie: cookie, Origin: BASE_URL },
+    }).catch(() => {});
+
     return null;
 }
 

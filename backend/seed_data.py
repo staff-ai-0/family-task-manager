@@ -45,6 +45,7 @@ from app.models.budget import (
     BudgetPayee,
     BudgetRecurringTransaction,
     BudgetTransaction,
+    BudgetTransactionItem,
 )
 from app.models.subscription import SubscriptionPlan, FamilySubscription, UsageTracking
 from app.core.security import get_password_hash
@@ -154,7 +155,40 @@ async def create_e2e_account(
     )
     session.add(e2e_parent)
     await session.commit()
+
+    # A scanned receipt, so the item read-back path has something real to show.
+    # Without it the e2e that opens a transaction and asserts its line items
+    # skips itself, which is a green run that checked nothing. There is no API
+    # to create items (they only arrive via the scanner), so the seed is the
+    # only place this fixture can come from.
+    account = BudgetAccount(
+        family_id=e2e_family.id, name="E2E Card", type="checking",
+        currency="MXN", starting_balance=0,
+    )
+    session.add(account)
+    await session.flush()
+    receipt_tx = BudgetTransaction(
+        family_id=e2e_family.id, account_id=account.id, date=TODAY,
+        amount=-8700, notes="E2E scanned receipt",
+    )
+    session.add(receipt_tx)
+    await session.flush()
+    session.add_all([
+        BudgetTransactionItem(
+            family_id=e2e_family.id, transaction_id=receipt_tx.id,
+            name="Leche Alpura 1L", normalized_name="leche alpura",
+            qty=2, unit_price_cents=2900, total_cents=5800,
+        ),
+        BudgetTransactionItem(
+            family_id=e2e_family.id, transaction_id=receipt_tx.id,
+            name="Pan Bimbo", normalized_name="pan bimbo",
+            qty=1, unit_price_cents=2900, total_cents=2900,
+        ),
+    ])
+    await session.commit()
+
     print(f"  {email} / {password} (PARENT, verified)")
+    print("  + 1 scanned receipt with 2 line items (item read-back fixture)")
     return e2e_family, e2e_parent
 
 

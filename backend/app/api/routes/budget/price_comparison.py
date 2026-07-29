@@ -38,9 +38,17 @@ async def get_comparison(
     family_id = to_uuid_required(current_user.family_id)
     cfg = await A2AWebhookService.get_config(db, family_id)
     if cfg is None or not cfg.enabled:
+        # A machine-readable code, because "the family never opted into this
+        # integration" and "the agent has not answered yet" are different
+        # facts. Both were plain 404s, so the UI showed every family without
+        # the integration a permanent "check back in 5 minutes" for data that
+        # was never coming.
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            "no a2a webhook configured for this family",
+            {
+                "code": "a2a_not_configured",
+                "message": "no a2a webhook configured for this family",
+            },
         )
 
     tx_str = str(transaction_id)
@@ -63,7 +71,10 @@ async def get_comparison(
         )
 
     if resp.status_code == 404:
-        raise HTTPException(404, "no comparisons yet")
+        raise HTTPException(
+            404,
+            {"code": "no_comparisons_yet", "message": "no comparisons yet"},
+        )
     if resp.status_code >= 400:
         logger.warning("price-checker returned %d: %s",
                        resp.status_code, resp.text[:200])
