@@ -1,0 +1,560 @@
+---
+/**
+ * ReceiptScanSheet — pick → scan → confirm, without leaving the page.
+ *
+ * Mounted once by BudgetShell, so every budget page can start a scan from
+ * wherever the user already is. Before this existed the flow was: FAB → tap
+ * "Escanear" → full page navigation to /budget/scan-receipt → tap one of three
+ * buttons → camera. Three taps and a page load before the shutter.
+ *
+ * Opening it:
+ *   - any element with [data-scan-receipt-open] (click is wired here), or
+ *   - window.dispatchEvent(new CustomEvent("ftm:scan-receipt")), or
+ *   - ?scan=1 in the URL (used by the /budget/scan-receipt wrapper page).
+ *
+ * All three call input.click() synchronously inside the originating gesture —
+ * iOS discards a file-picker open that has left the user-gesture task.
+ *
+ * ONE file input, deliberately without `capture`: `capture="environment"`
+ * pins iOS to the camera, which is why the old page needed a second "upload"
+ * button and a third for batches. Without it the OS sheet offers Take Photo /
+ * Photo Library / Choose File, and `multiple` makes the same control drive the
+ * bulk path.
+ *
+ * Rendering rule (inherited from the page this came from, keep it): every
+ * user- or LLM-controlled value is written with textContent into a cloned
+ * <template>. Never innerHTML — a malicious payee name from a scanned receipt
+ * must render as text, not markup.
+ *
+ * @prop lang "en" | "es"
+ */
+interface Props {
+    lang?: "en" | "es";
+}
+const { lang = "es" } = Astro.props;
+const es = lang === "es";
+---
+
+<div id="receipt-scan-sheet" data-lang={lang}>
+    <input
+        id="rss-input"
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+        multiple
+        class="hidden"
+    />
+
+    <!-- Scan progress: covers the page while the server works -->
+    <div
+        id="rss-overlay"
+        class="hidden fixed inset-0 z-[70] bg-brand-cream/95 flex flex-col items-center justify-center p-6"
+    >
+        <div class="size-32 rounded-2xl bg-brand-coral/15 mb-6 animate-pulse flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-brand-coral-deep animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+        </div>
+        <ul id="rss-stages" class="text-brand-ink text-sm space-y-1 text-center font-medium">
+            <li data-stage="0">{es ? "Leyendo…" : "Reading…"}</li>
+            <li data-stage="1" class="opacity-30">{es ? "Detectando cuenta…" : "Matching account…"}</li>
+            <li data-stage="2" class="opacity-30">{es ? "Categorizando…" : "Categorizing…"}</li>
+            <li data-stage="3" class="opacity-30">{es ? "Buscando duplicados…" : "Checking duplicates…"}</li>
+        </ul>
+    </div>
+
+    <!-- Result sheet: holds the confirm card OR the bulk panel -->
+    <div id="rss-backdrop" class="hidden fixed inset-0 z-[55] bg-brand-ink/40"></div>
+    <section
+        id="rss-result"
+        class="hidden fixed inset-x-0 bottom-0 z-[60] max-h-[85dvh] overflow-y-auto rounded-t-[var(--radius-tile)] bg-brand-cream-deep p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-[var(--shadow-card)]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rss-result-title"
+    >
+        <div class="flex items-center justify-between mb-3">
+            <h2 id="rss-result-title" class="text-lg font-display font-extrabold text-brand-ink">
+                {es ? "Ticket escaneado" : "Receipt scanned"}
+            </h2>
+            <button
+                id="rss-close"
+                type="button"
+                aria-label={es ? "Cerrar" : "Close"}
+                class="size-9 rounded-full bg-brand-cream text-brand-ink font-bold press"
+            >✕</button>
+        </div>
+        <div id="rss-body"></div>
+    </section>
+
+    <dialog id="rss-dup" class="rounded-2xl p-0 bg-transparent backdrop:bg-brand-ink/40"></dialog>
+
+    <!--
+      Templates — rendered once at SSR with the static structure. JS clones and
+      fills them with textContent, so any field added here is XSS-safe by
+      default; you would have to switch to innerHTML to introduce a hole.
+    -->
+    <template id="rss-confirm-tpl">
+        <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5 space-y-4">
+            <div>
+                <h3 data-slot="payee-name" class="text-xl font-display font-extrabold text-brand-ink"></h3>
+                <div data-slot="total" class="text-3xl font-display font-extrabold text-brand-coral-deep num mt-1"></div>
+                <div data-slot="fx-line" class="text-sm text-brand-ink-soft mt-1 hidden"></div>
+            </div>
+
+            <div class="text-sm">
+                <div class="text-brand-ink-soft text-xs uppercase tracking-wider font-semibold mb-1">
+                    {es ? "Cuenta" : "Account"}
+                </div>
+                <div class="flex items-center gap-2">
+                    <span data-slot="match-badge" class="inline-block font-bold"></span>
+                    <span data-slot="account-name" class="text-brand-ink font-medium"></span>
+                </div>
+            </div>
+
+            <div data-slot="iva-pill" class="inline-block px-3 py-1 rounded-full bg-brand-cream-deep text-xs font-semibold text-brand-ink hidden"></div>
+
+            <ul data-slot="items" class="border-t border-brand-ink/10 pt-3 divide-y divide-brand-ink/5 hidden"></ul>
+
+            <div class="flex flex-col gap-2 pt-3">
+                <button
+                    data-slot="done"
+                    type="button"
+                    class="block w-full text-center bg-brand-coral-deep text-white px-4 py-3 rounded-xl font-semibold press"
+                >{es ? "✓ Listo, guardar" : "✓ Looks good — save"}</button>
+                <div class="flex gap-2">
+                    <a
+                        data-slot="edit-link"
+                        class="flex-1 text-center bg-brand-cream-deep text-brand-ink px-4 py-3 rounded-xl font-semibold border border-brand-ink/10 press"
+                    >{es ? "Editar" : "Edit"}</a>
+                    <button
+                        data-slot="delete"
+                        type="button"
+                        class="flex-1 text-center bg-brand-cream-deep text-brand-ink px-4 py-3 rounded-xl font-semibold border border-brand-ink/10 press"
+                    >{es ? "Borrar y re-escanear" : "Delete & re-scan"}</button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <template id="rss-item-tpl">
+        <li class="flex justify-between items-center py-1.5 text-sm">
+            <span class="text-brand-ink">
+                <span data-slot="qty" class="text-xs text-brand-ink-soft mr-1 hidden"></span>
+                <a data-slot="name-link" class="underline-offset-4 hover:underline"></a>
+                <span data-slot="trend-badge" class="ml-2 text-xs font-semibold hidden"></span>
+            </span>
+            <span data-slot="total" class="text-brand-ink font-medium num"></span>
+        </li>
+    </template>
+
+    <template id="rss-bulk-tpl">
+        <div class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5 space-y-3">
+            <div class="flex items-baseline justify-between">
+                <h3 class="text-lg font-display font-extrabold text-brand-ink">
+                    {es ? "Procesando lote" : "Processing batch"}
+                </h3>
+                <span data-slot="counter" class="text-sm text-brand-ink-soft num"></span>
+            </div>
+            <div class="w-full h-2 bg-brand-cream-deep rounded-full overflow-hidden">
+                <div data-slot="bar" class="h-full bg-brand-coral-deep transition-all duration-300" style="width:0%"></div>
+            </div>
+            <ul data-slot="list" class="text-sm divide-y divide-brand-ink/5"></ul>
+            <div data-slot="summary" class="hidden pt-2 text-sm text-brand-ink-soft"></div>
+            <a
+                data-slot="done-link"
+                href="/budget/transactions"
+                class="hidden block w-full text-center bg-brand-coral-deep text-white px-4 py-3 rounded-xl font-semibold press"
+            >{es ? "Ver transacciones" : "View transactions"}</a>
+        </div>
+    </template>
+
+    <template id="rss-dup-tpl">
+        <form method="dialog" class="bg-brand-cream rounded-2xl shadow-[var(--shadow-card)] border border-brand-ink/10 p-5 space-y-3 max-w-sm mx-auto">
+            <h3 class="text-lg font-display font-extrabold text-brand-ink">
+                {es ? "⚠ Ya escaneado" : "⚠ Already scanned"}
+            </h3>
+            <p data-slot="summary" class="text-sm text-brand-ink-soft"></p>
+            <div class="flex gap-2 justify-end pt-2">
+                <a
+                    data-slot="open-original"
+                    class="bg-brand-cream-deep text-brand-ink px-4 py-2 rounded-xl font-semibold border border-brand-ink/10 press"
+                >{es ? "Ver original" : "Open original"}</a>
+                <button
+                    data-slot="force-save"
+                    type="button"
+                    class="bg-brand-coral-deep text-white px-4 py-2 rounded-xl font-semibold press"
+                >{es ? "Guardar de todas formas" : "Save anyway"}</button>
+            </div>
+        </form>
+    </template>
+</div>
+
+<script>
+    function initReceiptScanSheet() {
+        const root = document.getElementById("receipt-scan-sheet");
+        if (!root || (root as any).__rssInit) return;
+        (root as any).__rssInit = true;
+
+        const lang = root.dataset.lang === "en" ? "en" : "es";
+        const es = lang === "es";
+        const input = document.getElementById("rss-input") as HTMLInputElement;
+        const overlay = document.getElementById("rss-overlay")!;
+        const backdrop = document.getElementById("rss-backdrop")!;
+        const result = document.getElementById("rss-result")!;
+        const body = document.getElementById("rss-body")!;
+        const dupModal = document.getElementById("rss-dup") as HTMLDialogElement;
+        if (!input) return;
+
+        const tpl = (id: string) =>
+            (document.getElementById(id) as HTMLTemplateElement)
+                .content.firstElementChild!.cloneNode(true) as HTMLElement;
+
+        // ── Helpers ──────────────────────────────────────────────────────
+        function money(cents: unknown, ccy?: string) {
+            const c = Number(cents || 0);
+            const sign = c < 0 ? "-" : "";
+            return `${sign}$${(Math.abs(c) / 100).toFixed(2)} ${ccy || ""}`.trim();
+        }
+
+        function timeAgo(iso: string) {
+            const sec = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+            if (sec < 60) return es ? `hace ${sec}s` : `${sec}s ago`;
+            return es ? `hace ${Math.round(sec / 60)}m` : `${Math.round(sec / 60)}m ago`;
+        }
+
+        function showResult(node: HTMLElement) {
+            body.replaceChildren(node);
+            backdrop.classList.remove("hidden");
+            result.classList.remove("hidden");
+        }
+
+        function closeResult() {
+            backdrop.classList.add("hidden");
+            result.classList.add("hidden");
+            body.replaceChildren();
+        }
+
+        document.getElementById("rss-close")?.addEventListener("click", closeResult);
+        backdrop.addEventListener("click", closeResult);
+
+        // ── Progress overlay ─────────────────────────────────────────────
+        function resetStages() {
+            overlay.querySelectorAll("#rss-stages li").forEach((el, i) => {
+                el.classList.toggle("opacity-30", i !== 0);
+            });
+        }
+
+        function tickStages() {
+            const stages = overlay.querySelectorAll("#rss-stages li");
+            let i = 0;
+            return window.setInterval(() => {
+                if (i > 0 && stages[i - 1]) stages[i - 1].classList.remove("opacity-30");
+                if (i < stages.length && stages[i]) stages[i].classList.remove("opacity-30");
+                i = Math.min(stages.length, i + 1);
+            }, 700);
+        }
+
+        // ── API ──────────────────────────────────────────────────────────
+        async function scanReceipt(file: File, opts?: { force?: boolean; account_id?: string }) {
+            // account_id rides the multipart body (Form(...) on the route);
+            // force stays a query parameter.
+            const form = new FormData();
+            form.append("file", file);
+            if (opts?.account_id) form.append("account_id", opts.account_id);
+            const q = new URLSearchParams();
+            if (opts?.force) q.set("force", "true");
+            const url = `/api/budget/transactions/scan-receipt${q.toString() ? "?" + q : ""}`;
+            const resp = await fetch(url, { method: "POST", body: form });
+            const b = await resp.json().catch(() => ({}));
+            return { status: resp.status, body: b as any };
+        }
+
+        // ── Single scan ──────────────────────────────────────────────────
+        async function runScan(file: File) {
+            resetStages();
+            closeResult();
+            overlay.classList.remove("hidden");
+            const ticker = tickStages();
+            try {
+                const { status, body: b } = await scanReceipt(file);
+                clearInterval(ticker);
+                overlay.classList.add("hidden");
+
+                if (status === 403) {
+                    // Premium gate — a real path to upgrade, not a dead end.
+                    const go = confirm(es
+                        ? "El escaneo de recibos requiere un plan Plus o Pro. ¿Ver los planes?"
+                        : "Receipt scanning requires a Plus or Pro plan. See the plans?");
+                    if (go) window.location.href = "/parent/settings/subscription";
+                    return;
+                }
+                if (status === 409 && b?.dup_warning) {
+                    showDupModal(file, b);
+                    return;
+                }
+                if (b?.draft_id) {
+                    window.location.href = "/budget/receipt-drafts";
+                    return;
+                }
+                if (status >= 400 || !b?.success) {
+                    // Surface the backend's real reason (model config, no
+                    // accounts) rather than a generic failure.
+                    alert(b?.message || b?.detail || (es ? "Error escaneando." : "Scan failed."));
+                    return;
+                }
+                showConfirmCard(b);
+            } catch {
+                clearInterval(ticker);
+                overlay.classList.add("hidden");
+                alert(es ? "Error escaneando." : "Scan failed.");
+            }
+        }
+
+        function showConfirmCard(b: any) {
+            const tx = b.transaction || {};
+            const currency = tx.currency || "MXN";
+            const node = tpl("rss-confirm-tpl");
+            const slot = (n: string) => node.querySelector(`[data-slot="${n}"]`) as HTMLElement;
+
+            slot("payee-name").textContent = tx.payee_name || (es ? "Ticket" : "Receipt");
+            slot("total").textContent = money(
+                typeof tx.amount === "number" ? Math.abs(tx.amount) : 0,
+                currency,
+            );
+
+            if (b.fx) {
+                const fx = slot("fx-line");
+                fx.textContent = `≈ ${money(b.fx.original_amount_cents, b.fx.original_currency)} @ ${b.fx.rate}`;
+                fx.classList.remove("hidden");
+            }
+
+            const badge = slot("match-badge");
+            const strategy = b.account_match?.strategy;
+            if (strategy === "card_last4") {
+                badge.textContent = "✓";
+                badge.classList.add("text-brand-mint-deep");
+            } else if (strategy === "override") {
+                badge.textContent = "●";
+                badge.classList.add("text-brand-ink");
+            } else {
+                badge.textContent = "●";
+                badge.classList.add("text-yellow-600");
+                badge.title = es ? "Mejor estimación" : "Best guess";
+            }
+            slot("account-name").textContent = tx.account_name || "—";
+
+            if (tx.iva_cents) {
+                const iva = slot("iva-pill");
+                iva.textContent = `IVA ${money(tx.iva_cents, currency)}`;
+                iva.classList.remove("hidden");
+            }
+
+            const items = b.items || [];
+            if (items.length) {
+                const trends = new Map((b.trends || []).map((t: any) => [t.normalized_name, t]));
+                const list = slot("items");
+                list.classList.remove("hidden");
+                for (const it of items) {
+                    const row = tpl("rss-item-tpl");
+                    const rslot = (n: string) => row.querySelector(`[data-slot="${n}"]`) as HTMLElement;
+
+                    if (it.qty && Number(it.qty) > 1) {
+                        const q = rslot("qty");
+                        q.textContent = `${it.qty}×`;
+                        q.classList.remove("hidden");
+                    }
+
+                    const link = rslot("name-link") as HTMLAnchorElement;
+                    link.textContent = it.name || "";
+                    link.href = `/budget/items/${encodeURIComponent(it.normalized_name || "")}`;
+
+                    const t = trends.get(it.normalized_name) as any;
+                    if (t && t.sample_size >= 3 && Math.abs(t.pct_change) >= 0.05) {
+                        const up = t.pct_change > 0;
+                        const tb = rslot("trend-badge");
+                        tb.textContent = `${up ? "📈" : "📉"} ${(t.pct_change * 100).toFixed(0)}%`;
+                        tb.classList.add(up ? "text-red-600" : "text-brand-mint-deep");
+                        tb.classList.remove("hidden");
+                    }
+
+                    rslot("total").textContent = money(it.total_cents, currency);
+                    list.appendChild(row);
+                }
+            }
+
+            const editLink = slot("edit-link") as HTMLAnchorElement;
+            if (b.transaction_id) {
+                editLink.href = `/budget/transactions?tx=${encodeURIComponent(b.transaction_id)}`;
+            } else {
+                editLink.removeAttribute("href");
+            }
+
+            // The transaction is already persisted by the scan; "save" just
+            // dismisses. Reload so the page behind the sheet shows it.
+            slot("done").addEventListener("click", () => window.location.reload());
+
+            slot("delete").addEventListener("click", async () => {
+                if (b.transaction_id) {
+                    try {
+                        await fetch(`/api/budget/transactions/${b.transaction_id}`, { method: "DELETE" });
+                    } catch {
+                        // swallow — reopen the picker regardless so the user can retry
+                    }
+                }
+                closeResult();
+                input.click();
+            });
+
+            showResult(node);
+        }
+
+        function showDupModal(file: File, b: any) {
+            const dup = b.dup_warning || {};
+            const ccy = b.transaction?.currency || "MXN";
+            const node = tpl("rss-dup-tpl");
+            const slot = (n: string) => node.querySelector(`[data-slot="${n}"]`) as HTMLElement;
+
+            slot("summary").textContent = [
+                dup.payee || (es ? "Comercio" : "Merchant"),
+                money(dup.amount_cents, ccy),
+                timeAgo(dup.scanned_at),
+            ].join(" · ");
+
+            const openLink = slot("open-original") as HTMLAnchorElement;
+            if (dup.existing_transaction_id) {
+                openLink.href = `/budget/transactions?tx=${encodeURIComponent(dup.existing_transaction_id)}`;
+            } else {
+                openLink.removeAttribute("href");
+            }
+
+            slot("force-save").addEventListener("click", async (e) => {
+                e.preventDefault();
+                try { dupModal.close(); } catch { /* no <dialog> support */ }
+                resetStages();
+                overlay.classList.remove("hidden");
+                const ticker = tickStages();
+                try {
+                    const { body: r2 } = await scanReceipt(file, { force: true });
+                    clearInterval(ticker);
+                    overlay.classList.add("hidden");
+                    if (r2?.success) showConfirmCard(r2);
+                    else alert(es ? "Error guardando." : "Save failed.");
+                } catch {
+                    clearInterval(ticker);
+                    overlay.classList.add("hidden");
+                    alert(es ? "Error guardando." : "Save failed.");
+                }
+            });
+
+            dupModal.replaceChildren(node);
+            try {
+                dupModal.showModal();
+            } catch {
+                dupModal.classList.remove("hidden");
+            }
+        }
+
+        // ── Bulk ─────────────────────────────────────────────────────────
+        // Serial on purpose: each file is one premium-metered scan, and
+        // sequencing keeps ordering stable and the model's rate limit happy.
+        async function runBulk(files: File[]) {
+            const node = tpl("rss-bulk-tpl");
+            const slot = (n: string) => node.querySelector(`[data-slot="${n}"]`) as HTMLElement;
+            const list = slot("list");
+            showResult(node);
+
+            let created = 0, drafts = 0, dups = 0, errors = 0;
+            const total = files.length;
+
+            for (let i = 0; i < total; i++) {
+                const file = files[i];
+                const row = document.createElement("li");
+                row.className = "flex items-center justify-between py-2 gap-2";
+                const name = document.createElement("span");
+                name.className = "truncate flex-1 text-brand-ink";
+                name.textContent = file.name;
+                const status = document.createElement("span");
+                status.className = "text-xs font-semibold whitespace-nowrap";
+                status.textContent = es ? "Procesando…" : "Processing…";
+                row.append(name, status);
+                list.append(row);
+
+                slot("counter").textContent = `${i + 1} / ${total}`;
+                slot("bar").style.width = `${Math.round((i / total) * 100)}%`;
+
+                try {
+                    const { status: code, body: b } = await scanReceipt(file, { force: false });
+                    if (code === 409 && b?.dup_warning) {
+                        // Auto-skip in bulk; the user can re-scan one on purpose later.
+                        dups++;
+                        status.textContent = es ? "⚠ Duplicado" : "⚠ Duplicate";
+                        status.classList.add("text-yellow-600");
+                    } else if (b?.draft_id) {
+                        drafts++;
+                        status.textContent = es ? "📋 Revisión" : "📋 Drafts";
+                        status.classList.add("text-yellow-600");
+                    } else if (b?.success) {
+                        created++;
+                        status.textContent = es ? "✓ Creado" : "✓ Created";
+                        status.classList.add("text-brand-mint-deep");
+                    } else {
+                        errors++;
+                        status.textContent = es ? "✗ Falló" : "✗ Failed";
+                        status.classList.add("text-red-600");
+                    }
+                } catch {
+                    errors++;
+                    status.textContent = es ? "✗ Error" : "✗ Error";
+                    status.classList.add("text-red-600");
+                }
+            }
+
+            slot("bar").style.width = "100%";
+            slot("counter").textContent = `${total} / ${total}`;
+            slot("summary").classList.remove("hidden");
+            slot("summary").textContent = es
+                ? `✓ ${created} creados · 📋 ${drafts} en revisión · ⚠ ${dups} duplicados · ✗ ${errors} errores`
+                : `✓ ${created} created · 📋 ${drafts} drafts · ⚠ ${dups} duplicates · ✗ ${errors} errors`;
+            slot("done-link").classList.remove("hidden");
+        }
+
+        // ── Entry points ─────────────────────────────────────────────────
+        input.addEventListener("change", () => {
+            const files = Array.from(input.files || []);
+            // Reset so re-picking the same file still fires a change event.
+            input.value = "";
+            if (files.length === 1) runScan(files[0]);
+            else if (files.length > 1) runBulk(files);
+        });
+
+        // Must stay synchronous with the originating gesture — iOS ignores a
+        // file-picker open that has left the user-gesture task, so no await
+        // and no timeout between the tap and input.click().
+        function openPicker() {
+            // The drawer's own links close it by navigating; ours no longer
+            // navigates, so it would stay open over the result sheet.
+            (document.getElementById("drawer-close") as HTMLElement | null)?.click();
+            input.click();
+        }
+
+        window.addEventListener("ftm:scan-receipt", openPicker);
+        document.querySelectorAll("[data-scan-receipt-open]").forEach((el) => {
+            el.addEventListener("click", (e) => {
+                e.preventDefault();
+                openPicker();
+            });
+        });
+
+        // Deep link: /budget/scan-receipt?scan=1 opens the picker on arrival.
+        // Not a gesture, so Safari may refuse it; the page keeps a visible
+        // button for exactly that case.
+        if (new URLSearchParams(window.location.search).get("scan") === "1") {
+            setTimeout(openPicker, 300);
+        }
+    }
+
+    document.addEventListener("astro:page-load", initReceiptScanSheet);
+    // The one-shot astro:page-load fires on DOMContentLoaded; a module that
+    // executes after that would miss it. The __rssInit guard keeps this
+    // idempotent.
+    if (document.readyState !== "loading") initReceiptScanSheet();
+</script>

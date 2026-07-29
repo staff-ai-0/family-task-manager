@@ -23,7 +23,11 @@ const sections = [
     {
         title: es ? "Herramientas" : "Tools",
         links: [
-            { emoji: "📸", label: es ? "Escanear ticket" : "Scan receipt", href: "/budget/scan-receipt" },
+            // scanOpen: ReceiptScanSheet opens the picker in place when it is
+            // mounted (every BudgetShell page). The href is the fallback —
+            // /parent/settings/a2a also renders this drawer without a sheet,
+            // where the attribute is simply inert.
+            { emoji: "📸", label: es ? "Escanear ticket" : "Scan receipt", href: "/budget/scan-receipt?scan=1", scanOpen: true },
             { emoji: "📥", label: es ? "Importar CSV" : "Import CSV", href: "/budget/import" },
             { emoji: "🔄", label: es ? "Recurrentes" : "Recurring", href: "/budget/settings#recurring" },
             { emoji: "⚡", label: es ? "Reglas auto" : "Auto rules", href: "/budget/settings#rules" },
@@ -80,6 +84,7 @@ const sections = [
                 {section.links.map(link => (
                     <a
                         href={link.href}
+                        data-scan-receipt-open={"scanOpen" in link && link.scanOpen ? "" : undefined}
                         class="flex items-center gap-3 px-4 py-2.5 text-sm text-brand-ink hover:bg-brand-cream-deep transition-colors"
                     >
                         <span class="text-lg">{link.emoji}</span>
