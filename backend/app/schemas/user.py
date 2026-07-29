@@ -5,7 +5,7 @@ Request and response models for user-related operations.
 """
 
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 from datetime import date
 
@@ -62,6 +62,9 @@ class UserResponse(EntityResponse):
     email_verified: bool = False
     acknowledged_gigs_intro: bool = False
     completed_welcome_tour: bool = False
+    # Ids of the per-module tours already finished or skipped. The frontend
+    # gates auto-start on this, so it has to ride /auth/me like the flag above.
+    completed_tours: List[str] = Field(default_factory=list)
     gig_trust_streak: int = 0
     # Star Mode (P2): per-kid "young kid" display toggle (parent-set). When true
     # the kid dashboard + kiosk render POINTS as big stars and hide peso amounts.

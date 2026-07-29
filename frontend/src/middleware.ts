@@ -2,18 +2,17 @@ import { createHash } from "node:crypto";
 import { defineMiddleware } from "astro:middleware";
 import type { User } from "./types/api";
 // Pure request-classification rules (public routes, CSRF origins, admin
-// surface, module gating, JWT expiry) live in their own module so they are
-// unit-testable without the astro:middleware virtual module — see
-// frontend/test/request-guards.test.ts (rules) and test/middleware.test.ts
-// (this handler, driven with a fake context).
+// surface, module gating, JWT expiry, refresh decision) live in their own
+// module so they are unit-testable without the astro:middleware virtual
+// module — see frontend/test/request-guards.test.ts.
 import {
     isAdminSurface as isAdminSurfacePath,
     isAllowedOrigin,
-    isJwtExpired,
     isPublicRoute as isPublicRoutePath,
     moduleForPath,
     moduleRedirectTarget,
     requiresCsrfCheck,
+    shouldAttemptRefresh,
 } from "./lib/security/request-guards";
 
 // ---------------------------------------------------------------------------
@@ -163,10 +162,46 @@ export const onRequest = defineMiddleware(async (context, next) => {
         });
     }
 
+    // ── Session cookies + transparent refresh ───────────────────────────
+    // Runs BEFORE the public-route early return on purpose. The installed PWA
+    // launches at "/", which is public, so a refresh confined to protected
+    // routes meant every cold start more than an hour after last use (the
+    // access-token cookie is Max-Age=3600) rendered the marketing landing page
+    // and made the user sign in with Google again — with a valid 30-day
+    // refresh cookie sitting unread in the jar. shouldAttemptRefresh() also
+    // keeps anonymous traffic free: no refresh cookie, no backend call.
+    let accessToken = cookies.get("access_token")?.value;
+    const refreshToken = cookies.get("refresh_token")?.value;
+    let refreshedSetCookies: string[] | undefined;
+
+    if (shouldAttemptRefresh(path, accessToken, refreshToken)) {
+        const { refreshAccessToken } = await import("./lib/server/refresh");
+        const r = await refreshAccessToken(refreshToken!);
+        if (r.ok) {
+            accessToken = r.accessToken;
+            refreshedSetCookies = r.setCookies;
+            // Make the fresh token visible to this same request's downstream
+            // logic — page frontmatter reads Astro.cookies directly.
+            cookies.set("access_token", r.accessToken!, {
+                path: "/",
+                httpOnly: true,
+                sameSite: "lax",
+                secure: !import.meta.env.DEV,
+                maxAge: 3600,
+            });
+        }
+    }
+
     // Public routes that don't require authentication (list in
     // lib/security/request-guards.ts).
     if (isPublicRoutePath(path)) {
         const response = await next();
+        // A public page that resumed a session (e.g. "/" 302ing an installed
+        // PWA to /dashboard) must still hand the rotated pair to the browser,
+        // or the next request repeats the refresh.
+        if (refreshedSetCookies) {
+            for (const c of refreshedSetCookies) response.headers.append("Set-Cookie", c);
+        }
         // /login uses Google Identity Services popup sign-in. Chrome's
         // default COOP (`unsafe-none` or no header) can still block the
         // window.postMessage bridge from the Google popup back to our
@@ -203,30 +238,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // needs two checks instead of one.
     const isAdminSurface = isAdminSurfacePath(path);
 
-    // Check authentication for protected routes
-    let accessToken = cookies.get("access_token")?.value;
-    const refreshToken = cookies.get("refresh_token")?.value;
-    let refreshedSetCookies: string[] | undefined;
-
-    // Transparently refresh the access token when it's missing/expired but a
-    // refresh cookie is present. Runs BEFORE the missing-token guard so a dead
-    // access token does not bounce the user to /login if the refresh succeeds.
-    if (isJwtExpired(accessToken) && refreshToken) {
-        const { refreshAccessToken } = await import("./lib/server/refresh");
-        const r = await refreshAccessToken(refreshToken);
-        if (r.ok) {
-            accessToken = r.accessToken;
-            refreshedSetCookies = r.setCookies;
-            // Make the fresh token visible to this same request's downstream logic.
-            cookies.set("access_token", r.accessToken!, {
-                path: "/",
-                httpOnly: true,
-                sameSite: "lax",
-                secure: !import.meta.env.DEV,
-                maxAge: 3600,
-            });
-        }
-    }
+    // (Auth cookies were read and refreshed above the public-route return.)
 
     // Zero-token requests to the super-admin surface must ALSO 404, not
     // redirect-to-login or 401 — the generic !accessToken handling right

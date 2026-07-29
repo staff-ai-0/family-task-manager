@@ -3,6 +3,7 @@ import Layout from "../../layouts/Layout.astro";
 import BudgetNavNew from "../BudgetNavNew.astro";
 import DrawerMenu from "../DrawerMenu.astro";
 import BottomNav from "../BottomNav.astro";
+import ReceiptScanSheet from "../budget/ReceiptScanSheet.astro";
 
 /**
  * BudgetShell — page shell for /budget/* pages.
@@ -59,5 +60,9 @@ const {
     </main>
     <BottomNav active="budget" role={role} lang={lang} />
     <slot name="overlays" />
+    <!-- Mounted for every budget page so a scan starts wherever the user
+         already is: [data-scan-receipt-open] or a "ftm:scan-receipt" event
+         opens the picker, no navigation. -->
+    <ReceiptScanSheet lang={lang} />
   </div>
 </Layout>

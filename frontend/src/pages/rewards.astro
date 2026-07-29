@@ -2,10 +2,11 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
 import { t } from "../lib/i18n";
+import ModuleTour from "@components/ModuleTour.astro";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
-const lang = Astro.cookies.get("lang")?.value ?? "es";
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
 
 if (Astro.request.method === "POST") {
     const data = await Astro.request.formData();
@@ -100,7 +101,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 >
                     {t(lang, "rewards_available_points")}
                 </p>
-                <p class="text-3xl font-extrabold">{user.points}</p>
+                <p class="text-3xl font-extrabold" data-tour="rewards-points">{user.points}</p>
             </div>
         </div>
     </div>
@@ -170,7 +171,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                 </p>
             </div>
         ) : (
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" data-tour="rewards-catalog">
                 {rewards.map((reward: any) => {
                     const isGoal = isKid && activeGoal?.reward_id === reward.id;
                     const canAfford = user.points >= reward.points_cost;
@@ -264,6 +265,13 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
             </div>
         )
     }
+
+    <ModuleTour
+        tourId="rewards-kid"
+        lang={lang}
+        userKey={user.id}
+        completed={user.completed_tours}
+    />
 </PageLayout>
 
 <script>

@@ -4,6 +4,7 @@ import DifficultyChip from "../../components/DifficultyChip.astro";
 import { apiFetch } from "../../lib/api";
 import { t } from "../../lib/i18n";
 import { gigTerm } from "../../lib/gigTerm";
+import ModuleTour from "@components/ModuleTour.astro";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -55,7 +56,7 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                     <p class="text-violet-200 text-sm font-medium">{lang === "es" ? "¡Gana dinero!" : "Earn cash!"}</p>
                     <h1 class="text-2xl font-bold">{gt.Many}</h1>
                 </div>
-                <a href="/gigs/my-gigs" class="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-white/30 transition-colors">
+                <a href="/gigs/my-gigs" data-tour="gig-mine" class="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-white/30 transition-colors">
                     {lang === "es" ? `Mis ${gt.Many}` : `My ${gt.Many}`}
                 </a>
             </div>
@@ -136,7 +137,7 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
                     <p class="text-brand-ink-soft text-sm">{lang === "es" ? `Tu papá/mamá publicará ${gt.many} pronto.` : `Your parent will post ${gt.many} soon.`}</p>
                 </div>
             ) : (
-                <div class="space-y-4">
+                <div class="space-y-4" data-tour="gig-board">
                     {offerings.map((item: any) => {
                         const o = item.offering;
                         const claim = item.my_claim;
@@ -287,6 +288,13 @@ const catLabel = (cat: string) => categoryLabels[cat]?.[lang] ?? cat;
             </form>
         </div>
     </div>
+
+    <ModuleTour
+        tourId="gigs-kid"
+        lang={lang}
+        userKey={user.id}
+        completed={user.completed_tours}
+    />
 </PageLayout>
 
 <script>

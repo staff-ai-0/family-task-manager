@@ -38,6 +38,47 @@ test.describe('JWT access + refresh', () => {
     expect(resp.status()).toBe(401);
   });
 
+  // The installed PWA launches at start_url "/", a public route. Until this
+  // was fixed, the middleware returned before ever reading the refresh cookie,
+  // so every cold start more than an hour after last use (access_token is
+  // Max-Age=3600) landed on the marketing page and forced a fresh Google
+  // sign-in — with a valid 30-day refresh cookie sitting right there.
+  test('PWA cold start at "/" resumes the session instead of showing the landing page', async ({ page, context }) => {
+    await loginAsParent(page);
+
+    const cookies = await context.cookies();
+    const kept = cookies.filter((c) => c.name !== 'access_token');
+    await context.clearCookies();
+    await context.addCookies(kept);
+
+    await page.goto(`${BASE_URL}/`);
+    await expect(page).toHaveURL(/\/(dashboard|parent)/);
+
+    const after = await context.cookies();
+    expect(after.find((c) => c.name === 'access_token')).toBeTruthy();
+  });
+
+  test('/login resumes an existing session rather than re-prompting', async ({ page, context }) => {
+    await loginAsParent(page);
+
+    const cookies = await context.cookies();
+    const kept = cookies.filter((c) => c.name !== 'access_token');
+    await context.clearCookies();
+    await context.addCookies(kept);
+
+    await page.goto(`${BASE_URL}/login`);
+    await expect(page).toHaveURL(/\/(dashboard|parent)/);
+  });
+
+  test('an anonymous visitor still sees the landing page', async ({ page, context }) => {
+    // The refresh must not fire without a refresh cookie — marketing traffic
+    // and crawlers pay no backend round-trip, and "/" stays public.
+    await context.clearCookies();
+    const resp = await page.goto(`${BASE_URL}/`);
+    expect(resp.status()).toBe(200);
+    await expect(page).toHaveURL(new RegExp(`^${BASE_URL}/?$`));
+  });
+
   test('no cookies redirects to login', async ({ page, context }) => {
     await context.clearCookies();
     await page.goto(`${BASE_URL}/dashboard`);

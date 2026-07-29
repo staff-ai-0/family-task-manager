@@ -157,6 +157,49 @@ export function moduleRedirectTarget(
  * treats anything unparseable as expired — failing closed, so a malformed
  * token triggers a refresh rather than being trusted.
  */
+/**
+ * Routes where minting a fresh token pair is wrong, not merely wasteful.
+ *
+ * Everything here writes the auth cookies itself. Since the middleware appends
+ * its refreshed Set-Cookie headers AFTER the route's own, a refresh on one of
+ * these would land last and win — signing the visitor back into the *previous*
+ * session on the very request that was meant to change it. That is a silent
+ * account mix-up on a shared device, not a slow page.
+ */
+const NO_REFRESH_ROUTES: readonly string[] = [
+    "/api/auth/refresh",       // IS the refresh — refreshing here would recurse
+    "/api/auth/logout",        // a fresh pair on the way out defeats the logout
+    "/api/auth/login",         // mints its own pair
+    "/api/auth/register",      // ditto
+    "/api/auth/register-family",
+    "/api/oauth/google",
+    "/api/oauth/google/",
+    "/api/invitations/accept",
+];
+
+/**
+ * Should this request try to trade the refresh cookie for a fresh access token?
+ *
+ * Deliberately independent of whether the route is public. The PWA's start_url
+ * is "/", which is public: when the refresh only ran on protected routes, every
+ * cold launch more than an hour after last use (access_token Max-Age=3600) found
+ * no access token, fell through to the marketing landing page, and made the user
+ * sign in with Google again — while a valid 30-day refresh cookie sat unread.
+ *
+ * The refresh-cookie requirement is what keeps this cheap: an anonymous visitor
+ * on a public page carries no refresh cookie and so costs no backend call.
+ */
+export function shouldAttemptRefresh(
+    path: string,
+    accessToken: string | undefined,
+    refreshToken: string | undefined,
+    nowMs: number = Date.now(),
+): boolean {
+    if (!refreshToken) return false;
+    if (NO_REFRESH_ROUTES.includes(path)) return false;
+    return isJwtExpired(accessToken, nowMs);
+}
+
 export function isJwtExpired(jwt: string | undefined, nowMs: number = Date.now()): boolean {
     if (!jwt) return true;
     const parts = jwt.split(".");

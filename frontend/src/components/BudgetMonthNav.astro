@@ -68,6 +68,7 @@ const monthName = monthNames[lang][month - 1];
 
     <button
         id="open-assign-funds-modal"
+        data-tour="budget-to-assign"
         class={`press w-full rounded-[var(--radius-card)] p-4 text-left border-2 border-brand-ink transition cursor-pointer ${readyToAssign < 0 ? 'bg-red-100' : readyToAssign === 0 ? 'bg-brand-mint/30' : 'bg-brand-sun'}`}
         title={lang === "es" ? "Toca para asignar fondos a categorías" : "Tap to assign funds to categories"}
     >

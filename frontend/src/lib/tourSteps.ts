@@ -128,6 +128,171 @@ export function buildTour(
     };
 }
 
+// ─── Per-module tours ────────────────────────────────────────────────────
+// The welcome tour above is one flat pass over the bottom nav: it says a module
+// exists, never how it works. These are the per-module walkthroughs, each run
+// once on first visit to its own page and replayable from the hub on /help.
+//
+// Ids are shared with the backend allowlist (TOUR_IDS in
+// backend/app/api/routes/onboarding.py) and with users.completed_tours. Adding
+// one here without adding it there makes its tour re-run forever.
+
+export type ModuleTourId =
+    | "budget-parent"
+    | "gigs-parent"
+    | "gigs-kid"
+    | "chores-parent"
+    | "rewards-kid";
+
+export const MODULE_TOUR_IDS: readonly ModuleTourId[] = [
+    "budget-parent",
+    "gigs-parent",
+    "gigs-kid",
+    "chores-parent",
+    "rewards-kid",
+];
+
+/** Which module each tour belongs to, for families.enabled_modules filtering. */
+export const MODULE_TOUR_MODULE: Record<ModuleTourId, string | null> = {
+    "budget-parent": "budget",
+    "gigs-parent": "gigs",
+    "gigs-kid": "gigs",
+    // Chores and rewards are core surfaces — never togglable, so never filtered.
+    "chores-parent": null,
+    "rewards-kid": null,
+};
+
+/** Who each tour is written for. */
+export const MODULE_TOUR_ROLE: Record<ModuleTourId, TourRole> = {
+    "budget-parent": "parent",
+    "gigs-parent": "parent",
+    "gigs-kid": "kid",
+    "chores-parent": "parent",
+    "rewards-kid": "kid",
+};
+
+/** Where a tour runs — the hub links here with ?tour=<id>. */
+export const MODULE_TOUR_PATH: Record<ModuleTourId, string> = {
+    "budget-parent": "/budget",
+    "gigs-parent": "/parent/gigs",
+    "gigs-kid": "/gigs",
+    "chores-parent": "/parent/tasks",
+    "rewards-kid": "/rewards",
+};
+
+/** Hub card label key for each tour. */
+export const MODULE_TOUR_LABEL: Record<ModuleTourId, string> = {
+    "budget-parent": "tour_hub_budget",
+    "gigs-parent": "tour_hub_gigs_parent",
+    "gigs-kid": "tour_hub_gigs_kid",
+    "chores-parent": "tour_hub_chores",
+    "rewards-kid": "tour_hub_rewards_kid",
+};
+
+/**
+ * Step skeletons: [i18n key prefix, selector].
+ *
+ * A null selector is a centered modal step — used for the opening step, which
+ * frames what the module is for before pointing at anything. Selectors are
+ * resolved at run time and missing ones are dropped by runTour(), so a step
+ * whose target is not on screen at this breakpoint is skipped rather than
+ * spotlighting empty space.
+ */
+const MODULE_TOUR_STEPS: Record<
+    ModuleTourId,
+    ReadonlyArray<readonly [string, string | null, ("top" | "bottom" | "left" | "right")?]>
+> = {
+    "budget-parent": [
+        ["tour_budget_parent_intro", null],
+        // Accounts, categories and payees all live behind the drawer, so the
+        // step points at the way in rather than at a panel that is off-screen.
+        ["tour_budget_parent_accounts", '[data-tour="budget-menu"]', "bottom"],
+        ["tour_budget_parent_categories", '[data-tour="budget-categories"]', "top"],
+        ["tour_budget_parent_assign", '[data-tour="budget-to-assign"]', "bottom"],
+        ["tour_budget_parent_scan", "#fab-button", "top"],
+        ["tour_budget_parent_reports", '[data-tour="budget-tab-reports"]', "bottom"],
+    ],
+    "gigs-parent": [
+        ["tour_gigs_parent_intro", null],
+        ["tour_gigs_parent_post", '[data-tour="gig-fab"]', "left"],
+        ["tour_gigs_parent_claim", '[data-tour="gig-board"]', "top"],
+        ["tour_gigs_parent_approve", '[data-tour="gig-approvals"]', "top"],
+        ["tour_gigs_parent_bank", '[data-nav-key="bank"]', "top"],
+    ],
+    "gigs-kid": [
+        ["tour_gigs_kid_intro", null],
+        ["tour_gigs_kid_board", '[data-tour="gig-board"]', "bottom"],
+        // Proof and payout both happen on /gigs/my-gigs, so both steps point
+        // at the way there rather than at a claimed card that may not exist yet.
+        ["tour_gigs_kid_proof", '[data-tour="gig-mine"]', "bottom"],
+        ["tour_gigs_kid_paid", '[data-tour="gig-mine"]', "bottom"],
+    ],
+    "chores-parent": [
+        ["tour_chores_parent_intro", null],
+        ["tour_chores_parent_templates", '[data-tour="task-template-grid"]', "bottom"],
+        ["tour_chores_parent_assign", '[data-tour="task-fab"]', "left"],
+        ["tour_chores_parent_review", '[data-nav-key="approvals"]', "top"],
+        ["tour_chores_parent_rewards", '[data-nav-key="rewards"]', "top"],
+    ],
+    "rewards-kid": [
+        ["tour_rewards_kid_intro", null],
+        ["tour_rewards_kid_catalog", '[data-tour="rewards-catalog"]', "bottom"],
+        ["tour_rewards_kid_redeem", '[data-tour="rewards-points"]', "bottom"],
+    ],
+};
+
+export interface ModuleTourData extends TourData {
+    id: ModuleTourId;
+    /** Endpoint the runner acks to when the tour ends. */
+    ackUrl: string;
+}
+
+export function buildModuleTour(
+    id: ModuleTourId,
+    lang: string,
+    userId?: string,
+): ModuleTourData {
+    const btn: TourButtons = {
+        next: t(lang, "tour_next"),
+        prev: t(lang, "tour_prev"),
+        done: t(lang, "tour_done"),
+        progress: t(lang, "tour_progress"),
+    };
+
+    const steps: TourStep[] = MODULE_TOUR_STEPS[id].map(([key, element, side]) => ({
+        ...(element ? { element } : {}),
+        title: t(lang, `${key}_title`),
+        description: t(lang, `${key}_body`),
+        ...(side ? { side } : {}),
+    }));
+
+    return {
+        id,
+        role: MODULE_TOUR_ROLE[id],
+        steps,
+        btn,
+        // Per-user AND per-tour, so one member finishing the budget tour on a
+        // shared tablet does not silence it for everyone else.
+        guardKey: userId ? `ftm_tour_${id}_${userId}` : `ftm_tour_${id}`,
+        ackUrl: `/api/onboarding/tours/${id}/complete`,
+    };
+}
+
+/** Tours worth offering to this viewer: right role, module switched on. */
+export function availableModuleTours(
+    role: TourRole,
+    enabledModules: unknown,
+): ModuleTourId[] {
+    return MODULE_TOUR_IDS.filter((id) => {
+        if (MODULE_TOUR_ROLE[id] !== role) return false;
+        const mod = MODULE_TOUR_MODULE[id];
+        if (!mod) return true; // core surface, never togglable
+        // NULL enabled_modules means "all modules on" (families.enabled_modules).
+        if (!Array.isArray(enabledModules)) return true;
+        return enabledModules.includes(mod);
+    });
+}
+
 /**
  * Action-driven onboarding "mission" — unlike the passive driver.js welcome
  * tour above, a mission step only advances when the REAL UI action happens

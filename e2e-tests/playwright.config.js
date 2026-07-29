@@ -1,5 +1,8 @@
 module.exports = {
   testDir: './',
+  // Pre-acks the per-module tours so their first-visit overlay cannot block
+  // clicks in unrelated specs (see global-setup.js).
+  globalSetup: require.resolve('./global-setup.js'),
   testMatch: ['**/*.spec.js'],
   testIgnore: ['node_modules/**', 'debug-login.spec.js', 'screenshot.spec.js'],
   timeout: 30000,

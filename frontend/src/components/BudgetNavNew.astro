@@ -41,6 +41,7 @@ const tabs = [
         <!-- Hamburger button -->
         <button
             id="drawer-toggle"
+            data-tour="budget-menu"
             type="button"
             class="p-3 text-brand-ink-soft hover:text-brand-ink transition-colors"
             aria-label={es ? "Abrir menú" : "Open menu"}
@@ -57,6 +58,7 @@ const tabs = [
             {tabs.map(tab => (
                 <a
                     href={tab.href}
+                    data-tour={`budget-tab-${tab.id}`}
                     aria-current={active === tab.id ? "page" : undefined}
                     class={`flex flex-col items-center gap-1 px-4 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
                         active === tab.id

@@ -1,0 +1,104 @@
+---
+/**
+ * "Interactive guides" — the replay hub, rendered at the top of /help and
+ * /ayuda.
+ *
+ * Module tours run once on a user's first visit to the module. Without a way
+ * back, a tour dismissed by accident is gone for good, so each card deep-links
+ * to the module page with ?tour=<id>, which ModuleTour treats as an explicit
+ * replay and runs regardless of either guard.
+ *
+ * Both host pages are public. An anonymous visitor gets nothing here — the
+ * guide itself is the public surface.
+ *
+ * @prop lang     "en" | "es"
+ * @prop user     viewer from /auth/me, or null when signed out
+ */
+import { t } from "../lib/i18n";
+import {
+    MODULE_TOUR_LABEL,
+    MODULE_TOUR_PATH,
+    availableModuleTours,
+} from "../lib/tourSteps";
+import type { TourRole } from "../lib/tourSteps";
+
+interface Props {
+    lang?: "en" | "es";
+    user?: {
+        role?: string;
+        enabled_modules?: unknown;
+        completed_tours?: string[] | null;
+    } | null;
+}
+const { lang = "es", user = null } = Astro.props;
+
+const role: TourRole =
+    String(user?.role ?? "").toLowerCase() === "parent" ? "parent" : "kid";
+const tours = user ? availableModuleTours(role, user?.enabled_modules) : [];
+const done = new Set(user?.completed_tours ?? []);
+---
+
+{tours.length > 0 && (
+    <section class="tour-hub" aria-labelledby="tour-hub-title">
+        <h2 id="tour-hub-title">{t(lang, "tour_hub_title")}</h2>
+        <p class="tour-hub-sub">{t(lang, "tour_hub_subtitle")}</p>
+        <ul class="tour-hub-grid">
+            {tours.map((id) => (
+                <li>
+                    <a href={`${MODULE_TOUR_PATH[id]}?tour=${id}`}>
+                        <span class="tour-hub-name">{t(lang, MODULE_TOUR_LABEL[id])}</span>
+                        <span class="tour-hub-cta">
+                            {done.has(id) ? `✓ ${t(lang, "tour_hub_done")}` : t(lang, "tour_hub_start")}
+                        </span>
+                    </a>
+                </li>
+            ))}
+        </ul>
+    </section>
+)}
+
+<style>
+    .tour-hub {
+        margin: 0 0 2rem;
+        padding: 1.25rem;
+        border-radius: var(--radius-card, 1rem);
+        background: var(--color-brand-cream, #fdf8f0);
+        border: 1px solid rgb(0 0 0 / 0.08);
+    }
+    .tour-hub h2 {
+        margin: 0;
+        font-size: 1.125rem;
+        font-weight: 800;
+    }
+    .tour-hub-sub {
+        margin: 0.25rem 0 1rem;
+        font-size: 0.875rem;
+        opacity: 0.7;
+    }
+    .tour-hub-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+        gap: 0.75rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    .tour-hub-grid a {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        height: 100%;
+        padding: 0.875rem 1rem;
+        border-radius: 0.75rem;
+        background: var(--color-brand-cream-deep, #f5ecdd);
+        border: 1px solid rgb(0 0 0 / 0.06);
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .tour-hub-cta {
+        font-size: 0.8125rem;
+        white-space: nowrap;
+        opacity: 0.75;
+    }
+</style>

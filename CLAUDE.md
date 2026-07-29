@@ -193,7 +193,7 @@ Uses Claude Vision via LiteLLM proxy to extract transaction data from receipt ph
 - Service: `backend/app/services/budget/receipt_scanner_service.py`
 - **The LLM client is built in exactly one place**: `backend/app/core/llm.py` — `get_llm_client()` plus `LLM_TIMEOUT` (5s connect / 60s read) and the `RECEIPT_MODEL` / `CATEGORIZER_MODEL` aliases. Every call site (Jarvis ×2, calendar scanner, recipe importer, proof validator, category AI, receipt scanner) goes through it; never hand-roll `OpenAI(...)` in a service. Tests mock `app.core.llm.OpenAI`, not the service module.
 - Endpoint: `POST /api/budget/transactions/scan-receipt` (parent only, premium gated)
-- Frontend: `/budget/scan-receipt` (camera capture + file upload + drag-drop; accepts JPEG/PNG/WebP/PDF)
+- **Frontend is a sheet, not a page**: `frontend/src/components/budget/ReceiptScanSheet.astro`, mounted once by `BudgetShell`, so any budget page can scan without navigating. Open it with `[data-scan-receipt-open]` or a `ftm:scan-receipt` window event; `input.click()` must stay synchronous with the originating gesture (iOS drops a picker opened after an `await`). ONE file input, deliberately **without `capture`** — that attribute pins iOS to the camera, which is why the old page needed separate camera/upload/bulk buttons; `multiple` on the same input drives the bulk path. `/budget/scan-receipt` remains as an addressable landing page (email links, drawer fallback) that just opens the sheet.
 - Routes through LiteLLM proxy (`LITELLM_API_BASE` / `LITELLM_API_KEY`) using model alias `claude-haiku`
 - PDFs are rasterized to JPEG (first page only, capped at 3000px, quality 85) via PyMuPDF before sending to vision API
 - **Original-image persistence** goes through `app/services/storage/receipt_storage.py`, which picks a backend from `RECEIPT_STORAGE_BACKEND`: `local` (default — writes to `UPLOADS_ROOT/receipts`, on the already-backed-up `receipt_uploads` volume) or `gcs` (opt-in, needs real Google credentials). Reads dispatch on the stored path, not on config: `local:`-prefixed keys are local, bare keys are legacy GCS objects. This was GCS-only until 2026-07-27, which meant every on-prem scan silently discarded its image (no ADC in the container, failure swallowed by the best-effort `except`).
@@ -226,6 +226,15 @@ Fully wired (routes + services + models + frontend), multi-tenant by `family_id`
 | **Admin** (operator console) | `/api/admin` | Cross-tenant operator surface: family directory, per-family support views, ten bounded write actions, append-only `operator_audit_log`. Gated by `require_superadmin` — `users.is_superadmin` **AND** `SUPERADMIN_EMAILS`, 404 on failure. Frontend at `/admin/*` behind a Cloudflare Access path policy. Metadata only: no message bodies, no images. See `docs/superpowers/specs/2026-07-26-super-admin-dashboard-design.md`. |
 
 Production-readiness audits live in `docs/audit/` (2026-06-04 techdebt, 2026-07-02 UX, 2026-07-07 launch gaps).
+
+### Onboarding tours
+
+Two layers, with separate state:
+
+- **Welcome tour** (driver.js) — one pass over the bottom nav, parent and kid variants in `buildTour`. State: the `users.completed_welcome_tour` boolean, acked at `POST /api/auth/ack-tour`.
+- **Module tours** — per-module walkthroughs built by `buildModuleTour` (`frontend/src/lib/tourSteps.ts`): `budget-parent`, `gigs-parent`, `gigs-kid`, `chores-parent`, `rewards-kid`. `ModuleTour.astro` auto-runs one on the user's first visit to its page, suppressed while the welcome tour is running. State: `users.completed_tours` (JSONB list) via `POST /api/families/onboarding/tours/{id}/complete` — not parent-gated, since two tours are kid-facing. Replay hub (`TourHub.astro`) sits above the guide on `/help` + `/ayuda`; a card links to `<page>?tour=<id>`, which overrides both the DB flag and the localStorage guard.
+- **Tour ids live in two places and must stay in sync**: `MODULE_TOUR_IDS` in `tourSteps.ts` and `TOUR_IDS` in `backend/app/api/routes/onboarding.py`. An id missing from the backend allowlist gets a 422 nobody sees, so that tour re-runs on every visit forever.
+- Steps point at `[data-tour="…"]` anchors. `runTour` drops steps whose element is missing or invisible, so a tour degrades instead of spotlighting empty space — which also means a renamed anchor fails silently.
 
 ### Per-family module registry
 

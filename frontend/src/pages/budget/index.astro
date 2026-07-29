@@ -17,6 +17,7 @@ import FABModal from "@components/FABModal.astro";
 import { apiFetch } from "@lib/api";
 import { getMonthBudget, getCategoryGroups, formatCurrency, getMonthStatus } from "@lib/api/budget";
 import { t } from "@lib/i18n";
+import ModuleTour from "@components/ModuleTour.astro";
 
 // --- Auth ---
 const token = Astro.cookies.get("access_token")?.value;
@@ -242,18 +243,21 @@ const jarvisQuestions: string[] =
         />
     ))}
 
-    {/* Expense groups */}
-    {expenseGroups.map((group: any) => (
-        <BudgetCategoryGroup
-            group={group}
-            isIncome={false}
-            lang={lang}
-            t={t}
-            formatCurrency={formatCurrency}
-            allExpenseCategories={allExpenseCategories}
-            goalsByCategory={goalsByCategory}
-        />
-    ))}
+    {/* Expense groups — wrapped so the budget tour has one stable anchor for
+        "these are your envelopes" instead of guessing at a group id. */}
+    <div data-tour="budget-categories" class="space-y-3">
+        {expenseGroups.map((group: any) => (
+            <BudgetCategoryGroup
+                group={group}
+                isIncome={false}
+                lang={lang}
+                t={t}
+                formatCurrency={formatCurrency}
+                allExpenseCategories={allExpenseCategories}
+                goalsByCategory={goalsByCategory}
+            />
+        ))}
+    </div>
 
     {/* Empty state */}
     {incomeGroups.length === 0 && expenseGroups.length === 0 && (
@@ -340,6 +344,13 @@ const jarvisQuestions: string[] =
             month={month}
         />
     </Fragment>
+
+    <ModuleTour
+        tourId="budget-parent"
+        lang={lang}
+        userKey={user.id}
+        completed={user.completed_tours}
+    />
 </BudgetShell>
 
 <script>
