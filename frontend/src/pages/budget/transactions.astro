@@ -362,10 +362,21 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                                                 data-tx-notes={transaction.notes || ""}
                                                 data-tx-cleared={transaction.cleared ? "1" : "0"}
                                                 data-has-receipt-image={transaction.receipt_image_path ? "1" : "0"}
+                                                data-item-count={transaction.item_count ?? 0}
                                                 aria-label={es ? "Editar transacción" : "Edit transaction"}
                                             >
                                                 <div class="flex-1 min-w-0">
                                                     <p class="text-sm font-medium text-brand-ink truncate">
+                                                        {/* Marks a transaction whose receipt breakdown was captured,
+                                                            so a scanned one is findable without opening every row. */}
+                                                        {transaction.item_count > 0 && (
+                                                            <span
+                                                                class="mr-1"
+                                                                title={es
+                                                                    ? `${transaction.item_count} artículos del ticket`
+                                                                    : `${transaction.item_count} receipt items`}
+                                                            >🧾</span>
+                                                        )}
                                                         {transaction.payee_name || category?.name || (es ? "Sin categoría" : "No category")}
                                                     </p>
                                                     <p class="text-xs text-brand-ink-soft">
@@ -529,6 +540,20 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                     </div>
 
                     <div id="edit-error" class="hidden text-sm text-red-600 mb-3 px-1"></div>
+
+                    <!-- Receipt line items.
+                         The scan confirm card used to be the only place these
+                         were ever rendered, so the breakdown was unreachable
+                         the moment the user navigated away. Loaded per
+                         transaction from /api/budget/items?transaction_id=. -->
+                    <section id="receipt-items-panel" class="mt-6 mb-4 hidden" data-tx="">
+                        <h2 class="text-base font-display font-extrabold text-brand-ink mb-2">
+                            🧾 {es ? "Artículos del ticket" : "Receipt items"}
+                        </h2>
+                        <div id="ri-content" class="text-sm text-brand-ink-soft">
+                            {es ? "Cargando…" : "Loading…"}
+                        </div>
+                    </section>
 
                     <!-- Price Comparison Panel -->
                     <section id="price-comparison-panel" class="mt-6 mb-4 hidden" data-tx="">
@@ -964,7 +989,11 @@ document.addEventListener("astro:after-swap", initFilters);
                 if (!txId) return;
 
                 panel.dataset.tx = txId;
-                panel.classList.remove("hidden");
+                // Stays hidden until we know there is something to say. The
+                // panel used to be revealed up front, so a family that never
+                // opted into the price-checker integration saw a permanent
+                // "check back in 5 minutes" on every single transaction.
+                panel.classList.add("hidden");
                 out.textContent = lang === "es" ? "Cargando…" : "Loading…";
 
                 try {
@@ -972,11 +1001,20 @@ document.addEventListener("astro:after-swap", initFilters);
                         credentials: "include",
                     });
                     if (r.status === 404) {
+                        const body = await r.json().catch(() => ({}));
+                        const code = body?.detail?.code;
+                        if (code === "a2a_not_configured") {
+                            // Nothing is coming for this family — say nothing
+                            // rather than promising data that will never land.
+                            return;
+                        }
+                        panel.classList.remove("hidden");
                         out.textContent = lang === "es"
                             ? "Pendiente — revisa en 5 minutos."
                             : "Pending — check back in 5 min.";
                         return;
                     }
+                    panel.classList.remove("hidden");
                     if (!r.ok) {
                         out.textContent = lang === "es"
                             ? "No disponible por ahora."
@@ -1070,6 +1108,118 @@ document.addEventListener("astro:after-swap", initFilters);
     attachPriceComparison();
     document.addEventListener("astro:after-swap", attachPriceComparison);
     document.addEventListener("astro:page-load", attachPriceComparison);
+
+    // ── Receipt line items ────────────────────────────────────────────────
+    // Everything the scanner extracted (name, qty, unit price, line total) is
+    // stored on the transaction, but until now the scan confirm card was the
+    // only thing that ever rendered it — dismiss the card and the breakdown
+    // was gone. Each row links to that product's price history.
+    function attachReceiptItems() {
+        const panel = document.getElementById("receipt-items-panel");
+        const out = document.getElementById("ri-content");
+        if (!panel || !out || panel.dataset.wired === "1") return;
+        panel.dataset.wired = "1";
+
+        const money = (cents) => `$${(Number(cents || 0) / 100).toFixed(2)}`;
+
+        async function load(txId) {
+            panel.dataset.tx = txId;
+            panel.classList.remove("hidden");
+            out.textContent = lang === "es" ? "Cargando…" : "Loading…";
+            try {
+                const r = await fetch(
+                    `/api/budget/items?transaction_id=${encodeURIComponent(txId)}&limit=200`,
+                    { credentials: "include" },
+                );
+                if (!r.ok) {
+                    out.textContent = lang === "es"
+                        ? "No se pudieron cargar los artículos."
+                        : "Could not load the items.";
+                    return;
+                }
+                const items = await r.json();
+                if (!Array.isArray(items) || items.length === 0) {
+                    // Not every transaction comes from a receipt — say so
+                    // rather than leaving an empty box.
+                    panel.classList.add("hidden");
+                    return;
+                }
+
+                out.replaceChildren();
+                const list = document.createElement("ul");
+                list.className = "divide-y divide-brand-ink/10";
+                let sum = 0;
+                for (const it of items) {
+                    sum += Number(it.total_cents || 0);
+                    const li = document.createElement("li");
+                    li.className = "py-2 flex justify-between items-baseline gap-3";
+
+                    const left = document.createElement("span");
+                    left.className = "min-w-0";
+                    if (it.qty && Number(it.qty) > 1) {
+                        const q = document.createElement("span");
+                        q.className = "text-xs text-brand-ink-soft mr-1";
+                        q.textContent = `${Number(it.qty)}×`;
+                        left.append(q);
+                    }
+                    // textContent, never innerHTML: these names come from a
+                    // model reading a photo.
+                    const link = document.createElement("a");
+                    link.className = "text-brand-ink underline-offset-4 hover:underline";
+                    link.textContent = it.name || it.normalized_name || "?";
+                    link.href = `/budget/items/${encodeURIComponent(it.normalized_name || "")}`;
+                    left.append(link);
+
+                    if (it.unit_price_cents) {
+                        const unit = document.createElement("span");
+                        unit.className = "block text-xs text-brand-ink-soft";
+                        unit.textContent = `${money(it.unit_price_cents)} ${lang === "es" ? "c/u" : "each"}`;
+                        left.append(unit);
+                    }
+
+                    const total = document.createElement("span");
+                    total.className = "font-medium text-brand-ink num whitespace-nowrap";
+                    total.textContent = money(it.total_cents);
+
+                    li.append(left, total);
+                    list.append(li);
+                }
+                out.append(list);
+
+                const foot = document.createElement("p");
+                foot.className = "pt-2 text-xs text-brand-ink-soft flex justify-between";
+                const label = document.createElement("span");
+                label.textContent = lang === "es"
+                    ? `${items.length} artículos`
+                    : `${items.length} items`;
+                const totalEl = document.createElement("span");
+                totalEl.className = "num";
+                totalEl.textContent = money(sum);
+                foot.append(label, totalEl);
+                out.append(foot);
+            } catch (_e) {
+                out.textContent = lang === "es"
+                    ? "No se pudieron cargar los artículos."
+                    : "Could not load the items.";
+            }
+        }
+
+        document.querySelectorAll(".tx-row").forEach((row) => {
+            row.addEventListener("click", () => {
+                const txId = row.dataset.txId;
+                if (txId) load(txId);
+            });
+        });
+
+        // Deep link (?tx=<id>, used by the scan confirm card's Edit link)
+        // opens the sheet without a row click, so load for that id too.
+        const deepLink = new URLSearchParams(window.location.search).get("tx");
+        if (deepLink) load(deepLink);
+    }
+
+    attachReceiptItems();
+    document.addEventListener("astro:after-swap", attachReceiptItems);
+    document.addEventListener("astro:page-load", attachReceiptItems);
 
     // Dedup button
     function attachDedup() {

@@ -74,6 +74,10 @@ export interface BudgetTransaction {
     is_parent: boolean;
     transfer_account_id?: string;
     receipt_image_path?: string;
+    /** Receipt line items on this transaction. Populated by LIST endpoints
+     *  only (0 on create/update responses, same convention as balance_cents
+     *  on accounts) so a list can mark scanned receipts without an N+1. */
+    item_count: number;
     created_at: string;
     updated_at: string;
 }

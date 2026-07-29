@@ -97,15 +97,21 @@ class TransactionItemService:
         db: AsyncSession,
         family_id: UUID,
         normalized_name: Optional[str] = None,
+        transaction_id: Optional[UUID] = None,
         since: Optional[datetime] = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[BudgetTransactionItem]:
+        # The family_id predicate stays first and unconditional: transaction_id
+        # is a client-supplied UUID, so on its own it would read another
+        # tenant's items given a guessed id.
         stmt = select(BudgetTransactionItem).where(
             BudgetTransactionItem.family_id == family_id
         )
         if normalized_name:
             stmt = stmt.where(BudgetTransactionItem.normalized_name == normalized_name)
+        if transaction_id:
+            stmt = stmt.where(BudgetTransactionItem.transaction_id == transaction_id)
         if since:
             stmt = stmt.where(BudgetTransactionItem.created_at >= since)
         stmt = stmt.order_by(desc(BudgetTransactionItem.created_at)).limit(limit).offset(offset)

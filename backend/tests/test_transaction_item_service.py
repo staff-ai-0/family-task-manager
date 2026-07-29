@@ -175,3 +175,135 @@ async def test_trend_returns_null_when_below_sample(
     )
     assert resp.status_code == 200
     assert resp.json() is None
+
+
+# ---------------------------------------------------------------------------
+# Reading back the items OF a transaction.
+#
+# The scan confirm card was the only render of a receipt's line items: they
+# were stored, then orphaned. Nothing could ask "what were the items on THIS
+# transaction" — list_items filtered by normalized_name only — so the breakdown
+# was unreachable the moment the user navigated away.
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture
+async def two_transactions_with_items(db: AsyncSession, test_parent_user):
+    """Two transactions in one family, each with its own items."""
+    from app.models.budget import BudgetAccount, BudgetTransaction, BudgetTransactionItem
+
+    family_id = test_parent_user.family_id
+    acct = BudgetAccount(family_id=family_id, name="Card", type="checking", currency="MXN")
+    db.add(acct)
+    await db.commit()
+    await db.refresh(acct)
+
+    made = []
+    for label, names in (
+        ("soriana", ["leche", "pan"]),
+        ("oxxo", ["cafe"]),
+    ):
+        tx = BudgetTransaction(
+            family_id=family_id, account_id=acct.id, date=date.today(),
+            amount=-5000, notes=label,
+        )
+        db.add(tx)
+        await db.commit()
+        await db.refresh(tx)
+        for n in names:
+            db.add(BudgetTransactionItem(
+                family_id=family_id, transaction_id=tx.id, name=n.title(),
+                normalized_name=n, qty=1, unit_price_cents=1000, total_cents=1000,
+            ))
+        made.append(tx)
+    await db.commit()
+    return made
+
+
+@pytest.mark.asyncio
+async def test_list_items_filters_by_transaction(
+    client: AsyncClient, auth_headers: dict, two_transactions_with_items,
+):
+    first, second = two_transactions_with_items
+
+    resp = await client.get(
+        f"/api/budget/items/?transaction_id={first.id}", headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert {row["normalized_name"] for row in body} == {"leche", "pan"}
+    assert all(row["transaction_id"] == str(first.id) for row in body)
+
+    resp2 = await client.get(
+        f"/api/budget/items/?transaction_id={second.id}", headers=auth_headers,
+    )
+    assert {row["normalized_name"] for row in resp2.json()} == {"cafe"}
+
+
+@pytest.mark.asyncio
+async def test_transaction_id_filter_is_family_scoped(
+    client: AsyncClient, auth_headers: dict, db: AsyncSession, two_transactions_with_items,
+):
+    """A transaction id from another family returns nothing, not its items.
+
+    The id is a client-supplied UUID, so without the family predicate this
+    endpoint would read another tenant's shopping list given a guessed id.
+    """
+    from app.models.budget import BudgetAccount, BudgetTransaction, BudgetTransactionItem
+    from app.models.family import Family
+
+    other = Family(name="Other Family")
+    db.add(other)
+    await db.commit()
+    await db.refresh(other)
+    acct = BudgetAccount(family_id=other.id, name="Cash", type="checking", currency="MXN")
+    db.add(acct)
+    await db.commit()
+    await db.refresh(acct)
+    tx = BudgetTransaction(
+        family_id=other.id, account_id=acct.id, date=date.today(), amount=-100,
+    )
+    db.add(tx)
+    await db.commit()
+    await db.refresh(tx)
+    db.add(BudgetTransactionItem(
+        family_id=other.id, transaction_id=tx.id, name="Secret",
+        normalized_name="secret", qty=1, unit_price_cents=100, total_cents=100,
+    ))
+    await db.commit()
+
+    resp = await client.get(
+        f"/api/budget/items/?transaction_id={tx.id}", headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+@pytest.mark.asyncio
+async def test_transaction_list_reports_which_rows_have_items(
+    client: AsyncClient, auth_headers: dict, two_transactions_with_items,
+):
+    """The list endpoint says how many items each transaction has.
+
+    Without this the UI cannot mark scanned receipts, and finding the one with
+    a breakdown means opening every row.
+    """
+    resp = await client.get("/api/budget/transactions/", headers=auth_headers)
+    assert resp.status_code == 200
+    by_id = {row["id"]: row for row in resp.json()}
+
+    first, second = two_transactions_with_items
+    assert by_id[str(first.id)]["item_count"] == 2
+    assert by_id[str(second.id)]["item_count"] == 1
+    # An int, not a Decimal-turned-string: strict mobile decoders reject
+    # "2" where the schema says int (see CLAUDE.md, budget/accounts.py).
+    assert isinstance(by_id[str(first.id)]["item_count"], int)
+
+
+@pytest.mark.asyncio
+async def test_transactions_without_items_report_zero(
+    client: AsyncClient, auth_headers: dict, seeded_items,
+):
+    resp = await client.get("/api/budget/transactions/", headers=auth_headers)
+    counts = {row["item_count"] for row in resp.json()}
+    assert counts <= {0, 2}

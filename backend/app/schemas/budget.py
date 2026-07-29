@@ -288,6 +288,10 @@ class TransactionResponse(TransactionBase):
     original_amount_cents: Optional[int] = None
     original_currency: Optional[str] = Field(None, min_length=3, max_length=3)
     receipt_image_path: Optional[str] = None
+    # How many line items this transaction has. Populated by LIST endpoints
+    # only (0 on POST/PUT responses, same convention as balance_cents on
+    # accounts) so a client can mark scanned receipts without an N+1 sweep.
+    item_count: int = 0
 
     # Force JSON to emit a real number for Decimal fields. Pydantic v2's
     # default is to serialize Decimal as a string, which breaks strict

@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,7 @@ router = APIRouter()
 @router.get("/", response_model=list[TransactionItemRead])
 async def list_items(
     normalized_name: Optional[str] = Query(None),
+    transaction_id: Optional[UUID] = Query(None),
     since: Optional[datetime] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -28,14 +30,17 @@ async def list_items(
 ):
     """List transaction items for the authenticated user's family.
 
-    Optionally filter by normalized_name, since (datetime), with pagination.
-    Family-scoped — results are always isolated to the calling user's family.
+    Optionally filter by normalized_name (price history for one product),
+    transaction_id (the line-item breakdown of one receipt), or since, with
+    pagination. Family-scoped — results are always isolated to the calling
+    user's family, including when transaction_id is supplied.
     """
     family_id = to_uuid_required(current_user.family_id)
     return await TransactionItemService.list_for_family(
         db,
         family_id,
         normalized_name=normalized_name,
+        transaction_id=transaction_id,
         since=since,
         limit=limit,
         offset=offset,
