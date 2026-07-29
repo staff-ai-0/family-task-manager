@@ -21,6 +21,7 @@ import {
     moduleForPath,
     moduleRedirectTarget,
     requiresCsrfCheck,
+    shouldAttemptRefresh,
 } from "../src/lib/security/request-guards";
 
 describe("CSRF origin check", () => {
@@ -172,10 +173,11 @@ describe("module gating", () => {
     });
 });
 
-describe("JWT expiry", () => {
-    const encode = (payload: object) =>
-        "h." + Buffer.from(JSON.stringify(payload)).toString("base64url") + ".s";
+/** Minimal JWT with the given payload — signature is never verified here. */
+const encode = (payload: object) =>
+    "h." + Buffer.from(JSON.stringify(payload)).toString("base64url") + ".s";
 
+describe("JWT expiry", () => {
     it("treats a live token as usable", () => {
         const now = 1_800_000_000_000;
         expect(isJwtExpired(encode({ exp: now / 1000 + 3600 }), now)).toBe(false);
@@ -202,5 +204,92 @@ describe("JWT expiry", () => {
         expect(isJwtExpired("a.b")).toBe(true);
         expect(isJwtExpired("h.!!!not-base64!!!.s")).toBe(true);
         expect(isJwtExpired(encode({ sub: "no-exp-claim" }))).toBe(true);
+    });
+});
+
+describe("transparent-refresh decision", () => {
+    const live = encode({ exp: 1_800_000_000 });
+    const dead = encode({ exp: 1_000_000_000 });
+    const now = 1_800_000_000_000; // `live` is already inside the skew window here
+
+    it("refreshes on a PUBLIC route when the access token is dead", () => {
+        // The regression this whole function exists for: the PWA's start_url
+        // is "/", a public route. When the refresh decision only ran on
+        // protected routes, every cold launch more than an hour after last use
+        // (access_token Max-Age=3600) hit the marketing page and forced a
+        // fresh Google sign-in, with a valid 30-day refresh cookie sitting
+        // right there unused.
+        expect(shouldAttemptRefresh("/", undefined, "refresh-tok", now)).toBe(true);
+        expect(shouldAttemptRefresh("/login", dead, "refresh-tok", now)).toBe(true);
+    });
+
+    it("refreshes on a protected route when the access token is dead", () => {
+        expect(shouldAttemptRefresh("/dashboard", undefined, "refresh-tok", now)).toBe(true);
+        expect(shouldAttemptRefresh("/api/budget/accounts/", dead, "refresh-tok", now)).toBe(true);
+    });
+
+    it("does nothing for an anonymous visitor", () => {
+        // No refresh cookie => no backend round-trip. Marketing traffic and
+        // crawlers must not pay for this.
+        expect(shouldAttemptRefresh("/", undefined, undefined, now)).toBe(false);
+        expect(shouldAttemptRefresh("/", undefined, "", now)).toBe(false);
+        expect(shouldAttemptRefresh("/tdah", dead, undefined, now)).toBe(false);
+    });
+
+    it("does nothing while the access token is still good", () => {
+        const later = encode({ exp: now / 1000 + 600 });
+        expect(shouldAttemptRefresh("/", later, "refresh-tok", now)).toBe(false);
+        expect(shouldAttemptRefresh("/dashboard", later, "refresh-tok", now)).toBe(false);
+    });
+
+    it("never fires for the refresh route itself", () => {
+        // /api/auth/refresh IS the refresh. Attempting one in its own
+        // middleware pass would recurse.
+        expect(shouldAttemptRefresh("/api/auth/refresh", dead, "refresh-tok", now)).toBe(false);
+        expect(shouldAttemptRefresh("/api/auth/refresh", undefined, "refresh-tok", now)).toBe(false);
+    });
+
+    it("never fires for logout", () => {
+        // Minting a fresh pair on the way out would defeat the logout.
+        expect(shouldAttemptRefresh("/api/auth/logout", dead, "refresh-tok", now)).toBe(false);
+    });
+
+    it("never fires on a route that mints its own session", () => {
+        // The middleware appends its refreshed Set-Cookie AFTER the route's
+        // own, so it would land last and win — signing the visitor back into
+        // the PREVIOUS session on the request meant to replace it. On a shared
+        // family device that is a silent account mix-up.
+        for (const p of [
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/register-family",
+            "/api/oauth/google",
+            "/api/oauth/google/",
+            "/api/invitations/accept",
+        ]) {
+            expect(shouldAttemptRefresh(p, dead, "stale-refresh-tok", now)).toBe(false);
+        }
+    });
+
+    it("covers every public route that writes auth cookies", () => {
+        // Guards against a new session-minting public route being added to
+        // PUBLIC_ROUTES without being excluded here. Anything matching these
+        // shapes must be listed above; update BOTH lists together.
+        const sessionMinting = PUBLIC_ROUTES.filter(
+            (p) =>
+                p.startsWith("/api/auth/login") ||
+                p.startsWith("/api/auth/register") ||
+                p.startsWith("/api/oauth/") ||
+                p.startsWith("/api/invitations/accept"),
+        );
+        for (const p of sessionMinting) {
+            expect(shouldAttemptRefresh(p, dead, "stale-refresh-tok", now)).toBe(false);
+        }
+    });
+
+    it("ignores `live` only because of the skew window, not by accident", () => {
+        // Guards the fixtures above: `live` is dead at `now`, alive well before it.
+        expect(isJwtExpired(live, now)).toBe(true);
+        expect(isJwtExpired(live, now - 3_600_000)).toBe(false);
     });
 });
