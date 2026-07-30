@@ -68,7 +68,7 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
@@ -142,7 +142,7 @@ jobs:
     steps:
       # Full-repo checkout is required: help.astro / ayuda.astro import
       # markdown from the top-level docs/ tree during the build.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -177,7 +177,7 @@ jobs:
     name: Compose files parse
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -222,7 +222,7 @@ jobs:
     name: Supply chain (audit + secrets)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # gitleaks needs history to scan commits, not just the tip tree.
           fetch-depth: 0
