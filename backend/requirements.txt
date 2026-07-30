@@ -62,12 +62,24 @@ google-auth==2.56.2
 # Anthropic Messages API underneath. All Anthropic spend is attributed
 # to the FTM virtual key in LiteLLM admin instead of hitting Anthropic
 # directly.
-openai>=2.50.0
+# Pinned, not a floor. This was `openai>=1.50.0`, which let the v2 major into
+# prod silently: a clean build resolves a floor to the newest release, so prod
+# ran 2.49.0 against a declared 1.50.0 minimum with no PR and no review. #192
+# then raised the floor to >=2.50.0; pinning it exactly is what actually stops
+# the drift, so dependabot proposes upgrades as reviewable PRs instead of them
+# arriving invisibly at image build time.
+# NOTE: prod is on 2.49.0, so the next deploy moves it to 2.50.0 — a minor,
+# green on CI in #192 and on the full suite locally.
+openai==2.50.0
 # PyMuPDF (imported as fitz) — lets receipt_scanner_service accept
 # application/pdf uploads and rasterize the first page to PNG in memory
 # before sending to the vision model. Ships as a prebuilt wheel for
 # Linux x86_64 so there's no poppler or other system dependency.
-pymupdf>=1.24.0
+# Pinned for the same reason as openai above. This one matters more than the
+# version number suggests: pymupdf rasterizes UNTRUSTED PDF uploads for the
+# receipt scanner, so it is the last dependency that should drift between
+# builds without anyone looking. Declared >=1.24.0, actually running 1.28.0.
+pymupdf==1.28.0
 
 # Image processing — generates ~200px WebP thumbnails for uploaded gig/task
 # proof + receipt-draft images at upload time (app/core/thumbnails.py). Ships
