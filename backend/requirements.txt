@@ -62,7 +62,7 @@ google-auth==2.56.2
 # Anthropic Messages API underneath. All Anthropic spend is attributed
 # to the FTM virtual key in LiteLLM admin instead of hitting Anthropic
 # directly.
-openai>=1.50.0
+openai>=2.50.0
 # PyMuPDF (imported as fitz) — lets receipt_scanner_service accept
 # application/pdf uploads and rasterize the first page to PNG in memory
 # before sending to the vision model. Ships as a prebuilt wheel for
