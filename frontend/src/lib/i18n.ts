@@ -416,6 +416,11 @@ export const translations = {
         pac_markdone_ok: "Sent to your review queue.",
         pac_markdone_ok_paid: "Sent to your review queue. That week's allowance was already paid, so grading credits points but no cash — use a manual adjustment if you want to make it up.",
         pac_markdone_err: "Could not mark it as done.",
+        pac_markdone_photo: "Add a photo (optional)",
+        pac_markdone_photo_pick: "📷 Choose a photo",
+        pac_markdone_photo_ready: "Photo attached",
+        pac_markdone_photo_err: "That photo could not be uploaded.",
+        pac_markdone_photo_remove: "Remove",
         pac_cancel_btn: "Close",
         pac_completed_count: (done: number, total: number) => `${done}/${total}`,
 
@@ -1024,6 +1029,11 @@ export const translations = {
         pac_markdone_ok: "Se envió a tu fila de revisión.",
         pac_markdone_ok_paid: "Se envió a tu fila de revisión. El domingo de esa semana ya se pagó, así que al calificar se dan puntos pero no dinero — usa un ajuste manual si quieres compensarlo.",
         pac_markdone_err: "No se pudo marcar como hecha.",
+        pac_markdone_photo: "Agregar foto (opcional)",
+        pac_markdone_photo_pick: "📷 Elegir foto",
+        pac_markdone_photo_ready: "Foto adjunta",
+        pac_markdone_photo_err: "No se pudo subir la foto.",
+        pac_markdone_photo_remove: "Quitar",
         pac_cancel_btn: "Cerrar",
         pac_completed_count: (done: number, total: number) => `${done}/${total}`,
 

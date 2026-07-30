@@ -552,7 +552,8 @@ function isToday(d: Date): boolean {
                 <div id="markdone-block" class="hidden border-t border-brand-ink/10 pt-4 space-y-2"
                      data-ok={t(lang, "pac_markdone_ok")}
                      data-ok-paid={t(lang, "pac_markdone_ok_paid")}
-                     data-err={t(lang, "pac_markdone_err")}>
+                     data-err={t(lang, "pac_markdone_err")}
+                     data-photo-err={t(lang, "pac_markdone_photo_err")}>
                     <p class="text-sm font-semibold text-brand-ink">✅ {t(lang, "pac_markdone_title")}</p>
                     <p class="text-xs text-brand-ink-soft">{t(lang, "pac_markdone_hint")}</p>
                     <label class="text-xs font-medium text-brand-ink-soft block" for="markdone-note">
@@ -565,6 +566,39 @@ function isToday(d: Date): boolean {
                         placeholder={t(lang, "pac_markdone_note_ph")}
                         class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-mint-deep outline-none"
                     />
+                    <!-- Optional photo. Uploaded to the existing stateless
+                         /proof-upload endpoint, which returns the path stored on
+                         the assignment; the approvals queue already renders
+                         proof_image_url as a thumbnail + lightbox, so the photo
+                         shows up exactly where the grading happens. No `capture`
+                         attribute: it pins iOS to the lens, and a parent is
+                         usually attaching a photo the kid already sent them. -->
+                    <div class="space-y-1.5">
+                        <p class="text-xs font-medium text-brand-ink-soft">{t(lang, "pac_markdone_photo")}</p>
+                        <input
+                            type="file"
+                            id="markdone-photo"
+                            accept="image/jpeg,image/png,image/webp"
+                            class="hidden"
+                        />
+                        <div class="flex items-center gap-2">
+                            <button
+                                type="button"
+                                id="markdone-photo-btn"
+                                class="flex-1 py-2 text-sm font-semibold rounded-lg border border-brand-ink/20 bg-brand-cream hover:bg-brand-cream-deep transition-colors disabled:opacity-50"
+                            >{t(lang, "pac_markdone_photo_pick")}</button>
+                            <button
+                                type="button"
+                                id="markdone-photo-clear"
+                                class="hidden px-3 py-2 text-xs font-semibold rounded-lg border border-brand-ink/20 text-brand-ink-soft hover:bg-brand-cream-deep transition-colors"
+                            >{t(lang, "pac_markdone_photo_remove")}</button>
+                        </div>
+                        <div id="markdone-photo-preview" class="hidden flex items-center gap-2">
+                            <img id="markdone-photo-img" alt="" class="h-16 w-16 rounded-lg object-cover border border-brand-ink/10" />
+                            <span class="text-xs text-brand-mint-deep font-medium">✓ {t(lang, "pac_markdone_photo_ready")}</span>
+                        </div>
+                    </div>
+
                     <p id="markdone-paidwarn" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
                         ⚠ {t(lang, "pac_markdone_paidwarn")}
                     </p>
@@ -640,8 +674,17 @@ function isToday(d: Date): boolean {
             const MARKDONE_OK = markBlockCopy("ok");
             const MARKDONE_OK_PAID = markBlockCopy("okPaid");
             const MARKDONE_ERR = markBlockCopy("err");
+            const MARKDONE_PHOTO_ERR = markBlockCopy("photoErr");
+            const photoInput = document.getElementById("markdone-photo") as HTMLInputElement | null;
+            const photoBtn = document.getElementById("markdone-photo-btn") as HTMLButtonElement | null;
+            const photoClear = document.getElementById("markdone-photo-clear");
+            const photoPreview = document.getElementById("markdone-photo-preview");
+            const photoImg = document.getElementById("markdone-photo-img") as HTMLImageElement | null;
+            // Set once the upload succeeds; this is what gets posted, never the
+            // raw file, so the server only ever sees a path it issued itself.
+            let uploadedPhotoUrl = "";
 
-            function markBlockCopy(key: "ok" | "okPaid" | "err"): string {
+            function markBlockCopy(key: "ok" | "okPaid" | "err" | "photoErr"): string {
                 const el = document.getElementById("markdone-block");
                 return (el?.dataset?.[key] as string) ?? "";
             }
@@ -671,6 +714,7 @@ function isToday(d: Date): boolean {
                 const canMarkDone = current === "pending" || current === "overdue";
                 if (markBlock) markBlock.classList.toggle("hidden", !canMarkDone);
                 if (markNote) markNote.value = "";
+                resetPhoto();
                 if (markMsg) markMsg.classList.add("hidden");
                 if (markBtn) markBtn.disabled = false;
                 if (markPaidWarn) {
@@ -696,6 +740,47 @@ function isToday(d: Date): boolean {
             // Retroactive completion. Awards nothing here by design — it lands
             // the task in the graded review queue, so points come from the same
             // approve path as every other task.
+            function resetPhoto() {
+                uploadedPhotoUrl = "";
+                if (photoInput) photoInput.value = "";
+                photoPreview?.classList.add("hidden");
+                photoClear?.classList.add("hidden");
+                if (photoBtn) photoBtn.disabled = false;
+            }
+
+            photoBtn?.addEventListener("click", () => photoInput?.click());
+            photoClear?.addEventListener("click", resetPhoto);
+
+            photoInput?.addEventListener("change", async () => {
+                const file = photoInput.files?.[0];
+                if (!file) return;
+                if (photoBtn) photoBtn.disabled = true;
+                try {
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    const r = await fetch("/api/task-assignments/proof-upload", {
+                        method: "POST",
+                        body: fd,
+                        credentials: "include",
+                    });
+                    if (!r.ok) throw new Error(String(r.status));
+                    const body = await r.json();
+                    uploadedPhotoUrl = body?.proof_image_url ?? "";
+                    if (!uploadedPhotoUrl) throw new Error("no url");
+                    if (photoImg) photoImg.src = `${uploadedPhotoUrl}?size=thumb`;
+                    photoPreview?.classList.remove("hidden");
+                    photoClear?.classList.remove("hidden");
+                } catch {
+                    resetPhoto();
+                    if (markMsg) {
+                        markMsg.textContent = MARKDONE_PHOTO_ERR;
+                        markMsg.className = "text-xs text-red-700";
+                        markMsg.classList.remove("hidden");
+                    }
+                }
+                if (photoBtn) photoBtn.disabled = false;
+            });
+
             markBtn?.addEventListener("click", async () => {
                 const note = (markNote?.value ?? "").trim();
                 if (!note || !markDoneId) {
@@ -709,7 +794,11 @@ function isToday(d: Date): boolean {
                         {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ note }),
+                            body: JSON.stringify(
+                                uploadedPhotoUrl
+                                    ? { note, proof_image_url: uploadedPhotoUrl }
+                                    : { note },
+                            ),
                             credentials: "include",
                         },
                     );

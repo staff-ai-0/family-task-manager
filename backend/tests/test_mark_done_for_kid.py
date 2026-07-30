@@ -326,3 +326,110 @@ async def test_route_requires_auth(client, db_session, test_family, test_child_u
         json={"note": "x"},
     )
     assert r.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# Optional photo. A parent asserting "she did it" is more convincing with the
+# evidence attached, and the approvals queue already renders proof_image_url
+# with a thumbnail + lightbox, so the photo shows up where the grading happens.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_photo_is_stored_when_given(
+    db_session, test_family, test_child_user, test_parent_user
+):
+    tpl = await _chore_template(db_session, test_family)
+    a = await _assignment(db_session, test_family, test_child_user, tpl)
+
+    # Exactly the shape POST /proof-upload returns: uuid4().hex + real ext.
+    url = f"/uploads/gig-proofs/{uuid4().hex}.jpg"
+    await TaskAssignmentService.mark_done_for_kid(
+        db_session, assignment_id=a.id, family_id=test_family.id,
+        parent_id=test_parent_user.id, note="aquí está la foto",
+        proof_image_url=url,
+    )
+    await db_session.refresh(a)
+    assert a.proof_image_url == url
+
+
+@pytest.mark.asyncio
+async def test_photo_is_optional(
+    db_session, test_family, test_child_user, test_parent_user
+):
+    tpl = await _chore_template(db_session, test_family)
+    a = await _assignment(db_session, test_family, test_child_user, tpl)
+
+    await TaskAssignmentService.mark_done_for_kid(
+        db_session, assignment_id=a.id, family_id=test_family.id,
+        parent_id=test_parent_user.id, note="sin foto",
+    )
+    await db_session.refresh(a)
+    assert a.proof_image_url is None
+
+
+@pytest.mark.asyncio
+async def test_an_arbitrary_url_is_refused(
+    db_session, test_family, test_child_user, test_parent_user
+):
+    """Only paths this app issued.
+
+    proof_image_url is rendered straight into an <img src> in the approvals
+    queue, so accepting a client-supplied absolute URL would let a caller point
+    it at any host — an off-site fetch on the grader's browser at best, and a
+    javascript:/data: payload at worst. The upload endpoint returns
+    /uploads/gig-proofs/<name>; nothing else is acceptable.
+    """
+    tpl = await _chore_template(db_session, test_family)
+    a = await _assignment(db_session, test_family, test_child_user, tpl)
+
+    for bad in (
+        "https://evil.example/x.jpg",
+        "//evil.example/x.jpg",
+        "javascript:alert(1)",
+        "data:image/png;base64,AAA",
+        "/uploads/gig-proofs/../../etc/passwd",
+        "/etc/passwd",
+        "/uploads/other/x.jpg",
+        "/uploads/gig-proofs/short.jpg",
+        "/uploads/gig-proofs/" + ("a" * 32) + ".svg",
+    ):
+        with pytest.raises(ValidationException):
+            await TaskAssignmentService.mark_done_for_kid(
+                db_session, assignment_id=a.id, family_id=test_family.id,
+                parent_id=test_parent_user.id, note="ok", proof_image_url=bad,
+            )
+
+
+@pytest.mark.asyncio
+async def test_route_accepts_a_photo(
+    client, auth_headers, db_session, test_family, test_child_user
+):
+    tpl = await _chore_template(db_session, test_family)
+    a = await _assignment(db_session, test_family, test_child_user, tpl)
+
+    r = await client.post(
+        f"/api/task-assignments/{a.id}/mark-done-for-kid",
+        json={"note": "con foto", "proof_image_url": "/uploads/gig-proofs/" + ("a" * 32) + ".webp"},
+        headers=auth_headers,
+    )
+    assert r.status_code == 200, r.text
+    await db_session.refresh(a)
+    assert a.proof_image_url == "/uploads/gig-proofs/" + ("a" * 32) + ".webp"
+
+
+@pytest.mark.asyncio
+async def test_route_refuses_an_offsite_photo(
+    client, auth_headers, db_session, test_family, test_child_user
+):
+    tpl = await _chore_template(db_session, test_family)
+    a = await _assignment(db_session, test_family, test_child_user, tpl)
+
+    r = await client.post(
+        f"/api/task-assignments/{a.id}/mark-done-for-kid",
+        json={"note": "x", "proof_image_url": "https://evil.example/x.jpg"},
+        headers=auth_headers,
+    )
+    assert r.status_code in (400, 422)
+    await db_session.refresh(a)
+    assert a.proof_image_url is None

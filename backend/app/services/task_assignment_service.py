@@ -21,12 +21,20 @@ from app.core.exceptions import (
     ForbiddenException,
     ValidationException,
 )
+import re
+
 from app.core.grading import grade_credit_points
+
 from app.core.time_utils import utc_today
 from app.services.base_service import (
     BaseFamilyService,
     get_user_by_id,
 )
+
+# Exactly what POST /api/task-assignments/proof-upload returns:
+# /uploads/gig-proofs/<uuid-hex>.<jpg|png|webp>. Anchored with fullmatch, so no
+# traversal, no scheme, no host, no query.
+_PROOF_URL_RE = re.compile(r"/uploads/gig-proofs/[0-9a-f]{32}\.(?:jpg|png|webp)")
 
 
 class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
@@ -1982,6 +1990,7 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         family_id: UUID,
         parent_id: UUID,
         note: Optional[str] = None,
+        proof_image_url: Optional[str] = None,
     ) -> dict:
         """Parent records that an un-completed chore was in fact done.
 
@@ -2019,6 +2028,20 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "Explica por qué la marcas como hecha / "
                 "Say why you are marking this done"
             )
+
+        # An optional photo, but only a path this app issued. proof_image_url is
+        # rendered straight into an <img src> in the approvals queue, so an
+        # arbitrary client-supplied value would let a caller point it at any
+        # host — an off-site fetch from the grader's browser at best, a
+        # javascript:/data: payload at worst. POST /proof-upload returns
+        # /uploads/gig-proofs/<uuid>.<ext>; nothing else is accepted.
+        if proof_image_url is not None:
+            proof_image_url = proof_image_url.strip()
+            if not _PROOF_URL_RE.fullmatch(proof_image_url):
+                raise ValidationException(
+                    "proof_image_url must be a path returned by "
+                    "POST /api/task-assignments/proof-upload"
+                )
 
         assignment = await TaskAssignmentService.get_assignment(
             db, assignment_id, family_id, for_update=True
@@ -2075,6 +2098,8 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         assignment.proof_text = (
             f"[{parent.name}] {parent_note}" if parent.name else parent_note
         )
+        if proof_image_url:
+            assignment.proof_image_url = proof_image_url
         await db.commit()
         await db.refresh(assignment)
 
