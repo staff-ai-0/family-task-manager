@@ -162,6 +162,12 @@ class MarkDoneForKidRequest(BaseModel):
     so they can see why a task they never submitted is suddenly marked done.
     """
     note: str = Field(..., min_length=1, max_length=2000)
+    # Optional photo of the finished work. Must be a path returned by
+    # POST /api/task-assignments/proof-upload — the service re-validates the
+    # shape, because this value is rendered into an <img src> in the approvals
+    # queue and an arbitrary URL there would point the grader's browser
+    # anywhere.
+    proof_image_url: Optional[str] = Field(None, max_length=500)
 
 
 class MarkDoneForKidResponse(BaseModel):

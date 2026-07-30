@@ -477,6 +477,7 @@ async def mark_done_for_kid(
         family_id=family_id,
         parent_id=to_uuid_required(current_user.id),
         note=body.note,
+        proof_image_url=body.proof_image_url,
     )
 
 
