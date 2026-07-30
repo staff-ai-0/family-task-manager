@@ -1976,6 +1976,115 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         return ("missed", None, 0)
 
     @staticmethod
+    async def mark_done_for_kid(
+        db: AsyncSession,
+        assignment_id: UUID,
+        family_id: UUID,
+        parent_id: UUID,
+        note: Optional[str] = None,
+    ) -> dict:
+        """Parent records that an un-completed chore was in fact done.
+
+        The parent grid could reschedule or cancel a past chore but never say
+        "she actually did this": nothing except kid-side completion ever set
+        approval_status=PENDING, so an OVERDUE task could not reach the graded
+        review queue at all.
+
+        This deliberately awards NOTHING. It moves the task to
+        (COMPLETED, approval PENDING) and lets the existing graded path
+        (approve_gig) do the crediting, so grade scaling, usage metering, the
+        trust streak and the point transaction all stay on one code path. A
+        second "mark complete" that awarded points itself would be a second
+        source of truth for the ledger.
+
+        assigned_date and week_of are untouched on purpose: _chore_units and
+        the family cup both scope on week_of, so the credit lands on the week
+        the chore was DUE rather than the week a parent got around to it.
+
+        Returns a dict with ``week_already_paid`` — see the check below. That
+        flag is the whole reason this is a service method and not an extra
+        option on the edit modal's status dropdown.
+        """
+        from app.models.user import UserRole
+        from app.models.cash_transaction import CashTransaction, CashTransactionType
+
+        parent = await get_user_by_id(db, parent_id)
+        if parent.family_id != family_id or parent.role != UserRole.PARENT:
+            raise ForbiddenException(
+                "Only parents in this family can mark a task done for a kid"
+            )
+
+        if not note or not note.strip():
+            raise ValidationException(
+                "Explica por qué la marcas como hecha / "
+                "Say why you are marking this done"
+            )
+
+        assignment = await TaskAssignmentService.get_assignment(
+            db, assignment_id, family_id, for_update=True
+        )
+
+        if assignment.status not in (
+            AssignmentStatus.PENDING,
+            AssignmentStatus.OVERDUE,
+        ):
+            # COMPLETED may already have credited points under a grade, and
+            # CANCELLED was explicitly waived — the edit modal un-cancels.
+            raise ValidationException(
+                f"Only a pending or overdue task can be marked done for a kid "
+                f"(this one is {assignment.status.value})"
+            )
+        if assignment.approval_status != ApprovalStatus.NONE:
+            raise ValidationException(
+                f"This task is already in review "
+                f"({assignment.approval_status.value})"
+            )
+
+        # Same 8-week horizon list_outstanding_weeks already uses, rather than
+        # a second competing rule. A months-old chore should not pay out.
+        from app.services.bank_service import BankService
+
+        today = await BankService._family_local_today(db, family_id)
+        if (today - assignment.assigned_date).days > 8 * 7:
+            raise ValidationException(
+                "Esta tarea es demasiado antigua para marcarla como hecha "
+                "(más de 8 semanas) / Too old to mark done (over 8 weeks)"
+            )
+
+        # Money edge: release_chore_paycheck is idempotent on a
+        # CashTransaction(ALLOWANCE, week_of=...), so a week that has been paid
+        # CANNOT be topped up. Retroactive credit on such a week therefore
+        # yields points but no cash. That is a silent shortfall unless the
+        # caller says so, so report it and let the parent decide — they can
+        # true it up with release_chore_paycheck's adjustment_cents.
+        week_already_paid = (await db.execute(
+            select(CashTransaction.id).where(
+                CashTransaction.family_id == family_id,
+                CashTransaction.user_id == assignment.assigned_to,
+                CashTransaction.type == CashTransactionType.ALLOWANCE,
+                CashTransaction.week_of == assignment.week_of,
+            ).limit(1)
+        )).scalar_one_or_none() is not None
+
+        assignment.status = AssignmentStatus.COMPLETED
+        assignment.completed_at = datetime.now(timezone.utc)
+        assignment.approval_status = ApprovalStatus.PENDING
+        # Recorded as the kid-facing proof line: they will see why a task they
+        # did not submit suddenly shows up as done.
+        parent_note = note.strip()
+        assignment.proof_text = (
+            f"[{parent.name}] {parent_note}" if parent.name else parent_note
+        )
+        await db.commit()
+        await db.refresh(assignment)
+
+        return {
+            "assignment_id": assignment.id,
+            "week_of": assignment.week_of,
+            "week_already_paid": week_already_paid,
+        }
+
+    @staticmethod
     async def approve_gig(
         db: AsyncSession,
         assignment_id: UUID,

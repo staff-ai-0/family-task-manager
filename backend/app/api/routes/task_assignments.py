@@ -26,6 +26,8 @@ from app.schemas.task_assignment import (
     AssignmentPatch,
     CompleteAssignmentRequest,
     ApprovalDecision,
+    MarkDoneForKidRequest,
+    MarkDoneForKidResponse,
     GigApprovalRow,
 )
 from app.models import User
@@ -448,6 +450,34 @@ async def approve_assignment(
         db, assignment_id, family_id
     )
     return _assignment_to_detail(assignment)
+
+
+@router.post(
+    "/{assignment_id}/mark-done-for-kid",
+    response_model=MarkDoneForKidResponse,
+)
+async def mark_done_for_kid(
+    assignment_id: UUID,
+    body: MarkDoneForKidRequest,
+    current_user: User = Depends(require_parent_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record that a pending/overdue chore was actually done, for review.
+
+    Credits nothing on its own: the task lands in the normal graded-review
+    queue so approve_gig stays the single place points are awarded. The
+    response's ``week_already_paid`` tells the caller when that week's paycheck
+    has already been released, in which case grading will credit points but no
+    cash — see the service docstring.
+    """
+    family_id = to_uuid_required(current_user.family_id)
+    return await TaskAssignmentService.mark_done_for_kid(
+        db,
+        assignment_id=assignment_id,
+        family_id=family_id,
+        parent_id=to_uuid_required(current_user.id),
+        note=body.note,
+    )
 
 
 @router.post("/check-overdue", response_model=List[TaskAssignmentResponse])

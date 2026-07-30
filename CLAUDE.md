@@ -176,6 +176,8 @@ Fully native to PostgreSQL (the external "Actual Budget" service was decommissio
 
 **28 budget services** in `backend/app/services/budget/` — one per concern; notable beyond the CRUD set: `a2a_webhook_service` (bank-email-matcher agent intake), `account_matching_service`, `category_ai_service`, `dedup_service`, `duplicate_guard_service`, `transfer_detector`, `transaction_item_service`, `default_categories`.
 
+**Retroactive completion**: a parent can record that a pending/overdue chore was actually done — `POST /api/task-assignments/{id}/mark-done-for-kid` (parent only, note required, 8-week horizon). It awards NOTHING: it sets `COMPLETED` + `approval_status=PENDING` so the task enters the normal graded-review queue and `approve_gig` stays the single place points are credited. `week_of`/`assigned_date` are deliberately preserved, since `_chore_units` and the family cup both scope on `week_of` — credit lands on the week the chore was DUE. The response returns `week_already_paid`: `release_chore_paycheck` is idempotent per (kid, week), so on an already-released week grading credits points but NO cash, and the UI must say so (remedy is `release_chore_paycheck`'s `adjustment_cents`).
+
 ### Subscription & premium gating
 
 3-tier plan system (Free / Plus / Pro) with PayPal billing integration (PayPal ONLY — no Stripe, no Mercado Pago).

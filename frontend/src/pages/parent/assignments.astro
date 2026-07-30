@@ -542,6 +542,40 @@ function isToday(d: Date): boolean {
                     </select>
                 </div>
 
+                <!-- Retroactive completion. Shown only for pending/overdue tasks:
+                     a COMPLETED one may already have credited points under a
+                     grade, so re-opening it in place would desync the ledger.
+                     This posts to its own endpoint (not the patch form) because
+                     it awards nothing — it moves the task into the graded
+                     review queue so approve_gig stays the one place points are
+                     awarded. -->
+                <div id="markdone-block" class="hidden border-t border-brand-ink/10 pt-4 space-y-2"
+                     data-ok={t(lang, "pac_markdone_ok")}
+                     data-ok-paid={t(lang, "pac_markdone_ok_paid")}
+                     data-err={t(lang, "pac_markdone_err")}>
+                    <p class="text-sm font-semibold text-brand-ink">✅ {t(lang, "pac_markdone_title")}</p>
+                    <p class="text-xs text-brand-ink-soft">{t(lang, "pac_markdone_hint")}</p>
+                    <label class="text-xs font-medium text-brand-ink-soft block" for="markdone-note">
+                        {t(lang, "pac_markdone_note")}
+                    </label>
+                    <input
+                        type="text"
+                        id="markdone-note"
+                        maxlength="2000"
+                        placeholder={t(lang, "pac_markdone_note_ph")}
+                        class="w-full px-3 py-2.5 rounded-lg border border-brand-ink/20 text-sm focus:ring-2 focus:ring-brand-mint-deep outline-none"
+                    />
+                    <p id="markdone-paidwarn" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+                        ⚠ {t(lang, "pac_markdone_paidwarn")}
+                    </p>
+                    <p id="markdone-msg" class="hidden text-xs"></p>
+                    <button
+                        type="button"
+                        id="markdone-btn"
+                        class="w-full py-2.5 bg-brand-mint-deep hover:bg-brand-mint text-white font-semibold text-sm rounded-lg transition-colors disabled:opacity-50"
+                    >{t(lang, "pac_markdone_btn")}</button>
+                </div>
+
                 <div class="flex items-center gap-2 pt-2">
                     <button type="button" id="edit-cancel" class="flex-1 py-2.5 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold text-sm rounded-lg transition-colors">
                         {t(lang, "pac_cancel_btn")}
@@ -595,6 +629,23 @@ function isToday(d: Date): boolean {
             const closeBtn = document.getElementById("edit-close");
             const cancelBtn = document.getElementById("edit-cancel");
 
+            const markBlock = document.getElementById("markdone-block");
+            const markNote = document.getElementById("markdone-note") as HTMLInputElement | null;
+            const markBtn = document.getElementById("markdone-btn") as HTMLButtonElement | null;
+            const markMsg = document.getElementById("markdone-msg");
+            const markPaidWarn = document.getElementById("markdone-paidwarn");
+            let markDoneId = "";
+            // Localized copy travels on the block's data-* attributes rather
+            // than define:vars, keeping this script processable.
+            const MARKDONE_OK = markBlockCopy("ok");
+            const MARKDONE_OK_PAID = markBlockCopy("okPaid");
+            const MARKDONE_ERR = markBlockCopy("err");
+
+            function markBlockCopy(key: "ok" | "okPaid" | "err"): string {
+                const el = document.getElementById("markdone-block");
+                return (el?.dataset?.[key] as string) ?? "";
+            }
+
             if (!modal || !form || !idInput || !assignedTo || !assignedDate || !statusSel) return;
 
             const dialog = createDialog(modal, {
@@ -614,11 +665,85 @@ function isToday(d: Date): boolean {
                 assignedDate.value = btn.dataset.assignedDate ?? "";
                 const current = btn.dataset.currentStatus ?? "pending";
                 statusSel.value = current === "cancelled" ? "cancelled" : "pending";
+
+                // Retroactive completion is offered for work that was never
+                // done, not for work already graded.
+                const canMarkDone = current === "pending" || current === "overdue";
+                if (markBlock) markBlock.classList.toggle("hidden", !canMarkDone);
+                if (markNote) markNote.value = "";
+                if (markMsg) markMsg.classList.add("hidden");
+                if (markBtn) markBtn.disabled = false;
+                if (markPaidWarn) {
+                    // We do not query per-task whether that week's paycheck was
+                    // released (it would be one request per card), so warn
+                    // whenever the task is in a PAST week — that is exactly when
+                    // the payout may already be closed. The response then says
+                    // which case it actually was.
+                    const d = btn.dataset.assignedDate ?? "";
+                    const now = new Date();
+                    const pad = (n: number) => String(n).padStart(2, "0");
+                    const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+                    markPaidWarn.classList.toggle("hidden", !(d && d < todayStr));
+                }
+                markDoneId = btn.dataset.assignmentId ?? "";
                 dialog.open();
             };
 
             document.querySelectorAll<HTMLButtonElement>("[data-edit-assignment]").forEach((btn) => {
                 btn.addEventListener("click", () => open(btn));
+            });
+
+            // Retroactive completion. Awards nothing here by design — it lands
+            // the task in the graded review queue, so points come from the same
+            // approve path as every other task.
+            markBtn?.addEventListener("click", async () => {
+                const note = (markNote?.value ?? "").trim();
+                if (!note || !markDoneId) {
+                    markNote?.focus();
+                    return;
+                }
+                markBtn.disabled = true;
+                try {
+                    const r = await fetch(
+                        `/api/task-assignments/${encodeURIComponent(markDoneId)}/mark-done-for-kid`,
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ note }),
+                            credentials: "include",
+                        },
+                    );
+                    if (!r.ok) {
+                        const body = await r.json().catch(() => ({}));
+                        if (markMsg) {
+                            // Surface the backend's real reason (too old, wrong
+                            // status) instead of a generic failure.
+                            const detail = typeof body?.detail === "string" ? body.detail : "";
+                            markMsg.textContent = detail || MARKDONE_ERR;
+                            markMsg.className = "text-xs text-red-700";
+                        }
+                        markBtn.disabled = false;
+                        return;
+                    }
+                    const body = await r.json();
+                    if (markMsg) {
+                        markMsg.textContent = body?.week_already_paid
+                            ? MARKDONE_OK_PAID
+                            : MARKDONE_OK;
+                        markMsg.className = body?.week_already_paid
+                            ? "text-xs text-amber-800"
+                            : "text-xs text-brand-mint-deep";
+                    }
+                    // Reload so the card moves to its completed styling and the
+                    // approvals badge picks it up.
+                    setTimeout(() => window.location.reload(), body?.week_already_paid ? 2600 : 900);
+                } catch {
+                    if (markMsg) {
+                        markMsg.textContent = MARKDONE_ERR;
+                        markMsg.className = "text-xs text-red-700";
+                    }
+                    markBtn.disabled = false;
+                }
             });
         });
     </script>

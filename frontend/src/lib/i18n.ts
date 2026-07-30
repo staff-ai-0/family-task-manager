@@ -406,6 +406,16 @@ export const translations = {
         pac_keep_pending: "Pending",
         pac_set_cancelled: "Cancelled",
         pac_save: "Save",
+        // Retroactive completion — a parent asserting an overdue chore was done.
+        pac_markdone_title: "It was actually done",
+        pac_markdone_hint: "Sends it to your review queue — points are awarded when you grade it there.",
+        pac_markdone_note: "What happened?",
+        pac_markdone_note_ph: "She did it Monday, I forgot to mark it",
+        pac_markdone_btn: "Mark as done",
+        pac_markdone_paidwarn: "If that week's allowance was already paid out, the points still count but the payment is not recalculated — use a manual adjustment to make it up.",
+        pac_markdone_ok: "Sent to your review queue.",
+        pac_markdone_ok_paid: "Sent to your review queue. That week's allowance was already paid, so grading credits points but no cash — use a manual adjustment if you want to make it up.",
+        pac_markdone_err: "Could not mark it as done.",
         pac_cancel_btn: "Close",
         pac_completed_count: (done: number, total: number) => `${done}/${total}`,
 
@@ -1004,6 +1014,16 @@ export const translations = {
         pac_keep_pending: "Pendiente",
         pac_set_cancelled: "Cancelada",
         pac_save: "Guardar",
+        // Marcado retroactivo — un papá afirma que una tarea vencida sí se hizo.
+        pac_markdone_title: "Sí la hizo",
+        pac_markdone_hint: "Se va a tu fila de revisión — los puntos se dan cuando la califiques ahí.",
+        pac_markdone_note: "¿Qué pasó?",
+        pac_markdone_note_ph: "La hizo el lunes, olvidé marcarla",
+        pac_markdone_btn: "Marcar como hecha",
+        pac_markdone_paidwarn: "Si el domingo de esa semana ya se pagó, los puntos sí cuentan pero el pago no se recalcula — usa un ajuste manual para compensarlo.",
+        pac_markdone_ok: "Se envió a tu fila de revisión.",
+        pac_markdone_ok_paid: "Se envió a tu fila de revisión. El domingo de esa semana ya se pagó, así que al calificar se dan puntos pero no dinero — usa un ajuste manual si quieres compensarlo.",
+        pac_markdone_err: "No se pudo marcar como hecha.",
         pac_cancel_btn: "Cerrar",
         pac_completed_count: (done: number, total: number) => `${done}/${total}`,
 
