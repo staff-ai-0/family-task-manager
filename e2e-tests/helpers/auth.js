@@ -28,8 +28,10 @@ const OPERATOR_USER = {
  *     leaving us stranded on /login until waitForURL times out.
  *  2. The page has a second `type=submit` (the language toggle), so we click
  *     the login button by id (`#login-submit-btn`), not an ambiguous selector.
- * The generous waitForURL budget covers the check-methods + login round-trips
- * plus the dashboard SSR render. Parents land on /parent, kids on /dashboard.
+ * The waitForURL budget covers the check-methods + login round-trips plus the
+ * dashboard SSR render, and deliberately expires BEFORE the runner's own test
+ * timeout so the missing-account diagnostic below can actually run. Parents
+ * land on /parent, kids on /dashboard.
  *
  * @param {import('@playwright/test').Page} page
  * @param {{email: string, password: string}} user
@@ -40,7 +42,28 @@ async function loginAs(page, user) {
   await page.fill('input[name="email"]', user.email);
   await page.fill('input[name="password"]', user.password);
   await page.click('#login-submit-btn');
-  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
+  try {
+    // Below playwright.config.js's 30s test timeout on purpose: at 30s the
+    // runner kills the test before the catch below can run, so the helpful
+    // message never appears and you get a bare "Test timeout exceeded".
+    await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 20000 });
+  } catch (err) {
+    // Distinguish "this account is not on this deployment" from "login is
+    // broken". Both surface identically as a waitForURL timeout, and reading
+    // the first as the second has already cost a debugging session: pointing
+    // BASE_URL at an unseeded deployment made six specs look like login
+    // regressions.
+    const known = await accountExists(page.request, user.email);
+    if (!known) {
+      throw new Error(
+        `Login timed out and ${user.email} does not exist on ${BASE_URL}. ` +
+        `This is almost certainly a missing seed account, not a login bug — ` +
+        `point E2E_EMAIL/E2E_PASSWORD at a real account there, or run against ` +
+        `a seeded stack. (See e2e-tests/README.md.)`
+      );
+    }
+    throw err;
+  }
   await dismissModuleTours(page);
 }
 
@@ -85,12 +108,41 @@ async function loginAsParent(page) {
   await loginAs(page, DEMO_USER);
 }
 
+
+/**
+ * Does this account exist on the target deployment?
+ *
+ * The suite's default accounts are seed data. Point BASE_URL at a deployment
+ * that was not seeded — prod, most obviously — and every spec that logs in dies
+ * inside loginAs with an opaque waitForURL timeout that reads like a broken
+ * login page. check-methods is public and answers for any address, so this
+ * distinguishes "no such account here" from "login is broken", which are very
+ * different findings.
+ *
+ * @param {import('@playwright/test').APIRequestContext} request
+ * @param {string} email
+ */
+async function accountExists(request, email) {
+  try {
+    const res = await request.post(`${BASE_URL}/api/auth/check-methods`, {
+      data: { email },
+      failOnStatusCode: false,
+    });
+    if (!res.ok()) return false;
+    const body = await res.json();
+    return body.has_password === true || body.has_google === true;
+  } catch {
+    return false;
+  }
+}
+
 module.exports = {
   BASE_URL,
   DEMO_USER,
   CHILD_USER,
   OPERATOR_USER,
   loginAs,
+  accountExists,
   loginAsParent,
   dismissModuleTours,
 };

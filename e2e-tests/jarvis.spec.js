@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { loginAsParent } = require('./helpers/auth');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3003';
 const EMAIL = process.env.E2E_EMAIL || 'e2e-fresh@example.com';
@@ -9,14 +10,6 @@ const PASSWORD = process.env.E2E_PASSWORD || 'fresh1234';
 const FREE_EMAIL = process.env.E2E_FREE_EMAIL || 'e2e-free@example.com';
 const FREE_PASSWORD = process.env.E2E_FREE_PASSWORD || 'free1234';
 
-async function login(page) {
-  await page.goto(`${BASE_URL}/login`);
-  await page.waitForLoadState('networkidle');
-  await page.fill('input[name="email"]', EMAIL);
-  await page.fill('input[name="password"]', PASSWORD);
-  await page.click('#login-submit-btn');
-  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
-}
 
 async function loginFree(page) {
   await page.goto(`${BASE_URL}/login`);
@@ -46,7 +39,7 @@ test.describe('Jarvis copilot', () => {
 
   test('sends a message and gets a response or graceful error', async ({ page }) => {
     test.skip(!process.env.E2E_FULL, 'requires LITELLM_API_KEY in backend');
-    await login(page);
+    await loginAsParent(page);
     await page.goto(`${BASE_URL}/parent/jarvis`);
     await page.fill('#message-input', 'What needs my attention today?');
     await page.locator('#chat-form button[type="submit"]').click();

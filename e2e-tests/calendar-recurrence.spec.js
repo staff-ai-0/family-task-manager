@@ -1,21 +1,14 @@
 const { test, expect } = require('@playwright/test');
+const { loginAsParent } = require('./helpers/auth');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3003';
 const EMAIL = process.env.E2E_EMAIL || 'e2e-fresh@example.com';
 const PASSWORD = process.env.E2E_PASSWORD || 'fresh1234';
 
-async function login(page) {
-  await page.goto(`${BASE_URL}/login`);
-  await page.waitForLoadState('networkidle');
-  await page.fill('input[name="email"]', EMAIL);
-  await page.fill('input[name="password"]', PASSWORD);
-  await page.click('#login-submit-btn');
-  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
-}
 
 test.describe('Calendar recurrence', () => {
   test('create weekly recurring event → 4+ occurrences visible in agenda', async ({ page }) => {
-    await login(page);
+    await loginAsParent(page);
     await page.goto(`${BASE_URL}/calendar`);
     await page.getByText(/Nuevo evento|New event/i).first().click();
 
@@ -35,7 +28,7 @@ test.describe('Calendar recurrence', () => {
   });
 
   test('custom RRULE input accepted', async ({ page }) => {
-    await login(page);
+    await loginAsParent(page);
     await page.goto(`${BASE_URL}/calendar`);
     await page.getByText(/Nuevo evento|New event/i).first().click();
 
@@ -54,7 +47,7 @@ test.describe('Calendar recurrence', () => {
   });
 
   test('iCal feed responds with text/calendar', async ({ page }) => {
-    await login(page);
+    await loginAsParent(page);
     const response = await page.request.get(`${BASE_URL}/api/calendar/feed.ics`);
     // Expect 200 with iCal content OR 401 if proxy strips auth
     if (response.ok()) {

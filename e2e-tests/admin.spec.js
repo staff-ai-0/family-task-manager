@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { BASE_URL, DEMO_USER, OPERATOR_USER, loginAs, loginAsParent } = require('./helpers/auth');
+const { BASE_URL, DEMO_USER, OPERATOR_USER, accountExists, loginAs, loginAsParent } = require('./helpers/auth');
 
 /**
  * Operator console (/admin) — the cross-tenant support surface merged 2026-07-26.
@@ -31,7 +31,15 @@ test.describe('Operator console fails closed', () => {
     expect((await res.json()).detail).toBe('Not Found');
   });
 
-  test('a logged-in non-operator parent gets 404 on the console and its API', async ({ page }) => {
+  test('a logged-in non-operator parent gets 404 on the console and its API', async ({ page, request }) => {
+    // Skip rather than fail where the seed parent does not exist (e.g. BASE_URL
+    // pointed at prod). Without this the test dies inside loginAs with a
+    // waitForURL timeout that reads like a broken login page — the two
+    // anonymous checks above still cover the surface on any deployment.
+    test.skip(
+      !(await accountExists(request, DEMO_USER.email)),
+      `${DEMO_USER.email} does not exist on this deployment — set E2E_EMAIL/E2E_PASSWORD to a parent that does`
+    );
     await loginAsParent(page);
 
     const pageRes = await page.goto(`${BASE_URL}/admin/families`);

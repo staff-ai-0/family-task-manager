@@ -1,21 +1,14 @@
 const { test, expect } = require('@playwright/test');
+const { loginAsParent } = require('./helpers/auth');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3003';
 const EMAIL = process.env.E2E_EMAIL || 'e2e-fresh@example.com';
 const PASSWORD = process.env.E2E_PASSWORD || 'fresh1234';
 
-async function login(page) {
-  await page.goto(`${BASE_URL}/login`);
-  await page.waitForLoadState('networkidle');
-  await page.fill('input[name="email"]', EMAIL);
-  await page.fill('input[name="password"]', PASSWORD);
-  await page.click('#login-submit-btn');
-  await page.waitForURL(/\/(dashboard|parent)$/, { timeout: 30000 });
-}
 
 test.describe('Jarvis schedules', () => {
   test('page loads + create form opens', async ({ page }) => {
-    await login(page);
+    await loginAsParent(page);
     await page.goto(`${BASE_URL}/parent/jarvis-schedules`);
     await expect(page.locator('h1')).toContainText(/Programaciones|Jarvis schedules/i);
     await page.getByText(/Nueva programación|New schedule/i).first().click();
@@ -23,7 +16,7 @@ test.describe('Jarvis schedules', () => {
   });
 
   test('preset button fills cron input', async ({ page }) => {
-    await login(page);
+    await loginAsParent(page);
     await page.goto(`${BASE_URL}/parent/jarvis-schedules`);
     await page.getByText(/Nueva programación|New schedule/i).first().click();
     await page.locator('.preset-btn').first().click();
@@ -32,7 +25,7 @@ test.describe('Jarvis schedules', () => {
   });
 
   test('create + delete schedule', async ({ page }) => {
-    await login(page);
+    await loginAsParent(page);
     await page.goto(`${BASE_URL}/parent/jarvis-schedules`);
     await page.getByText(/Nueva programación|New schedule/i).first().click();
     const name = `E2E sched ${Date.now()}`;
