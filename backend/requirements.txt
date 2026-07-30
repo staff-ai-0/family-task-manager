@@ -99,7 +99,7 @@ python-dateutil==2.8.2
 google-cloud-storage==3.13.0
 
 # Rate limiting (B1) — auth + AI endpoint abuse protection
-slowapi==0.1.9
+slowapi==0.1.10
 
 # Error monitoring — disabled unless SENTRY_DSN is set in .env
 sentry-sdk[fastapi]==2.8.0
