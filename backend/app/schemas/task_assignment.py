@@ -155,6 +155,25 @@ class ApprovalDecision(BaseModel):
     partial_credit_pct: Optional[int] = Field(None, ge=1, le=99)
 
 
+class MarkDoneForKidRequest(BaseModel):
+    """Parent asserting an un-completed chore was actually done.
+
+    The note is required, not optional: it becomes the kid-facing proof line,
+    so they can see why a task they never submitted is suddenly marked done.
+    """
+    note: str = Field(..., min_length=1, max_length=2000)
+
+
+class MarkDoneForKidResponse(BaseModel):
+    assignment_id: UUID
+    week_of: date
+    # True when that week's chore paycheck was already released. Points still
+    # credit on grading, but the cash CANNOT be topped up —
+    # release_chore_paycheck is idempotent per (kid, week) — so the caller must
+    # surface this instead of letting the kid be quietly short-changed.
+    week_already_paid: bool
+
+
 class GigApprovalRow(BaseModel):
     assignment_id: UUID
     template_id: UUID
