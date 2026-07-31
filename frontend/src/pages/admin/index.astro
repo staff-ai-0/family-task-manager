@@ -50,8 +50,11 @@ const TILES: [string, number, string][] = pulse
                 ))}
             </ul>
             <p class="mt-2 text-xs text-red-600">
-                Fix: <code>alembic upgrade head</code> restores prices;
-                <code>python -m scripts.setup_paypal_plans</code> wires the PayPal ids.
+                Fix: <code>python -m scripts.restore_plan_prices</code> restores prices
+                (not <code>alembic upgrade head</code> — that no-ops on a repeat
+                re-zeroing, since alembic will not re-run an already-applied
+                migration); <code>python -m scripts.setup_paypal_plans</code> wires
+                the PayPal ids.
             </p>
         </section>
     )}

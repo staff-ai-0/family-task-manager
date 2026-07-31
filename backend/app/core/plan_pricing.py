@@ -10,11 +10,19 @@ nothing noticed for two weeks — the pricing page advertised "$0/mes" and
 checkout 501'd. Every consumer now derives from this table:
 
 - backend/scripts/setup_paypal_plans.py  (what PayPal is told to charge)
+- backend/scripts/restore_plan_prices.py  (the operator remedy for a
+  re-zeroing; unlike `alembic upgrade head` it works on a REPEAT
+  occurrence, since alembic will not re-run an already-applied revision)
 - backend/migrations/versions/2026_07_31_restore_plan_prices.py
   (a FROZEN copy — migrations must not import app code, which moves under
   them; test_plan_pricing_invariants asserts the copy has not drifted)
-- app/main.py startup audit, the operator console panel, and the deploy
-  smoke check — all via audit_plan_rows() below.
+- app/main.py startup audit and the operator console panel, both via
+  audit_plan_rows() below. `scripts/deploy-onprem.sh`'s billing smoke check
+  is a DELIBERATELY SEPARATE consumer: it re-derives the same rule
+  in-line against the public API rather than calling audit_plan_rows(), so
+  it also exercises the tunnel/serialization the in-process function
+  cannot see — see verify_billing()'s comment in that script for exactly
+  what it does and does not check.
 
 The frontend deliberately has NO copy: a missing plan row renders "—" and
 disables checkout rather than printing a price the backend never confirmed.
@@ -53,10 +61,22 @@ def price_decimal_str(tier: str, cycle: str, currency: str) -> str:
 async def audit_plan_rows(db: AsyncSession) -> list[dict[str, Any]]:
     """Find ACTIVE paid plan rows that cannot correctly sell anything.
 
-    Returns one entry per broken row, `[]` when healthy. Three consumers:
-    the startup log, GET /api/admin/billing-config, and the deploy smoke
-    check — CI cannot see production data, so this function IS the
-    production-side regression guard.
+    Returns one entry per broken row, `[]` when healthy. TWO consumers: the
+    startup log and GET /api/admin/billing-config. Both run in production
+    against production data, but neither BLOCKS anything — they observe and
+    report.
+
+    The deploy-onprem.sh billing smoke check (verify_billing) is NOT a
+    consumer of this function — it deliberately re-derives an independent,
+    weaker version of the same rule against the public API, so it also
+    validates what a customer's browser actually receives (tunnel, JSON
+    serialization, the computed checkout_ready_* fields) rather than just
+    what this in-process query sees. It is the only one of the three checks
+    that GATES a deploy on production data, but because it does not import
+    this module it also does NOT catch drift from CANONICAL_PRICES — only a
+    non-positive price or an unwired PayPal id. CI cannot see production
+    data at all (Base.metadata.create_all leaves subscription_plans empty),
+    so together these three checks are the production-side regression guard.
 
     Scope decisions:
     - `free` is skipped: priced 0 with no PayPal plan by design.

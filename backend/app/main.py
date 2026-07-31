@@ -124,9 +124,12 @@ async def lifespan(app: FastAPI):
     )
 
     # Billing configuration audit. CI cannot see production data, so this is
-    # one of the three places a zeroed price or an unwired PayPal plan
-    # becomes visible (the others: GET /api/admin/billing-config and the
-    # deploy smoke check). Best-effort — never block startup on it.
+    # one of two places (the other: GET /api/admin/billing-config) that a
+    # zeroed price or an unwired PayPal plan becomes visible via
+    # audit_plan_rows(). Neither blocks anything, including this one — it's
+    # best-effort logging, never a startup gate. The deploy-onprem.sh
+    # billing smoke check is a separate, independent gate that does NOT call
+    # audit_plan_rows() — see that function's docstring for why.
     await _run_billing_audit()
 
     # Elect a single scheduler leader so cron jobs + the overdue sweep run on
