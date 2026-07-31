@@ -142,15 +142,18 @@ CANONICAL_PRICES: dict[tuple[str, str], tuple[int, int]] = {
 
 ### 3.3 Make recurrence loud
 
-Three layers, cheapest first:
+Four layers, cheapest first:
 
 1. **CI regression test** — `backend/tests/test_plan_pricing_invariants.py`:
-   - every active plan row whose `name != "free"` has
-     `price_monthly_cents > 0` and `price_annual_cents > 0`;
-   - every such row matches `CANONICAL_PRICES` exactly;
-   - the migration's frozen copy equals `CANONICAL_PRICES`.
-   Runs against the migrated test DB, so a future migration (or a seed
-   script) that zeroes a price fails the build.
+   - the provisioning script's prices derive from `CANONICAL_PRICES`;
+   - the migration's frozen copy equals `CANONICAL_PRICES`;
+   - `audit_plan_rows()` flags a zero price, a drifted price and an unwired
+     PayPal id, and ignores `free` and inactive rows.
+   Note what CI **cannot** do here: `conftest.py` builds the schema with
+   `Base.metadata.create_all`, not alembic, so `subscription_plans` is empty
+   in pytest and no test can assert that the real rows are correct. CI covers
+   the canonical-table drift and the detector's logic; the DB-truth check is
+   layers 2 and 3.
 2. **Operator console health panel** — the admin overview gains a "Billing
    configuration" block listing any active paid row with a zero price or a
    NULL `paypal_plan_id_*`, red when non-empty. Read-only, reuses
@@ -158,8 +161,13 @@ Three layers, cheapest first:
    incident: CI cannot see prod's data.
 3. **Startup warning** — `app/main.py` startup logs a single
    `logger.error("billing misconfigured: …")` line listing offending rows.
-   Free, and it lands in `podman logs` where the deploy smoke check can grep
-   it later if we want to escalate.
+   Free, and it lands in `podman logs`.
+
+4. **Deploy smoke check** — `deploy-onprem.sh` fetches
+   `/api/subscriptions/plans` after bringing the stack up and exits non-zero
+   if any paid tier is priced 0 or is not `checkout_ready`. This is the only
+   automated gate that inspects production pricing, so it is the one that
+   would actually have caught the incident.
 
 ### 3.4 Provisioning at PayPal (operator step, live)
 
@@ -456,4 +464,4 @@ and the same rule as `app/services/admin/`: no `verify_family_id` /
 | MXN plan creation rejected by the PayPal account | Documented fallback in §3.4: USD live, MXN rows deactivated — never left active-and-unwired |
 | Dropping `referral_bonus_until` loses credit for a family mid-window | Backfill runs in the same transaction as the drop; downgrade re-derives the column; round-trip test with a live future value |
 | A coupon grant silently upgrades a family past what an operator intended | Every grant is a row with `source`, `granted_by_user_id`, `reason` and a revoke path; operator actions are in `operator_audit_log` |
-| The zeroing that caused §1.1 recurs | Three detection layers (§3.3); the DB-level one (admin panel) is the one that would have caught the actual incident |
+| The zeroing that caused §1.1 recurs | Four detection layers (§3.3); the two that see production data (admin panel, deploy smoke) are the ones that would have caught the actual incident |
