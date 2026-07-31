@@ -777,3 +777,70 @@ async def test_deletions_rejects_non_operator(client, auth_headers):
 async def test_audit_log_rejects_non_operator(client, auth_headers):
     resp = await client.get("/api/admin/audit", headers=auth_headers)
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_billing_config_health_reports_broken_rows(
+    client, superadmin_headers, db_session
+):
+    """The panel that would have caught the 2026-07-16 zeroing. CI's DB is
+    empty, so the rows under test are created here."""
+    from app.models.subscription import SubscriptionPlan
+
+    db_session.add(
+        SubscriptionPlan(
+            name="pro",
+            display_name="Pro",
+            display_name_es="Pro",
+            currency="MXN",
+            price_monthly_cents=0,
+            price_annual_cents=0,
+            paypal_plan_id_monthly=None,
+            paypal_plan_id_annual=None,
+            limits={},
+            is_active=True,
+            sort_order=20,
+        )
+    )
+    await db_session.commit()
+
+    resp = await client.get("/api/admin/billing-config", headers=superadmin_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["healthy"] is False
+    assert body["findings"][0]["name"] == "pro"
+    assert body["findings"][0]["currency"] == "MXN"
+
+
+@pytest.mark.asyncio
+async def test_billing_config_health_is_healthy_when_correct(
+    client, superadmin_headers, db_session
+):
+    from app.models.subscription import SubscriptionPlan
+
+    db_session.add(
+        SubscriptionPlan(
+            name="plus",
+            display_name="Plus",
+            display_name_es="Plus",
+            currency="USD",
+            price_monthly_cents=500,
+            price_annual_cents=5_000,
+            paypal_plan_id_monthly="P-PLUS-M",
+            paypal_plan_id_annual="P-PLUS-A",
+            limits={},
+            is_active=True,
+            sort_order=10,
+        )
+    )
+    await db_session.commit()
+
+    resp = await client.get("/api/admin/billing-config", headers=superadmin_headers)
+    assert resp.status_code == 200
+    assert resp.json() == {"healthy": True, "findings": []}
+
+
+@pytest.mark.asyncio
+async def test_billing_config_health_is_superadmin_only(client, auth_headers):
+    resp = await client.get("/api/admin/billing-config", headers=auth_headers)
+    assert resp.status_code == 404

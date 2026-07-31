@@ -10,6 +10,8 @@ const { data } = await apiFetch<any>("/api/admin/overview", { token });
 // backend is down, not that the caller lacks permission.
 const pulse = data ?? null;
 
+const { data: billing } = await apiFetch<any>("/api/admin/billing-config", { token });
+
 const money = (cents: number, currency: string) =>
     `${(cents / 100).toFixed(2)} ${currency}`;
 
@@ -33,6 +35,25 @@ const TILES: [string, number, string][] = pulse
         <p class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             Could not load platform state. The backend may be restarting.
         </p>
+    )}
+
+    {billing && !billing.healthy && (
+        <section class="mb-6 rounded border border-red-200 bg-red-50 p-4">
+            <h2 class="text-sm font-semibold text-red-800">
+                Billing misconfigured — customers cannot subscribe
+            </h2>
+            <ul class="mt-2 space-y-1 text-sm text-red-700">
+                {billing.findings.map((f: any) => (
+                    <li>
+                        <strong>{f.name} / {f.currency}</strong>: {f.problems.join("; ")}
+                    </li>
+                ))}
+            </ul>
+            <p class="mt-2 text-xs text-red-600">
+                Fix: <code>alembic upgrade head</code> restores prices;
+                <code>python -m scripts.setup_paypal_plans</code> wires the PayPal ids.
+            </p>
+        </section>
     )}
 
     {pulse && (

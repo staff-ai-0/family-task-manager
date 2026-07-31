@@ -510,6 +510,20 @@ class AdminReadService:
         ]
 
     @staticmethod
+    async def billing_config_health(db: AsyncSession) -> dict:
+        """Can the app actually sell a plan right now?
+
+        Wraps app.core.plan_pricing.audit_plan_rows. This is the only one of
+        its three consumers that runs against PRODUCTION data on demand —
+        CI's schema is built with create_all and holds no plan rows, and the
+        startup log is only seen if somebody greps for it.
+        """
+        from app.core.plan_pricing import audit_plan_rows
+
+        findings = await audit_plan_rows(db)
+        return {"healthy": not findings, "findings": findings}
+
+    @staticmethod
     async def audit_log(
         db: AsyncSession,
         *,

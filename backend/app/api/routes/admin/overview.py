@@ -32,6 +32,16 @@ async def billing_review(
     return await AdminReadService.billing_review_queue(db)
 
 
+@router.get("/billing-config")
+async def billing_config(
+    _operator: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Plan rows that cannot correctly sell anything (zero price, drifted
+    price, or an unwired PayPal plan id)."""
+    return await AdminReadService.billing_config_health(db)
+
+
 @router.get("/deletions")
 async def pending_deletions(
     _operator: User = Depends(require_superadmin),
