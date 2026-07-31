@@ -185,3 +185,22 @@ async def test_audit_flags_an_unknown_active_paid_tier(db_session):
     findings = await audit_plan_rows(db_session)
     assert len(findings) == 1
     assert any("no canonical price" in p for p in findings[0]["problems"])
+
+
+def test_migration_frozen_prices_have_not_drifted():
+    """The migration carries its own literal copy on purpose — migrations
+    must not import app code, which changes underneath them. That freedom
+    costs a drift risk, and this is the test that pays for it."""
+    import importlib.util
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "migrations"
+        / "versions"
+        / "2026_07_31_restore_plan_prices.py"
+    )
+    spec = importlib.util.spec_from_file_location("_restore_plan_prices", path)
+    mig = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mig)
+    assert mig.FROZEN_PRICES == CANONICAL_PRICES
