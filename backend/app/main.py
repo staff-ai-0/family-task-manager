@@ -66,6 +66,23 @@ async def _billing_audit_message(session) -> str | None:
     return "billing misconfigured — " + " | ".join(parts)
 
 
+async def _run_billing_audit() -> None:
+    """Log a billing-config error at startup, or nothing when healthy.
+
+    Best-effort by contract: every failure path is swallowed. A billing
+    warning that prevents boot would be strictly worse than the
+    misconfiguration it reports. Extracted from lifespan so that contract is
+    testable — see test_plan_pricing_invariants.
+    """
+    try:
+        async with AsyncSessionLocal() as _billing_session:
+            _billing_problem = await _billing_audit_message(_billing_session)
+        if _billing_problem:
+            logger.error(_billing_problem)
+    except Exception:
+        logger.exception("Billing configuration audit failed")
+
+
 async def _overdue_sweep_loop() -> None:
     """Background loop: every 60 minutes, mark stale PENDING assignments OVERDUE."""
     # Run once on startup so a fresh boot catches anything missed during downtime.
@@ -110,13 +127,7 @@ async def lifespan(app: FastAPI):
     # one of the three places a zeroed price or an unwired PayPal plan
     # becomes visible (the others: GET /api/admin/billing-config and the
     # deploy smoke check). Best-effort — never block startup on it.
-    try:
-        async with AsyncSessionLocal() as _billing_session:
-            _billing_problem = await _billing_audit_message(_billing_session)
-        if _billing_problem:
-            logger.error(_billing_problem)
-    except Exception:
-        logger.exception("Billing configuration audit failed")
+    await _run_billing_audit()
 
     # Elect a single scheduler leader so cron jobs + the overdue sweep run on
     # exactly one worker (prod runs multiple uvicorn workers).

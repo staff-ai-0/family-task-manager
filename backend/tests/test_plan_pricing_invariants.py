@@ -187,22 +187,101 @@ async def test_audit_flags_an_unknown_active_paid_tier(db_session):
     assert any("no canonical price" in p for p in findings[0]["problems"])
 
 
-@pytest.mark.asyncio
-async def test_startup_audit_logs_an_error_for_broken_billing(db_session, caplog):
-    """A silent misconfiguration is what let this run for two weeks. At
-    minimum it must be greppable in podman logs."""
-    import logging
+class _SingleSessionFactory:
+    """Stand-in for `AsyncSessionLocal` that hands back an already-open
+    session instead of opening a new engine connection. Lets
+    `_run_billing_audit` — which does `async with AsyncSessionLocal() as
+    session:` — be exercised against the test DB's `db_session` fixture."""
 
+    def __init__(self, session):
+        self._session = session
+
+    def __call__(self):
+        return self
+
+    async def __aenter__(self):
+        return self._session
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+@pytest.mark.asyncio
+async def test_startup_audit_message_names_the_broken_row(db_session):
+    """Message construction: does _billing_audit_message name the broken
+    row? (The "is it actually logged" property is covered separately by
+    test_run_billing_audit_logs_an_error_record, against the real logger.)"""
     from app.main import _billing_audit_message
 
     db_session.add(_plan("plus", "USD", 0, 0))
     await db_session.commit()
 
-    with caplog.at_level(logging.ERROR):
-        message = await _billing_audit_message(db_session)
+    message = await _billing_audit_message(db_session)
 
     assert message is not None
     assert "plus" in message and "USD" in message
+
+
+@pytest.mark.asyncio
+async def test_run_billing_audit_logs_an_error_record(db_session, caplog, monkeypatch):
+    """The property the startup hook exists for: a broken row must be
+    greppable in podman logs. Exercises _run_billing_audit — the coroutine
+    lifespan actually calls — not just the message-building helper."""
+    import logging
+
+    from app import main as main_module
+
+    db_session.add(_plan("plus", "USD", 0, 0))
+    await db_session.commit()
+    monkeypatch.setattr(main_module, "AsyncSessionLocal", _SingleSessionFactory(db_session))
+
+    with caplog.at_level(logging.ERROR, logger="app.main"):
+        await main_module._run_billing_audit()
+
+    error_records = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert error_records, "expected an ERROR record from _run_billing_audit"
+    assert any("plus" in r.getMessage() and "USD" in r.getMessage() for r in error_records)
+
+
+@pytest.mark.asyncio
+async def test_run_billing_audit_survives_a_broken_audit_query(db_session, caplog, monkeypatch):
+    """The riskiest property in this task: a failing audit query must never
+    prevent the app from booting. Forces audit_plan_rows itself to blow up
+    and asserts _run_billing_audit swallows it (returns normally) while
+    still logging the failure via logger.exception."""
+    import logging
+
+    import app.core.plan_pricing as plan_pricing_module
+    from app import main as main_module
+
+    async def _boom(session):
+        raise RuntimeError("audit query exploded")
+
+    monkeypatch.setattr(main_module, "AsyncSessionLocal", _SingleSessionFactory(db_session))
+    monkeypatch.setattr(plan_pricing_module, "audit_plan_rows", _boom)
+
+    with caplog.at_level(logging.ERROR, logger="app.main"):
+        await main_module._run_billing_audit()  # must not raise
+
+    error_records = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert any("Billing configuration audit failed" in r.getMessage() for r in error_records)
+    assert any(r.exc_info is not None for r in error_records), "expected logger.exception, not logger.error"
+
+
+@pytest.mark.asyncio
+async def test_run_billing_audit_logs_nothing_when_healthy(db_session, caplog, monkeypatch):
+    import logging
+
+    from app import main as main_module
+
+    db_session.add(_plan("plus", "USD", 500, 5_000))
+    await db_session.commit()
+    monkeypatch.setattr(main_module, "AsyncSessionLocal", _SingleSessionFactory(db_session))
+
+    with caplog.at_level(logging.ERROR, logger="app.main"):
+        await main_module._run_billing_audit()
+
+    assert not any(r.levelname == "ERROR" for r in caplog.records)
 
 
 @pytest.mark.asyncio
