@@ -748,7 +748,7 @@ is_active or the paypal ids — that is the operator's provisioning run."
 
 **Interfaces:**
 - Consumes: `audit_plan_rows` from Task 3.
-- Produces: `async def _log_billing_config_audit() -> None` in `app/main.py`.
+- Produces: `async def _billing_audit_message(session) -> str | None` in `app/main.py`, plus a best-effort call to it inside `lifespan`.
 
 - [ ] **Step 1: Write the failing test**
 
