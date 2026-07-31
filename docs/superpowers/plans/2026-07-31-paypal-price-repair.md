@@ -16,7 +16,7 @@
 - `backend/tests/conftest.py` builds the schema with `Base.metadata.create_all`, **not** alembic. Tests therefore start with an EMPTY `subscription_plans` table — no test may assume seeded plan rows exist. Create the rows you need in the test.
 - Never `sudo podman` on `10.1.0.91`. Always `ssh jc@10.1.0.91 'podman ...'`.
 - Run backend tests inside the container: `podman exec -e PYTHONPATH=/app family_app_backend pytest tests/ -v`. When podman is down locally, `backend/.venv/bin/pytest --no-cov` against Homebrew PG on 5435 works.
-- Prices are **display and provisioning data only**. Nothing in this plan may write `paypal_plan_id_*` or `is_active` from a migration — those belong to the operator provisioning run (Task 7).
+- Prices are **display and provisioning data only**. Nothing in this plan may write `paypal_plan_id_*` or `is_active` from a migration — those belong to the operator provisioning run (Task 10).
 
 ---
 
@@ -143,12 +143,10 @@ checkout 501'd. Every consumer now derives from this table:
 
 The frontend deliberately has NO copy: a missing plan row renders "—" and
 disables checkout rather than printing a price the backend never confirmed.
+
+NOTE: audit_plan_rows() and its sqlalchemy imports are added in Task 3, not
+here — an unused import would fail ruff.
 """
-from typing import Any
-
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 # (tier, currency) -> (monthly_minor_units, annual_minor_units).
 # Annual is exactly 10x monthly — "2 months free" is a marketing promise the
 # invariant test enforces.
@@ -178,12 +176,12 @@ def price_decimal_str(tier: str, cycle: str, currency: str) -> str:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `podman exec -e PYTHONPATH=/app family_app_backend pytest tests/test_plan_pricing_invariants.py -v`
-Expected: PASS (7 tests)
+Expected: PASS (6 tests)
 
 - [ ] **Step 5: Lint**
 
 Run: `cd backend && ruff check app`
-Expected: no findings. (`Any`, `select`, `AsyncSession` are imported for Task 3 — if ruff flags them as unused now, add the `audit_plan_rows` stub from Task 3 in this commit instead of suppressing.)
+Expected: no findings. Do not import sqlalchemy or typing here — audit_plan_rows() and its imports land together in Task 3, and an unused import fails ruff.
 
 - [ ] **Step 6: Commit**
 
@@ -343,7 +341,7 @@ Do NOT add a price constant to this file.
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `podman exec -e PYTHONPATH=/app family_app_backend pytest tests/test_plan_pricing_invariants.py -v`
-Expected: PASS (9 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: Verify the dry run still works end to end**
 
@@ -552,7 +550,7 @@ async def audit_plan_rows(db: AsyncSession) -> list[dict[str, Any]]:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `podman exec -e PYTHONPATH=/app family_app_backend pytest tests/test_plan_pricing_invariants.py -v`
-Expected: PASS (16 tests)
+Expected: PASS (15 tests)
 
 - [ ] **Step 5: Lint**
 
@@ -832,7 +830,7 @@ Inside `lifespan`, right after the `Database URL:` log line:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `podman exec -e PYTHONPATH=/app family_app_backend pytest tests/test_plan_pricing_invariants.py -v`
-Expected: PASS (19 tests)
+Expected: PASS (18 tests)
 
 - [ ] **Step 5: Verify it fires for real**
 
