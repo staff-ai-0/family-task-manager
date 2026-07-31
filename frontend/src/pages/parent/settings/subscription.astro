@@ -79,22 +79,23 @@ const plusPlan = planForTier("plus");
 const proPlan = planForTier("pro");
 
 // A tier is upgradeable only when its row matches the selected currency AND
-// is wired to PayPal — otherwise checkout would 404/501.
+// is wired to PayPal AND is actually priced — otherwise checkout would
+// 404/501, or worse, create a PayPal subscription at a price we never showed.
 const canCheckout = (plan: any) =>
     Boolean(
         plan &&
         rowCurrency(plan) === selectedCurrency &&
-        plan.checkout_ready_monthly !== false,
+        plan.checkout_ready_monthly !== false &&
+        // A paid tier priced 0 is misconfiguration; selling it would create
+        // a PayPal subscription whose price does not match what we showed.
+        (plan.price_monthly_cents ?? 0) > 0,
     );
 
-// Fallbacks if the currency's plan rows are missing (pre-migration DBs).
-// THIRD copy of the launch price constants — keep in sync with PLAN_PRICES
-// in backend/scripts/setup_paypal_plans.py and MXN_PRICES in
-// backend/migrations/versions/2026_07_08_mxn_plan_currency_w6.py.
-const fallbackCents: Record<string, Record<string, number>> = {
-    MXN: { plus_monthly: 9900, plus_annual: 99000, pro_monthly: 19900, pro_annual: 199000 },
-    USD: { plus_monthly: 500, plus_annual: 5000, pro_monthly: 1500, pro_annual: 15000 },
-};
+// No price constants live here. A missing plan row renders "—" and disables
+// checkout rather than printing a price the backend never confirmed — which
+// is exactly how this page advertised "$0/mes" for two weeks in July 2026
+// (the rows existed with a real 0, so the old `?? fallbackCents[...]` never
+// fired). Canonical prices: backend/app/core/plan_pricing.py.
 
 // 'MX$99' / 'US$5' style — Intl.NumberFormat es-MX renders both MXN and USD
 // as a bare '$', so prefix the country code to disambiguate the two pesos.
@@ -112,11 +113,14 @@ function formatPrice(cents: number, currency: string): string {
     return s;
 }
 
-const price = (plan: any, cycle: "monthly" | "annual", tier: string) =>
-    formatPrice(
-        plan?.[`price_${cycle}_cents`] ?? fallbackCents[selectedCurrency][`${tier}_${cycle}`],
-        plan?.currency ?? selectedCurrency,
-    );
+// Returns null when the tier has no row in the selected currency, or when
+// the row is priced 0 (a paid tier at 0 is a backend misconfiguration, not
+// a free plan — see GET /api/admin/billing-config).
+const price = (plan: any, cycle: "monthly" | "annual"): string | null => {
+    const cents = plan?.[`price_${cycle}_cents`];
+    if (typeof cents !== "number" || cents <= 0) return null;
+    return formatPrice(cents, plan?.currency ?? selectedCurrency);
+};
 
 const currentPlanName = (current?.plan?.name ?? current?.plan_name ?? "free").toLowerCase();
 const isActive = current?.status === "active";
@@ -384,7 +388,7 @@ function cellClass(value: any): string {
                             </th>
                             <th class={`text-center py-3 px-2 ${currentPlanName === "plus" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
                                 <div class="font-bold text-brand-ink">{l.plus}</div>
-                                <div class="text-xs text-brand-ink-soft">{price(plusPlan, "monthly", "plus")}{l.month} ({price(plusPlan, "annual", "plus")}{l.year})</div>
+                                <div class="text-xs text-brand-ink-soft">{price(plusPlan, "monthly") ?? "—"}{l.month} ({price(plusPlan, "annual") ?? "—"}{l.year})</div>
                                 {currentPlanName === "plus" && (
                                     <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
                                         {l.current_plan}
@@ -393,7 +397,7 @@ function cellClass(value: any): string {
                             </th>
                             <th class={`text-center py-3 px-2 ${currentPlanName === "pro" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
                                 <div class="font-bold text-brand-ink">{l.pro}</div>
-                                <div class="text-xs text-brand-ink-soft">{price(proPlan, "monthly", "pro")}{l.month} ({price(proPlan, "annual", "pro")}{l.year})</div>
+                                <div class="text-xs text-brand-ink-soft">{price(proPlan, "monthly") ?? "—"}{l.month} ({price(proPlan, "annual") ?? "—"}{l.year})</div>
                                 {currentPlanName === "pro" && (
                                     <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
                                         {l.current_plan}
