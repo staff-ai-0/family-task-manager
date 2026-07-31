@@ -19,6 +19,10 @@ checkout 501'd. Every consumer now derives from this table:
 The frontend deliberately has NO copy: a missing plan row renders "—" and
 disables checkout rather than printing a price the backend never confirmed.
 """
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # (tier, currency) -> (monthly_minor_units, annual_minor_units).
 # Annual is exactly 10x monthly — "2 months free" is a marketing promise the
@@ -44,3 +48,68 @@ def price_minor(tier: str, cycle: str, currency: str) -> int:
 def price_decimal_str(tier: str, cycle: str, currency: str) -> str:
     """Canonical price as the decimal string PayPal's Billing API expects."""
     return f"{price_minor(tier, cycle, currency) / 100:.2f}"
+
+
+async def audit_plan_rows(db: AsyncSession) -> list[dict[str, Any]]:
+    """Find ACTIVE paid plan rows that cannot correctly sell anything.
+
+    Returns one entry per broken row, `[]` when healthy. Three consumers:
+    the startup log, GET /api/admin/billing-config, and the deploy smoke
+    check — CI cannot see production data, so this function IS the
+    production-side regression guard.
+
+    Scope decisions:
+    - `free` is skipped: priced 0 with no PayPal plan by design.
+    - inactive rows are skipped: they are never listed nor checkout-able, and
+      inactive-and-unwired is the deliberate seeded state for a currency
+      awaiting provisioning.
+    """
+    from app.models.subscription import SubscriptionPlan
+
+    rows = (
+        await db.execute(
+            select(SubscriptionPlan).where(
+                SubscriptionPlan.is_active == True,  # noqa: E712
+                SubscriptionPlan.name != "free",
+            )
+        )
+    ).scalars().all()
+
+    findings: list[dict[str, Any]] = []
+    for row in rows:
+        problems: list[str] = []
+
+        if row.price_monthly_cents == 0 or row.price_annual_cents == 0:
+            problems.append(
+                "zero price on an active paid plan "
+                f"(monthly={row.price_monthly_cents}, "
+                f"annual={row.price_annual_cents})"
+            )
+
+        expected = CANONICAL_PRICES.get((row.name, row.currency))
+        if expected is None:
+            problems.append(
+                f"no canonical price for tier {row.name!r} in {row.currency}"
+            )
+        elif (row.price_monthly_cents, row.price_annual_cents) != expected:
+            problems.append(
+                "price differs from canonical "
+                f"(db={row.price_monthly_cents}/{row.price_annual_cents}, "
+                f"canonical={expected[0]}/{expected[1]})"
+            )
+
+        if not row.paypal_plan_id_monthly:
+            problems.append("paypal_plan_id_monthly is not wired — checkout 501s")
+        if not row.paypal_plan_id_annual:
+            problems.append("paypal_plan_id_annual is not wired — checkout 501s")
+
+        if problems:
+            findings.append(
+                {
+                    "name": row.name,
+                    "currency": row.currency,
+                    "problems": problems,
+                }
+            )
+
+    return sorted(findings, key=lambda f: (f["name"], f["currency"]))

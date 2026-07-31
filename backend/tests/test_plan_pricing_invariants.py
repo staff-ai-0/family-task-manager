@@ -88,3 +88,100 @@ def test_provisioning_script_has_no_private_price_copy():
     import scripts.setup_paypal_plans as mod
 
     assert not hasattr(mod, "PLAN_PRICES")
+
+
+from app.core.plan_pricing import audit_plan_rows
+from app.models.subscription import SubscriptionPlan
+
+
+def _plan(name, currency, monthly, annual, *, pp_m="P-M", pp_a="P-A", active=True):
+    return SubscriptionPlan(
+        name=name,
+        display_name=name.capitalize(),
+        display_name_es=name.capitalize(),
+        currency=currency,
+        price_monthly_cents=monthly,
+        price_annual_cents=annual,
+        paypal_plan_id_monthly=pp_m,
+        paypal_plan_id_annual=pp_a,
+        limits={},
+        is_active=active,
+        sort_order=10,
+    )
+
+
+@pytest.mark.asyncio
+async def test_audit_is_clean_when_every_row_is_correct(db_session):
+    db_session.add(_plan("plus", "USD", 500, 5_000))
+    db_session.add(_plan("pro", "MXN", 19_900, 199_000))
+    await db_session.commit()
+
+    assert await audit_plan_rows(db_session) == []
+
+
+@pytest.mark.asyncio
+async def test_audit_flags_a_zero_price(db_session):
+    """The exact production failure: an active paid row priced at 0."""
+    db_session.add(_plan("plus", "USD", 0, 0))
+    await db_session.commit()
+
+    findings = await audit_plan_rows(db_session)
+    assert len(findings) == 1
+    assert findings[0]["name"] == "plus"
+    assert findings[0]["currency"] == "USD"
+    assert any("zero" in p for p in findings[0]["problems"])
+
+
+@pytest.mark.asyncio
+async def test_audit_flags_a_price_that_drifted_from_canonical(db_session):
+    db_session.add(_plan("pro", "USD", 1_200, 12_000))
+    await db_session.commit()
+
+    findings = await audit_plan_rows(db_session)
+    assert len(findings) == 1
+    assert any("canonical" in p for p in findings[0]["problems"])
+
+
+@pytest.mark.asyncio
+async def test_audit_flags_a_missing_paypal_plan_id(db_session):
+    """The second half of the prod outage: priced correctly, unwired, active
+    — the pricing page shows a price nobody can actually check out."""
+    db_session.add(_plan("plus", "MXN", 9_900, 99_000, pp_m=None))
+    await db_session.commit()
+
+    findings = await audit_plan_rows(db_session)
+    assert len(findings) == 1
+    assert any("paypal_plan_id_monthly" in p for p in findings[0]["problems"])
+
+
+@pytest.mark.asyncio
+async def test_audit_ignores_the_free_tier(db_session):
+    """free is priced 0 and has no PayPal plan by design."""
+    db_session.add(
+        _plan("free", "USD", 0, 0, pp_m=None, pp_a=None)
+    )
+    await db_session.commit()
+
+    assert await audit_plan_rows(db_session) == []
+
+
+@pytest.mark.asyncio
+async def test_audit_ignores_inactive_rows(db_session):
+    """An inactive row is never listed or checked out — it is allowed to sit
+    unwired, which is exactly how mxn_plan_currency_w6 seeds MXN."""
+    db_session.add(_plan("pro", "MXN", 0, 0, pp_m=None, pp_a=None, active=False))
+    await db_session.commit()
+
+    assert await audit_plan_rows(db_session) == []
+
+
+@pytest.mark.asyncio
+async def test_audit_flags_an_unknown_active_paid_tier(db_session):
+    """A paid tier with no canonical price cannot be validated at all — say
+    so rather than silently passing it."""
+    db_session.add(_plan("enterprise", "USD", 9_900, 99_000))
+    await db_session.commit()
+
+    findings = await audit_plan_rows(db_session)
+    assert len(findings) == 1
+    assert any("no canonical price" in p for p in findings[0]["problems"])
