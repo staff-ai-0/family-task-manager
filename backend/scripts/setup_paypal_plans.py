@@ -219,10 +219,64 @@ def create_product_if_missing(api: PayPalAPI, name: str) -> str:
     return created["id"]
 
 
+class PlanPriceMismatch(RuntimeError):
+    """A PayPal plan matched by name does not charge the canonical price.
+
+    Raised by create_plan_if_missing instead of silently reusing the match:
+    a name collision is NOT proof the plan is safe to reuse (see that
+    function's docstring).
+    """
+
+
+def _regular_fixed_price(plan: dict[str, Any]) -> dict[str, Any] | None:
+    """The REGULAR billing cycle's fixed_price from a PayPal plan object, or
+    None if absent.
+
+    `plan` here is the same shape PayPal returns for both a List Plans item
+    and a Show Plan Details response — per billing_subscriptions_v1's
+    OpenAPI spec, `plan_list` items $ref the identical `plan` schema
+    (which includes `billing_cycles`) as the single-plan GET, so the list
+    response is trusted here without an extra per-plan API call.
+    """
+    for cycle in plan.get("billing_cycles") or []:
+        if cycle.get("tenure_type") == "REGULAR":
+            return (cycle.get("pricing_scheme") or {}).get("fixed_price")
+    return None
+
+
 def create_plan_if_missing(api: PayPalAPI, plan_def: dict[str, Any]) -> str:
-    """Look up plan by name (across all pages); create if absent."""
+    """Look up plan by name (across all pages); create if absent.
+
+    A name match alone is NOT enough to safely reuse a plan: PayPal's plan
+    id is the only thing that actually fixes what a subscriber is charged,
+    and idempotency-by-name means the next operator run relies on exactly
+    this reuse path (if the 2026-07-16 provisioning really happened, this
+    reuses those plans rather than duplicating them). If a reused plan
+    carries a stale price — e.g. a pre-usd_price_alignment "Plus Monthly"
+    still at $4.99 — the DB gets force-set to canonical (by migration or
+    scripts/restore_plan_prices.py) while PayPal keeps charging the old
+    amount, and a customer is billed something they were never shown. So
+    before reusing a name match, this verifies its REGULAR billing cycle's
+    fixed_price (value AND currency_code) against what plan_def says it
+    should charge. A mismatch raises PlanPriceMismatch — naming the plan
+    id, its actual price, and the expected price — rather than proceeding
+    silently, so the operator sees it BEFORE any wiring SQL is applied.
+    """
+    expected_price = [
+        c for c in plan_def["billing_cycles"] if c["tenure_type"] == "REGULAR"
+    ][0]["pricing_scheme"]["fixed_price"]
+
     for p in iter_all_pages(api, "/v1/billing/plans?page_size=20", "plans"):
         if p.get("name") == plan_def["name"]:
+            actual_price = _regular_fixed_price(p)
+            if actual_price != expected_price:
+                raise PlanPriceMismatch(
+                    f"PayPal plan {p.get('id')!r} named {plan_def['name']!r} "
+                    f"charges {actual_price!r} but the canonical price is "
+                    f"{expected_price!r}. Refusing to reuse it — retire the "
+                    "stale plan at PayPal (or correct its price there) "
+                    "before re-running provisioning."
+                )
             return p["id"]
     created = api.post("/v1/billing/plans", plan_def)
     return created["id"]
