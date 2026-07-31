@@ -187,6 +187,34 @@ async def test_audit_flags_an_unknown_active_paid_tier(db_session):
     assert any("no canonical price" in p for p in findings[0]["problems"])
 
 
+@pytest.mark.asyncio
+async def test_startup_audit_logs_an_error_for_broken_billing(db_session, caplog):
+    """A silent misconfiguration is what let this run for two weeks. At
+    minimum it must be greppable in podman logs."""
+    import logging
+
+    from app.main import _billing_audit_message
+
+    db_session.add(_plan("plus", "USD", 0, 0))
+    await db_session.commit()
+
+    with caplog.at_level(logging.ERROR):
+        message = await _billing_audit_message(db_session)
+
+    assert message is not None
+    assert "plus" in message and "USD" in message
+
+
+@pytest.mark.asyncio
+async def test_startup_audit_is_silent_when_healthy(db_session):
+    from app.main import _billing_audit_message
+
+    db_session.add(_plan("plus", "USD", 500, 5_000))
+    await db_session.commit()
+
+    assert await _billing_audit_message(db_session) is None
+
+
 def test_migration_frozen_prices_have_not_drifted():
     """The migration carries its own literal copy on purpose — migrations
     must not import app code, which changes underneath them. That freedom

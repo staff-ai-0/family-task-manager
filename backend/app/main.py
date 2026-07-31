@@ -48,6 +48,24 @@ if settings.SENTRY_DSN:
     )
 
 
+async def _billing_audit_message(session) -> str | None:
+    """Human-readable summary of billing misconfiguration, or None if healthy.
+
+    Split out from the lifespan hook so it is testable without booting the
+    app. See app/core/plan_pricing.audit_plan_rows.
+    """
+    from app.core.plan_pricing import audit_plan_rows
+
+    findings = await audit_plan_rows(session)
+    if not findings:
+        return None
+    parts = [
+        f"{f['name']}/{f['currency']}: {'; '.join(f['problems'])}"
+        for f in findings
+    ]
+    return "billing misconfigured — " + " | ".join(parts)
+
+
 async def _overdue_sweep_loop() -> None:
     """Background loop: every 60 minutes, mark stale PENDING assignments OVERDUE."""
     # Run once on startup so a fresh boot catches anything missed during downtime.
@@ -87,6 +105,18 @@ async def lifespan(app: FastAPI):
     logger.info(
         f"Database URL: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'Not configured'}"
     )
+
+    # Billing configuration audit. CI cannot see production data, so this is
+    # one of the three places a zeroed price or an unwired PayPal plan
+    # becomes visible (the others: GET /api/admin/billing-config and the
+    # deploy smoke check). Best-effort — never block startup on it.
+    try:
+        async with AsyncSessionLocal() as _billing_session:
+            _billing_problem = await _billing_audit_message(_billing_session)
+        if _billing_problem:
+            logger.error(_billing_problem)
+    except Exception:
+        logger.exception("Billing configuration audit failed")
 
     # Elect a single scheduler leader so cron jobs + the overdue sweep run on
     # exactly one worker (prod runs multiple uvicorn workers).
