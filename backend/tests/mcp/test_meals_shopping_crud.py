@@ -6,10 +6,18 @@ Mirrors the structure of test_tasks_gigs_crud.py.
 """
 
 import json
+from datetime import date, timedelta
 import pytest
 from app.mcp.server import build_server
 from app.mcp.context import McpContext, use_context
 from mcp.shared.memory import create_connected_server_and_client_session
+
+# Relative, never a literal. PlanEntryAdapter.list only returns today-30d to
+# today+90d, so a hardcoded date silently ages out of the window: "2026-06-30"
+# passed for a month and then started failing on 2026-07-30 — exactly 30 days
+# later — with no code change. Tomorrow is comfortably inside the window at any
+# point in time.
+_PLAN_DATE = (date.today() + timedelta(days=1)).isoformat()
 
 
 @pytest.fixture
@@ -102,7 +110,7 @@ async def test_planentry_create_list_get_update_delete(db_session, family, paren
             # Create
             created = json.loads((await s.call_tool(
                 "meals_planentry_create",
-                {"plan_date": "2026-06-30", "meal_type": "dinner", "title": "Pasta Night"},
+                {"plan_date": _PLAN_DATE, "meal_type": "dinner", "title": "Pasta Night"},
             )).content[0].text)
             assert created["ok"] is True, created
             entry_id = created["data"]["id"]

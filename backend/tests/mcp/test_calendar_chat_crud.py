@@ -7,10 +7,19 @@ the tools are present and functional.  chat is the new domain added here.
 """
 
 import json
+from datetime import datetime, timedelta
 import pytest
 from app.mcp.server import build_server
 from app.mcp.context import McpContext, use_context
 from mcp.shared.memory import create_connected_server_and_client_session
+
+# Relative for the same reason as the meals plan date. EventAdapter.list has no
+# date window but orders start_ts DESC and caps at 50, so a past-dated event
+# sinks below newer ones and eventually falls off the page. A near-future start
+# keeps it at the top regardless of when the suite runs.
+_EVENT_START = (datetime.now() + timedelta(days=1)).replace(
+    hour=19, minute=0, second=0, microsecond=0
+).isoformat(timespec="seconds")
 
 
 @pytest.fixture
@@ -41,7 +50,7 @@ async def test_calendar_event_create_list_get_update_delete(db_session, family, 
             # Create
             created = json.loads((await s.call_tool(
                 "calendar_event_create",
-                {"title": "Family Dinner", "start_iso": "2026-06-30T19:00:00"},
+                {"title": "Family Dinner", "start_iso": _EVENT_START},
             )).content[0].text)
             assert created["ok"] is True, created
             event_id = created["data"]["id"]
