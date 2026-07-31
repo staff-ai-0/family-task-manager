@@ -188,6 +188,21 @@ Fully native to PostgreSQL (the external "Actual Budget" service was decommissio
 - Boolean features: `budget_reports`, `budget_goals`, `csv_import`, `ai_features`
 - **Every LLM call site must be gated** (`require_feature("ai_features")` or `family_tier_allows`); regression suite `test_ai_gating.py`
 
+**Plan prices have exactly one source**: `backend/app/core/plan_pricing.py`
+(`CANONICAL_PRICES`, minor units). `scripts/setup_paypal_plans.py` derives
+from it; the `restore_plan_prices` migration carries a FROZEN copy that
+`test_plan_pricing_invariants.py` asserts has not drifted; the frontend has
+NO copy and renders `—` when a row is missing or priced 0. Never add a
+fourth copy — three hand-synced ones is how prod advertised "$0/mes" from
+2026-07-16 to 2026-07-31 while `/checkout` returned 501.
+
+`plan_pricing.audit_plan_rows()` detects active paid rows that cannot sell
+(zero price, drift from canonical, unwired `paypal_plan_id_*`). It backs
+three consumers: a startup `logger.error`, `GET /api/admin/billing-config`
+(red panel on the operator console), and the `deploy-onprem.sh` smoke check
+— which is the only one that sees production data, since `conftest.py`
+builds the test schema with `create_all` and holds no plan rows.
+
 ### AI Receipt Scanner
 
 Uses Claude Vision via LiteLLM proxy to extract transaction data from receipt photos/PDFs.
