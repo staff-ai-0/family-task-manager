@@ -144,7 +144,7 @@ jobs:
       # markdown from the top-level docs/ tree during the build.
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # Matches frontend/Dockerfile (node:22-alpine).
           node-version: "22"
@@ -236,7 +236,7 @@ jobs:
           pip install pip-audit
           pip-audit --requirement backend/requirements.txt --desc
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
 
