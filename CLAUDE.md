@@ -130,7 +130,7 @@ Routes must not contain business logic. Services own domain rules. Use `base_ser
 ### Authentication
 
 - JWT tokens contain `user_id`, `role`, `family_id`; access+refresh pair in httpOnly cookies
-- Sessions stored in Redis
+- **Auth is stateless — Redis is NOT in the login path.** Nothing in `dependencies.py`, `auth_service.py` or `security.py` touches Redis; a session is the JWT pair plus `users.token_version` (bumped by logout-everywhere, password reset, soft-delete, admin action). Redis carries chat/DM pub-sub, the scheduler lock, and caches (member prefs, FX, receipt scanner) — losing it degrades realtime and caches, it does not log anyone out.
 - Roles: `PARENT` (full access), `TEEN` (extended), `CHILD` (limited)
 - Prefer the `require_parent_role` dependency (`app/core/dependencies.py`) over inline role checks
 - Google OAuth accepts multiple client IDs: `GOOGLE_CLIENT_ID` (web) plus `GOOGLE_CLIENT_IDS` (comma list, for native iOS/Android client IDs under the same Cloud project). `GoogleOAuthService.verify_google_token` skips library-level `aud` validation and checks against the union manually (`backend/app/services/google_oauth_service.py`).
