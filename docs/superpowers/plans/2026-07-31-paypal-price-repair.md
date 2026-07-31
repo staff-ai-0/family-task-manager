@@ -1171,8 +1171,10 @@ echo "    billing OK"
 
 - [ ] **Step 3: Verify the check can actually fail**
 
-Run: `./scripts/deploy-onprem.sh --dry-run`
-Expected: the new block appears in the printed remote commands.
+Run: `DEPLOY_DRY_RUN=1 ./scripts/deploy-onprem.sh -y`
+Expected: the new block appears in the printed remote commands. (Note:
+`--dry-run` is not a flag this script accepts — it exits 1 with "unknown
+option: --dry-run"; dry-run mode is the `DEPLOY_DRY_RUN=1` env var.)
 
 Then prove the failure path locally without deploying:
 ```bash
