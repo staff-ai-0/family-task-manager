@@ -8,7 +8,8 @@
 # $REMOTE_PATH/.deploy-state → alembic migrate against the NEW image (old
 # backend keeps serving) → recreate the pod (scoped `down` + re-pin egress
 # DNS + `up` — a plain `up -d` does NOT swap pod containers onto a rebuilt
-# image) → health-check → public smoke.
+# image) → health-check → public smoke → billing-configuration smoke (the
+# only automated check that inspects real production pricing data).
 #
 # Rollback:
 #   * AUTOMATIC — if the post-up health check fails, the PREV_TAG images are
@@ -187,6 +188,67 @@ verify_public() { # assert both public URLs answer <400; non-zero if either does
     fi
   done
   return $fail
+}
+
+verify_billing() { # assert every non-free plan is priced + PayPal-wired for both cycles; non-zero on any failure
+  # CI's schema is built with Base.metadata.create_all and never sees a real
+  # plan row, so THIS is the only automated gate that inspects production
+  # pricing data. Mirrors app/core/plan_pricing.audit_plan_rows (monthly +
+  # annual price and PayPal-wiring) against the public endpoint. Every paid
+  # plan shipped priced $0 with no PayPal id wired, unnoticed, for two weeks
+  # in July 2026 — see plan_pricing.py's module docstring.
+  section "Verify billing configuration"
+  if [[ "$DRY_RUN" == "1" ]]; then echo "[dry-run] skipping billing configuration check"; return 0; fi
+  local json broken
+  json="$(curl -fsS -m 15 "https://api-family.agent-ia.mx/api/subscriptions/plans" 2>/dev/null)" || {
+    echo "❌ could not fetch /api/subscriptions/plans"
+    return 1
+  }
+  broken="$(printf '%s' "$json" | python3 -c '
+import json, sys
+
+try:
+    plans = json.load(sys.stdin)
+except Exception:
+    print("__PARSE_ERROR__")
+    sys.exit(0)
+
+if not isinstance(plans, list):
+    print("__PARSE_ERROR__")
+    sys.exit(0)
+
+bad = []
+for p in plans:
+    if not isinstance(p, dict) or p.get("name") == "free":
+        continue
+    problems = []
+    if not p.get("price_monthly_cents"):
+        problems.append("monthly price is 0")
+    if not p.get("checkout_ready_monthly"):
+        problems.append("monthly PayPal id missing")
+    if not p.get("price_annual_cents"):
+        problems.append("annual price is 0")
+    if not p.get("checkout_ready_annual"):
+        problems.append("annual PayPal id missing")
+    if problems:
+        name = p.get("name", "?")
+        currency = p.get("currency", "?")
+        bad.append(name + "/" + currency + " (" + ", ".join(problems) + ")")
+
+print(",".join(bad))
+')" || { echo "❌ billing check: python3 parse failed (is python3 available?)"; return 1; }
+  if [[ "$broken" == "__PARSE_ERROR__" ]]; then
+    echo "❌ billing check: malformed or unexpected JSON from /api/subscriptions/plans"
+    return 1
+  fi
+  if [[ -n "$broken" ]]; then
+    echo "❌ paid plans cannot be sold: $broken"
+    echo "   alembic upgrade head        → restores prices"
+    echo "   python -m scripts.setup_paypal_plans → wires the PayPal plan ids"
+    return 1
+  fi
+  echo "billing OK"
+  return 0
 }
 
 # ── Pre-flight ────────────────────────────────────────────────────────────
@@ -459,6 +521,24 @@ if ! verify_public; then
   echo "        IPv6 link-local upstream; without it the connector 530s)"
   echo "    Cloudflare Zero Trust → tunnel 'family-onprem' → public hostnames"
   echo "      → routes must target family_onprem_frontend / family_onprem_backend"
+  echo "════════════════════════════════════════════════════════════════"
+  exit 1
+fi
+
+# Same posture as verify_public above: containers healthy + publicly reachable
+# but selling nothing is a DATA problem (bad prices / unwired PayPal ids), not
+# an image problem — retagging cannot fix it, so no automatic rollback.
+if ! verify_billing; then
+  echo
+  echo "════════════════════════════════════════════════════════════════"
+  echo "  ⚠️ DEPLOYED BUT PAID PLANS CANNOT BE SOLD."
+  echo "  Containers are healthy and public on :$NEW_TAG — this is a DATA"
+  echo "  problem (pricing rows / PayPal wiring), so no automatic rollback"
+  echo "  was attempted (retagging images cannot fix it). Remedies:"
+  echo "    ssh $SSH_TARGET 'cd $REMOTE_PATH && $DC run --rm -T --no-deps backend alembic upgrade head'"
+  echo "      → restores canonical prices (see app/core/plan_pricing.py)"
+  echo "    ssh $SSH_TARGET 'cd $REMOTE_PATH && $DC run --rm -T --no-deps backend python -m scripts.setup_paypal_plans'"
+  echo "      → wires the PayPal plan ids"
   echo "════════════════════════════════════════════════════════════════"
   exit 1
 fi
