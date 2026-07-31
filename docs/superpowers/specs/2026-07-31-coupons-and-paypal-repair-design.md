@@ -112,11 +112,11 @@ CANONICAL_PRICES: dict[tuple[str, str], tuple[int, int]] = {
 
 - `setup_paypal_plans.py` imports it and derives its PayPal decimal strings
   from it (`f"{minor/100:.2f}"`), deleting `PLAN_PRICES`.
-- The repair migration (§3.2) imports it. Migrations normally must not
-  import app code (it can drift under them), so the migration copies the
-  literal table into its own module-level constant *and* a test asserts the
-  two are equal — the migration stays self-contained and frozen, the drift
-  is caught in CI rather than at `alembic upgrade` time.
+- The repair migration (§3.2) does **not** import it — migrations must not
+  import app code, which evolves underneath already-applied revisions.
+  Instead it carries a frozen literal copy *and* a test asserts the two are
+  equal, so the migration stays self-contained while the drift is caught in
+  CI rather than at `alembic upgrade` time.
 - `fallbackCents` in the frontend is **deleted**. A missing plan row now
   renders `—` and disables the upgrade button, instead of confidently
   printing a price the backend never confirmed. This removes the third copy
@@ -153,7 +153,7 @@ Four layers, cheapest first:
    `Base.metadata.create_all`, not alembic, so `subscription_plans` is empty
    in pytest and no test can assert that the real rows are correct. CI covers
    the canonical-table drift and the detector's logic; the DB-truth check is
-   layers 2 and 3.
+   layers 2-4.
 2. **Operator console health panel** — the admin overview gains a "Billing
    configuration" block listing any active paid row with a zero price or a
    NULL `paypal_plan_id_*`, red when non-empty. Read-only, reuses
