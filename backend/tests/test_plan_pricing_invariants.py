@@ -55,3 +55,36 @@ def test_price_minor_rejects_unknown_inputs():
 def test_price_decimal_str_is_paypal_shaped():
     assert price_decimal_str("plus", "monthly", "USD") == "5.00"
     assert price_decimal_str("pro", "annual", "MXN") == "1990.00"
+
+
+def test_provisioning_script_prices_match_the_canonical_table():
+    """setup_paypal_plans is what PayPal actually charges. If it drifts from
+    the DB's display price, customers see one number and pay another."""
+    from scripts.setup_paypal_plans import build_plan_definitions, plan_meta
+
+    defs = build_plan_definitions("PROD-TEST")
+    assert len(defs) == 8  # plus/pro x monthly/annual x USD/MXN
+
+    seen = set()
+    for plan_def in defs:
+        tier, cycle, currency = plan_meta(plan_def)
+        seen.add((tier, cycle, currency))
+        regular = [
+            c for c in plan_def["billing_cycles"] if c["tenure_type"] == "REGULAR"
+        ][0]
+        charged = regular["pricing_scheme"]["fixed_price"]
+        assert charged["currency_code"] == currency
+        assert charged["value"] == price_decimal_str(tier, cycle, currency)
+
+    assert seen == {
+        (tier, cycle, currency)
+        for (tier, currency) in CANONICAL_PRICES
+        for cycle in ("monthly", "annual")
+    }
+
+
+def test_provisioning_script_has_no_private_price_copy():
+    """The whole point of Task 1 — the script must not carry its own table."""
+    import scripts.setup_paypal_plans as mod
+
+    assert not hasattr(mod, "PLAN_PRICES")

@@ -2,7 +2,6 @@
 from unittest.mock import MagicMock
 
 from scripts.setup_paypal_plans import (
-    PLAN_PRICES,
     build_plan_definitions,
     create_product_if_missing,
     create_plan_if_missing,
@@ -91,16 +90,6 @@ def test_sql_update_activates_the_row():
     inactive so they cannot be listed/checked out before provisioning."""
     sql = _sql_update("pro", "annual", "MXN", "P-456")
     assert "is_active = true" in sql
-
-
-def test_prices_cover_all_tiers_for_each_currency():
-    for currency, prices in PLAN_PRICES.items():
-        assert set(prices) == {
-            ("plus", "monthly"),
-            ("plus", "annual"),
-            ("pro", "monthly"),
-            ("pro", "annual"),
-        }, currency
 
 
 def test_dry_run_makes_no_api_calls_and_needs_no_credentials(capsys, monkeypatch):

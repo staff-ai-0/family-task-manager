@@ -8,9 +8,9 @@ Manager" Product and 8 Plans (Plus/Pro x monthly/annual x USD/MXN) with a
 wire them into the subscription_plans rows AND activate them (the MXN rows
 are migration-seeded inactive until wired — see _sql_update).
 
-MXN plans are the Mexico-first defaults (see PLAN_PRICES below — edit there):
-    Plus  MX$99/mo  | MX$990/yr
-    Pro   MX$199/mo | MX$1990/yr
+MXN plans are the Mexico-first defaults. Prices come from
+app/core/plan_pricing.py (CANONICAL_PRICES) — the single source of truth.
+Do NOT add a price constant to this file.
 
 NOTE: verify the PayPal business account supports MXN pricing before the
 live run (Mexico-registered accounts do; plan creation 400s otherwise).
@@ -86,31 +86,9 @@ class PayPalAPI:
 
 
 # ---------------------------------------------------------------------------
-# Editable price constants (whole plan price as PayPal decimal strings)
+# Prices come from the canonical table — do NOT add a copy here.
 # ---------------------------------------------------------------------------
-# MXN defaults per the 2026-07-07 market intel: Plus MX$99/mo | MX$990/yr,
-# Pro MX$199/mo | MX$1990/yr (annual ≈ 2 months free).
-# THREE copies of these prices exist — keep ALL in sync when changing:
-#   1. here (what gets provisioned at PayPal),
-#   2. the DB seeds — MXN_PRICES in
-#      migrations/versions/2026_07_08_mxn_plan_currency_w6.py and USD_PRICES
-#      in migrations/versions/2026_07_16_usd_price_alignment.py,
-#   3. the pre-migration display fallback `fallbackCents` in
-#      frontend/src/pages/parent/settings/subscription.astro.
-PLAN_PRICES: dict[str, dict[tuple[str, str], str]] = {
-    "USD": {
-        ("plus", "monthly"): "5.00",
-        ("plus", "annual"): "50.00",
-        ("pro", "monthly"): "15.00",
-        ("pro", "annual"): "150.00",
-    },
-    "MXN": {
-        ("plus", "monthly"): "99.00",
-        ("plus", "annual"): "990.00",
-        ("pro", "monthly"): "199.00",
-        ("pro", "annual"): "1990.00",
-    },
-}
+from app.core.plan_pricing import price_decimal_str  # noqa: E402
 
 TRIAL_DAYS = 7
 
@@ -144,7 +122,6 @@ def build_plan_definitions(
     }
     out = []
     for currency in currencies:
-        prices = PLAN_PRICES[currency]
         for tier in ("plus", "pro"):
             for cycle in ("monthly", "annual"):
                 out.append(
@@ -178,7 +155,9 @@ def build_plan_definitions(
                                 "frequency": cycles[cycle],
                                 "pricing_scheme": {
                                     "fixed_price": {
-                                        "value": prices[(tier, cycle)],
+                                        "value": price_decimal_str(
+                                            tier, cycle, currency
+                                        ),
                                         "currency_code": currency,
                                     }
                                 },
@@ -278,7 +257,7 @@ def print_dry_run() -> None:
           f"({TRIAL_DAYS}-day trial, then:)")
     for plan_def in build_plan_definitions("<product-id>"):
         tier, cycle, currency = plan_meta(plan_def)
-        price = PLAN_PRICES[currency][(tier, cycle)]
+        price = price_decimal_str(tier, cycle, currency)
         interval = "month" if cycle == "monthly" else "year"
         print(f"  - {plan_def['name']:<20} {currency} {price:>8} / {interval}")
     print(
