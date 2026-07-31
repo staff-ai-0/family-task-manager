@@ -56,6 +56,19 @@ const TILES: [string, number, string][] = pulse
         </section>
     )}
 
+    {/* pulse loaded but the separate billing-config fetch failed (500, DB
+        hiccup, network) — a silent `billing` null must not look the same as
+        a confirmed-healthy panel, so this renders even though nothing is
+        provably wrong yet. Suppressed when pulse is also null: the banner
+        above already reports the whole-page outage and a second banner
+        saying the same thing is noise. */}
+    {pulse && !billing && (
+        <p class="mb-6 rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            Could not verify billing configuration. This is not a confirmation
+            that billing is healthy — the check itself failed to run.
+        </p>
+    )}
+
     {pulse && (
         <>
             <div class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
