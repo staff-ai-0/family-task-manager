@@ -10,6 +10,40 @@ from app.services.admin.operator_audit_service import OperatorAuditService
 from conftest import current_week_monday, family_local_today
 
 
+async def _active_credit_end(db, family_id):
+    """End of the family's latest credit window, or None.
+
+    Replaces the old `family.referral_bonus_until` assertion — same
+    behavior, now stored as a PlanCreditGrant row.
+
+    Deliberately NOT scoped to PlanCreditService.active_grants (which filters
+    to starts_at <= now): a credit stacked behind another grant is QUEUED
+    rather than active yet — exactly the state the old raw
+    `referral_bonus_until` timestamp represented just as well as an
+    already-running credit (never conditioned on "has this actually
+    started"). This mirrors PlanCreditService.next_window_start's own anchor
+    query, which looks at every non-revoked, dated grant regardless of
+    whether it has started (see test_comp_plus_now_stacks_like_any_other_
+    grant, which needs the SECOND, still-queued grant's end).
+    """
+    from sqlalchemy import select as _select
+
+    from app.models.plan_credit import PlanCreditGrant
+
+    return (
+        await db.execute(
+            _select(PlanCreditGrant.ends_at)
+            .where(
+                PlanCreditGrant.family_id == family_id,
+                PlanCreditGrant.revoked_at.is_(None),
+                PlanCreditGrant.ends_at.is_not(None),
+            )
+            .order_by(PlanCreditGrant.ends_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
 @pytest.mark.asyncio
 async def test_audit_record_stages_without_committing(
     db_session, test_superadmin_user, test_family
@@ -91,7 +125,7 @@ async def test_audit_record_truncates_long_error_strings(
 
 
 @pytest.mark.asyncio
-async def test_comp_plus_month_extends_referral_bonus_and_audits(
+async def test_comp_plus_grants_plan_credit_and_audits(
     client, db_session, superadmin_headers, test_family
 ):
     resp = await client.post(
@@ -100,46 +134,56 @@ async def test_comp_plus_month_extends_referral_bonus_and_audits(
         headers=superadmin_headers,
     )
     assert resp.status_code == 200
-    await db_session.refresh(test_family)
-    assert test_family.referral_bonus_until is not None
+    assert resp.json()["tier"] == "plus"
+    assert await _active_credit_end(db_session, test_family.id) is not None
 
     row = (
         await db_session.execute(
             select(OperatorAuditLog).where(
-                OperatorAuditLog.action == "family.comp_plus"
+                OperatorAuditLog.action == "family.grant_credit"
             )
         )
     ).scalar_one()
     assert row.target_family_id == test_family.id
     assert row.params["days"] == 30
+    assert row.params["tier"] == "plus"
     assert row.result == "ok"
 
 
 @pytest.mark.asyncio
-async def test_comp_plus_month_sets_absolute_expiry_not_stacked(
+async def test_comp_plus_now_stacks_like_any_other_grant(
     client, db_session, superadmin_headers, test_family
 ):
-    """Two comps of 30 days must not silently become 60.
+    """Two comps of 30 days now total ~60, not 30.
 
-    ReferralService._grant_referral_month stacks +30d per call; the operator
-    action deliberately does NOT use it and writes an absolute expiry.
+    comp_plus_month used to write an ABSOLUTE expiry specifically so repeated
+    comps did not stack — a guarantee unique to that one write path. It is
+    gone: /comp-plus is now a thin alias over the general grant_plan_credit,
+    which goes through PlanCreditService.grant like every other credit
+    source (coupon, referral, operator), and grants stack additively by
+    design — see test_plan_credit_service.test_grants_stack_additively, the
+    behavior this task's amendment explicitly keeps. An operator who wants
+    to RESET a family's comp instead of extending it now has a real tool for
+    that intent (revoke the old grant, then issue a fresh one) rather than
+    relying on this route's old, comp-only idempotent-overwrite behavior.
     """
     await client.post(
         f"/api/admin/families/{test_family.id}/comp-plus",
         json={"days": 30, "reason": "one"},
         headers=superadmin_headers,
     )
-    await db_session.refresh(test_family)
-    first = test_family.referral_bonus_until
+    first_end = await _active_credit_end(db_session, test_family.id)
+    assert first_end is not None
 
     await client.post(
         f"/api/admin/families/{test_family.id}/comp-plus",
         json={"days": 30, "reason": "two"},
         headers=superadmin_headers,
     )
-    await db_session.refresh(test_family)
-    delta = abs((test_family.referral_bonus_until - first).total_seconds())
-    assert delta < 5
+    second_end = await _active_credit_end(db_session, test_family.id)
+
+    delta_days = (second_end - first_end).total_seconds() / 86400
+    assert 29 <= delta_days <= 31
 
 
 @pytest.mark.asyncio
@@ -534,6 +578,12 @@ async def test_error_audit_row_written_even_when_refresh_would_fail(
     """
     from sqlalchemy.ext.asyncio import AsyncSession as AsyncSessionCls
 
+    # Captured up front, before any rollback: db.rollback() inside
+    # _record_failure expires every object on this shared session (see
+    # release_paycheck/restore_recycled tests above for the same rule), so
+    # re-reading test_family.id afterward would raise MissingGreenlet.
+    family_id = test_family.id
+
     async def _refresh_must_not_be_called(self, *args, **kwargs):
         raise RuntimeError(
             "AsyncSession.refresh must not be called on the admin-action "
@@ -548,7 +598,7 @@ async def test_error_audit_row_written_even_when_refresh_would_fail(
     def _raise_once_then_record(db, **kwargs):
         call_count["n"] += 1
         if call_count["n"] == 1:
-            raise RuntimeError("comp plus exploded")
+            raise RuntimeError("grant credit exploded")
         return real_record(db, **kwargs)
 
     monkeypatch.setattr(
@@ -556,30 +606,29 @@ async def test_error_audit_row_written_even_when_refresh_would_fail(
     )
 
     resp = await client.post(
-        f"/api/admin/families/{test_family.id}/comp-plus",
+        f"/api/admin/families/{family_id}/comp-plus",
         json={"days": 30, "reason": "force failure"},
         headers=superadmin_headers,
     )
     assert resp.status_code == 500
-    assert "comp plus failed" in resp.json()["detail"]
+    assert "grant credit failed" in resp.json()["detail"]
 
     # Restore the real refresh()/record() before using db_session ourselves
     # to verify final state below.
     monkeypatch.undo()
 
-    await db_session.refresh(test_family)
-    assert test_family.referral_bonus_until is None
+    assert await _active_credit_end(db_session, family_id) is None
 
     rows = (
         await db_session.execute(
             select(OperatorAuditLog).where(
-                OperatorAuditLog.action == "family.comp_plus"
+                OperatorAuditLog.action == "family.grant_credit"
             )
         )
     ).scalars().all()
     assert len(rows) == 1
     assert rows[0].result == "error"
-    assert "comp plus exploded" in rows[0].error
+    assert "grant credit exploded" in rows[0].error
     assert rows[0].actor_email == "superadmin@test.com"
 
 
@@ -1047,3 +1096,53 @@ async def test_restore_recycled_through_route_audits_ok_and_error_paths(
     assert len(error_rows) == 2
     assert any("unknown item_type" in (r.error or "") for r in error_rows)
     assert any("not found" in (r.error or "").lower() for r in error_rows)
+
+
+@pytest.mark.asyncio
+async def test_operator_can_grant_a_lifetime_pro_credit(
+    client, superadmin_headers, db_session, test_family
+):
+    """comp_plus_month could not do either half of this."""
+    resp = await client.post(
+        f"/api/admin/families/{test_family.id}/credits",
+        headers=superadmin_headers,
+        json={"tier": "pro", "days": None, "reason": "founder"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["tier"] == "pro"
+    assert resp.json()["ends_at"] is None
+
+    from app.services.plan_credit_service import PlanCreditService
+
+    assert await PlanCreditService.floor_tier(db_session, test_family.id) == "pro"
+
+
+@pytest.mark.asyncio
+async def test_granting_credit_writes_an_audit_row(
+    client, superadmin_headers, db_session, test_family
+):
+    await client.post(
+        f"/api/admin/families/{test_family.id}/credits",
+        headers=superadmin_headers,
+        json={"tier": "plus", "days": 30, "reason": "support goodwill"},
+    )
+
+    row = (
+        await db_session.execute(
+            select(OperatorAuditLog).where(
+                OperatorAuditLog.action == "family.grant_credit"
+            )
+        )
+    ).scalars().first()
+    assert row is not None
+    assert row.params["tier"] == "plus"
+
+
+@pytest.mark.asyncio
+async def test_grant_credit_is_superadmin_only(client, auth_headers, test_family):
+    resp = await client.post(
+        f"/api/admin/families/{test_family.id}/credits",
+        headers=auth_headers,
+        json={"tier": "pro", "days": None, "reason": "nope"},
+    )
+    assert resp.status_code == 404

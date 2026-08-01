@@ -23,6 +23,39 @@ from app.services.referral_service import (
 )
 
 
+async def _active_credit_end(db, family_id):
+    """End of the family's latest credit window, or None.
+
+    Replaces the old `family.referral_bonus_until` assertion — same
+    behavior, now stored as a PlanCreditGrant row.
+
+    Deliberately NOT scoped to PlanCreditService.active_grants (which filters
+    to starts_at <= now): a credit stacked behind a paid subscription's
+    current_period_end, or behind another grant, is QUEUED rather than
+    active yet — exactly the state the old raw `referral_bonus_until`
+    timestamp represented just as well as an already-running credit (it was
+    never conditioned on "has this actually started"). This mirrors
+    PlanCreditService.next_window_start's own anchor query, which looks at
+    every non-revoked, dated grant regardless of whether it has started.
+    """
+    from sqlalchemy import select as _select
+
+    from app.models.plan_credit import PlanCreditGrant
+
+    return (
+        await db.execute(
+            _select(PlanCreditGrant.ends_at)
+            .where(
+                PlanCreditGrant.family_id == family_id,
+                PlanCreditGrant.revoked_at.is_(None),
+                PlanCreditGrant.ends_at.is_not(None),
+            )
+            .order_by(PlanCreditGrant.ends_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -183,14 +216,11 @@ async def test_referral_recorded_once_and_rewards_both(
     assert ref_plan.name == "plus"
     assert red_plan.name == "plus"
 
-    # The credit lives on families.referral_bonus_until (~30 days out) — NOT
-    # on a subscription row — so the PayPal reconcile sweep can never erase it.
+    # The credit lives on a PlanCreditGrant (~30 days out) — NOT on a
+    # subscription row — so the PayPal reconcile sweep can never erase it.
     for fam_id in (referrer_family.id, referred_family.id):
-        fam = (
-            await db_session.execute(select(Family).where(Family.id == fam_id))
-        ).scalar_one()
-        assert fam.referral_bonus_until is not None
-        end = fam.referral_bonus_until
+        end = await _active_credit_end(db_session, fam_id)
+        assert end is not None
         if end.tzinfo is None:
             end = end.replace(tzinfo=timezone.utc)
         days = (end - datetime.now(timezone.utc)).days
@@ -209,12 +239,7 @@ async def test_self_referral_rejected(db_session, plus_plan, referrer_family):
     rows = (await db_session.execute(select(Referral))).scalars().all()
     assert rows == []
     assert await _sub_for(db_session, referrer_family.id) is None
-    fam = (
-        await db_session.execute(
-            select(Family).where(Family.id == referrer_family.id)
-        )
-    ).scalar_one()
-    assert fam.referral_bonus_until is None
+    assert await _active_credit_end(db_session, referrer_family.id) is None
 
 
 @pytest.mark.asyncio
@@ -226,12 +251,7 @@ async def test_double_referral_rejected(
     )
     assert first is not None
     # Capture the referred family's credit after the first (only) reward.
-    fam1 = (
-        await db_session.execute(
-            select(Family).where(Family.id == referred_family.id)
-        )
-    ).scalar_one()
-    bonus_after_first = fam1.referral_bonus_until
+    bonus_after_first = await _active_credit_end(db_session, referred_family.id)
     assert bonus_after_first is not None
 
     # A SECOND family tries to claim the same referred family.
@@ -253,15 +273,12 @@ async def test_double_referral_rejected(
         )
     ).scalars().all()
     assert len(rows) == 1
-    await db_session.refresh(fam1)
-    assert fam1.referral_bonus_until == bonus_after_first
+    assert (
+        await _active_credit_end(db_session, referred_family.id)
+        == bonus_after_first
+    )
     # The second referrer got NO credit.
-    other = (
-        await db_session.execute(
-            select(Family).where(Family.id == other_referrer.id)
-        )
-    ).scalar_one()
-    assert other.referral_bonus_until is None
+    assert await _active_credit_end(db_session, other_referrer.id) is None
     assert await _sub_for(db_session, other_referrer.id) is None
 
 
@@ -277,8 +294,8 @@ async def test_paid_sub_left_untouched_credit_on_family(
     db_session, plus_plan, referrer_family, referred_family
 ):
     """A referrer on a live PAID sub keeps their PayPal row COMPLETELY
-    untouched (no clobbered period, no severed linkage). The reward lands on
-    families.referral_bonus_until, stacked to begin after the paid period."""
+    untouched (no clobbered period, no severed linkage). The reward lands as
+    a PlanCreditGrant, stacked to begin after the paid period."""
     now = datetime.now(timezone.utc)
     paid = FamilySubscription(
         family_id=referrer_family.id,
@@ -315,14 +332,9 @@ async def test_paid_sub_left_untouched_credit_on_family(
     # Paid period is UNCHANGED (~10 days) — the sweep-clobbered field is safe.
     assert 9 <= (end - now).days <= 11
 
-    # The reward is on the family row, stacked after the paid period: ~40 days.
-    fam = (
-        await db_session.execute(
-            select(Family).where(Family.id == referrer_family.id)
-        )
-    ).scalar_one()
-    assert fam.referral_bonus_until is not None
-    bonus = fam.referral_bonus_until
+    # The reward is a PlanCreditGrant, stacked after the paid period: ~40 days.
+    bonus = await _active_credit_end(db_session, referrer_family.id)
+    assert bonus is not None
     if bonus.tzinfo is None:
         bonus = bonus.replace(tzinfo=timezone.utc)
     # 10 (paid remaining) + 30 (reward) ≈ 40 days out.
@@ -340,8 +352,8 @@ async def test_paid_sub_referral_bonus_survives_reconcile(
 
     The old bug wrote the +30d onto current_period_end; reconcile then
     overwrote it from PayPal's next_billing_at (which knows nothing of the
-    internal credit), zeroing the reward within 24h. Now the credit lives on
-    families.referral_bonus_until, which reconcile never touches.
+    internal credit), zeroing the reward within 24h. Now the credit lives as
+    a PlanCreditGrant row, which reconcile never touches.
     """
     from app.jobs import subscription_sweep
     from app.services.paypal_service import PayPalService
@@ -364,12 +376,7 @@ async def test_paid_sub_referral_bonus_survives_reconcile(
     )
     assert ref is not None
 
-    fam = (
-        await db_session.execute(
-            select(Family).where(Family.id == referrer_family.id)
-        )
-    ).scalar_one()
-    bonus_before = fam.referral_bonus_until
+    bonus_before = await _active_credit_end(db_session, referrer_family.id)
     assert bonus_before is not None
     if bonus_before.tzinfo is None:
         bonus_before = bonus_before.replace(tzinfo=timezone.utc)
@@ -402,9 +409,9 @@ async def test_paid_sub_referral_bonus_survives_reconcile(
         end = end.replace(tzinfo=timezone.utc)
     assert abs((end - paypal_next).total_seconds()) < 60
 
-    # ...but the referral credit SURVIVED untouched on the family row.
-    await db_session.refresh(fam)
-    survived = fam.referral_bonus_until
+    # ...but the referral credit SURVIVED untouched (same grant, unrelated
+    # to the subscription row the sweep just rewrote).
+    survived = await _active_credit_end(db_session, referrer_family.id)
     assert survived is not None
     if survived.tzinfo is None:
         survived = survived.replace(tzinfo=timezone.utc)
@@ -425,12 +432,9 @@ async def test_no_plus_plan_credit_recorded_but_resolves_free(
     assert await _sub_for(db_session, referrer_family.id) is None
     assert await _sub_for(db_session, referred_family.id) is None
     for fam_id in (referrer_family.id, referred_family.id):
-        fam = (
-            await db_session.execute(select(Family).where(Family.id == fam_id))
-        ).scalar_one()
-        # Credit timestamp is stamped (harmless — resolves to Plus once a Plus
+        # Credit grant is stamped (harmless — resolves to Plus once a Plus
         # plan is configured)...
-        assert fam.referral_bonus_until is not None
+        assert await _active_credit_end(db_session, fam_id) is not None
         # ...but with no Plus plan it resolves to free right now.
         assert (await get_family_plan_by_id(db_session, fam_id)).name == "free"
 
