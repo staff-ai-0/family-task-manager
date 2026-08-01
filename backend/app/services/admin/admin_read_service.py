@@ -513,10 +513,17 @@ class AdminReadService:
     async def billing_config_health(db: AsyncSession) -> dict:
         """Can the app actually sell a plan right now?
 
-        Wraps app.core.plan_pricing.audit_plan_rows. This is the only one of
-        its three consumers that runs against PRODUCTION data on demand —
-        CI's schema is built with create_all and holds no plan rows, and the
-        startup log is only seen if somebody greps for it.
+        Wraps app.core.plan_pricing.audit_plan_rows, which has TWO
+        consumers: the app.main startup log and this admin endpoint. Both
+        run against PRODUCTION data (CI's schema is built with create_all
+        and holds no plan rows) — this one on demand, the startup log once
+        per boot and only seen if somebody greps for it. Neither BLOCKS
+        anything; they observe and report. `scripts/deploy-onprem.sh`'s
+        billing smoke check is a separate, independent third check that
+        does NOT call audit_plan_rows — it re-derives an equivalent rule
+        against the public API instead. It is the only one of the three
+        that GATES: a failure there blocks the deploy, while this panel and
+        the startup log only ever surface a problem for a human to see.
         """
         from app.core.plan_pricing import audit_plan_rows
 
