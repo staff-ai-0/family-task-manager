@@ -5,16 +5,22 @@ valid, expired, exhausted) raises the SAME CouponInvalid, so the endpoint is
 not an oracle for which codes exist. Only already-redeemed is distinct — the
 family can see that state anyway, and a uniform error there is confusing.
 
-True concurrency is not simulated here — the test suite shares one session
-per test. The concurrency guards are exercised structurally instead:
-UNIQUE(family_id, coupon_id) has its own IntegrityError test in
-test_plan_credit_service.py, and the redemption cap is a predicated UPDATE
-whose 0-row path is covered by test_exhausted_code_is_invalid.
+Concurrency IS simulated for the one contract that demands it: two genuinely
+independent sessions racing CouponService.redeem() for the same code and the
+same family (test_concurrent_redeem_same_family_awards_exactly_once below),
+following the same async_sessionmaker + asyncio.gather(..., return_exceptions
+=True) pattern as test_gig_claim_race.py, test_cash_concurrency.py,
+test_allocation_race.py and test_task_assignment_race.py. Everything else in
+this file — the validation matrix, the cap's 0-row path, the pre-check's
+IntegrityError-equivalent behavior — stays single-session, since those
+branches don't depend on two transactions actually overlapping in time.
 """
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.plan_credit import Coupon, PlanCreditGrant
 from app.services.coupon_service import (
@@ -190,3 +196,51 @@ async def test_two_coupons_stack(db_session, test_family):
 
     assert second.starts_at == first.ends_at
     assert second.ends_at - first.starts_at == timedelta(days=60)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_redeem_same_family_awards_exactly_once(
+    test_engine, db_session, test_family
+):
+    """Two independent sessions redeem the SAME code for the SAME family at
+    the same time. Deterministic, not timing-dependent: PlanCreditService.
+    grant() takes a per-family pg_advisory_xact_lock, so the two attempts
+    fully serialize — whichever one acquires the lock second only does so
+    after the first has committed, and by then a conflicting
+    PlanCreditGrant row already exists, so its own INSERT unconditionally
+    hits UNIQUE(family_id, coupon_id) at flush. This is exactly the branch
+    the widened try/except (wrapping grant() as well as commit()) exists to
+    convert into CouponAlreadyRedeemed instead of a raw IntegrityError."""
+    coupon = await _coupon(db_session)
+    coupon_id = coupon.id
+    family_id = test_family.id
+
+    maker = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def _redeem():
+        async with maker() as s:
+            return await CouponService.redeem(
+                s, family_id=family_id, code="LANZAMIENTO"
+            )
+
+    results = await asyncio.gather(_redeem(), _redeem(), return_exceptions=True)
+
+    succeeded = [r for r in results if isinstance(r, tuple)]
+    failed = [r for r in results if isinstance(r, Exception)]
+    assert len(succeeded) == 1, f"expected 1 success, got {results}"
+    assert len(failed) == 1 and isinstance(failed[0], CouponAlreadyRedeemed), (
+        f"expected 1 CouponAlreadyRedeemed, got {results}"
+    )
+
+    grants = (
+        await db_session.execute(
+            select(PlanCreditGrant).where(
+                PlanCreditGrant.family_id == family_id,
+                PlanCreditGrant.coupon_id == coupon_id,
+            )
+        )
+    ).scalars().all()
+    assert len(grants) == 1, f"expected exactly 1 grant row, got {len(grants)}"
+
+    await db_session.refresh(coupon)
+    assert coupon.redemption_count == 1
