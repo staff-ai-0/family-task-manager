@@ -342,3 +342,99 @@ async def test_jarvis_chat_passes_gate_on_plus_plan(
         "/api/jarvis/chat", json={"message": "hola"}, headers=auth_headers
     )
     assert resp.status_code == 502, resp.text
+
+
+@pytest.mark.asyncio
+async def test_a_pro_grant_floors_a_free_family_at_pro(
+    db_session, test_parent_user, test_family
+):
+    from app.core.premium import get_family_plan
+    from app.models.subscription import SubscriptionPlan
+    from app.services.plan_credit_service import PlanCreditService
+
+    db_session.add(
+        SubscriptionPlan(
+            name="pro", display_name="Pro", display_name_es="Pro",
+            currency="USD", price_monthly_cents=1_500, price_annual_cents=15_000,
+            limits={"ai_features": True, "max_family_members": -1},
+            is_active=True, sort_order=20,
+        )
+    )
+    await db_session.flush()
+    await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="coupon",
+        tier="pro", duration_days=30,
+    )
+    await db_session.commit()
+
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "pro"
+    assert plan.limits["ai_features"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_higher_paid_plan_beats_a_lower_grant(
+    db_session, test_parent_user, test_family
+):
+    """A Pro payer with a Plus coupon must keep Pro."""
+    from app.core.premium import get_family_plan
+    from app.models.subscription import FamilySubscription, SubscriptionPlan
+    from app.services.plan_credit_service import PlanCreditService
+
+    plus = SubscriptionPlan(
+        name="plus", display_name="Plus", display_name_es="Plus", currency="USD",
+        price_monthly_cents=500, price_annual_cents=5_000,
+        limits={"max_family_members": 6}, is_active=True, sort_order=10,
+    )
+    pro = SubscriptionPlan(
+        name="pro", display_name="Pro", display_name_es="Pro", currency="USD",
+        price_monthly_cents=1_500, price_annual_cents=15_000,
+        limits={"max_family_members": -1}, is_active=True, sort_order=20,
+    )
+    db_session.add_all([plus, pro])
+    await db_session.flush()
+    db_session.add(
+        FamilySubscription(
+            family_id=test_family.id, plan_id=pro.id,
+            billing_cycle="monthly", status="active",
+            paypal_subscription_id="I-PRO",
+        )
+    )
+    await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="coupon",
+        tier="plus", duration_days=30,
+    )
+    await db_session.commit()
+
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "pro"
+
+
+@pytest.mark.asyncio
+async def test_an_expired_grant_returns_the_family_to_free(
+    db_session, test_parent_user, test_family
+):
+    from datetime import datetime, timedelta, timezone
+
+    from app.core.premium import get_family_plan
+    from app.models.plan_credit import PlanCreditGrant
+    from app.models.subscription import SubscriptionPlan
+
+    db_session.add(
+        SubscriptionPlan(
+            name="free", display_name="Free", display_name_es="Gratis",
+            currency="USD", price_monthly_cents=0, price_annual_cents=0,
+            limits={"ai_features": False}, is_active=True, sort_order=0,
+        )
+    )
+    past = datetime.now(timezone.utc) - timedelta(days=90)
+    db_session.add(
+        PlanCreditGrant(
+            family_id=test_family.id, source="coupon", tier="pro",
+            starts_at=past, ends_at=past + timedelta(days=30),
+        )
+    )
+    await db_session.commit()
+
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "free"
