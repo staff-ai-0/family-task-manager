@@ -220,7 +220,7 @@ def create_product_if_missing(api: PayPalAPI, name: str) -> str:
 
 
 class PlanPriceMismatch(RuntimeError):
-    """A PayPal plan matched by name does not charge the canonical price.
+    """A PayPal plan matched by name charges a stale (non-canonical) price.
 
     Raised by create_plan_if_missing instead of silently reusing the match:
     a name collision is NOT proof the plan is safe to reuse (see that
@@ -228,15 +228,31 @@ class PlanPriceMismatch(RuntimeError):
     """
 
 
+class PlanPriceUnavailable(RuntimeError):
+    """A PayPal plan matched by name has no comparable REGULAR price even
+    after fetching its full Show-Plan-Details representation.
+
+    This is NOT evidence of a stale price — it means the price data itself
+    is missing or malformed, which is a different (and rarer) problem.
+    Raised separately from PlanPriceMismatch so the operator isn't told
+    "charges None" for something that was never comparable in the first
+    place.
+    """
+
+
 def _regular_fixed_price(plan: dict[str, Any]) -> dict[str, Any] | None:
     """The REGULAR billing cycle's fixed_price from a PayPal plan object, or
     None if absent.
 
-    `plan` here is the same shape PayPal returns for both a List Plans item
-    and a Show Plan Details response — per billing_subscriptions_v1's
-    OpenAPI spec, `plan_list` items $ref the identical `plan` schema
-    (which includes `billing_cycles`) as the single-plan GET, so the list
-    response is trusted here without an extra per-plan API call.
+    Callers must pass the Show Plan Details response (GET
+    /v1/billing/plans/{id}), NOT a List Plans item. Per billing_subscriptions_v1's
+    published OpenAPI spec, GET /v1/billing/plans declares a `Prefer` header
+    whose default is `return=minimal` — a minimal response carries only
+    `id`, `status`, and HATEOAS `links`, no `billing_cycles` — while
+    PayPalAPI.get sends no Prefer override at all, so list items never carry
+    a price. Show Plan Details takes no `Prefer` parameter and returns the
+    full representation (including `billing_cycles`) by default, so it is
+    the one PayPal response this function can trust.
     """
     for cycle in plan.get("billing_cycles") or []:
         if cycle.get("tenure_type") == "REGULAR":
@@ -258,9 +274,23 @@ def create_plan_if_missing(api: PayPalAPI, plan_def: dict[str, Any]) -> str:
     amount, and a customer is billed something they were never shown. So
     before reusing a name match, this verifies its REGULAR billing cycle's
     fixed_price (value AND currency_code) against what plan_def says it
-    should charge. A mismatch raises PlanPriceMismatch — naming the plan
-    id, its actual price, and the expected price — rather than proceeding
-    silently, so the operator sees it BEFORE any wiring SQL is applied.
+    should charge.
+
+    The List Plans item used for the name match is NOT trustworthy for this
+    check — see _regular_fixed_price's docstring: PayPal's `Prefer:
+    return=minimal` default strips `billing_cycles` from list items
+    entirely, which is indistinguishable from "no billing_cycles" and would
+    make every reused plan look like a price mismatch (`charges None`) on
+    the very first name match against the real API. So on a name match this
+    fetches the plan's full representation via Show Plan Details (GET
+    /v1/billing/plans/{id}, no Prefer needed, cost is fine — this only
+    happens once per name match) and compares THAT instead. A genuine
+    mismatch raises PlanPriceMismatch — naming the plan id, its actual
+    price, and the expected price — rather than proceeding silently, so the
+    operator sees it BEFORE any wiring SQL is applied. If the detail fetch
+    still has no comparable REGULAR price (missing/malformed data, not a
+    stale price), that raises the distinct PlanPriceUnavailable instead —
+    absent price data must mean "go fetch it", never "mismatch".
     """
     expected_price = [
         c for c in plan_def["billing_cycles"] if c["tenure_type"] == "REGULAR"
@@ -268,16 +298,27 @@ def create_plan_if_missing(api: PayPalAPI, plan_def: dict[str, Any]) -> str:
 
     for p in iter_all_pages(api, "/v1/billing/plans?page_size=20", "plans"):
         if p.get("name") == plan_def["name"]:
-            actual_price = _regular_fixed_price(p)
+            plan_id = p["id"]
+            detail = api.get(f"/v1/billing/plans/{plan_id}")
+            actual_price = _regular_fixed_price(detail)
+            if actual_price is None:
+                raise PlanPriceUnavailable(
+                    f"PayPal plan {plan_id!r} named {plan_def['name']!r} has "
+                    "no REGULAR billing-cycle price in its Show Plan Details "
+                    "response, so its price cannot be verified. This is NOT "
+                    "a stale-price mismatch — the price data itself is "
+                    "missing or malformed. Inspect the plan directly at "
+                    "PayPal before re-running provisioning."
+                )
             if actual_price != expected_price:
                 raise PlanPriceMismatch(
-                    f"PayPal plan {p.get('id')!r} named {plan_def['name']!r} "
+                    f"PayPal plan {plan_id!r} named {plan_def['name']!r} "
                     f"charges {actual_price!r} but the canonical price is "
                     f"{expected_price!r}. Refusing to reuse it — retire the "
                     "stale plan at PayPal (or correct its price there) "
                     "before re-running provisioning."
                 )
-            return p["id"]
+            return plan_id
     created = api.post("/v1/billing/plans", plan_def)
     return created["id"]
 
