@@ -27,6 +27,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -260,6 +261,26 @@ def _regular_fixed_price(plan: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
+def _same_price(actual: dict[str, Any], expected: dict[str, Any]) -> bool:
+    """Numeric equality on ``value`` + exact match on ``currency_code``.
+
+    PayPal does not guarantee decimal formatting on the wire: the live API
+    returned ``'5.0'`` on 2026-07-31 for a plan provisioned as ``'5.00'``,
+    and raw dict equality aborted the entire provisioning run over that
+    formatting difference. Decimal("5.0") == Decimal("5.00"), so numeric
+    comparison is the correct semantics; currency_code stays an exact
+    string match (USD 99 and MXN 99 are different prices).
+
+    Raises decimal.InvalidOperation (or TypeError on a non-string/number)
+    when a value cannot be parsed — the caller maps that to
+    PlanPriceUnavailable, because unparseable price data is missing data,
+    not evidence of a stale price.
+    """
+    if (actual.get("currency_code") or "") != (expected.get("currency_code") or ""):
+        return False
+    return Decimal(str(actual["value"])) == Decimal(str(expected["value"]))
+
+
 def create_plan_if_missing(api: PayPalAPI, plan_def: dict[str, Any]) -> str:
     """Look up plan by name (across all pages); create if absent.
 
@@ -310,7 +331,18 @@ def create_plan_if_missing(api: PayPalAPI, plan_def: dict[str, Any]) -> str:
                     "missing or malformed. Inspect the plan directly at "
                     "PayPal before re-running provisioning."
                 )
-            if actual_price != expected_price:
+            try:
+                prices_match = _same_price(actual_price, expected_price)
+            except (InvalidOperation, TypeError, ValueError) as exc:
+                raise PlanPriceUnavailable(
+                    f"PayPal plan {plan_id!r} named {plan_def['name']!r} has "
+                    f"an unparseable REGULAR price {actual_price!r} in its "
+                    "Show Plan Details response, so its price cannot be "
+                    "verified. This is NOT a stale-price mismatch — the "
+                    "price data itself is malformed. Inspect the plan "
+                    "directly at PayPal before re-running provisioning."
+                ) from exc
+            if not prices_match:
                 raise PlanPriceMismatch(
                     f"PayPal plan {plan_id!r} named {plan_def['name']!r} "
                     f"charges {actual_price!r} but the canonical price is "
