@@ -334,3 +334,74 @@ async def test_grant_rejects_an_ungrantable_tier(db_session, test_family):
             db_session, family_id=test_family.id, source="operator",
             tier="free", duration_days=30,
         )
+
+
+@pytest.mark.asyncio
+async def test_a_lower_tier_grant_queues_behind_an_active_higher_tier_grant(
+    db_session, test_family
+):
+    """A Plus grant issued while a Pro grant is active must not run in
+    parallel underneath the Pro floor — it queues to start exactly when the
+    Pro grant ends. (Under same-tier-only queueing this would start "now"
+    instead, wasting the Plus days under a Pro window that already covers
+    them.)"""
+    pro = await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="operator",
+        tier="pro", duration_days=30,
+    )
+    await db_session.commit()
+
+    plus = await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="referral",
+        tier="plus", duration_days=30,
+    )
+    await db_session.commit()
+
+    assert plus.starts_at == pro.ends_at
+
+
+@pytest.mark.asyncio
+async def test_a_higher_tier_grant_never_waits_behind_a_lower_tier_grant(
+    db_session, test_family
+):
+    """A Pro comp issued while a Plus credit is already queued must start
+    now, not behind it — the better tier is never made to wait behind the
+    worse one."""
+    await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="referral",
+        tier="plus", duration_days=30,
+    )
+    await db_session.commit()
+
+    before = datetime.now(timezone.utc)
+    pro = await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="operator",
+        tier="pro", duration_days=30,
+    )
+    await db_session.commit()
+
+    assert pro.starts_at >= before
+
+
+@pytest.mark.asyncio
+async def test_a_revoked_grant_does_not_anchor_the_queue(db_session, test_family):
+    """Revoking a grant must free the queue slot it was anchoring —
+    otherwise a revoked credit silently pushes the next grant into the
+    future forever."""
+    first = await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="referral",
+        tier="plus", duration_days=30,
+    )
+    await db_session.commit()
+
+    await PlanCreditService.revoke(db_session, grant_id=first.id)
+    await db_session.commit()
+
+    before = datetime.now(timezone.utc)
+    second = await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="referral",
+        tier="plus", duration_days=30,
+    )
+    await db_session.commit()
+
+    assert second.starts_at >= before

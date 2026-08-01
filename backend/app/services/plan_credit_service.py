@@ -70,25 +70,31 @@ class PlanCreditService:
 
     @staticmethod
     async def next_window_start(
-        db: AsyncSession, family_id: UUID, *, tier: Optional[str] = None
+        db: AsyncSession, family_id: UUID, *, tier: str
     ) -> datetime:
-        """When a newly granted credit should begin.
+        """When a newly granted credit of *tier* should begin.
 
-        The latest of: now, the end of the family's last queued credit AT
-        THE SAME TIER, and a live paid subscription's current_period_end.
-        Credits are ADDITIVE — a family holding two 30-day codes at the same
-        tier gets 60 days, and a payer's free month starts after the time
-        they already bought rather than being spent in parallel with it.
+        The latest of: now, the end of the family's last queued credit whose
+        tier outranks-or-equals *tier* (PLAN_ORDER), and a live paid
+        subscription's current_period_end. Credits are ADDITIVE — a family
+        holding two 30-day codes at the same tier gets 60 days, and a
+        payer's free month starts after the time they already bought rather
+        than being spent in parallel with it.
 
-        The "latest queued credit" lookup is scoped to *tier* (when given)
-        rather than every grant regardless of tier. Otherwise a higher-tier
-        comp granted on top of an already-queued lower-tier credit would
-        itself get queued behind it — wasting the higher tier for the
-        duration of the lower one and breaking floor_tier's job of always
-        reporting the best CURRENTLY active tier. Same-tier grants still
-        stack head-to-tail so the same benefit is never doubled up in
-        parallel. ``tier=None`` (the default, for callers previewing a
-        window without a target tier in mind) considers all tiers.
+        The "latest queued credit" lookup is scoped to tier >= *tier*, not
+        tier == *tier*: a grant is only worth queuing behind a credit that
+        already covers (or beats) it. A Pro comp must never wait behind an
+        already-queued Plus credit — the better tier would sit unused for no
+        reason, and floor_tier's job is to always report the best tier
+        active RIGHT NOW. But a Plus grant issued while a Pro grant is
+        active must not run in parallel underneath the Pro floor — that
+        would burn the Plus days for nothing, since Pro already dominates
+        them — so it queues to start when the Pro grant ends. *tier* is
+        required (no tier-agnostic default): every real caller resolves to
+        one of grant()/floor_tier()/active_grants()/revoke(), all of which
+        know the tier in question, and a caller that forgot to pass tier
+        would silently fall back to the tier-agnostic bug this scoping
+        exists to fix.
 
         Lifetime grants (ends_at IS NULL) are skipped: there is nothing to
         queue behind "forever", and treating them as infinite would make
@@ -97,16 +103,18 @@ class PlanCreditService:
         now = datetime.now(timezone.utc)
         base = now
 
-        latest_end_query = select(PlanCreditGrant.ends_at).where(
-            PlanCreditGrant.family_id == family_id,
-            PlanCreditGrant.revoked_at.is_(None),
-            PlanCreditGrant.ends_at.is_not(None),
-        )
-        if tier is not None:
-            latest_end_query = latest_end_query.where(PlanCreditGrant.tier == tier)
+        anchor_tiers = [t for t in GRANTABLE_TIERS if PLAN_ORDER[t] >= PLAN_ORDER[tier]]
         latest_end = (
             await db.execute(
-                latest_end_query.order_by(PlanCreditGrant.ends_at.desc()).limit(1)
+                select(PlanCreditGrant.ends_at)
+                .where(
+                    PlanCreditGrant.family_id == family_id,
+                    PlanCreditGrant.revoked_at.is_(None),
+                    PlanCreditGrant.ends_at.is_not(None),
+                    PlanCreditGrant.tier.in_(anchor_tiers),
+                )
+                .order_by(PlanCreditGrant.ends_at.desc())
+                .limit(1)
             )
         ).scalar_one_or_none()
         latest_end = _aware(latest_end)
