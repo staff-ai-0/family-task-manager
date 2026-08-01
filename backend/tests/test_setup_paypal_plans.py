@@ -204,6 +204,51 @@ def test_create_plan_reused_when_list_response_lacks_billing_cycles():
     assert fake_api.get.call_args_list[1].args[0] == "/v1/billing/plans/P-EXISTING"
 
 
+def test_create_plan_reused_when_price_differs_only_in_formatting():
+    """Regression test for the 2026-07-31 LIVE provisioning abort.
+
+    The real API returned {'currency_code': 'USD', 'value': '5.0'} for the
+    July-provisioned "Plus Monthly" plan — numerically identical to the
+    canonical '5.00', but raw dict equality treated the formatting
+    difference as a stale price and aborted the whole run with zero output.
+    PayPal does not guarantee decimal formatting on the wire; comparison
+    must be numeric (Decimal) on value + exact on currency_code.
+    """
+    fake_api = MagicMock()
+    list_page = {"plans": [{"id": "P-FMT", "name": "Plus Monthly"}]}
+    detail = {
+        "id": "P-FMT",
+        "name": "Plus Monthly",
+        # the exact wire shape observed live on 2026-07-31
+        "billing_cycles": _regular_cycle("5.0", "USD"),
+    }
+    fake_api.get.side_effect = [list_page, detail]
+    plan_def = {"name": "Plus Monthly", "billing_cycles": _regular_cycle("5.00", "USD")}
+
+    pid = create_plan_if_missing(fake_api, plan_def=plan_def)
+
+    assert pid == "P-FMT"
+    fake_api.post.assert_not_called()
+
+
+def test_create_plan_raises_price_unavailable_on_malformed_value():
+    """A value Decimal cannot parse is missing/malformed price data, not
+    evidence of a stale price — PlanPriceUnavailable, never a crash and
+    never PlanPriceMismatch."""
+    fake_api = MagicMock()
+    list_page = {"plans": [{"id": "P-GARBAGE", "name": "Plus Monthly"}]}
+    detail = {
+        "id": "P-GARBAGE",
+        "name": "Plus Monthly",
+        "billing_cycles": _regular_cycle("not-a-number", "USD"),
+    }
+    fake_api.get.side_effect = [list_page, detail]
+    plan_def = {"name": "Plus Monthly", "billing_cycles": _regular_cycle("5.00", "USD")}
+
+    with pytest.raises(PlanPriceUnavailable):
+        create_plan_if_missing(fake_api, plan_def=plan_def)
+
+
 def test_create_plan_raises_on_price_mismatch():
     """Whole-branch review Fix 4: a name match with a STALE price must NOT
     be silently reused — that is precisely how a customer could be charged
