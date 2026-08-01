@@ -107,7 +107,7 @@ const shortDT = (iso: string | null) =>
                     <dd class="num">
                         {overview.active_credits?.length
                             ? overview.active_credits
-                                  .map((c: any) => `${c.tier} · ${c.ends_at?.slice(0, 10) ?? "de por vida"}`)
+                                  .map((c: any) => `${c.tier} · ${c.source} · ${c.ends_at?.slice(0, 10) ?? "lifetime"}`)
                                   .join(", ")
                             : "—"}
                     </dd>

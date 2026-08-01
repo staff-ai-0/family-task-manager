@@ -526,6 +526,33 @@ async def test_family_detail_returns_all_tabs(
 
 
 @pytest.mark.asyncio
+async def test_family_detail_reports_active_credits(
+    client, db_session, superadmin_headers, test_family
+):
+    """The overview's active_credits key is the operator-console replacement
+    for the old referral_bonus_until read (see
+    migrate_referral_bonus_to_grants) — it must actually surface a live
+    PlanCreditGrant, not just exist as an empty key."""
+    from app.services.plan_credit_service import PlanCreditService
+
+    await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="operator",
+        tier="plus", duration_days=30, reason="test comp",
+    )
+    await db_session.commit()
+
+    resp = await client.get(
+        f"/api/admin/families/{test_family.id}", headers=superadmin_headers
+    )
+    assert resp.status_code == 200
+    credits = resp.json()["overview"]["active_credits"]
+    assert len(credits) == 1
+    assert credits[0]["tier"] == "plus"
+    assert credits[0]["source"] == "operator"
+    assert credits[0]["ends_at"] is not None
+
+
+@pytest.mark.asyncio
 async def test_family_detail_members_report_uppercase_enum_roles(
     client, superadmin_headers, test_family, test_parent_user
 ):
