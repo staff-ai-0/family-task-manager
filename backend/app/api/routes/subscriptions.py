@@ -222,12 +222,20 @@ async def create_checkout(
     # same class of failure as the 501 below (a plan that was never wired to
     # PayPal at all) but distinct: this plan WAS wired, its price is just
     # broken — see app/core/plan_pricing.py for how that happens.
+    #
+    # `free` is exempt: it is priced 0 BY DESIGN, not misconfigured — every
+    # sibling rule agrees (audit_plan_rows skips it by name in
+    # app/core/plan_pricing.py; deploy-onprem.sh's verify_billing skips it
+    # too). It is also not reachable from the shipped UI (nothing offers
+    # checkout for the free tier), so this exemption is about the error
+    # message being truthful, not a live bug. Falls through to the 501
+    # below, same as any other plan with no PayPal id wired.
     price = (
         plan.price_monthly_cents
         if request.billing_cycle == "monthly"
         else plan.price_annual_cents
     )
-    if price <= 0:
+    if plan.name != "free" and price <= 0:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(

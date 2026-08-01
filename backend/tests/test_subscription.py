@@ -882,7 +882,30 @@ async def test_checkout_positive_price_still_reaches_paypal(
 
     assert resp.status_code == 200, resp.text
     assert resp.json()["paypal_subscription_id"] == "I-NEW-PLUS"
-    mock_create.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_checkout_free_plan_is_exempt_from_zero_price_guard(
+    client, auth_headers, db_session, test_family, free_plan
+):
+    """`free` is priced 0 by design, not misconfigured — every sibling rule
+    exempts it by name (audit_plan_rows, deploy-onprem.sh's verify_billing).
+    A direct POST for the free tier must NOT get the 503 misconfiguration
+    error; it falls through to the pre-existing "no PayPal id wired" 501
+    (free has no paypal_plan_id_monthly/annual, and is never wired to one)."""
+    with patch(
+        "app.services.paypal_service.PayPalService.create_subscription",
+    ) as mock_create:
+        resp = await client.post(
+            "/api/subscriptions/checkout",
+            headers=auth_headers,
+            json={"plan_name": "free", "billing_cycle": "monthly"},
+        )
+
+    assert resp.status_code != 503, resp.text
+    assert "misconfigured" not in resp.json()["detail"]
+    assert resp.status_code == 501, resp.text
+    mock_create.assert_not_called()
 
 
 @pytest.mark.asyncio
