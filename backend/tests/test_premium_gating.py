@@ -438,3 +438,102 @@ async def test_an_expired_grant_returns_the_family_to_free(
 
     plan = await get_family_plan(db_session, test_parent_user)
     assert plan.name == "free"
+
+
+@pytest.mark.asyncio
+async def test_an_active_pro_grant_overrides_a_paid_plus_sub(
+    db_session, test_parent_user, test_family
+):
+    """A Plus payer with an active Pro grant must resolve to Pro.
+
+    This exercises the branch inside get_family_plan_by_id where `resolved`
+    (the paid plan) is NOT None but the credit floor outranks it — the
+    floor must win, not the paid sub. Row 2 of the decision table.
+
+    current_period_end is deliberately left unset on the subscription:
+    PlanCreditService.next_window_start only pushes a grant's starts_at
+    past "now" when the paid sub has a populated current_period_end that
+    is later than now. Leaving it None keeps the grant's window starting
+    immediately, so this test exercises the override branch rather than
+    silently asserting on a grant that hasn't started yet.
+    """
+    from app.core.premium import get_family_plan
+    from app.models.subscription import FamilySubscription, SubscriptionPlan
+    from app.services.plan_credit_service import PlanCreditService
+
+    plus = SubscriptionPlan(
+        name="plus", display_name="Plus", display_name_es="Plus", currency="USD",
+        price_monthly_cents=500, price_annual_cents=5_000,
+        limits={"max_family_members": 6}, is_active=True, sort_order=10,
+    )
+    pro = SubscriptionPlan(
+        name="pro", display_name="Pro", display_name_es="Pro", currency="USD",
+        price_monthly_cents=1_500, price_annual_cents=15_000,
+        limits={"max_family_members": -1}, is_active=True, sort_order=20,
+    )
+    db_session.add_all([plus, pro])
+    await db_session.flush()
+    db_session.add(
+        FamilySubscription(
+            family_id=test_family.id, plan_id=plus.id,
+            billing_cycle="monthly", status="active",
+            paypal_subscription_id="I-PLUS",
+            # current_period_end intentionally omitted — see docstring.
+        )
+    )
+    await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="coupon",
+        tier="pro", duration_days=30,
+    )
+    await db_session.commit()
+
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "pro"
+    # A Pro-only limit value proves the limits came from the Pro row, not
+    # just the resolved plan name happening to say "pro".
+    assert plan.limits["max_family_members"] == -1
+
+
+@pytest.mark.asyncio
+async def test_a_pro_grant_beats_the_legacy_referral_plus_floor(
+    db_session, test_parent_user, test_family
+):
+    """The legacy referral_bonus_until fold must never shadow a Pro grant.
+
+    No paid sub. families.referral_bonus_until is active (the legacy
+    Plus-only floor) AND an active Pro grant is also present — the higher
+    tier must win. Row 6 of the decision table; this is the only
+    hand-written new logic in the diff (the credit_tier bump at
+    premium.py's legacy-fold block), so it needs its own direct coverage
+    rather than relying on the other tests to exercise it incidentally.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.core.premium import get_family_plan
+    from app.models.subscription import SubscriptionPlan
+    from app.services.plan_credit_service import PlanCreditService
+
+    db_session.add_all(
+        [
+            SubscriptionPlan(
+                name="plus", display_name="Plus", display_name_es="Plus",
+                currency="USD", price_monthly_cents=500, price_annual_cents=5_000,
+                limits={"max_family_members": 6}, is_active=True, sort_order=10,
+            ),
+            SubscriptionPlan(
+                name="pro", display_name="Pro", display_name_es="Pro",
+                currency="USD", price_monthly_cents=1_500, price_annual_cents=15_000,
+                limits={"max_family_members": -1}, is_active=True, sort_order=20,
+            ),
+        ]
+    )
+    await db_session.flush()
+    test_family.referral_bonus_until = datetime.now(timezone.utc) + timedelta(days=30)
+    await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="coupon",
+        tier="pro", duration_days=30,
+    )
+    await db_session.commit()
+
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "pro"
