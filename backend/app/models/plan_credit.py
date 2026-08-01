@@ -10,9 +10,10 @@ Two tables, one mechanism:
 - ``PlanCreditGrant`` — one row per credit window actually given to a family.
   This is THE credit mechanism: coupon redemptions, referral rewards and
   operator comps all write it, and premium.get_family_plan_by_id resolves a
-  tier floor from it. It replaced families.referral_bonus_until, which was a
-  single Plus-only timestamp with no tier, no lifetime, no revoke and no
-  per-grant audit trail.
+  tier floor from it. It replaced a single nullable timestamp column that
+  used to live directly on ``families`` (backfilled into grants and dropped
+  by the migrate_referral_bonus_to_grants migration), which was Plus-only
+  with no tier, no lifetime, no revoke and no per-grant audit trail.
 
 Credit is INTERNAL: no PayPal object is created and no PayPal-linked column
 is ever written, so the nightly reconcile sweep (which overwrites

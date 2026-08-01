@@ -13,18 +13,18 @@ from conftest import current_week_monday, family_local_today
 async def _active_credit_end(db, family_id):
     """End of the family's latest credit window, or None.
 
-    Replaces the old `family.referral_bonus_until` assertion — same
-    behavior, now stored as a PlanCreditGrant row.
+    Replaces the old single-timestamp `families` credit-expiry column
+    assertion — same behavior, now stored as a PlanCreditGrant row.
 
     Deliberately NOT scoped to PlanCreditService.active_grants (which filters
     to starts_at <= now): a credit stacked behind another grant is QUEUED
-    rather than active yet — exactly the state the old raw
-    `referral_bonus_until` timestamp represented just as well as an
-    already-running credit (never conditioned on "has this actually
-    started"). This mirrors PlanCreditService.next_window_start's own anchor
-    query, which looks at every non-revoked, dated grant regardless of
-    whether it has started (see test_comp_plus_now_stacks_like_any_other_
-    grant, which needs the SECOND, still-queued grant's end).
+    rather than active yet — exactly the state the old raw timestamp column
+    represented just as well as an already-running credit (never conditioned
+    on "has this actually started"). This mirrors
+    PlanCreditService.next_window_start's own anchor query, which looks at
+    every non-revoked, dated grant regardless of whether it has started (see
+    test_comp_plus_now_stacks_like_any_other_grant, which needs the SECOND,
+    still-queued grant's end).
     """
     from sqlalchemy import select as _select
 

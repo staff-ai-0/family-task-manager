@@ -1,8 +1,10 @@
 """Unified plan-credit mechanism.
 
-Before this, credit was families.referral_bonus_until — one nullable
-timestamp, Plus-only, not revocable, with no per-grant audit trail. It could
-not express "90 days of Pro", "lifetime comp", or "who redeemed which code".
+Before this, credit lived on a single nullable timestamp column on
+`families` — Plus-only, not revocable, with no per-grant audit trail (that
+column was backfilled into grants and dropped by the
+migrate_referral_bonus_to_grants migration). It could not express "90 days
+of Pro", "lifetime comp", or "who redeemed which code".
 """
 from datetime import datetime, timedelta, timezone
 

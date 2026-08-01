@@ -21,6 +21,7 @@ from app.models.subscription import FamilySubscription, SubscriptionPlan
 from app.models.task_assignment import AssignmentStatus, TaskAssignment
 from app.models.user import APPROVAL_PENDING, User
 from app.services.family_deletion_service import FamilyDeletionService
+from app.services.plan_credit_service import PlanCreditService
 
 # Subscription statuses that represent a live entitlement backed by PayPal.
 # 'past_due' and 'payment_failed' are inside the billing grace window and are
@@ -329,11 +330,14 @@ class AdminReadService:
                 ),
                 "join_code": family.join_code,
                 "referral_code": family.referral_code,
-                "referral_bonus_until": (
-                    family.referral_bonus_until.isoformat()
-                    if family.referral_bonus_until
-                    else None
-                ),
+                "active_credits": [
+                    {
+                        "tier": g.tier,
+                        "source": g.source,
+                        "ends_at": g.ends_at.isoformat() if g.ends_at else None,
+                    }
+                    for g in await PlanCreditService.active_grants(db, family.id)
+                ],
                 # NULL means ALL modules on, not none. Rendered verbatim so
                 # the UI can say so explicitly rather than showing "0 modules".
                 "enabled_modules": family.enabled_modules,

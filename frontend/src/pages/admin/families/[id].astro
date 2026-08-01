@@ -103,8 +103,14 @@ const shortDT = (iso: string | null) =>
                     <dt class="text-slate-500">Join code</dt><dd class="num">{overview.join_code ?? "—"}</dd>
                     <dt class="text-slate-500">Modules</dt><dd>{moduleSummary}</dd>
                     <dt class="text-slate-500">Point value</dt><dd class="num">{money(overview.point_value_cents)}</dd>
-                    <dt class="text-slate-500">Comped until</dt>
-                    <dd class="num">{overview.referral_bonus_until?.slice(0, 10) ?? "—"}</dd>
+                    <dt class="text-slate-500">Active credits</dt>
+                    <dd class="num">
+                        {overview.active_credits?.length
+                            ? overview.active_credits
+                                  .map((c: any) => `${c.tier} · ${c.ends_at?.slice(0, 10) ?? "de por vida"}`)
+                                  .join(", ")
+                            : "—"}
+                    </dd>
                     <dt class="text-slate-500">AI consent</dt>
                     <dd>{overview.ai_processing_consent ? "granted" : "not granted"}</dd>
                 </dl>
@@ -301,7 +307,8 @@ const shortDT = (iso: string | null) =>
                 )}
             </div>
             <p class="mt-3 max-w-3xl text-xs text-slate-500">
-                Comping sets an absolute expiry (now + 30 days). Repeating it does not stack.
+                Comps add 30 days of Plus on top of any existing credit (they stack). Grants
+                are individually audited and revocable.
                 Points and cash adjustments are deliberately absent — an operator has no
                 member identity to attribute them to, and faking one would put a change in a
                 child's ledger that their parent never made.

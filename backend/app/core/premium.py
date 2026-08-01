@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.config import settings
-from app.models.family import Family
 from app.models.subscription import FamilySubscription, SubscriptionPlan
 from app.models.user import User
 from app.services.usage_service import UsageService
@@ -212,20 +211,6 @@ async def get_family_plan_by_id(db: AsyncSession, family_id) -> FamilyPlan:
     from app.services.plan_credit_service import PlanCreditService
 
     credit_tier = await PlanCreditService.floor_tier(db, family_id)
-
-    # LEGACY (removed in migrate_referral_bonus_to_grants): the pre-grants
-    # referral credit. Read here so the suite stays green while the writers
-    # move over; the column and this block go away in the same revision.
-    bonus_until = (
-        await db.execute(
-            select(Family.referral_bonus_until).where(Family.id == family_id)
-        )
-    ).scalar_one_or_none()
-    if bonus_until is not None and bonus_until.tzinfo is None:
-        bonus_until = bonus_until.replace(tzinfo=timezone.utc)
-    if bonus_until is not None and bonus_until > datetime.now(timezone.utc):
-        if PLAN_ORDER.get("plus", 0) > PLAN_ORDER.get(credit_tier or "free", 0):
-            credit_tier = "plus"
 
     if resolved is not None:
         if credit_tier and PLAN_ORDER.get(resolved.name, 0) < PLAN_ORDER.get(
