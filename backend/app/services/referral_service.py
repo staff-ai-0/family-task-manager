@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -174,8 +174,22 @@ class ReferralService:
         db.add(referral)
 
         # Credit both sides (no commit inside — single atomic commit below).
-        await ReferralService._grant_referral_month(db, referrer_family_id)
-        await ReferralService._grant_referral_month(db, referred_family_id)
+        # PlanCreditService.grant() takes a per-family advisory xact lock
+        # before computing each family's window (see its docstring), and
+        # this call grants to TWO different families in one transaction. The
+        # acquisition order therefore matters for deadlock avoidance: if we
+        # always locked referrer-then-referred, two REVERSED concurrent
+        # referrals (X refers Y in one transaction while Y refers X in
+        # another) would lock in opposite order — txn1 holds lock(X), wants
+        # lock(Y); txn2 holds lock(Y), wants lock(X) — a classic lock-order
+        # cycle that Postgres would abort one side of with
+        # deadlock_detected. Sorting the two ids first gives every
+        # transaction the SAME acquisition order regardless of which family
+        # is "referrer" vs "referred", which makes that cycle impossible (at
+        # most one shared id contends, and contention alone — one txn
+        # waiting for the other to finish — is not a cycle).
+        for family_id in sorted((referrer_family_id, referred_family_id)):
+            await ReferralService._grant_referral_month(db, family_id)
         referral.reward_granted_at = datetime.now(timezone.utc)
 
         try:
@@ -204,27 +218,13 @@ class ReferralService:
         begins after the period they already paid for. We never mutate a
         PayPal-linked column, so a live paying subscription is untouched.
 
-        Takes a per-family Postgres advisory xact lock FIRST, before the
-        grant's window computation runs. Without it, two referrals crediting
-        the SAME family concurrently — e.g. two different referred families
-        finishing signup within the same instant — each run in their own
-        transaction, each read the family's existing grants and see no
-        anchor to queue behind, and both independently pick "now" as the
-        start: the family ends up with 30 days instead of 60. The lock
-        serializes that read-then-insert window computation across
-        transactions. It is transaction-scoped (``pg_advisory_xact_lock``)
-        and self-releasing on commit or rollback, so there is no unlock or
-        timeout to manage. record_referral_and_reward calls this twice
-        (once per side of the referral) inside ONE transaction, but always
-        on two DIFFERENT families, so a single referral never blocks on
-        itself.
+        Concurrency: PlanCreditService.grant() takes a per-family advisory
+        xact lock before computing the window — see its docstring. Nothing
+        to do here; see record_referral_and_reward for the lock-ORDERING
+        concern specific to this call site (it grants to two families).
         """
         from app.services.plan_credit_service import PlanCreditService
 
-        await db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 13))"),
-            {"key": f"plan-credit:{family_id}"},
-        )
         await PlanCreditService.grant(
             db,
             family_id=family_id,

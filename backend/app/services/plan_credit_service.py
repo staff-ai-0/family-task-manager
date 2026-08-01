@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.premium import ENTITLED_STATUSES, PLAN_ORDER
@@ -176,6 +176,25 @@ class PlanCreditService:
         transaction, so a grant and its audit row land together or not at all.
 
         ``duration_days=None`` creates a lifetime grant.
+
+        Takes a per-family Postgres advisory xact lock BEFORE computing the
+        window (next_window_start reads existing grants + the subscription
+        row; the insert below adds a new one), and holds it for the rest of
+        the transaction. This serializes EVERY grant writer for the same
+        family — referral rewards, operator comps, and coupon redemptions —
+        across concurrent transactions. Without it, two grants to the same
+        family computed in separate transactions could each see no anchor
+        and both start "now": a family earning two 30-day credits
+        concurrently would get 30 days instead of 60. Structural here
+        (rather than left to each call site) so every current and future
+        writer is covered for free — a caller cannot forget to take it.
+
+        The lock is transaction-scoped (``pg_advisory_xact_lock``) and
+        self-releasing on commit or rollback, so there is no unlock or
+        timeout to manage. It is also idempotent WITHIN one transaction —
+        re-locking the same key (e.g. a caller that grants twice to the same
+        family in one transaction) is a no-op, not a self-deadlock — so
+        nothing here needs to track whether it already holds the lock.
         """
         if source not in CREDIT_SOURCES:
             raise ValueError(f"Unknown credit source: {source!r}")
@@ -183,6 +202,11 @@ class PlanCreditService:
             raise ValueError(f"Not a grantable tier: {tier!r}")
         if duration_days is not None and duration_days < 1:
             raise ValueError("duration_days must be >= 1 or None (lifetime)")
+
+        await db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 13))"),
+            {"key": f"plan-credit:{family_id}"},
+        )
 
         starts_at = await PlanCreditService.next_window_start(
             db, family_id, tier=tier
