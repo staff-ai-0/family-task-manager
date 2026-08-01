@@ -405,3 +405,85 @@ async def test_a_revoked_grant_does_not_anchor_the_queue(db_session, test_family
     await db_session.commit()
 
     assert second.starts_at >= before
+
+
+@pytest.mark.asyncio
+async def test_a_higher_tier_grant_starts_now_despite_a_lower_tier_paid_sub(
+    db_session, test_family
+):
+    """A Plus payer who receives a Pro grant must see it start immediately.
+    The paid Plus period does not already cover Pro, so there is nothing to
+    defer behind — the spec's own promise: 'A Pro grant beats a Plus paid
+    sub.'"""
+    from app.models.subscription import FamilySubscription, SubscriptionPlan
+
+    plan = SubscriptionPlan(
+        name="plus", display_name="Plus", display_name_es="Plus",
+        currency="USD", price_monthly_cents=500, price_annual_cents=5_000,
+        limits={}, is_active=True, sort_order=10,
+    )
+    db_session.add(plan)
+    await db_session.flush()
+
+    paid_end = datetime.now(timezone.utc) + timedelta(days=20)
+    db_session.add(
+        FamilySubscription(
+            family_id=test_family.id,
+            plan_id=plan.id,
+            billing_cycle="monthly",
+            status="active",
+            paypal_subscription_id="I-PAYING",
+            current_period_end=paid_end,
+        )
+    )
+    await db_session.commit()
+
+    before = datetime.now(timezone.utc)
+    row = await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="referral",
+        tier="pro", duration_days=30,
+    )
+    await db_session.commit()
+
+    assert row.starts_at >= before
+    assert row.starts_at != paid_end
+
+
+@pytest.mark.asyncio
+async def test_a_lower_tier_grant_defers_behind_a_higher_tier_paid_sub(
+    db_session, test_family
+):
+    """A Pro payer who receives a Plus-tier credit (e.g. a referral reward)
+    must not have it run in parallel underneath their paid Pro period — Pro
+    already covers Plus, so the credit queues to start when the paid period
+    ends, same as the same-tier case."""
+    from app.models.subscription import FamilySubscription, SubscriptionPlan
+
+    plan = SubscriptionPlan(
+        name="pro", display_name="Pro", display_name_es="Pro",
+        currency="USD", price_monthly_cents=1_500, price_annual_cents=15_000,
+        limits={}, is_active=True, sort_order=20,
+    )
+    db_session.add(plan)
+    await db_session.flush()
+
+    paid_end = datetime.now(timezone.utc) + timedelta(days=20)
+    db_session.add(
+        FamilySubscription(
+            family_id=test_family.id,
+            plan_id=plan.id,
+            billing_cycle="monthly",
+            status="active",
+            paypal_subscription_id="I-PAYING",
+            current_period_end=paid_end,
+        )
+    )
+    await db_session.commit()
+
+    row = await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="referral",
+        tier="plus", duration_days=30,
+    )
+    await db_session.commit()
+
+    assert row.starts_at == paid_end

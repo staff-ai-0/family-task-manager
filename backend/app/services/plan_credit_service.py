@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.premium import ENTITLED_STATUSES, PLAN_ORDER
 from app.models.plan_credit import CREDIT_SOURCES, PlanCreditGrant
-from app.models.subscription import FamilySubscription
+from app.models.subscription import FamilySubscription, SubscriptionPlan
 
 # Tiers a credit may grant. 'free' is excluded: granting it is a no-op that
 # would read as a bug at the call site.
@@ -74,27 +74,40 @@ class PlanCreditService:
     ) -> datetime:
         """When a newly granted credit of *tier* should begin.
 
-        The latest of: now, the end of the family's last queued credit whose
-        tier outranks-or-equals *tier* (PLAN_ORDER), and a live paid
-        subscription's current_period_end. Credits are ADDITIVE — a family
-        holding two 30-day codes at the same tier gets 60 days, and a
-        payer's free month starts after the time they already bought rather
-        than being spent in parallel with it.
+        The unified rule: a grant starts at the first moment the family is
+        NOT already entitled at >= *tier* from another source. That "other
+        source" is either of two anchors — the family's own queued credits,
+        or a live paid subscription — and BOTH are scoped the same way: only
+        defer behind something that already covers (tier >= *tier*), never
+        behind something *tier* itself outranks.
 
-        The "latest queued credit" lookup is scoped to tier >= *tier*, not
-        tier == *tier*: a grant is only worth queuing behind a credit that
-        already covers (or beats) it. A Pro comp must never wait behind an
-        already-queued Plus credit — the better tier would sit unused for no
-        reason, and floor_tier's job is to always report the best tier
-        active RIGHT NOW. But a Plus grant issued while a Pro grant is
-        active must not run in parallel underneath the Pro floor — that
-        would burn the Plus days for nothing, since Pro already dominates
-        them — so it queues to start when the Pro grant ends. *tier* is
-        required (no tier-agnostic default): every real caller resolves to
-        one of grant()/floor_tier()/active_grants()/revoke(), all of which
-        know the tier in question, and a caller that forgot to pass tier
-        would silently fall back to the tier-agnostic bug this scoping
-        exists to fix.
+        Anchor 1 — the family's last queued credit whose tier
+        outranks-or-equals *tier* (PLAN_ORDER). A Pro comp must never wait
+        behind an already-queued Plus credit — the better tier would sit
+        unused for no reason, and floor_tier's job is to always report the
+        best tier active RIGHT NOW. But a Plus grant issued while a Pro
+        grant is active must not run in parallel underneath the Pro floor —
+        that would burn the Plus days for nothing, since Pro already
+        dominates them — so it queues to start when the Pro grant ends.
+
+        Anchor 2 — a live paid subscription's current_period_end, but ONLY
+        when the paid plan's tier outranks-or-equals *tier*. The spec's own
+        example: a family paying for Plus that receives a Pro grant sees it
+        take effect immediately — the paid Plus period does not already
+        cover Pro, so there is nothing to defer behind, and floor_tier /
+        get_family_plan_by_id must be able to see the Pro floor right away.
+        A same-or-lower-tier credit (Plus-on-Plus, or Plus-on-Pro) still
+        defers to current_period_end, staying genuinely additive rather than
+        wasted in parallel with time already paid for. A paid plan name
+        outside PLAN_ORDER ranks 0, which never defers (the safe direction —
+        the grant starts now rather than silently vanishing behind an
+        unranked plan).
+
+        *tier* is required (no tier-agnostic default): every real caller
+        resolves to one of grant()/floor_tier()/active_grants()/revoke(),
+        all of which know the tier in question, and a caller that forgot to
+        pass tier would silently fall back to the tier-agnostic bug this
+        scoping exists to fix.
 
         Lifetime grants (ends_at IS NULL) are skipped: there is nothing to
         queue behind "forever", and treating them as infinite would make
@@ -121,22 +134,29 @@ class PlanCreditService:
         if latest_end is not None and latest_end > base:
             base = latest_end
 
-        # Read-only: we never mutate the subscription row.
-        sub = (
+        # Read-only: we never mutate the subscription or plan rows. Join
+        # to the plan for its name rather than touching sub.plan — that
+        # relationship attribute lazy-loads and is unsafe under async.
+        sub_row = (
             await db.execute(
-                select(FamilySubscription).where(
-                    FamilySubscription.family_id == family_id
+                select(FamilySubscription, SubscriptionPlan.name)
+                .join(
+                    SubscriptionPlan,
+                    FamilySubscription.plan_id == SubscriptionPlan.id,
                 )
+                .where(FamilySubscription.family_id == family_id)
             )
-        ).scalar_one_or_none()
-        if (
-            sub is not None
-            and sub.paypal_subscription_id
-            and sub.status in ENTITLED_STATUSES
-        ):
-            paid_end = _aware(sub.current_period_end)
-            if paid_end is not None and paid_end > base:
-                base = paid_end
+        ).one_or_none()
+        if sub_row is not None:
+            sub, paid_plan_name = sub_row
+            if (
+                sub.paypal_subscription_id
+                and sub.status in ENTITLED_STATUSES
+                and PLAN_ORDER.get(paid_plan_name, 0) >= PLAN_ORDER[tier]
+            ):
+                paid_end = _aware(sub.current_period_end)
+                if paid_end is not None and paid_end > base:
+                    base = paid_end
 
         return base
 
