@@ -811,6 +811,103 @@ async def test_activate_flags_review_when_supersede_cancel_fails(
     assert "I-LIVE-PLUS" in (live.review_reason or "")
 
 
+# ---------------------------------------------------------------------------
+# Server-side zero-price checkout guard (whole-branch review, Fix 3):
+# the frontend disables the upgrade button for a zero-priced plan, but that
+# is UX only. A direct POST here must be refused too, or a re-zeroing after
+# PayPal ids are wired would let a customer be charged a price they were
+# never shown.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_checkout_refuses_a_zero_priced_wired_plan(
+    client, auth_headers, db_session, test_family
+):
+    """An active plan that IS wired to PayPal but priced 0 (the exact
+    production failure class: canonical prices force-restored in the DB
+    while the reused PayPal plan keeps charging something else, or simply a
+    re-zeroing after provisioning) must be refused before any PayPal call."""
+    broken_plan = SubscriptionPlan(
+        name="plus",
+        display_name="Plus",
+        display_name_es="Plus",
+        currency="USD",
+        price_monthly_cents=0,
+        price_annual_cents=0,
+        paypal_plan_id_monthly="P-PLUS-MONTHLY",
+        paypal_plan_id_annual="P-PLUS-ANNUAL",
+        limits={"ai_features": False},
+        sort_order=1,
+    )
+    db_session.add(broken_plan)
+    await db_session.commit()
+
+    with patch(
+        "app.services.paypal_service.PayPalService.create_subscription",
+    ) as mock_create:
+        resp = await client.post(
+            "/api/subscriptions/checkout",
+            headers=auth_headers,
+            json={"plan_name": "plus", "billing_cycle": "monthly"},
+        )
+
+    assert resp.status_code == 503, resp.text
+    assert "plus" in resp.json()["detail"]
+    mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_checkout_positive_price_still_reaches_paypal(
+    client, auth_headers, db_session, test_family, plus_plan
+):
+    """The normal path (positive price, wired PayPal id) must be unaffected
+    by the new guard — it should still reach PayPalService.create_subscription."""
+    plus_plan.paypal_plan_id_monthly = "P-PLUS-MONTHLY"
+    await db_session.commit()
+
+    with patch(
+        "app.services.paypal_service.PayPalService.create_subscription",
+        return_value={
+            "subscription_id": "I-NEW-PLUS",
+            "approval_url": "https://paypal.example/approve",
+            "status": "APPROVAL_PENDING",
+        },
+    ) as mock_create:
+        resp = await client.post(
+            "/api/subscriptions/checkout",
+            headers=auth_headers,
+            json={"plan_name": "plus", "billing_cycle": "monthly"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["paypal_subscription_id"] == "I-NEW-PLUS"
+
+
+@pytest.mark.asyncio
+async def test_checkout_free_plan_is_exempt_from_zero_price_guard(
+    client, auth_headers, db_session, test_family, free_plan
+):
+    """`free` is priced 0 by design, not misconfigured — every sibling rule
+    exempts it by name (audit_plan_rows, deploy-onprem.sh's verify_billing).
+    A direct POST for the free tier must NOT get the 503 misconfiguration
+    error; it falls through to the pre-existing "no PayPal id wired" 501
+    (free has no paypal_plan_id_monthly/annual, and is never wired to one)."""
+    with patch(
+        "app.services.paypal_service.PayPalService.create_subscription",
+    ) as mock_create:
+        resp = await client.post(
+            "/api/subscriptions/checkout",
+            headers=auth_headers,
+            json={"plan_name": "free", "billing_cycle": "monthly"},
+        )
+
+    assert resp.status_code != 503, resp.text
+    assert "misconfigured" not in resp.json()["detail"]
+    assert resp.status_code == 501, resp.text
+    mock_create.assert_not_called()
+
+
 @pytest.mark.asyncio
 async def test_join_code_register_rejected_at_member_cap(
     client, db_session, sample_family

@@ -1,8 +1,11 @@
 """Tests for the setup-paypal-plans script."""
 from unittest.mock import MagicMock
 
+import pytest
+
 from scripts.setup_paypal_plans import (
-    PLAN_PRICES,
+    PlanPriceMismatch,
+    PlanPriceUnavailable,
     build_plan_definitions,
     create_product_if_missing,
     create_plan_if_missing,
@@ -11,6 +14,19 @@ from scripts.setup_paypal_plans import (
     _env_key,
     _sql_update,
 )
+
+
+def _regular_cycle(value: str, currency: str = "USD") -> list[dict]:
+    """A minimal billing_cycles list containing only the REGULAR cycle —
+    all create_plan_if_missing's price check looks at."""
+    return [
+        {
+            "tenure_type": "REGULAR",
+            "pricing_scheme": {
+                "fixed_price": {"value": value, "currency_code": currency}
+            },
+        }
+    ]
 
 
 def test_build_plan_definitions_returns_eight_across_currencies():
@@ -93,16 +109,6 @@ def test_sql_update_activates_the_row():
     assert "is_active = true" in sql
 
 
-def test_prices_cover_all_tiers_for_each_currency():
-    for currency, prices in PLAN_PRICES.items():
-        assert set(prices) == {
-            ("plus", "monthly"),
-            ("plus", "annual"),
-            ("pro", "monthly"),
-            ("pro", "annual"),
-        }, currency
-
-
 def test_dry_run_makes_no_api_calls_and_needs_no_credentials(capsys, monkeypatch):
     monkeypatch.delenv("PAYPAL_CLIENT_ID", raising=False)
     monkeypatch.delenv("PAYPAL_CLIENT_SECRET", raising=False)
@@ -124,13 +130,168 @@ def test_create_product_skips_if_exists():
     fake_api.post.assert_not_called()
 
 
-def test_create_plan_skips_if_exists():
+def test_create_plan_skips_if_exists_and_price_matches():
+    """The List Plans item name-matches; the price comparison must be made
+    against the Show Plan Details fetch (the second api.get call), not the
+    list item itself."""
     fake_api = MagicMock()
-    fake_api.get.return_value = {
-        "plans": [{"id": "P-EXISTING", "name": "Plus Monthly"}]
+    list_page = {
+        "plans": [
+            {
+                "id": "P-EXISTING",
+                "name": "Plus Monthly",
+                "billing_cycles": _regular_cycle("5.00", "USD"),
+            }
+        ]
     }
-    pid = create_plan_if_missing(fake_api, plan_def={"name": "Plus Monthly"})
+    detail = {
+        "id": "P-EXISTING",
+        "name": "Plus Monthly",
+        "billing_cycles": _regular_cycle("5.00", "USD"),
+    }
+    fake_api.get.side_effect = [list_page, detail]
+    plan_def = {"name": "Plus Monthly", "billing_cycles": _regular_cycle("5.00", "USD")}
+    pid = create_plan_if_missing(fake_api, plan_def=plan_def)
     assert pid == "P-EXISTING"
+    fake_api.post.assert_not_called()
+    assert fake_api.get.call_count == 2
+    assert fake_api.get.call_args_list[1].args[0] == "/v1/billing/plans/P-EXISTING"
+
+
+def test_create_plan_reused_when_list_response_lacks_billing_cycles():
+    """Regression test for the defect this fix corrects.
+
+    Per PayPal's published OpenAPI spec, GET /v1/billing/plans defaults to
+    `Prefer: return=minimal` — a minimal response carries only `id`,
+    `status`, and HATEOAS `links`, NEVER `billing_cycles`. This is the
+    REALISTIC shape of a List Plans item against the real API (unlike the
+    other tests in this file, which stub `billing_cycles` directly onto the
+    list item for convenience). The old code treated an absent
+    `billing_cycles` as a price mismatch and raised `PlanPriceMismatch:
+    ... charges None`, aborting the entire provisioning run on the very
+    first name match. The fix must instead fetch the plan's full
+    representation via Show Plan Details and compare THAT — so a plan
+    charging the canonical price is reused with no exception, even though
+    the list item itself carried no price data at all.
+    """
+    fake_api = MagicMock()
+    list_page = {
+        "plans": [
+            {
+                "id": "P-EXISTING",
+                "status": "ACTIVE",
+                "links": [{"rel": "self", "href": "https://api-m.paypal.com/v1/billing/plans/P-EXISTING"}],
+                # No "name" key omitted deliberately — minimal responses DO
+                # include name (needed for the match itself); what's absent
+                # is billing_cycles.
+                "name": "Plus Monthly",
+            }
+        ]
+    }
+    detail = {
+        "id": "P-EXISTING",
+        "name": "Plus Monthly",
+        "billing_cycles": _regular_cycle("5.00", "USD"),
+    }
+    fake_api.get.side_effect = [list_page, detail]
+
+    plan_def = {"name": "Plus Monthly", "billing_cycles": _regular_cycle("5.00", "USD")}
+    pid = create_plan_if_missing(fake_api, plan_def=plan_def)
+
+    assert pid == "P-EXISTING"
+    fake_api.post.assert_not_called()
+    assert fake_api.get.call_count == 2
+    assert fake_api.get.call_args_list[1].args[0] == "/v1/billing/plans/P-EXISTING"
+
+
+def test_create_plan_raises_on_price_mismatch():
+    """Whole-branch review Fix 4: a name match with a STALE price must NOT
+    be silently reused — that is precisely how a customer could be charged
+    something the DB never showed them (DB force-set to canonical while
+    PayPal keeps billing the old amount). The stale price is discovered via
+    the Show Plan Details fetch, not the list item."""
+    fake_api = MagicMock()
+    list_page = {
+        "plans": [
+            {
+                "id": "P-STALE",
+                "name": "Plus Monthly",
+            }
+        ]
+    }
+    detail = {
+        "id": "P-STALE",
+        "name": "Plus Monthly",
+        # pre-usd_price_alignment price — canonical is now 5.00
+        "billing_cycles": _regular_cycle("4.99", "USD"),
+    }
+    fake_api.get.side_effect = [list_page, detail]
+    plan_def = {"name": "Plus Monthly", "billing_cycles": _regular_cycle("5.00", "USD")}
+
+    with pytest.raises(PlanPriceMismatch) as exc_info:
+        create_plan_if_missing(fake_api, plan_def=plan_def)
+
+    message = str(exc_info.value)
+    assert "P-STALE" in message
+    assert "4.99" in message
+    assert "5.00" in message
+    fake_api.post.assert_not_called()
+
+
+def test_create_plan_raises_on_currency_mismatch():
+    """Value can match while currency_code differs — must still abort."""
+    fake_api = MagicMock()
+    list_page = {
+        "plans": [
+            {
+                "id": "P-WRONG-CCY",
+                "name": "Plus Monthly MXN",
+            }
+        ]
+    }
+    detail = {
+        "id": "P-WRONG-CCY",
+        "name": "Plus Monthly MXN",
+        "billing_cycles": _regular_cycle("99.00", "USD"),
+    }
+    fake_api.get.side_effect = [list_page, detail]
+    plan_def = {
+        "name": "Plus Monthly MXN",
+        "billing_cycles": _regular_cycle("99.00", "MXN"),
+    }
+
+    with pytest.raises(PlanPriceMismatch):
+        create_plan_if_missing(fake_api, plan_def=plan_def)
+
+
+def test_create_plan_raises_price_unavailable_when_detail_fetch_still_has_no_price():
+    """Distinct from a stale-price mismatch: the Show Plan Details response
+    itself has no REGULAR billing cycle at all (missing/malformed data).
+    Must raise PlanPriceUnavailable, NOT PlanPriceMismatch — this is a
+    different problem with its own message, not evidence of a stale
+    price."""
+    fake_api = MagicMock()
+    list_page = {
+        "plans": [
+            {
+                "id": "P-BROKEN",
+                "name": "Plus Monthly",
+            }
+        ]
+    }
+    detail = {
+        "id": "P-BROKEN",
+        "name": "Plus Monthly",
+        "billing_cycles": [{"tenure_type": "TRIAL"}],  # no REGULAR cycle at all
+    }
+    fake_api.get.side_effect = [list_page, detail]
+    plan_def = {"name": "Plus Monthly", "billing_cycles": _regular_cycle("5.00", "USD")}
+
+    with pytest.raises(PlanPriceUnavailable) as exc_info:
+        create_plan_if_missing(fake_api, plan_def=plan_def)
+
+    message = str(exc_info.value)
+    assert "P-BROKEN" in message
     fake_api.post.assert_not_called()
 
 
@@ -147,19 +308,30 @@ def test_create_plan_finds_match_beyond_first_page():
         ],
     }
     page2 = {
-        "plans": [{"id": "P-EXISTING-MXN", "name": "Plus Monthly MXN"}],
+        "plans": [{
+            "id": "P-EXISTING-MXN",
+            "name": "Plus Monthly MXN",
+        }],
         "links": [{"rel": "self", "href": "https://api-m.sandbox.paypal.com/v1/billing/plans?page_size=20&page=2"}],
     }
-    fake_api.get.side_effect = [page1, page2]
+    detail = {
+        "id": "P-EXISTING-MXN",
+        "name": "Plus Monthly MXN",
+        "billing_cycles": _regular_cycle("99.00", "MXN"),
+    }
+    fake_api.get.side_effect = [page1, page2, detail]
 
-    pid = create_plan_if_missing(fake_api, plan_def={"name": "Plus Monthly MXN"})
+    plan_def = {"name": "Plus Monthly MXN", "billing_cycles": _regular_cycle("99.00", "MXN")}
+    pid = create_plan_if_missing(fake_api, plan_def=plan_def)
 
     assert pid == "P-EXISTING-MXN"
     fake_api.post.assert_not_called()
-    assert fake_api.get.call_count == 2
+    assert fake_api.get.call_count == 3
     # The followed href is passed base-relative (PayPalAPI.get prefixes base).
     followed = fake_api.get.call_args_list[1].args[0]
     assert followed == "/v1/billing/plans?page_size=20&page=2"
+    # The final call is the Show Plan Details detail fetch on the match.
+    assert fake_api.get.call_args_list[2].args[0] == "/v1/billing/plans/P-EXISTING-MXN"
 
 
 def test_create_plan_creates_only_after_scanning_all_pages():
@@ -172,7 +344,8 @@ def test_create_plan_creates_only_after_scanning_all_pages():
     fake_api.get.side_effect = [page1, page2]
     fake_api.post.return_value = {"id": "P-NEW"}
 
-    pid = create_plan_if_missing(fake_api, plan_def={"name": "Plus Monthly MXN"})
+    plan_def = {"name": "Plus Monthly MXN", "billing_cycles": _regular_cycle("99.00", "MXN")}
+    pid = create_plan_if_missing(fake_api, plan_def=plan_def)
 
     assert pid == "P-NEW"
     assert fake_api.get.call_count == 2

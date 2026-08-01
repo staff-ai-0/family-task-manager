@@ -188,6 +188,34 @@ Fully native to PostgreSQL (the external "Actual Budget" service was decommissio
 - Boolean features: `budget_reports`, `budget_goals`, `csv_import`, `ai_features`
 - **Every LLM call site must be gated** (`require_feature("ai_features")` or `family_tier_allows`); regression suite `test_ai_gating.py`
 
+**Plan prices have exactly one source**: `backend/app/core/plan_pricing.py`
+(`CANONICAL_PRICES`, minor units). `scripts/setup_paypal_plans.py` derives
+from it; the `restore_plan_prices` migration carries a FROZEN copy that
+`test_plan_pricing_invariants.py` asserts has not drifted; the frontend has
+NO copy and renders `—` when a row is missing or priced 0. Never add a
+fourth copy — three hand-synced ones is how prod advertised "$0/mes" from
+2026-07-16 to 2026-07-31 while `/checkout` returned 501. If prices are ever
+re-zeroed again, the remedy is `python -m scripts.restore_plan_prices`
+(`--dry-run` to preview) — **not** `alembic upgrade head`, which only fixes
+this once: alembic refuses to re-run an already-applied revision, so on a
+repeat re-zeroing it reports "already at head" and changes nothing.
+
+`plan_pricing.audit_plan_rows()` detects active paid rows that cannot sell
+(zero price, drift from canonical, unwired `paypal_plan_id_*`). It backs
+TWO consumers: a startup `logger.error` and `GET /api/admin/billing-config`
+(red panel on the operator console) — both run against production data but
+neither blocks anything. The `deploy-onprem.sh` billing smoke check
+(`verify_billing`) is a deliberately INDEPENDENT third check, not a caller
+of `audit_plan_rows()`: it re-derives a weaker version of the same rule
+in-line against the public `/api/subscriptions/plans` endpoint, which is
+the only one of the three that **gates** a deploy on production data (`GET
+/api/subscriptions/plans` is what a customer's browser actually receives —
+tunnel, serialization, computed `checkout_ready_*` fields included, none of
+which an in-process `audit_plan_rows()` call would exercise). Because it
+does not import `plan_pricing`, it catches a non-positive price or an
+unwired PayPal id but — unlike `audit_plan_rows()` — does **not** catch a
+price that has drifted from canonical while staying positive.
+
 ### AI Receipt Scanner
 
 Uses Claude Vision via LiteLLM proxy to extract transaction data from receipt photos/PDFs.

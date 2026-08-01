@@ -10,6 +10,8 @@ const { data } = await apiFetch<any>("/api/admin/overview", { token });
 // backend is down, not that the caller lacks permission.
 const pulse = data ?? null;
 
+const { data: billing } = await apiFetch<any>("/api/admin/billing-config", { token });
+
 const money = (cents: number, currency: string) =>
     `${(cents / 100).toFixed(2)} ${currency}`;
 
@@ -32,6 +34,41 @@ const TILES: [string, number, string][] = pulse
     {!pulse && (
         <p class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             Could not load platform state. The backend may be restarting.
+        </p>
+    )}
+
+    {billing && !billing.healthy && (
+        <section class="mb-6 rounded border border-red-200 bg-red-50 p-4">
+            <h2 class="text-sm font-semibold text-red-800">
+                Billing misconfigured — customers cannot subscribe
+            </h2>
+            <ul class="mt-2 space-y-1 text-sm text-red-700">
+                {billing.findings.map((f: any) => (
+                    <li>
+                        <strong>{f.name} / {f.currency}</strong>: {f.problems.join("; ")}
+                    </li>
+                ))}
+            </ul>
+            <p class="mt-2 text-xs text-red-600">
+                Fix: <code>python -m scripts.restore_plan_prices</code> restores prices
+                (not <code>alembic upgrade head</code> — that no-ops on a repeat
+                re-zeroing, since alembic will not re-run an already-applied
+                migration); <code>python -m scripts.setup_paypal_plans</code> wires
+                the PayPal ids.
+            </p>
+        </section>
+    )}
+
+    {/* pulse loaded but the separate billing-config fetch failed (500, DB
+        hiccup, network) — a silent `billing` null must not look the same as
+        a confirmed-healthy panel, so this renders even though nothing is
+        provably wrong yet. Suppressed when pulse is also null: the banner
+        above already reports the whole-page outage and a second banner
+        saying the same thing is noise. */}
+    {pulse && !billing && (
+        <p class="mb-6 rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            Could not verify billing configuration. This is not a confirmation
+            that billing is healthy — the check itself failed to run.
         </p>
     )}
 

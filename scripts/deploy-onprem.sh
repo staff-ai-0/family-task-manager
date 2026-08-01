@@ -8,7 +8,8 @@
 # $REMOTE_PATH/.deploy-state → alembic migrate against the NEW image (old
 # backend keeps serving) → recreate the pod (scoped `down` + re-pin egress
 # DNS + `up` — a plain `up -d` does NOT swap pod containers onto a rebuilt
-# image) → health-check → public smoke.
+# image) → health-check → public smoke → billing-configuration smoke (the
+# only automated check that inspects real production pricing data).
 #
 # Rollback:
 #   * AUTOMATIC — if the post-up health check fails, the PREV_TAG images are
@@ -187,6 +188,90 @@ verify_public() { # assert both public URLs answer <400; non-zero if either does
     fi
   done
   return $fail
+}
+
+verify_billing() { # assert every non-free plan is positively priced + PayPal-wired for both cycles; non-zero on any failure
+  # This is a deliberately INDEPENDENT end-to-end gate, not a caller of
+  # app.core.plan_pricing.audit_plan_rows: it fetches the SAME public API a
+  # customer's browser hits, so it also validates the tunnel, JSON
+  # serialization, and the computed checkout_ready_* fields — properties an
+  # in-process audit_plan_rows() call could never exercise. The trade-off is
+  # that this check is WEAKER than audit_plan_rows: it does NOT compare
+  # against CANONICAL_PRICES, so a price that drifted from canonical but is
+  # still a positive number (e.g. MXN "plus" silently set to 900 centavos —
+  # MX$9 instead of the correct MX$99) passes this gate even though
+  # audit_plan_rows would flag it. CI's schema is built with
+  # Base.metadata.create_all and never sees a real plan row, so despite that
+  # weaker check, this is still the only automated gate that BLOCKS the
+  # deploy on production pricing data — the startup log and the admin panel
+  # also inspect production, but neither of them fails a deploy. Every paid
+  # plan shipped priced $0 with no PayPal id wired, unnoticed, for two weeks
+  # in July 2026 — see plan_pricing.py's module docstring.
+  section "Verify billing configuration"
+  if [[ "$DRY_RUN" == "1" ]]; then echo "[dry-run] skipping billing configuration check"; return 0; fi
+  local json broken curl_err_file curl_err
+  curl_err_file="$(mktemp 2>/dev/null || echo "/tmp/verify_billing_curl_err.$$")"
+  json="$(curl -fsS -m 15 "https://api-family.agent-ia.mx/api/subscriptions/plans" 2>"$curl_err_file")" || {
+    curl_err="$(cat "$curl_err_file" 2>/dev/null)"
+    rm -f "$curl_err_file"
+    echo "❌ could not fetch /api/subscriptions/plans: ${curl_err:-<curl gave no diagnostic output>}"
+    return 1
+  }
+  rm -f "$curl_err_file"
+  broken="$(printf '%s' "$json" | python3 -c '
+import json, sys
+
+try:
+    plans = json.load(sys.stdin)
+except Exception:
+    print("__PARSE_ERROR__")
+    sys.exit(0)
+
+if not isinstance(plans, list):
+    print("__PARSE_ERROR__")
+    sys.exit(0)
+
+def bad_price(v):
+    # bool is a subclass of int in Python (isinstance(True, int) is True) —
+    # exclude it explicitly so a stray true/false price is not accepted as
+    # a positive price. A price that is not an int, or is <= 0 (including
+    # negative), is rejected.
+    return not isinstance(v, int) or isinstance(v, bool) or v <= 0
+
+bad = []
+for p in plans:
+    if not isinstance(p, dict) or p.get("name") == "free":
+        continue
+    problems = []
+    if bad_price(p.get("price_monthly_cents")):
+        problems.append("monthly price is not positive (" + repr(p.get("price_monthly_cents")) + ")")
+    if not p.get("checkout_ready_monthly"):
+        problems.append("monthly PayPal id missing")
+    if bad_price(p.get("price_annual_cents")):
+        problems.append("annual price is not positive (" + repr(p.get("price_annual_cents")) + ")")
+    if not p.get("checkout_ready_annual"):
+        problems.append("annual PayPal id missing")
+    if problems:
+        name = p.get("name", "?")
+        currency = p.get("currency", "?")
+        bad.append(name + "/" + currency + " (" + ", ".join(problems) + ")")
+
+print(",".join(bad))
+')" || { echo "❌ billing check: python3 parse failed (is python3 available?)"; return 1; }
+  if [[ "$broken" == "__PARSE_ERROR__" ]]; then
+    echo "❌ billing check: malformed or unexpected JSON from /api/subscriptions/plans"
+    return 1
+  fi
+  if [[ -n "$broken" ]]; then
+    echo "❌ paid plans cannot be sold: $broken"
+    echo "   python -m scripts.restore_plan_prices → re-asserts canonical prices"
+    echo "     (NOT 'alembic upgrade head' — that no-ops on a REPEAT re-zeroing"
+    echo "     because alembic will not re-run an already-applied revision)"
+    echo "   python -m scripts.setup_paypal_plans  → wires the PayPal plan ids"
+    return 1
+  fi
+  echo "billing OK"
+  return 0
 }
 
 # ── Pre-flight ────────────────────────────────────────────────────────────
@@ -459,6 +544,27 @@ if ! verify_public; then
   echo "        IPv6 link-local upstream; without it the connector 530s)"
   echo "    Cloudflare Zero Trust → tunnel 'family-onprem' → public hostnames"
   echo "      → routes must target family_onprem_frontend / family_onprem_backend"
+  echo "════════════════════════════════════════════════════════════════"
+  exit 1
+fi
+
+# Same posture as verify_public above: containers healthy + publicly reachable
+# but selling nothing is a DATA problem (bad prices / unwired PayPal ids), not
+# an image problem — retagging cannot fix it, so no automatic rollback.
+if ! verify_billing; then
+  echo
+  echo "════════════════════════════════════════════════════════════════"
+  echo "  ⚠️ DEPLOYED BUT PAID PLANS CANNOT BE SOLD."
+  echo "  Containers are healthy and public on :$NEW_TAG — this is a DATA"
+  echo "  problem (pricing rows / PayPal wiring), so no automatic rollback"
+  echo "  was attempted (retagging images cannot fix it). Remedies:"
+  echo "    ssh $SSH_TARGET 'cd $REMOTE_PATH && $DC run --rm -T --no-deps backend python -m scripts.restore_plan_prices'"
+  echo "      → re-asserts canonical prices (see app/core/plan_pricing.py)."
+  echo "      NOT 'alembic upgrade head' — that only works ONCE; alembic will"
+  echo "      not re-run an already-applied revision, so it no-ops on a"
+  echo "      REPEAT re-zeroing (the exact recurrence this check exists for)."
+  echo "    ssh $SSH_TARGET 'cd $REMOTE_PATH && $DC run --rm -T --no-deps backend python -m scripts.setup_paypal_plans'"
+  echo "      → wires the PayPal plan ids"
   echo "════════════════════════════════════════════════════════════════"
   exit 1
 fi

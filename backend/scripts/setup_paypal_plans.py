@@ -8,9 +8,9 @@ Manager" Product and 8 Plans (Plus/Pro x monthly/annual x USD/MXN) with a
 wire them into the subscription_plans rows AND activate them (the MXN rows
 are migration-seeded inactive until wired — see _sql_update).
 
-MXN plans are the Mexico-first defaults (see PLAN_PRICES below — edit there):
-    Plus  MX$99/mo  | MX$990/yr
-    Pro   MX$199/mo | MX$1990/yr
+MXN plans are the Mexico-first defaults. Prices come from
+app/core/plan_pricing.py (CANONICAL_PRICES) — the single source of truth.
+Do NOT add a price constant to this file.
 
 NOTE: verify the PayPal business account supports MXN pricing before the
 live run (Mexico-registered accounts do; plan creation 400s otherwise).
@@ -86,31 +86,9 @@ class PayPalAPI:
 
 
 # ---------------------------------------------------------------------------
-# Editable price constants (whole plan price as PayPal decimal strings)
+# Prices come from the canonical table — do NOT add a copy here.
 # ---------------------------------------------------------------------------
-# MXN defaults per the 2026-07-07 market intel: Plus MX$99/mo | MX$990/yr,
-# Pro MX$199/mo | MX$1990/yr (annual ≈ 2 months free).
-# THREE copies of these prices exist — keep ALL in sync when changing:
-#   1. here (what gets provisioned at PayPal),
-#   2. the DB seeds — MXN_PRICES in
-#      migrations/versions/2026_07_08_mxn_plan_currency_w6.py and USD_PRICES
-#      in migrations/versions/2026_07_16_usd_price_alignment.py,
-#   3. the pre-migration display fallback `fallbackCents` in
-#      frontend/src/pages/parent/settings/subscription.astro.
-PLAN_PRICES: dict[str, dict[tuple[str, str], str]] = {
-    "USD": {
-        ("plus", "monthly"): "5.00",
-        ("plus", "annual"): "50.00",
-        ("pro", "monthly"): "15.00",
-        ("pro", "annual"): "150.00",
-    },
-    "MXN": {
-        ("plus", "monthly"): "99.00",
-        ("plus", "annual"): "990.00",
-        ("pro", "monthly"): "199.00",
-        ("pro", "annual"): "1990.00",
-    },
-}
+from app.core.plan_pricing import price_decimal_str  # noqa: E402
 
 TRIAL_DAYS = 7
 
@@ -144,7 +122,6 @@ def build_plan_definitions(
     }
     out = []
     for currency in currencies:
-        prices = PLAN_PRICES[currency]
         for tier in ("plus", "pro"):
             for cycle in ("monthly", "annual"):
                 out.append(
@@ -178,7 +155,9 @@ def build_plan_definitions(
                                 "frequency": cycles[cycle],
                                 "pricing_scheme": {
                                     "fixed_price": {
-                                        "value": prices[(tier, cycle)],
+                                        "value": price_decimal_str(
+                                            tier, cycle, currency
+                                        ),
                                         "currency_code": currency,
                                     }
                                 },
@@ -240,11 +219,106 @@ def create_product_if_missing(api: PayPalAPI, name: str) -> str:
     return created["id"]
 
 
+class PlanPriceMismatch(RuntimeError):
+    """A PayPal plan matched by name charges a stale (non-canonical) price.
+
+    Raised by create_plan_if_missing instead of silently reusing the match:
+    a name collision is NOT proof the plan is safe to reuse (see that
+    function's docstring).
+    """
+
+
+class PlanPriceUnavailable(RuntimeError):
+    """A PayPal plan matched by name has no comparable REGULAR price even
+    after fetching its full Show-Plan-Details representation.
+
+    This is NOT evidence of a stale price — it means the price data itself
+    is missing or malformed, which is a different (and rarer) problem.
+    Raised separately from PlanPriceMismatch so the operator isn't told
+    "charges None" for something that was never comparable in the first
+    place.
+    """
+
+
+def _regular_fixed_price(plan: dict[str, Any]) -> dict[str, Any] | None:
+    """The REGULAR billing cycle's fixed_price from a PayPal plan object, or
+    None if absent.
+
+    Callers must pass the Show Plan Details response (GET
+    /v1/billing/plans/{id}), NOT a List Plans item. Per billing_subscriptions_v1's
+    published OpenAPI spec, GET /v1/billing/plans declares a `Prefer` header
+    whose default is `return=minimal` — a minimal response carries only
+    `id`, `status`, and HATEOAS `links`, no `billing_cycles` — while
+    PayPalAPI.get sends no Prefer override at all, so list items never carry
+    a price. Show Plan Details takes no `Prefer` parameter and returns the
+    full representation (including `billing_cycles`) by default, so it is
+    the one PayPal response this function can trust.
+    """
+    for cycle in plan.get("billing_cycles") or []:
+        if cycle.get("tenure_type") == "REGULAR":
+            return (cycle.get("pricing_scheme") or {}).get("fixed_price")
+    return None
+
+
 def create_plan_if_missing(api: PayPalAPI, plan_def: dict[str, Any]) -> str:
-    """Look up plan by name (across all pages); create if absent."""
+    """Look up plan by name (across all pages); create if absent.
+
+    A name match alone is NOT enough to safely reuse a plan: PayPal's plan
+    id is the only thing that actually fixes what a subscriber is charged,
+    and idempotency-by-name means the next operator run relies on exactly
+    this reuse path (if the 2026-07-16 provisioning really happened, this
+    reuses those plans rather than duplicating them). If a reused plan
+    carries a stale price — e.g. a pre-usd_price_alignment "Plus Monthly"
+    still at $4.99 — the DB gets force-set to canonical (by migration or
+    scripts/restore_plan_prices.py) while PayPal keeps charging the old
+    amount, and a customer is billed something they were never shown. So
+    before reusing a name match, this verifies its REGULAR billing cycle's
+    fixed_price (value AND currency_code) against what plan_def says it
+    should charge.
+
+    The List Plans item used for the name match is NOT trustworthy for this
+    check — see _regular_fixed_price's docstring: PayPal's `Prefer:
+    return=minimal` default strips `billing_cycles` from list items
+    entirely, which is indistinguishable from "no billing_cycles" and would
+    make every reused plan look like a price mismatch (`charges None`) on
+    the very first name match against the real API. So on a name match this
+    fetches the plan's full representation via Show Plan Details (GET
+    /v1/billing/plans/{id}, no Prefer needed, cost is fine — this only
+    happens once per name match) and compares THAT instead. A genuine
+    mismatch raises PlanPriceMismatch — naming the plan id, its actual
+    price, and the expected price — rather than proceeding silently, so the
+    operator sees it BEFORE any wiring SQL is applied. If the detail fetch
+    still has no comparable REGULAR price (missing/malformed data, not a
+    stale price), that raises the distinct PlanPriceUnavailable instead —
+    absent price data must mean "go fetch it", never "mismatch".
+    """
+    expected_price = [
+        c for c in plan_def["billing_cycles"] if c["tenure_type"] == "REGULAR"
+    ][0]["pricing_scheme"]["fixed_price"]
+
     for p in iter_all_pages(api, "/v1/billing/plans?page_size=20", "plans"):
         if p.get("name") == plan_def["name"]:
-            return p["id"]
+            plan_id = p["id"]
+            detail = api.get(f"/v1/billing/plans/{plan_id}")
+            actual_price = _regular_fixed_price(detail)
+            if actual_price is None:
+                raise PlanPriceUnavailable(
+                    f"PayPal plan {plan_id!r} named {plan_def['name']!r} has "
+                    "no REGULAR billing-cycle price in its Show Plan Details "
+                    "response, so its price cannot be verified. This is NOT "
+                    "a stale-price mismatch — the price data itself is "
+                    "missing or malformed. Inspect the plan directly at "
+                    "PayPal before re-running provisioning."
+                )
+            if actual_price != expected_price:
+                raise PlanPriceMismatch(
+                    f"PayPal plan {plan_id!r} named {plan_def['name']!r} "
+                    f"charges {actual_price!r} but the canonical price is "
+                    f"{expected_price!r}. Refusing to reuse it — retire the "
+                    "stale plan at PayPal (or correct its price there) "
+                    "before re-running provisioning."
+                )
+            return plan_id
     created = api.post("/v1/billing/plans", plan_def)
     return created["id"]
 
@@ -278,7 +352,7 @@ def print_dry_run() -> None:
           f"({TRIAL_DAYS}-day trial, then:)")
     for plan_def in build_plan_definitions("<product-id>"):
         tier, cycle, currency = plan_meta(plan_def)
-        price = PLAN_PRICES[currency][(tier, cycle)]
+        price = price_decimal_str(tier, cycle, currency)
         interval = "month" if cycle == "monthly" else "year"
         print(f"  - {plan_def['name']:<20} {currency} {price:>8} / {interval}")
     print(

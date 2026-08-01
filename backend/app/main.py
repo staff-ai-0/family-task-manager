@@ -48,6 +48,41 @@ if settings.SENTRY_DSN:
     )
 
 
+async def _billing_audit_message(session) -> str | None:
+    """Human-readable summary of billing misconfiguration, or None if healthy.
+
+    Split out from the lifespan hook so it is testable without booting the
+    app. See app/core/plan_pricing.audit_plan_rows.
+    """
+    from app.core.plan_pricing import audit_plan_rows
+
+    findings = await audit_plan_rows(session)
+    if not findings:
+        return None
+    parts = [
+        f"{f['name']}/{f['currency']}: {'; '.join(f['problems'])}"
+        for f in findings
+    ]
+    return "billing misconfigured — " + " | ".join(parts)
+
+
+async def _run_billing_audit() -> None:
+    """Log a billing-config error at startup, or nothing when healthy.
+
+    Best-effort by contract: every failure path is swallowed. A billing
+    warning that prevents boot would be strictly worse than the
+    misconfiguration it reports. Extracted from lifespan so that contract is
+    testable — see test_plan_pricing_invariants.
+    """
+    try:
+        async with AsyncSessionLocal() as _billing_session:
+            _billing_problem = await _billing_audit_message(_billing_session)
+        if _billing_problem:
+            logger.error(_billing_problem)
+    except Exception:
+        logger.exception("Billing configuration audit failed")
+
+
 async def _overdue_sweep_loop() -> None:
     """Background loop: every 60 minutes, mark stale PENDING assignments OVERDUE."""
     # Run once on startup so a fresh boot catches anything missed during downtime.
@@ -87,6 +122,15 @@ async def lifespan(app: FastAPI):
     logger.info(
         f"Database URL: {settings.DATABASE_URL.split('@')[1] if '@' in settings.DATABASE_URL else 'Not configured'}"
     )
+
+    # Billing configuration audit. CI cannot see production data, so this is
+    # one of two places (the other: GET /api/admin/billing-config) that a
+    # zeroed price or an unwired PayPal plan becomes visible via
+    # audit_plan_rows(). Neither blocks anything, including this one — it's
+    # best-effort logging, never a startup gate. The deploy-onprem.sh
+    # billing smoke check is a separate, independent gate that does NOT call
+    # audit_plan_rows() — see that function's docstring for why.
+    await _run_billing_audit()
 
     # Elect a single scheduler leader so cron jobs + the overdue sweep run on
     # exactly one worker (prod runs multiple uvicorn workers).

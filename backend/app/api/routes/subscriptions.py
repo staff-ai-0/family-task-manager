@@ -202,6 +202,50 @@ async def create_checkout(
         key=lambda p: (_paypal_id(p) is None, p.currency != "MXN", p.currency or ""),
     )
 
+    # SERVER-SIDE price guard. The pricing page already disables its upgrade
+    # button when a plan is priced <= 0 (subscription.astro's canCheckout),
+    # with the comment "selling it would create a PayPal subscription whose
+    # price does not match what we showed" — but a disabled button is a UX
+    # nicety, not enforcement: nothing stopped a direct POST here from
+    # creating that mismatched PayPal subscription anyway. This mirrors that
+    # rule server-side so it holds regardless of client.
+    #
+    # Status code: this is a SERVER misconfiguration (a broken price row),
+    # not a bad request from the caller, so a 4xx that blames the client
+    # (400/404/422) is wrong. 503 over 409: the request is well-formed and
+    # the plan is nominally active, but the server's own data makes it
+    # unsafe to fulfill right now — the "temporarily can't, an operator will
+    # fix it, retry later" signal 503 is meant for. 409 is conventionally a
+    # conflict the CALLER can resolve by resubmitting differently (e.g. a
+    # stale version), which does not apply here — no request the client
+    # could construct would succeed until the price is fixed. This is the
+    # same class of failure as the 501 below (a plan that was never wired to
+    # PayPal at all) but distinct: this plan WAS wired, its price is just
+    # broken — see app/core/plan_pricing.py for how that happens.
+    #
+    # `free` is exempt: it is priced 0 BY DESIGN, not misconfigured — every
+    # sibling rule agrees (audit_plan_rows skips it by name in
+    # app/core/plan_pricing.py; deploy-onprem.sh's verify_billing skips it
+    # too). It is also not reachable from the shipped UI (nothing offers
+    # checkout for the free tier), so this exemption is about the error
+    # message being truthful, not a live bug. Falls through to the 501
+    # below, same as any other plan with no PayPal id wired.
+    price = (
+        plan.price_monthly_cents
+        if request.billing_cycle == "monthly"
+        else plan.price_annual_cents
+    )
+    if plan.name != "free" and price <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"Plan '{plan.name}' ({plan.currency}) is misconfigured — "
+                f"{request.billing_cycle} price is not positive. Checkout "
+                "is disabled until an operator fixes the price "
+                "(see app/core/plan_pricing.py)."
+            ),
+        )
+
     paypal_plan_id = _paypal_id(plan)
     if not paypal_plan_id:
         raise HTTPException(
