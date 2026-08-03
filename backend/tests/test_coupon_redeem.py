@@ -447,6 +447,31 @@ async def test_registration_survives_a_bad_coupon(client):
 
 
 @pytest.mark.asyncio
+async def test_registration_survives_an_exhausted_coupon(client, db_session):
+    """Exhausted is the one failure where redeem() rolls back BEFORE raising —
+    the registration flow must survive the expired identity map (its own
+    rollback becomes a no-op, refresh(user) reloads) and still issue tokens."""
+    await _coupon(
+        db_session, code="AGOTADO", max_redemptions=1, redemption_count=1
+    )
+
+    resp = await client.post(
+        "/api/auth/register-family",
+        json={
+            "family_name": "Los Tardios",
+            "name": "Caro",
+            "email": "caro@example.com",
+            "password": "password123",
+            "accept_terms": True,
+            "coupon": "AGOTADO",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["coupon_applied"] is False
+    assert resp.json()["access_token"]
+
+
+@pytest.mark.asyncio
 async def test_join_by_code_signup_does_not_redeem(
     client, db_session, test_family
 ):
