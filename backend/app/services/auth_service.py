@@ -31,6 +31,7 @@ from app.core.exceptions import (
     ValidationException,
     UnauthorizedException,
 )
+from app.services.coupon_service import CouponService
 from app.services.email_service import EmailService
 from app.services.invitation_service import InvitationService
 
@@ -338,6 +339,41 @@ class AuthService:
                 except Exception:
                     pass
 
+        # Coupon credit: a brand-new family founded via ?coupon=CODE redeems
+        # it here. Best-effort with the same contract as the referral block —
+        # a bad or exhausted code must never break signup, and a failure must
+        # leave the session usable for the email send and token issue below.
+        coupon_applied = False
+        if not data.family_code and pending_invite is None and data.coupon:
+            # Snapshot before the try: a failed redeem ends in a rollback
+            # (ours below, or redeem's own on the exhausted path), and
+            # rollback expires every identity-map instance regardless of
+            # expire_on_commit=False — a plain `family.id` read in the except
+            # would then lazy-load outside an await (MissingGreenlet).
+            new_family_id = family.id
+            try:
+                await CouponService.redeem(
+                    db, family_id=new_family_id, code=data.coupon
+                )
+                coupon_applied = True
+            except Exception:
+                import logging
+                logging.getLogger(__name__).info(
+                    "coupon %s not applied for new family %s",
+                    data.coupon, new_family_id, exc_info=True,
+                )
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
+                # That rollback expired `user` too, and everything below
+                # still reads it (approval branch, token claims,
+                # UserResponse) — an expired attribute read under asyncpg
+                # raises MissingGreenlet, turning a bad coupon into a broken
+                # signup. The user row was committed before this block, so
+                # re-load it explicitly.
+                await db.refresh(user)
+
         # Onboarding hook: advance child_invited when joining an existing family
         if data.family_code:
             try:
@@ -393,6 +429,7 @@ class AuthService:
             refresh_token=refresh_token,
             token_type="bearer",
             user=UserResponse.model_validate(user),
+            coupon_applied=coupon_applied,
         )
 
     @staticmethod

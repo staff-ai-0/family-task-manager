@@ -17,6 +17,7 @@ branches don't depend on two transactions actually overlapping in time.
 """
 import asyncio
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 import pytest
 from sqlalchemy import select
@@ -387,3 +388,96 @@ async def test_credits_endpoint_is_empty_for_a_family_without_any(
     resp = await client.get("/api/subscriptions/credits", headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+# ---------------------------------------------------------------------------
+# ?coupon=CODE at family registration
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_registration_applies_a_coupon_to_the_new_family(
+    client, db_session
+):
+    coupon = await _coupon(db_session)
+
+    resp = await client.post(
+        "/api/auth/register-family",
+        json={
+            "family_name": "Los Nuevos",
+            "name": "Ana",
+            "email": "ana@example.com",
+            "password": "password123",
+            "accept_terms": True,
+            "coupon": "lanzamiento",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["coupon_applied"] is True
+
+    # The flag must reflect an actual grant, not wishful thinking.
+    new_family_id = UUID(resp.json()["user"]["family_id"])
+    grants = (
+        await db_session.execute(
+            select(PlanCreditGrant).where(
+                PlanCreditGrant.family_id == new_family_id
+            )
+        )
+    ).scalars().all()
+    assert len(grants) == 1
+    assert grants[0].coupon_id == coupon.id
+
+
+@pytest.mark.asyncio
+async def test_registration_survives_a_bad_coupon(client):
+    """A mistyped launch code must never cost somebody their signup."""
+    resp = await client.post(
+        "/api/auth/register-family",
+        json={
+            "family_name": "Los Otros",
+            "name": "Beto",
+            "email": "beto@example.com",
+            "password": "password123",
+            "accept_terms": True,
+            "coupon": "NOEXISTE",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["coupon_applied"] is False
+    assert resp.json()["access_token"]
+
+
+@pytest.mark.asyncio
+async def test_join_by_code_signup_does_not_redeem(
+    client, db_session, test_family
+):
+    """Joining an existing family must not burn a coupon seat — the family
+    already exists and its parent can redeem deliberately."""
+    coupon = await _coupon(db_session, max_redemptions=1)
+    test_family.join_code = "JOINME"
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/auth/register-family",
+        json={
+            "family_code": "JOINME",
+            "name": "Kid",
+            "email": "kid@example.com",
+            "password": "password123",
+            "role": "child",
+            "coupon": "LANZAMIENTO",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["coupon_applied"] is False
+
+    # The seat survives untouched for the family's parent to redeem later.
+    await db_session.refresh(coupon)
+    assert coupon.redemption_count == 0
+    grants = (
+        await db_session.execute(
+            select(PlanCreditGrant).where(
+                PlanCreditGrant.family_id == test_family.id
+            )
+        )
+    ).scalars().all()
+    assert grants == []
