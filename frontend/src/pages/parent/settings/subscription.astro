@@ -17,15 +17,17 @@ if (user.role !== "parent") return Astro.redirect("/dashboard");
 // Fetch subscription data in parallel. Plans are fetched WITHOUT a currency
 // filter so we can tell which currencies are actually checkout-able (wired
 // to PayPal) before choosing a default or rendering the toggle.
-const [plansRes, currentRes, usageRes] = await Promise.all([
+const [plansRes, currentRes, usageRes, creditsRes] = await Promise.all([
     apiFetch<any[]>("/api/subscriptions/plans", { token }),
     apiFetch<any>("/api/subscriptions/current", { token }),
     apiFetch<any>("/api/subscriptions/usage", { token }),
+    apiFetch<any[]>("/api/subscriptions/credits", { token }),
 ]);
 
 const plans = plansRes.data ?? [];
 const current = currentRes.data;
 const usage = usageRes.data;
+const credits = creditsRes.data ?? [];
 
 // A currency is checkout-READY when it offers paid rows and every one of
 // them is wired to a PayPal plan (checkout_ready_monthly — the upgrade
@@ -168,6 +170,17 @@ const i18n = {
         cancel: "Cancel Subscription",
         cancel_confirm: "Are you sure you want to cancel your subscription?",
         support_prompt: "Questions about your plan or billing? Email us at",
+        credit_banner_until: "free until",
+        credit_banner_lifetime: "for life",
+        credit_source_coupon: "coupon",
+        credit_source_referral: "referral",
+        credit_source_operator: "courtesy",
+        coupon_title: "Have a coupon?",
+        coupon_placeholder: "CODE",
+        coupon_apply: "Apply",
+        coupon_invalid: "That code is not valid or has expired.",
+        coupon_already: "You already used this code.",
+        coupon_error: "Could not apply the code. Try again.",
         features: {
             tasks_rewards: "Tasks & Rewards",
             family_members: "Family Members",
@@ -206,6 +219,17 @@ const i18n = {
         cancel: "Cancelar Suscripci\u00f3n",
         cancel_confirm: "\u00bfEst\u00e1s seguro de que quieres cancelar tu suscripci\u00f3n?",
         support_prompt: "\u00bfDudas sobre tu plan o facturaci\u00f3n? Escr\u00edbenos a",
+        credit_banner_until: "gratis hasta el",
+        credit_banner_lifetime: "de por vida",
+        credit_source_coupon: "cup\u00f3n",
+        credit_source_referral: "referido",
+        credit_source_operator: "cortes\u00eda",
+        coupon_title: "\u00bfTienes un cup\u00f3n?",
+        coupon_placeholder: "C\u00d3DIGO",
+        coupon_apply: "Aplicar",
+        coupon_invalid: "Ese c\u00f3digo no es v\u00e1lido o ya venci\u00f3.",
+        coupon_already: "Ya usaste este c\u00f3digo.",
+        coupon_error: "No se pudo aplicar el c\u00f3digo. Int\u00e9ntalo de nuevo.",
         features: {
             tasks_rewards: "Tareas y Recompensas",
             family_members: "Miembros de Familia",
@@ -354,6 +378,29 @@ function cellClass(value: any): string {
                 </section>
             )}
 
+            <!-- Active plan credits (coupons / referrals / operator courtesy) -->
+            {credits.length > 0 && (
+                <section class="rounded-2xl border border-emerald-300 bg-emerald-50 p-4 shadow-[var(--shadow-card)]">
+                    <ul class="space-y-1 text-sm text-emerald-800">
+                        {credits.map((c: any) => (
+                            <li>
+                                <strong class="uppercase">{c.tier}</strong>{" "}
+                                {c.lifetime
+                                    ? l.credit_banner_lifetime
+                                    : `${l.credit_banner_until} ${fmtDate(c.ends_at, lang, user.timezone, { year: "numeric", month: "long", day: "numeric" })}`}
+                                <span class="opacity-70">
+                                    {" "}· {c.source === "coupon"
+                                        ? l.credit_source_coupon
+                                        : c.source === "referral"
+                                            ? l.credit_source_referral
+                                            : l.credit_source_operator}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
             <!-- Plan Comparison Table -->
             <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 overflow-x-auto">
                 <div class="flex flex-wrap items-start justify-between gap-2 mb-1">
@@ -462,6 +509,29 @@ function cellClass(value: any): string {
                 )}
             </section>
 
+            <!-- Coupon redeem box -->
+            <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
+                <h2 class="text-lg font-bold text-brand-ink">{l.coupon_title}</h2>
+                <form id="coupon-form" class="mt-2 flex gap-2">
+                    <input
+                        id="coupon-code"
+                        name="code"
+                        required
+                        maxlength="32"
+                        autocomplete="off"
+                        placeholder={l.coupon_placeholder}
+                        class="flex-1 min-w-0 rounded-lg border border-brand-ink/20 bg-white px-3 py-2 text-sm text-brand-ink uppercase placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-brand-sky-deep"
+                    />
+                    <button
+                        type="submit"
+                        class="px-4 py-2 bg-brand-sky-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-sky-deep transition-colors"
+                    >
+                        {l.coupon_apply}
+                    </button>
+                </form>
+                <p id="coupon-error" class="mt-2 hidden text-sm text-red-600"></p>
+            </section>
+
             <!-- Support contact -->
             <p class="mt-6 text-center text-sm text-brand-ink-soft font-sans">
                 {l.support_prompt}
@@ -469,8 +539,45 @@ function cellClass(value: any): string {
             </p>
 </PageLayout>
 
-<script define:vars={{ cancelConfirm: l.cancel_confirm }}>
+<script define:vars={{ cancelConfirm: l.cancel_confirm, couponMsgs: { invalid: l.coupon_invalid, already: l.coupon_already, error: l.coupon_error } }}>
     document.addEventListener('astro:page-load', () => {
+        const couponForm = document.getElementById('coupon-form');
+        if (couponForm) {
+            const errorEl = document.getElementById('coupon-error');
+            couponForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                errorEl.classList.add('hidden');
+                // Trim only — the backend service normalizes case itself; the
+                // input's `uppercase` class is cosmetic.
+                const code = document.getElementById('coupon-code').value.trim();
+                if (!code) return;
+                try {
+                    const resp = await fetch('/api/subscriptions/coupons/redeem', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code }),
+                    });
+                    if (resp.ok) {
+                        // Reload so the banner, the current plan and the usage
+                        // table all reflect the new entitlement in one pass.
+                        window.location.reload();
+                        return;
+                    }
+                    // FastAPI wraps HTTPException detail: the wire shape is
+                    // {"detail": {"error": "invalid_or_expired_coupon"}}.
+                    const body = await resp.json().catch(() => null);
+                    const errCode = body?.detail?.error;
+                    errorEl.textContent =
+                        errCode === 'invalid_or_expired_coupon' || resp.status === 404 ? couponMsgs.invalid
+                        : errCode === 'already_redeemed' || resp.status === 409 ? couponMsgs.already
+                        : couponMsgs.error;
+                } catch {
+                    errorEl.textContent = couponMsgs.error;
+                }
+                errorEl.classList.remove('hidden');
+            });
+        }
+
         const cancelBtn = document.getElementById('cancel-sub-btn');
         if (cancelBtn) {
             cancelBtn.addEventListener('click', async () => {
