@@ -293,16 +293,42 @@ async def test_redeem_endpoint_hides_why_a_code_failed(
 
 
 @pytest.mark.asyncio
+async def test_redeem_endpoint_hides_an_exhausted_code(
+    client, auth_headers, db_session
+):
+    """Exhausted is the one CouponInvalid reason raised AFTER a rollback —
+    the handler must survive the expired identity map and must not become
+    an existence oracle."""
+    await _coupon(
+        db_session, code="AGOTADO", max_redemptions=1, redemption_count=1
+    )
+
+    exhausted = await client.post(
+        "/api/subscriptions/coupons/redeem",
+        headers=auth_headers,
+        json={"code": "AGOTADO"},
+    )
+    unknown = await client.post(
+        "/api/subscriptions/coupons/redeem",
+        headers=auth_headers,
+        json={"code": "NOEXISTE"},
+    )
+    assert exhausted.status_code == unknown.status_code == 404
+    assert exhausted.json()["detail"] == unknown.json()["detail"]
+
+
+@pytest.mark.asyncio
 async def test_redeem_endpoint_409s_on_a_second_attempt(
     client, auth_headers, db_session
 ):
     await _coupon(db_session)
 
-    await client.post(
+    first = await client.post(
         "/api/subscriptions/coupons/redeem",
         headers=auth_headers,
         json={"code": "LANZAMIENTO"},
     )
+    assert first.status_code == 200
     again = await client.post(
         "/api/subscriptions/coupons/redeem",
         headers=auth_headers,
@@ -338,11 +364,12 @@ async def test_credits_endpoint_lists_active_grants(
     client, auth_headers, db_session
 ):
     await _coupon(db_session)
-    await client.post(
+    redeemed = await client.post(
         "/api/subscriptions/coupons/redeem",
         headers=auth_headers,
         json={"code": "LANZAMIENTO"},
     )
+    assert redeemed.status_code == 200
 
     resp = await client.get("/api/subscriptions/credits", headers=auth_headers)
     assert resp.status_code == 200

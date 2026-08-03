@@ -26,6 +26,7 @@ router = APIRouter()
 
 # One message for every unusable-code reason — see coupon_service's docstring.
 _INVALID_DETAIL = {"error": "invalid_or_expired_coupon"}
+_ALREADY_REDEEMED_DETAIL = {"error": "already_redeemed"}
 
 
 @router.post("/coupons/redeem", response_model=CreditResponse)
@@ -44,7 +45,7 @@ async def redeem_coupon(
     except CouponAlreadyRedeemed:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"error": "already_redeemed"},
+            detail=_ALREADY_REDEEMED_DETAIL,
         ) from None
     except CouponInvalid:
         raise HTTPException(
