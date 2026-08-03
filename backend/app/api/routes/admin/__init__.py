@@ -34,3 +34,7 @@ router.include_router(families.router)
 from app.api.routes.admin import actions  # noqa: E402
 
 router.include_router(actions.router)
+
+from app.api.routes.admin import coupons  # noqa: E402
+
+router.include_router(coupons.router)
