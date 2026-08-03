@@ -248,3 +248,68 @@ async def test_coupon_routes_are_superadmin_only(
     call = getattr(client, method)
     resp = await call(path, headers=auth_headers, **({"json": payload} if payload else {}))
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_id_bearing_coupon_routes_are_superadmin_only(
+    client, superadmin_headers, auth_headers
+):
+    """PATCH / redemptions / revoke against REAL rows as a plain parent.
+
+    Real ids on purpose: with a fabricated UUID a missing require_superadmin
+    would still 404 from the service's own existence check and the test
+    would pass vacuously. Against a live row, a dropped gate answers 200 —
+    and the follow-up superadmin calls prove no write actually landed."""
+    created = await client.post(
+        "/api/admin/coupons", headers=superadmin_headers,
+        json={"code": "GUARDIA", "kind": "launch", "tier": "plus",
+              "duration_days": 30},
+    )
+    coupon_id = created.json()["id"]
+    redeemed = await client.post(
+        "/api/subscriptions/coupons/redeem",
+        headers=auth_headers,
+        json={"code": "GUARDIA"},
+    )
+    grant_id = redeemed.json()["id"]
+
+    patched = await client.patch(
+        f"/api/admin/coupons/{coupon_id}",
+        headers=auth_headers,
+        json={"is_active": False},
+    )
+    listed = await client.get(
+        f"/api/admin/coupons/{coupon_id}/redemptions", headers=auth_headers
+    )
+    revoked = await client.post(
+        f"/api/admin/credits/{grant_id}/revoke",
+        headers=auth_headers,
+        json={"reason": "not an operator"},
+    )
+    assert patched.status_code == 404
+    assert listed.status_code == 404
+    assert revoked.status_code == 404
+
+    # Nothing landed: the coupon is still active and the grant still
+    # revocable (a prior revoke would make this 409).
+    rows = (await client.get(
+        "/api/admin/coupons", headers=superadmin_headers
+    )).json()
+    guardia = next(r for r in rows if r["code"] == "GUARDIA")
+    assert guardia["is_active"] is True
+    real_revoke = await client.post(
+        f"/api/admin/credits/{grant_id}/revoke",
+        headers=superadmin_headers,
+        json={"reason": "cleanup"},
+    )
+    assert real_revoke.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_patch_unknown_coupon_is_404(client, superadmin_headers):
+    resp = await client.patch(
+        "/api/admin/coupons/00000000-0000-0000-0000-000000000000",
+        headers=superadmin_headers,
+        json={"is_active": False},
+    )
+    assert resp.status_code == 404
