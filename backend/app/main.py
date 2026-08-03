@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.database import engine, AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
 from app.core.request_context import RequestIDLogFilter, RequestIDMiddleware
-from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm, bank, family_cup, referrals, routines
+from app.api.routes import auth, users, rewards, consequences, families, task_templates, task_assignments, oauth, cash, invitations, subscriptions, coupons, push, shopping, calendar, notifications, kiosk, pet, analytics, jarvis, meals, family_chat, jarvis_schedules, dm, bank, family_cup, referrals, routines
 from app.api.routes.budget import router as budget_router
 from app.api.routes.gigs import router as gigs_router
 from app.api.routes import oversight, onboarding
@@ -431,6 +431,7 @@ app.include_router(oversight.router, prefix="/api/oversight", tags=["Oversight"]
 app.include_router(cash.router, prefix="/api/cash", tags=["Cash"])
 app.include_router(bank.router, prefix="/api/bank", tags=["Family Bank"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["Subscriptions"])
+app.include_router(coupons.router, prefix="/api/subscriptions", tags=["Coupons"])
 app.include_router(referrals.router, prefix="/api/referrals", tags=["Referrals"])
 from app.api.routes import subscriptions_webhook  # noqa: E402
 app.include_router(

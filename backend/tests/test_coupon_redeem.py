@@ -244,3 +244,119 @@ async def test_concurrent_redeem_same_family_awards_exactly_once(
 
     await db_session.refresh(coupon)
     assert coupon.redemption_count == 1
+
+
+@pytest.mark.asyncio
+async def test_redeem_endpoint_returns_the_granted_window(
+    client, auth_headers, db_session
+):
+    await _coupon(db_session)
+
+    resp = await client.post(
+        "/api/subscriptions/coupons/redeem",
+        headers=auth_headers,
+        json={"code": "lanzamiento"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["tier"] == "plus"
+    assert body["lifetime"] is False
+    assert body["ends_at"] is not None
+    assert body["coupon"]["code"] == "LANZAMIENTO"
+    assert body["coupon"]["kind"] == "launch"
+
+
+@pytest.mark.asyncio
+async def test_redeem_endpoint_hides_why_a_code_failed(
+    client, auth_headers, db_session
+):
+    """Unknown and expired must be indistinguishable to the caller."""
+    await _coupon(
+        db_session,
+        code="CADUCADO",
+        valid_until=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+
+    unknown = await client.post(
+        "/api/subscriptions/coupons/redeem",
+        headers=auth_headers,
+        json={"code": "NOEXISTE"},
+    )
+    expired = await client.post(
+        "/api/subscriptions/coupons/redeem",
+        headers=auth_headers,
+        json={"code": "CADUCADO"},
+    )
+
+    assert unknown.status_code == expired.status_code == 404
+    assert unknown.json()["detail"] == expired.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_redeem_endpoint_409s_on_a_second_attempt(
+    client, auth_headers, db_session
+):
+    await _coupon(db_session)
+
+    await client.post(
+        "/api/subscriptions/coupons/redeem",
+        headers=auth_headers,
+        json={"code": "LANZAMIENTO"},
+    )
+    again = await client.post(
+        "/api/subscriptions/coupons/redeem",
+        headers=auth_headers,
+        json={"code": "LANZAMIENTO"},
+    )
+    assert again.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_redeem_is_parent_only(client, db_session, test_child_user):
+    await _coupon(db_session)
+
+    login = await client.post(
+        "/api/auth/login",
+        json={"email": test_child_user.email, "password": "password123"},
+    )
+    assert login.status_code == 200, (
+        f"child fixture login failed ({login.status_code}) — the parent-only "
+        "gate was never exercised"
+    )
+    token = login.json()["access_token"]
+
+    resp = await client.post(
+        "/api/subscriptions/coupons/redeem",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"code": "LANZAMIENTO"},
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_credits_endpoint_lists_active_grants(
+    client, auth_headers, db_session
+):
+    await _coupon(db_session)
+    await client.post(
+        "/api/subscriptions/coupons/redeem",
+        headers=auth_headers,
+        json={"code": "LANZAMIENTO"},
+    )
+
+    resp = await client.get("/api/subscriptions/credits", headers=auth_headers)
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 1
+    assert rows[0]["tier"] == "plus"
+    assert rows[0]["source"] == "coupon"
+    assert rows[0]["lifetime"] is False
+
+
+@pytest.mark.asyncio
+async def test_credits_endpoint_is_empty_for_a_family_without_any(
+    client, auth_headers
+):
+    resp = await client.get("/api/subscriptions/credits", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json() == []

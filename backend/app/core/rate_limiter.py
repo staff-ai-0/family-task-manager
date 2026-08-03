@@ -63,3 +63,4 @@ limiter = Limiter(
 AUTH_LIMIT = "10/minute"      # login, register-family, check-methods, password reset
 EMAIL_LIMIT = "5/minute"     # verification / resend (extra-cheap to abuse)
 AI_LIMIT = "30/hour"         # receipt scan / document scan
+COUPON_LIMIT = "10/hour"     # coupon redemption attempts
