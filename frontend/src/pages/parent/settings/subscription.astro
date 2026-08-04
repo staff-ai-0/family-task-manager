@@ -148,11 +148,32 @@ const effectivePlanName =
 const isActive = current?.status === "active";
 const isCancelled = current?.status === "cancelled";
 const isPaid = currentPlanName !== "free";
+// The upgrade buttons key off the REAL paid tier, NOT the credit-floored
+// display tier. A family holding a 30-day Pro coupon — the exact launch flow
+// this page exists to serve — renders effectivePlanName === "pro", which hid
+// BOTH buttons; and isPaid is still false, so there was no cancel/manage
+// block either. The highest-intent moment in the funnel offered them nothing
+// to buy, even though POST /subscriptions/checkout has no tier guard and the
+// purchase works fine. The floor still drives the header and the comparison
+// highlight — that part was the point.
+const liveCredits = credits.filter(isLive);
+const isCreditFloored = effectivePlanName !== currentPlanName;
+const hasLifetimeCredit = liveCredits.some((c: any) => c.lifetime || !c.ends_at);
+const creditEndsIso = hasLifetimeCredit
+    ? null
+    : liveCredits.reduce(
+          (latest: string | null, c: any) =>
+              !latest || Date.parse(c.ends_at) > Date.parse(latest)
+                  ? c.ends_at
+                  : latest,
+          null,
+      );
 // True when at least one rendered upgrade button is disabled because the
 // selected currency's row is not checkout-able — shows the explainer note.
+// Keyed to the same tier as the buttons it describes.
 const upgradeUnavailable =
-    (effectivePlanName === "free" && !canCheckout(plusPlan)) ||
-    (effectivePlanName !== "pro" && !canCheckout(proPlan));
+    (currentPlanName === "free" && !canCheckout(plusPlan)) ||
+    (currentPlanName !== "pro" && !canCheckout(proPlan));
 const cancelAtPeriodEnd = Boolean(current?.cancel_at_period_end);
 const periodEndIso = current?.current_period_end ?? null;
 const periodEndLabel = periodEndIso
@@ -196,6 +217,11 @@ const i18n = {
         credit_source_coupon: "coupon",
         credit_source_referral: "referral",
         credit_source_operator: "courtesy",
+        credit_upgrade_note:
+            "Your {tier} credit is free until {date}. Buying a plan now is not " +
+            "wasted — paid time is added on top, starting when the credit ends.",
+        credit_upgrade_lifetime:
+            "Your {tier} credit never expires, so there is nothing you need to buy.",
         coupon_title: "Have a coupon?",
         coupon_placeholder: "CODE",
         coupon_apply: "Apply",
@@ -246,6 +272,12 @@ const i18n = {
         credit_source_coupon: "cup\u00f3n",
         credit_source_referral: "referido",
         credit_source_operator: "cortes\u00eda",
+        credit_upgrade_note:
+            "Tu cr\u00e9dito {tier} es gratis hasta el {date}. Si compras un plan " +
+            "ahora no lo desperdicias: el tiempo pagado se suma y empieza cuando " +
+            "termina el cr\u00e9dito.",
+        credit_upgrade_lifetime:
+            "Tu cr\u00e9dito {tier} no vence, as\u00ed que no necesitas comprar nada.",
         coupon_title: "\u00bfTienes un cup\u00f3n?",
         coupon_placeholder: "C\u00d3DIGO",
         coupon_apply: "Aplicar",
@@ -267,6 +299,26 @@ const i18n = {
 };
 
 const l = i18n[lang] ?? i18n.en;
+
+// Explains why a credited family still sees a price tag: the credit has an
+// end date, and buying now is additive rather than wasted (PlanCreditService
+// starts a same-or-lower-tier grant only once the paid period is over, and a
+// paid plan simply outranks the credit while both run). Without this the
+// buttons read as billing the family twice for what they already have.
+const creditUpgradeNote = !isCreditFloored
+    ? null
+    : hasLifetimeCredit
+        ? l.credit_upgrade_lifetime.replace(
+              "{tier}", effectivePlanName.toUpperCase(),
+          )
+        : l.credit_upgrade_note
+              .replace("{tier}", effectivePlanName.toUpperCase())
+              .replace(
+                  "{date}",
+                  fmtDate(creditEndsIso, lang, user.timezone, {
+                      year: "numeric", month: "long", day: "numeric",
+                  }),
+              );
 
 // Feature comparison table data
 const featureRows = [
@@ -497,7 +549,7 @@ function cellClass(value: any): string {
 
                 <!-- Upgrade / Cancel Buttons -->
                 <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
-                    {effectivePlanName === "free" && (
+                    {currentPlanName === "free" && (
                         <button
                             class="upgrade-btn px-6 py-2.5 bg-brand-sky-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-sky-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             data-plan="plus"
@@ -508,7 +560,7 @@ function cellClass(value: any): string {
                             {l.upgrade} → {l.plus}
                         </button>
                     )}
-                    {effectivePlanName !== "pro" && (
+                    {currentPlanName !== "pro" && (
                         <button
                             class="upgrade-btn px-6 py-2.5 bg-brand-coral-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-coral-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             data-plan="pro"
@@ -528,6 +580,9 @@ function cellClass(value: any): string {
                         </button>
                     )}
                 </div>
+                {creditUpgradeNote && (
+                    <p class="mt-3 text-center text-xs text-brand-ink-soft">{creditUpgradeNote}</p>
+                )}
                 {upgradeUnavailable && (
                     <p class="mt-3 text-center text-xs text-brand-ink-soft">{l.coming_soon}</p>
                 )}

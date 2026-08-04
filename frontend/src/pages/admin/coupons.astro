@@ -125,7 +125,7 @@ const shortDate = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
                 </button>
             </div>
         </form>
-        <p id="coupon-create-error" class="mt-3 hidden text-sm text-red-700"></p>
+        <p id="coupon-create-error" aria-live="polite" class="mt-3 hidden text-sm text-red-700"></p>
     </section>
 
     {!rows && (
@@ -371,9 +371,22 @@ const shortDate = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
                         // user-supplied and this is the operator console.
                         const line = document.createElement("div");
                         const label = document.createElement("span");
+                        // A grant whose window has not opened yet reads as
+                        // pending, not as live — same distinction the family
+                        // page and the family's own subscription page make.
+                        // This drawer is the one place an operator drills into
+                        // a SPECIFIC code, so it is where an invisible queued
+                        // comp is most likely to be re-issued by clicking
+                        // again — and comps stack, so every click is another
+                        // 30 free days.
+                        const window_ =
+                            r.starts_at && Date.parse(r.starts_at) > Date.now()
+                                ? `pending, starts ${r.starts_at.slice(0, 10)}`
+                                : r.ends_at
+                                    ? r.ends_at.slice(0, 10)
+                                    : "lifetime";
                         label.textContent =
-                            `${r.family_name} · ${r.tier} · ` +
-                            `${r.ends_at ? r.ends_at.slice(0, 10) : "lifetime"}` +
+                            `${r.family_name} · ${r.tier} · ${window_}` +
                             `${r.revoked_at ? " · revoked" : ""}`;
                         line.appendChild(label);
 
