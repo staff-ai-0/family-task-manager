@@ -10,7 +10,8 @@ This does NOT award points. It puts the task into the existing graded path
 on one code path. The tests below pin that, plus the money edge that makes this
 more than a dropdown change: on a week whose paycheck was already released,
 retroactive credit gives POINTS but no cash, because release_chore_paycheck is
-idempotent on the ledger. The caller has to be told, not silently short-changed.
+idempotent on the ledger. The caller has to be told, not silently short-changed
+— and then trues it up with a top-up release (see test_chore_paycheck.py).
 """
 from datetime import date, timedelta
 from uuid import uuid4
@@ -325,9 +326,10 @@ async def test_reports_whether_that_week_was_already_paid(
     """The money edge, and the reason this is not a dropdown change.
 
     release_chore_paycheck is idempotent on a CashTransaction(ALLOWANCE,
-    week_of=...), so once a week is paid it cannot be topped up. Retroactive
-    credit then yields points but no cash — a silent shortfall unless the
-    caller surfaces it, which is what this flag is for.
+    week_of=...), so once a week is paid a plain re-release 409s. Retroactive
+    credit then yields points but no cash on its own — a silent shortfall
+    unless the caller surfaces it, which is what this flag is for. The parent
+    acts on it with a top_up=true release.
     """
     from app.models.cash_transaction import CashTransaction, CashTransactionType
 

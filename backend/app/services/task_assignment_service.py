@@ -2086,11 +2086,14 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             )
 
         # Money edge: release_chore_paycheck is idempotent on a
-        # CashTransaction(ALLOWANCE, week_of=...), so a week that has been paid
-        # CANNOT be topped up. Retroactive credit on such a week therefore
-        # yields points but no cash. That is a silent shortfall unless the
-        # caller says so, so report it and let the parent decide — they can
-        # true it up with release_chore_paycheck's adjustment_cents.
+        # CashTransaction(ALLOWANCE, week_of=...), so re-releasing a week that
+        # has been paid 409s. Retroactive credit on such a week therefore
+        # yields points but no cash on its own. That is a silent shortfall
+        # unless the caller says so, so report it and let the parent decide —
+        # they true it up with a top-up release (POST
+        # /api/bank/chore-paycheck/{kid}/release with top_up=true and a
+        # positive adjustment_cents), which pays that amount and only that,
+        # leaving the base where it is.
         week_already_paid = (await db.execute(
             select(CashTransaction.id).where(
                 CashTransaction.family_id == family_id,

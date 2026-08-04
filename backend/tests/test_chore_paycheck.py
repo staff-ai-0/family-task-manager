@@ -552,6 +552,151 @@ async def test_release_adjustment_floors_at_zero(db):
     assert r["amount_cents"] == 0
 
 
+# ── topping up a week that was already released ───────────────────────────
+#
+# mark_done_for_kid returns week_already_paid=True when retroactive credit
+# lands on a week whose paycheck is out the door: the kid gets points but no
+# cash. Its docstring (and CLAUDE.md) told the parent to true that up with
+# release_chore_paycheck's adjustment_cents — which was unreachable, because
+# the 409 fires before adjustment_cents is ever read. top_up=True is that
+# door. The 409 itself stays exactly as load-bearing as it was: it is what
+# stops an out-of-order backlog release from double-paying a week.
+
+
+async def _week_allowance_total(db, kid, week) -> int:
+    rows = (await db.execute(
+        select(CashTransaction.amount_cents).where(
+            CashTransaction.user_id == kid.id,
+            CashTransaction.type == CashTransactionType.ALLOWANCE,
+            CashTransaction.week_of == week,
+        )
+    )).scalars().all()
+    return sum(rows)
+
+
+@pytest.mark.asyncio
+async def test_top_up_adds_only_the_adjustment_and_keeps_the_409(db):
+    """The money-safety invariant, both halves at once.
+
+    Half the week's chores were graded when the paycheck went out (base
+    12500 of a 25000 cap). The parent then marks the rest done retroactively
+    — a re-release would recompute the base to 25000 and pay it AGAIN on top
+    of the 12500 already sent. The top-up must add the adjustment and
+    nothing else, and a plain re-release must still be refused.
+    """
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    await _chore(db, fam, parent, kid, 60, AssignmentStatus.COMPLETED)
+    late = await _chore(db, fam, parent, kid, 60, AssignmentStatus.PENDING)
+
+    r = await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    assert r["amount_cents"] == 12500          # 50% of the week
+
+    # The retroactive completion: now the week is 100% done.
+    late.status = AssignmentStatus.COMPLETED
+    late.approval_status = ApprovalStatus.APPROVED
+    await db.commit()
+
+    # A plain re-release is still refused — that guard is what stops a
+    # double payment, and this must not have weakened it.
+    with pytest.raises(Exception) as ei:
+        await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    assert getattr(ei.value, "status_code", None) == 409
+    assert await _week_allowance_total(db, kid, WEEK) == 12500
+
+    # The documented remedy: pay only the shortfall.
+    top = await BankService.release_chore_paycheck(
+        db, kid, fam.id, WEEK, entitled=True,
+        adjustment_cents=12500, top_up=True,
+    )
+    assert top["amount_cents"] == 12500        # the adjustment, NOT the base
+
+    # base + adjustment, exactly — not 12500 + 25000, and not 25000.
+    assert await _week_allowance_total(db, kid, WEEK) == 25000
+    u = await db.get(User, kid.id)
+    assert u.cash_cents == 25000
+
+    # And a plain re-release is STILL refused afterwards.
+    with pytest.raises(Exception) as ei2:
+        await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    assert getattr(ei2.value, "status_code", None) == 409
+
+
+@pytest.mark.asyncio
+async def test_top_up_needs_a_week_that_was_actually_released(db):
+    """Not a back door around the release itself: with no paycheck out for
+    the week there is nothing to top up, and quietly paying the adjustment
+    alone would skip the base the kid is owed."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    await _chore(db, fam, parent, kid, 60, AssignmentStatus.COMPLETED)
+
+    with pytest.raises(Exception) as ei:
+        await BankService.release_chore_paycheck(
+            db, kid, fam.id, WEEK, entitled=True,
+            adjustment_cents=5000, top_up=True,
+        )
+    assert getattr(ei.value, "status_code", None) == 422
+    assert await _week_allowance_total(db, kid, WEEK) == 0
+    u = await db.get(User, kid.id)
+    assert u.cash_cents == 0
+
+
+@pytest.mark.asyncio
+async def test_top_up_requires_a_positive_adjustment(db):
+    """A top-up pays a shortfall. Zero writes a second ALLOWANCE row for the
+    week for nothing; a negative one is a claw-back, which credit_split_rows
+    cannot express (it collapses to a $0 row) — parents dock through
+    POST /api/cash/{id}/adjust."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    await _chore(db, fam, parent, kid, 60, AssignmentStatus.COMPLETED)
+    await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    baseline = await _week_allowance_total(db, kid, WEEK)
+
+    for bad in (0, -5000):
+        with pytest.raises(Exception) as ei:
+            await BankService.release_chore_paycheck(
+                db, kid, fam.id, WEEK, entitled=True,
+                adjustment_cents=bad, top_up=True,
+            )
+        assert getattr(ei.value, "status_code", None) == 422, bad
+    assert await _week_allowance_total(db, kid, WEEK) == baseline
+
+
+@pytest.mark.asyncio
+async def test_top_up_does_not_re_convert_points(db):
+    """points_rate deducts the points it just paid out as cash. A top-up must
+    not run that conversion a second time — it is not paying for points, it
+    is paying a number the parent typed."""
+    fam = await _family(db)
+    fam.point_value_cents = 100
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    kid.points = 500
+    await _config(db, kid, allowance_mode="points_rate")
+    await _chore(db, fam, parent, kid, 100, AssignmentStatus.COMPLETED)
+    await db.commit()
+
+    first = await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+    assert first["points_converted"] > 0
+    await db.refresh(kid)
+    points_after_release = kid.points
+
+    top = await BankService.release_chore_paycheck(
+        db, kid, fam.id, WEEK, entitled=True, adjustment_cents=2500, top_up=True,
+    )
+    assert top["points_converted"] == 0
+    await db.refresh(kid)
+    assert kid.points == points_after_release
+
+
 # ── notification on release + parent reminder ─────────────────────────────
 
 @pytest.mark.asyncio

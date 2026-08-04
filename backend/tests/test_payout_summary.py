@@ -459,3 +459,44 @@ async def test_history_route_cross_tenant_404(
         f"/api/bank/chore-paycheck/{outsider.id}/history", headers=parent_headers
     )
     assert r.status_code == 404
+
+
+# ── Chore-paycheck release route: the top-up door ────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_release_route_top_up_reaches_an_already_paid_week(
+    client, db_session, test_family, test_parent_user, test_teen_user,
+    parent_headers, plus_subscription,
+):
+    """The remedy mark_done_for_kid's week_already_paid points at has to be
+    reachable over HTTP, not just from the service — the parent hitting the
+    flag is looking at a UI, and a service-only knob is no remedy at all.
+    """
+    await _bank_config(
+        db_session, test_teen_user,
+        allowance_mode="chore_proportional", allowance_cents=10000,
+    )
+    week = await current_week_monday(db_session, test_family.id)
+    await _chore(db_session, test_family.id, test_parent_user.id, test_teen_user.id, 10, week)
+
+    url = f"/api/bank/chore-paycheck/{test_teen_user.id}/release"
+    first = await client.post(url, json={"week_of": week.isoformat()}, headers=parent_headers)
+    assert first.status_code == 200, first.text
+    assert first.json()["amount_cents"] == 10000
+
+    # Plain re-release: still refused. The guard is untouched.
+    again = await client.post(url, json={"week_of": week.isoformat()}, headers=parent_headers)
+    assert again.status_code == 409, again.text
+
+    # Explicit top-up: pays only the adjustment.
+    top = await client.post(
+        url,
+        json={"week_of": week.isoformat(), "adjustment_cents": 2500, "top_up": True},
+        headers=parent_headers,
+    )
+    assert top.status_code == 200, top.text
+    assert top.json()["amount_cents"] == 2500
+
+    await db_session.refresh(test_teen_user)
+    assert test_teen_user.cash_cents == 12500

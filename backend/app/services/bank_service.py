@@ -811,7 +811,7 @@ class BankService:
     async def release_chore_paycheck(
         db: AsyncSession, target_user: User, family_id: UUID,
         week_of: date, entitled: bool, adjustment_cents: int = 0,
-        released_by: Optional[UUID] = None,
+        released_by: Optional[UUID] = None, top_up: bool = False,
     ) -> dict:
         """Parent releases a teen's weekly chore paycheck: allowance_cents scaled
         by completed-&-approved chore points (plus an optional signed parent
@@ -819,7 +819,18 @@ class BankService:
         (kid, week) via a CashTransaction(ALLOWANCE, week_of=that week) existence
         check — not last_chore_paycheck_week, which only remembers the most
         recent release and can't represent an out-of-order past one. Route
-        enforces role/tenant and the premium gate (passed as ``entitled``)."""
+        enforces role/tenant and the premium gate (passed as ``entitled``).
+
+        ``top_up=True`` is the ONE way past that 409, and it is a different
+        operation, not a softer release: it pays ``adjustment_cents`` and only
+        that, as its own ALLOWANCE row on the same week. It never recomputes
+        the base, so retroactive chore credit landing on an already-paid week
+        (mark_done_for_kid's ``week_already_paid``) can be trued up without the
+        base going out a second time. It is spelled as its own flag rather than
+        inferred from ``adjustment_cents != 0`` because a first release WITH a
+        bonus is an existing, legitimate call — inferring would turn a
+        double-submitted release-with-bonus form into a silent second payment,
+        which is exactly what the 409 exists to prevent."""
         user = await _get_user_locked(db, target_user.id)
         acct = await _get_or_create_account_locked(db, user, family_id)
         if acct.allowance_mode not in CHORE_PAYCHECK_MODES:
@@ -842,6 +853,13 @@ class BankService:
                 CashTransaction.week_of == week_monday,
             ).limit(1)
         )).scalar_one_or_none()
+        if top_up:
+            return await BankService._top_up_chore_paycheck(
+                db, user, acct, family_id, week_monday,
+                adjustment_cents=adjustment_cents,
+                entitled=entitled,
+                already_paid=already_paid is not None,
+            )
         if already_paid is not None:
             raise HTTPException(
                 status_code=409,
@@ -912,6 +930,75 @@ class BankService:
             "assigned_points": units_to_points(assigned),
             "amount_cents": amount,
             "points_converted": points_converted,
+        }
+
+    @staticmethod
+    async def _top_up_chore_paycheck(
+        db: AsyncSession, user: User, acct: KidBankAccount, family_id: UUID,
+        week_monday: date, *, adjustment_cents: int, entitled: bool,
+        already_paid: bool,
+    ) -> dict:
+        """Pay a parent-typed shortfall onto a week whose paycheck already went
+        out. Writes ONE thing: ``adjustment_cents`` as its own ALLOWANCE row on
+        that week. Deliberately does not touch _chore_units, the allowance cap,
+        or the points_rate conversion — this is not "release the week again
+        with a number added", it is a correction, so re-deriving the base here
+        would put the base back on the wire and double-pay it.
+
+        Caller has already taken the user + account row locks.
+        """
+        if not already_paid:
+            # Not a side door around the release itself. Paying only the
+            # adjustment on an unreleased week would leave the base — the money
+            # the kid actually earned — permanently unpaid, because the row
+            # this writes is exactly what makes the week look released.
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "no chore paycheck released for this week yet — "
+                    "release it before topping it up"
+                ),
+            )
+        if adjustment_cents <= 0:
+            # Zero would write a second ALLOWANCE row worth nothing; a negative
+            # is a claw-back, which credit_split_rows cannot express (it
+            # collapses a non-positive credit into a $0 spend row and would
+            # silently pay nothing). Docks go through POST /api/cash/{id}/adjust,
+            # which owns the jar cascade.
+            raise HTTPException(
+                status_code=422,
+                detail="top_up requires a positive adjustment_cents",
+            )
+        CashService.credit_split_rows(
+            db, user, acct, family_id, adjustment_cents,
+            CashTransactionType.ALLOWANCE, entitled=entitled,
+            description=(
+                f"Ajuste del domingo por tareas (semana {week_monday.isoformat()})"
+            ),
+            week_of=week_monday,
+        )
+        await db.commit()
+        await db.refresh(acct)
+
+        done, assigned, _ = await BankService._chore_units(
+            db, family_id, user.id, week_monday
+        )
+        try:
+            await NotificationService.create_localized(
+                db, family_id=family_id, key="chore_paycheck_topup",
+                user_id=user.id,
+                params={"amount": _fmt_mxn(adjustment_cents)}, link="/bank",
+            )
+        except Exception:
+            logger.exception("chore-paycheck top-up notification failed for %s", user.id)
+        return {
+            "user_id": user.id,
+            "week_of": week_monday,
+            "done_points": units_to_points(done),
+            "assigned_points": units_to_points(assigned),
+            # What THIS call paid — not the week's running total.
+            "amount_cents": adjustment_cents,
+            "points_converted": 0,
         }
 
     @staticmethod

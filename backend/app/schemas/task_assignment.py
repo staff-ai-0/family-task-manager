@@ -174,9 +174,11 @@ class MarkDoneForKidResponse(BaseModel):
     assignment_id: UUID
     week_of: date
     # True when that week's chore paycheck was already released. Points still
-    # credit on grading, but the cash CANNOT be topped up —
-    # release_chore_paycheck is idempotent per (kid, week) — so the caller must
-    # surface this instead of letting the kid be quietly short-changed.
+    # credit on grading, but no cash follows on its own — release_chore_paycheck
+    # is idempotent per (kid, week) and a plain re-release 409s. The caller must
+    # surface this instead of letting the kid be quietly short-changed; the fix
+    # is a top-up release (POST /api/bank/chore-paycheck/{kid}/release with
+    # top_up=true + positive adjustment_cents).
     week_already_paid: bool
 
 
