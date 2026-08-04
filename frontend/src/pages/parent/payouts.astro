@@ -238,9 +238,32 @@ const dayLabel = (iso: string): string =>
                                                 <p class="text-2xl font-extrabold text-brand-mint-deep">{fmt(w.amount_cents)}</p>
                                                 <div data-release-slot class="flex flex-col items-end gap-1 mt-1">
                                                     {w.already_released ? (
-                                                        <span class="text-xs font-bold text-brand-mint-deep">
-                                                            {lang === "es" ? "Liberado ✓" : "Released ✓"}
-                                                        </span>
+                                                        <>
+                                                            <span class="text-xs font-bold text-brand-mint-deep">
+                                                                {lang === "es" ? "Liberado ✓" : "Released ✓"}
+                                                            </span>
+                                                            {/* A retroactively-approved chore lands on a week that
+                                                                may already be paid, and the paycheck is idempotent
+                                                                per (kid, week) — so grading credits points but no
+                                                                cash. This is the only way to make that up without
+                                                                leaving the week's ledger. */}
+                                                            <div class="flex items-center gap-1.5">
+                                                                <label
+                                                                    class="text-[11px] text-brand-ink-soft"
+                                                                    title={lang === "es"
+                                                                        ? "Pago adicional sobre una semana ya liberada — se registra como su propio movimiento"
+                                                                        : "Extra payment on an already-released week — recorded as its own ledger entry"}
+                                                                >
+                                                                    {lang === "es" ? "+ Extra $" : "+ Extra $"}
+                                                                </label>
+                                                                <input type="number" step="1" min="1" placeholder="0" data-topup-amount
+                                                                    class="w-14 rounded-lg border border-brand-ink/20 bg-white px-1.5 py-1 text-xs text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep" />
+                                                                <button type="button" data-topup
+                                                                    class="px-2.5 py-1.5 border border-brand-mint-deep text-brand-mint-deep hover:bg-brand-mint/10 font-semibold text-xs rounded-lg transition-colors">
+                                                                    {lang === "es" ? "Pagar" : "Pay"}
+                                                                </button>
+                                                            </div>
+                                                        </>
                                                     ) : (
                                                         <>
                                                             <div class="flex items-center gap-1.5">
@@ -387,6 +410,67 @@ const dayLabel = (iso: string): string =>
             pay(Math.round(pesos * 100));
         });
         payAllBtn.addEventListener("click", () => pay(currentBalanceCents()));
+    });
+
+    // ── Top up an ALREADY-RELEASED week ──────────────────────────────────
+    // Separate from the release loop below, which bails when there is no
+    // [data-release] button — which is exactly every released row.
+    document.querySelectorAll("[data-paycheck-row]").forEach((row) => {
+        const topBtn = row.querySelector("[data-topup]");
+        if (!topBtn) return;
+        const weekOf = row.getAttribute("data-week-of");
+        const kidId = row.getAttribute("data-kid-id");
+        const amountEl = row.querySelector("[data-topup-amount]");
+        const msgEl = row.querySelector("[data-msg]");
+
+        const say = (text, isError) => {
+            if (!msgEl) return;
+            msgEl.textContent = text;
+            msgEl.classList.remove("hidden");
+            msgEl.classList.toggle("text-red-600", Boolean(isError));
+        };
+
+        topBtn.addEventListener("click", async () => {
+            const cents = Math.round((parseFloat(amountEl?.value || "0") || 0) * 100);
+            // The API rejects a non-positive top-up; say so here rather than
+            // spending a round trip to be told.
+            if (cents <= 0) {
+                say(lang === "es"
+                    ? "Escribe un monto mayor a 0."
+                    : "Enter an amount greater than 0.", true);
+                return;
+            }
+            const original = topBtn.textContent;
+            topBtn.disabled = true;
+            topBtn.textContent = "…";
+            try {
+                const res = await fetch(`/api/bank/chore-paycheck/${kidId}/release`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        week_of: weekOf,
+                        adjustment_cents: cents,
+                        top_up: true,
+                    }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    say(data.detail || `Error ${res.status}`, true);
+                    topBtn.disabled = false;
+                    topBtn.textContent = original;
+                    return;
+                }
+                say(lang === "es"
+                    ? `Pago extra de ${fmt(cents)} registrado.`
+                    : `Extra payment of ${fmt(cents)} recorded.`, false);
+                // Reload so the balance and the week's history reflect it.
+                setTimeout(() => window.location.reload(), 900);
+            } catch {
+                say(lang === "es" ? "Error de red." : "Network error.", true);
+                topBtn.disabled = false;
+                topBtn.textContent = original;
+            }
+        });
     });
 
     // ── Release a specific outstanding week's chore paycheck ─────────────
