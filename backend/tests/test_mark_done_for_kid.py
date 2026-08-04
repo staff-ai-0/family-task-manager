@@ -191,6 +191,63 @@ async def test_beyond_the_lookback_window_is_rejected(
 
 
 @pytest.mark.asyncio
+async def test_the_horizon_matches_the_window_it_claims_to_match(
+    db_session, test_family, test_child_user, test_parent_user
+):
+    """The cut-off must be the one list_outstanding_weeks actually enforces.
+
+    The old rule was "56 days from assigned_date"; the window is
+    `range(lookback_weeks - 1, ...)` off the current MONDAY, so its oldest
+    visible week is current_monday - 49 days. A chore dated 50-56 days back
+    therefore passed the guard and landed in the review queue for a week the
+    parent's payout screen will never list — cash that can never be released.
+    Both halves are asserted against list_outstanding_weeks itself, so the two
+    rules cannot drift apart again.
+    """
+    from app.services.bank_service import BankService
+
+    tpl = await _chore_template(db_session, test_family)
+    monday = await current_week_monday(db_session, test_family.id)
+    acct = await BankService.ensure_account(db_session, test_child_user)
+    acct.allowance_mode = "chore_proportional"
+    acct.allowance_cents = 25000
+    await db_session.commit()
+
+    # One week older than the oldest week the payout screen can show. Dated on
+    # that week's SUNDAY so it is at most 56 days from today — i.e. the old
+    # assigned_date rule accepted it.
+    too_old = await _assignment(
+        db_session, test_family, test_child_user, tpl,
+        on=monday - timedelta(days=50),
+    )
+    listed = {w["week_of"] for w in await BankService.list_outstanding_weeks(
+        db_session, test_child_user, test_family.id
+    )}
+    assert too_old.week_of not in listed, "fixture is not actually out of window"
+    with pytest.raises(ValidationException):
+        await TaskAssignmentService.mark_done_for_kid(
+            db_session, assignment_id=too_old.id, family_id=test_family.id,
+            parent_id=test_parent_user.id, note="ok",
+        )
+
+    # The oldest week the payout screen DOES show is still markable.
+    oldest_ok = await _assignment(
+        db_session, test_family, test_child_user, tpl,
+        on=monday - timedelta(days=49),
+    )
+    listed = {w["week_of"] for w in await BankService.list_outstanding_weeks(
+        db_session, test_child_user, test_family.id
+    )}
+    assert oldest_ok.week_of in listed
+    await TaskAssignmentService.mark_done_for_kid(
+        db_session, assignment_id=oldest_ok.id, family_id=test_family.id,
+        parent_id=test_parent_user.id, note="ok",
+    )
+    await db_session.refresh(oldest_ok)
+    assert oldest_ok.approval_status == ApprovalStatus.PENDING
+
+
+@pytest.mark.asyncio
 async def test_a_future_dated_chore_is_rejected(
     db_session, test_family, test_child_user, test_parent_user
 ):

@@ -65,6 +65,14 @@ ALLOWANCE_MODES = ("flat", "chore_proportional", "chore_gated", "points_rate")
 # payday sweep) after the week's chores are reviewed.
 CHORE_PAYCHECK_MODES = ("chore_proportional", "chore_gated", "points_rate")
 
+# How many weeks back the parent's outstanding-paycheck screen reaches,
+# counting the current one. THE single source for that horizon: anything that
+# wants to know "can this week still be paid?" must derive from
+# BankService.oldest_outstanding_week rather than restate the number, since a
+# second copy is exactly how a chore ended up markable into a week the payout
+# screen would never list.
+PAYCHECK_LOOKBACK_WEEKS = 8
+
 # Config fields a parent may upsert (jar balances are NEVER settable here).
 _SETTINGS_FIELDS = (
     "allowance_cents",
@@ -374,6 +382,24 @@ class BankService:
         return d - timedelta(days=d.weekday())
 
     @staticmethod
+    async def oldest_outstanding_week(
+        db: AsyncSession, family_id: UUID,
+        lookback_weeks: int = PAYCHECK_LOOKBACK_WEEKS,
+    ) -> date:
+        """Monday of the oldest week list_outstanding_weeks can ever list.
+
+        The loop below runs `range(lookback_weeks - 1, -1, -1)` off the
+        CURRENT week's Monday, so the floor is `current_monday -
+        (lookback_weeks - 1)` weeks — measured week-to-week, not as N days
+        back from today. Exposed because callers that gate work on "is this
+        week still payable?" must ask the window rather than re-derive it.
+        """
+        today = await BankService._family_local_today(db, family_id)
+        return BankService._week_monday(today) - timedelta(
+            weeks=lookback_weeks - 1
+        )
+
+    @staticmethod
     async def _chore_units(
         db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date
     ) -> tuple[int, int, int]:
@@ -605,7 +631,7 @@ class BankService:
     @staticmethod
     async def list_outstanding_weeks(
         db: AsyncSession, target_user: User, family_id: UUID,
-        lookback_weeks: int = 8,
+        lookback_weeks: int = PAYCHECK_LOOKBACK_WEEKS,
     ) -> list[dict]:
         """Every unreleased chore-paycheck week for a kid, oldest first. A
         week counts as released when a CashTransaction(ALLOWANCE, week_of=

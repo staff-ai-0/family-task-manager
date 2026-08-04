@@ -2063,8 +2063,14 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 f"({assignment.approval_status.value})"
             )
 
-        # Same 8-week horizon list_outstanding_weeks already uses, rather than
-        # a second competing rule. A months-old chore should not pay out.
+        # The cut-off is the payout window itself, asked of the window rather
+        # than restated: a task may only be marked done into a week the
+        # parent's outstanding-paycheck screen can still list. The old rule
+        # ("56 days from assigned_date") was a second, WIDER number —
+        # list_outstanding_weeks counts whole weeks off the current Monday, so
+        # its floor is 49 days from that Monday. A chore 50-56 days old passed
+        # the guard and landed in the review queue for a week nobody could
+        # ever release cash for.
         from app.services.bank_service import BankService
 
         today = await BankService._family_local_today(db, family_id)
@@ -2079,10 +2085,14 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "hecha todavía / This task is scheduled for a future day — "
                 "it cannot be marked done yet"
             )
-        if (today - assignment.assigned_date).days > 8 * 7:
+        oldest_payable_week = await BankService.oldest_outstanding_week(
+            db, family_id
+        )
+        if BankService._week_monday(assignment.week_of) < oldest_payable_week:
             raise ValidationException(
                 "Esta tarea es demasiado antigua para marcarla como hecha "
-                "(más de 8 semanas) / Too old to mark done (over 8 weeks)"
+                "(su semana ya salió del periodo de pago) / Too old to mark "
+                "done (its week is past the payout window)"
             )
 
         # Money edge: release_chore_paycheck is idempotent on a
