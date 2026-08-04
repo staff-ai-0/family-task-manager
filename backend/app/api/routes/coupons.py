@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import require_parent_role
-from app.core.rate_limiter import COUPON_LIMIT, limiter
+from app.core.rate_limiter import charge_coupon_attempt
 from app.models.user import User
 from app.schemas.coupon import (
     CouponSummary,
@@ -30,14 +30,21 @@ _ALREADY_REDEEMED_DETAIL = {"error": "already_redeemed"}
 
 
 @router.post("/coupons/redeem", response_model=CreditResponse)
-@limiter.limit(COUPON_LIMIT)
 async def redeem_coupon(
     request: Request,
     payload: RedeemCouponRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_parent_role),
 ) -> CreditResponse:
-    """Redeem a coupon code into a plan credit for the caller's family."""
+    """Redeem a coupon code into a plan credit for the caller's family.
+
+    Charged manually instead of via ``@limiter.limit``: the budget is shared
+    with the coupon branch of register-family (a decorator's bucket is scoped
+    to one endpoint, which is what let signup guess codes 60x faster), and
+    being authenticated here means it can also charge the un-rotatable
+    family_id, not only the client IP.
+    """
+    charge_coupon_attempt(request, family_id=current_user.family_id)
     try:
         coupon, grant = await CouponService.redeem(
             db, family_id=current_user.family_id, code=payload.code

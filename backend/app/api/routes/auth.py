@@ -38,7 +38,12 @@ from app.core.security import (
     decode_token,
     oauth2_scheme,
 )
-from app.core.rate_limiter import limiter, AUTH_LIMIT, EMAIL_LIMIT
+from app.core.rate_limiter import (
+    limiter,
+    AUTH_LIMIT,
+    EMAIL_LIMIT,
+    charge_coupon_attempt,
+)
 
 router = APIRouter()
 
@@ -87,6 +92,20 @@ async def register_family(
     vs. new-family founding, consent + approval-status handling, referral
     crediting). This route is dependency injection + rate limiting only.
     """
+    # A coupon here reaches the same CouponService.redeem as the dedicated
+    # redeem endpoint, so it must cost the same scarce budget — AUTH_LIMIT
+    # alone would allow 600 guesses/hour against deliberately guessable
+    # launch codes, with `coupon_applied` in the 201 as the oracle.
+    #
+    # Only on the branch that carries a code: couponless signup (nearly all
+    # of them) is untouched and keeps its existing AUTH_LIMIT behavior
+    # exactly. Deliberately charged before AuthService runs, so a refused
+    # attempt leaves no half-made family behind. Slightly broader than the
+    # service's own condition (which also requires no family_code / no
+    # pending invite) — erring toward charging is the safe direction, and a
+    # join-by-code signup that carries a coupon is not a real flow.
+    if data.coupon:
+        charge_coupon_attempt(request)
     return await AuthService.register_family(db, data)
 
 
