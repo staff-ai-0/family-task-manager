@@ -330,13 +330,19 @@ class AdminReadService:
                 ),
                 "join_code": family.join_code,
                 "referral_code": family.referral_code,
+                # Queued grants included on purpose (visible_grants, not
+                # active_grants): comps stack, so an operator who cannot see
+                # the comp they just queued behind a paid period clicks again
+                # and adds another 30 free days. starts_at lets the console
+                # say "pending".
                 "active_credits": [
                     {
                         "tier": g.tier,
                         "source": g.source,
+                        "starts_at": g.starts_at.isoformat() if g.starts_at else None,
                         "ends_at": g.ends_at.isoformat() if g.ends_at else None,
                     }
-                    for g in await PlanCreditService.active_grants(db, family.id)
+                    for g in await PlanCreditService.visible_grants(db, family.id)
                 ],
                 # NULL means ALL modules on, not none. Rendered verbatim so
                 # the UI can say so explicitly rather than showing "0 modules".

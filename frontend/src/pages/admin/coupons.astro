@@ -370,10 +370,64 @@ const shortDate = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
                         // textContent, never innerHTML: family_name is
                         // user-supplied and this is the operator console.
                         const line = document.createElement("div");
-                        line.textContent =
+                        const label = document.createElement("span");
+                        label.textContent =
                             `${r.family_name} · ${r.tier} · ` +
                             `${r.ends_at ? r.ends_at.slice(0, 10) : "lifetime"}` +
                             `${r.revoked_at ? " · revoked" : ""}`;
+                        line.appendChild(label);
+
+                        // Without this the console can never produce the
+                        // "· revoked" state it renders, and the family page's
+                        // "individually revocable" copy is a promise only curl
+                        // can keep.
+                        if (!r.revoked_at) {
+                            const btn = document.createElement("button");
+                            btn.type = "button";
+                            btn.className = "ml-2 text-red-600 underline";
+                            btn.textContent = "Revoke";
+                            btn.addEventListener("click", async () => {
+                                const reason = window.prompt(
+                                    `Revoke this credit for ${r.family_name}? Reason (audited):`,
+                                );
+                                // Cancel, or a reason too short for the API's
+                                // min_length=3 — do not fire a doomed request.
+                                if (reason === null) return;
+                                if (reason.trim().length < 3) {
+                                    window.alert("A reason of at least 3 characters is required.");
+                                    return;
+                                }
+                                btn.disabled = true;
+                                btn.textContent = "…";
+                                try {
+                                    const res = await fetch(
+                                        `/api/admin/credits/${r.grant_id}/revoke`,
+                                        {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ reason: reason.trim() }),
+                                        },
+                                    );
+                                    if (res.ok) {
+                                        label.textContent = `${label.textContent} · revoked`;
+                                        btn.remove();
+                                        return;
+                                    }
+                                    window.alert(
+                                        res.status === 409
+                                            ? "That credit was already revoked."
+                                            : res.status === 404
+                                                ? "That credit no longer exists."
+                                                : "Could not revoke the credit.",
+                                    );
+                                } catch (e) {
+                                    window.alert(`Request failed: ${e}`);
+                                }
+                                btn.disabled = false;
+                                btn.textContent = "Revoke";
+                            });
+                            line.appendChild(btn);
+                        }
                         target.appendChild(line);
                     }
                 } catch (e) {

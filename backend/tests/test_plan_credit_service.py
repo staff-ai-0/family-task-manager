@@ -250,6 +250,135 @@ async def test_credit_begins_after_a_paid_period(db_session, test_family):
 
 
 @pytest.mark.asyncio
+async def test_credit_does_not_defer_behind_a_grace_expired_subscription(
+    db_session, test_family
+):
+    """premium already treats a grace-expired payment_failed sub as free, so
+    deferring a credit behind its period end would push the code out past a
+    window the family is not actually being entitled by — and the sweep that
+    fixes the STATUS never comes back to fix a starts_at already written."""
+    from app.core.config import settings
+    from app.models.subscription import FamilySubscription, SubscriptionPlan
+
+    plan = SubscriptionPlan(
+        name="plus", display_name="Plus", display_name_es="Plus",
+        currency="USD", price_monthly_cents=500, price_annual_cents=5_000,
+        limits={}, is_active=True, sort_order=10,
+    )
+    db_session.add(plan)
+    await db_session.flush()
+
+    paid_end = datetime.now(timezone.utc) + timedelta(days=20)
+    db_session.add(
+        FamilySubscription(
+            family_id=test_family.id,
+            plan_id=plan.id,
+            billing_cycle="monthly",
+            status="payment_failed",
+            paypal_subscription_id="I-LAPSED",
+            # Period still runs, but grace ran out and the sweep hasn't run.
+            current_period_end=paid_end,
+            payment_failure_at=(
+                datetime.now(timezone.utc)
+                - timedelta(days=settings.BILLING_GRACE_DAYS + 1)
+            ),
+        )
+    )
+    await db_session.commit()
+
+    before = datetime.now(timezone.utc)
+    row = await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="coupon",
+        tier="plus", duration_days=30,
+    )
+    await db_session.commit()
+
+    # Must start NOW. Asserting `>= before` alone would be vacuous — the
+    # deferred value (20 days out) satisfies that too; the upper bound is
+    # what actually distinguishes the two behaviors.
+    assert before <= row.starts_at < before + timedelta(minutes=1)
+    assert row.starts_at != paid_end
+
+
+@pytest.mark.asyncio
+async def test_credit_still_defers_behind_a_sub_inside_its_grace_window(
+    db_session, test_family
+):
+    """The mirror of the test above: a payer whose payment just failed is
+    still entitled during grace, so their gift must still queue behind it."""
+    from app.models.subscription import FamilySubscription, SubscriptionPlan
+
+    plan = SubscriptionPlan(
+        name="plus", display_name="Plus", display_name_es="Plus",
+        currency="USD", price_monthly_cents=500, price_annual_cents=5_000,
+        limits={}, is_active=True, sort_order=10,
+    )
+    db_session.add(plan)
+    await db_session.flush()
+
+    paid_end = datetime.now(timezone.utc) + timedelta(days=20)
+    db_session.add(
+        FamilySubscription(
+            family_id=test_family.id,
+            plan_id=plan.id,
+            billing_cycle="monthly",
+            status="payment_failed",
+            paypal_subscription_id="I-DUNNING",
+            current_period_end=paid_end,
+            payment_failure_at=datetime.now(timezone.utc),  # just now
+        )
+    )
+    await db_session.commit()
+
+    row = await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="coupon",
+        tier="plus", duration_days=30,
+    )
+    await db_session.commit()
+
+    assert row.starts_at == paid_end
+
+
+@pytest.mark.asyncio
+async def test_visible_grants_include_a_queued_one(db_session, test_family):
+    """A queued grant must be reportable, or a successful redeem/comp looks
+    like a no-op and gets repeated — and comps stack."""
+    first = await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="coupon",
+        tier="plus", duration_days=30,
+    )
+    await db_session.commit()
+    second = await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="coupon",
+        tier="plus", duration_days=30,
+    )
+    await db_session.commit()
+
+    active = await PlanCreditService.active_grants(db_session, test_family.id)
+    visible = await PlanCreditService.visible_grants(db_session, test_family.id)
+
+    # The queued one is deliberately absent from the ENTITLEMENT query...
+    assert [g.id for g in active] == [first.id]
+    # ...and present, in window order, in the one the UI reads.
+    assert [g.id for g in visible] == [first.id, second.id]
+
+
+@pytest.mark.asyncio
+async def test_visible_grants_exclude_revoked_and_expired(
+    db_session, test_family
+):
+    revoked = await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="operator",
+        tier="pro", duration_days=30,
+    )
+    await db_session.commit()
+    await PlanCreditService.revoke(db_session, grant_id=revoked.id)
+    await db_session.commit()
+
+    assert await PlanCreditService.visible_grants(db_session, test_family.id) == []
+
+
+@pytest.mark.asyncio
 async def test_floor_tier_picks_the_highest_active_grant(db_session, test_family):
     await PlanCreditService.grant(
         db_session, family_id=test_family.id, source="referral",

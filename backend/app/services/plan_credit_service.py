@@ -16,7 +16,11 @@ from uuid import UUID
 from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.premium import ENTITLED_STATUSES, PLAN_ORDER
+from app.core.premium import (
+    ENTITLED_STATUSES,
+    PLAN_ORDER,
+    _payment_failed_within_grace,
+)
 from app.models.plan_credit import CREDIT_SOURCES, PlanCreditGrant
 from app.models.subscription import FamilySubscription, SubscriptionPlan
 
@@ -56,6 +60,40 @@ class PlanCreditService:
                         PlanCreditGrant.ends_at > now,
                     ),
                 )
+            )
+        ).scalars().all()
+        return list(rows)
+
+    @staticmethod
+    async def visible_grants(
+        db: AsyncSession, family_id: UUID
+    ) -> list[PlanCreditGrant]:
+        """Grants worth SHOWING: the active ones plus the queued ones.
+
+        Deliberately NOT the entitlement query — `active_grants` owns that,
+        and adding queued rows there would hand out a tier before its window
+        opens. This exists because the >=-tier rule makes queuing normal: a
+        second Plus code, or any comp handed to a payer, starts in the
+        future. Reading only `active_grants` renders those as nothing at
+        all, so a successful redemption looks like a no-op (the family
+        retries and gets 409) and a successful comp looks unapplied (the
+        operator clicks again, and comps STACK — every click is another 30
+        free days). Callers must render `starts_at` so a queued grant reads
+        as pending rather than live.
+        """
+        now = datetime.now(timezone.utc)
+        rows = (
+            await db.execute(
+                select(PlanCreditGrant)
+                .where(
+                    PlanCreditGrant.family_id == family_id,
+                    PlanCreditGrant.revoked_at.is_(None),
+                    or_(
+                        PlanCreditGrant.ends_at.is_(None),
+                        PlanCreditGrant.ends_at > now,
+                    ),
+                )
+                .order_by(PlanCreditGrant.starts_at)
             )
         ).scalars().all()
         return list(rows)
@@ -149,9 +187,20 @@ class PlanCreditService:
         ).one_or_none()
         if sub_row is not None:
             sub, paid_plan_name = sub_row
+            # The grace check has to match premium's, not just ENTITLED_STATUSES:
+            # a grace-EXPIRED payment_failed sub still carries that status until
+            # the daily sweep flips it, and premium already treats such a family
+            # as free. Deferring behind it would push a code the family redeems
+            # in that window out to a period end they are not being entitled by
+            # — and unlike the status, the starts_at we bake into the grant row
+            # is not something the sweep comes back and fixes.
             if (
                 sub.paypal_subscription_id
                 and sub.status in ENTITLED_STATUSES
+                and not (
+                    sub.status == "payment_failed"
+                    and not _payment_failed_within_grace(sub)
+                )
                 and PLAN_ORDER.get(paid_plan_name, 0) >= PLAN_ORDER[tier]
             ):
                 paid_end = _aware(sub.current_period_end)

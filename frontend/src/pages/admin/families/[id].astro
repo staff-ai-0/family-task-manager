@@ -107,7 +107,15 @@ const shortDT = (iso: string | null) =>
                     <dd class="num">
                         {overview.active_credits?.length
                             ? overview.active_credits
-                                  .map((c: any) => `${c.tier} · ${c.source} · ${c.ends_at?.slice(0, 10) ?? "lifetime"}`)
+                                  .map((c: any) =>
+                                      // A grant queued behind a paid period or another
+                                      // credit is listed as pending, not omitted: comps
+                                      // STACK, so an operator who cannot see the one they
+                                      // just issued clicks again and gives away 30 more days.
+                                      c.starts_at && Date.parse(c.starts_at) > Date.now()
+                                          ? `${c.tier} · ${c.source} · pending, starts ${c.starts_at.slice(0, 10)}`
+                                          : `${c.tier} · ${c.source} · ${c.ends_at?.slice(0, 10) ?? "lifetime"}`,
+                                  )
                                   .join(", ")
                             : "—"}
                     </dd>

@@ -130,8 +130,13 @@ const currentPlanName = (current?.plan?.name ?? current?.plan_name ?? "free").to
 // says "PRO free until …". A credit only ever raises the shown tier — a real
 // paid sub of equal/higher tier wins unchanged — and isPaid/cancel stay keyed
 // to the REAL subscription (a credit has no PayPal sub to cancel).
+// /credits returns QUEUED grants too (a second code of the same tier starts
+// when the first ends), so the floor must use only the ones already running —
+// a queued Pro credit must not show the family as Pro before its window opens.
+const nowMs = Date.now();
+const isLive = (c: any) => !c.starts_at || Date.parse(c.starts_at) <= nowMs;
 const TIER_RANK: Record<string, number> = { free: 0, plus: 1, pro: 2 };
-const creditTier = credits.reduce(
+const creditTier = credits.filter(isLive).reduce(
     (best: string, c: any) =>
         (TIER_RANK[c.tier] ?? 0) > (TIER_RANK[best] ?? 0) ? c.tier : best,
     "free",
@@ -186,6 +191,7 @@ const i18n = {
         cancel_confirm: "Are you sure you want to cancel your subscription?",
         support_prompt: "Questions about your plan or billing? Email us at",
         credit_banner_until: "free until",
+        credit_banner_starts: "starts",
         credit_banner_lifetime: "for life",
         credit_source_coupon: "coupon",
         credit_source_referral: "referral",
@@ -235,6 +241,7 @@ const i18n = {
         cancel_confirm: "\u00bfEst\u00e1s seguro de que quieres cancelar tu suscripci\u00f3n?",
         support_prompt: "\u00bfDudas sobre tu plan o facturaci\u00f3n? Escr\u00edbenos a",
         credit_banner_until: "gratis hasta el",
+        credit_banner_starts: "empieza el",
         credit_banner_lifetime: "de por vida",
         credit_source_coupon: "cup\u00f3n",
         credit_source_referral: "referido",
@@ -400,9 +407,11 @@ function cellClass(value: any): string {
                         {credits.map((c: any) => (
                             <li>
                                 <strong class="uppercase">{c.tier}</strong>{" "}
-                                {c.lifetime
-                                    ? l.credit_banner_lifetime
-                                    : `${l.credit_banner_until} ${fmtDate(c.ends_at, lang, user.timezone, { year: "numeric", month: "long", day: "numeric" })}`}
+                                {!isLive(c)
+                                    ? `${l.credit_banner_starts} ${fmtDate(c.starts_at, lang, user.timezone, { year: "numeric", month: "long", day: "numeric" })}`
+                                    : c.lifetime
+                                        ? l.credit_banner_lifetime
+                                        : `${l.credit_banner_until} ${fmtDate(c.ends_at, lang, user.timezone, { year: "numeric", month: "long", day: "numeric" })}`}
                                 <span class="opacity-70">
                                     {" "}· {c.source === "coupon"
                                         ? l.credit_source_coupon

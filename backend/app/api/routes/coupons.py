@@ -68,8 +68,14 @@ async def list_credits(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_parent_role),
 ) -> list[CreditResponse]:
-    """Active plan credits for the caller's family (drives the UI banner)."""
-    grants = await PlanCreditService.active_grants(db, current_user.family_id)
+    """Plan credits for the caller's family (drives the UI banner).
+
+    Includes QUEUED grants, not just live ones: under the >=-tier rule a
+    second code of the same tier starts when the first ends, and without
+    it a successful redemption would leave the page byte-identical — the
+    family would retry and get a 409. `starts_at` distinguishes them.
+    """
+    grants = await PlanCreditService.visible_grants(db, current_user.family_id)
     return [
         CreditResponse(
             id=g.id,

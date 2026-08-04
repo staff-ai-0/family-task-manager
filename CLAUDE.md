@@ -224,9 +224,16 @@ grant's tier, and a higher paid plan always wins. Credit is INTERNAL — no
 PayPal object is created and no PayPal-linked column is written, so the
 nightly reconcile sweep cannot erase it. Windows are ADDITIVE **at or above
 the granted tier**: a grant starts at the first moment the family is not
-already entitled at `>=` its own tier — it queues behind active grants of
-tier `>=` its own, and defers behind a live paid period only when the paid
-tier is `>=` the granted tier. So two 30-day Plus codes give 60 days, a
+already entitled at `>=` its own tier — it queues behind every unrevoked
+*dated* grant of tier `>=` its own (**including ones that have not started
+yet**, which is what makes stacking additive; lifetime grants are NOT
+anchors, so a code redeemed under lifetime Pro burns in parallel for
+nothing), and defers behind a live paid period only when the paid tier is
+`>=` the granted tier **and** that subscription is genuinely entitling —
+a `payment_failed` sub past its grace window is treated as free here, the
+same as in `premium`, because the sweep that later fixes the *status* never
+revisits a `starts_at` already written. So two 30-day Plus codes give 60
+days, a
 payer's free month begins after the time they already bought, but a Pro comp
 handed to a Plus subscriber starts NOW rather than waiting out a plan it
 outranks. Operator comps therefore STACK; the old absolute "Plus until X"

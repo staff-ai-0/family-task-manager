@@ -65,6 +65,11 @@ def downgrade() -> None:
             WHERE revoked_at IS NULL
               AND ends_at IS NOT NULL
               AND ends_at > now()
+              -- Queued grants excluded: the old column meant "entitled
+              -- until", with no notion of a window that has not opened,
+              -- so counting one would hand back entitlement the family
+              -- does not have yet.
+              AND starts_at <= now()
             GROUP BY family_id
         ) sub
         WHERE f.id = sub.family_id
