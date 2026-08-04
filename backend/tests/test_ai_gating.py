@@ -23,6 +23,7 @@ from httpx import AsyncClient
 
 from app.models.a2a import FamilyA2AWebhook
 from app.models.jarvis_schedule import JarvisSchedule
+from app.models.subscription import SubscriptionPlan
 
 
 def _assert_upgrade_required(r):
@@ -447,3 +448,101 @@ async def test_bank_sync_create_uses_ai_for_plus(
     )
     assert r.status_code == 200, r.text
     assert suggest.await_count == 1
+
+
+# ---------------------------------------------------------------------------
+# 7. Plan credit (coupons / referrals / operator comps) reaches the same gate
+#    a paying customer does — and revoking it re-locks the feature.
+# ---------------------------------------------------------------------------
+
+def _plan_row(name: str, *, ai_features: bool) -> SubscriptionPlan:
+    """A minimal active plan row. Gating resolves by ``name`` only, so the
+    prices are decoration; ``limits`` and ``is_active`` are what matter
+    (``premium._tier_floor_plan`` filters on ``is_active``)."""
+    paid = name != "free"
+    return SubscriptionPlan(
+        name=name,
+        display_name=name.capitalize(),
+        display_name_es="Gratis" if name == "free" else name.capitalize(),
+        currency="USD",
+        price_monthly_cents=500 if paid else 0,
+        price_annual_cents=5_000 if paid else 0,
+        limits={"ai_features": ai_features},
+        is_active=True,
+        sort_order=10 if paid else 0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_coupon_credit_unlocks_a_gated_feature(
+    db_session, test_parent_user, test_family
+):
+    """The whole point of a coupon: a free family gets real entitlements.
+
+    Gating resolves through premium.get_family_plan, so this is the test
+    that proves the credit path is wired to the same gate paying customers
+    use. A real 'free' row is seeded alongside the 'plus' one so the
+    assertion exercises the credit FLOOR beating an actual free plan — not
+    merely the absence of a free row. Remove the floor branch in
+    get_family_plan_by_id and this resolves to free (ai_features False),
+    which makes require_feature raise 403 instead of returning.
+    """
+    from app.core.premium import require_feature
+    from app.services.plan_credit_service import PlanCreditService
+
+    db_session.add_all(
+        [_plan_row("free", ai_features=False), _plan_row("plus", ai_features=True)]
+    )
+    await db_session.flush()
+    await PlanCreditService.grant(
+        db_session,
+        family_id=test_family.id,
+        source="coupon",
+        tier="plus",
+        duration_days=30,
+    )
+    await db_session.commit()
+
+    plan = await require_feature("ai_features", db_session, test_parent_user)
+    assert plan.name == "plus"
+    # Limits must come from the Plus row, not just the name saying "plus".
+    assert plan.limits["ai_features"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_revoked_credit_re_locks_the_feature(
+    db_session, test_parent_user, test_family
+):
+    """Revoking is the operator's undo, and it must reach the gate.
+
+    Same seed as above, so the only difference is the revoke call: if
+    PlanCreditService.revoke stops setting revoked_at (or scopes the lookup
+    wrongly and silently returns None), the grant stays active,
+    require_feature returns the Plus plan, and pytest.raises fails.
+    """
+    from fastapi import HTTPException
+
+    from app.core.premium import require_feature
+    from app.services.plan_credit_service import PlanCreditService
+
+    db_session.add_all(
+        [_plan_row("free", ai_features=False), _plan_row("plus", ai_features=True)]
+    )
+    await db_session.flush()
+    grant = await PlanCreditService.grant(
+        db_session,
+        family_id=test_family.id,
+        source="coupon",
+        tier="plus",
+        duration_days=30,
+    )
+    await db_session.commit()
+
+    revoked = await PlanCreditService.revoke(db_session, grant_id=grant.id)
+    assert revoked is not None, "revoke() did not find the grant it just created"
+    await db_session.commit()
+
+    with pytest.raises(HTTPException) as exc:
+        await require_feature("ai_features", db_session, test_parent_user)
+    assert exc.value.status_code == 403
+    assert exc.value.detail["error"] == "upgrade_required"
