@@ -95,7 +95,7 @@ apscheduler==3.10.4
 # EllipticCurve *instance* (ec.SECP256R1()) — 1.14.0 passed the class, which
 # cryptography>=43 rejects with "curve must be an EllipticCurve instance",
 # crashing every push send. Stays on the light 1.x deps (no aiohttp).
-pywebpush==1.14.1
+pywebpush==2.3.0
 
 # Utilities
 python-dotenv==1.2.2  # PYSEC-2026-2270
