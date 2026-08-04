@@ -125,14 +125,29 @@ const price = (plan: any, cycle: "monthly" | "annual"): string | null => {
 };
 
 const currentPlanName = (current?.plan?.name ?? current?.plan_name ?? "free").toLowerCase();
+// Plan credits floor the DISPLAYED tier: grants never write FamilySubscription
+// rows, so /current reports "free" for a credit-only family while the banner
+// says "PRO free until …". A credit only ever raises the shown tier — a real
+// paid sub of equal/higher tier wins unchanged — and isPaid/cancel stay keyed
+// to the REAL subscription (a credit has no PayPal sub to cancel).
+const TIER_RANK: Record<string, number> = { free: 0, plus: 1, pro: 2 };
+const creditTier = credits.reduce(
+    (best: string, c: any) =>
+        (TIER_RANK[c.tier] ?? 0) > (TIER_RANK[best] ?? 0) ? c.tier : best,
+    "free",
+);
+const effectivePlanName =
+    (TIER_RANK[creditTier] ?? 0) > (TIER_RANK[currentPlanName] ?? 0)
+        ? creditTier
+        : currentPlanName;
 const isActive = current?.status === "active";
 const isCancelled = current?.status === "cancelled";
 const isPaid = currentPlanName !== "free";
 // True when at least one rendered upgrade button is disabled because the
 // selected currency's row is not checkout-able — shows the explainer note.
 const upgradeUnavailable =
-    (currentPlanName === "free" && !canCheckout(plusPlan)) ||
-    (currentPlanName !== "pro" && !canCheckout(proPlan));
+    (effectivePlanName === "free" && !canCheckout(plusPlan)) ||
+    (effectivePlanName !== "pro" && !canCheckout(proPlan));
 const cancelAtPeriodEnd = Boolean(current?.cancel_at_period_end);
 const periodEndIso = current?.current_period_end ?? null;
 const periodEndLabel = periodEndIso
@@ -322,7 +337,7 @@ function cellClass(value: any): string {
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-sm text-brand-ink-soft">{l.current_plan}</p>
-                        <h2 class="text-xl font-bold text-brand-ink capitalize">{currentPlanName}</h2>
+                        <h2 class="text-xl font-bold text-brand-ink capitalize">{effectivePlanName}</h2>
                     </div>
                     {isActive && !cancelAtPeriodEnd && (
                         <span class="px-3 py-1 text-xs font-semibold rounded-full bg-brand-mint/20 text-brand-mint-deep border border-brand-mint">
@@ -424,28 +439,28 @@ function cellClass(value: any): string {
                     <thead>
                         <tr class="border-b border-brand-ink/10">
                             <th class="text-left py-3 px-2 text-brand-ink-soft font-medium">{l.feature}</th>
-                            <th class={`text-center py-3 px-2 ${currentPlanName === "free" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
+                            <th class={`text-center py-3 px-2 ${effectivePlanName === "free" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
                                 <div class="font-bold text-brand-ink">{l.free}</div>
                                 <div class="text-xs text-brand-ink-soft">{l.free}</div>
-                                {currentPlanName === "free" && (
+                                {effectivePlanName === "free" && (
                                     <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
                                         {l.current_plan}
                                     </span>
                                 )}
                             </th>
-                            <th class={`text-center py-3 px-2 ${currentPlanName === "plus" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
+                            <th class={`text-center py-3 px-2 ${effectivePlanName === "plus" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
                                 <div class="font-bold text-brand-ink">{l.plus}</div>
                                 <div class="text-xs text-brand-ink-soft">{price(plusPlan, "monthly") ?? "—"}{l.month} ({price(plusPlan, "annual") ?? "—"}{l.year})</div>
-                                {currentPlanName === "plus" && (
+                                {effectivePlanName === "plus" && (
                                     <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
                                         {l.current_plan}
                                     </span>
                                 )}
                             </th>
-                            <th class={`text-center py-3 px-2 ${currentPlanName === "pro" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
+                            <th class={`text-center py-3 px-2 ${effectivePlanName === "pro" ? "bg-brand-sky/15 rounded-t-xl" : ""}`}>
                                 <div class="font-bold text-brand-ink">{l.pro}</div>
                                 <div class="text-xs text-brand-ink-soft">{price(proPlan, "monthly") ?? "—"}{l.month} ({price(proPlan, "annual") ?? "—"}{l.year})</div>
-                                {currentPlanName === "pro" && (
+                                {effectivePlanName === "pro" && (
                                     <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-brand-sky/15 text-brand-sky-deep">
                                         {l.current_plan}
                                     </span>
@@ -457,13 +472,13 @@ function cellClass(value: any): string {
                         {featureRows.map((row, i) => (
                             <tr class={`border-b border-brand-ink/10 ${i % 2 === 0 ? "bg-brand-cream-deep/50" : ""}`}>
                                 <td class="py-3 px-2 text-brand-ink">{row.label}</td>
-                                <td class={`py-3 px-2 text-center ${cellClass(row.free)} ${currentPlanName === "free" ? "bg-brand-sky/15/50" : ""}`}>
+                                <td class={`py-3 px-2 text-center ${cellClass(row.free)} ${effectivePlanName === "free" ? "bg-brand-sky/15/50" : ""}`}>
                                     {renderCell(row.free)}
                                 </td>
-                                <td class={`py-3 px-2 text-center ${cellClass(row.plus)} ${currentPlanName === "plus" ? "bg-brand-sky/15/50" : ""}`}>
+                                <td class={`py-3 px-2 text-center ${cellClass(row.plus)} ${effectivePlanName === "plus" ? "bg-brand-sky/15/50" : ""}`}>
                                     {renderCell(row.plus)}
                                 </td>
-                                <td class={`py-3 px-2 text-center ${cellClass(row.pro)} ${currentPlanName === "pro" ? "bg-brand-sky/15/50" : ""}`}>
+                                <td class={`py-3 px-2 text-center ${cellClass(row.pro)} ${effectivePlanName === "pro" ? "bg-brand-sky/15/50" : ""}`}>
                                     {renderCell(row.pro)}
                                 </td>
                             </tr>
@@ -473,7 +488,7 @@ function cellClass(value: any): string {
 
                 <!-- Upgrade / Cancel Buttons -->
                 <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
-                    {currentPlanName === "free" && (
+                    {effectivePlanName === "free" && (
                         <button
                             class="upgrade-btn px-6 py-2.5 bg-brand-sky-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-sky-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             data-plan="plus"
@@ -484,7 +499,7 @@ function cellClass(value: any): string {
                             {l.upgrade} → {l.plus}
                         </button>
                     )}
-                    {currentPlanName !== "pro" && (
+                    {effectivePlanName !== "pro" && (
                         <button
                             class="upgrade-btn px-6 py-2.5 bg-brand-coral-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-coral-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             data-plan="pro"
@@ -529,7 +544,7 @@ function cellClass(value: any): string {
                         {l.coupon_apply}
                     </button>
                 </form>
-                <p id="coupon-error" class="mt-2 hidden text-sm text-red-600"></p>
+                <p id="coupon-error" aria-live="polite" class="mt-2 hidden text-sm text-red-600"></p>
             </section>
 
             <!-- Support contact -->
@@ -547,10 +562,23 @@ function cellClass(value: any): string {
             couponForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 errorEl.classList.add('hidden');
+                const input = document.getElementById('coupon-code');
                 // Trim only — the backend service normalizes case itself; the
                 // input's `uppercase` class is cosmetic.
-                const code = document.getElementById('coupon-code').value.trim();
-                if (!code) return;
+                const code = input.value.trim();
+                // Write the trimmed value back: `required` accepts spaces, so a
+                // whitespace-only entry would otherwise bail below with no
+                // feedback at all. Emptying the field lets the browser's own
+                // required-field bubble explain it, in the user's locale.
+                input.value = code;
+                if (!code) {
+                    input.reportValidity();
+                    return;
+                }
+                const submitBtn = couponForm.querySelector('button[type="submit"]');
+                const originalText = submitBtn.textContent;
+                submitBtn.disabled = true;
+                submitBtn.textContent = '...';
                 try {
                     const resp = await fetch('/api/subscriptions/coupons/redeem', {
                         method: 'POST',
@@ -559,7 +587,10 @@ function cellClass(value: any): string {
                     });
                     if (resp.ok) {
                         // Reload so the banner, the current plan and the usage
-                        // table all reflect the new entitlement in one pass.
+                        // table all reflect the new entitlement in one pass. The
+                        // button stays disabled on purpose — the page is leaving,
+                        // and a second POST would 409 over a redemption that
+                        // actually worked.
                         window.location.reload();
                         return;
                     }
@@ -574,6 +605,8 @@ function cellClass(value: any): string {
                 } catch {
                     errorEl.textContent = couponMsgs.error;
                 }
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
                 errorEl.classList.remove('hidden');
             });
         }
