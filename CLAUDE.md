@@ -36,7 +36,7 @@ Routes MUST target the **container names**, not bare `frontend`/`backend`: on ro
 
 ```bash
 ./scripts/deploy-onprem.sh            # full deploy (backup → rsync → build → migrate → up → smoke)
-./scripts/deploy-onprem.sh --dry-run  # print remote commands only
+DEPLOY_DRY_RUN=1 ./scripts/deploy-onprem.sh -y  # print remote commands only (there is NO --dry-run flag; the script exits 1 on unknown options)
 ssh jc@10.1.0.91 'podman ps'          # status (NEVER sudo podman)
 ssh jc@10.1.0.91 'podman logs -f family_onprem_backend'
 ./scripts/backup-db.sh                # on-demand DB dump
@@ -176,7 +176,11 @@ Fully native to PostgreSQL (the external "Actual Budget" service was decommissio
 
 **28 budget services** in `backend/app/services/budget/` — one per concern; notable beyond the CRUD set: `a2a_webhook_service` (bank-email-matcher agent intake), `account_matching_service`, `category_ai_service`, `dedup_service`, `duplicate_guard_service`, `transfer_detector`, `transaction_item_service`, `default_categories`.
 
-**Retroactive completion**: a parent can record that a pending/overdue chore was actually done — `POST /api/task-assignments/{id}/mark-done-for-kid` (parent only, note required, 8-week horizon). It awards NOTHING: it sets `COMPLETED` + `approval_status=PENDING` so the task enters the normal graded-review queue and `approve_gig` stays the single place points are credited. `week_of`/`assigned_date` are deliberately preserved, since `_chore_units` and the family cup both scope on `week_of` — credit lands on the week the chore was DUE. The response returns `week_already_paid`: `release_chore_paycheck` is idempotent per (kid, week), so on an already-released week grading credits points but NO cash, and the UI must say so (remedy is `release_chore_paycheck`'s `adjustment_cents`).
+**Retroactive completion**: a parent can record that a pending/overdue chore was actually done — `POST /api/task-assignments/{id}/mark-done-for-kid` (parent only, note required). It awards NOTHING: it sets `COMPLETED` + `approval_status=PENDING` so the task enters the normal graded-review queue and `approve_gig` stays the single place points are credited. `week_of`/`assigned_date` are deliberately preserved, since `_chore_units` and the family cup both scope on `week_of` — credit lands on the week the chore was DUE.
+
+Its date window is the payout window, asked of the window rather than restated: rejected if `assigned_date` is in the future, or if `week_of` is older than `BankService.oldest_outstanding_week()` (derived from `PAYCHECK_LOOKBACK_WEEKS`, the same constant `list_outstanding_weeks` loops over — `current_monday - 7 weeks`, NOT "56 days from assigned_date"). Never hardcode a second number here: a chore inside the old wider rule but outside the window landed in the review queue for a week the parent could never release cash for.
+
+The response returns `week_already_paid`: `release_chore_paycheck` is idempotent per (kid, week), so on an already-released week grading credits points but NO cash and the UI must say so. **The remedy is a top-up release** — `POST /api/bank/chore-paycheck/{kid}/release` with `top_up: true` and a **positive** `adjustment_cents`, which writes that amount and only that as its own `CashTransaction(ALLOWANCE, week_of)` (no base recompute, no `points_rate` re-conversion). A plain re-release still 409s, deliberately: that guard is what stops an out-of-order backlog release from double-paying. `top_up` is an explicit flag, never inferred from `adjustment_cents != 0` — a first release *with* a bonus is a legitimate call, and inferring would turn a double-submitted form into a second payment. Docks are not top-ups: `credit_split_rows` collapses a non-positive credit to a $0 row, so a negative adjustment 422s and goes through `POST /api/cash/{id}/adjust` instead.
 
 ### Subscription & premium gating
 

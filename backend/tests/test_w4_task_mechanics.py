@@ -445,7 +445,7 @@ class TestIntervalRecurrence:
         # Kid completes with photo → parks in the approval queue.
         done = await TaskAssignmentService.complete_assignment(
             db_session, created[0].id, test_family.id, kids[0].id,
-            proof_image_url="/uploads/gig-proofs/test-w4-interval.jpg",
+            proof_image_url="/uploads/gig-proofs/a00f094b9a13416cb1092103aa7d1209.jpg",
         )
         assert done.status == AssignmentStatus.COMPLETED
         assert done.approval_status == ApprovalStatus.PENDING
@@ -528,11 +528,11 @@ class TestProofRequiredFlow:
         done = await TaskAssignmentService.complete_assignment(
             db_session, a.id, test_family.id, test_child_user.id,
             proof_text="listo",
-            proof_image_url="/uploads/gig-proofs/test-w4.jpg",
+            proof_image_url="/uploads/gig-proofs/cd4dce66c30f419fa64e10643123d640.jpg",
         )
         assert done.status == AssignmentStatus.COMPLETED
         assert done.approval_status == ApprovalStatus.PENDING
-        assert done.proof_image_url == "/uploads/gig-proofs/test-w4.jpg"
+        assert done.proof_image_url == "/uploads/gig-proofs/cd4dce66c30f419fa64e10643123d640.jpg"
 
         await db_session.refresh(test_child_user)
         assert test_child_user.points == balance_before  # nothing credited yet
@@ -575,7 +575,7 @@ class TestProofRequiredFlow:
         await TaskAssignmentService.complete_assignment(
             db_session, a.id, test_family.id, test_child_user.id,
             proof_text=None,
-            proof_image_url="/uploads/gig-proofs/test-w4b.jpg",
+            proof_image_url="/uploads/gig-proofs/56a80643ea5e4c97b1b8b223b6c14956.jpg",
         )
         rejected = await TaskAssignmentService.approve_gig(
             db_session, a.id, test_family.id, test_parent_user.id,
@@ -591,9 +591,144 @@ class TestProofRequiredFlow:
         # Kid can redo it (photo again) → pending approval once more.
         redo = await TaskAssignmentService.complete_assignment(
             db_session, a.id, test_family.id, test_child_user.id,
-            proof_image_url="/uploads/gig-proofs/test-w4c.jpg",
+            proof_image_url="/uploads/gig-proofs/143a8c0e1dbb4722885ab77cfcc803c0.jpg",
         )
         assert redo.approval_status == ApprovalStatus.PENDING
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 3b. proof_image_url allow-list on the KID-facing completion paths
+# ─────────────────────────────────────────────────────────────────────
+
+# Anything that is not literally /uploads/gig-proofs/<uuid4-hex>.<jpg|png|webp>
+# — the one shape POST /api/task-assignments/proof-upload hands back.
+BAD_PROOF_URLS = (
+    "https://evil.example/x.jpg",
+    "//evil.example/x.jpg",
+    "javascript:alert(1)",
+    "data:image/png;base64,AAA",
+    "/uploads/gig-proofs/../../etc/passwd",
+    "/etc/passwd",
+    "/uploads/other/x.jpg",
+    "/uploads/gig-proofs/short.jpg",
+    "/uploads/gig-proofs/" + ("a" * 32) + ".svg",
+)
+
+
+def _good_proof_url() -> str:
+    return f"/uploads/gig-proofs/{uuid.uuid4().hex}.jpg"
+
+
+async def _bonus_gig_with_assignment(db, family, kid):
+    tmpl = TaskTemplate(
+        id=uuid.uuid4(), title="Wash the car", points=30, effort_level=1,
+        interval_days=1, assignment_type=AssignmentType.AUTO, is_bonus=True,
+        is_active=True, family_id=family.id,
+    )
+    db.add(tmpl)
+    await db.flush()
+    a = TaskAssignment(
+        template_id=tmpl.id, assigned_to=kid.id, family_id=family.id,
+        status=AssignmentStatus.PENDING, assigned_date=_utc_today(),
+        week_of=TaskAssignmentService._get_monday(_utc_today()),
+    )
+    db.add(a)
+    await db.commit()
+    await db.refresh(a)
+    return tmpl, a
+
+
+class TestProofUrlAllowList:
+    """proof_image_url must be a path this app issued, on EVERY write path.
+
+    The value is rendered straight into an <img src> in the PARENT's approval
+    queue, so a client-supplied one is a stored injection aimed at the grader:
+    an off-site fetch from their browser at best, a javascript:/data: payload
+    at worst. The parent-side mark_done_for_kid already checked it; the two
+    kid-side completion paths — which is the direction that actually matters,
+    since the attacker is the one submitting — assigned it raw.
+    """
+
+    @pytest.mark.asyncio
+    async def test_proof_required_chore_refuses_a_foreign_url(
+        self, db_session, test_family, test_child_user
+    ):
+        for bad in BAD_PROOF_URLS:
+            _, a = await _proof_chore_with_assignment(
+                db_session, test_family, test_child_user
+            )
+            with pytest.raises(ValidationException):
+                await TaskAssignmentService.complete_assignment(
+                    db_session, a.id, test_family.id, test_child_user.id,
+                    proof_text="listo", proof_image_url=bad,
+                )
+            await db_session.refresh(a)
+            assert a.proof_image_url is None, bad
+            assert a.status == AssignmentStatus.PENDING
+
+    @pytest.mark.asyncio
+    async def test_gig_completion_refuses_a_foreign_url(
+        self, db_session, test_family, test_child_user
+    ):
+        for bad in BAD_PROOF_URLS:
+            _, a = await _bonus_gig_with_assignment(
+                db_session, test_family, test_child_user
+            )
+            with pytest.raises(ValidationException):
+                await TaskAssignmentService.complete_assignment(
+                    db_session, a.id, test_family.id, test_child_user.id,
+                    proof_text="lo lavé", proof_image_url=bad,
+                )
+            await db_session.refresh(a)
+            assert a.proof_image_url is None, bad
+            assert a.status == AssignmentStatus.PENDING
+
+    @pytest.mark.asyncio
+    async def test_an_issued_url_still_works_on_both_paths(
+        self, db_session, test_family, test_child_user
+    ):
+        chore_url = _good_proof_url()
+        _, chore = await _proof_chore_with_assignment(
+            db_session, test_family, test_child_user
+        )
+        done = await TaskAssignmentService.complete_assignment(
+            db_session, chore.id, test_family.id, test_child_user.id,
+            proof_text="listo", proof_image_url=chore_url,
+        )
+        assert done.proof_image_url == chore_url
+
+        gig_url = _good_proof_url()
+        _, gig = await _bonus_gig_with_assignment(
+            db_session, test_family, test_child_user
+        )
+        done_gig = await TaskAssignmentService.complete_assignment(
+            db_session, gig.id, test_family.id, test_child_user.id,
+            proof_text="lo lavé", proof_image_url=gig_url,
+        )
+        assert done_gig.proof_image_url == gig_url
+
+    @pytest.mark.asyncio
+    async def test_route_refuses_a_foreign_url(
+        self, client: AsyncClient, db_session, test_family, test_child_user
+    ):
+        _, a = await _proof_chore_with_assignment(
+            db_session, test_family, test_child_user
+        )
+        login = await client.post(
+            "/api/auth/login",
+            json={"email": "child@test.com", "password": "password123"},
+        )
+        kid_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+        r = await client.patch(
+            f"/api/task-assignments/{a.id}/complete",
+            json={"proof_text": "listo",
+                  "proof_image_url": "https://evil.example/x.jpg"},
+            headers=kid_headers,
+        )
+        assert r.status_code in (400, 422), r.text
+        await db_session.refresh(a)
+        assert a.proof_image_url is None
 
 
 # ─────────────────────────────────────────────────────────────────────

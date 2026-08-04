@@ -467,8 +467,10 @@ async def mark_done_for_kid(
     Credits nothing on its own: the task lands in the normal graded-review
     queue so approve_gig stays the single place points are awarded. The
     response's ``week_already_paid`` tells the caller when that week's paycheck
-    has already been released, in which case grading will credit points but no
-    cash — see the service docstring.
+    has already been released, in which case grading credits points but no
+    cash; the parent trues that up with a top-up release (POST
+    /api/bank/chore-paycheck/{kid}/release, ``top_up: true``). See the service
+    docstring.
     """
     family_id = to_uuid_required(current_user.family_id)
     return await TaskAssignmentService.mark_done_for_kid(

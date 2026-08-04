@@ -21,20 +21,15 @@ from app.core.exceptions import (
     ForbiddenException,
     ValidationException,
 )
-import re
 
 from app.core.grading import grade_credit_points
 
 from app.core.time_utils import utc_today
+from app.core.upload_validation import clean_proof_url
 from app.services.base_service import (
     BaseFamilyService,
     get_user_by_id,
 )
-
-# Exactly what POST /api/task-assignments/proof-upload returns:
-# /uploads/gig-proofs/<uuid-hex>.<jpg|png|webp>. Anchored with fullmatch, so no
-# traversal, no scheme, no host, no query.
-_PROOF_URL_RE = re.compile(r"/uploads/gig-proofs/[0-9a-f]{32}\.(?:jpg|png|webp)")
 
 
 class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
@@ -1394,6 +1389,11 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         proof_text, and enters PENDING approval state. Points are credited only
         when a parent approves via approve_gig().
         """
+        # Before anything else: this is the KID-facing door, so the photo path
+        # is fully untrusted input that ends up in an <img src> in the parent's
+        # approval queue. Normalised to None when blank so the "this task
+        # requires a photo" branches below still give their own message.
+        proof_image_url = clean_proof_url(proof_image_url)
         # Row-lock the assignment: the mandatory path now awards points, so a
         # concurrent double-submit (kid double-tapping "complete") must not pass
         # the can_complete check twice and double-award.
@@ -2029,19 +2029,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "Say why you are marking this done"
             )
 
-        # An optional photo, but only a path this app issued. proof_image_url is
-        # rendered straight into an <img src> in the approvals queue, so an
-        # arbitrary client-supplied value would let a caller point it at any
-        # host — an off-site fetch from the grader's browser at best, a
-        # javascript:/data: payload at worst. POST /proof-upload returns
-        # /uploads/gig-proofs/<uuid>.<ext>; nothing else is accepted.
-        if proof_image_url is not None:
-            proof_image_url = proof_image_url.strip()
-            if not _PROOF_URL_RE.fullmatch(proof_image_url):
-                raise ValidationException(
-                    "proof_image_url must be a path returned by "
-                    "POST /api/task-assignments/proof-upload"
-                )
+        # An optional photo, but only a path this app issued — see
+        # clean_proof_url.
+        proof_image_url = clean_proof_url(proof_image_url)
 
         assignment = await TaskAssignmentService.get_assignment(
             db, assignment_id, family_id, for_update=True
@@ -2063,23 +2053,47 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 f"({assignment.approval_status.value})"
             )
 
-        # Same 8-week horizon list_outstanding_weeks already uses, rather than
-        # a second competing rule. A months-old chore should not pay out.
+        # The cut-off is the payout window itself, asked of the window rather
+        # than restated: a task may only be marked done into a week the
+        # parent's outstanding-paycheck screen can still list. The old rule
+        # ("56 days from assigned_date") was a second, WIDER number —
+        # list_outstanding_weeks counts whole weeks off the current Monday, so
+        # its floor is 49 days from that Monday. A chore 50-56 days old passed
+        # the guard and landed in the review queue for a week nobody could
+        # ever release cash for.
         from app.services.bank_service import BankService
 
         today = await BankService._family_local_today(db, family_id)
-        if (today - assignment.assigned_date).days > 8 * 7:
+        # A chore that has not come due yet was not "already done". The
+        # horizon check below only rejects too-OLD assignments — for a future
+        # date its delta is negative and sails straight under the limit, so a
+        # parent could push tomorrow's chore into the graded queue and have it
+        # pay out. complete_assignment refuses exactly this on the kid's side.
+        if assignment.assigned_date > today:
+            raise ValidationException(
+                "Esta tarea es para un día futuro — no se puede marcar como "
+                "hecha todavía / This task is scheduled for a future day — "
+                "it cannot be marked done yet"
+            )
+        oldest_payable_week = await BankService.oldest_outstanding_week(
+            db, family_id
+        )
+        if BankService._week_monday(assignment.week_of) < oldest_payable_week:
             raise ValidationException(
                 "Esta tarea es demasiado antigua para marcarla como hecha "
-                "(más de 8 semanas) / Too old to mark done (over 8 weeks)"
+                "(su semana ya salió del periodo de pago) / Too old to mark "
+                "done (its week is past the payout window)"
             )
 
         # Money edge: release_chore_paycheck is idempotent on a
-        # CashTransaction(ALLOWANCE, week_of=...), so a week that has been paid
-        # CANNOT be topped up. Retroactive credit on such a week therefore
-        # yields points but no cash. That is a silent shortfall unless the
-        # caller says so, so report it and let the parent decide — they can
-        # true it up with release_chore_paycheck's adjustment_cents.
+        # CashTransaction(ALLOWANCE, week_of=...), so re-releasing a week that
+        # has been paid 409s. Retroactive credit on such a week therefore
+        # yields points but no cash on its own. That is a silent shortfall
+        # unless the caller says so, so report it and let the parent decide —
+        # they true it up with a top-up release (POST
+        # /api/bank/chore-paycheck/{kid}/release with top_up=true and a
+        # positive adjustment_cents), which pays that amount and only that,
+        # leaving the base where it is.
         week_already_paid = (await db.execute(
             select(CashTransaction.id).where(
                 CashTransaction.family_id == family_id,

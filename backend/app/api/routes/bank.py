@@ -230,7 +230,15 @@ async def release_chore_paycheck(
     week — defaults to the current week when week_of is omitted, so any
     existing caller is unaffected. Credits allowance_cents × completion (±
     optional adjustment), split into jars. Premium-gated (Family-Bank
-    automation); idempotent per (kid, week)."""
+    automation); idempotent per (kid, week) — a second release 409s.
+
+    ``top_up: true`` in the body is the one path past that 409: it pays
+    ``adjustment_cents`` (positive, required) and nothing else onto a week
+    already released, which is how a parent trues up retroactive chore credit
+    that landed after payday. A top-up is repeatable on purpose (two late
+    chores, two corrections), so it only 409s on a same-week repeat inside
+    BankService.TOPUP_DEDUPE_WINDOW — enough to swallow a double-submit, not
+    an idempotency guarantee. See BankService.release_chore_paycheck."""
     fam = to_uuid_required(current_user.family_id)
     target = await verify_user_in_family(db, user_id, fam)
     if target.role not in (UserRole.CHILD, UserRole.TEEN):
@@ -247,6 +255,7 @@ async def release_chore_paycheck(
         db, target, fam, week_monday, entitled=True,
         adjustment_cents=(body.adjustment_cents if body else 0),
         released_by=to_uuid_required(current_user.id),
+        top_up=bool(body.top_up) if body else False,
     )
     return ChorePaycheckReleaseResult(**result)
 

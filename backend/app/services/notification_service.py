@@ -332,6 +332,17 @@ _COPY = {
             "en": "You finished {pct}% of your chores this week. Nice work!",
         },
     },
+    "chore_paycheck_topup": {
+        "type": NT.PAYDAY,
+        "title": {
+            "es": "💵 Ajuste de tu pago por tareas: +{amount}",
+            "en": "💵 Chore paycheck adjustment: +{amount}",
+        },
+        "body": {
+            "es": "Tus papás ajustaron el pago de esa semana. ¡Ya está en tu cuenta!",
+            "en": "Your parents topped up that week's paycheck. It's in your account!",
+        },
+    },
     "chore_paycheck_reminder": {
         "type": NT.PAYDAY,
         "title": {

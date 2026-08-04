@@ -104,7 +104,7 @@ async def test_approved_proof_chore_autoposts_with_photo(
     db_session.add(a)
     await db_session.commit()
 
-    proof = "/uploads/gig-proofs/proof.jpg"
+    proof = "/uploads/gig-proofs/f700a65c4cbe46f88ba8316e473161a0.jpg"
     # Completing a proof-required chore parks it for review → no card yet.
     await TaskAssignmentService.complete_assignment(
         db_session, a.id, test_family.id, test_child_user.id, proof_image_url=proof
@@ -147,7 +147,7 @@ async def test_rejected_completion_does_not_autopost(
         a.id,
         test_family.id,
         test_child_user.id,
-        proof_image_url="/uploads/gig-proofs/proof.jpg",
+        proof_image_url="/uploads/gig-proofs/f700a65c4cbe46f88ba8316e473161a0.jpg",
     )
     await TaskAssignmentService.approve_gig(
         db_session, a.id, test_family.id, test_parent_user.id, approve=False,

@@ -65,6 +65,28 @@ ALLOWANCE_MODES = ("flat", "chore_proportional", "chore_gated", "points_rate")
 # payday sweep) after the week's chores are reviewed.
 CHORE_PAYCHECK_MODES = ("chore_proportional", "chore_gated", "points_rate")
 
+# How many weeks back the parent's outstanding-paycheck screen reaches,
+# counting the current one. THE single source for that horizon: anything that
+# wants to know "can this week still be paid?" must derive from
+# BankService.oldest_outstanding_week rather than restate the number, since a
+# second copy is exactly how a chore ended up markable into a week the payout
+# screen would never list.
+PAYCHECK_LOOKBACK_WEEKS = 8
+
+# How long two top-ups of the same (kid, week) are treated as one
+# double-submitted request rather than two deliberate corrections. See
+# _top_up_chore_paycheck for what this does and does NOT protect.
+TOPUP_DEDUPE_WINDOW = timedelta(seconds=90)
+
+
+def _topup_description(week_monday: date) -> str:
+    """Ledger text for a top-up row. Shared by the writer and the dedupe
+    probe on purpose: the probe recognises a previous top-up by this exact
+    string, so a copy edit that changed only one of the two would silently
+    disarm the guard."""
+    return f"Ajuste del domingo por tareas (semana {week_monday.isoformat()})"
+
+
 # Config fields a parent may upsert (jar balances are NEVER settable here).
 _SETTINGS_FIELDS = (
     "allowance_cents",
@@ -374,6 +396,24 @@ class BankService:
         return d - timedelta(days=d.weekday())
 
     @staticmethod
+    async def oldest_outstanding_week(
+        db: AsyncSession, family_id: UUID,
+        lookback_weeks: int = PAYCHECK_LOOKBACK_WEEKS,
+    ) -> date:
+        """Monday of the oldest week list_outstanding_weeks can ever list.
+
+        The loop below runs `range(lookback_weeks - 1, -1, -1)` off the
+        CURRENT week's Monday, so the floor is `current_monday -
+        (lookback_weeks - 1)` weeks — measured week-to-week, not as N days
+        back from today. Exposed because callers that gate work on "is this
+        week still payable?" must ask the window rather than re-derive it.
+        """
+        today = await BankService._family_local_today(db, family_id)
+        return BankService._week_monday(today) - timedelta(
+            weeks=lookback_weeks - 1
+        )
+
+    @staticmethod
     async def _chore_units(
         db: AsyncSession, family_id: UUID, user_id: UUID, week_monday: date
     ) -> tuple[int, int, int]:
@@ -605,7 +645,7 @@ class BankService:
     @staticmethod
     async def list_outstanding_weeks(
         db: AsyncSession, target_user: User, family_id: UUID,
-        lookback_weeks: int = 8,
+        lookback_weeks: int = PAYCHECK_LOOKBACK_WEEKS,
     ) -> list[dict]:
         """Every unreleased chore-paycheck week for a kid, oldest first. A
         week counts as released when a CashTransaction(ALLOWANCE, week_of=
@@ -785,7 +825,7 @@ class BankService:
     async def release_chore_paycheck(
         db: AsyncSession, target_user: User, family_id: UUID,
         week_of: date, entitled: bool, adjustment_cents: int = 0,
-        released_by: Optional[UUID] = None,
+        released_by: Optional[UUID] = None, top_up: bool = False,
     ) -> dict:
         """Parent releases a teen's weekly chore paycheck: allowance_cents scaled
         by completed-&-approved chore points (plus an optional signed parent
@@ -793,7 +833,18 @@ class BankService:
         (kid, week) via a CashTransaction(ALLOWANCE, week_of=that week) existence
         check — not last_chore_paycheck_week, which only remembers the most
         recent release and can't represent an out-of-order past one. Route
-        enforces role/tenant and the premium gate (passed as ``entitled``)."""
+        enforces role/tenant and the premium gate (passed as ``entitled``).
+
+        ``top_up=True`` is the ONE way past that 409, and it is a different
+        operation, not a softer release: it pays ``adjustment_cents`` and only
+        that, as its own ALLOWANCE row on the same week. It never recomputes
+        the base, so retroactive chore credit landing on an already-paid week
+        (mark_done_for_kid's ``week_already_paid``) can be trued up without the
+        base going out a second time. It is spelled as its own flag rather than
+        inferred from ``adjustment_cents != 0`` because a first release WITH a
+        bonus is an existing, legitimate call — inferring would turn a
+        double-submitted release-with-bonus form into a silent second payment,
+        which is exactly what the 409 exists to prevent."""
         user = await _get_user_locked(db, target_user.id)
         acct = await _get_or_create_account_locked(db, user, family_id)
         if acct.allowance_mode not in CHORE_PAYCHECK_MODES:
@@ -816,6 +867,14 @@ class BankService:
                 CashTransaction.week_of == week_monday,
             ).limit(1)
         )).scalar_one_or_none()
+        if top_up:
+            return await BankService._top_up_chore_paycheck(
+                db, user, acct, family_id, week_monday,
+                adjustment_cents=adjustment_cents,
+                entitled=entitled,
+                already_paid=already_paid is not None,
+                released_by=released_by,
+            )
         if already_paid is not None:
             raise HTTPException(
                 status_code=409,
@@ -886,6 +945,114 @@ class BankService:
             "assigned_points": units_to_points(assigned),
             "amount_cents": amount,
             "points_converted": points_converted,
+        }
+
+    @staticmethod
+    async def _top_up_chore_paycheck(
+        db: AsyncSession, user: User, acct: KidBankAccount, family_id: UUID,
+        week_monday: date, *, adjustment_cents: int, entitled: bool,
+        already_paid: bool, released_by: Optional[UUID] = None,
+    ) -> dict:
+        """Pay a parent-typed shortfall onto a week whose paycheck already went
+        out. Writes ONE thing: ``adjustment_cents`` as its own ALLOWANCE row on
+        that week. Deliberately does not touch _chore_units, the allowance cap,
+        or the points_rate conversion — this is not "release the week again
+        with a number added", it is a correction, so re-deriving the base here
+        would put the base back on the wire and double-pay it.
+
+        IDEMPOTENCY — read this before trusting the flow. Unlike the release it
+        sits next to, a top-up has NO natural idempotency key: (kid, week) is
+        already taken by the release, and a parent may legitimately top the same
+        week up more than once (two late chores approved on different days), so
+        making the pair unique would break the feature it exists for. What is
+        implemented instead is a narrow dedupe: a second top-up for the same
+        (kid, week) inside ``TOPUP_DEDUPE_WINDOW`` is refused with a 409.
+
+        That covers the realistic accident — a double-submitted request, a
+        retried POST, a second tab clicked twice — and nothing else. It does NOT
+        make this endpoint idempotent: two identical calls a few minutes apart
+        both pay, by design, because at that distance they are far more likely
+        to be two real corrections than one duplicate. A caller that must not
+        double-pay across a longer gap owns that itself (the payouts UI disables
+        the button for the flight and reloads on success).
+
+        Caller has already taken the user + account row locks.
+        """
+        if not already_paid:
+            # Not a side door around the release itself. Paying only the
+            # adjustment on an unreleased week would leave the base — the money
+            # the kid actually earned — permanently unpaid, because the row
+            # this writes is exactly what makes the week look released.
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "no chore paycheck released for this week yet — "
+                    "release it before topping it up"
+                ),
+            )
+        if adjustment_cents <= 0:
+            # Zero would write a second ALLOWANCE row worth nothing; a negative
+            # is a claw-back, which credit_split_rows cannot express (it
+            # collapses a non-positive credit into a $0 spend row and would
+            # silently pay nothing). Docks go through POST /api/cash/{id}/adjust,
+            # which owns the jar cascade.
+            raise HTTPException(
+                status_code=422,
+                detail="top_up requires a positive adjustment_cents",
+            )
+        description = _topup_description(week_monday)
+        recent = (await db.execute(
+            select(CashTransaction.id).where(
+                CashTransaction.user_id == user.id,
+                CashTransaction.family_id == family_id,
+                CashTransaction.type == CashTransactionType.ALLOWANCE,
+                CashTransaction.week_of == week_monday,
+                CashTransaction.description == description,
+                CashTransaction.created_at
+                >= datetime.now(timezone.utc) - TOPUP_DEDUPE_WINDOW,
+            ).limit(1)
+        )).scalar_one_or_none()
+        if recent is not None:
+            # Matches on the description, not the amount: a double-submit that
+            # raced a typo-correction would carry two different numbers and is
+            # still one accident. The parent can retry after the window if the
+            # second payment was deliberate.
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "a top-up for this week was just recorded — "
+                    "check the kid's balance before paying again"
+                ),
+            )
+        CashService.credit_split_rows(
+            db, user, acct, family_id, adjustment_cents,
+            CashTransactionType.ALLOWANCE, entitled=entitled,
+            created_by=released_by,
+            description=description,
+            week_of=week_monday,
+        )
+        await db.commit()
+        await db.refresh(acct)
+
+        done, assigned, _ = await BankService._chore_units(
+            db, family_id, user.id, week_monday
+        )
+        try:
+            await NotificationService.create_localized(
+                db, family_id=family_id, key="chore_paycheck_topup",
+                user_id=user.id,
+                params={"amount": _fmt_mxn(adjustment_cents)}, link="/bank",
+            )
+        except Exception:
+            logger.exception("chore-paycheck top-up notification failed for %s", user.id)
+        return {
+            "user_id": user.id,
+            "week_of": week_monday,
+            "done_points": units_to_points(done),
+            "assigned_points": units_to_points(assigned),
+            # What THIS call paid — not the week's running total.
+            "amount_cents": adjustment_cents,
+            "points_converted": 0,
         }
 
     @staticmethod

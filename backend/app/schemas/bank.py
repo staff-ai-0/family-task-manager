@@ -165,9 +165,19 @@ class ChorePaycheckReleaseBody(BaseModel):
     """Optional parent adjustment (signed cents) added to the computed paycheck —
     a bonus (positive) or dock (negative). Final amount floored at 0. week_of
     targets a specific week (any date in it; normalized to that week's Monday
-    server-side) — omit to release the current week, unchanged default."""
+    server-side) — omit to release the current week, unchanged default.
+
+    ``top_up`` switches the call from "release this week" to "add
+    adjustment_cents to a week already released" — the remedy for retroactive
+    chore credit landing on a paid week (mark_done_for_kid's
+    ``week_already_paid``). It pays ONLY the adjustment, which must be
+    positive, and 422s if the week was never released. Without it a re-release
+    still 409s, so a double-submitted form can never pay twice; a top-up is
+    deliberately repeatable (a week can need more than one correction), so it
+    is guarded only against an immediate same-week repeat."""
     adjustment_cents: int = Field(0, ge=-100000, le=100000)
     week_of: Optional[date] = None
+    top_up: bool = False
 
 
 class ChorePaycheckReleaseResult(BaseModel):

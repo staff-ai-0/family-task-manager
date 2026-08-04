@@ -390,7 +390,7 @@ async def test_gig_photo_ai_skipped_for_free(
         test_family.id,
         test_child_user.id,
         proof_text="raked everything",
-        proof_image_url="/uploads/gig-proofs/synthetic.jpg",
+        proof_image_url="/uploads/gig-proofs/e38805162f1e43d19a4074a1ae27849c.jpg",
     )
 
     assert validate.await_count == 0
@@ -424,7 +424,7 @@ async def test_gig_photo_ai_runs_for_plus(
         test_family.id,
         test_child_user.id,
         proof_text="raked everything",
-        proof_image_url="/uploads/gig-proofs/synthetic.jpg",
+        proof_image_url="/uploads/gig-proofs/e38805162f1e43d19a4074a1ae27849c.jpg",
     )
 
     assert validate.await_count == 1
