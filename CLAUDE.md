@@ -216,6 +216,56 @@ does not import `plan_pricing`, it catches a non-positive price or an
 unwired PayPal id but — unlike `audit_plan_rows()` — does **not** catch a
 price that has drifted from canonical while staying positive.
 
+**Plan credit (coupons, referrals, operator comps) is ONE mechanism**:
+`plan_credit_grants`, written only by `PlanCreditService.grant`. A grant is
+`(family_id, source, tier, starts_at, ends_at | NULL = lifetime, revoked_at)`;
+`premium.get_family_plan_by_id` floors the family at the highest active
+grant's tier, and a higher paid plan always wins. Credit is INTERNAL — no
+PayPal object is created and no PayPal-linked column is written, so the
+nightly reconcile sweep cannot erase it. Windows are ADDITIVE **at or above
+the granted tier**: a grant starts at the first moment the family is not
+already entitled at `>=` its own tier — it queues behind every unrevoked
+*dated* grant of tier `>=` its own (**including ones that have not started
+yet**, which is what makes stacking additive; lifetime grants are NOT
+anchors, so a code redeemed under lifetime Pro burns in parallel for
+nothing), and defers behind a live paid period only when the paid tier is
+`>=` the granted tier **and** that subscription is genuinely entitling —
+a `payment_failed` sub past its grace window is treated as free here, the
+same as in `premium`, because the sweep that later fixes the *status* never
+revisits a `starts_at` already written. So two 30-day Plus codes give 60
+days, a
+payer's free month begins after the time they already bought, but a Pro comp
+handed to a Plus subscriber starts NOW rather than waiting out a plan it
+outranks. Operator comps therefore STACK; the old absolute "Plus until X"
+overwrite is gone. `families.referral_bonus_until` was dropped in the
+`migrate_referral_bonus_to_grants` migration — do not reintroduce a
+per-family credit column.
+
+`coupons` is an operator catalog, cross-tenant like `subscription_plans`
+(no `family_id`), reached only through `require_superadmin` — except the
+redeem path, which looks one code up by exact match and never lists. Every
+unusable-code reason returns an identical `404 invalid_or_expired_coupon`
+so redeem is not an oracle; only `409 already_redeemed` is distinct. The
+one-per-family guard is `UNIQUE(family_id, coupon_id)` at the DB level, and
+the redemption cap is enforced by a predicated `UPDATE` (race-free, no
+`SELECT … FOR UPDATE`). `coupons.kind` (launch/beta/comp) is a reporting
+label with NO behavior — never branch resolution logic on it.
+
+**A credited family still reads as `free` on the API.** A grant never writes
+a `FamilySubscription` row, so `GET /api/subscriptions/current` returns its
+hardcoded `plan_name: "free"` while `limits` already reflect the credited
+tier. The reconciliation is deliberately frontend-side, in
+`parent/settings/subscription.astro`: the page floors the DISPLAYED tier by
+the highest active credit (header, comparison table, upgrade buttons) while
+cancel/period-end stay keyed to the real subscription — a credit has no
+PayPal subscription to cancel. Any NEW surface that shows a plan name must
+floor it the same way, or it will invite a comped family to pay for what it
+already has.
+
+Percent/amount-off coupons are NOT implemented; `discount_percent`,
+`discount_amount_cents` and `discount_cycles` are reserved columns for a
+phase-2 PayPal plan-override at subscription-create.
+
 ### AI Receipt Scanner
 
 Uses Claude Vision via LiteLLM proxy to extract transaction data from receipt photos/PDFs.

@@ -184,6 +184,11 @@ class RegisterFamilyRequest(BaseModel):
     # honored when FOUNDING a new family — the new family becomes the
     # referred party and both families get a 30-day Plus credit.
     ref: Optional[str] = Field(None, min_length=1, max_length=16)
+    # Optional coupon code (from ?coupon=CODE on the register page). Only
+    # honored when FOUNDING a new family — a join-by-code signup joins a
+    # family that already exists, whose parent can redeem deliberately, and
+    # burning a seat on their behalf would be surprising.
+    coupon: Optional[str] = Field(None, min_length=1, max_length=32)
 
 
 class RegisterFamilyResponse(BaseModel):
@@ -199,3 +204,8 @@ class RegisterFamilyResponse(BaseModel):
     user: UserResponse
     pending_approval: bool = False
     message: Optional[str] = None
+    # True when a coupon supplied at signup was actually redeemed. Reported
+    # explicitly so the success screen never silently swallows a mistyped
+    # launch code — that is the failure mode most likely to generate support
+    # mail.
+    coupon_applied: bool = False

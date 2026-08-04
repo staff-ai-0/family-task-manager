@@ -13,7 +13,7 @@ attempt itself fails, the client still gets the original error, not a crash.
 """
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 from types import SimpleNamespace
 from typing import Optional
 from uuid import UUID
@@ -117,49 +117,71 @@ class AdminActionService:
     """Operator write actions."""
 
     @staticmethod
-    async def comp_plus_month(
+    async def grant_plan_credit(
         db: AsyncSession,
         *,
         operator: User,
         family_id: UUID,
-        days: int,
+        tier: str,
+        days: Optional[int],
         reason: str,
     ) -> dict:
-        """Grant free Plus for ``days`` from now.
+        """Grant free *tier* for *days* (or forever when days is None).
 
-        Writes families.referral_bonus_until directly and ABSOLUTELY, rather
-        than calling ReferralService._grant_referral_month — that helper is
-        private, does not commit, stacks +30d per invocation, and is Plus-only.
-        An operator comp must be idempotent in intent: "Plus until date X".
+        Replaces comp_plus_month, which could only ever grant Plus, for a
+        fixed window, with no way to revoke it and no per-grant trail. The
+        grant row and its audit row commit together.
         """
+        from app.services.plan_credit_service import PlanCreditService
+
         operator_id, operator_email = operator.id, operator.email
-        family = await _load_family(db, family_id)
-        until = datetime.now(timezone.utc) + timedelta(days=days)
-        family.referral_bonus_until = until
+        await _load_family(db, family_id)
         try:
+            row = await PlanCreditService.grant(
+                db,
+                family_id=family_id,
+                source="operator",
+                tier=tier,
+                duration_days=days,
+                granted_by_user_id=operator.id,
+                reason=reason,
+            )
             OperatorAuditService.record(
                 db,
                 actor=operator,
-                action="family.comp_plus",
+                action="family.grant_credit",
                 target_family_id=family_id,
-                params={"days": days, "reason": reason, "until": until.isoformat()},
+                params={
+                    "tier": tier,
+                    "days": days,
+                    "reason": reason,
+                    "ends_at": row.ends_at.isoformat() if row.ends_at else None,
+                },
             )
             await db.commit()
+        except ValueError as exc:
+            await db.rollback()
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
         except Exception as exc:
             await _record_failure(
                 db,
                 operator_id=operator_id,
                 operator_email=operator_email,
-                action="family.comp_plus",
+                action="family.grant_credit",
                 target_family_id=family_id,
                 target_user_id=None,
-                params={"days": days, "reason": reason},
+                params={"tier": tier, "days": days, "reason": reason},
                 exc=exc,
             )
             raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR, f"comp plus failed: {exc}"
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"grant credit failed: {exc}",
             ) from exc
-        return {"referral_bonus_until": until.isoformat()}
+        return {
+            "grant_id": str(row.id),
+            "tier": row.tier,
+            "ends_at": row.ends_at.isoformat() if row.ends_at else None,
+        }
 
     @staticmethod
     async def set_family_active(

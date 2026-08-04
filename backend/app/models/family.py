@@ -46,13 +46,6 @@ class Family(Base):
     # on demand (ReferralService.get_or_create_referral_code); existing rows
     # were backfilled by the referral_program migration.
     referral_code = Column(String(16), unique=True, nullable=True, index=True)
-    # Internal referral credit expiry (give-a-month/get-a-month). While this
-    # is in the future, premium.get_family_plan floors the family at Plus,
-    # independent of any paid subscription. It lives HERE — on the family row,
-    # NOT on the subscription's current_period_end — precisely so the nightly
-    # PayPal reconcile sweep (which overwrites current_period_end from
-    # PayPal's next_billing_at) can never erase the reward. NULL = no credit.
-    referral_bonus_until = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Parental opt-in for AI processing of KID-generated content (gig proof

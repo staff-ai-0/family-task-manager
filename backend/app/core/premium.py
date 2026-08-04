@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.core.config import settings
-from app.models.family import Family
 from app.models.subscription import FamilySubscription, SubscriptionPlan
 from app.models.user import User
 from app.services.usage_service import UsageService
@@ -132,30 +131,32 @@ def _payment_failed_within_grace(sub: FamilySubscription) -> bool:
     return datetime.now(timezone.utc) <= deadline
 
 
-async def _plus_floor_plan(db: AsyncSession, family_id) -> FamilyPlan | None:
-    """The Plus ``FamilyPlan`` used as an active-referral-credit floor.
+async def _tier_floor_plan(
+    db: AsyncSession, family_id, tier: str
+) -> FamilyPlan | None:
+    """The ``FamilyPlan`` used as an internal-credit floor for *tier*.
 
-    Any active 'plus' plan row works (limits are identical across a tier's
-    currency rows); pick deterministically. Returns None if no active 'plus'
-    plan is configured — in which case the caller falls back to free (the
-    credit timestamp harmlessly resolves to Plus once a plan exists).
+    Any active row of that tier works (limits are identical across a tier's
+    currency rows); pick deterministically. Returns None if no active row for
+    the tier is configured — the caller then falls back to free, and the
+    credit resolves correctly once a plan row exists.
     """
-    plus = (
+    row = (
         await db.execute(
             select(SubscriptionPlan)
             .where(
-                SubscriptionPlan.name == "plus",
+                SubscriptionPlan.name == tier,
                 SubscriptionPlan.is_active == True,  # noqa: E712
             )
             .order_by(SubscriptionPlan.currency)
             .limit(1)
         )
     ).scalar_one_or_none()
-    if plus is None:
+    if row is None:
         return None
     return FamilyPlan(
-        name=plus.name,
-        limits=plus.limits or {},
+        name=row.name,
+        limits=row.limits or {},
         status="active",
         family_id=family_id,
     )
@@ -201,31 +202,27 @@ async def get_family_plan_by_id(db: AsyncSession, family_id) -> FamilyPlan:
             family_id=family_id,
         )
 
-    # 1b. Referral credit floor. An active internal referral credit
-    #     (families.referral_bonus_until in the future) entitles the family to
-    #     at least Plus, independent of any paid sub. It lives on the family
-    #     row so the daily PayPal reconcile sweep never touches it — the credit
-    #     cannot be silently erased. A higher paid tier (Pro) always wins.
-    bonus_until = (
-        await db.execute(
-            select(Family.referral_bonus_until).where(Family.id == family_id)
-        )
-    ).scalar_one_or_none()
-    if bonus_until is not None and bonus_until.tzinfo is None:
-        bonus_until = bonus_until.replace(tzinfo=timezone.utc)
-    bonus_active = (
-        bonus_until is not None and bonus_until > datetime.now(timezone.utc)
-    )
+    # 1b. Internal credit floor. Active PlanCreditGrant rows (coupon,
+    #     referral or operator comp) entitle the family to at least their
+    #     highest granted tier, independent of any paid subscription. Credit
+    #     lives in its own table — NOT on a subscription's
+    #     current_period_end — precisely so the nightly PayPal reconcile
+    #     sweep can never erase it. A higher paid tier always wins.
+    from app.services.plan_credit_service import PlanCreditService
+
+    credit_tier = await PlanCreditService.floor_tier(db, family_id)
 
     if resolved is not None:
-        if bonus_active and PLAN_ORDER.get(resolved.name, 0) < PLAN_ORDER["plus"]:
-            floor = await _plus_floor_plan(db, family_id)
+        if credit_tier and PLAN_ORDER.get(resolved.name, 0) < PLAN_ORDER.get(
+            credit_tier, 0
+        ):
+            floor = await _tier_floor_plan(db, family_id, credit_tier)
             if floor is not None:
                 return floor
         return resolved
 
-    if bonus_active:
-        floor = await _plus_floor_plan(db, family_id)
+    if credit_tier:
+        floor = await _tier_floor_plan(db, family_id, credit_tier)
         if floor is not None:
             return floor
 

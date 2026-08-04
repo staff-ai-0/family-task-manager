@@ -16,7 +16,7 @@ import Layout from "../../layouts/Layout.astro";
 interface Props {
     title: string;
     /** Nav key of the current page, for the active-link highlight. */
-    active?: "overview" | "families" | "billing" | "deletions" | "audit";
+    active?: "overview" | "families" | "billing" | "coupons" | "deletions" | "audit";
 }
 const { title, active } = Astro.props;
 
@@ -24,6 +24,7 @@ const NAV = [
     { key: "overview", href: "/admin", label: "Overview" },
     { key: "families", href: "/admin/families", label: "Families" },
     { key: "billing", href: "/admin/billing-review", label: "Billing review" },
+    { key: "coupons", href: "/admin/coupons", label: "Coupons" },
     { key: "deletions", href: "/admin/deletions", label: "Deletions" },
     { key: "audit", href: "/admin/audit", label: "Audit log" },
 ] as const;

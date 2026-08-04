@@ -18,6 +18,8 @@ from app.models import (
     Reward,
     Consequence,
     PointTransaction,
+    Coupon,
+    PlanCreditGrant,
 )
 
 # This is the Alembic Config object

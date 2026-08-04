@@ -234,8 +234,20 @@ async def test_outstanding_weeks_excludes_already_released(db):
     kid = await _user(db, fam)
     await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
 
-    past_week = WEEK - timedelta(days=7)
+    # Anchored on the real current week (see the WEEK contract above): with a
+    # fixed date this week eventually drifts out of the lookback window, and
+    # then the assertion below passes whether or not released weeks are
+    # actually excluded.
+    past_week = await current_week_monday(db, fam.id) - timedelta(days=7)
     await _chore(db, fam, parent, kid, 100, AssignmentStatus.COMPLETED, week=past_week)
+
+    # Prove the week is inside the window BEFORE releasing it, so the
+    # post-release assertion can only pass for the right reason.
+    before = await BankService.list_outstanding_weeks(
+        db, kid, fam.id, lookback_weeks=4
+    )
+    assert past_week in {w["week_of"] for w in before}
+
     await BankService.release_chore_paycheck(db, kid, fam.id, past_week, entitled=True)
 
     weeks = await BankService.list_outstanding_weeks(
@@ -266,11 +278,17 @@ async def test_release_targets_an_explicit_past_week_independent_of_current(db):
     kid = await _user(db, fam)
     await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
 
-    past_week = WEEK - timedelta(days=14)
-    mid_week = WEEK - timedelta(days=7)
+    # Anchored on the REAL current week, per this module's WEEK contract: the
+    # assertions below read list_outstanding_weeks, whose lookback window is
+    # measured from today. With the fixed WEEK these three dates aged out of
+    # that window one week at a time — mid_week fell off on 2026-08-03 and
+    # took the suite red on main.
+    current = await current_week_monday(db, fam.id)
+    past_week = current - timedelta(days=14)
+    mid_week = current - timedelta(days=7)
     await _chore(db, fam, parent, kid, 100, AssignmentStatus.COMPLETED, week=past_week)  # 100%
     await _chore(db, fam, parent, kid, 40, AssignmentStatus.COMPLETED, week=mid_week)    # will stay outstanding
-    await _chore(db, fam, parent, kid, 50, AssignmentStatus.COMPLETED, week=WEEK)        # current week
+    await _chore(db, fam, parent, kid, 50, AssignmentStatus.COMPLETED, week=current)     # current week
 
     r = await BankService.release_chore_paycheck(db, kid, fam.id, past_week, entitled=True)
     assert r["amount_cents"] == 25000
@@ -280,7 +298,7 @@ async def test_release_targets_an_explicit_past_week_independent_of_current(db):
     remaining = {w["week_of"] for w in weeks}
     assert past_week not in remaining          # just released
     assert mid_week in remaining               # still outstanding
-    assert WEEK in remaining                   # current week, still shown
+    assert current in remaining                # current week, still shown
 
 
 @pytest.mark.asyncio

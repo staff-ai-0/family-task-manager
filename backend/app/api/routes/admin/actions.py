@@ -26,6 +26,13 @@ class CompPlusRequest(ReasonRequest):
     days: int = Field(30, ge=1, le=365)
 
 
+class GrantCreditRequest(ReasonRequest):
+    tier: str = Field(..., pattern=r"^(plus|pro)$")
+    # None => lifetime. Bounded at 5 years so a typo cannot comp a family
+    # for a century by accident; use days=null for a deliberate lifetime.
+    days: Optional[int] = Field(None, ge=1, le=1825)
+
+
 class SuspendRequest(ReasonRequest):
     suspended: bool
 
@@ -60,11 +67,31 @@ async def comp_plus(
     operator: User = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Grant free Plus until now + days (absolute, not stacked)."""
-    return await AdminActionService.comp_plus_month(
+    """Grant free Plus for N days. Thin alias over the general credit grant,
+    kept so the existing operator UI keeps working."""
+    return await AdminActionService.grant_plan_credit(
         db,
         operator=operator,
         family_id=family_id,
+        tier="plus",
+        days=body.days,
+        reason=body.reason,
+    )
+
+
+@router.post("/families/{family_id}/credits")
+async def grant_credit(
+    family_id: UUID,
+    body: GrantCreditRequest,
+    operator: User = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Grant free time at any tier. days=null grants it for life."""
+    return await AdminActionService.grant_plan_credit(
+        db,
+        operator=operator,
+        family_id=family_id,
+        tier=body.tier,
         days=body.days,
         reason=body.reason,
     )

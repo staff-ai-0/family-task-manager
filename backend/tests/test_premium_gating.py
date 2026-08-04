@@ -342,3 +342,153 @@ async def test_jarvis_chat_passes_gate_on_plus_plan(
         "/api/jarvis/chat", json={"message": "hola"}, headers=auth_headers
     )
     assert resp.status_code == 502, resp.text
+
+
+@pytest.mark.asyncio
+async def test_a_pro_grant_floors_a_free_family_at_pro(
+    db_session, test_parent_user, test_family
+):
+    from app.core.premium import get_family_plan
+    from app.models.subscription import SubscriptionPlan
+    from app.services.plan_credit_service import PlanCreditService
+
+    db_session.add(
+        SubscriptionPlan(
+            name="pro", display_name="Pro", display_name_es="Pro",
+            currency="USD", price_monthly_cents=1_500, price_annual_cents=15_000,
+            limits={"ai_features": True, "max_family_members": -1},
+            is_active=True, sort_order=20,
+        )
+    )
+    await db_session.flush()
+    await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="coupon",
+        tier="pro", duration_days=30,
+    )
+    await db_session.commit()
+
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "pro"
+    assert plan.limits["ai_features"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_higher_paid_plan_beats_a_lower_grant(
+    db_session, test_parent_user, test_family
+):
+    """A Pro payer with a Plus coupon must keep Pro."""
+    from app.core.premium import get_family_plan
+    from app.models.subscription import FamilySubscription, SubscriptionPlan
+    from app.services.plan_credit_service import PlanCreditService
+
+    plus = SubscriptionPlan(
+        name="plus", display_name="Plus", display_name_es="Plus", currency="USD",
+        price_monthly_cents=500, price_annual_cents=5_000,
+        limits={"max_family_members": 6}, is_active=True, sort_order=10,
+    )
+    pro = SubscriptionPlan(
+        name="pro", display_name="Pro", display_name_es="Pro", currency="USD",
+        price_monthly_cents=1_500, price_annual_cents=15_000,
+        limits={"max_family_members": -1}, is_active=True, sort_order=20,
+    )
+    db_session.add_all([plus, pro])
+    await db_session.flush()
+    db_session.add(
+        FamilySubscription(
+            family_id=test_family.id, plan_id=pro.id,
+            billing_cycle="monthly", status="active",
+            paypal_subscription_id="I-PRO",
+        )
+    )
+    await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="coupon",
+        tier="plus", duration_days=30,
+    )
+    await db_session.commit()
+
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "pro"
+
+
+@pytest.mark.asyncio
+async def test_an_expired_grant_returns_the_family_to_free(
+    db_session, test_parent_user, test_family
+):
+    from datetime import datetime, timedelta, timezone
+
+    from app.core.premium import get_family_plan
+    from app.models.plan_credit import PlanCreditGrant
+    from app.models.subscription import SubscriptionPlan
+
+    db_session.add(
+        SubscriptionPlan(
+            name="free", display_name="Free", display_name_es="Gratis",
+            currency="USD", price_monthly_cents=0, price_annual_cents=0,
+            limits={"ai_features": False}, is_active=True, sort_order=0,
+        )
+    )
+    past = datetime.now(timezone.utc) - timedelta(days=90)
+    db_session.add(
+        PlanCreditGrant(
+            family_id=test_family.id, source="coupon", tier="pro",
+            starts_at=past, ends_at=past + timedelta(days=30),
+        )
+    )
+    await db_session.commit()
+
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "free"
+
+
+@pytest.mark.asyncio
+async def test_an_active_pro_grant_overrides_a_paid_plus_sub(
+    db_session, test_parent_user, test_family
+):
+    """A Plus payer with an active Pro grant must resolve to Pro.
+
+    This exercises the branch inside get_family_plan_by_id where `resolved`
+    (the paid plan) is NOT None but the credit floor outranks it — the
+    floor must win, not the paid sub. Row 2 of the decision table.
+
+    current_period_end is deliberately left unset on the subscription:
+    PlanCreditService.next_window_start only pushes a grant's starts_at
+    past "now" when the paid sub has a populated current_period_end that
+    is later than now. Leaving it None keeps the grant's window starting
+    immediately, so this test exercises the override branch rather than
+    silently asserting on a grant that hasn't started yet.
+    """
+    from app.core.premium import get_family_plan
+    from app.models.subscription import FamilySubscription, SubscriptionPlan
+    from app.services.plan_credit_service import PlanCreditService
+
+    plus = SubscriptionPlan(
+        name="plus", display_name="Plus", display_name_es="Plus", currency="USD",
+        price_monthly_cents=500, price_annual_cents=5_000,
+        limits={"max_family_members": 6}, is_active=True, sort_order=10,
+    )
+    pro = SubscriptionPlan(
+        name="pro", display_name="Pro", display_name_es="Pro", currency="USD",
+        price_monthly_cents=1_500, price_annual_cents=15_000,
+        limits={"max_family_members": -1}, is_active=True, sort_order=20,
+    )
+    db_session.add_all([plus, pro])
+    await db_session.flush()
+    db_session.add(
+        FamilySubscription(
+            family_id=test_family.id, plan_id=plus.id,
+            billing_cycle="monthly", status="active",
+            paypal_subscription_id="I-PLUS",
+            # current_period_end intentionally omitted — see docstring.
+        )
+    )
+    await PlanCreditService.grant(
+        db_session, family_id=test_family.id, source="coupon",
+        tier="pro", duration_days=30,
+    )
+    await db_session.commit()
+
+    plan = await get_family_plan(db_session, test_parent_user)
+    assert plan.name == "pro"
+    # A Pro-only limit value proves the limits came from the Pro row, not
+    # just the resolved plan name happening to say "pro".
+    assert plan.limits["max_family_members"] == -1

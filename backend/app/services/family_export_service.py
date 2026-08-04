@@ -6,7 +6,7 @@ users (sans credentials), task templates/assignments, gigs, points/cash, rewards
 budget (reusing the budget ExportService so that portion stays re-importable),
 calendar, meals, shopping, chat + DMs, pets, notifications, Jarvis (chat
 history, schedules, pending actions, MCP token metadata), kiosk devices,
-onboarding events, subscription/usage, and A2A webhook config.
+onboarding events, subscription/usage/credit grants, and A2A webhook config.
 
 Uploaded images are NOT bundled — the archive carries a manifest of the file
 paths instead (see uploads_manifest.json + README.txt inside the ZIP).
@@ -61,6 +61,7 @@ from app.models import (
     MealPlanEntry,
     Notification,
     OnboardingEvent,
+    PlanCreditGrant,
     PointTransaction,
     PupScoreSnapshot,
     Recipe,
@@ -180,6 +181,7 @@ EXPORTED_FAMILY_TABLES: frozenset[str] = frozenset(
         OnboardingEvent,
         FamilySubscription,
         UsageTracking,
+        PlanCreditGrant,
         FamilyA2AWebhook,
         # exported via the re-importable budget backup (budget/budget_data.json)
         BudgetAccount,
@@ -392,6 +394,7 @@ class FamilyExportService:
         onboarding_events = await _rows(db, fam(OnboardingEvent))
         subscriptions = await _rows(db, fam(FamilySubscription))
         usage_tracking = await _rows(db, fam(UsageTracking))
+        credit_grants = await _rows(db, fam(PlanCreditGrant))
         a2a_webhooks = await _rows(db, fam(FamilyA2AWebhook))
 
         # Budget extras not covered by the re-importable budget backup format.
@@ -507,6 +510,12 @@ class FamilyExportService:
             "onboarding_events.json": _dump(onboarding_events),
             "subscription/subscription.json": _dump(subscriptions),
             "subscription/usage_tracking.json": _dump(usage_tracking),
+            # coupon_id and granted_by_user_id are exported as-is (FK ids),
+            # matching the file's existing precedent for actor/reference
+            # columns (e.g. kiosk/devices.json:created_by,
+            # invitations.json:invited_by_user_id) — only credential/secret
+            # columns get stripped in this service, not internal ids.
+            "subscription/credit_grants.json": _dump(credit_grants),
             "a2a/webhook_config.json": _dump(
                 a2a_webhooks, exclude=_A2A_EXCLUDED_COLUMNS
             ),

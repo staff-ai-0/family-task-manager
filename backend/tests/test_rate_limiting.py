@@ -127,3 +127,114 @@ class TestRateLimitKeyBehavior:
             )
             statuses.append(r.status_code)
         assert 429 not in statuses, f"distinct CF IPs shared a bucket: {statuses}"
+
+
+_ATTACKER_IP = "203.0.113.77"
+_REDEEM = "/api/subscriptions/coupons/redeem"
+
+
+async def _signup(client, email: str, *, coupon: str | None = None, ip: str):
+    body = {
+        "family_name": "Los Nuevos",
+        "name": "Ana",
+        "email": email,
+        "password": "password123",
+        "accept_terms": True,
+    }
+    if coupon is not None:
+        body["coupon"] = coupon
+    return await client.post(
+        "/api/auth/register-family", json=body, headers={"CF-Connecting-IP": ip}
+    )
+
+
+async def _redeem(client, auth_headers, *, ip: str):
+    return await client.post(
+        _REDEEM,
+        json={"code": "GUESS"},
+        headers={**auth_headers, "CF-Connecting-IP": ip},
+    )
+
+
+class TestCouponAttemptBudget:
+    """A coupon guess costs the same scarce budget wherever it enters from.
+
+    The dedicated endpoint is COUPON_LIMIT (10/hour), but register-family
+    reaches the SAME CouponService.redeem while carrying only AUTH_LIMIT
+    (10/minute = 600/hour) — a 60x budget against codes the coupon service's
+    own docstring calls "human-chosen and guessable by design", with
+    `coupon_applied` in the 201 body as a clean hit/miss oracle. Both paths
+    now charge one shared per-IP bucket so the cheaper door is not the
+    unlocked one.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_signup_coupon_is_blocked_once_the_budget_is_spent(
+        self, client, auth_headers
+    ):
+        """Ten redeems exhaust the hourly budget for this IP; the very FIRST
+        signup from it must then be refused, even though AUTH_LIMIT is
+        untouched. Without a shared bucket this signup is request 1 of 600."""
+        for _ in range(10):
+            await _redeem(client, auth_headers, ip=_ATTACKER_IP)
+
+        r = await _signup(
+            client, "burned@example.com", coupon="GUESS", ip=_ATTACKER_IP
+        )
+        assert r.status_code == 429, (
+            "a coupon attempt through signup ignored the coupon budget: "
+            f"{r.status_code} {r.text}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_couponless_signup_is_untouched_by_a_spent_budget(
+        self, client, auth_headers
+    ):
+        """The blast radius must stop at coupon attempts: normal signup keeps
+        working exactly as before, at its own AUTH_LIMIT."""
+        for _ in range(10):
+            await _redeem(client, auth_headers, ip=_ATTACKER_IP)
+
+        r = await _signup(client, "clean@example.com", ip=_ATTACKER_IP)
+        assert r.status_code == 201, (
+            f"couponless signup was collateral damage: {r.status_code} {r.text}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_signup_attempts_charge_the_shared_bucket(
+        self, client, auth_headers
+    ):
+        """The other direction: guesses made through signup must deplete the
+        budget the dedicated endpoint draws from. Nine signups (kept under
+        AUTH_LIMIT's 10/minute, which is exactly why this door was cheaper)
+        leave room for one redeem, and the one after it must be refused."""
+        for i in range(9):
+            r = await _signup(
+                client, f"probe{i}@example.com", coupon="GUESS", ip=_ATTACKER_IP
+            )
+            assert r.status_code == 201, f"signup {i} failed: {r.text}"
+
+        tenth = await _redeem(client, auth_headers, ip=_ATTACKER_IP)
+        assert tenth.status_code != 429, "the 10th attempt should still fit"
+
+        eleventh = await _redeem(client, auth_headers, ip=_ATTACKER_IP)
+        assert eleventh.status_code == 429, (
+            "signup guesses did not deplete the redeem budget: "
+            f"{eleventh.status_code}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_redeem_budget_also_follows_the_family_not_only_the_ip(
+        self, client, auth_headers
+    ):
+        """An IP is rotatable (open proxies, a phone's cell network); the
+        family_id in the JWT is not. Redeem is authenticated and parent-only,
+        so it charges both dimensions — moving to a fresh IP with the same
+        token must not refresh the budget."""
+        for _ in range(10):
+            await _redeem(client, auth_headers, ip=_ATTACKER_IP)
+
+        r = await _redeem(client, auth_headers, ip="198.51.100.4")
+        assert r.status_code == 429, (
+            f"rotating the IP refreshed the family's budget: {r.status_code}"
+        )

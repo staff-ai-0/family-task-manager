@@ -1,0 +1,452 @@
+---
+import AdminShell from "@components/ui/AdminShell.astro";
+import { apiFetch } from "../../lib/api";
+
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+
+const { data } = await apiFetch<any[]>("/api/admin/coupons", { token });
+// null means the backend call failed (down / network / non-2xx) — see
+// frontend/src/lib/api.ts. A genuinely empty catalog is `[]` with ok:true.
+// Collapsing "backend unreachable" into "no coupons yet" would invite an
+// operator to re-create a code that already exists, so keep them distinct.
+const rows = data;
+
+// duration_days null => the credit never ends; max_redemptions null => no cap.
+const durationLabel = (c: any) =>
+    c.duration_days === null ? "lifetime" : `${c.duration_days}d`;
+const usageLabel = (c: any) =>
+    `${c.redemption_count} / ${c.max_redemptions ?? "∞"}`;
+const shortDate = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
+---
+
+<AdminShell title="Coupons" active="coupons">
+    <p class="mb-4 max-w-3xl text-sm text-slate-600">
+        Launch promos, beta passes and courtesy comps. Redeeming a coupon grants
+        the family a plan credit — it does not create a PayPal subscription, so
+        nothing here ever charges anyone. code, kind, tier and duration are
+        immutable once created: changing them would retroactively alter what
+        already-issued credits meant. Deactivate instead, which stops new
+        redemptions and leaves running credits alone.
+    </p>
+
+    <section class="mb-8 rounded border border-slate-200 bg-white p-4">
+        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Create coupon
+        </h2>
+        <form id="coupon-create" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label class="text-sm text-slate-600">
+                Code
+                <input
+                    name="code"
+                    required
+                    minlength="4"
+                    maxlength="32"
+                    pattern="[A-Za-z0-9][A-Za-z0-9\-]{3,31}"
+                    placeholder="LAUNCH2026"
+                    title="4–32 characters: letters, digits and hyphens, starting with a letter or digit"
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm uppercase"
+                />
+            </label>
+            <label class="text-sm text-slate-600">
+                Kind
+                <select
+                    name="kind"
+                    class="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+                >
+                    <option value="launch">launch — launch promo</option>
+                    <option value="beta">beta — tester</option>
+                    <option value="comp">comp — courtesy</option>
+                </select>
+            </label>
+            <label class="text-sm text-slate-600">
+                Tier
+                <select
+                    name="tier"
+                    class="mt-1 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+                >
+                    <option value="plus">plus</option>
+                    <option value="pro">pro</option>
+                </select>
+            </label>
+            <label class="text-sm text-slate-600">
+                Duration in days <span class="text-slate-400">(empty = lifetime)</span>
+                <input
+                    name="duration_days"
+                    type="number"
+                    min="1"
+                    max="1825"
+                    placeholder="30"
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+            </label>
+            <label class="text-sm text-slate-600">
+                Max redemptions <span class="text-slate-400">(empty = unlimited)</span>
+                <input
+                    name="max_redemptions"
+                    type="number"
+                    min="1"
+                    placeholder="500"
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+            </label>
+            <label class="text-sm text-slate-600">
+                Valid until <span class="text-slate-400">(empty = no expiry)</span>
+                <input
+                    name="valid_until"
+                    type="date"
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+            </label>
+            <label class="text-sm text-slate-600">
+                Campaign
+                <input
+                    name="campaign"
+                    maxlength="120"
+                    placeholder="launch-week"
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+            </label>
+            <label class="text-sm text-slate-600 sm:col-span-2">
+                Notes
+                <input
+                    name="notes"
+                    maxlength="500"
+                    placeholder="Why this exists, who asked for it"
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+            </label>
+            <div class="sm:col-span-2 lg:col-span-3">
+                <button
+                    type="submit"
+                    class="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+                >
+                    Create
+                </button>
+            </div>
+        </form>
+        <p id="coupon-create-error" aria-live="polite" class="mt-3 hidden text-sm text-red-700"></p>
+    </section>
+
+    {!rows && (
+        <p class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            Could not load coupons. The backend may be restarting.
+        </p>
+    )}
+
+    {rows && (rows.length === 0 ? (
+        <p class="text-sm text-slate-500">No coupons yet.</p>
+    ) : (
+        <div class="overflow-x-auto">
+            <table class="w-full min-w-[900px] border-collapse text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                        <th class="py-2">Code</th>
+                        <th class="py-2">Kind</th>
+                        <th class="py-2">Tier</th>
+                        <th class="py-2">Duration</th>
+                        <th class="py-2">Redemptions</th>
+                        <th class="py-2">Valid until</th>
+                        <th class="py-2">Campaign</th>
+                        <th class="py-2">Active</th>
+                        <th class="py-2"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((row: any) => (
+                        <tr class="border-b border-slate-100 align-top">
+                            <td class="num py-2 font-medium">{row.code}</td>
+                            <td class="py-2">{row.kind}</td>
+                            <td class="py-2">{row.tier}</td>
+                            <td class="num py-2">{durationLabel(row)}</td>
+                            <td class="py-2">
+                                {/* Lazy: a campaign coupon can have hundreds of
+                                    grants and nobody needs them all up front. */}
+                                <details
+                                    data-redemptions={row.id}
+                                    data-counter={row.redemption_count}
+                                >
+                                    <summary class="num cursor-pointer">
+                                        {usageLabel(row)}
+                                    </summary>
+                                    <div
+                                        data-redemption-body
+                                        class="mt-1 space-y-0.5 text-xs text-slate-500"
+                                    >
+                                        Loading…
+                                    </div>
+                                </details>
+                            </td>
+                            <td class="num py-2">{shortDate(row.valid_until)}</td>
+                            <td class="py-2">{row.campaign ?? "—"}</td>
+                            <td class="py-2">{row.is_active ? "yes" : "no"}</td>
+                            <td class="py-2">
+                                {row.is_active && (
+                                    <button
+                                        data-deactivate={row.id}
+                                        data-code={row.code}
+                                        class="underline disabled:opacity-50"
+                                    >
+                                        Deactivate
+                                    </button>
+                                )}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    ))}
+</AdminShell>
+
+<script>
+    import { normalizeErrorDetail } from "../../lib/errors";
+
+    // Same three backend error-body shapes as the family-detail actions page:
+    // FastAPI HTTPException {detail: string}, RequestValidationError
+    // {detail: [{loc, msg}]}, and this codebase's {error, message} handlers —
+    // which is also what the /api/admin proxy returns on a 502.
+    function errorMessageFrom(body: any): string {
+        return (
+            normalizeErrorDetail(body?.detail) ??
+            (typeof body?.message === "string" ? body.message : null) ??
+            "unknown error"
+        );
+    }
+
+    const form = document.getElementById("coupon-create") as HTMLFormElement | null;
+    const errorEl = document.getElementById("coupon-create-error");
+
+    function showCreateError(message: string) {
+        if (!errorEl) return;
+        errorEl.textContent = message;
+        errorEl.classList.remove("hidden");
+    }
+
+    form?.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        errorEl?.classList.add("hidden");
+
+        const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+        const original = submit?.textContent ?? "";
+        const fd = new FormData(form);
+
+        // Empty number/date inputs must serialize as null, never "" or 0: the
+        // API reads null as lifetime / unlimited / no expiry, and "" is a 422.
+        const num = (k: string) => (fd.get(k) ? Number(fd.get(k)) : null);
+        const str = (k: string) => String(fd.get(k) ?? "").trim() || null;
+        const validUntil = String(fd.get("valid_until") ?? "").trim();
+
+        if (submit) {
+            submit.disabled = true;
+            submit.textContent = "Creating…";
+        }
+        try {
+            const res = await fetch("/api/admin/coupons", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    code: String(fd.get("code") ?? "").trim().toUpperCase(),
+                    kind: fd.get("kind"),
+                    tier: fd.get("tier"),
+                    duration_days: num("duration_days"),
+                    max_redemptions: num("max_redemptions"),
+                    // End of the chosen day in UTC. A bare date would expire
+                    // the coupon at midnight *entering* the day the operator
+                    // picked, i.e. a day early.
+                    valid_until: validUntil
+                        ? new Date(`${validUntil}T23:59:59Z`).toISOString()
+                        : null,
+                    campaign: str("campaign"),
+                    notes: str("notes"),
+                }),
+            });
+            if (res.ok) {
+                window.location.reload();
+                return;
+            }
+            const body = await res.json().catch(() => ({}));
+            // 409 (the code exists) and 422 (the input is malformed) are
+            // different operator mistakes with different fixes — they must not
+            // read the same.
+            if (res.status === 409) {
+                showCreateError("That code already exists. Pick a different one.");
+            } else if (res.status === 422) {
+                showCreateError(
+                    `Invalid input — ${errorMessageFrom(body)}. Code is 4–32 characters ` +
+                        `(letters, digits, hyphen), duration 1–1825 days, max redemptions 1 or more.`,
+                );
+            } else {
+                showCreateError(`Could not create the coupon (${res.status}): ${errorMessageFrom(body)}`);
+            }
+        } catch (e) {
+            showCreateError(`Request failed: ${e}`);
+        } finally {
+            if (submit) {
+                submit.disabled = false;
+                submit.textContent = original;
+            }
+        }
+    });
+
+    document
+        .querySelectorAll<HTMLButtonElement>("button[data-deactivate]")
+        .forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                const id = btn.dataset.deactivate;
+                const code = btn.dataset.code ?? id;
+                if (
+                    !window.confirm(
+                        `Deactivate ${code}? Credits already granted keep running — ` +
+                            `the code just stops being redeemable. This cannot be undone here.`,
+                    )
+                ) {
+                    return;
+                }
+                const original = btn.textContent ?? "";
+                btn.disabled = true;
+                btn.textContent = "Working…";
+                try {
+                    const res = await fetch(`/api/admin/coupons/${id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ is_active: false }),
+                    });
+                    if (res.ok) {
+                        window.location.reload();
+                        return;
+                    }
+                    const body = await res.json().catch(() => ({}));
+                    window.alert(`Failed (${res.status}): ${errorMessageFrom(body)}`);
+                } catch (e) {
+                    window.alert(`Request failed: ${e}`);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = original;
+                }
+            });
+        });
+
+    document
+        .querySelectorAll<HTMLDetailsElement>("details[data-redemptions]")
+        .forEach((el) => {
+            el.addEventListener("toggle", async () => {
+                if (!el.open || el.dataset.loaded) return;
+                el.dataset.loaded = "1";
+                const id = el.dataset.redemptions;
+                const target = el.querySelector<HTMLElement>("[data-redemption-body]");
+                if (!target) return;
+                try {
+                    const res = await fetch(`/api/admin/coupons/${id}/redemptions`);
+                    if (!res.ok) {
+                        const body = await res.json().catch(() => ({}));
+                        target.textContent = `Could not load (${res.status}): ${errorMessageFrom(body)}`;
+                        delete el.dataset.loaded; // let the operator retry
+                        return;
+                    }
+                    const data = await res.json();
+                    const list = Array.isArray(data?.redemptions) ? data.redemptions : [];
+                    target.replaceChildren();
+
+                    // `count` is recomputed from the grant rows server-side,
+                    // while the summary above shows the denormalized
+                    // coupons.redemption_count. Surfacing a mismatch is the
+                    // whole point of the backend computing it separately.
+                    const shown = Number(el.dataset.counter);
+                    if (Number.isFinite(shown) && data?.count !== shown) {
+                        const warn = document.createElement("div");
+                        warn.className = "font-semibold text-amber-700";
+                        warn.textContent = `Counter drift: this row says ${shown}, actual grants ${data?.count}.`;
+                        target.appendChild(warn);
+                    }
+
+                    if (!list.length) {
+                        const empty = document.createElement("div");
+                        empty.textContent = "No redemptions.";
+                        target.appendChild(empty);
+                        return;
+                    }
+                    for (const r of list) {
+                        // textContent, never innerHTML: family_name is
+                        // user-supplied and this is the operator console.
+                        const line = document.createElement("div");
+                        const label = document.createElement("span");
+                        // A grant whose window has not opened yet reads as
+                        // pending, not as live — same distinction the family
+                        // page and the family's own subscription page make.
+                        // This drawer is the one place an operator drills into
+                        // a SPECIFIC code, so it is where an invisible queued
+                        // comp is most likely to be re-issued by clicking
+                        // again — and comps stack, so every click is another
+                        // 30 free days.
+                        const window_ =
+                            r.starts_at && Date.parse(r.starts_at) > Date.now()
+                                ? `pending, starts ${r.starts_at.slice(0, 10)}`
+                                : r.ends_at
+                                    ? r.ends_at.slice(0, 10)
+                                    : "lifetime";
+                        label.textContent =
+                            `${r.family_name} · ${r.tier} · ${window_}` +
+                            `${r.revoked_at ? " · revoked" : ""}`;
+                        line.appendChild(label);
+
+                        // Without this the console can never produce the
+                        // "· revoked" state it renders, and the family page's
+                        // "individually revocable" copy is a promise only curl
+                        // can keep.
+                        if (!r.revoked_at) {
+                            const btn = document.createElement("button");
+                            btn.type = "button";
+                            btn.className = "ml-2 text-red-600 underline";
+                            btn.textContent = "Revoke";
+                            btn.addEventListener("click", async () => {
+                                const reason = window.prompt(
+                                    `Revoke this credit for ${r.family_name}? Reason (audited):`,
+                                );
+                                // Cancel, or a reason too short for the API's
+                                // min_length=3 — do not fire a doomed request.
+                                if (reason === null) return;
+                                if (reason.trim().length < 3) {
+                                    window.alert("A reason of at least 3 characters is required.");
+                                    return;
+                                }
+                                btn.disabled = true;
+                                btn.textContent = "…";
+                                try {
+                                    const res = await fetch(
+                                        `/api/admin/credits/${r.grant_id}/revoke`,
+                                        {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ reason: reason.trim() }),
+                                        },
+                                    );
+                                    if (res.ok) {
+                                        label.textContent = `${label.textContent} · revoked`;
+                                        btn.remove();
+                                        return;
+                                    }
+                                    window.alert(
+                                        res.status === 409
+                                            ? "That credit was already revoked."
+                                            : res.status === 404
+                                                ? "That credit no longer exists."
+                                                : "Could not revoke the credit.",
+                                    );
+                                } catch (e) {
+                                    window.alert(`Request failed: ${e}`);
+                                }
+                                btn.disabled = false;
+                                btn.textContent = "Revoke";
+                            });
+                            line.appendChild(btn);
+                        }
+                        target.appendChild(line);
+                    }
+                } catch (e) {
+                    target.textContent = `Request failed: ${e}`;
+                    delete el.dataset.loaded;
+                }
+            });
+        });
+</script>
