@@ -153,7 +153,7 @@ async def test_grant_creates_a_window_starting_now(db_session, test_family):
     )
     await db_session.commit()
 
-    assert row.starts_at >= before
+    assert before <= row.starts_at < before + timedelta(minutes=1)
     assert row.ends_at - row.starts_at == timedelta(days=30)
     assert row.tier == "plus"
 
@@ -209,7 +209,9 @@ async def test_a_lifetime_grant_does_not_shift_the_next_window(
     )
     await db_session.commit()
 
-    assert later.starts_at >= before  # not queued behind "forever"
+    # Not queued behind "forever". The upper bound matters: any treatment of
+    # a lifetime grant as an infinitely-far anchor also lands `>= before`.
+    assert before <= later.starts_at < before + timedelta(minutes=1)
 
 
 @pytest.mark.asyncio
@@ -511,7 +513,11 @@ async def test_a_higher_tier_grant_never_waits_behind_a_lower_tier_grant(
     )
     await db_session.commit()
 
-    assert pro.starts_at >= before
+    # The upper bound is the whole test. Without the tier filter in
+    # next_window_start's anchor query the Pro grant queues behind the Plus
+    # one and starts 30 days out — which satisfies `>= before` just as well
+    # as the correct value does, so the lower bound alone guards nothing.
+    assert before <= pro.starts_at < before + timedelta(minutes=1)
 
 
 @pytest.mark.asyncio
@@ -535,7 +541,10 @@ async def test_a_revoked_grant_does_not_anchor_the_queue(db_session, test_family
     )
     await db_session.commit()
 
-    assert second.starts_at >= before
+    # Upper bound, not just `>= before`: if the anchor query stopped
+    # excluding revoked grants the second credit would start at the revoked
+    # one's ends_at (30 days out), which is also `>= before`.
+    assert before <= second.starts_at < before + timedelta(minutes=1)
 
 
 @pytest.mark.asyncio
@@ -576,7 +585,11 @@ async def test_a_higher_tier_grant_starts_now_despite_a_lower_tier_paid_sub(
     )
     await db_session.commit()
 
-    assert row.starts_at >= before
+    # Same trap as the credit-vs-credit tiering tests: dropping the paid
+    # plan's PLAN_ORDER comparison defers the Pro grant to paid_end (20 days
+    # out), which still satisfies `>= before`.
+    assert before <= row.starts_at < before + timedelta(minutes=1)
+    assert row.starts_at != paid_end
     assert row.starts_at != paid_end
 
 
