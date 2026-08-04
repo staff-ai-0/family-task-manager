@@ -235,7 +235,10 @@ async def release_chore_paycheck(
     ``top_up: true`` in the body is the one path past that 409: it pays
     ``adjustment_cents`` (positive, required) and nothing else onto a week
     already released, which is how a parent trues up retroactive chore credit
-    that landed after payday. See BankService.release_chore_paycheck."""
+    that landed after payday. A top-up is repeatable on purpose (two late
+    chores, two corrections), so it only 409s on a same-week repeat inside
+    BankService.TOPUP_DEDUPE_WINDOW — enough to swallow a double-submit, not
+    an idempotency guarantee. See BankService.release_chore_paycheck."""
     fam = to_uuid_required(current_user.family_id)
     target = await verify_user_in_family(db, user_id, fam)
     if target.role not in (UserRole.CHILD, UserRole.TEEN):

@@ -172,7 +172,9 @@ class ChorePaycheckReleaseBody(BaseModel):
     chore credit landing on a paid week (mark_done_for_kid's
     ``week_already_paid``). It pays ONLY the adjustment, which must be
     positive, and 422s if the week was never released. Without it a re-release
-    still 409s, so a double-submitted form can never pay twice."""
+    still 409s, so a double-submitted form can never pay twice; a top-up is
+    deliberately repeatable (a week can need more than one correction), so it
+    is guarded only against an immediate same-week repeat."""
     adjustment_cents: int = Field(0, ge=-100000, le=100000)
     week_of: Optional[date] = None
     top_up: bool = False

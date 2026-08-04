@@ -697,6 +697,75 @@ async def test_top_up_does_not_re_convert_points(db):
     assert kid.points == points_after_release
 
 
+@pytest.mark.asyncio
+async def test_top_up_refuses_an_immediate_repeat(db):
+    """A double-submitted top-up must not pay twice.
+
+    The release next door is idempotent per (kid, week); a top-up cannot be,
+    because a week may legitimately need two corrections. So the guard is a
+    time window, and this is the accident it is sized for: the same request
+    arriving twice (retry, second tab, stale page) pays once.
+    """
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    await _chore(db, fam, parent, kid, 100, AssignmentStatus.COMPLETED)
+    await BankService.release_chore_paycheck(
+        db, kid, fam.id, WEEK, entitled=True, released_by=parent.id,
+    )
+    paid_after_release = await _week_allowance_total(db, kid, WEEK)
+
+    await BankService.release_chore_paycheck(
+        db, kid, fam.id, WEEK, entitled=True, adjustment_cents=3000,
+        top_up=True, released_by=parent.id,
+    )
+    assert await _week_allowance_total(db, kid, WEEK) == paid_after_release + 3000
+
+    with pytest.raises(Exception) as ei:
+        await BankService.release_chore_paycheck(
+            db, kid, fam.id, WEEK, entitled=True, adjustment_cents=3000,
+            top_up=True, released_by=parent.id,
+        )
+    assert getattr(ei.value, "status_code", None) == 409
+    # Not a different number either — the accident is the repeat, not the amount.
+    with pytest.raises(Exception):
+        await BankService.release_chore_paycheck(
+            db, kid, fam.id, WEEK, entitled=True, adjustment_cents=500,
+            top_up=True, released_by=parent.id,
+        )
+    assert await _week_allowance_total(db, kid, WEEK) == paid_after_release + 3000
+    u = await db.get(User, kid.id)
+    assert u.cash_cents == paid_after_release + 3000
+
+
+@pytest.mark.asyncio
+async def test_top_up_is_attributed_to_the_parent_who_typed_it(db):
+    """A correction is the row an audit most wants a name on — it is a number
+    a human chose, not one the payout math derived."""
+    fam = await _family(db)
+    parent = await _user(db, fam, UserRole.PARENT)
+    kid = await _user(db, fam)
+    await _config(db, kid, allowance_mode="chore_proportional", allowance_cents=25000)
+    await _chore(db, fam, parent, kid, 100, AssignmentStatus.COMPLETED)
+    await BankService.release_chore_paycheck(db, kid, fam.id, WEEK, entitled=True)
+
+    await BankService.release_chore_paycheck(
+        db, kid, fam.id, WEEK, entitled=True, adjustment_cents=1500,
+        top_up=True, released_by=parent.id,
+    )
+    rows = (await db.execute(
+        select(CashTransaction).where(
+            CashTransaction.user_id == kid.id,
+            CashTransaction.type == CashTransactionType.ALLOWANCE,
+            CashTransaction.week_of == WEEK,
+            CashTransaction.description.like("Ajuste%"),
+        )
+    )).scalars().all()
+    assert rows, "top-up wrote no ledger row"
+    assert all(r.created_by == parent.id for r in rows)
+
+
 # ── notification on release + parent reminder ─────────────────────────────
 
 @pytest.mark.asyncio

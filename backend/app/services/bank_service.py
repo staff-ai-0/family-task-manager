@@ -73,6 +73,20 @@ CHORE_PAYCHECK_MODES = ("chore_proportional", "chore_gated", "points_rate")
 # screen would never list.
 PAYCHECK_LOOKBACK_WEEKS = 8
 
+# How long two top-ups of the same (kid, week) are treated as one
+# double-submitted request rather than two deliberate corrections. See
+# _top_up_chore_paycheck for what this does and does NOT protect.
+TOPUP_DEDUPE_WINDOW = timedelta(seconds=90)
+
+
+def _topup_description(week_monday: date) -> str:
+    """Ledger text for a top-up row. Shared by the writer and the dedupe
+    probe on purpose: the probe recognises a previous top-up by this exact
+    string, so a copy edit that changed only one of the two would silently
+    disarm the guard."""
+    return f"Ajuste del domingo por tareas (semana {week_monday.isoformat()})"
+
+
 # Config fields a parent may upsert (jar balances are NEVER settable here).
 _SETTINGS_FIELDS = (
     "allowance_cents",
@@ -859,6 +873,7 @@ class BankService:
                 adjustment_cents=adjustment_cents,
                 entitled=entitled,
                 already_paid=already_paid is not None,
+                released_by=released_by,
             )
         if already_paid is not None:
             raise HTTPException(
@@ -936,7 +951,7 @@ class BankService:
     async def _top_up_chore_paycheck(
         db: AsyncSession, user: User, acct: KidBankAccount, family_id: UUID,
         week_monday: date, *, adjustment_cents: int, entitled: bool,
-        already_paid: bool,
+        already_paid: bool, released_by: Optional[UUID] = None,
     ) -> dict:
         """Pay a parent-typed shortfall onto a week whose paycheck already went
         out. Writes ONE thing: ``adjustment_cents`` as its own ALLOWANCE row on
@@ -944,6 +959,22 @@ class BankService:
         or the points_rate conversion — this is not "release the week again
         with a number added", it is a correction, so re-deriving the base here
         would put the base back on the wire and double-pay it.
+
+        IDEMPOTENCY — read this before trusting the flow. Unlike the release it
+        sits next to, a top-up has NO natural idempotency key: (kid, week) is
+        already taken by the release, and a parent may legitimately top the same
+        week up more than once (two late chores approved on different days), so
+        making the pair unique would break the feature it exists for. What is
+        implemented instead is a narrow dedupe: a second top-up for the same
+        (kid, week) inside ``TOPUP_DEDUPE_WINDOW`` is refused with a 409.
+
+        That covers the realistic accident — a double-submitted request, a
+        retried POST, a second tab clicked twice — and nothing else. It does NOT
+        make this endpoint idempotent: two identical calls a few minutes apart
+        both pay, by design, because at that distance they are far more likely
+        to be two real corrections than one duplicate. A caller that must not
+        double-pay across a longer gap owns that itself (the payouts UI disables
+        the button for the flight and reloads on success).
 
         Caller has already taken the user + account row locks.
         """
@@ -969,12 +1000,35 @@ class BankService:
                 status_code=422,
                 detail="top_up requires a positive adjustment_cents",
             )
+        description = _topup_description(week_monday)
+        recent = (await db.execute(
+            select(CashTransaction.id).where(
+                CashTransaction.user_id == user.id,
+                CashTransaction.family_id == family_id,
+                CashTransaction.type == CashTransactionType.ALLOWANCE,
+                CashTransaction.week_of == week_monday,
+                CashTransaction.description == description,
+                CashTransaction.created_at
+                >= datetime.now(timezone.utc) - TOPUP_DEDUPE_WINDOW,
+            ).limit(1)
+        )).scalar_one_or_none()
+        if recent is not None:
+            # Matches on the description, not the amount: a double-submit that
+            # raced a typo-correction would carry two different numbers and is
+            # still one accident. The parent can retry after the window if the
+            # second payment was deliberate.
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "a top-up for this week was just recorded — "
+                    "check the kid's balance before paying again"
+                ),
+            )
         CashService.credit_split_rows(
             db, user, acct, family_id, adjustment_cents,
             CashTransactionType.ALLOWANCE, entitled=entitled,
-            description=(
-                f"Ajuste del domingo por tareas (semana {week_monday.isoformat()})"
-            ),
+            created_by=released_by,
+            description=description,
             week_of=week_monday,
         )
         await db.commit()
