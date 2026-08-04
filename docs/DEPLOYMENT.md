@@ -14,7 +14,7 @@
 
 ```bash
 ./scripts/deploy-onprem.sh              # full: backup → rsync → rollback point → build → migrate → up → smoke
-./scripts/deploy-onprem.sh --dry-run    # print remote commands only
+DEPLOY_DRY_RUN=1 ./scripts/deploy-onprem.sh -y   # print remote commands only
 ```
 
 Deploy config (SSH target, paths) lives in `.deploy.onprem.env`.

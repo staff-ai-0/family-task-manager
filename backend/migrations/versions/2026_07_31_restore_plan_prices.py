@@ -6,8 +6,16 @@ migration: prod's head was downstream of both usd_price_alignment and
 mxn_plan_currency_w6, all four rows shared updated_at
 2026-07-16 17:30:11.67115+00 (one transaction, consistent with that upgrade
 run), and no migration in the chain ever writes a 0. The rows were
-overwritten out of band afterwards; subscription_plans has no audit trail,
-so the actor is not recoverable.
+overwritten out of band afterwards.
+
+Since resolved (2026-08-03): that write was a DELIBERATE, operator-requested
+"test mode" on 2026-07-16, disabling checkout by zeroing the prices. It was
+never recorded in-repo, which is why this migration was written as a
+forensic reconstruction of an unexplained event. It is not corruption — but
+the remedy stands, and so does the rule it produced: never zero prices to
+switch selling off. Every guard now fires on a zero (CI invariants, the
+startup audit, GET /api/admin/billing-config, and the deploy gate, which
+exits non-zero). The sanctioned off switch is is_active=false on the rows.
 
 The UPDATE is ABSOLUTE and idempotent — re-running always converges on the
 canonical values, whatever the row currently holds.

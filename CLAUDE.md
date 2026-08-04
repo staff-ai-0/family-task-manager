@@ -36,7 +36,7 @@ Routes MUST target the **container names**, not bare `frontend`/`backend`: on ro
 
 ```bash
 ./scripts/deploy-onprem.sh            # full deploy (backup → rsync → build → migrate → up → smoke)
-./scripts/deploy-onprem.sh --dry-run  # print remote commands only
+DEPLOY_DRY_RUN=1 ./scripts/deploy-onprem.sh -y  # print remote commands only (there is NO --dry-run flag; the script exits 1 on unknown options)
 ssh jc@10.1.0.91 'podman ps'          # status (NEVER sudo podman)
 ssh jc@10.1.0.91 'podman logs -f family_onprem_backend'
 ./scripts/backup-db.sh                # on-demand DB dump
