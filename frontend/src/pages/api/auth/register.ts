@@ -10,7 +10,7 @@ import { clientIpHeaders } from "../../../lib/client-ip";
 export const POST: APIRoute = async ({ request, cookies }) => {
     try {
         const body = await request.json();
-        const { family_name, family_code, name, email, password, preferred_lang, role, accept_terms, birthdate, ref } = body;
+        const { family_name, family_code, name, email, password, preferred_lang, role, accept_terms, birthdate, ref, coupon } = body;
         // Carry the UI language into the account so the welcome email + first
         // login render in the user's language. Fall back to the lang cookie.
         const lang = preferred_lang === "es" || preferred_lang === "en"
@@ -60,6 +60,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
             if (typeof ref === "string" && ref.trim()) {
                 registerBody.ref = ref.trim().toUpperCase();
             }
+            // Coupon code (?coupon=CODE), likewise founding-only. The key is
+            // only set when there is a non-empty code:
+            // RegisterFamilyRequest.coupon is min_length=1, so forwarding ""
+            // would 422 the entire signup instead of just skipping the coupon.
+            // An unusable code never breaks signup — the backend redeems
+            // best-effort and reports the outcome via coupon_applied.
+            if (typeof coupon === "string" && coupon.trim()) {
+                registerBody.coupon = coupon.trim().toUpperCase();
+            }
         }
 
         const response = await fetch(`${apiUrl}/api/auth/register-family`, {
@@ -90,7 +99,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
             // kids/teens land on the kid task dashboard.
             const isParent = (data as any)?.user?.role === "parent";
             return new Response(
-                JSON.stringify({ success: true, redirect: isParent ? "/parent" : "/dashboard" }),
+                JSON.stringify({
+                    success: true,
+                    redirect: isParent ? "/parent" : "/dashboard",
+                    // Relayed so the page can say whether the coupon actually
+                    // landed. Defaults to false when the backend omits it.
+                    coupon_applied: (data as any)?.coupon_applied === true,
+                }),
                 { status: 200, headers }
             );
         }

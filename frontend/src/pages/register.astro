@@ -17,6 +17,16 @@ const ref = (Astro.url.searchParams.get("ref") ?? "")
     .replace(/[^A-Za-z0-9]/g, "")
     .toUpperCase()
     .slice(0, 16);
+
+// Coupon code from a campaign link (?coupon=CODE). Sanitized to the coupon
+// alphabet — letters, digits and hyphen, matching the backend's
+// CreateCouponRequest pattern — so it is safe to echo into the page. Like
+// `ref` it is only honored when FOUNDING a family; a join-by-code signup
+// joins a family whose parent can redeem deliberately.
+const coupon = (Astro.url.searchParams.get("coupon") ?? "")
+    .replace(/[^A-Za-z0-9-]/g, "")
+    .toUpperCase()
+    .slice(0, 32);
 ---
 
 <Layout title={seo.title} description={seo.description} lang={lang}>
@@ -103,6 +113,22 @@ const ref = (Astro.url.searchParams.get("ref") ?? "")
                                         {lang === "es"
                                             ? `Crea tu familia con el código ${ref} y tú y quien te invitó reciben un mes de Plus gratis.`
                                             : `Create your family with code ${ref} and both you and your inviter get a free month of Plus.`}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {coupon && (
+                            <div class="mb-6 p-4 rounded-xl bg-brand-sun/15 border border-brand-sun text-brand-ink text-sm font-medium flex items-start gap-3">
+                                <span class="text-xl leading-none">🎟️</span>
+                                <div>
+                                    <p class="font-bold">
+                                        {lang === "es" ? "Cupón detectado" : "Coupon detected"}
+                                    </p>
+                                    <p class="text-xs text-brand-ink-soft mt-0.5">
+                                        {lang === "es"
+                                            ? `El cupón ${coupon} se aplicará al crear tu familia.`
+                                            : `Coupon ${coupon} will be applied when you create your family.`}
                                     </p>
                                 </div>
                             </div>
@@ -309,7 +335,7 @@ const ref = (Astro.url.searchParams.get("ref") ?? "")
         </div>
     </main>
 
-    <script is:inline define:vars={{ lang, ref }}>
+    <script is:inline define:vars={{ lang, ref, coupon }}>
         document.addEventListener('astro:page-load', () => {
         const form = document.getElementById('register-form');
         const errorDiv = document.getElementById('register-error');
@@ -383,6 +409,12 @@ const ref = (Astro.url.searchParams.get("ref") ?? "")
             submitBtn.disabled = true;
             submitBtn.textContent = '...';
 
+            // Whether the coupon was actually sent. A ?coupon= link followed by
+            // a join-by-code signup never attempts a redemption, so reporting
+            // "could not be applied" there would describe something that was
+            // never tried.
+            let couponSent = false;
+
             try {
                 // Build request body - only include family_name if no code provided
                 const body = {
@@ -405,6 +437,14 @@ const ref = (Astro.url.searchParams.get("ref") ?? "")
                     try { body.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch {}
                     // Referral code only applies when founding a new family.
                     if (ref) body.ref = ref;
+                    // Coupon likewise — and the key is OMITTED entirely when
+                    // there is no code. RegisterFamilyRequest.coupon is
+                    // min_length=1, so sending "" 422s the WHOLE signup
+                    // instead of merely skipping the coupon.
+                    if (coupon) {
+                        body.coupon = coupon;
+                        couponSent = true;
+                    }
                 }
 
                 const response = await fetch('/api/auth/register', {
@@ -425,6 +465,41 @@ const ref = (Astro.url.searchParams.get("ref") ?? "")
                     pendingDiv.classList.remove('hidden');
                     pendingDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 } else if (data.success && data.redirect) {
+                    if (couponSent) {
+                        // The account exists either way. A mistyped or expired
+                        // launch code that vanished silently is the failure
+                        // mode most likely to generate support mail, so the
+                        // outcome is stated before leaving the page.
+                        form.classList.add('hidden');
+                        pendingDiv.textContent = data.coupon_applied
+                            ? (lang === 'es'
+                                ? `Cupón ${coupon} aplicado. Entrando…`
+                                : `Coupon ${coupon} applied. Signing you in…`)
+                            : (lang === 'es'
+                                ? `El cupón ${coupon} no se pudo aplicar, pero tu cuenta se creó.`
+                                : `Coupon ${coupon} could not be applied, but your account was created.`);
+                        if (!data.coupon_applied) {
+                            // Not an error (the signup worked) and not a plain
+                            // success either — recolor so it does not read as
+                            // "all good".
+                            pendingDiv.classList.remove('bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
+                            pendingDiv.classList.add('bg-amber-50', 'border-amber-200', 'text-amber-900');
+                        }
+                        const go = document.createElement('a');
+                        go.href = data.redirect;
+                        go.textContent = lang === 'es' ? 'Continuar →' : 'Continue →';
+                        go.className = 'mt-3 block font-bold underline';
+                        pendingDiv.appendChild(go);
+                        pendingDiv.classList.remove('hidden');
+                        pendingDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        // Applied is the happy path, so it moves on by itself.
+                        // The failure case waits for the click, so the message
+                        // is actually read rather than flashed.
+                        if (data.coupon_applied) {
+                            setTimeout(() => { window.location.href = data.redirect; }, 2000);
+                        }
+                        return;
+                    }
                     window.location.href = data.redirect;
                 } else {
                     errorDiv.textContent = data.error || (lang === 'es' ? 'Error al crear la cuenta' : 'Registration failed');
