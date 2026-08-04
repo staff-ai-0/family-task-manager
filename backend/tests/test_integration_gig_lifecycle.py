@@ -88,7 +88,7 @@ class TestGigLifecycleAIAutoApproval:
             test_family.id,
             test_child_user.id,
             proof_text="vacuumed",
-            proof_image_url="/uploads/gig-proofs/synthetic.jpg",
+            proof_image_url="/uploads/gig-proofs/21bfccbe09cd475f801a5857b395a3fa.jpg",
         )
 
         assert result.approval_status == ApprovalStatus.APPROVED
@@ -148,7 +148,7 @@ class TestGigLifecycleAIAutoApproval:
             test_family.id,
             test_child_user.id,
             proof_text="did it",
-            proof_image_url="/uploads/gig-proofs/synthetic.jpg",
+            proof_image_url="/uploads/gig-proofs/21bfccbe09cd475f801a5857b395a3fa.jpg",
         )
 
         assert result.approval_status == ApprovalStatus.PENDING

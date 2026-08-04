@@ -245,7 +245,7 @@ async def test_boss_only_approved_deals_damage(
         asg_a.id,
         test_family.id,
         test_child_user.id,
-        proof_image_url="/uploads/gig-proofs/proof.jpg",
+        proof_image_url="/uploads/gig-proofs/19cacd8cea8a4b268d40fb6683b644d4.jpg",
     )
     pending = await FamilyCupService.boss_battle(db_session, test_family.id)
     assert pending["max_hp"] == 60

@@ -21,20 +21,15 @@ from app.core.exceptions import (
     ForbiddenException,
     ValidationException,
 )
-import re
 
 from app.core.grading import grade_credit_points
 
 from app.core.time_utils import utc_today
+from app.core.upload_validation import clean_proof_url
 from app.services.base_service import (
     BaseFamilyService,
     get_user_by_id,
 )
-
-# Exactly what POST /api/task-assignments/proof-upload returns:
-# /uploads/gig-proofs/<uuid-hex>.<jpg|png|webp>. Anchored with fullmatch, so no
-# traversal, no scheme, no host, no query.
-_PROOF_URL_RE = re.compile(r"/uploads/gig-proofs/[0-9a-f]{32}\.(?:jpg|png|webp)")
 
 
 class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
@@ -1394,6 +1389,11 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         proof_text, and enters PENDING approval state. Points are credited only
         when a parent approves via approve_gig().
         """
+        # Before anything else: this is the KID-facing door, so the photo path
+        # is fully untrusted input that ends up in an <img src> in the parent's
+        # approval queue. Normalised to None when blank so the "this task
+        # requires a photo" branches below still give their own message.
+        proof_image_url = clean_proof_url(proof_image_url)
         # Row-lock the assignment: the mandatory path now awards points, so a
         # concurrent double-submit (kid double-tapping "complete") must not pass
         # the can_complete check twice and double-award.
@@ -2029,19 +2029,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 "Say why you are marking this done"
             )
 
-        # An optional photo, but only a path this app issued. proof_image_url is
-        # rendered straight into an <img src> in the approvals queue, so an
-        # arbitrary client-supplied value would let a caller point it at any
-        # host — an off-site fetch from the grader's browser at best, a
-        # javascript:/data: payload at worst. POST /proof-upload returns
-        # /uploads/gig-proofs/<uuid>.<ext>; nothing else is accepted.
-        if proof_image_url is not None:
-            proof_image_url = proof_image_url.strip()
-            if not _PROOF_URL_RE.fullmatch(proof_image_url):
-                raise ValidationException(
-                    "proof_image_url must be a path returned by "
-                    "POST /api/task-assignments/proof-upload"
-                )
+        # An optional photo, but only a path this app issued — see
+        # clean_proof_url.
+        proof_image_url = clean_proof_url(proof_image_url)
 
         assignment = await TaskAssignmentService.get_assignment(
             db, assignment_id, family_id, for_update=True

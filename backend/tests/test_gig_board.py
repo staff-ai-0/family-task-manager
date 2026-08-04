@@ -260,6 +260,57 @@ async def test_claim_complete_approve_awards_points(
 
 
 @pytest.mark.asyncio
+async def test_claim_proof_photo_must_be_an_issued_path(
+    client: AsyncClient, parent_headers, child_headers, db_session: AsyncSession
+):
+    """A claim's proof_image_url renders into an <img src> on /parent/approvals
+    (same as an assignment's), and the kid submitting it is the untrusted
+    party — so it takes the same allow-list: only a path POST
+    /api/task-assignments/proof-upload actually handed out.
+    """
+    from uuid import uuid4
+    from sqlalchemy import select
+    from app.models.gig import GigClaim
+
+    create_res = await client.post(
+        "/api/gigs/offerings", json={"title": "Wash car", "points": 10},
+        headers=parent_headers,
+    )
+    gig_id = create_res.json()["id"]
+    claim_id = (await client.post(
+        f"/api/gigs/offerings/{gig_id}/claim", headers=child_headers
+    )).json()["id"]
+
+    for bad in (
+        "https://evil.example/x.jpg",
+        "javascript:alert(1)",
+        "data:image/png;base64,AAA",
+        "/uploads/gig-proofs/../../etc/passwd",
+        "/uploads/gig-proofs/nice-try.jpg",
+    ):
+        r = await client.post(
+            f"/api/gigs/claims/{claim_id}/complete",
+            json={"proof_text": "lo lavé", "proof_image_url": bad},
+            headers=child_headers,
+        )
+        assert r.status_code in (400, 422), f"{bad} -> {r.status_code}"
+        claim = (await db_session.execute(
+            select(GigClaim).where(GigClaim.id == claim_id)
+        )).scalar_one()
+        await db_session.refresh(claim)
+        assert claim.proof_image_url is None, bad
+
+    good = f"/uploads/gig-proofs/{uuid4().hex}.png"
+    r = await client.post(
+        f"/api/gigs/claims/{claim_id}/complete",
+        json={"proof_text": "lo lavé", "proof_image_url": good},
+        headers=child_headers,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["proof_image_url"] == good
+
+
+@pytest.mark.asyncio
 async def test_pending_approvals_endpoint_returns_completed_claim(
     client: AsyncClient, parent_headers, child_headers
 ):

@@ -3,10 +3,16 @@
 Client-supplied Content-Type is attacker-controlled, so the real type is
 sniffed from the file's leading bytes. Reads are streamed with a hard byte
 cap so a large authenticated upload cannot exhaust a worker's memory.
+
+Also home to the allow-list for proof-image *paths* coming back in a request
+body (``clean_proof_url``) — the read side of the same trust boundary.
 """
+import re
 from typing import Optional, Set
 
 from fastapi import UploadFile, HTTPException
+
+from app.core.exceptions import ValidationException
 
 # Size limits (bytes).
 MB = 1024 * 1024
@@ -16,6 +22,40 @@ MAX_PROOF_BYTES = 5 * MB          # gig proof images
 MAX_BACKUP_BYTES = 25 * MB        # full budget export ZIP (JSON-in-ZIP, small)
 
 _CHUNK = 64 * 1024
+
+# Exactly what POST /api/task-assignments/proof-upload returns:
+# /uploads/gig-proofs/<uuid4-hex>.<jpg|png|webp>. Matched with fullmatch, so
+# no traversal, no scheme, no host, no query.
+PROOF_URL_RE = re.compile(r"/uploads/gig-proofs/[0-9a-f]{32}\.(?:jpg|png|webp)")
+
+
+def clean_proof_url(proof_image_url: Optional[str]) -> Optional[str]:
+    """Accept only a proof path this app issued; return it trimmed.
+
+    proof_image_url is rendered straight into an <img src> in the PARENT's
+    approval queue (/parent/approvals), so an arbitrary client-supplied value
+    is a stored injection aimed at the grader — an off-site fetch from their
+    browser at best, a javascript:/data: payload at worst. THE single gate:
+    every path that persists a proof image path must go through here,
+    above all the KID-facing completion paths, where the submitter is the
+    untrusted party.
+
+    Blank normalises to None rather than raising: the dashboard's completion
+    form posts an empty hidden proof_image_url whenever there is no photo, and
+    "no photo" is not an error — the callers that require one say so
+    themselves, with their own message.
+    """
+    if proof_image_url is None:
+        return None
+    cleaned = proof_image_url.strip()
+    if not cleaned:
+        return None
+    if not PROOF_URL_RE.fullmatch(cleaned):
+        raise ValidationException(
+            "proof_image_url must be a path returned by "
+            "POST /api/task-assignments/proof-upload"
+        )
+    return cleaned
 
 
 def sniff_mime(data: bytes) -> Optional[str]:

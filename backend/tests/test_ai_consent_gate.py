@@ -90,7 +90,7 @@ class TestProofValidatorConsentGate:
             test_family.id,
             test_child_user.id,
             proof_text="raked everything",
-            proof_image_url="/uploads/gig-proofs/synthetic.jpg",
+            proof_image_url="/uploads/gig-proofs/9406932862484efbbd8cd70aec597b65.jpg",
         )
 
         assert calls == []  # gate honored: validator never invoked
@@ -129,7 +129,7 @@ class TestProofValidatorConsentGate:
             test_family.id,
             test_child_user.id,
             proof_text="raked everything",
-            proof_image_url="/uploads/gig-proofs/synthetic.jpg",
+            proof_image_url="/uploads/gig-proofs/9406932862484efbbd8cd70aec597b65.jpg",
         )
 
         assert len(calls) == 1

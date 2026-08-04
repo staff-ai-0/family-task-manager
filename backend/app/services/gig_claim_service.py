@@ -10,6 +10,7 @@ from app.core.exceptions import (
     ForbiddenException,
     ValidationException,
 )
+from app.core.upload_validation import clean_proof_url
 
 
 async def _get_user(db: AsyncSession, user_id: UUID):
@@ -107,6 +108,11 @@ class GigClaimService:
         """Submit proof. Auto-approves for trusted kids; otherwise moves to
         COMPLETED and notifies parents that a gig awaits review."""
         from app.core.config import settings
+
+        # Same trust boundary as the task-assignment completion paths: a claim's
+        # proof_image_url renders into an <img src> on /parent/approvals, and
+        # the kid submitting it is the untrusted party.
+        proof_image_url = clean_proof_url(proof_image_url)
 
         # Lock the row: two concurrent proof submissions on the same claim must
         # not both reach the auto-approve branch and double-award points.
