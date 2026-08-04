@@ -99,7 +99,7 @@ pywebpush==1.14.1
 
 # Utilities
 python-dotenv==1.2.2  # PYSEC-2026-2270
-email-validator==2.1.0.post1
+email-validator==2.3.0
 hvac==2.4.0  # HashiCorp Vault client — runtime secrets loading via vault_bootstrap
 
 # Date and Time
