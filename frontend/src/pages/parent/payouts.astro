@@ -246,7 +246,16 @@ const dayLabel = (iso: string): string =>
                                                                 may already be paid, and the paycheck is idempotent
                                                                 per (kid, week) — so grading credits points but no
                                                                 cash. This is the only way to make that up without
-                                                                leaving the week's ledger. */}
+                                                                leaving the week's ledger.
+
+                                                                Only the CURRENT week can ever reach this branch:
+                                                                list_outstanding_weeks drops released PAST weeks
+                                                                (they live in the history). The same control is
+                                                                therefore rendered on every history row too — see
+                                                                the history panel below — because a past week is
+                                                                the common case for a late chore. Markup is
+                                                                duplicated there (JSX vs. template string); the
+                                                                behaviour is not (wireTopUp). */}
                                                             <div class="flex items-center gap-1.5">
                                                                 <label
                                                                     class="text-[11px] text-brand-ink-soft"
@@ -254,9 +263,9 @@ const dayLabel = (iso: string): string =>
                                                                         ? "Pago adicional sobre una semana ya liberada — se registra como su propio movimiento"
                                                                         : "Extra payment on an already-released week — recorded as its own ledger entry"}
                                                                 >
-                                                                    {lang === "es" ? "+ Extra $" : "+ Extra $"}
+                                                                    + Extra $
                                                                 </label>
-                                                                <input type="number" step="1" min="1" placeholder="0" data-topup-amount
+                                                                <input type="number" step="1" min="1" max="1000" placeholder="0" data-topup-amount
                                                                     class="w-14 rounded-lg border border-brand-ink/20 bg-white px-1.5 py-1 text-xs text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep" />
                                                                 <button type="button" data-topup
                                                                     class="px-2.5 py-1.5 border border-brand-mint-deep text-brand-mint-deep hover:bg-brand-mint/10 font-semibold text-xs rounded-lg transition-colors">
@@ -334,45 +343,70 @@ const dayLabel = (iso: string): string =>
     </div>
 </PageLayout>
 
-<script define:vars={{ lang }}>
+<script>
+import { normalizeErrorDetail } from "../../lib/errors";
+
 (function initPayouts() {
-    const fmt = (cents) => `$${(cents / 100).toFixed(2)}`;
+    // Read from the cookie rather than define:vars: an inline script cannot
+    // import, and this page needs normalizeErrorDetail (same pattern as
+    // parent/gigs.astro).
+    const lang = document.cookie.split(";").find((c) => c.trim().startsWith("lang="))?.split("=")[1] ?? "es";
+    const fmt = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+    // ChorePaycheckReleaseBody caps adjustment_cents at 100000, and this input
+    // is typed in pesos (×100). Checked in JS as well as via the input's `max`
+    // because nothing here submits a <form>, so the browser never runs
+    // constraint validation on its own.
+    const MAX_TOPUP_CENTS = 100000;
+
+    /** The backend's `detail` is a string, an array of Pydantic errors, or a
+     * structured object depending on which guard fired — concatenating it
+     * blind prints "[object Object]" (reachable: an over-cap adjustment_cents
+     * comes back as the array shape). normalizeErrorDetail is the one place
+     * that knows all three. The `message` fallback is for the fourth shape it
+     * cannot help with: this app's own exception handlers answer
+     * {error, message, status_code} with no `detail` key at all, which is what
+     * a wrong/foreign kid id on these routes comes back as. */
+    const errorText = (data: any, status: number): string =>
+        normalizeErrorDetail(data?.detail, lang)
+        ?? (typeof data?.message === "string" ? data.message : null)
+        ?? `Error ${status}`;
 
     // Live totals header. Releasing a paycheck moves money between buckets
     // (paycheck → gig cash, kid balance credited) so the grand total holds;
     // recording a payout shrinks cash and the grand total.
-    const header = document.querySelector("[data-owed-header]");
-    function adjustTotals(cashDelta, paycheckDelta) {
+    const header = document.querySelector<HTMLElement>("[data-owed-header]");
+    function adjustTotals(cashDelta: number, paycheckDelta: number) {
         if (!header) return;
         const cash = Math.max(0, parseInt(header.dataset.cashCents || "0", 10) + cashDelta);
         const paycheck = Math.max(0, parseInt(header.dataset.paycheckCents || "0", 10) + paycheckDelta);
         header.dataset.cashCents = String(cash);
         header.dataset.paycheckCents = String(paycheck);
-        header.querySelector("[data-cash-total]").textContent = fmt(cash);
-        header.querySelector("[data-paycheck-total]").textContent = fmt(paycheck);
-        header.querySelector("[data-grand-total]").textContent = fmt(cash + paycheck);
+        header.querySelector("[data-cash-total]")!.textContent = fmt(cash);
+        header.querySelector("[data-paycheck-total]")!.textContent = fmt(paycheck);
+        header.querySelector("[data-grand-total]")!.textContent = fmt(cash + paycheck);
     }
 
     document.querySelectorAll("[data-kid-card]").forEach((card) => {
         const kidId = card.getAttribute("data-kid-id");
-        const amountEl = card.querySelector("[data-amount]");
-        const balanceEl = card.querySelector("[data-balance]");
-        const msgEl = card.querySelector("[data-msg]");
-        const payBtn = card.querySelector("[data-pay]");
-        const payAllBtn = card.querySelector("[data-pay-all]");
+        const amountEl = card.querySelector<HTMLInputElement>("[data-amount]")!;
+        const balanceEl = card.querySelector<HTMLElement>("[data-balance]")!;
+        const msgEl = card.querySelector<HTMLElement>("[data-msg]")!;
+        const payBtn = card.querySelector<HTMLButtonElement>("[data-pay]")!;
+        const payAllBtn = card.querySelector<HTMLButtonElement>("[data-pay-all]")!;
 
         function currentBalanceCents() {
             const txt = (balanceEl.textContent || "").replace(/[^0-9.]/g, "");
             return Math.round(parseFloat(txt || "0") * 100);
         }
 
-        function showMsg(text, ok) {
+        function showMsg(text: string, ok: boolean) {
             msgEl.textContent = text;
             msgEl.classList.remove("hidden", "text-red-600", "text-emerald-700");
             msgEl.classList.add(ok ? "text-emerald-700" : "text-red-600");
         }
 
-        async function pay(amountCents) {
+        async function pay(amountCents: number) {
             if (!amountCents || amountCents <= 0) {
                 showMsg(lang === "es" ? "Ingresa un monto" : "Enter an amount", false);
                 return;
@@ -387,7 +421,7 @@ const dayLabel = (iso: string): string =>
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
-                    showMsg(data.detail || `Error ${res.status}`, false);
+                    showMsg(errorText(data, res.status), false);
                     return;
                 }
                 balanceEl.textContent = fmt(data.new_balance_cents);
@@ -413,17 +447,25 @@ const dayLabel = (iso: string): string =>
     });
 
     // ── Top up an ALREADY-RELEASED week ──────────────────────────────────
-    // Separate from the release loop below, which bails when there is no
-    // [data-release] button — which is exactly every released row.
-    document.querySelectorAll("[data-paycheck-row]").forEach((row) => {
-        const topBtn = row.querySelector("[data-topup]");
-        if (!topBtn) return;
-        const weekOf = row.getAttribute("data-week-of");
-        const kidId = row.getAttribute("data-kid-id");
-        const amountEl = row.querySelector("[data-topup-amount]");
-        const msgEl = row.querySelector("[data-msg]");
+    /**
+     * Wire one "+ Extra $" control. Called for BOTH places a released week is
+     * visible, which is the whole point of it being a function:
+     *
+     *  - the outstanding list, where only the CURRENT week can be released
+     *    (list_outstanding_weeks skips released past weeks by design), and
+     *  - every row of the history panel, which is where a released PAST week
+     *    actually lives — and a chore marked done for a kid reaches back 7
+     *    weeks, so "the week was already paid" is normally a past week.
+     *
+     * Wiring only the first left the control missing for the dominant case.
+     */
+    function wireTopUp(row: Element, kidId: string | null, weekOf: string | null) {
+        const topBtn = row.querySelector<HTMLButtonElement>("[data-topup]");
+        if (!topBtn || !kidId || !weekOf) return;
+        const amountEl = row.querySelector<HTMLInputElement>("[data-topup-amount]");
+        const msgEl = row.querySelector<HTMLElement>("[data-msg]");
 
-        const say = (text, isError) => {
+        const say = (text: string, isError: boolean) => {
             if (!msgEl) return;
             msgEl.textContent = text;
             msgEl.classList.remove("hidden");
@@ -438,6 +480,12 @@ const dayLabel = (iso: string): string =>
                 say(lang === "es"
                     ? "Escribe un monto mayor a 0."
                     : "Enter an amount greater than 0.", true);
+                return;
+            }
+            if (cents > MAX_TOPUP_CENTS) {
+                say(lang === "es"
+                    ? `El máximo por pago extra es ${fmt(MAX_TOPUP_CENTS)}.`
+                    : `The most one extra payment can be is ${fmt(MAX_TOPUP_CENTS)}.`, true);
                 return;
             }
             const original = topBtn.textContent;
@@ -455,7 +503,7 @@ const dayLabel = (iso: string): string =>
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
-                    say(data.detail || `Error ${res.status}`, true);
+                    say(errorText(data, res.status), true);
                     topBtn.disabled = false;
                     topBtn.textContent = original;
                     return;
@@ -471,20 +519,27 @@ const dayLabel = (iso: string): string =>
                 topBtn.textContent = original;
             }
         });
+    }
+
+    // The outstanding rows. Separate pass from the release loop below, which
+    // bails when there is no [data-release] button — which is exactly every
+    // released row.
+    document.querySelectorAll("[data-paycheck-row]").forEach((row) => {
+        wireTopUp(row, row.getAttribute("data-kid-id"), row.getAttribute("data-week-of"));
     });
 
     // ── Release a specific outstanding week's chore paycheck ─────────────
     document.querySelectorAll("[data-paycheck-row]").forEach((row) => {
-        const btn = row.querySelector("[data-release]");
+        const btn = row.querySelector<HTMLButtonElement>("[data-release]");
         if (!btn) return;
         const weekOf = row.getAttribute("data-week-of");
         const isCurrentWeek = row.getAttribute("data-is-current-week") === "1";
         const projected = parseInt(row.getAttribute("data-amount-cents") || "0", 10);
         const kidId = row.getAttribute("data-kid-id");
-        const adjustEl = row.querySelector("[data-adjust]");
-        const totalValueEl = row.querySelector("[data-total-value]");
-        const msgEl = row.querySelector("[data-msg]");
-        const slot = row.querySelector("[data-release-slot]");
+        const adjustEl = row.querySelector<HTMLInputElement>("[data-adjust]");
+        const totalValueEl = row.querySelector<HTMLElement>("[data-total-value]");
+        const msgEl = row.querySelector<HTMLElement>("[data-msg]")!;
+        const slot = row.querySelector<HTMLElement>("[data-release-slot]")!;
 
         const updateTotalPreview = () => {
             if (!totalValueEl) return;
@@ -504,7 +559,7 @@ const dayLabel = (iso: string): string =>
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
-                    msgEl.textContent = data.detail || `Error ${res.status}`;
+                    msgEl.textContent = errorText(data, res.status);
                     msgEl.classList.remove("hidden");
                     msgEl.classList.add("text-red-600");
                     btn.disabled = false;
@@ -539,15 +594,15 @@ const dayLabel = (iso: string): string =>
     });
 
     // ── Chore-paycheck history (lazy-fetched on first expand, per kid) ───
-    const histChipCls = {
+    const histChipCls: Record<string, string> = {
         credited: "bg-brand-mint/20 border-brand-mint-deep/40 text-brand-mint-deep",
         pending_review: "bg-amber-100 border-amber-300 text-amber-800",
         missed: "bg-red-100 border-red-300 text-red-700",
         not_done: "bg-brand-ink/5 border-brand-ink/15 text-brand-ink-soft",
     };
-    const histChipIcon = { credited: "✓", pending_review: "⏳", missed: "✗", not_done: "·" };
+    const histChipIcon: Record<string, string> = { credited: "✓", pending_review: "⏳", missed: "✗", not_done: "·" };
 
-    function histStatusLabel(t) {
+    function histStatusLabel(t: any) {
         if (t.status === "credited") {
             const base = lang === "es" ? "Completada ✓" : "Completed ✓";
             return t.grade === "partial"
@@ -559,20 +614,42 @@ const dayLabel = (iso: string): string =>
         return lang === "es" ? "Sin hacer" : "Not done yet";
     }
 
-    function histDayLabel(iso) {
+    function histDayLabel(iso: string) {
         return new Date(`${iso}T00:00:00`).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
             weekday: "short", day: "numeric", month: "short",
         });
     }
 
-    function escapeHtml(s) {
+    function escapeHtml(s: unknown) {
         return String(s).replace(/[&<>"']/g, (c) => (
-            { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+            ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as Record<string, string>)[c]
         ));
     }
 
-    function renderWeekTasks(tasks) {
-        return (tasks || []).map((t) => `
+    /** The "+ Extra $" control for a history row. Every history week is by
+     * definition already released — it IS a ledger row — so unlike the
+     * outstanding list there is no released/unreleased branch here. Mirrors
+     * the JSX version above; the behaviour behind it is the shared wireTopUp,
+     * which reads the week off the row's data-week-of. */
+    function renderTopUp() {
+        const title = lang === "es"
+            ? "Pago adicional sobre una semana ya liberada — se registra como su propio movimiento"
+            : "Extra payment on an already-released week — recorded as its own ledger entry";
+        const pay = lang === "es" ? "Pagar" : "Pay";
+        return `
+            <div class="flex items-center justify-end gap-1.5 mt-2">
+                <label class="text-[11px] text-brand-ink-soft" title="${escapeHtml(title)}">+ Extra $</label>
+                <input type="number" step="1" min="1" max="1000" placeholder="0" data-topup-amount
+                    class="w-14 rounded-lg border border-brand-ink/20 bg-brand-cream px-1.5 py-1 text-xs text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep" />
+                <button type="button" data-topup
+                    class="px-2.5 py-1.5 border border-brand-mint-deep text-brand-mint-deep hover:bg-brand-mint/10 font-semibold text-xs rounded-lg transition-colors">${pay}</button>
+            </div>
+            <p class="hidden text-xs mt-2" data-msg></p>
+        `;
+    }
+
+    function renderWeekTasks(tasks: any[]) {
+        return (tasks || []).map((t: any) => `
             <button type="button" class="group px-2 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-brand-mint-deep/50 ${histChipCls[t.status] || histChipCls.not_done}">
                 <span aria-hidden="true">${histChipIcon[t.status] || "·"}</span>
                 <span class="max-w-[9rem] truncate">${escapeHtml(t.title)}</span>
@@ -589,7 +666,8 @@ const dayLabel = (iso: string): string =>
 
     document.querySelectorAll("[data-history-toggle]").forEach((btn) => {
         const kidId = btn.getAttribute("data-kid-id");
-        const panel = document.querySelector(`[data-history-panel][data-kid-id="${kidId}"]`);
+        const panel = document.querySelector<HTMLElement>(`[data-history-panel][data-kid-id="${kidId}"]`);
+        if (!panel) return;
         let loaded = false;
 
         btn.addEventListener("click", async () => {
@@ -609,7 +687,7 @@ const dayLabel = (iso: string): string =>
                 const res = await fetch(`/api/bank/chore-paycheck/${kidId}/history`);
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
-                    panel.innerHTML = `<p class="text-xs text-red-600">${data.detail || `Error ${res.status}`}</p>`;
+                    panel.innerHTML = `<p class="text-xs text-red-600">${escapeHtml(errorText(data, res.status))}</p>`;
                     return;
                 }
                 const weeks = data.weeks || [];
@@ -619,17 +697,24 @@ const dayLabel = (iso: string): string =>
                     }</p>`;
                     return;
                 }
-                panel.innerHTML = weeks.map((w) => `
-                    <div class="relative rounded-xl border border-brand-ink/10 bg-white p-3">
+                panel.innerHTML = weeks.map((w: any) => `
+                    <div class="relative rounded-xl border border-brand-ink/10 bg-white p-3"
+                         data-history-week data-week-of="${escapeHtml(w.week_of)}">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-brand-ink">${histDayLabel(w.week_of)}</span>
                             <span class="text-sm font-extrabold text-brand-mint-deep">${fmt(w.amount_cents)}</span>
                         </div>
                         <div class="flex flex-wrap gap-1.5 mt-2">${renderWeekTasks(w.tasks)}</div>
+                        ${renderTopUp()}
                     </div>
                 `).join("") + (data.has_more ? `<p class="text-[11px] text-brand-ink-soft">${
                     lang === "es" ? "Mostrando las últimas 12 semanas." : "Showing the last 12 weeks."
                 }</p>` : "");
+                // Same handler the outstanding rows get. This is the branch
+                // that matters: a released PAST week only ever appears here.
+                panel.querySelectorAll("[data-history-week]").forEach((histRow) => {
+                    wireTopUp(histRow, kidId, histRow.getAttribute("data-week-of"));
+                });
             } catch (e) {
                 panel.innerHTML = `<p class="text-xs text-red-600">${
                     lang === "es" ? "Error de red" : "Network error"
