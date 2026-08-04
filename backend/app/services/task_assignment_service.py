@@ -2068,6 +2068,17 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
         from app.services.bank_service import BankService
 
         today = await BankService._family_local_today(db, family_id)
+        # A chore that has not come due yet was not "already done". The
+        # horizon check below only rejects too-OLD assignments — for a future
+        # date its delta is negative and sails straight under the limit, so a
+        # parent could push tomorrow's chore into the graded queue and have it
+        # pay out. complete_assignment refuses exactly this on the kid's side.
+        if assignment.assigned_date > today:
+            raise ValidationException(
+                "Esta tarea es para un día futuro — no se puede marcar como "
+                "hecha todavía / This task is scheduled for a future day — "
+                "it cannot be marked done yet"
+            )
         if (today - assignment.assigned_date).days > 8 * 7:
             raise ValidationException(
                 "Esta tarea es demasiado antigua para marcarla como hecha "

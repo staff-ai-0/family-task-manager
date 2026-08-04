@@ -30,6 +30,7 @@ from app.models.task_assignment import (
 )
 from app.models.point_transaction import PointTransaction
 from app.services.task_assignment_service import TaskAssignmentService
+from conftest import current_week_monday, family_local_today
 
 
 def _monday_of(d: date) -> date:
@@ -50,10 +51,10 @@ async def _chore_template(db_session, family, points=20):
 
 
 async def _assignment(
-    db_session, family, child, template, *, days_ago=3,
+    db_session, family, child, template, *, days_ago=3, on=None,
     status=AssignmentStatus.OVERDUE, approval=ApprovalStatus.NONE,
 ):
-    d = date.today() - timedelta(days=days_ago)
+    d = on if on is not None else date.today() - timedelta(days=days_ago)
     a = TaskAssignment(
         id=uuid4(), template_id=template.id, assigned_to=child.id,
         family_id=family.id, assigned_date=d, week_of=_monday_of(d),
@@ -187,6 +188,53 @@ async def test_beyond_the_lookback_window_is_rejected(
             db_session, assignment_id=a.id, family_id=test_family.id,
             parent_id=test_parent_user.id, note="ok",
         )
+
+
+@pytest.mark.asyncio
+async def test_a_future_dated_chore_is_rejected(
+    db_session, test_family, test_child_user, test_parent_user
+):
+    """Tomorrow's chore cannot be "already done".
+
+    The lookback guard only ever rejected too-OLD assignments: for a chore
+    dated next week `today - assigned_date` is NEGATIVE, sails under the
+    horizon, and a parent could push a chore that has not happened yet into
+    the graded review queue — where approving it pays out. complete_assignment
+    already refuses the same thing on the kid's side; this is the parent-side
+    hole in the identical rule.
+    """
+    tpl = await _chore_template(db_session, test_family)
+    today = await family_local_today(db_session, test_family.id)
+
+    for offset in (1, 3, 14):
+        a = await _assignment(
+            db_session, test_family, test_child_user, tpl,
+            on=today + timedelta(days=offset),
+            status=AssignmentStatus.PENDING,
+        )
+        with pytest.raises(ValidationException):
+            await TaskAssignmentService.mark_done_for_kid(
+                db_session, assignment_id=a.id, family_id=test_family.id,
+                parent_id=test_parent_user.id, note="la hará mañana",
+            )
+        # Untouched: it must not have entered the review queue at all.
+        await db_session.refresh(a)
+        assert a.status == AssignmentStatus.PENDING
+        assert a.approval_status == ApprovalStatus.NONE
+        assert a.completed_at is None
+
+    # Boundary: TODAY is still allowed (the existing behaviour this must not
+    # break — a chore due today that the kid forgot to tap is the main case).
+    todays = await _assignment(
+        db_session, test_family, test_child_user, tpl,
+        on=today, status=AssignmentStatus.PENDING,
+    )
+    await TaskAssignmentService.mark_done_for_kid(
+        db_session, assignment_id=todays.id, family_id=test_family.id,
+        parent_id=test_parent_user.id, note="sí la hizo hoy",
+    )
+    await db_session.refresh(todays)
+    assert todays.approval_status == ApprovalStatus.PENDING
 
 
 @pytest.mark.asyncio
