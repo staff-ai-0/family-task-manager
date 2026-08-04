@@ -10,7 +10,7 @@ import { clientIpHeaders } from "../../../lib/client-ip";
 export const POST: APIRoute = async ({ request, cookies }) => {
     try {
         const body = await request.json();
-        const { family_name, family_code, name, email, password, preferred_lang, role, accept_terms, birthdate, ref, coupon } = body;
+        const { family_name, family_code, name, email, password, preferred_lang, role, accept_terms, birthdate, ref, coupon, timezone } = body;
         // Carry the UI language into the account so the welcome email + first
         // login render in the user's language. Fall back to the lang cookie.
         const lang = preferred_lang === "es" || preferred_lang === "en"
@@ -41,6 +41,17 @@ export const POST: APIRoute = async ({ request, cookies }) => {
             preferred_lang: lang,
             accept_terms: accept_terms === true,
         };
+
+        // The browser's IANA timezone, so "today" (task lists, shuffle week,
+        // payday) is right from day one — the UTC default bit families in the
+        // evening, whose calendar showed the next day's tasks. The backend
+        // consumes it only when FOUNDING a family and re-validates it with
+        // ZoneInfo, falling back to UTC. Length-guarded here because
+        // RegisterFamilyRequest.timezone is max_length=64: a junk value must
+        // degrade to UTC, never 422 the whole signup over a convenience field.
+        if (typeof timezone === "string" && timezone && timezone.length <= 64) {
+            registerBody.timezone = timezone;
+        }
 
         if (family_code) {
             registerBody.family_code = family_code;
