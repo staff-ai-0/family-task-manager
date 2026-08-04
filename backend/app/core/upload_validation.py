@@ -40,10 +40,20 @@ def clean_proof_url(proof_image_url: Optional[str]) -> Optional[str]:
     above all the KID-facing completion paths, where the submitter is the
     untrusted party.
 
-    Blank normalises to None rather than raising: the dashboard's completion
-    form posts an empty hidden proof_image_url whenever there is no photo, and
-    "no photo" is not an error — the callers that require one say so
-    themselves, with their own message.
+    Blank normalises to None rather than raising. That is a deliberate
+    convenience, NOT something a caller depends on: no client in this repo
+    sends "". The dashboard's completion form does post an empty hidden
+    proof_image_url, but its Astro proxy (pages/api/assignments/complete.ts)
+    already collapses it to null before the backend sees it, and every other
+    caller either omits the key or sends null.
+
+    It is kept because "" and None mean the same thing here — "no photo" — and
+    that is not an error condition: the callers that REQUIRE a photo check for
+    themselves, after this, with their own message. Rejecting "" would buy no
+    security (a blank string is not a path and can never reach an <img src>)
+    while turning a no-op into a 422 for any form-encoded or native client
+    outside this repo that posts an empty field. The allow-list below is what
+    does the actual work.
     """
     if proof_image_url is None:
         return None
