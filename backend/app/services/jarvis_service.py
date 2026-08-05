@@ -484,6 +484,7 @@ class JarvisService:
         model: str | None = None,
         preferred_lang: str = "en",
         role: str = "PARENT",
+        mode: str = "copilot",
     ):
         """Public SSE generator — owns a short-lived DB session that is closed on
         completion AND on client disconnect (the async-with __aexit__ runs on
@@ -493,7 +494,8 @@ class JarvisService:
         from app.core.database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
             async for evt in JarvisService._chat_stream_inner(
-                db, family_id, user_id, message, model, preferred_lang, role
+                db, family_id, user_id, message, model, preferred_lang, role,
+                mode,
             ):
                 yield evt
 
@@ -506,6 +508,7 @@ class JarvisService:
         model: str | None = None,
         preferred_lang: str = "en",
         role: str = "PARENT",
+        mode: str = "copilot",
     ):
         """Async generator yielding SSE event lines.
 
@@ -524,11 +527,62 @@ class JarvisService:
         out-of-band via POST /api/jarvis/actions/{id}/approve.
         """
         try:
-            if not settings.LITELLM_API_KEY:
+            if mode == "support":
+                # Effective-key guard: prod without the support key disables
+                # the feature — never a silent fallback to the main key.
+                if not _support_api_key():
+                    raise JarvisSupportNotConfigured(
+                        _SUPPORT_NOT_CONFIGURED.get(
+                            preferred_lang, _SUPPORT_NOT_CONFIGURED["en"]
+                        )
+                    )
+            elif not settings.LITELLM_API_KEY:
                 raise JarvisUpstreamError("Jarvis not configured. Set LITELLM_API_KEY.")
             msg = (message or "").strip()
             if not msg:
                 raise ValidationError("Message is empty.")
+
+            if mode == "support":
+                cap = int(settings.SUPPORT_DAILY_MESSAGE_CAP or 0)
+                if cap > 0:
+                    sent = await JarvisService._today_message_count(
+                        db, family_id, mode="support"
+                    )
+                    if sent >= cap:
+                        raise JarvisQuotaExceeded(
+                            _SUPPORT_CAP_MSG.get(
+                                preferred_lang, _SUPPORT_CAP_MSG["en"]
+                            )
+                        )
+                yield "event: thinking\ndata: {}\n\n"
+                reply = await JarvisService._support_reply(
+                    db, family_id, user_id, msg, preferred_lang
+                )
+                user_row = JarvisMessage(
+                    family_id=family_id, user_id=user_id, role="user",
+                    content=msg, mode="support",
+                )
+                bot_row = JarvisMessage(
+                    # Per-user support thread for BOTH roles.
+                    family_id=family_id, user_id=user_id, role="assistant",
+                    content=reply, mode="support",
+                )
+                db.add(user_row)
+                db.add(bot_row)
+                await db.commit()
+                await db.refresh(bot_row)
+                yield (
+                    "event: reply\ndata: "
+                    + json.dumps({
+                        "reply": reply,
+                        "actions": [],
+                        "message_id": str(bot_row.id),
+                        "model": settings.SUPPORT_MODEL,
+                    })
+                    + "\n\n"
+                )
+                return
+
             cap = int(settings.JARVIS_DAILY_MESSAGE_CAP or 0)
             if cap > 0:
                 if await JarvisService._today_message_count(db, family_id) >= cap:

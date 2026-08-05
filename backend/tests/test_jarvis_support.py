@@ -433,3 +433,112 @@ class TestSupportChat:
             "hola", preferred_lang="es", role="PARENT", mode="support",
         )
         assert constructed["api_key"] == "main-key"
+
+
+import json as _json
+
+
+async def _collect_events(gen):
+    """Drain the SSE async generator into [(event, data_dict), ...]."""
+    events: list[tuple[str, dict]] = []
+    async for line in gen:
+        ev = "message"
+        data_str = ""
+        for raw in line.splitlines():
+            if raw.startswith("event: "):
+                ev = raw[7:].strip()
+            elif raw.startswith("data: "):
+                data_str += raw[6:]
+        try:
+            data = _json.loads(data_str) if data_str else {}
+        except _json.JSONDecodeError:
+            data = {"raw": data_str}
+        events.append((ev, data))
+    return events
+
+
+class TestSupportStream:
+    @pytest.fixture(autouse=True)
+    def _support_settings(self, monkeypatch):
+        monkeypatch.setattr(settings, "LITELLM_API_KEY", "main-key")
+        monkeypatch.setattr(settings, "SUPPORT_LITELLM_API_KEY", "support-key")
+        monkeypatch.setattr(settings, "SUPPORT_MODEL", "claude-haiku")
+        monkeypatch.setattr(settings, "SUPPORT_DAILY_MESSAGE_CAP", 30)
+        monkeypatch.setattr(settings, "JARVIS_DAILY_MESSAGE_CAP", 100)
+        monkeypatch.setattr(settings, "DEBUG", True)
+
+    async def test_stream_support_thinking_reply_done(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        captured: dict = {}
+        client = MagicMock()
+
+        def _create(**kwargs):
+            captured.update(kwargs)
+            return _mk_message(content="Desde Ajustes puedes invitar miembros.")
+
+        client.chat.completions.create.side_effect = _create
+        monkeypatch.setattr("app.core.llm.OpenAI", lambda *a, **kw: client)
+
+        events = await _collect_events(
+            JarvisService._chat_stream_inner(
+                db_session, test_family.id, test_parent_user.id,
+                "¿Cómo invito a alguien?", None, "es", "PARENT", "support",
+            )
+        )
+        names = [e for e, _ in events]
+        assert names[0] == "thinking"
+        assert "reply" in names
+        assert "tool" not in names and "confirm" not in names
+        assert names[-1] == "done"
+        reply_payload = next(d for e, d in events if e == "reply")
+        assert reply_payload["actions"] == []
+        assert reply_payload["model"] == "claude-haiku"
+        assert "message_id" in reply_payload
+        # Tool-free completion + support persona on the stream path too.
+        assert "tools" not in captured and "tool_choice" not in captured
+        assert "TABLE OF CONTENTS" in captured["messages"][0]["content"]
+
+    async def test_stream_support_cap_hit_is_error_event_with_mailto(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        monkeypatch.setattr(settings, "SUPPORT_DAILY_MESSAGE_CAP", 1)
+        await _seed_msg(
+            db_session, test_family.id, test_parent_user.id, "user", "s1",
+            "support",
+        )
+        events = await _collect_events(
+            JarvisService._chat_stream_inner(
+                db_session, test_family.id, test_parent_user.id,
+                "otra pregunta", None, "es", "PARENT", "support",
+            )
+        )
+        names = [e for e, _ in events]
+        assert "error" in names and names[-1] == "done"
+        detail = next(d for e, d in events if e == "error")["detail"]
+        assert "soporte@agent-ia.mx" in detail
+
+    async def test_stream_support_persists_per_user_rows(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _mk_message(content="ok")
+        monkeypatch.setattr("app.core.llm.OpenAI", lambda *a, **kw: client)
+
+        await _collect_events(
+            JarvisService._chat_stream_inner(
+                db_session, test_family.id, test_parent_user.id,
+                "hola", None, "es", "PARENT", "support",
+            )
+        )
+        from sqlalchemy import select
+        rows = (
+            await db_session.execute(
+                select(JarvisMessage).where(
+                    JarvisMessage.family_id == test_family.id,
+                    JarvisMessage.mode == "support",
+                )
+            )
+        ).scalars().all()
+        assert len(rows) == 2
+        assert all(r.user_id == test_parent_user.id for r in rows)
