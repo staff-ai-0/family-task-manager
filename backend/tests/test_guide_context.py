@@ -36,6 +36,40 @@ class TestParse:
         assert doc.toc == ("Crear Cuenta", "Tienda de Premios", "Importar CSV")
         assert "cuenta bancaria" in doc.sections[0].body
 
+    def test_fence_block_guards_h2_split(self):
+        """A '## ' line inside a fenced code block must not be treated as a
+        section header. The fenced block (including the `## ` line) must be
+        preserved in the containing section's body."""
+        doc_with_fence = """# Guide
+
+## Markdown Syntax
+
+Learn how to use markdown headers in your documentation:
+
+```markdown
+# Main Title
+## Subsection with code
+This is just an example.
+```
+
+You can use multiple levels of headers.
+
+## Another Real Section
+
+This section comes after the fenced block."""
+
+        doc = parse_guide(doc_with_fence, "es")
+        # Without fence tracking, this would incorrectly split into:
+        # ["Markdown Syntax", "Subsection with code", "Another Real Section"]
+        # (3 sections). With fence tracking, it should be:
+        # ["Markdown Syntax", "Another Real Section"] (2 sections).
+        assert len(doc.sections) == 2, f"Expected 2 sections, got {len(doc.sections)}: {doc.toc}"
+        assert doc.toc == ("Markdown Syntax", "Another Real Section")
+
+        # The fenced `## ` line must be preserved in the first section's body.
+        assert "## Subsection with code" in doc.sections[0].body
+        assert "```markdown" in doc.sections[0].body
+
 
 class TestSelect:
     def test_keyword_match_is_deterministic(self):

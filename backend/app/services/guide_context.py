@@ -69,12 +69,25 @@ def _docs_dir() -> Path:
 
 def parse_guide(text: str, lang: str) -> GuideDoc:
     """Split markdown into '## '-delimited sections. Preamble before the
-    first '## ' is dropped — we emit our own TOC from the parsed titles."""
+    first '## ' is dropped — we emit our own TOC from the parsed titles.
+
+    Fenced code blocks (lines starting with ```) are tracked to avoid treating
+    '## ' lines inside fences as section headers. Both the fence markers and any
+    '## ' lines inside are preserved in the section body. An unbalanced fence
+    (opened but never closed) will swallow the remainder of the document into
+    the current section—this is acceptable and better than a silent mis-split."""
     sections: list[GuideSection] = []
     title: str | None = None
     body: list[str] = []
+    in_fence = False
     for line in text.splitlines():
-        if line.startswith("## "):
+        # Track fence state: a line whose stripped form starts with ``` toggles it.
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+
+        # '## ' is only a section header if we're not inside a fence.
+        if line.startswith("## ") and not in_fence:
             if title is not None:
                 sections.append(
                     GuideSection(title=title, body="\n".join(body).strip())
