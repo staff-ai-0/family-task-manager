@@ -36,6 +36,15 @@ class JarvisMessage(Base):
         nullable=True,
     )
     role = Column(String(16), nullable=False)
+    # Thread namespace: 'copilot' (the original family copilot) or 'support'
+    # (the support-ftm agent — platform agents/catalogue). Every history /
+    # daily-cap / clear query filters on this so support turns never leak
+    # into the copilot thread or eat its paid quota (and vice versa).
+    # Nullable per migration simplicity; the migration backfills legacy rows
+    # to 'copilot' so read-time filters never need a NULL branch.
+    mode = Column(
+        String(16), nullable=True, default="copilot", server_default="copilot"
+    )
     content = Column(Text, nullable=False)
     created_at = Column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False

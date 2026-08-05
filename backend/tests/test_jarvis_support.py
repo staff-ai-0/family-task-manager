@@ -52,3 +52,38 @@ class TestLlmClientApiKeyOverride:
         monkeypatch.setattr(settings, "LITELLM_API_KEY", "")
         with pytest.raises(LLMNotConfiguredError):
             get_llm_client()
+
+
+class TestModeColumn:
+    async def test_mode_defaults_to_copilot(
+        self, db_session, test_family, test_parent_user
+    ):
+        from app.models.jarvis_message import JarvisMessage
+
+        row = JarvisMessage(
+            family_id=test_family.id,
+            user_id=test_parent_user.id,
+            role="user",
+            content="hi",
+        )
+        db_session.add(row)
+        await db_session.commit()
+        await db_session.refresh(row)
+        assert row.mode == "copilot"
+
+    async def test_mode_accepts_support(
+        self, db_session, test_family, test_parent_user
+    ):
+        from app.models.jarvis_message import JarvisMessage
+
+        row = JarvisMessage(
+            family_id=test_family.id,
+            user_id=test_parent_user.id,
+            role="user",
+            content="hi",
+            mode="support",
+        )
+        db_session.add(row)
+        await db_session.commit()
+        await db_session.refresh(row)
+        assert row.mode == "support"
