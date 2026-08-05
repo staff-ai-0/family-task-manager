@@ -60,6 +60,21 @@ class Settings(BaseSettings):
     # 2026-07-20) and selectable, just not the default.
     JARVIS_MODEL: str = "gemini-2.5-flash"
 
+    # --- Support assistant (support-ftm — see platform agents/catalogue) ---
+    # Pinned model for support mode. Client-side model overrides are IGNORED
+    # in support mode so a forced model can't bill the wrong key or 502 on a
+    # model the support key isn't granted.
+    SUPPORT_MODEL: str = "claude-haiku"
+    # Dedicated LiteLLM virtual key (key_alias=support-ftm) so support spend
+    # is attributable + revocable. Dev (DEBUG=true) may fall back to
+    # LITELLM_API_KEY; in prod (DEBUG=false) a missing value cleanly disables
+    # support mode (fail-closed) — see jarvis_service._support_api_key().
+    SUPPORT_LITELLM_API_KEY: str = ""
+    # Daily support-message cap per family (user turns, UTC-midnight reset).
+    # Independent of JARVIS_DAILY_MESSAGE_CAP: both counters are mode-scoped
+    # so support turns never eat the paid copilot quota. 0 = unlimited.
+    SUPPORT_DAILY_MESSAGE_CAP: int = 30
+
     # MCP HTTP transport — mounts the family-scoped MCP server at /mcp behind
     # per-family bearer auth. Disable to keep the in-app (in-memory) MCP client
     # path only. JARVIS_MCP_DB_ROLE, when set, is applied via SET ROLE on the
