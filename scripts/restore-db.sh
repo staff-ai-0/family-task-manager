@@ -164,14 +164,23 @@ if [[ -n "$DB_FILE" ]]; then
     # GRANT/REVOKE/OWNER TO statements and creating what is missing as NOLOGIN
     # — enough to make the GRANTs apply, but any role that needs LOGIN comes
     # back unable to authenticate until its password is reset.
+    # Substitute in the BASENAME only. `${DB_FILE/db-/globals-}` rewrites the
+    # first match anywhere in the path, so any directory containing "db-"
+    # (a backup dir, a temp dir) silently produces a path that does not exist
+    # and the globals sidecar is skipped without a word.
     GLOBALS_FILE=""
-    _cand="${DB_FILE/db-/globals-}"
-    for _g in "$_cand" "${_cand%.gz}"; do
-        if [[ "$_g" != "$DB_FILE" && -f "$_g" ]]; then
-            GLOBALS_FILE="$_g"
-            break
-        fi
-    done
+    _dir="$(dirname "$DB_FILE")"
+    _base="$(basename "$DB_FILE")"
+    if [[ "$_base" == db-* ]]; then
+        _stem="globals-${_base#db-}"
+        _stem="${_stem%.gz}"
+        for _try in "${_dir}/${_stem}.gz" "${_dir}/${_stem}"; do
+            if [[ -f "$_try" ]]; then
+                GLOBALS_FILE="$_try"
+                break
+            fi
+        done
+    fi
 
     # psql_exec passes stdin through (the globals restore pipes into it).
     psql_exec() {

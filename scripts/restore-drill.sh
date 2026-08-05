@@ -50,8 +50,19 @@ if [[ -z "$DUMP" || ! -f "$DUMP" ]]; then
     echo "[drill] FAIL: no dump found (looked in backups/scheduled/db-*.sql.gz)" >&2
     exit 1
 fi
-GLOBALS="${DUMP/db-/globals-}"
-[[ -f "$GLOBALS" ]] || GLOBALS=""
+# Basename-only substitution: `${DUMP/db-/globals-}` would rewrite the first
+# match anywhere in the path, so a directory containing "db-" silently yields a
+# nonexistent path and the sidecar is skipped without a word.
+GLOBALS=""
+_dir="$(dirname "$DUMP")"
+_base="$(basename "$DUMP")"
+if [[ "$_base" == db-* ]]; then
+    _stem="globals-${_base#db-}"
+    _stem="${_stem%.gz}"
+    for _try in "${_dir}/${_stem}.gz" "${_dir}/${_stem}"; do
+        [[ -f "$_try" ]] && { GLOBALS="$_try"; break; }
+    done
+fi
 
 echo "[drill] dump    : $DUMP ($(du -h "$DUMP" | cut -f1))"
 echo "[drill] globals : ${GLOBALS:-<none — pre-2026-08-04 backup, roles will be derived>}"
