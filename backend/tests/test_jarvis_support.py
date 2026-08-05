@@ -189,3 +189,70 @@ class TestModeScoping:
         assert ("parent support q", "support") not in remaining
         assert ("teen support q", "support") in remaining
         assert ("copilot q", "copilot") in remaining
+
+    async def test_support_history_excludes_other_parent_in_same_family(
+        self, db_session, test_family, test_parent_user, test_parent_user_2
+    ):
+        # Discriminating regression for the "personal, even for parents"
+        # requirement: with a SINGLE parent per family (the pre-existing
+        # fixtures), the else-branch parent_ids predicate
+        # (user_id IS NULL OR user_id IN parent_ids) would resolve to the
+        # same one id as an explicit user_id filter — a removed
+        # `if mode == "support":` branch would still pass. Two parents in
+        # the SAME family exposes the gap: parent_ids now contains BOTH,
+        # so only an explicit per-user filter keeps them apart.
+        fid = test_family.id
+        await _seed_msg(
+            db_session, fid, test_parent_user.id, "user", "parent A support q",
+            "support",
+        )
+        await _seed_msg(
+            db_session, fid, test_parent_user_2.id, "user", "parent B support q",
+            "support",
+        )
+
+        a_view = await JarvisService.list_history(
+            db_session, fid, user_id=test_parent_user.id, role="PARENT",
+            mode="support",
+        )
+        b_view = await JarvisService.list_history(
+            db_session, fid, user_id=test_parent_user_2.id, role="PARENT",
+            mode="support",
+        )
+        assert [m.content for m in a_view] == ["parent A support q"]
+        assert [m.content for m in b_view] == ["parent B support q"]
+
+    async def test_clear_support_history_does_not_touch_other_parent(
+        self, db_session, test_family, test_parent_user, test_parent_user_2
+    ):
+        # Same discriminating gap as above, for the delete path: with only
+        # one parent fixture, a removed `if mode == "support":` branch in
+        # clear_history would still fall through to the parent_ids
+        # else-branch and delete exactly that one parent's rows, passing
+        # by accident. A second same-family parent proves the delete is
+        # scoped to user_id, not "any parent".
+        fid = test_family.id
+        await _seed_msg(
+            db_session, fid, test_parent_user.id, "user", "parent A support q",
+            "support",
+        )
+        await _seed_msg(
+            db_session, fid, test_parent_user_2.id, "user", "parent B support q",
+            "support",
+        )
+
+        await JarvisService.clear_history(
+            db_session, fid, user_id=test_parent_user.id, role="PARENT",
+            mode="support",
+        )
+        from sqlalchemy import select
+        remaining = [
+            (m.content, m.mode)
+            for m in (
+                (await db_session.execute(
+                    select(JarvisMessage).where(JarvisMessage.family_id == fid)
+                )).scalars().all()
+            )
+        ]
+        assert ("parent A support q", "support") not in remaining
+        assert ("parent B support q", "support") in remaining
