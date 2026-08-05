@@ -1,18 +1,23 @@
 # FastAPI and Web Framework
 #
-# These four move together. mcp pins sse-starlette, which pins starlette, which
-# fastapi tracks — so bumping any one alone fails to resolve. The previous
-# comment here concluded starlette 1.x was "incompatible with fastapi 0.115";
-# that was true only because fastapi was held back. With fastapi >= 0.140 the
-# whole chain resolves cleanly.
+# starlette is the pinned one: mcp pins sse-starlette, which pins starlette. So
+# starlette cannot move without mcp, and the previous comment here concluded
+# starlette 1.x was "incompatible with fastapi 0.115" — that was true only
+# because fastapi was held back. With fastapi >= 0.140 the whole chain resolves.
+#
+# fastapi and uvicorn are NOT bound to mcp and move independently above that
+# floor: 0.141.1 / 0.52.0 resolve against starlette 1.3.1 + mcp 1.28.1, proven
+# by a clean-container `pip install --dry-run` (not by the dev container, which
+# bind-mounts an already-populated site-packages and hides resolution failures).
+# Re-run that dry-run before splitting this group again.
 #
 # This set clears 36 advisories that pip-audit found against the old pins,
 # including starlette PYSEC-2026-1942 (unauthenticated crafted request) and
 # PYSEC-2026-1941 (multipart large-file DoS) — both in the path of every
 # request — plus the python-multipart querystring parser bugs.
-fastapi==0.140.7
+fastapi==0.141.1
 starlette==1.3.1
-uvicorn[standard]==0.51.0
+uvicorn[standard]==0.52.0
 # 0.0.18 -> 0.0.32 clears PYSEC-2026-3036..3040 (QuerystringParser) and
 # PYSEC-2026-1852 (path traversal, needs non-default UPLOAD_DIR — not our
 # config, fixed regardless). We accept multipart uploads on the receipt scanner.
