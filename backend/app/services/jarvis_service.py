@@ -274,9 +274,19 @@ class JarvisService:
         *,
         user_id: UUID | None = None,
         teen: bool = False,
+        mode: str = "copilot",
     ) -> List[JarvisMessage]:
-        q = select(JarvisMessage).where(JarvisMessage.family_id == family_id)
-        if teen and user_id is not None:
+        q = select(JarvisMessage).where(
+            and_(
+                JarvisMessage.family_id == family_id,
+                JarvisMessage.mode == mode,
+            )
+        )
+        if mode == "support":
+            # Support threads are per-user for BOTH roles — a parent's support
+            # questions are personal, unlike the family-shared copilot thread.
+            q = q.where(JarvisMessage.user_id == user_id)
+        elif teen and user_id is not None:
             # A teen has a private thread: only their own rows (both the user
             # turn and its assistant reply are persisted with their user_id).
             q = q.where(JarvisMessage.user_id == user_id)
@@ -312,9 +322,11 @@ class JarvisService:
 
     @staticmethod
     async def _today_message_count(
-        db: AsyncSession, family_id: UUID
+        db: AsyncSession, family_id: UUID, mode: str = "copilot"
     ) -> int:
-        """Count user→assistant pairs sent today (UTC). Cheap throttle."""
+        """Count user→assistant pairs sent today (UTC) in *mode*. Cheap
+        throttle — mode-scoped so support turns never eat the copilot quota
+        (and vice versa)."""
         cutoff = datetime.now(timezone.utc).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
@@ -325,6 +337,7 @@ class JarvisService:
                 and_(
                     JarvisMessage.family_id == family_id,
                     JarvisMessage.role == "user",
+                    JarvisMessage.mode == mode,
                     JarvisMessage.created_at >= cutoff,
                 )
             )
@@ -529,7 +542,8 @@ class JarvisService:
                 reply = _EMPTY_REPLY.get(preferred_lang, _EMPTY_REPLY["en"])
 
             user_row = JarvisMessage(
-                family_id=family_id, user_id=user_id, role="user", content=msg
+                family_id=family_id, user_id=user_id, role="user", content=msg,
+                mode="copilot",
             )
             bot_row = JarvisMessage(
                 family_id=family_id,
@@ -537,6 +551,7 @@ class JarvisService:
                 # and self-scoped; parent replies stay NULL (family-wide thread).
                 user_id=user_id if teen else None,
                 role="assistant",
+                mode="copilot",
                 content=reply
                 + (
                     f"\n\n[actions: {', '.join(actions_taken)}]"
@@ -718,7 +733,8 @@ class JarvisService:
             reply = _EMPTY_REPLY.get(preferred_lang, _EMPTY_REPLY["en"])
 
         user_msg = JarvisMessage(
-            family_id=family_id, user_id=user_id, role="user", content=message
+            family_id=family_id, user_id=user_id, role="user", content=message,
+            mode="copilot",
         )
         bot_msg = JarvisMessage(
             family_id=family_id,
@@ -726,6 +742,7 @@ class JarvisService:
             # stay NULL (shared family-wide thread).
             user_id=user_id if teen else None,
             role="assistant",
+            mode="copilot",
             content=reply
             + (f"\n\n[actions: {', '.join(actions_taken)}]" if actions_taken else ""),
         )
@@ -747,9 +764,11 @@ class JarvisService:
         *,
         user_id: UUID | None = None,
         role: str = "PARENT",
+        mode: str = "copilot",
     ) -> List[JarvisMessage]:
         return await JarvisService._load_history(
-            db, family_id, limit=limit, user_id=user_id, teen=_is_teen(role)
+            db, family_id, limit=limit, user_id=user_id, teen=_is_teen(role),
+            mode=mode,
         )
 
     @staticmethod
@@ -759,13 +778,21 @@ class JarvisService:
         *,
         user_id: UUID | None = None,
         role: str = "PARENT",
+        mode: str = "copilot",
     ) -> int:
         from sqlalchemy import delete as sql_delete
 
         stmt = sql_delete(JarvisMessage).where(
-            JarvisMessage.family_id == family_id
+            and_(
+                JarvisMessage.family_id == family_id,
+                JarvisMessage.mode == mode,
+            )
         )
-        if _is_teen(role) and user_id is not None:
+        if mode == "support":
+            # Support threads are per-user for BOTH roles — a user may only
+            # clear their own support thread.
+            stmt = stmt.where(JarvisMessage.user_id == user_id)
+        elif _is_teen(role) and user_id is not None:
             # A teen may only clear their own private thread.
             stmt = stmt.where(JarvisMessage.user_id == user_id)
         else:

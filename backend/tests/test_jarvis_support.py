@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 from app.core.config import Settings, settings
 from app.core.llm import LLMNotConfiguredError, get_llm_client
+from app.models.jarvis_message import JarvisMessage
 
 
 # ---------------------------------------------------------------------------
@@ -87,3 +88,104 @@ class TestModeColumn:
         await db_session.commit()
         await db_session.refresh(row)
         assert row.mode == "support"
+
+
+from app.services.jarvis_service import JarvisService
+
+
+async def _seed_msg(db, family_id, user_id, role, content, mode):
+    row = JarvisMessage(
+        family_id=family_id, user_id=user_id, role=role, content=content, mode=mode
+    )
+    db.add(row)
+    await db.commit()
+    return row
+
+
+class TestModeScoping:
+    async def test_history_is_mode_scoped(
+        self, db_session, test_family, test_parent_user
+    ):
+        fid, uid = test_family.id, test_parent_user.id
+        await _seed_msg(db_session, fid, uid, "user", "copilot q", "copilot")
+        await _seed_msg(db_session, fid, None, "assistant", "copilot a", "copilot")
+        await _seed_msg(db_session, fid, uid, "user", "support q", "support")
+        await _seed_msg(db_session, fid, uid, "assistant", "support a", "support")
+
+        copilot = await JarvisService.list_history(
+            db_session, fid, user_id=uid, role="PARENT"
+        )
+        assert [m.content for m in copilot] == ["copilot q", "copilot a"]
+
+        support = await JarvisService.list_history(
+            db_session, fid, user_id=uid, role="PARENT", mode="support"
+        )
+        assert [m.content for m in support] == ["support q", "support a"]
+
+    async def test_support_thread_is_per_user_even_for_parents(
+        self, db_session, test_family, test_parent_user, test_teen_user
+    ):
+        fid = test_family.id
+        await _seed_msg(
+            db_session, fid, test_parent_user.id, "user", "parent support q", "support"
+        )
+        await _seed_msg(
+            db_session, fid, test_teen_user.id, "user", "teen support q", "support"
+        )
+
+        parent_view = await JarvisService.list_history(
+            db_session, fid, user_id=test_parent_user.id, role="PARENT", mode="support"
+        )
+        teen_view = await JarvisService.list_history(
+            db_session, fid, user_id=test_teen_user.id, role="TEEN", mode="support"
+        )
+        assert [m.content for m in parent_view] == ["parent support q"]
+        assert [m.content for m in teen_view] == ["teen support q"]
+
+    async def test_today_message_count_is_mode_scoped(
+        self, db_session, test_family, test_parent_user
+    ):
+        fid, uid = test_family.id, test_parent_user.id
+        await _seed_msg(db_session, fid, uid, "user", "c1", "copilot")
+        await _seed_msg(db_session, fid, uid, "user", "c2", "copilot")
+        await _seed_msg(db_session, fid, uid, "user", "s1", "support")
+        await _seed_msg(db_session, fid, uid, "user", "s2", "support")
+        await _seed_msg(db_session, fid, uid, "user", "s3", "support")
+
+        assert await JarvisService._today_message_count(db_session, fid) == 2
+        assert (
+            await JarvisService._today_message_count(db_session, fid, mode="support")
+            == 3
+        )
+
+    async def test_clear_history_is_mode_and_user_scoped(
+        self, db_session, test_family, test_parent_user, test_teen_user
+    ):
+        fid = test_family.id
+        await _seed_msg(
+            db_session, fid, test_parent_user.id, "user", "copilot q", "copilot"
+        )
+        await _seed_msg(
+            db_session, fid, test_parent_user.id, "user", "parent support q", "support"
+        )
+        await _seed_msg(
+            db_session, fid, test_teen_user.id, "user", "teen support q", "support"
+        )
+
+        # Parent clears THEIR support thread: teen's support + copilot survive.
+        await JarvisService.clear_history(
+            db_session, fid, user_id=test_parent_user.id, role="PARENT",
+            mode="support",
+        )
+        from sqlalchemy import select
+        remaining = [
+            (m.content, m.mode)
+            for m in (
+                (await db_session.execute(
+                    select(JarvisMessage).where(JarvisMessage.family_id == fid)
+                )).scalars().all()
+            )
+        ]
+        assert ("parent support q", "support") not in remaining
+        assert ("teen support q", "support") in remaining
+        assert ("copilot q", "copilot") in remaining
