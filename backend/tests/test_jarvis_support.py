@@ -256,3 +256,180 @@ class TestModeScoping:
         ]
         assert ("parent A support q", "support") not in remaining
         assert ("parent B support q", "support") in remaining
+
+
+class TestSupportChat:
+    @pytest.fixture(autouse=True)
+    def _support_settings(self, monkeypatch):
+        monkeypatch.setattr(settings, "LITELLM_API_KEY", "main-key")
+        monkeypatch.setattr(settings, "SUPPORT_LITELLM_API_KEY", "support-key")
+        monkeypatch.setattr(settings, "SUPPORT_MODEL", "claude-haiku")
+        monkeypatch.setattr(settings, "SUPPORT_DAILY_MESSAGE_CAP", 30)
+        monkeypatch.setattr(settings, "JARVIS_DAILY_MESSAGE_CAP", 100)
+        monkeypatch.setattr(settings, "DEBUG", True)
+
+    def _capture_llm(self, monkeypatch, reply="Ve a Ajustes y elige Miembros."):
+        captured: dict = {}
+        constructed: dict = {}
+        client = MagicMock()
+
+        def _create(**kwargs):
+            captured.update(kwargs)
+            return _mk_message(content=reply)
+
+        client.chat.completions.create.side_effect = _create
+
+        def _openai(**kwargs):
+            constructed.update(kwargs)
+            return client
+
+        monkeypatch.setattr("app.core.llm.OpenAI", _openai)
+        return captured, constructed, client
+
+    async def test_support_persona_no_tools_pinned_model_support_key(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        from app.services.jarvis_service import SYSTEM_BASE, SYSTEM_SUPPORT
+
+        captured, constructed, _ = self._capture_llm(monkeypatch)
+        out = await JarvisService.chat(
+            db_session,
+            test_family.id,
+            test_parent_user.id,
+            "¿Cómo agrego un miembro a la familia?",
+            model="gemini-2.5-flash",  # client override MUST be ignored
+            preferred_lang="es",
+            role="PARENT",
+            mode="support",
+        )
+        assert out["reply"]
+        assert out["actions"] == []
+        # Pinned model, tool-free, dedicated key.
+        assert captured["model"] == "claude-haiku"
+        assert "tools" not in captured and "tool_choice" not in captured
+        assert constructed["api_key"] == "support-key"
+        # Support persona selected, copilot persona absent.
+        sys_content = captured["messages"][0]["content"]
+        assert SYSTEM_SUPPORT[:40] in sys_content
+        assert SYSTEM_BASE[:40] not in sys_content
+
+    async def test_grounding_is_guide_not_family_state(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        captured, _, _ = self._capture_llm(monkeypatch)
+        await JarvisService.chat(
+            db_session, test_family.id, test_parent_user.id,
+            "¿Cómo importo un CSV?", preferred_lang="es", role="PARENT",
+            mode="support",
+        )
+        sys_content = captured["messages"][0]["content"]
+        assert "TABLE OF CONTENTS" in sys_content
+        assert "FAMILY STATE" not in sys_content
+
+    async def test_guide_language_follows_preferred_lang(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        captured, _, _ = self._capture_llm(monkeypatch)
+        await JarvisService.chat(
+            db_session, test_family.id, test_parent_user.id,
+            "puntos", preferred_lang="es", role="PARENT", mode="support",
+        )
+        assert "Que es Family Task Manager" in captured["messages"][0]["content"]
+
+        await JarvisService.chat(
+            db_session, test_family.id, test_parent_user.id,
+            "points", preferred_lang="en", role="PARENT", mode="support",
+        )
+        assert "What is Family Task Manager" in captured["messages"][0]["content"]
+
+    async def test_support_rows_persist_per_user_with_mode(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        self._capture_llm(monkeypatch)
+        await JarvisService.chat(
+            db_session, test_family.id, test_parent_user.id,
+            "hola soporte", preferred_lang="es", role="PARENT", mode="support",
+        )
+        from sqlalchemy import select
+        rows = (
+            await db_session.execute(
+                select(JarvisMessage).where(
+                    JarvisMessage.family_id == test_family.id
+                )
+            )
+        ).scalars().all()
+        assert len(rows) == 2
+        assert all(r.mode == "support" for r in rows)
+        # Per-user thread even for a PARENT: both rows carry the user's id.
+        assert all(r.user_id == test_parent_user.id for r in rows)
+
+    async def test_caps_count_independently(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        from app.services.jarvis_service import JarvisQuotaExceeded
+
+        self._capture_llm(monkeypatch)
+        monkeypatch.setattr(settings, "SUPPORT_DAILY_MESSAGE_CAP", 1)
+        # A copilot turn today must NOT count against the support cap.
+        await _seed_msg(
+            db_session, test_family.id, test_parent_user.id, "user", "c", "copilot"
+        )
+        out = await JarvisService.chat(
+            db_session, test_family.id, test_parent_user.id,
+            "primera pregunta", preferred_lang="es", role="PARENT",
+            mode="support",
+        )
+        assert out["reply"]
+        # Now the support cap (1) is spent — next support turn is refused ...
+        with pytest.raises(JarvisQuotaExceeded) as exc:
+            await JarvisService.chat(
+                db_session, test_family.id, test_parent_user.id,
+                "segunda pregunta", preferred_lang="es", role="PARENT",
+                mode="support",
+            )
+        assert "soporte@agent-ia.mx" in str(exc.value)
+        # ... but the copilot cap (100) is untouched: copilot still works.
+        out2 = await JarvisService.chat(
+            db_session, test_family.id, test_parent_user.id,
+            "copilot sigue vivo?", preferred_lang="es", role="PARENT",
+        )
+        assert out2["reply"]
+
+    async def test_upstream_failure_degrades_to_friendly_reply(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        client = MagicMock()
+        client.chat.completions.create.side_effect = RuntimeError("proxy down")
+        monkeypatch.setattr("app.core.llm.OpenAI", lambda *a, **kw: client)
+
+        out = await JarvisService.chat(
+            db_session, test_family.id, test_parent_user.id,
+            "ayuda", preferred_lang="es", role="PARENT", mode="support",
+        )
+        # Never a raw upstream error: bilingual friendly copy + human channel.
+        assert "soporte@agent-ia.mx" in out["reply"]
+
+    async def test_prod_without_support_key_fails_closed(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        from app.services.jarvis_service import JarvisSupportNotConfigured
+
+        monkeypatch.setattr(settings, "SUPPORT_LITELLM_API_KEY", "")
+        monkeypatch.setattr(settings, "DEBUG", False)
+        with pytest.raises(JarvisSupportNotConfigured):
+            await JarvisService.chat(
+                db_session, test_family.id, test_parent_user.id,
+                "hola", preferred_lang="es", role="PARENT", mode="support",
+            )
+
+    async def test_dev_falls_back_to_main_key(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        monkeypatch.setattr(settings, "SUPPORT_LITELLM_API_KEY", "")
+        monkeypatch.setattr(settings, "DEBUG", True)
+        _, constructed, _ = self._capture_llm(monkeypatch)
+        await JarvisService.chat(
+            db_session, test_family.id, test_parent_user.id,
+            "hola", preferred_lang="es", role="PARENT", mode="support",
+        )
+        assert constructed["api_key"] == "main-key"

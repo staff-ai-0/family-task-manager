@@ -14,6 +14,7 @@ as the receipt scanner) for centralized spend tracking. Each call:
 """
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any, List
 from uuid import UUID
@@ -36,8 +37,11 @@ from app.models.kid_pet import KidPet
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.user import User, UserRole
 from app.services.analytics_service import AnalyticsService
+from app.services.guide_context import build_support_context
 from app.services.jarvis_pending_action_service import PendingActionService
 from app.core.time_utils import utc_today
+
+logger = logging.getLogger(__name__)
 
 
 # Jarvis model alias — defaults to receipt scanner's claude-haiku for
@@ -64,6 +68,68 @@ SYSTEM_TEEN = (
     "money), tell them to do it in the app or ask a parent. Be concise (2-4 "
     "sentences) and upbeat. If you don't know, say so."
 )
+
+
+# Canonical: platform/agents/catalogue/support-ftm.md — edit there first
+SYSTEM_SUPPORT = (
+    "You are the Family Task Manager support assistant. You help signed-in "
+    "parents and teens use the app: chores, points, rewards, gigs, the "
+    "family bank, budgeting, calendar, plans/billing and account issues. "
+    "Answer ONLY from the user-guide material provided below. If the guide "
+    "does not cover the question, say you don't know and tell the user to "
+    "email soporte@agent-ia.mx — never invent features, prices or steps. "
+    "You cannot see this family's data and you cannot perform actions in "
+    "the app; explain the steps so the user can do it themselves. Be "
+    "concise: 2-5 sentences or a short numbered list."
+)
+
+# Support-mode bilingual copy. Support must never surface a raw 502 —
+# outages and budget refusals degrade to friendly text + the human channel.
+_SUPPORT_UNAVAILABLE = {
+    "en": (
+        "The support assistant is temporarily unavailable. Please email "
+        "soporte@agent-ia.mx and a human will help you."
+    ),
+    "es": (
+        "El asistente de soporte no está disponible por el momento. "
+        "Escríbenos a soporte@agent-ia.mx y una persona te ayudará."
+    ),
+}
+_SUPPORT_CAP_MSG = {
+    "en": (
+        "Daily support limit reached — email soporte@agent-ia.mx and "
+        "we'll help you directly."
+    ),
+    "es": (
+        "Alcanzaste el límite diario de soporte — escríbenos a "
+        "soporte@agent-ia.mx y te ayudamos directamente."
+    ),
+}
+_SUPPORT_NOT_CONFIGURED = {
+    "en": (
+        "The support assistant is not enabled on this deployment. "
+        "Email soporte@agent-ia.mx."
+    ),
+    "es": (
+        "El asistente de soporte no está habilitado en esta instalación. "
+        "Escríbenos a soporte@agent-ia.mx."
+    ),
+}
+
+
+def _support_api_key() -> str:
+    """Effective LiteLLM key for support mode.
+
+    The dedicated support-ftm virtual key wins. Falling back to the app-wide
+    LITELLM_API_KEY is DEV-ONLY (DEBUG=true): in prod (DEBUG=false) a missing
+    support key must cleanly disable the feature — never silently bill
+    support traffic to the family-app key.
+    """
+    if settings.SUPPORT_LITELLM_API_KEY:
+        return settings.SUPPORT_LITELLM_API_KEY
+    if settings.DEBUG:
+        return settings.LITELLM_API_KEY
+    return ""
 
 
 def _is_teen(role) -> bool:
@@ -144,6 +210,10 @@ class JarvisQuotaExceeded(ValidationError):
 
 class JarvisUpstreamError(ValidationError):
     """The upstream LLM call failed — the only genuinely 502 condition here."""
+
+
+class JarvisSupportNotConfigured(ValidationError):
+    """Support mode has no usable key (prod fail-closed) — feature disabled."""
 
 
 class JarvisService:
@@ -343,6 +413,68 @@ class JarvisService:
             )
         )
         return int((await db.execute(q)).scalar() or 0)
+
+    @staticmethod
+    async def _support_reply(
+        db: AsyncSession,
+        family_id: UUID,
+        user_id: UUID,
+        message: str,
+        preferred_lang: str,
+    ) -> str:
+        """One tool-free, guide-grounded completion for support mode.
+
+        Pins settings.SUPPORT_MODEL on the dedicated support key. Upstream
+        failures (proxy down, timeout, budget-exhausted refusal) resolve to
+        the bilingual friendly-unavailable copy — support never surfaces a
+        raw 502 to the user.
+        """
+        history = await JarvisService._load_history(
+            db, family_id, limit=MAX_HISTORY_TURNS, user_id=user_id,
+            mode="support",
+        )
+        last_user_turn = next(
+            (h.content for h in reversed(history) if h.role == "user"), ""
+        )
+        context_block = build_support_context(
+            message, last_user_turn, preferred_lang
+        )
+        msgs: list[dict[str, Any]] = [
+            {
+                "role": "system",
+                "content": _build_system(
+                    context_block, preferred_lang, base=SYSTEM_SUPPORT
+                ),
+            }
+        ]
+        for h in history:
+            if h.role in ("user", "assistant"):
+                msgs.append({"role": h.role, "content": h.content})
+        msgs.append({"role": "user", "content": message})
+
+        # Release the read transaction before the (up to 60s) completion —
+        # same idle-in-transaction reasoning as the copilot path.
+        await db.commit()
+
+        client = get_llm_client(api_key=_support_api_key())
+        try:
+            record_llm_call()  # best-effort outbound-LLM counter
+            completion = await run_in_threadpool(
+                lambda: client.chat.completions.create(
+                    model=settings.SUPPORT_MODEL,
+                    max_tokens=512,
+                    messages=msgs,
+                )
+            )
+            reply = (completion.choices[0].message.content or "").strip()
+        except Exception:
+            logger.exception("support-mode LLM call failed")
+            return _SUPPORT_UNAVAILABLE.get(
+                preferred_lang, _SUPPORT_UNAVAILABLE["en"]
+            )
+        if not reply:
+            reply = _EMPTY_REPLY.get(preferred_lang, _EMPTY_REPLY["en"])
+        return reply
 
     @staticmethod
     async def chat_stream(
@@ -588,14 +720,61 @@ class JarvisService:
         model: str | None = None,
         preferred_lang: str = "en",
         role: str = "PARENT",
+        mode: str = "copilot",
     ) -> dict:
-        if not settings.LITELLM_API_KEY:
+        if mode == "support":
+            # The guard must check the EFFECTIVE support key, not
+            # LITELLM_API_KEY — in prod a missing support key disables the
+            # feature instead of silently spending on the main key.
+            if not _support_api_key():
+                raise JarvisSupportNotConfigured(
+                    _SUPPORT_NOT_CONFIGURED.get(
+                        preferred_lang, _SUPPORT_NOT_CONFIGURED["en"]
+                    )
+                )
+        elif not settings.LITELLM_API_KEY:
             raise JarvisUpstreamError(
                 "Jarvis not configured. Set LITELLM_API_KEY."
             )
         message = (message or "").strip()
         if not message:
             raise ValidationError("Message is empty.")
+
+        if mode == "support":
+            cap = int(settings.SUPPORT_DAILY_MESSAGE_CAP or 0)
+            if cap > 0:
+                sent_today = await JarvisService._today_message_count(
+                    db, family_id, mode="support"
+                )
+                if sent_today >= cap:
+                    raise JarvisQuotaExceeded(
+                        _SUPPORT_CAP_MSG.get(
+                            preferred_lang, _SUPPORT_CAP_MSG["en"]
+                        )
+                    )
+            reply = await JarvisService._support_reply(
+                db, family_id, user_id, message, preferred_lang
+            )
+            user_msg = JarvisMessage(
+                family_id=family_id, user_id=user_id, role="user",
+                content=message, mode="support",
+            )
+            bot_msg = JarvisMessage(
+                # Support threads are per-user for BOTH roles — a parent's
+                # support questions are personal, unlike the family-shared
+                # copilot thread (whose assistant rows stay NULL).
+                family_id=family_id, user_id=user_id, role="assistant",
+                content=reply, mode="support",
+            )
+            db.add(user_msg)
+            db.add(bot_msg)
+            await db.commit()
+            await db.refresh(bot_msg)
+            return {
+                "reply": reply,
+                "actions": [],
+                "message_id": str(bot_msg.id),
+            }
 
         cap = int(settings.JARVIS_DAILY_MESSAGE_CAP or 0)
         if cap > 0:
