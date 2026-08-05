@@ -137,21 +137,131 @@ if [[ "$ans" != "restore" ]]; then
 fi
 
 if [[ -n "$DB_FILE" ]]; then
-    # pg_dump does not include cluster-level roles; dumps carry GRANTs to
-    # jarvis_mcp, which aborts a fresh-cluster restore under ON_ERROR_STOP
-    # (found in the 2026-07-07 restore drill). Pre-create it if missing —
-    # NOLOGIN is enough for the GRANTs; if Jarvis MCP HTTP is enabled, set
-    # its LOGIN password afterwards per docs/JARVIS_MCP.md.
-    # shellcheck disable=SC2086
-    $COMPOSE_CMD --env-file .env -f "$COMPOSE_FILE" exec -T "$PG_SERVICE" \
-        psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
-        "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'jarvis_mcp') THEN CREATE ROLE jarvis_mcp NOLOGIN; END IF; END \$\$;"
-
     if [[ "$DB_FILE" == *.gz ]]; then
         DECOMP=(gunzip -c "$DB_FILE")
     else
         DECOMP=(cat "$DB_FILE")
     fi
+
+    # ── Role preflight ──────────────────────────────────────────────────────
+    # pg_dump carries GRANTs to cluster-level roles but never the roles
+    # themselves, so a restore into a cluster that lacks one dies on
+    # `role "<x>" does not exist` — and because the restore runs
+    # --single-transaction, that rolls the WHOLE restore back and recovers
+    # nothing.
+    #
+    # This used to hardcode `jarvis_mcp` (the role the 2026-07-07 drill hit).
+    # The monitoring stack later added `grafana_ro`, whose GRANT sorts BEFORE
+    # the jarvis_mcp ones, and the hardcoded preflight sailed straight past it:
+    # the 2026-08-04 drill restored prod's newest dump into a scratch cluster
+    # and ended with tables=0. A hardcoded list is only correct until the next
+    # role, so derive the set from the dump being restored.
+    #
+    # Preferred source is the sibling globals-<ts>.sql[.gz] that backup-db.sh
+    # now writes (pg_dumpall --globals-only): real CREATE ROLE statements with
+    # attributes, passwords and memberships intact. Backups taken before that
+    # existed have no globals file, so fall back to scanning the dump's own
+    # GRANT/REVOKE/OWNER TO statements and creating what is missing as NOLOGIN
+    # — enough to make the GRANTs apply, but any role that needs LOGIN comes
+    # back unable to authenticate until its password is reset.
+    GLOBALS_FILE=""
+    _cand="${DB_FILE/db-/globals-}"
+    for _g in "$_cand" "${_cand%.gz}"; do
+        if [[ "$_g" != "$DB_FILE" && -f "$_g" ]]; then
+            GLOBALS_FILE="$_g"
+            break
+        fi
+    done
+
+    # psql_exec passes stdin through (the globals restore pipes into it).
+    psql_exec() {
+        # shellcheck disable=SC2086
+        $COMPOSE_CMD --env-file .env -f "$COMPOSE_FILE" exec -T "$PG_SERVICE" \
+            psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" "$@"
+    }
+    # psql_query is for -c/-tAc calls and MUST NOT inherit stdin: `exec -T`
+    # drains whatever it is given, so calling it inside a `while read` loop
+    # would swallow the very list being iterated.
+    psql_query() { psql_exec "$@" </dev/null; }
+    # Globals are applied WITHOUT ON_ERROR_STOP on purpose. The target cluster
+    # always already has POSTGRES_USER (the postgres image creates it), so the
+    # globals file's first `CREATE ROLE familyapp;` is guaranteed to error —
+    # and under ON_ERROR_STOP that would abort before reaching grafana_ro or
+    # jarvis_mcp, quietly restoring none of the roles the dump actually needs.
+    psql_globals() {
+        # shellcheck disable=SC2086
+        $COMPOSE_CMD --env-file .env -f "$COMPOSE_FILE" exec -T "$PG_SERVICE" \
+            psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+    }
+
+    # Role names referenced by the dump. Skips COPY data blocks so a row whose
+    # text happens to start with "GRANT " cannot invent a role.
+    dump_roles() {
+        "${DECOMP[@]}" | awk '
+            /^COPY .* FROM stdin;$/ { in_copy = 1; next }
+            in_copy                 { if ($0 == "\\.") in_copy = 0; next }
+            /^GRANT /   { if (match($0, / TO [^;]+;/))   emit(substr($0, RSTART + 4,  RLENGTH - 5)) }
+            /^REVOKE /  { if (match($0, / FROM [^;]+;/)) emit(substr($0, RSTART + 6,  RLENGTH - 7)) }
+                        { if (match($0, / OWNER TO [^;]+;/)) emit(substr($0, RSTART + 10, RLENGTH - 11)) }
+            /^ALTER DEFAULT PRIVILEGES/ {
+                if (match($0, /FOR ROLE [A-Za-z0-9_"$]+/)) emit(substr($0, RSTART + 9, RLENGTH - 9))
+            }
+            function emit(s,   n, parts, i, r) {
+                sub(/ WITH GRANT OPTION$/, "", s)
+                n = split(s, parts, ",")
+                for (i = 1; i <= n; i++) {
+                    r = parts[i]
+                    gsub(/^[ \t]+|[ \t]+$/, "", r)
+                    gsub(/^"|"$/, "", r)
+                    if (r != "") print r
+                }
+            }
+        ' | sort -u
+    }
+
+    if [[ -n "$GLOBALS_FILE" ]]; then
+        echo "[restore-db] restoring cluster globals from $GLOBALS_FILE"
+        # "role already exists" here is normal and harmless — the roles that do
+        # NOT exist are the point. The preflight below re-checks every role the
+        # dump references, so anything this misses is still caught.
+        if [[ "$GLOBALS_FILE" == *.gz ]]; then
+            gunzip -c "$GLOBALS_FILE"
+        else
+            cat "$GLOBALS_FILE"
+        fi | psql_globals 2>&1 | grep -viE '^(SET|CREATE ROLE|ALTER ROLE|GRANT|REVOKE)$|already exists' || true
+    else
+        echo "[restore-db] no globals file next to the dump — deriving roles from the dump itself"
+    fi
+
+    MISSING=()
+    while IFS= read -r role; do
+        [[ -z "$role" ]] && continue
+        case "$role" in
+            PUBLIC|public|CURRENT_USER|SESSION_USER|CURRENT_ROLE|pg_*|"$POSTGRES_USER") continue ;;
+        esac
+        # Captured, not piped into `grep -q`: with `set -o pipefail` that
+        # pipeline intermittently reports failure when grep exits early and
+        # SIGPIPEs psql, which here would mean re-creating a role that already
+        # exists — an ON_ERROR_STOP error that `set -e` turns into an abort.
+        exists="$(psql_query -tAc "SELECT 1 FROM pg_roles WHERE rolname = '${role//\'/\'\'}'" 2>/dev/null | tr -d '[:space:]')"
+        if [[ "$exists" != "1" ]]; then
+            MISSING+=("$role")
+        fi
+    done < <(dump_roles)
+
+    if (( ${#MISSING[@]} > 0 )); then
+        echo "[restore-db] creating ${#MISSING[@]} missing role(s) referenced by the dump: ${MISSING[*]}"
+        for role in "${MISSING[@]}"; do
+            psql_query -c "CREATE ROLE \"${role//\"/\"\"}\" NOLOGIN"
+        done
+        echo "[restore-db] WARNING: those roles were created NOLOGIN with no password." >&2
+        echo "             Any of them that needs to connect (e.g. grafana_ro for the" >&2
+        echo "             metrics exporter, jarvis_mcp when MCP HTTP is enabled) must be" >&2
+        echo "             given LOGIN + a password before that client works again." >&2
+    else
+        echo "[restore-db] role preflight OK — every role the dump references exists"
+    fi
+
     # --single-transaction makes the restore atomic: backup-db.sh produces a
     # plain pg_dump (--clean --if-exists, no BEGIN/COMMIT of its own), so the
     # whole script — DROPs included — runs in one transaction and a mid-stream

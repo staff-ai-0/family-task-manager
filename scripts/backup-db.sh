@@ -9,6 +9,10 @@
 # What it does:
 #   1. pg_dumps the postgres container to backups/scheduled/db-<ts>.sql.gz
 #      (--clean --if-exists, so restores are idempotent over a populated DB)
+#   1b. pg_dumpall --globals-only to backups/scheduled/globals-<ts>.sql.gz —
+#      the cluster roles the dump GRANTs to but does not contain. Without it a
+#      restore into a fresh cluster aborts on a missing role and, being
+#      --single-transaction, rolls back to nothing (2026-08-04 drill).
 #   2. Archives the receipt_uploads volume (gig proof photos, receipt images)
 #      to backups/scheduled/uploads-<ts>.tar.gz via rootless
 #      `podman volume export` (audit 2026-07-07: uploads were never backed up)
@@ -76,6 +80,34 @@ $COMPOSE_CMD --env-file .env -f "$COMPOSE_FILE" exec -T "$PG_SERVICE" \
     pg_dump --clean --if-exists -U "$POSTGRES_USER" "$POSTGRES_DB" | gzip > "$OUT"
 echo "[backup-db] wrote ${OUT} ($(du -h "$OUT" | cut -f1))"
 
+# ── 1b. Cluster globals (roles) ─────────────────────────────────────────────
+# pg_dump is per-database: it emits GRANTs to cluster-level roles but never the
+# roles themselves. Restoring into a fresh cluster therefore dies on
+# `role "<x>" does not exist`, and under --single-transaction that rolls the
+# entire restore back — which is exactly what the 2026-08-04 drill hit with
+# grafana_ro. pg_dumpall --globals-only captures CREATE ROLE with attributes,
+# password hashes and memberships, so restore-db.sh can rebuild them properly
+# instead of guessing NOLOGIN placeholders.
+#
+# Same sensitivity as the data dump (which already holds user password hashes):
+# keep it beside the dump, under the same retention and the same offsite push.
+GLOBALS_OUT="${BACKUP_DIR}/globals-${TS}.sql.gz"
+echo "[backup-db] dumping cluster globals -> ${GLOBALS_OUT}"
+# shellcheck disable=SC2086
+$COMPOSE_CMD --env-file .env -f "$COMPOSE_FILE" exec -T "$PG_SERVICE" \
+    pg_dumpall --globals-only -U "$POSTGRES_USER" | gzip > "$GLOBALS_OUT"
+# grep -c, not grep -q: under `set -o pipefail` a `gunzip -c … | grep -q …`
+# reports the PIPELINE as failed when grep exits at the first match and
+# SIGPIPEs gunzip — which would abort a perfectly good backup at random.
+# grep -c consumes all of its input, so there is nothing to SIGPIPE.
+ROLE_COUNT="$(gunzip -c "$GLOBALS_OUT" 2>/dev/null | grep -c '^CREATE ROLE' || true)"
+if [[ ! -s "$GLOBALS_OUT" || "${ROLE_COUNT:-0}" -eq 0 ]]; then
+    echo "[backup-db] ERROR: globals dump is empty or has no CREATE ROLE — a restore" >&2
+    echo "            into a fresh cluster would fail on missing roles." >&2
+    exit 1
+fi
+echo "[backup-db] wrote ${GLOBALS_OUT} ($(du -h "$GLOBALS_OUT" | cut -f1), ${ROLE_COUNT} roles)"
+
 # ── 2. Uploads volume archive ───────────────────────────────────────────────
 # Resolve the compose-managed volume name (<project>_receipt_uploads): the
 # project prefix differs between local dev and the on-prem deploy, so match
@@ -122,7 +154,7 @@ else
 fi
 
 # ── 3. Local retention ──────────────────────────────────────────────────────
-find "$BACKUP_DIR" \( -name 'db-*.sql.gz' -o -name 'uploads-*.tar.gz' \) \
+find "$BACKUP_DIR" \( -name 'db-*.sql.gz' -o -name 'uploads-*.tar.gz' -o -name 'globals-*.sql.gz' \) \
     -type f -mtime "+${RETENTION_DAYS}" -print -delete
 
 # ── 4. Offsite push (rclone) ────────────────────────────────────────────────
@@ -134,18 +166,17 @@ if [[ -n "$OFFSITE_RCLONE_REMOTE" ]]; then
         exit 1
     fi
     DEST="${OFFSITE_RCLONE_REMOTE}/scheduled"
-    echo "[backup-db] offsite: pushing $(basename "$OUT") -> ${DEST}"
-    if ! rclone copy "$OUT" "$DEST"; then
-        echo "[backup-db] ERROR: offsite push of ${OUT} to ${DEST} FAILED — backups are on-host only!" >&2
-        exit 1
-    fi
-    if [[ -n "$UPLOADS_OUT" ]]; then
-        echo "[backup-db] offsite: pushing $(basename "$UPLOADS_OUT") -> ${DEST}"
-        if ! rclone copy "$UPLOADS_OUT" "$DEST"; then
-            echo "[backup-db] ERROR: offsite push of ${UPLOADS_OUT} to ${DEST} FAILED" >&2
+    # The globals dump goes offsite too: a dump without its roles cannot be
+    # restored into a fresh cluster, so shipping one without the other would
+    # ship an unrestorable backup.
+    for ARTIFACT in "$OUT" "$GLOBALS_OUT" "$UPLOADS_OUT"; do
+        [[ -z "$ARTIFACT" ]] && continue
+        echo "[backup-db] offsite: pushing $(basename "$ARTIFACT") -> ${DEST}"
+        if ! rclone copy "$ARTIFACT" "$DEST"; then
+            echo "[backup-db] ERROR: offsite push of ${ARTIFACT} to ${DEST} FAILED — backups are on-host only!" >&2
             exit 1
         fi
-    fi
+    done
     echo "[backup-db] offsite: pruning ${DEST} copies older than ${OFFSITE_RETENTION_DAYS}d"
     if ! rclone delete --min-age "${OFFSITE_RETENTION_DAYS}d" "$DEST"; then
         echo "[backup-db] ERROR: offsite prune of ${DEST} FAILED" >&2
