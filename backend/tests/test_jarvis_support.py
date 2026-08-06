@@ -301,6 +301,38 @@ class TestSupportRoutes:
         assert r.status_code == 403
         assert r.json()["detail"]["error"] == "upgrade_required"
 
+    async def test_free_tier_passes_support_gate_on_stream(
+        self, client: AsyncClient, auth_headers, monkeypatch
+    ):
+        # Mirrors test_free_tier_passes_support_gate but for /chat-stream:
+        # the pre-stream gate-skip branch (jarvis.py ~126-127) must also let
+        # support mode through for a free-tier family. Assert on the status
+        # code only — the body is an open SSE stream, and a 403 from
+        # require_feature is raised (and headers sent) before any streaming
+        # body starts, so we never need to drain it.
+        self._stub_llm(monkeypatch)
+        async with client.stream(
+            "POST",
+            "/api/jarvis/chat-stream",
+            json={"message": "¿Cómo creo una tarea?", "mode": "support"},
+            headers=auth_headers,
+        ) as r:
+            assert r.status_code == 200, await r.aread()
+
+    async def test_free_tier_copilot_still_gated_on_stream(
+        self, client: AsyncClient, auth_headers
+    ):
+        # Counterweight: without mode="support", /chat-stream must still 403
+        # for a free-tier family — proves the gate-skip is a branch on
+        # data.mode, not an unconditional skip for the stream endpoint.
+        async with client.stream(
+            "POST",
+            "/api/jarvis/chat-stream",
+            json={"message": "hola"},
+            headers=auth_headers,
+        ) as r:
+            assert r.status_code == 403
+
     async def test_support_cap_hits_429_with_mailto(
         self, client: AsyncClient, auth_headers, db_session, test_family,
         test_parent_user, monkeypatch,
