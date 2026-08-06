@@ -35,7 +35,7 @@ async def _on_list_tools(ctx, params) -> ListToolsResult:
             tools.append(Tool(
                 name=tool_name(spec, op),
                 description=dict(spec.op_descriptions).get(op, f"{op} {spec.domain}.{spec.name}"),
-                inputSchema=_input_schema(spec, op),
+                input_schema=_input_schema(spec, op),
             ))
     return ListToolsResult(tools=tools)
 
