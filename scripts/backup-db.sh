@@ -32,9 +32,18 @@
 #   RETENTION_DAYS          local retention, default 14
 #   UPLOADS_VOLUME          override uploads-volume autodetection
 #   SKIP_UPLOADS=1          skip the uploads archive (e.g. docker-only host)
+#   OFFSITE_GCS_BUCKET      gs://bucket[/prefix] — offsite via gsutil + a
+#                           service-account key. Canonical on 10.1.0.91.
+#   GCS_KEY_FILE            SA key for the above, default
+#                           /etc/gcs/sa-onprem-backup-key.json
 #   OFFSITE_RCLONE_REMOTE   rclone remote[:path], e.g. "b2:family-backups".
-#                           Unset = no offsite push (loud warning).
-#   OFFSITE_RETENTION_DAYS  remote retention, default 30
+#                           Alternative to OFFSITE_GCS_BUCKET; set only one.
+#   OFFSITE_RETENTION_DAYS  remote retention for the rclone path, default 30.
+#                           The GCS path uses a bucket LIFECYCLE rule instead.
+#
+# All three also fall back to the deployed .env, so the systemd timer, a manual
+# run and deploy-onprem.sh's pre-deploy backup behave identically.
+# Unset = no offsite push (loud warning, exit 0).
 #
 # GCP rollback host (Docker CE, archival only) override:
 #   COMPOSE_FILE=docker-compose.gcp.yml COMPOSE_CMD="sudo docker compose" \
@@ -67,6 +76,17 @@ POSTGRES_DB="${POSTGRES_DB:-$(env_get POSTGRES_DB)}"
 if [[ -z "$POSTGRES_USER" || -z "$POSTGRES_DB" ]]; then
     echo "[backup-db] ERROR: POSTGRES_USER / POSTGRES_DB not found in .env" >&2
     exit 1
+fi
+
+# Offsite settings also fall back to .env, so every invocation path agrees:
+# the systemd timer, a manual run, and the pre-deploy backup inside
+# deploy-onprem.sh. Putting them only in the .service file would mean deploys
+# and hand-runs silently produced local-only backups.
+OFFSITE_GCS_BUCKET="${OFFSITE_GCS_BUCKET:-$(env_get OFFSITE_GCS_BUCKET)}"
+GCS_KEY_FILE="${GCS_KEY_FILE:-$(env_get GCS_KEY_FILE)}"
+GCS_KEY_FILE="${GCS_KEY_FILE:-/etc/gcs/sa-onprem-backup-key.json}"
+if [[ -z "$OFFSITE_RCLONE_REMOTE" ]]; then
+    OFFSITE_RCLONE_REMOTE="$(env_get OFFSITE_RCLONE_REMOTE)"
 fi
 
 mkdir -p "$BACKUP_DIR"
@@ -157,8 +177,51 @@ fi
 find "$BACKUP_DIR" \( -name 'db-*.sql.gz' -o -name 'uploads-*.tar.gz' -o -name 'globals-*.sql.gz' \) \
     -type f -mtime "+${RETENTION_DAYS}" -print -delete
 
-# ── 4. Offsite push (rclone) ────────────────────────────────────────────────
-if [[ -n "$OFFSITE_RCLONE_REMOTE" ]]; then
+# ── 4. Offsite push ─────────────────────────────────────────────────────────
+# Two supported destinations; set exactly one.
+#
+#   OFFSITE_GCS_BUCKET    gs://bucket/prefix — uses gsutil + a service-account
+#                         key. Preferred on 10.1.0.91, where gcloud/gsutil are
+#                         already installed and school-admin has been pushing
+#                         this way since 2026-07.
+#   OFFSITE_RCLONE_REMOTE remote:path — provider-agnostic (B2, S3, …).
+#
+# Both treat a failed push as FATAL (exit non-zero) so the systemd unit records
+# it. That is a deliberate difference from school-admin's script, which logs a
+# warning and exits 0 — an offsite that quietly stopped working would look
+# green there, which is exactly the failure mode that made the 2026-08-04
+# restore drill necessary in the first place.
+if [[ -n "$OFFSITE_GCS_BUCKET" && -n "$OFFSITE_RCLONE_REMOTE" ]]; then
+    echo "[backup-db] ERROR: set only ONE of OFFSITE_GCS_BUCKET / OFFSITE_RCLONE_REMOTE." >&2
+    exit 1
+fi
+
+if [[ -n "$OFFSITE_GCS_BUCKET" ]]; then
+    if ! command -v gsutil >/dev/null 2>&1; then
+        echo "[backup-db] ERROR: OFFSITE_GCS_BUCKET='${OFFSITE_GCS_BUCKET}' is set but gsutil is not installed." >&2
+        exit 1
+    fi
+    if [[ ! -f "$GCS_KEY_FILE" ]]; then
+        echo "[backup-db] ERROR: GCS key file not found: ${GCS_KEY_FILE}" >&2
+        echo "            Backups would be host-only. Refusing to exit 0." >&2
+        exit 1
+    fi
+    DEST="${OFFSITE_GCS_BUCKET%/}"
+    for ARTIFACT in "$OUT" "$GLOBALS_OUT" "$UPLOADS_OUT"; do
+        [[ -z "$ARTIFACT" ]] && continue
+        echo "[backup-db] offsite: pushing $(basename "$ARTIFACT") -> ${DEST}/"
+        if ! GOOGLE_APPLICATION_CREDENTIALS="$GCS_KEY_FILE" \
+                gsutil -q cp "$ARTIFACT" "${DEST}/$(basename "$ARTIFACT")"; then
+            echo "[backup-db] ERROR: offsite push of ${ARTIFACT} to ${DEST} FAILED — backups are on-host only!" >&2
+            exit 1
+        fi
+    done
+    # Remote retention is a BUCKET LIFECYCLE RULE, not a delete loop here.
+    # Server-side, free, and it cannot be silently skipped by a bug in this
+    # script — the one place we least want one. See scripts/systemd/README.md
+    # for the `gsutil lifecycle set` command that installs it.
+    echo "[backup-db] offsite push OK -> ${DEST} (retention: bucket lifecycle policy)"
+elif [[ -n "$OFFSITE_RCLONE_REMOTE" ]]; then
     if ! command -v rclone >/dev/null 2>&1; then
         echo "[backup-db] ERROR: OFFSITE_RCLONE_REMOTE='${OFFSITE_RCLONE_REMOTE}' is set but rclone is not installed." >&2
         echo "            Install it (RHEL: sudo dnf install -y rclone; or https://rclone.org/install/)" >&2

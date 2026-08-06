@@ -44,7 +44,58 @@ ls -lh backups/scheduled/
 (`loginctl enable-linger jc` is already set on the host, so user timers fire
 without an open session.)
 
-## Offsite setup (rclone, as user jc)
+## Offsite setup — GCS (CANONICAL on 10.1.0.91, live since 2026-08-06)
+
+Backups push to `gs://agentia-family-ftm-backups/scheduled` via `gsutil` and
+the service-account key already on the host at
+`/etc/gcs/sa-onprem-backup-key.json` (the same one school-admin has used since
+2026-07 — `gcloud`/`gsutil` are already installed, so there is nothing to
+install and no new secret on the box).
+
+Config lives in the deployed `.env`, so the systemd timer, a manual run and
+`deploy-onprem.sh`'s pre-deploy backup all behave identically:
+
+```bash
+OFFSITE_GCS_BUCKET=gs://agentia-family-ftm-backups/scheduled
+# GCS_KEY_FILE defaults to /etc/gcs/sa-onprem-backup-key.json
+```
+
+Two deliberate properties, both worth preserving:
+
+1. **The host can write and read backups, but CANNOT delete them.** The SA holds
+   only `roles/storage.objectCreator` + `roles/storage.objectViewer` on this
+   bucket. A compromised or ransomwared .91 can add junk; it cannot erase
+   history. Verified: `gsutil rm` returns `403 ... does not have
+   storage.objects.delete access`.
+2. **Retention is a bucket LIFECYCLE rule (31 days), not a delete loop in the
+   script.** Server-side, free, and it cannot be silently skipped by a bug in
+   the one script we least want one in. `OFFSITE_RETENTION_DAYS` applies only
+   to the rclone path.
+
+Bucket: project `agentia-calendar-501506`, location `us-south1`, class
+NEARLINE, uniform access, public access prevented. To inspect or change:
+
+```bash
+gcloud storage ls -l gs://agentia-family-ftm-backups/scheduled/
+gcloud storage buckets describe gs://agentia-family-ftm-backups --format="default(lifecycle)"
+```
+
+A failed push is **fatal** here (exit non-zero, so the timer records it). That
+differs on purpose from `school-admin/scripts/backup-91-to-gcs.sh`, which logs
+a warning and exits 0 — an offsite that quietly stopped working is exactly the
+failure mode that made the 2026-08-04 restore drill necessary.
+
+To verify the whole chain (not just that files exist), pull a backup back down
+and restore it:
+
+```bash
+D=/tmp/offsite-check && mkdir -p $D
+GOOGLE_APPLICATION_CREDENTIALS=/etc/gcs/sa-onprem-backup-key.json \
+  gsutil -q cp "gs://agentia-family-ftm-backups/scheduled/*" $D/
+./scripts/restore-drill.sh $D/$(ls -1 $D | grep '^db-' | tail -1)
+```
+
+## Offsite setup (rclone — alternative, e.g. Backblaze B2)
 
 Backups on the same disk as the live DB are not backups. One-time setup:
 
