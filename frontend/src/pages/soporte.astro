@@ -1,0 +1,272 @@
+---
+import ChatShell from "@components/ui/ChatShell.astro";
+import { apiFetch } from "../lib/api";
+
+/**
+ * /soporte — support-assistant chat (the support-ftm agent; canonical entry:
+ * platform/agents/catalogue/support-ftm.md). Signed-in parents and teens
+ * only; children are excluded (backend gate: require_teen_or_parent). Unlike
+ * /parent/jarvis this mode is NOT premium-gated, has no model picker and no
+ * tools — it answers app-usage questions grounded on the user guide and
+ * escalates to soporte@agent-ia.mx when it can't help.
+ */
+const token = Astro.cookies.get("access_token")?.value;
+if (!token) return Astro.redirect("/login");
+const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+
+const { data: user } = await apiFetch<any>("/api/auth/me", { token });
+if (!user) {
+    Astro.cookies.delete("access_token", { path: "/" });
+    return Astro.redirect("/login");
+}
+const roleLower = String(user.role).toLowerCase();
+if (roleLower !== "parent" && roleLower !== "teen") return Astro.redirect("/dashboard");
+
+if (Astro.request.method === "POST") {
+    const data = await Astro.request.formData();
+    if (data.get("action") === "clear") {
+        await apiFetch("/api/jarvis/history?mode=support", { method: "DELETE", token });
+    }
+    return Astro.redirect("/soporte");
+}
+
+const { data: historyRaw } = await apiFetch<any[]>(
+    "/api/jarvis/history?mode=support",
+    { token },
+);
+const history: any[] = Array.isArray(historyRaw) ? historyRaw : [];
+
+const es = lang === "es";
+const labels = {
+    title: es ? "Soporte" : "Support",
+    subtitle: es
+        ? "Asistente de ayuda — preguntas sobre cómo usar la app"
+        : "Help assistant — questions about using the app",
+    mailto: es ? "¿Prefieres una persona? Escríbenos a" : "Prefer a human? Email us at",
+    guide: es ? "📖 Guía de usuario" : "📖 User guide",
+    placeholder: es
+        ? "¿Cómo creo una tarea? ¿Cómo funciona el banco familiar?"
+        : "How do I create a chore? How does the family bank work?",
+    send: es ? "Enviar" : "Send",
+    clear: es ? "Limpiar historial" : "Clear history",
+    empty: es
+        ? "Sin mensajes aún. Pregunta lo que sea sobre la app."
+        : "No messages yet. Ask anything about the app.",
+    thinking: es ? "Pensando…" : "Thinking…",
+    tryLabel: es ? "Prueba con:" : "Try:",
+};
+const exampleChips = es
+    ? [
+          "¿Cómo invito a otro miembro de la familia?",
+          "¿Cómo funcionan los puntos y premios?",
+          "¿Cómo importo transacciones CSV?",
+          "¿Qué incluye el plan Plus?",
+      ]
+    : [
+          "How do I invite another family member?",
+          "How do points and rewards work?",
+          "How do I import CSV transactions?",
+          "What does the Plus plan include?",
+      ];
+---
+
+<ChatShell
+    title={`${labels.title} - Family Task Manager`}
+    headerClass="bg-gradient-to-br from-teal-600 to-cyan-500"
+    feedId="chat-scroll"
+    feedClass="flex-1 px-4 py-4 space-y-3 overflow-y-auto"
+    role={user.role}
+    lang={lang}
+>
+    <Fragment slot="header">
+        <div class="flex items-baseline justify-between">
+            <div>
+                <h1 class="text-2xl font-bold">🛟 {labels.title}</h1>
+                <p class="text-teal-100 text-xs mt-1">{labels.subtitle}</p>
+            </div>
+            {history.length > 0 && (
+                <form method="POST">
+                    <input type="hidden" name="action" value="clear" />
+                    <button
+                        type="submit"
+                        class="text-xs underline text-teal-100 hover:text-white"
+                    >
+                        {labels.clear}
+                    </button>
+                </form>
+            )}
+        </div>
+        <p class="text-teal-100 text-[11px] mt-2">
+            {labels.mailto}
+            <a href="mailto:soporte@agent-ia.mx" class="underline font-semibold">soporte@agent-ia.mx</a>
+            <span aria-hidden="true"> · </span>
+            <a href={es ? "/ayuda" : "/help"} class="underline">{labels.guide}</a>
+        </p>
+    </Fragment>
+    {history.length === 0 ? (
+        <div class="bg-brand-cream rounded-2xl p-6 text-center border border-brand-ink/10">
+            <p class="text-4xl mb-2">🛟</p>
+            <p class="text-brand-ink-soft text-sm mb-4">{labels.empty}</p>
+            <p class="text-[11px] font-bold text-brand-ink-soft uppercase tracking-wider mb-2">
+                {labels.tryLabel}
+            </p>
+            <div class="flex flex-wrap justify-center gap-2">
+                {exampleChips.map((c) => (
+                    <button
+                        type="button"
+                        class="support-chip px-3 py-1.5 rounded-full bg-teal-100 text-teal-700 text-xs font-semibold hover:bg-teal-200 active:scale-95 transition-all"
+                    >
+                        {c}
+                    </button>
+                ))}
+            </div>
+        </div>
+    ) : (
+        history.map((m: any) => (
+            <div class={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div class={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
+                    m.role === "user"
+                        ? "bg-brand-ink text-brand-cream"
+                        : "bg-brand-cream border border-brand-ink/10 text-brand-ink"
+                }`}>
+                    <p class="whitespace-pre-wrap">{m.content}</p>
+                </div>
+            </div>
+        ))
+    )}
+    <div id="pending" class="hidden flex justify-start">
+        <div class="bg-brand-cream border border-brand-ink/10 text-brand-ink-soft rounded-2xl px-4 py-2.5 text-sm italic">
+            {labels.thinking}
+        </div>
+    </div>
+    <form
+        slot="composer"
+        id="chat-form"
+        class="p-3 border-t border-brand-ink/10 bg-brand-cream flex-shrink-0 flex gap-2"
+    >
+        <input
+            type="text"
+            id="message-input"
+            required
+            maxlength="2000"
+            placeholder={labels.placeholder}
+            class="flex-1 px-3 py-2.5 rounded-xl border border-brand-ink/20 text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+        />
+        <button
+            type="submit"
+            class="px-4 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-700 active:scale-95"
+        >
+            {labels.send}
+        </button>
+    </form>
+</ChatShell>
+
+<script>
+    import { streamJarvisChat } from "../lib/jarvis-chat";
+
+    document.addEventListener("astro:page-load", () => {
+        const form = document.getElementById("chat-form") as HTMLFormElement | null;
+        const input = document.getElementById("message-input") as HTMLInputElement | null;
+        const pending = document.getElementById("pending");
+        const scroll = document.getElementById("chat-scroll");
+        if (!form || !input) return;
+
+        const isEs = document.documentElement.lang === "es";
+        const fallbackError = isEs
+            ? "Error — intenta de nuevo o escríbenos a soporte@agent-ia.mx."
+            : "Error — try again or email soporte@agent-ia.mx.";
+
+        scroll?.scrollTo({ top: scroll.scrollHeight });
+
+        document.querySelectorAll<HTMLElement>(".support-chip").forEach((chip) => {
+            chip.addEventListener("click", () => {
+                input.value = (chip.textContent || "").trim();
+                input.focus();
+            });
+        });
+
+        const showError = (msg: string) => {
+            if (!scroll) return;
+            const wrap = document.createElement("div");
+            wrap.className = "flex justify-start";
+            wrap.setAttribute("data-error-bubble", "");
+            wrap.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-red-50 border border-red-200 text-red-800"><p class="whitespace-pre-wrap"></p></div>`;
+            (wrap.querySelector("p") as HTMLElement).textContent = msg;
+            scroll.insertBefore(wrap, pending);
+            scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+        };
+
+        const addBotBubble = (text: string) => {
+            if (!scroll) return;
+            const bot = document.createElement("div");
+            bot.className = "flex justify-start";
+            bot.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-brand-cream border border-brand-ink/10 text-brand-ink"><p class="whitespace-pre-wrap"></p></div>`;
+            (bot.querySelector("p") as HTMLElement).textContent = text;
+            scroll.insertBefore(bot, pending);
+            scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+        };
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const message = input.value.trim();
+            if (!message) return;
+            input.value = "";
+            input.disabled = true;
+
+            let userBubble: HTMLDivElement | null = null;
+            if (scroll) {
+                userBubble = document.createElement("div");
+                userBubble.className = "flex justify-end";
+                userBubble.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-brand-ink text-brand-cream"><p class="whitespace-pre-wrap"></p></div>`;
+                (userBubble.querySelector("p") as HTMLElement).textContent = message;
+                scroll.insertBefore(userBubble, pending);
+            }
+            const markSendFailed = () => {
+                userBubble?.setAttribute("data-send-failed", "");
+                userBubble?.classList.add("opacity-60");
+                if (!input.value) input.value = message;
+            };
+            pending?.classList.remove("hidden");
+            scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+
+            await streamJarvisChat(
+                { message, mode: "support" },
+                {
+                    onHttpError: async (resp) => {
+                        pending?.classList.add("hidden");
+                        let txt = fallbackError;
+                        try {
+                            const d = (await resp.json()).detail;
+                            if (typeof d === "string" && d) txt = d;
+                            else if (Array.isArray(d)) txt = d.map((x: any) => x.msg || JSON.stringify(x)).join("; ");
+                            else if (d && typeof d === "object" && d.message) txt = d.message;
+                        } catch {}
+                        showError(txt);
+                        markSendFailed();
+                    },
+                    onReply: (payload) => {
+                        pending?.classList.add("hidden");
+                        addBotBubble(payload.reply ?? "");
+                    },
+                    onError: (payload) => {
+                        pending?.classList.add("hidden");
+                        const d = payload.detail;
+                        showError(typeof d === "string" && d ? d : fallbackError);
+                        markSendFailed();
+                    },
+                    onNetworkError: () => {
+                        pending?.classList.add("hidden");
+                        showError(
+                            isEs
+                                ? "Error de conexión — revisa tu internet e intenta de nuevo."
+                                : "Connection error — check your internet and try again.",
+                        );
+                        markSendFailed();
+                    },
+                },
+            );
+            input.disabled = false;
+            input.focus();
+        });
+    });
+</script>
