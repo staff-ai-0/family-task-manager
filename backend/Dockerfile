@@ -1,3 +1,8 @@
+# Build context: the REPO ROOT (not ./backend). docker-compose*.yml set
+# `context: .` + `dockerfile: backend/Dockerfile` so this file can COPY the
+# docs/ tree — support mode (app/services/guide_context.py) reads
+# docs/USER_GUIDE_{ES,EN}.md at runtime to ground its answers. Mirrors
+# frontend/Dockerfile, which widened its context for the same files.
 FROM python:3.12-slim
 
 # Set environment variables
@@ -19,7 +24,7 @@ RUN apt-get update && apt-get install -y \
 ARG INSTALL_DEV=false
 
 # Copy requirements first for better caching
-COPY requirements.txt requirements-dev.txt ./
+COPY backend/requirements.txt backend/requirements-dev.txt ./
 
 # Install Python dependencies
 RUN pip install --upgrade pip && \
@@ -29,8 +34,9 @@ RUN pip install --upgrade pip && \
         pip install -r requirements.txt; \
     fi
 
-# Copy project
-COPY . .
+# Copy the backend tree, then the user guides it grounds support answers on.
+COPY backend/ .
+COPY docs/ ./docs/
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \

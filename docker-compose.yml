@@ -68,8 +68,10 @@ services:
   # docker-compose.override.yml with bind mounts and the --reload command.
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      # Repo-root context (like the frontend) so the image can COPY docs/ —
+      # the support-mode grounding reads the user guides at runtime.
+      context: .
+      dockerfile: backend/Dockerfile
       args:
         INSTALL_DEV: "true"
     container_name: family_app_backend

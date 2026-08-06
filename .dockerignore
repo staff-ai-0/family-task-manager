@@ -1,6 +1,10 @@
-# Root build context is used ONLY by frontend/Dockerfile (compose sets
-# `context: .` so the image can COPY frontend/ + docs/ — help.astro/ayuda.astro
-# import markdown from docs/). Keep everything else out of the context.
+# Root build context is used by frontend/Dockerfile AND backend/Dockerfile
+# (compose sets `context: .` for both so the images can COPY docs/ —
+# help.astro/ayuda.astro import the guide markdown at build time, and the
+# backend's support mode reads it at runtime via app/services/guide_context.py).
+# Keep everything else out of the context. NOTE: with a root context the
+# per-directory backend/.dockerignore does NOT apply — its excludes are
+# folded in here as **/ patterns.
 **/node_modules
 **/.git
 **/__pycache__
@@ -9,25 +13,30 @@
 **/dist
 **/.astro
 **/*.rdb
+**/venv/
+**/.venv/
+**/.pytest_cache/
+**/.ruff_cache/
+**/htmlcov/
+**/.coverage
+**/coverage.xml
 
 # Not needed by any image built from the root context
-backend/
 e2e-tests/
 scripts/
 logs/
 backups/
 web-stack/
 .playwright-mcp/
-.venv/
-**/venv/
-.ruff_cache/
-.pytest_cache/
 
 # Root-level screenshots / notebooks (unanchored patterns match root only)
 *.png
 *.ipynb
 *.sql
 
-# docs/ ships only its markdown (imported at build time) — not binaries/audits
+# docs/ ships only its markdown (the guides are imported at build time by
+# help.astro/ayuda.astro and read at runtime by the backend's support mode) —
+# never the binaries or the audit tree. PRESERVE THESE: dropping them would
+# ship docs/audit/ into both images.
 docs/**/*.pdf
 docs/audit/
