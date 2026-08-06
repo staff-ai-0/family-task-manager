@@ -19,7 +19,7 @@ from typing import Any, List
 from uuid import UUID
 
 from fastapi.concurrency import run_in_threadpool
-from mcp.shared.memory import create_connected_server_and_client_session
+from app.mcp.inproc import connected_mcp_session
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -107,7 +107,7 @@ async def _mcp_tool_definitions() -> list[dict]:
     Uses the module-global ``mcp_server`` (already built once at import) so we
     never re-register the low-level handlers via ``build_server()``.
     """
-    async with create_connected_server_and_client_session(mcp_server) as session:
+    async with connected_mcp_session(mcp_server) as session:
         await session.initialize()
         tools = (await session.list_tools()).tools
     return mcp_tools_to_openai(tools)
@@ -128,7 +128,7 @@ async def _mcp_dispatch(
     """
     ctx = McpContext(family_id=family_id, user_id=user_id, role=role, db=db)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(mcp_server) as session:
+        async with connected_mcp_session(mcp_server) as session:
             await session.initialize()
             result = await session.call_tool(name, args or {})
     try:

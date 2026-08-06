@@ -8,7 +8,7 @@ import json
 import pytest
 from app.mcp.server import build_server
 from app.mcp.context import McpContext, use_context
-from mcp.shared.memory import create_connected_server_and_client_session
+from app.mcp.inproc import connected_mcp_session
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ async def test_points_ledger_list_and_adjust(db_session, family, parent_user):
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             tool_names = [t.name for t in (await s.list_tools()).tools]
 
@@ -81,7 +81,7 @@ async def test_points_transfer_create(db_session, family, parent_user, user):
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             result = json.loads((await s.call_tool(
                 "points_transfer_create",
@@ -108,7 +108,7 @@ async def test_reward_create_list_update_delete(db_session, family, parent_user)
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             tool_names = [t.name for t in (await s.list_tools()).tools]
 
@@ -174,7 +174,7 @@ async def test_redemption_list_and_create(db_session, family, parent_user, user)
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             tool_names = [t.name for t in (await s.list_tools()).tools]
 

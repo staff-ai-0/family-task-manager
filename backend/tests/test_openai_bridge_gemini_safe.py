@@ -52,10 +52,10 @@ def test_object_items_untouched():
 @pytest.mark.asyncio
 async def test_real_mcp_tools_all_gemini_safe():
     """Every tool the MCP server exposes must convert to a Gemini-safe schema."""
-    from mcp.shared.memory import create_connected_server_and_client_session
+    from app.mcp.inproc import connected_mcp_session
     from app.mcp.server import server as mcp_server
 
-    async with create_connected_server_and_client_session(mcp_server) as session:
+    async with connected_mcp_session(mcp_server) as session:
         await session.initialize()
         tools = (await session.list_tools()).tools
 

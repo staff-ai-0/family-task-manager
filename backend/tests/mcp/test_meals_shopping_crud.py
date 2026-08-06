@@ -10,7 +10,7 @@ from datetime import date, timedelta
 import pytest
 from app.mcp.server import build_server
 from app.mcp.context import McpContext, use_context
-from mcp.shared.memory import create_connected_server_and_client_session
+from app.mcp.inproc import connected_mcp_session
 
 # Relative, never a literal. PlanEntryAdapter.list only returns today-30d to
 # today+90d, so a hardcoded date silently ages out of the window: "2026-06-30"
@@ -35,7 +35,7 @@ async def test_recipe_create_list_get_update_delete(db_session, family, parent_u
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             tool_names = [t.name for t in (await s.list_tools()).tools]
 
@@ -97,7 +97,7 @@ async def test_planentry_create_list_get_update_delete(db_session, family, paren
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             tool_names = [t.name for t in (await s.list_tools()).tools]
 
@@ -153,7 +153,7 @@ async def test_shopping_list_create_list_get_update_delete(db_session, family, p
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             tool_names = [t.name for t in (await s.list_tools()).tools]
 
@@ -221,7 +221,7 @@ async def test_shopping_item_create_list_get_update_delete(db_session, family, p
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             tool_names = [t.name for t in (await s.list_tools()).tools]
 
