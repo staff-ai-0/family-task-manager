@@ -1,6 +1,6 @@
 import json
 from mcp.server import Server
-from mcp.types import Tool, TextContent
+from mcp.types import Tool, TextContent, ListToolsResult, CallToolResult
 from app.mcp.registry import REGISTRY, tool_name, register_builtin
 from app.mcp.dispatch import dispatch_tool
 
@@ -28,28 +28,36 @@ def _input_schema(spec, op) -> dict:
     return schema
 
 
+async def _on_list_tools(ctx, params) -> ListToolsResult:
+    tools = []
+    for spec in REGISTRY:
+        for op in sorted(spec.ops):
+            tools.append(Tool(
+                name=tool_name(spec, op),
+                description=dict(spec.op_descriptions).get(op, f"{op} {spec.domain}.{spec.name}"),
+                inputSchema=_input_schema(spec, op),
+            ))
+    return ListToolsResult(tools=tools)
+
+
+async def _on_call_tool(ctx, params) -> CallToolResult:
+    result = await dispatch_tool(params.name, params.arguments or {})
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(result, default=str))]
+    )
+
+
 def build_server() -> Server:
     register_builtin()
-    server = Server(SERVER_NAME)
-
-    @server.list_tools()
-    async def _list_tools() -> list[Tool]:
-        tools = []
-        for spec in REGISTRY:
-            for op in sorted(spec.ops):
-                tools.append(Tool(
-                    name=tool_name(spec, op),
-                    description=dict(spec.op_descriptions).get(op, f"{op} {spec.domain}.{spec.name}"),
-                    inputSchema=_input_schema(spec, op),
-                ))
-        return tools
-
-    @server.call_tool()
-    async def _call_tool(name: str, arguments: dict) -> list[TextContent]:
-        result = await dispatch_tool(name, arguments or {})
-        return [TextContent(type="text", text=json.dumps(result, default=str))]
-
-    return server
+    # mcp 2.0 removed the typed decorators (@server.list_tools(), @server.call_tool())
+    # from the low-level Server in favour of constructor-injected handlers that take
+    # (ctx, params) and return a *Result model rather than a bare list. FastMCP is
+    # gone from the package entirely, so this low-level form is the supported path.
+    return Server(
+        SERVER_NAME,
+        on_list_tools=_on_list_tools,
+        on_call_tool=_on_call_tool,
+    )
 
 
 server = build_server()
