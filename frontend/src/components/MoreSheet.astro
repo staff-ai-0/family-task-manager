@@ -67,6 +67,9 @@ const kidLinks: Link[] = [
     // + API enforce the ai_features plan gate, so an unentitled teen sees an
     // upsell rather than a broken chat.
     ...(isTeen ? [{ href: "/parent/jarvis", label: "Jarvis", icon: I.jarvis }] : []),
+    // Support assistant: parents & teens only (children excluded — the
+    // backend gate is require_teen_or_parent). NOT premium-gated.
+    ...(isTeen ? [{ href: "/soporte", label: es ? "Soporte" : "Support", icon: I.help }] : []),
     ...(mod("pet") ? [{ href: "/pet", label: es ? "Mascota" : "Pet", icon: I.pet }] : []),
     ...(mod("meals") ? [{ href: "/meals", label: es ? "Comidas" : "Meals", icon: I.meals }] : []),
     ...(mod("shopping") ? [{ href: "/shopping", label: es ? "Compras" : "Shopping", icon: I.shopping }] : []),
@@ -87,6 +90,7 @@ const parentLinks: Link[] = [
     { href: "/parent/day", label: es ? "Día a día" : "Day review", icon: I.calendar },
     { href: "/parent/analytics", label: es ? "Análisis" : "Analytics", icon: I.analytics },
     { href: "/parent/jarvis", label: "Jarvis", icon: I.jarvis },
+    { href: "/soporte", label: es ? "Soporte" : "Support", icon: I.help },
     ...(mod("chat") ? [
         { href: "/chat", label: "Chat", icon: I.chat },
         { href: "/dm", label: es ? "Mensajes" : "Messages", icon: I.dm },
