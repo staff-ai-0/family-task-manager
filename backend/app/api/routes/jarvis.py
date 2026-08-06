@@ -1,7 +1,7 @@
 """Jarvis copilot routes (W6.1)."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -19,6 +19,7 @@ from app.models import User
 from app.services.jarvis_service import (
     JarvisQuotaExceeded,
     JarvisService,
+    JarvisSupportNotConfigured,
     JarvisUpstreamError,
 )
 from app.services.jarvis_pending_action_service import PendingActionService
@@ -39,6 +40,10 @@ ALLOWED_MODELS = {"gemini-2.5-flash", "qwen3", "claude-haiku", "mistral-nemo"}
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
     model: Optional[str] = Field(None, description="LiteLLM model alias override")
+    # "support" = the support-ftm agent: tool-free, user-guide-grounded,
+    # pinned to SUPPORT_MODEL (the model field above is IGNORED), and NOT
+    # premium-gated. "copilot" = the original Jarvis behavior.
+    mode: Literal["copilot", "support"] = "copilot"
 
 
 class ChatReply(BaseModel):
@@ -52,6 +57,7 @@ class HistoryItem(BaseModel):
     role: str
     content: str
     created_at: datetime
+    mode: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -64,11 +70,13 @@ async def chat(
     current_user: User = Depends(require_teen_or_parent),
     db: AsyncSession = Depends(get_db),
 ):
-    # Plan gate: Jarvis is an LLM feature — free tier has ai_features=False.
-    # The per-family JARVIS_DAILY_MESSAGE_CAP inside the service still applies;
-    # AI_LIMIT above adds per-IP burst protection on top. Teens get a tool-free,
-    # self-scoped coach (see JarvisService); the role drives that branch.
-    await require_feature("ai_features", db, current_user)
+    # Plan gate: the copilot is an LLM feature — free tier has
+    # ai_features=False. Support mode is deliberately NOT premium-gated
+    # (any signed-in parent/teen may ask app-usage questions), so branch
+    # BEFORE the awaited gate call. AI_LIMIT above and the per-family daily
+    # caps inside the service still apply to both modes.
+    if data.mode != "support":
+        await require_feature("ai_features", db, current_user)
     model = data.model if data.model in ALLOWED_MODELS else None
     try:
         return await JarvisService.chat(
@@ -79,11 +87,17 @@ async def chat(
             model=model,
             preferred_lang=(current_user.preferred_lang or "en"),
             role=current_user.role,
+            mode=data.mode,
         )
     except JarvisQuotaExceeded as exc:
         # A spent quota is not a gateway failure. Returning 502 made routine
         # cap-hits look like an outage to the client and to any 5xx alerting.
         raise HTTPException(status_code=429, detail=str(exc))
+    except JarvisSupportNotConfigured as exc:
+        # Support key unset in prod: the feature is cleanly disabled — 503
+        # with the human channel in the copy, never a silent fallback onto
+        # the family-app LiteLLM key.
+        raise HTTPException(status_code=503, detail=str(exc))
     except JarvisUpstreamError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     except ValidationError as exc:
@@ -107,8 +121,10 @@ async def chat_stream(
     auth dependency (require_parent_role → get_current_user) already checked
     out for this request — it adds no extra pool pressure.
     """
-    # Plan gate before the stream starts (mirrors /chat).
-    await require_feature("ai_features", db, current_user)
+    # Plan gate before the stream starts (mirrors /chat) — skipped entirely
+    # for support mode, which is not a premium feature.
+    if data.mode != "support":
+        await require_feature("ai_features", db, current_user)
     model = data.model if data.model in ALLOWED_MODELS else None
     gen = JarvisService.chat_stream(
         family_id=to_uuid_required(current_user.family_id),
@@ -117,6 +133,7 @@ async def chat_stream(
         model=model,
         preferred_lang=(current_user.preferred_lang or "en"),
         role=current_user.role,
+        mode=data.mode,
     )
     return StreamingResponse(
         gen,
@@ -130,6 +147,7 @@ async def chat_stream(
 
 @router.get("/history", response_model=List[HistoryItem])
 async def history(
+    mode: Literal["copilot", "support"] = "copilot",
     current_user: User = Depends(require_teen_or_parent),
     db: AsyncSession = Depends(get_db),
 ):
@@ -138,12 +156,14 @@ async def history(
         to_uuid_required(current_user.family_id),
         user_id=to_uuid_required(current_user.id),
         role=current_user.role,
+        mode=mode,
     )
     return [HistoryItem.model_validate(r) for r in rows]
 
 
 @router.delete("/history", status_code=status.HTTP_204_NO_CONTENT)
 async def clear_history(
+    mode: Literal["copilot", "support"] = "copilot",
     current_user: User = Depends(require_teen_or_parent),
     db: AsyncSession = Depends(get_db),
 ):
@@ -152,6 +172,7 @@ async def clear_history(
         to_uuid_required(current_user.family_id),
         user_id=to_uuid_required(current_user.id),
         role=current_user.role,
+        mode=mode,
     )
     return None
 
