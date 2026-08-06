@@ -2,7 +2,7 @@
 
 Jarvis talks to the LiteLLM proxy with the OpenAI chat-completions tool
 format. The MCP server is the source of truth for the tool list, so we map
-each MCP ``Tool`` (name + description + JSON-Schema ``inputSchema``) onto the
+each MCP ``Tool`` (name + description + JSON-Schema ``input_schema``) onto the
 ``{"type": "function", "function": {...}}`` shape the LLM expects.
 
 Gemini (our only working upstream — see ``ALLOWED_MODELS`` in the jarvis
@@ -68,9 +68,13 @@ def mcp_tools_to_openai(tools) -> list[dict]:
             "function": {
                 "name": t.name,
                 "description": t.description or t.name,
+                # mcp 2.0 renamed this field to snake_case. `inputSchema` lives
+                # on as a pydantic ALIAS, so constructing a Tool with it still
+                # works — only attribute reads break, which is why this surfaced
+                # as an AttributeError at runtime rather than a build failure.
                 "parameters": _gemini_safe(
-                    copy.deepcopy(t.inputSchema)
-                    if t.inputSchema
+                    copy.deepcopy(t.input_schema)
+                    if t.input_schema
                     else {"type": "object", "properties": {}}
                 ),
             },

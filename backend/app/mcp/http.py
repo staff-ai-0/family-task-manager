@@ -121,11 +121,18 @@ async def mcp_asgi(scope: Scope, receive: Receive, send: Send) -> None:
 
 async def _run_server(read_stream, write_stream) -> None:
     try:
+        # mcp 2.0 dropped `stateless=` from Server.run; the flag moved onto
+        # StreamableHTTPSessionManager. We deliberately do NOT switch to that
+        # manager: it owns a task group created once at app-lifespan time, and
+        # contextvars are captured when a task is spawned — so tools would run
+        # outside the per-request `use_context` binding below and lose their
+        # family scope. Statelessness here comes from the transport instead:
+        # a fresh StreamableHTTPServerTransport per request with
+        # mcp_session_id=None, so nothing is carried between requests anyway.
         await _server.run(
             read_stream,
             write_stream,
             _server.create_initialization_options(),
-            stateless=True,
         )
     except anyio.get_cancelled_exc_class():
         raise

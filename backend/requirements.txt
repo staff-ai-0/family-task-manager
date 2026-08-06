@@ -17,7 +17,7 @@
 # request — plus the python-multipart querystring parser bugs.
 fastapi==0.141.1
 starlette==1.3.1
-uvicorn[standard]==0.52.0
+uvicorn[standard]==0.52.1
 # 0.0.18 -> 0.0.32 clears PYSEC-2026-3036..3040 (QuerystringParser) and
 # PYSEC-2026-1852 (path traversal, needs non-default UPLOAD_DIR — not our
 # config, fixed regardless). We accept multipart uploads on the receipt scanner.
@@ -122,4 +122,4 @@ slowapi==0.1.10
 sentry-sdk[fastapi]==2.8.0
 
 # MCP server — Jarvis AI copilot tool registry
-mcp==1.28.1  # PYSEC-2026-1617, -3482 (SSE/HTTP), -3483 (WebSocket)
+mcp==2.0.0  # PYSEC-2026-1617, -3482 (SSE/HTTP), -3483 (WebSocket)

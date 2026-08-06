@@ -13,7 +13,7 @@ import json
 import pytest
 from app.mcp.server import build_server
 from app.mcp.context import McpContext, use_context
-from mcp.shared.memory import create_connected_server_and_client_session
+from app.mcp.inproc import connected_mcp_session
 
 
 @pytest.fixture
@@ -58,7 +58,7 @@ async def test_pet_list_get_feed_interact(db_session, family, user):
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             tool_names = [t.name for t in (await s.list_tools()).tools]
 
@@ -113,7 +113,7 @@ async def test_consequence_create_list_get_update_delete(db_session, family, par
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             tool_names = [t.name for t in (await s.list_tools()).tools]
 
@@ -178,7 +178,7 @@ async def test_notification_list_get_create_delete(db_session, family, parent_us
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             tool_names = [t.name for t in (await s.list_tools()).tools]
 
