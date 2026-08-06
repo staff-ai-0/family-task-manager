@@ -3,21 +3,32 @@
 The user guides (docs/USER_GUIDE_{ES,EN}.md, ~27-30k tokens each) are far too
 big to inject whole on every turn. This module parses each guide once into
 '## '-delimited sections, then per message emits the table of contents plus
-the best keyword-matched sections under a hard character budget (~6k tokens).
-Deterministic on purpose — no vector store, no LLM: same inputs, same block.
+the best keyword-matched sections under a hard character budget (~2.5k
+tokens). Deterministic on purpose — no vector store, no LLM: same inputs,
+same block.
 
 Consumed by jarvis_service in support mode, where this block REPLACES the
 family-state context block (support answers app-usage questions; it never
 sees family data).
 """
 
+import logging
 import re
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-# <=6k tokens ~= 24k chars at ~4 chars/token — the design's injection budget.
-CHAR_BUDGET = 24_000
+logger = logging.getLogger(__name__)
+
+# <=2.5k tokens ~= 10k chars at ~4 chars/token — the design's injection
+# budget (cut from 24k chars/~6k tokens 2026-08 to fit the support-ftm key's
+# $10/30d budget at the family's daily cap — see SUPPORT_DAILY_MESSAGE_CAP).
+CHAR_BUDGET = 10_000
+# Hard cap on the number of sections injected per turn, independent of
+# CHAR_BUDGET — keeps a pathological guide edit (many small sections that
+# each score > 0) from still injecting a large number of sections that
+# individually fit under budget.
+MAX_SECTIONS = 4
 # Words shorter than this are matching noise ("el", "the", "de", "las", ...).
 MIN_TERM_LEN = 4
 
@@ -105,7 +116,19 @@ def load_guide(lang: str) -> GuideDoc:
     lang = lang if lang in GUIDE_FILENAMES else "es"
     if lang not in _cache:
         path = _docs_dir() / GUIDE_FILENAMES[lang]
-        _cache[lang] = parse_guide(path.read_text(encoding="utf-8"), lang)
+        doc = parse_guide(path.read_text(encoding="utf-8"), lang)
+        if len(doc.sections) < 5:
+            # A guide edit that breaks '## '-delimited parsing (e.g. no H2
+            # headers left, or an unbalanced fence swallowing the rest of the
+            # document) degrades support to an ungrounded persona with no
+            # other signal — surface it loudly.
+            logger.warning(
+                "guide_context: parsed only %d section(s) for lang=%s from "
+                "%s — support grounding may be degraded; check the guide's "
+                "'## ' headers and fenced code blocks",
+                len(doc.sections), lang, path,
+            )
+        _cache[lang] = doc
     return _cache[lang]
 
 
@@ -129,7 +152,7 @@ def select_sections(
     """Best keyword-matched sections, deterministic: score desc, then guide
     order. Title hits weigh 3x a body occurrence. Zero-score sections are
     never selected; over-budget sections are skipped (smaller later matches
-    may still fit)."""
+    may still fit). Capped at MAX_SECTIONS regardless of remaining budget."""
     terms = _terms(query)
     scored: list[tuple[int, int, GuideSection]] = []
     for idx, sec in enumerate(doc.sections):
@@ -146,6 +169,8 @@ def select_sections(
     picked: list[GuideSection] = []
     used = 0
     for _score, _idx, sec in scored:
+        if len(picked) >= MAX_SECTIONS:
+            break
         size = len(sec.title) + len(sec.body) + 8
         if used + size > char_budget:
             continue

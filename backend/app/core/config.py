@@ -73,7 +73,10 @@ class Settings(BaseSettings):
     # Daily support-message cap per family (user turns, UTC-midnight reset).
     # Independent of JARVIS_DAILY_MESSAGE_CAP: both counters are mode-scoped
     # so support turns never eat the paid copilot quota. 0 = unlimited.
-    SUPPORT_DAILY_MESSAGE_CAP: int = 30
+    # Cut from 30 to 15 (2026-08) alongside guide_context.CHAR_BUDGET — at
+    # ~$0.01/turn (guide injection + history) a single active family on 30/day
+    # could exhaust most of the shared $10/30d support-ftm LiteLLM budget.
+    SUPPORT_DAILY_MESSAGE_CAP: int = 15
 
     # MCP HTTP transport — mounts the family-scoped MCP server at /mcp behind
     # per-family bearer auth. Disable to keep the in-app (in-memory) MCP client

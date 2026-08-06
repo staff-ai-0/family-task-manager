@@ -156,7 +156,7 @@ def _build_system(
     return (
         base
         + f"\n\nIMPORTANT: Always respond in {lang_name}, regardless of the "
-        "language of the family-state data below or earlier turns."
+        "language of the reference material below or earlier turns."
         + "\n\n"
         + context_block
     )
@@ -425,9 +425,10 @@ class JarvisService:
         """One tool-free, guide-grounded completion for support mode.
 
         Pins settings.SUPPORT_MODEL on the dedicated support key. Upstream
-        failures (proxy down, timeout, budget-exhausted refusal) resolve to
-        the bilingual friendly-unavailable copy — support never surfaces a
-        raw 502 to the user.
+        failures (proxy down, timeout, budget-exhausted refusal) AND a
+        failure to load the grounding guide (e.g. a missing docs/ dir)
+        resolve to the bilingual friendly-unavailable copy — support never
+        surfaces a raw 5xx to the user.
         """
         history = await JarvisService._load_history(
             db, family_id, limit=MAX_HISTORY_TURNS, user_id=user_id,
@@ -436,28 +437,47 @@ class JarvisService:
         last_user_turn = next(
             (h.content for h in reversed(history) if h.role == "user"), ""
         )
-        context_block = build_support_context(
-            message, last_user_turn, preferred_lang
-        )
-        msgs: list[dict[str, Any]] = [
-            {
-                "role": "system",
-                "content": _build_system(
-                    context_block, preferred_lang, base=SYSTEM_SUPPORT
-                ),
-            }
-        ]
-        for h in history:
-            if h.role in ("user", "assistant"):
-                msgs.append({"role": h.role, "content": h.content})
-        msgs.append({"role": "user", "content": message})
 
-        # Release the read transaction before the (up to 60s) completion —
-        # same idle-in-transaction reasoning as the copilot path.
-        await db.commit()
+        # Fail-closed key invariant, local to this method (not just the two
+        # current callers): get_llm_client(api_key="") would silently fall
+        # back to settings.LITELLM_API_KEY (the family-app key) — never bill
+        # support traffic there. Raised outside the try/except below so it
+        # propagates as JarvisSupportNotConfigured (→ 503), not swallowed
+        # into the generic friendly-unavailable copy.
+        key = _support_api_key()
+        if not key:
+            raise JarvisSupportNotConfigured(
+                _SUPPORT_NOT_CONFIGURED.get(
+                    preferred_lang, _SUPPORT_NOT_CONFIGURED["en"]
+                )
+            )
 
-        client = get_llm_client(api_key=_support_api_key())
         try:
+            # Guide loading (build_support_context → load_guide → _docs_dir)
+            # can raise FileNotFoundError if docs/ is missing from the image;
+            # kept inside this guarded region so that degrades to the
+            # friendly-unavailable copy instead of an uncaught 500.
+            context_block = build_support_context(
+                message, last_user_turn, preferred_lang
+            )
+            msgs: list[dict[str, Any]] = [
+                {
+                    "role": "system",
+                    "content": _build_system(
+                        context_block, preferred_lang, base=SYSTEM_SUPPORT
+                    ),
+                }
+            ]
+            for h in history:
+                if h.role in ("user", "assistant"):
+                    msgs.append({"role": h.role, "content": h.content})
+            msgs.append({"role": "user", "content": message})
+
+            # Release the read transaction before the (up to 60s) completion —
+            # same idle-in-transaction reasoning as the copilot path.
+            await db.commit()
+
+            client = get_llm_client(api_key=key)
             record_llm_call()  # best-effort outbound-LLM counter
             completion = await run_in_threadpool(
                 lambda: client.chat.completions.create(
@@ -1014,6 +1034,19 @@ class JarvisService:
         mode: str = "copilot",
     ) -> int:
         from sqlalchemy import delete as sql_delete
+
+        if mode == "support" and user_id is None:
+            # Defence in depth: JarvisMessage.user_id == None renders as
+            # `user_id IS NULL`, which resolves to a DIFFERENT row set than
+            # "this caller's thread" (support rows always carry a concrete
+            # user_id — see chat()/_chat_stream_inner() above) rather than
+            # safely matching nothing. Unreachable today (the route always
+            # passes the authenticated caller's id), but a future
+            # support-mode entry point that forgets to pass one must fail
+            # loudly instead of silently deleting the wrong scope.
+            raise ValidationError(
+                "clear_history(mode='support') requires a caller user_id."
+            )
 
         stmt = sql_delete(JarvisMessage).where(
             and_(

@@ -4,12 +4,16 @@ mode column, mode-scoped queries, the support chat/stream paths and routes.
 Runtime counterpart of platform/agents/catalogue/support-ftm.md.
 """
 
-import pytest
+import json as _json
 from unittest.mock import MagicMock
+
+import pytest
+from httpx import AsyncClient
 
 from app.core.config import Settings, settings
 from app.core.llm import LLMNotConfiguredError, get_llm_client
 from app.models.jarvis_message import JarvisMessage
+from app.services.jarvis_service import JarvisService
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +37,7 @@ class TestSupportSettings:
         # with SUPPORT_* overrides must not flip this test.
         assert Settings.model_fields["SUPPORT_MODEL"].default == "claude-haiku"
         assert Settings.model_fields["SUPPORT_LITELLM_API_KEY"].default == ""
-        assert Settings.model_fields["SUPPORT_DAILY_MESSAGE_CAP"].default == 30
+        assert Settings.model_fields["SUPPORT_DAILY_MESSAGE_CAP"].default == 15
 
 
 class TestLlmClientApiKeyOverride:
@@ -59,8 +63,6 @@ class TestModeColumn:
     async def test_mode_defaults_to_copilot(
         self, db_session, test_family, test_parent_user
     ):
-        from app.models.jarvis_message import JarvisMessage
-
         row = JarvisMessage(
             family_id=test_family.id,
             user_id=test_parent_user.id,
@@ -75,8 +77,6 @@ class TestModeColumn:
     async def test_mode_accepts_support(
         self, db_session, test_family, test_parent_user
     ):
-        from app.models.jarvis_message import JarvisMessage
-
         row = JarvisMessage(
             family_id=test_family.id,
             user_id=test_parent_user.id,
@@ -88,9 +88,6 @@ class TestModeColumn:
         await db_session.commit()
         await db_session.refresh(row)
         assert row.mode == "support"
-
-
-from app.services.jarvis_service import JarvisService
 
 
 async def _seed_msg(db, family_id, user_id, role, content, mode):
@@ -256,9 +253,6 @@ class TestModeScoping:
         ]
         assert ("parent A support q", "support") not in remaining
         assert ("parent B support q", "support") in remaining
-
-
-from httpx import AsyncClient
 
 
 class TestSupportRoutes:
@@ -474,6 +468,37 @@ class TestSupportChat:
         assert "TABLE OF CONTENTS" in sys_content
         assert "FAMILY STATE" not in sys_content
 
+    async def test_history_never_replays_copilot_turns(
+        self, db_session, test_family, test_parent_user, monkeypatch
+    ):
+        """Regression: _support_reply loads history with mode="support" —
+        _load_history's own default is mode="copilot". A dropped kwarg would
+        silently replay the family's copilot turns (which can carry
+        family-state-derived assistant replies) into the support prompt, on
+        the support key/model that's supposed to be family-data-free.
+        test_grounding_is_guide_not_family_state above only asserts on
+        messages[0] (the system block) — this checks the FULL transcript,
+        including history entries, not just the system prompt."""
+        await _seed_msg(
+            db_session, test_family.id, test_parent_user.id, "user",
+            "copilot-only content about family tasks", "copilot",
+        )
+        await _seed_msg(
+            db_session, test_family.id, test_parent_user.id, "user",
+            "earlier support question", "support",
+        )
+        captured, _, _ = self._capture_llm(monkeypatch)
+        await JarvisService.chat(
+            db_session, test_family.id, test_parent_user.id,
+            "una pregunta nueva", preferred_lang="es", role="PARENT",
+            mode="support",
+        )
+        contents = [m.get("content", "") for m in captured["messages"]]
+        assert not any(
+            "copilot-only content about family tasks" in c for c in contents
+        )
+        assert any("earlier support question" in c for c in contents)
+
     async def test_guide_language_follows_preferred_lang(
         self, db_session, test_family, test_parent_user, monkeypatch
     ):
@@ -581,9 +606,6 @@ class TestSupportChat:
             "hola", preferred_lang="es", role="PARENT", mode="support",
         )
         assert constructed["api_key"] == "main-key"
-
-
-import json as _json
 
 
 async def _collect_events(gen):
