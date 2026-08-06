@@ -1,14 +1,5 @@
-# Backend image build context (compose sets `context: ./backend`).
-# tests/ intentionally ships — the documented workflow runs pytest inside the
-# container (see CLAUDE.md).
-venv/
-.venv/
-**/__pycache__
-*.pyc
-.pytest_cache/
-htmlcov/
-.coverage
-coverage.xml
-*.rdb
-*.sql
-.env
+# INERT — the backend image now builds from the REPO ROOT context (compose
+# sets `context: .`, `dockerfile: backend/Dockerfile`; see that file's header
+# comment), and Podman/Docker only honor a .dockerignore next to the build
+# context root. This per-directory file is never read. Add excludes to the
+# root .dockerignore instead.
