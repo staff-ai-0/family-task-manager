@@ -105,7 +105,9 @@ async def export_my_family(
     family_export_service) because the archive is built fully in memory.
     """
     zip_bytes = await FamilyExportService.export_family(
-        db, to_uuid_required(current_user.family_id)
+        db,
+        to_uuid_required(current_user.family_id),
+        to_uuid_required(current_user.id),
     )
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
     return Response(

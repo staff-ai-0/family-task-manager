@@ -11,7 +11,10 @@ onboarding events, subscription/usage/credit grants, and A2A webhook config.
 Uploaded images are NOT bundled — the archive carries a manifest of the file
 paths instead (see uploads_manifest.json + README.txt inside the ZIP).
 
-Multi-tenant: every query filters by the caller's family_id.
+Multi-tenant: every query filters by the caller's family_id. Jarvis support
+threads are additionally scoped to the calling user_id (see the
+jarvis_messages query below) — support chats are personal even to a co-parent
+in the same family, unlike the family-wide copilot thread.
 
 Size guard: the ZIP is built fully in memory, so export_family refuses
 (HTTP 413) when a cheap pre-flight row count exceeds EXPORT_MAX_ROWS or the
@@ -30,7 +33,7 @@ from typing import Any, Sequence
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -310,7 +313,9 @@ class FamilyExportService:
         return int(total or 0)
 
     @classmethod
-    async def export_family(cls, db: AsyncSession, family_id: UUID) -> bytes:
+    async def export_family(
+        cls, db: AsyncSession, family_id: UUID, user_id: UUID
+    ) -> bytes:
         # Size guard: the whole archive is materialized in memory. Refuse
         # up-front when the family is clearly too large (streaming export is
         # the follow-up if this ever fires for legitimate data volumes).
@@ -386,7 +391,26 @@ class FamilyExportService:
         pup_snapshots = await _rows(db, fam(PupScoreSnapshot))
         notifications = await _rows(db, fam(Notification))
         invitations = await _rows(db, fam(FamilyInvitation))
-        jarvis_messages = await _rows(db, fam(JarvisMessage))
+        # Support-mode Jarvis threads are per-user and personal (see
+        # jarvis_service._load_history: "Support threads are per-user for
+        # BOTH roles ... a parent's support questions are personal, unlike
+        # the family-shared copilot thread"). The export must respect that:
+        # every copilot row for the family, but only the CALLING user's own
+        # support rows — otherwise parent A could export parent B's support
+        # conversation through this family-wide endpoint. mode is nullable
+        # (legacy rows backfilled to 'copilot' by migration), so NULL is
+        # treated as copilot here too, not as an accidental support match.
+        jarvis_messages = await _rows(
+            db,
+            select(JarvisMessage).where(
+                JarvisMessage.family_id == family_id,
+                or_(
+                    JarvisMessage.mode != "support",
+                    JarvisMessage.mode.is_(None),
+                    JarvisMessage.user_id == user_id,
+                ),
+            ),
+        )
         jarvis_schedules = await _rows(db, fam(JarvisSchedule))
         jarvis_pending_actions = await _rows(db, fam(JarvisPendingAction))
         jarvis_mcp_tokens = await _rows(db, fam(JarvisMcpToken))

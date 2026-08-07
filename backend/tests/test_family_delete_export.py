@@ -422,6 +422,49 @@ class TestFamilyExport:
         r = await client.get("/api/families/export")
         assert r.status_code == 401
 
+    async def test_export_scopes_support_rows_to_caller(
+        self, client: AsyncClient, db_session: AsyncSession,
+        test_family, test_parent_user, test_parent_user_2,
+    ):
+        """Regression (final fix wave): Jarvis support-mode threads are
+        personal (see jarvis_service._load_history), so the export must
+        include only the CALLING parent's own support rows, alongside every
+        copilot row for the family. Uses two parents in the SAME family
+        (test_parent_user / test_parent_user_2) — a cross-family fixture like
+        `seeded` above can't expose this gap, since the family_id filter
+        alone already isolates different families and would make an
+        unscoped `fam(JarvisMessage)` query pass by accident."""
+        db_session.add_all([
+            JarvisMessage(
+                family_id=test_family.id, user_id=test_parent_user.id,
+                role="user", content="shared copilot question",
+                mode="copilot",
+            ),
+            JarvisMessage(
+                family_id=test_family.id, user_id=test_parent_user.id,
+                role="user", content="parent A private support question",
+                mode="support",
+            ),
+            JarvisMessage(
+                family_id=test_family.id, user_id=test_parent_user_2.id,
+                role="user", content="parent B private support question",
+                mode="support",
+            ),
+        ])
+        await db_session.commit()
+
+        r = await client.get(
+            "/api/families/export", headers=_auth(test_parent_user)
+        )
+        assert r.status_code == 200, r.text
+        zf = zipfile.ZipFile(io.BytesIO(r.content))
+        contents = {
+            m["content"] for m in json.loads(zf.read("jarvis/messages.json"))
+        }
+        assert "shared copilot question" in contents
+        assert "parent A private support question" in contents
+        assert "parent B private support question" not in contents
+
     async def test_export_includes_jarvis_kiosk_onboarding_and_extras(
         self, client: AsyncClient, seeded
     ):

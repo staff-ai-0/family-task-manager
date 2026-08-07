@@ -42,26 +42,32 @@ class LLMNotConfiguredError(ValidationError):
     """No LiteLLM virtual key — our misconfiguration, not the caller's input."""
 
 
-def get_llm_client() -> OpenAI:
+def get_llm_client(api_key: str | None = None) -> OpenAI:
     """Build the OpenAI SDK client pointed at the LiteLLM proxy.
 
     The proxy owns authentication, translation to each provider's native
     format, per-key monthly budget enforcement and spend logging, so no call
     site may talk to an upstream provider directly.
 
+    Args:
+        api_key: Optional per-call LiteLLM virtual key override. Support mode
+            passes its dedicated key (spend attribution + budget isolation);
+            every other call site keeps the app-wide LITELLM_API_KEY.
+
     Raises:
-        LLMNotConfiguredError: LITELLM_API_KEY is unset. Call sites that can
-            degrade gracefully (returning None, or refusing with their own
-            wording) check the key before they get here; this is the backstop
-            so a missing key can never reach the network layer.
+        LLMNotConfiguredError: no usable key — neither the override nor
+            LITELLM_API_KEY is set. Call sites that can degrade gracefully
+            check before they get here; this is the backstop so a missing
+            key can never reach the network layer.
     """
-    if not settings.LITELLM_API_KEY:
+    key = api_key or settings.LITELLM_API_KEY
+    if not key:
         raise LLMNotConfiguredError(
             "AI features are not configured. Please set LITELLM_API_KEY "
             "to a virtual key issued by the LiteLLM proxy."
         )
     return OpenAI(
         base_url=f"{settings.LITELLM_API_BASE.rstrip('/')}/v1",
-        api_key=settings.LITELLM_API_KEY,
+        api_key=key,
         timeout=LLM_TIMEOUT,
     )

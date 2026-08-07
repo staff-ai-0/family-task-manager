@@ -8,6 +8,7 @@
 import GuideShell from "../components/GuideShell.astro";
 // docs/ está montado read-only en /app/docs dentro del container del frontend.
 import TourHub from "../components/TourHub.astro";
+import SupportCta from "../components/SupportCta.astro";
 import { apiFetch } from "../lib/api";
 
 // Both guide pages are public. A signed-in reader also gets the replay hub, so
@@ -44,5 +45,6 @@ import { Content as GuideContent } from "../../docs/USER_GUIDE_ES.md";
     supportLabel="Contactar soporte"
 >
     <TourHub slot="before-content" lang="es" user={tourUser} />
+    <SupportCta slot="before-content" lang="es" user={tourUser} />
     <GuideContent />
 </GuideShell>

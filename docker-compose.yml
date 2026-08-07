@@ -66,10 +66,15 @@ services:
   # Local development should run outside docker (see CLAUDE.md: `uvicorn
   # --reload` + `npm run dev` directly) or use a gitignored
   # docker-compose.override.yml with bind mounts and the --reload command.
+  # If that override bind-mounts ./backend:/app, it must also mount
+  # ./docs:/app/docs:ro — otherwise it hides the image's /app/docs and
+  # support mode's guide_context.py raises FileNotFoundError at runtime.
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      # Repo-root context (like the frontend) so the image can COPY docs/ —
+      # the support-mode grounding reads the user guides at runtime.
+      context: .
+      dockerfile: backend/Dockerfile
       args:
         INSTALL_DEV: "true"
     container_name: family_app_backend
