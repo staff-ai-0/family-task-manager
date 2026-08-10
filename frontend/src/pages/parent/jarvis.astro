@@ -218,6 +218,8 @@ if (isTeen) {
 </ChatShell>
 
 <script>
+    import { streamJarvisChat } from "../../lib/jarvis-chat";
+
     document.addEventListener("astro:page-load", () => {
         const form = document.getElementById("chat-form") as HTMLFormElement | null;
         const input = document.getElementById("message-input") as HTMLInputElement | null;
@@ -390,129 +392,102 @@ if (isTeen) {
             scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
 
             const liveActions: string[] = [];
-            try {
-                const resp = await fetch("/api/jarvis/chat-stream", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ message, model: selectedModel }),
-                });
-                if (!resp.ok || !resp.body) {
-                    pending?.classList.add("hidden");
-                    let txt = "Error";
-                    let upsell = false;
-                    try {
-                        const d = (await resp.json()).detail;
-                        // 422s carry an array of Pydantic error objects; the
-                        // premium gate (403) carries an object with .error.
-                        if (Array.isArray(d)) {
-                            txt = d.map((x: any) => x.msg || JSON.stringify(x)).join("; ");
-                        } else if (d && typeof d === "object") {
-                            upsell = d.error === "upgrade_required";
-                            txt = upsell
-                                ? (isEs
-                                    ? "Jarvis requiere el plan Plus."
-                                    : "Jarvis requires the Plus plan.")
-                                : (d.message || JSON.stringify(d));
-                        } else {
-                            txt = d || txt;
-                        }
-                    } catch {}
-                    showError(txt, upsell);
-                    markSendFailed();
-                    return;
-                }
-
-                const reader = resp.body.getReader();
-                const decoder = new TextDecoder();
-                let buf = "";
-                let event = "message";
-                let dataStr = "";
-
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    buf += decoder.decode(value, { stream: true });
-
-                    let idx;
-                    while ((idx = buf.indexOf("\n\n")) >= 0) {
-                        const chunk = buf.slice(0, idx);
-                        buf = buf.slice(idx + 2);
-                        event = "message";
-                        dataStr = "";
-                        for (const line of chunk.split("\n")) {
-                            if (line.startsWith("event: ")) event = line.slice(7).trim();
-                            else if (line.startsWith("data: ")) dataStr += line.slice(6);
-                        }
-                        let payload: any = {};
-                        try { payload = dataStr ? JSON.parse(dataStr) : {}; } catch {}
-
-                        if (event === "tool") {
-                            liveActions.push(`${payload.name}(${payload.ok ? "ok" : "err"})`);
-                            if (pending) {
-                                pending.querySelector("div")!.textContent =
-                                    `⚡ ${payload.name} · ${liveActions.length} action(s) so far…`;
+            await streamJarvisChat(
+                { message, model: selectedModel },
+                {
+                    onHttpError: async (resp) => {
+                        pending?.classList.add("hidden");
+                        let txt = "Error";
+                        let upsell = false;
+                        try {
+                            const d = (await resp.json()).detail;
+                            // 422s carry an array of Pydantic error objects; the
+                            // premium gate (403) carries an object with .error.
+                            if (Array.isArray(d)) {
+                                txt = d.map((x: any) => x.msg || JSON.stringify(x)).join("; ");
+                            } else if (d && typeof d === "object") {
+                                upsell = d.error === "upgrade_required";
+                                txt = upsell
+                                    ? (isEs
+                                        ? "Jarvis requiere el plan Plus."
+                                        : "Jarvis requires the Plus plan.")
+                                    : (d.message || JSON.stringify(d));
+                            } else {
+                                txt = d || txt;
                             }
-                        } else if (event === "confirm") {
-                            pending?.classList.add("hidden");
-                            renderConfirmCard(
-                                String(payload.action_id ?? ""),
-                                payload.tool ?? "",
-                                payload.summary ?? "",
-                                payload.params ?? {},
-                            );
-                            scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
-                        } else if (event === "reply") {
-                            pending?.classList.add("hidden");
-                            if (scroll) {
-                                const MODEL_META: Record<string, {label: string; icon: string; color: string}> = {
-                                    "claude-haiku":     { label: "Claude Haiku",       icon: "⚡", color: "bg-orange-100 text-orange-700" },
-                                    "claude-sonnet":    { label: "Claude Sonnet",      icon: "🧠", color: "bg-violet-100 text-violet-700" },
-                                    "gpt-4o":           { label: "GPT-4o",             icon: "🟢", color: "bg-green-100 text-green-700" },
-                                    "gemini-2.5-flash": { label: "Gemini 2.5 Flash",   icon: "💎", color: "bg-sky-100 text-sky-700" },
-                                    "qwen3":            { label: "Qwen 2.5 7B · GPU",  icon: "🖥️", color: "bg-gray-100 text-gray-600" },
-                                    "mistral-nemo":     { label: "Mistral Nemo · GPU", icon: "🖥️", color: "bg-gray-100 text-gray-600" },
-                                };
-                                const bot = document.createElement("div");
-                                bot.className = "flex justify-start flex-col gap-1";
-                                const actions: string[] = Array.isArray(payload.actions) ? payload.actions : liveActions;
-                                const actionBadges = actions.length
-                                    ? `<div class="mt-2 flex flex-wrap gap-1">${actions.map(() => `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700"></span>`).join("")}</div>`
-                                    : "";
-                                const modelKey = payload.model ?? selectedModel;
-                                const meta = MODEL_META[modelKey] ?? { label: modelKey, icon: "🤖", color: "bg-gray-100 text-gray-600" };
-                                const modelCard = `<div class="flex items-center gap-1 pl-1"><span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${meta.color}">${meta.icon} ${meta.label}</span></div>`;
-                                bot.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-brand-cream border border-brand-ink/10 text-brand-ink"><p class="whitespace-pre-wrap"></p>${actionBadges}</div>${modelCard}`;
-                                (bot.querySelector("p") as HTMLElement).textContent = payload.reply ?? "";
-                                bot.querySelectorAll("span.bg-violet-100").forEach((el, i) => {
-                                    (el as HTMLElement).textContent = "⚡ " + actions[i];
-                                });
-                                scroll.insertBefore(bot, pending);
-                                scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
-                            }
-                        } else if (event === "error") {
-                            pending?.classList.add("hidden");
-                            const d = payload.detail;
-                            showError(
-                                typeof d === "string" && d
-                                    ? d
-                                    : (d?.message || (isEs ? "Error — intenta de nuevo." : "Error — try again.")),
-                            );
-                            markSendFailed();
+                        } catch {}
+                        showError(txt, upsell);
+                        markSendFailed();
+                    },
+                    onTool: (payload) => {
+                        liveActions.push(`${payload.name}(${payload.ok ? "ok" : "err"})`);
+                        if (pending) {
+                            pending.querySelector("div")!.textContent =
+                                `⚡ ${payload.name} · ${liveActions.length} action(s) so far…`;
                         }
-                    }
-                }
-            } catch (err) {
-                pending?.classList.add("hidden");
-                showError(
-                    isEs
-                        ? "Error de conexión — revisa tu internet e intenta de nuevo."
-                        : "Connection error — check your internet and try again.",
-                );
-                markSendFailed();
-            } finally {
-                input.disabled = false;
-                input.focus();
-            }
+                    },
+                    onConfirm: (payload) => {
+                        pending?.classList.add("hidden");
+                        renderConfirmCard(
+                            String(payload.action_id ?? ""),
+                            payload.tool ?? "",
+                            payload.summary ?? "",
+                            payload.params ?? {},
+                        );
+                        scroll?.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+                    },
+                    onReply: (payload) => {
+                        pending?.classList.add("hidden");
+                        if (scroll) {
+                            const MODEL_META: Record<string, {label: string; icon: string; color: string}> = {
+                                "claude-haiku":     { label: "Claude Haiku",       icon: "⚡", color: "bg-orange-100 text-orange-700" },
+                                "claude-sonnet":    { label: "Claude Sonnet",      icon: "🧠", color: "bg-violet-100 text-violet-700" },
+                                "gpt-4o":           { label: "GPT-4o",             icon: "🟢", color: "bg-green-100 text-green-700" },
+                                "gemini-2.5-flash": { label: "Gemini 2.5 Flash",   icon: "💎", color: "bg-sky-100 text-sky-700" },
+                                "qwen3":            { label: "Qwen 2.5 7B · GPU",  icon: "🖥️", color: "bg-gray-100 text-gray-600" },
+                                "mistral-nemo":     { label: "Mistral Nemo · GPU", icon: "🖥️", color: "bg-gray-100 text-gray-600" },
+                            };
+                            const bot = document.createElement("div");
+                            bot.className = "flex justify-start flex-col gap-1";
+                            const actions: string[] = Array.isArray(payload.actions) ? payload.actions : liveActions;
+                            const actionBadges = actions.length
+                                ? `<div class="mt-2 flex flex-wrap gap-1">${actions.map(() => `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700"></span>`).join("")}</div>`
+                                : "";
+                            const modelKey = payload.model ?? selectedModel;
+                            const meta = MODEL_META[modelKey] ?? { label: modelKey, icon: "🤖", color: "bg-gray-100 text-gray-600" };
+                            const modelCard = `<div class="flex items-center gap-1 pl-1"><span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${meta.color}">${meta.icon} ${meta.label}</span></div>`;
+                            bot.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-brand-cream border border-brand-ink/10 text-brand-ink"><p class="whitespace-pre-wrap"></p>${actionBadges}</div>${modelCard}`;
+                            (bot.querySelector("p") as HTMLElement).textContent = payload.reply ?? "";
+                            bot.querySelectorAll("span.bg-violet-100").forEach((el, i) => {
+                                (el as HTMLElement).textContent = "⚡ " + actions[i];
+                            });
+                            scroll.insertBefore(bot, pending);
+                            scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+                        }
+                    },
+                    onError: (payload) => {
+                        pending?.classList.add("hidden");
+                        const d = payload.detail;
+                        showError(
+                            typeof d === "string" && d
+                                ? d
+                                : (d?.message || (isEs ? "Error — intenta de nuevo." : "Error — try again.")),
+                        );
+                        markSendFailed();
+                    },
+                    onNetworkError: () => {
+                        pending?.classList.add("hidden");
+                        showError(
+                            isEs
+                                ? "Error de conexión — revisa tu internet e intenta de nuevo."
+                                : "Connection error — check your internet and try again.",
+                        );
+                        markSendFailed();
+                    },
+                },
+            );
+            input.disabled = false;
+            input.focus();
         });
     });
 </script>

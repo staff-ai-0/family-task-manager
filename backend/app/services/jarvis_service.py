@@ -14,6 +14,7 @@ as the receipt scanner) for centralized spend tracking. Each call:
 """
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any, List
 from uuid import UUID
@@ -36,8 +37,11 @@ from app.models.kid_pet import KidPet
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.user import User, UserRole
 from app.services.analytics_service import AnalyticsService
+from app.services.guide_context import build_support_context
 from app.services.jarvis_pending_action_service import PendingActionService
 from app.core.time_utils import utc_today
+
+logger = logging.getLogger(__name__)
 
 
 # Jarvis model alias — defaults to receipt scanner's claude-haiku for
@@ -66,6 +70,68 @@ SYSTEM_TEEN = (
 )
 
 
+# Canonical: platform/agents/catalogue/support-ftm.md — edit there first
+SYSTEM_SUPPORT = (
+    "You are the Family Task Manager support assistant. You help signed-in "
+    "parents and teens use the app: chores, points, rewards, gigs, the "
+    "family bank, budgeting, calendar, plans/billing and account issues. "
+    "Answer ONLY from the user-guide material provided below. If the guide "
+    "does not cover the question, say you don't know and tell the user to "
+    "email soporte@agent-ia.mx — never invent features, prices or steps. "
+    "You cannot see this family's data and you cannot perform actions in "
+    "the app; explain the steps so the user can do it themselves. Be "
+    "concise: 2-5 sentences or a short numbered list."
+)
+
+# Support-mode bilingual copy. Support must never surface a raw 502 —
+# outages and budget refusals degrade to friendly text + the human channel.
+_SUPPORT_UNAVAILABLE = {
+    "en": (
+        "The support assistant is temporarily unavailable. Please email "
+        "soporte@agent-ia.mx and a human will help you."
+    ),
+    "es": (
+        "El asistente de soporte no está disponible por el momento. "
+        "Escríbenos a soporte@agent-ia.mx y una persona te ayudará."
+    ),
+}
+_SUPPORT_CAP_MSG = {
+    "en": (
+        "Daily support limit reached — email soporte@agent-ia.mx and "
+        "we'll help you directly."
+    ),
+    "es": (
+        "Alcanzaste el límite diario de soporte — escríbenos a "
+        "soporte@agent-ia.mx y te ayudamos directamente."
+    ),
+}
+_SUPPORT_NOT_CONFIGURED = {
+    "en": (
+        "The support assistant is not enabled on this deployment. "
+        "Email soporte@agent-ia.mx."
+    ),
+    "es": (
+        "El asistente de soporte no está habilitado en esta instalación. "
+        "Escríbenos a soporte@agent-ia.mx."
+    ),
+}
+
+
+def _support_api_key() -> str:
+    """Effective LiteLLM key for support mode.
+
+    The dedicated support-ftm virtual key wins. Falling back to the app-wide
+    LITELLM_API_KEY is DEV-ONLY (DEBUG=true): in prod (DEBUG=false) a missing
+    support key must cleanly disable the feature — never silently bill
+    support traffic to the family-app key.
+    """
+    if settings.SUPPORT_LITELLM_API_KEY:
+        return settings.SUPPORT_LITELLM_API_KEY
+    if settings.DEBUG:
+        return settings.LITELLM_API_KEY
+    return ""
+
+
 def _is_teen(role) -> bool:
     """The teen path is tool-free + self-scoped. Accepts a UserRole enum or a
     plain string; anything not TEEN (i.e. PARENT) keeps full copilot behaviour."""
@@ -90,7 +156,7 @@ def _build_system(
     return (
         base
         + f"\n\nIMPORTANT: Always respond in {lang_name}, regardless of the "
-        "language of the family-state data below or earlier turns."
+        "language of the reference material below or earlier turns."
         + "\n\n"
         + context_block
     )
@@ -144,6 +210,10 @@ class JarvisQuotaExceeded(ValidationError):
 
 class JarvisUpstreamError(ValidationError):
     """The upstream LLM call failed — the only genuinely 502 condition here."""
+
+
+class JarvisSupportNotConfigured(ValidationError):
+    """Support mode has no usable key (prod fail-closed) — feature disabled."""
 
 
 class JarvisService:
@@ -274,9 +344,19 @@ class JarvisService:
         *,
         user_id: UUID | None = None,
         teen: bool = False,
+        mode: str = "copilot",
     ) -> List[JarvisMessage]:
-        q = select(JarvisMessage).where(JarvisMessage.family_id == family_id)
-        if teen and user_id is not None:
+        q = select(JarvisMessage).where(
+            and_(
+                JarvisMessage.family_id == family_id,
+                JarvisMessage.mode == mode,
+            )
+        )
+        if mode == "support":
+            # Support threads are per-user for BOTH roles — a parent's support
+            # questions are personal, unlike the family-shared copilot thread.
+            q = q.where(JarvisMessage.user_id == user_id)
+        elif teen and user_id is not None:
             # A teen has a private thread: only their own rows (both the user
             # turn and its assistant reply are persisted with their user_id).
             q = q.where(JarvisMessage.user_id == user_id)
@@ -312,9 +392,11 @@ class JarvisService:
 
     @staticmethod
     async def _today_message_count(
-        db: AsyncSession, family_id: UUID
+        db: AsyncSession, family_id: UUID, mode: str = "copilot"
     ) -> int:
-        """Count user→assistant pairs sent today (UTC). Cheap throttle."""
+        """Count user→assistant pairs sent today (UTC) in *mode*. Cheap
+        throttle — mode-scoped so support turns never eat the copilot quota
+        (and vice versa)."""
         cutoff = datetime.now(timezone.utc).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
@@ -325,11 +407,94 @@ class JarvisService:
                 and_(
                     JarvisMessage.family_id == family_id,
                     JarvisMessage.role == "user",
+                    JarvisMessage.mode == mode,
                     JarvisMessage.created_at >= cutoff,
                 )
             )
         )
         return int((await db.execute(q)).scalar() or 0)
+
+    @staticmethod
+    async def _support_reply(
+        db: AsyncSession,
+        family_id: UUID,
+        user_id: UUID,
+        message: str,
+        preferred_lang: str,
+    ) -> str:
+        """One tool-free, guide-grounded completion for support mode.
+
+        Pins settings.SUPPORT_MODEL on the dedicated support key. Upstream
+        failures (proxy down, timeout, budget-exhausted refusal) AND a
+        failure to load the grounding guide (e.g. a missing docs/ dir)
+        resolve to the bilingual friendly-unavailable copy — support never
+        surfaces a raw 5xx to the user.
+        """
+        history = await JarvisService._load_history(
+            db, family_id, limit=MAX_HISTORY_TURNS, user_id=user_id,
+            mode="support",
+        )
+        last_user_turn = next(
+            (h.content for h in reversed(history) if h.role == "user"), ""
+        )
+
+        # Fail-closed key invariant, local to this method (not just the two
+        # current callers): get_llm_client(api_key="") would silently fall
+        # back to settings.LITELLM_API_KEY (the family-app key) — never bill
+        # support traffic there. Raised outside the try/except below so it
+        # propagates as JarvisSupportNotConfigured (→ 503), not swallowed
+        # into the generic friendly-unavailable copy.
+        key = _support_api_key()
+        if not key:
+            raise JarvisSupportNotConfigured(
+                _SUPPORT_NOT_CONFIGURED.get(
+                    preferred_lang, _SUPPORT_NOT_CONFIGURED["en"]
+                )
+            )
+
+        try:
+            # Guide loading (build_support_context → load_guide → _docs_dir)
+            # can raise FileNotFoundError if docs/ is missing from the image;
+            # kept inside this guarded region so that degrades to the
+            # friendly-unavailable copy instead of an uncaught 500.
+            context_block = build_support_context(
+                message, last_user_turn, preferred_lang
+            )
+            msgs: list[dict[str, Any]] = [
+                {
+                    "role": "system",
+                    "content": _build_system(
+                        context_block, preferred_lang, base=SYSTEM_SUPPORT
+                    ),
+                }
+            ]
+            for h in history:
+                if h.role in ("user", "assistant"):
+                    msgs.append({"role": h.role, "content": h.content})
+            msgs.append({"role": "user", "content": message})
+
+            # Release the read transaction before the (up to 60s) completion —
+            # same idle-in-transaction reasoning as the copilot path.
+            await db.commit()
+
+            client = get_llm_client(api_key=key)
+            record_llm_call()  # best-effort outbound-LLM counter
+            completion = await run_in_threadpool(
+                lambda: client.chat.completions.create(
+                    model=settings.SUPPORT_MODEL,
+                    max_tokens=512,
+                    messages=msgs,
+                )
+            )
+            reply = (completion.choices[0].message.content or "").strip()
+        except Exception:
+            logger.exception("support-mode LLM call failed")
+            return _SUPPORT_UNAVAILABLE.get(
+                preferred_lang, _SUPPORT_UNAVAILABLE["en"]
+            )
+        if not reply:
+            reply = _EMPTY_REPLY.get(preferred_lang, _EMPTY_REPLY["en"])
+        return reply
 
     @staticmethod
     async def chat_stream(
@@ -339,6 +504,7 @@ class JarvisService:
         model: str | None = None,
         preferred_lang: str = "en",
         role: str = "PARENT",
+        mode: str = "copilot",
     ):
         """Public SSE generator — owns a short-lived DB session that is closed on
         completion AND on client disconnect (the async-with __aexit__ runs on
@@ -348,7 +514,8 @@ class JarvisService:
         from app.core.database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
             async for evt in JarvisService._chat_stream_inner(
-                db, family_id, user_id, message, model, preferred_lang, role
+                db, family_id, user_id, message, model, preferred_lang, role,
+                mode,
             ):
                 yield evt
 
@@ -361,6 +528,7 @@ class JarvisService:
         model: str | None = None,
         preferred_lang: str = "en",
         role: str = "PARENT",
+        mode: str = "copilot",
     ):
         """Async generator yielding SSE event lines.
 
@@ -379,11 +547,62 @@ class JarvisService:
         out-of-band via POST /api/jarvis/actions/{id}/approve.
         """
         try:
-            if not settings.LITELLM_API_KEY:
+            if mode == "support":
+                # Effective-key guard: prod without the support key disables
+                # the feature — never a silent fallback to the main key.
+                if not _support_api_key():
+                    raise JarvisSupportNotConfigured(
+                        _SUPPORT_NOT_CONFIGURED.get(
+                            preferred_lang, _SUPPORT_NOT_CONFIGURED["en"]
+                        )
+                    )
+            elif not settings.LITELLM_API_KEY:
                 raise JarvisUpstreamError("Jarvis not configured. Set LITELLM_API_KEY.")
             msg = (message or "").strip()
             if not msg:
                 raise ValidationError("Message is empty.")
+
+            if mode == "support":
+                cap = int(settings.SUPPORT_DAILY_MESSAGE_CAP or 0)
+                if cap > 0:
+                    sent = await JarvisService._today_message_count(
+                        db, family_id, mode="support"
+                    )
+                    if sent >= cap:
+                        raise JarvisQuotaExceeded(
+                            _SUPPORT_CAP_MSG.get(
+                                preferred_lang, _SUPPORT_CAP_MSG["en"]
+                            )
+                        )
+                yield "event: thinking\ndata: {}\n\n"
+                reply = await JarvisService._support_reply(
+                    db, family_id, user_id, msg, preferred_lang
+                )
+                user_row = JarvisMessage(
+                    family_id=family_id, user_id=user_id, role="user",
+                    content=msg, mode="support",
+                )
+                bot_row = JarvisMessage(
+                    # Per-user support thread for BOTH roles.
+                    family_id=family_id, user_id=user_id, role="assistant",
+                    content=reply, mode="support",
+                )
+                db.add(user_row)
+                db.add(bot_row)
+                await db.commit()
+                await db.refresh(bot_row)
+                yield (
+                    "event: reply\ndata: "
+                    + json.dumps({
+                        "reply": reply,
+                        "actions": [],
+                        "message_id": str(bot_row.id),
+                        "model": settings.SUPPORT_MODEL,
+                    })
+                    + "\n\n"
+                )
+                return
+
             cap = int(settings.JARVIS_DAILY_MESSAGE_CAP or 0)
             if cap > 0:
                 if await JarvisService._today_message_count(db, family_id) >= cap:
@@ -529,7 +748,8 @@ class JarvisService:
                 reply = _EMPTY_REPLY.get(preferred_lang, _EMPTY_REPLY["en"])
 
             user_row = JarvisMessage(
-                family_id=family_id, user_id=user_id, role="user", content=msg
+                family_id=family_id, user_id=user_id, role="user", content=msg,
+                mode="copilot",
             )
             bot_row = JarvisMessage(
                 family_id=family_id,
@@ -537,6 +757,7 @@ class JarvisService:
                 # and self-scoped; parent replies stay NULL (family-wide thread).
                 user_id=user_id if teen else None,
                 role="assistant",
+                mode="copilot",
                 content=reply
                 + (
                     f"\n\n[actions: {', '.join(actions_taken)}]"
@@ -573,14 +794,61 @@ class JarvisService:
         model: str | None = None,
         preferred_lang: str = "en",
         role: str = "PARENT",
+        mode: str = "copilot",
     ) -> dict:
-        if not settings.LITELLM_API_KEY:
+        if mode == "support":
+            # The guard must check the EFFECTIVE support key, not
+            # LITELLM_API_KEY — in prod a missing support key disables the
+            # feature instead of silently spending on the main key.
+            if not _support_api_key():
+                raise JarvisSupportNotConfigured(
+                    _SUPPORT_NOT_CONFIGURED.get(
+                        preferred_lang, _SUPPORT_NOT_CONFIGURED["en"]
+                    )
+                )
+        elif not settings.LITELLM_API_KEY:
             raise JarvisUpstreamError(
                 "Jarvis not configured. Set LITELLM_API_KEY."
             )
         message = (message or "").strip()
         if not message:
             raise ValidationError("Message is empty.")
+
+        if mode == "support":
+            cap = int(settings.SUPPORT_DAILY_MESSAGE_CAP or 0)
+            if cap > 0:
+                sent_today = await JarvisService._today_message_count(
+                    db, family_id, mode="support"
+                )
+                if sent_today >= cap:
+                    raise JarvisQuotaExceeded(
+                        _SUPPORT_CAP_MSG.get(
+                            preferred_lang, _SUPPORT_CAP_MSG["en"]
+                        )
+                    )
+            reply = await JarvisService._support_reply(
+                db, family_id, user_id, message, preferred_lang
+            )
+            user_msg = JarvisMessage(
+                family_id=family_id, user_id=user_id, role="user",
+                content=message, mode="support",
+            )
+            bot_msg = JarvisMessage(
+                # Support threads are per-user for BOTH roles — a parent's
+                # support questions are personal, unlike the family-shared
+                # copilot thread (whose assistant rows stay NULL).
+                family_id=family_id, user_id=user_id, role="assistant",
+                content=reply, mode="support",
+            )
+            db.add(user_msg)
+            db.add(bot_msg)
+            await db.commit()
+            await db.refresh(bot_msg)
+            return {
+                "reply": reply,
+                "actions": [],
+                "message_id": str(bot_msg.id),
+            }
 
         cap = int(settings.JARVIS_DAILY_MESSAGE_CAP or 0)
         if cap > 0:
@@ -718,7 +986,8 @@ class JarvisService:
             reply = _EMPTY_REPLY.get(preferred_lang, _EMPTY_REPLY["en"])
 
         user_msg = JarvisMessage(
-            family_id=family_id, user_id=user_id, role="user", content=message
+            family_id=family_id, user_id=user_id, role="user", content=message,
+            mode="copilot",
         )
         bot_msg = JarvisMessage(
             family_id=family_id,
@@ -726,6 +995,7 @@ class JarvisService:
             # stay NULL (shared family-wide thread).
             user_id=user_id if teen else None,
             role="assistant",
+            mode="copilot",
             content=reply
             + (f"\n\n[actions: {', '.join(actions_taken)}]" if actions_taken else ""),
         )
@@ -747,9 +1017,11 @@ class JarvisService:
         *,
         user_id: UUID | None = None,
         role: str = "PARENT",
+        mode: str = "copilot",
     ) -> List[JarvisMessage]:
         return await JarvisService._load_history(
-            db, family_id, limit=limit, user_id=user_id, teen=_is_teen(role)
+            db, family_id, limit=limit, user_id=user_id, teen=_is_teen(role),
+            mode=mode,
         )
 
     @staticmethod
@@ -759,13 +1031,34 @@ class JarvisService:
         *,
         user_id: UUID | None = None,
         role: str = "PARENT",
+        mode: str = "copilot",
     ) -> int:
         from sqlalchemy import delete as sql_delete
 
+        if mode == "support" and user_id is None:
+            # Defence in depth: JarvisMessage.user_id == None renders as
+            # `user_id IS NULL`, which resolves to a DIFFERENT row set than
+            # "this caller's thread" (support rows always carry a concrete
+            # user_id — see chat()/_chat_stream_inner() above) rather than
+            # safely matching nothing. Unreachable today (the route always
+            # passes the authenticated caller's id), but a future
+            # support-mode entry point that forgets to pass one must fail
+            # loudly instead of silently deleting the wrong scope.
+            raise ValidationError(
+                "clear_history(mode='support') requires a caller user_id."
+            )
+
         stmt = sql_delete(JarvisMessage).where(
-            JarvisMessage.family_id == family_id
+            and_(
+                JarvisMessage.family_id == family_id,
+                JarvisMessage.mode == mode,
+            )
         )
-        if _is_teen(role) and user_id is not None:
+        if mode == "support":
+            # Support threads are per-user for BOTH roles — a user may only
+            # clear their own support thread.
+            stmt = stmt.where(JarvisMessage.user_id == user_id)
+        elif _is_teen(role) and user_id is not None:
             # A teen may only clear their own private thread.
             stmt = stmt.where(JarvisMessage.user_id == user_id)
         else:

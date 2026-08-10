@@ -220,6 +220,29 @@ async def test_parent_user(db_session: AsyncSession, test_family):
 
 
 @pytest_asyncio.fixture
+async def test_parent_user_2(db_session: AsyncSession, test_family):
+    """Create a second test parent user in the SAME family — for tests that
+    must prove a per-user privacy boundary between co-parents (e.g. that one
+    parent's Jarvis support thread is invisible to the other parent)."""
+    from app.models.user import User, UserRole
+    from app.core.security import get_password_hash
+
+    user = User(
+        email="parent2@test.com",
+        password_hash=get_password_hash("password123"),
+        name="Test Parent 2",
+        role=UserRole.PARENT,
+        family_id=test_family.id,
+        email_verified=True,
+        points=0,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
 async def test_child_user(db_session: AsyncSession, test_family):
     """Create a test child user"""
     from app.models.user import User, UserRole

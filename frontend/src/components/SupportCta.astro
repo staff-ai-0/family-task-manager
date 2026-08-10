@@ -1,0 +1,54 @@
+---
+/**
+ * Support-chat CTA on the guide pages (/help, /ayuda): links signed-in
+ * parents and teens to /soporte. Children never see it (the backend gate is
+ * require_teen_or_parent), and anonymous readers keep the mailto in the
+ * GuideShell footer as their only channel (support agent v1 is signed-in
+ * only per the agent-catalogue design).
+ */
+interface Props {
+    lang?: "en" | "es";
+    /** Resolved /api/auth/me payload or null (guide pages are public). */
+    user?: any;
+}
+const { lang = "es", user = null } = Astro.props;
+const role = String(user?.role ?? "").toLowerCase();
+const show = role === "parent" || role === "teen";
+const es = lang === "es";
+---
+
+{show && (
+    <a href="/soporte" class="support-cta">
+        <span class="support-cta-icon" aria-hidden="true">🛟</span>
+        <span>
+            <strong>{es ? "¿No encuentras la respuesta?" : "Can't find the answer?"}</strong>
+            {" "}
+            {es
+                ? "Chatea con nuestro asistente de soporte."
+                : "Chat with our support assistant."}
+        </span>
+    </a>
+)}
+
+<style>
+    .support-cta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+        padding: 14px 16px;
+        border: 1px solid #99f6e4;
+        border-radius: 12px;
+        background: #f0fdfa;
+        color: #134e4a;
+        text-decoration: none;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+    .support-cta:hover {
+        background: #ccfbf1;
+    }
+    .support-cta-icon {
+        font-size: 22px;
+    }
+</style>
