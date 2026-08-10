@@ -122,6 +122,42 @@ async def test_send_to_user_noop_without_vapid(db_session, test_parent_user):
 
 
 @pytest.mark.asyncio
+async def test_send_to_user_sets_explicit_vapid_exp(db_session, test_parent_user):
+    """Regression (prod 2026-08-10): py-vapid's default exp is now + exactly
+    86400s — RFC 8292 caps exp at "not more than 24 hours", so any Apple
+    node whose clock trails ours computes >24h and intermittently rejects
+    the token with 403 BadJwtToken. We must pass our own exp, comfortably
+    inside the window (12h)."""
+    import time
+
+    from app.core.config import settings
+    settings.VAPID_PRIVATE_KEY = "fake-private-pem"
+    settings.VAPID_PUBLIC_KEY = "fake-public"
+
+    sub = PushSubscription(
+        user_id=test_parent_user.id,
+        endpoint="https://web.push.apple.com/EXP-CHECK",
+        p256dh="p", auth="a",
+    )
+    db_session.add(sub)
+    await db_session.commit()
+
+    with patch("app.services.push_service.webpush") as mock_webpush:
+        await PushService.send_to_user(
+            db_session, test_parent_user.id, {"title": "x", "body": "y"}
+        )
+        assert mock_webpush.call_count == 1
+        claims = mock_webpush.call_args.kwargs["vapid_claims"]
+        now = int(time.time())
+        assert "exp" in claims, "exp must be explicit, not py-vapid's 24h default"
+        # Well inside RFC 8292's 24h ceiling, but a real future deadline.
+        assert now + 3600 <= claims["exp"] <= now + 43200 + 60
+
+    settings.VAPID_PRIVATE_KEY = ""
+    settings.VAPID_PUBLIC_KEY = ""
+
+
+@pytest.mark.asyncio
 async def test_fan_out_calls_webpush_per_parent(
     db_session, test_family, test_parent_user, test_child_user, gig_template_factory,
 ):

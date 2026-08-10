@@ -35,9 +35,17 @@ $DC exec -T backend alembic upgrade head
 
 ## Backups
 
-- `./scripts/backup-db.sh` — on-demand dump (also runs automatically at the start of each deploy)
+- `./scripts/backup-db.sh` — on-demand dump (also runs automatically at the start of each deploy). Writes three artifacts per run: `db-<ts>.sql.gz`, `globals-<ts>.sql.gz` (cluster roles — `pg_dump` does NOT contain them) and `uploads-<ts>.tar.gz`.
 - `./scripts/restore-db.sh` — restore helper
-- systemd timers in `scripts/systemd/` (`family-onprem-backup.*`) schedule host-side dumps
+- `./scripts/restore-drill.sh` — **proves the newest backup actually restores**, into a throwaway container; reads live only. Run it after any change to the backup/restore path.
+- systemd timers in `scripts/systemd/` schedule host-side dumps (`family-onprem-backup.*`, every 6h) and the weekly restore drill (`family-onprem-restore-drill.*`, Sun 04:30)
+
+> A dump and its `globals-` sidecar belong together: restoring into a fresh
+> cluster without the roles the dump GRANTs to aborts the whole
+> `--single-transaction` restore and recovers nothing. This is not theoretical
+> — it was true of every production backup between 2026-07-07 and 2026-08-04.
+> Keep them in the same directory (and the same offsite push) so
+> `restore-db.sh` finds the pair automatically.
 
 ## Database Migrations
 
@@ -46,6 +54,7 @@ Alembic only. CI (`.github/workflows/ci.yml`) exercises `upgrade head → downgr
 ## Rollback
 
 1. **Images**: the deploy script tags the previously running backend/frontend images as a rollback point before rebuilding — retag + `up` to revert.
+1a. **Database**: restoring from a dump is only a real option because the drill proves it. Before relying on a specific backup, run `./scripts/restore-drill.sh <that dump>` — it takes ~30s and tells you whether that file recovers anything at all.
 2. **GCP (last resort)**: the decommissioned GCP VM (`family-app`, project `family-prod`) still has its volumes; `scripts/deploy-gcp.sh` + `docker-compose.gcp.yml` + the pre-cutover dump `backups/prod-cutover-gcp-20260705.sql` can resurrect it. Reassess before using — DNS/tunnel need switching back.
 
 ## Decommissioned targets

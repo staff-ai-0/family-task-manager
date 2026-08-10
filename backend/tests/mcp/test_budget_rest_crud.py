@@ -12,7 +12,7 @@ from datetime import date
 
 from app.mcp.server import build_server
 from app.mcp.context import McpContext, use_context
-from mcp.shared.memory import create_connected_server_and_client_session
+from app.mcp.inproc import connected_mcp_session
 
 
 @pytest.fixture
@@ -38,7 +38,7 @@ async def test_budget_category_group_crud(db_session, family, parent_user):
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             names = [t.name for t in (await s.list_tools()).tools]
             assert "budget_category_group_create" in names
@@ -69,7 +69,7 @@ async def test_budget_payee_crud(db_session, family, parent_user):
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             assert "budget_payee_create" in [t.name for t in (await s.list_tools()).tools]
 
@@ -96,7 +96,7 @@ async def test_budget_tag_crud(db_session, family, parent_user):
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             assert "budget_tag_create" in [t.name for t in (await s.list_tools()).tools]
 
@@ -123,7 +123,7 @@ async def test_budget_saved_filter_crud(db_session, family, parent_user):
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             assert "budget_saved_filter_create" in [t.name for t in (await s.list_tools()).tools]
 
@@ -154,7 +154,7 @@ async def test_budget_custom_report_crud(db_session, family, parent_user):
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             assert "budget_custom_report_create" in [t.name for t in (await s.list_tools()).tools]
 
@@ -204,7 +204,7 @@ async def test_budget_receipt_draft_list_delete(db_session, family, parent_user)
     await db_session.refresh(draft)
 
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             assert "budget_receipt_draft_list" in [t.name for t in (await s.list_tools()).tools]
 
@@ -229,7 +229,7 @@ async def test_saved_filter_create_token_session_returns_error(db_session, famil
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=None, role="MCP_TOKEN", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             r = await _call(s, "budget_saved_filter_create", {
                 "name": "Token Filter",
@@ -248,7 +248,7 @@ async def test_saved_filter_create_with_user_sets_created_by(db_session, family,
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             r = await _call(s, "budget_saved_filter_create", {
                 "name": "User Filter",
@@ -270,7 +270,7 @@ async def test_custom_report_create_token_session_returns_error(db_session, fami
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=None, role="MCP_TOKEN", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             r = await _call(s, "budget_custom_report_create", {
                 "name": "Token Report",
@@ -288,7 +288,7 @@ async def test_custom_report_create_with_user_sets_created_by(db_session, family
     server = build_server()
     ctx = McpContext(family_id=family.id, user_id=parent_user.id, role="PARENT", db=db_session)
     async with use_context(ctx):
-        async with create_connected_server_and_client_session(server) as s:
+        async with connected_mcp_session(server) as s:
             await s.initialize()
             r = await _call(s, "budget_custom_report_create", {
                 "name": "User Report",

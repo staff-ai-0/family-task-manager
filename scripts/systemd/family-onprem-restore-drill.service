@@ -1,0 +1,21 @@
+# scripts/systemd/family-onprem-restore-drill.service
+# USER unit — install under ~/.config/systemd/user/ on 10.1.0.91.
+# Rootless podman: NO sudo (global Rule 1). Runs as jc.
+#
+# Proves the newest backup actually restores. Non-destructive: it restores into
+# a throwaway container and only ever SELECTs from the live DB.
+#
+# This exists because a backup that has never been restored is not a backup.
+# From the 2026-07-07 drill until 2026-08-04, every nightly dump completed
+# successfully and none of them could be restored — restore-db.sh pre-created a
+# hardcoded `jarvis_mcp` role, the monitoring stack later added `grafana_ro`,
+# and the missing role aborted the whole --single-transaction restore. Nothing
+# re-ran the drill, so nothing noticed for four weeks.
+[Unit]
+Description=Family Task Manager (on-prem) — weekly backup restore drill
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jc/family-task-manager
+Environment=COMPOSE_FILE=docker-compose.onprem.yml
+ExecStart=/home/jc/family-task-manager/scripts/restore-drill.sh

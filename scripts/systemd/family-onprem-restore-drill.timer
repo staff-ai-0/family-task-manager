@@ -1,0 +1,11 @@
+# scripts/systemd/family-onprem-restore-drill.timer
+[Unit]
+Description=Run the on-prem Family Task Manager restore drill weekly
+
+[Timer]
+# Sunday 04:30 — after the 00/6h backup timer, so it drills a fresh dump.
+OnCalendar=Sun *-*-* 04:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,13 +1,21 @@
 ---
+/**
+ * PayPal return URL. Finalizes the subscription server-side, then bounces
+ * straight back to the settings page — no interstitial, no manual click.
+ *
+ * The webhook (BILLING.SUBSCRIPTION.ACTIVATED) usually races us and wins;
+ * "already_active" is therefore a SUCCESS here, not an anomaly, and both
+ * outcomes land on ?upgraded=1. Only a real activation failure keeps the
+ * user on an error card, because silently swallowing a payment problem is
+ * worse than one extra page.
+ */
 import Layout from '../../../../layouts/Layout.astro';
 
 const token = Astro.cookies.get('access_token')?.value;
 if (!token) return Astro.redirect('/login');
 
 const subscriptionId = Astro.url.searchParams.get('subscription_id');
-let status = 'pending';
 let message = '';
-let plan = '';
 
 if (subscriptionId) {
     const backend = import.meta.env.API_BASE_URL || process.env.API_BASE_URL || 'http://backend:8000';
@@ -19,38 +27,25 @@ if (subscriptionId) {
         },
         body: JSON.stringify({ paypal_subscription_id: subscriptionId }),
     });
-    const data = await resp.json().catch(() => ({}));
     if (resp.ok) {
-        status = 'activated';
-        message = data.status === 'already_active'
-            ? 'Subscription was already active.'
-            : 'Your subscription is active.';
-        plan = data.plan_name ?? '';
-    } else {
-        status = 'error';
-        message = data.detail || 'Activation failed';
+        return Astro.redirect('/parent/settings/subscription?upgraded=1');
     }
+    const data = await resp.json().catch(() => ({}));
+    message = data.detail || 'Activation failed';
 } else {
-    status = 'error';
     message = 'Missing subscription_id';
 }
 ---
-<Layout title="Activating subscription...">
+<Layout title="Subscription activation">
   <main class="max-w-2xl mx-auto p-8">
-    {status === 'activated' && (
-      <div class="bg-brand-mint/20 border border-brand-mint rounded p-6 text-center">
-        <h1 class="text-2xl font-bold mb-2">Subscription activated</h1>
-        <p>{message}</p>
-        <p class="mt-2 text-sm">Plan: <strong>{plan}</strong></p>
-        <a href="/parent/settings/subscription" class="inline-block mt-4 px-4 py-2 bg-brand-sky-deep text-white rounded">Back to settings</a>
-      </div>
-    )}
-    {status === 'error' && (
-      <div class="bg-red-100 border border-red-300 rounded p-6 text-center">
-        <h1 class="text-2xl font-bold mb-2">Activation problem</h1>
-        <p>{message}</p>
-        <a href="/parent/settings/subscription" class="inline-block mt-4 px-4 py-2 bg-brand-sky-deep text-white rounded">Back to settings</a>
-      </div>
-    )}
+    <div class="bg-red-100 border border-red-300 rounded p-6 text-center">
+      <h1 class="text-2xl font-bold mb-2">Activation problem</h1>
+      <p>{message}</p>
+      <p class="mt-2 text-sm">
+        If you were charged, your plan will activate automatically within a
+        few minutes — PayPal confirms it to us directly.
+      </p>
+      <a href="/parent/settings/subscription" class="inline-block mt-4 px-4 py-2 bg-brand-sky-deep text-white rounded">Back to settings</a>
+    </div>
   </main>
 </Layout>

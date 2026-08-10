@@ -44,7 +44,58 @@ ls -lh backups/scheduled/
 (`loginctl enable-linger jc` is already set on the host, so user timers fire
 without an open session.)
 
-## Offsite setup (rclone, as user jc)
+## Offsite setup — GCS (CANONICAL on 10.1.0.91, live since 2026-08-06)
+
+Backups push to `gs://agentia-family-ftm-backups/scheduled` via `gsutil` and
+the service-account key already on the host at
+`/etc/gcs/sa-onprem-backup-key.json` (the same one school-admin has used since
+2026-07 — `gcloud`/`gsutil` are already installed, so there is nothing to
+install and no new secret on the box).
+
+Config lives in the deployed `.env`, so the systemd timer, a manual run and
+`deploy-onprem.sh`'s pre-deploy backup all behave identically:
+
+```bash
+OFFSITE_GCS_BUCKET=gs://agentia-family-ftm-backups/scheduled
+# GCS_KEY_FILE defaults to /etc/gcs/sa-onprem-backup-key.json
+```
+
+Two deliberate properties, both worth preserving:
+
+1. **The host can write and read backups, but CANNOT delete them.** The SA holds
+   only `roles/storage.objectCreator` + `roles/storage.objectViewer` on this
+   bucket. A compromised or ransomwared .91 can add junk; it cannot erase
+   history. Verified: `gsutil rm` returns `403 ... does not have
+   storage.objects.delete access`.
+2. **Retention is a bucket LIFECYCLE rule (31 days), not a delete loop in the
+   script.** Server-side, free, and it cannot be silently skipped by a bug in
+   the one script we least want one in. `OFFSITE_RETENTION_DAYS` applies only
+   to the rclone path.
+
+Bucket: project `agentia-calendar-501506`, location `us-south1`, class
+NEARLINE, uniform access, public access prevented. To inspect or change:
+
+```bash
+gcloud storage ls -l gs://agentia-family-ftm-backups/scheduled/
+gcloud storage buckets describe gs://agentia-family-ftm-backups --format="default(lifecycle)"
+```
+
+A failed push is **fatal** here (exit non-zero, so the timer records it). That
+differs on purpose from `school-admin/scripts/backup-91-to-gcs.sh`, which logs
+a warning and exits 0 — an offsite that quietly stopped working is exactly the
+failure mode that made the 2026-08-04 restore drill necessary.
+
+To verify the whole chain (not just that files exist), pull a backup back down
+and restore it:
+
+```bash
+D=/tmp/offsite-check && mkdir -p $D
+GOOGLE_APPLICATION_CREDENTIALS=/etc/gcs/sa-onprem-backup-key.json \
+  gsutil -q cp "gs://agentia-family-ftm-backups/scheduled/*" $D/
+./scripts/restore-drill.sh $D/$(ls -1 $D | grep '^db-' | tail -1)
+```
+
+## Offsite setup (rclone — alternative, e.g. Backblaze B2)
 
 Backups on the same disk as the live DB are not backups. One-time setup:
 
@@ -115,48 +166,45 @@ Defaults target the on-prem host (`podman compose` +
 `docker-compose.onprem.yml`). For the decommissioned GCP rollback host only:
 `COMPOSE_FILE=docker-compose.gcp.yml COMPOSE_CMD="sudo docker compose" ./scripts/restore-db.sh ...`
 
-## RESTORE DRILL (run quarterly; ~5 minutes; zero risk to prod)
-
-Restores the latest scheduled dump into a **scratch postgres container**,
-runs a sanity query, and drops it. Does not touch the prod DB or volumes.
+## RESTORE DRILL
 
 ```bash
 cd /home/jc/family-task-manager
-POSTGRES_USER="$(sed -n 's/^POSTGRES_USER=//p' .env | tail -1)"
-POSTGRES_DB="$(sed -n 's/^POSTGRES_DB=//p' .env | tail -1)"
-LATEST="$(ls -1t backups/scheduled/db-*.sql.gz | head -1)"
-echo "drilling with: $LATEST"
-
-# 1. Scratch postgres (same major version as prod), throwaway volume
-podman run -d --name family_restore_drill \
-  -e POSTGRES_USER="$POSTGRES_USER" \
-  -e POSTGRES_PASSWORD=drill \
-  -e POSTGRES_DB="$POSTGRES_DB" \
-  docker.io/library/postgres:15-alpine
-
-# 2. Wait until it accepts connections
-until podman exec family_restore_drill pg_isready -U "$POSTGRES_USER" >/dev/null 2>&1; do sleep 1; done
-
-# 3. Recreate cluster-level roles the dump GRANTs to (pg_dump does NOT
-#    include roles — without this, ON_ERROR_STOP aborts on the first GRANT;
-#    found in the 2026-07-07 drill: role "jarvis_mcp" does not exist)
-podman exec family_restore_drill psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-  -c 'CREATE ROLE jarvis_mcp NOLOGIN;'
-
-# 4. Restore the dump (dumps are --clean --if-exists, so a fresh DB is fine)
-gunzip -c "$LATEST" | podman exec -i family_restore_drill \
-  psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
-
-# 5. Sanity query — row counts must be non-zero and look plausible
-podman exec family_restore_drill psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
-  "SELECT (SELECT count(*) FROM families) AS families,
-          (SELECT count(*) FROM users) AS users,
-          (SELECT count(*) FROM task_assignments) AS task_assignments,
-          (SELECT max(created_at) FROM users) AS newest_user;"
-
-# 6. Tear down
-podman rm -f family_restore_drill
+./scripts/restore-drill.sh                 # newest scheduled dump
+./scripts/restore-drill.sh <dump.sql.gz>   # a specific one
 ```
+
+Restores into a **throwaway** postgres container, compares table and row
+counts against live, and drops the container. The live DB is only ever read
+(`SELECT count(*)`), so this is safe to run on prod at any time. Exits
+non-zero — and says why — if the dump does not restore or comes back short.
+
+Scheduled weekly by `family-onprem-restore-drill.timer` (Sun 04:30, after the
+6-hourly backup so it always drills a fresh dump). Install it the same way as
+the backup units above:
+
+```bash
+systemctl --user enable --now family-onprem-restore-drill.timer
+systemctl --user start family-onprem-restore-drill.service   # run once now
+journalctl --user -u family-onprem-restore-drill.service -n 40
+```
+
+**Why this is a script and a timer instead of a manual quarterly checklist:**
+the manual version that used to live here hardcoded `CREATE ROLE jarvis_mcp`,
+because that is the role the 2026-07-07 drill happened to hit. `pg_dump` emits
+GRANTs to cluster roles but never the roles themselves, so the restore dies on
+whichever role is missing — and under `--single-transaction` that rolls back
+*everything*. When the monitoring stack later added `grafana_ro`, whose GRANT
+sorts first, both this checklist and `restore-db.sh` walked straight past it.
+From then until 2026-08-04 every backup completed cleanly and restored zero
+tables. Nobody re-ran the quarterly drill, so nobody found out.
+
+`restore-db.sh` now derives the role set from the dump being restored, and
+`backup-db.sh` writes a `globals-<ts>.sql.gz` (`pg_dumpall --globals-only`)
+alongside each dump so roles come back with their real attributes and
+passwords instead of NOLOGIN placeholders. A dump restored *without* its
+globals sidecar still works, but any role needing LOGIN (e.g. `grafana_ro`
+for the metrics exporter) must have its password reset afterwards.
 
 Record each drill (date, dump file, row counts, elapsed time) below:
 
