@@ -134,7 +134,8 @@ class TestRotationConcentrationCap:
                         members=[a])
         fixed_b = _tmpl(test_family, "fixB", 10, 1, AssignmentType.FIXED,
                         members=[b])
-        assignments = _run(test_family, [rot, fixed_a, fixed_b], [a, b, m])
+        assignments = _run(test_family, [rot, fixed_a, fixed_b], [a, b, m],
+                           seed="s1")
 
         turns = Counter(x.assigned_to for x in assignments
                         if x.template_id == rot.id)
@@ -159,7 +160,7 @@ class TestCountBalance:
         t20 = _tmpl(test_family, "auto20", 20, 1, AssignmentType.AUTO)
         t10 = _tmpl(test_family, "auto10", 10, 1, AssignmentType.AUTO)
         templates = [fixed_a, t20, t10]
-        assignments = _run(test_family, templates, [a, b])
+        assignments = _run(test_family, templates, [a, b], seed="s1")
 
         counts = _counts(assignments, [a, b])
         points = _points(assignments, templates, [a, b])
