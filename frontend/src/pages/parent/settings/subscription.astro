@@ -65,6 +65,11 @@ const toggleCurrencies = ["MXN", "USD"].filter(
     (c) => readyCurrencies.includes(c) || c === selectedCurrency,
 );
 const showCurrencyToggle = toggleCurrencies.length >= 2;
+// Post-checkout outcome banners. ?upgraded=1 comes from the PayPal return
+// redirect (activate.astro), ?cancelled=1 from the PayPal cancel URL.
+const justUpgraded = Astro.url.searchParams.get("upgraded") === "1";
+const checkoutCancelled = Astro.url.searchParams.get("cancelled") === "1";
+
 // Preserve unrelated query params (e.g. ?cancelled=1 from a PayPal cancel
 // return) — only the currency key is replaced.
 const currencyHref = (cur: string) => {
@@ -188,6 +193,9 @@ const i18n = {
     en: {
         title: "Subscription",
         back: "Settings",
+        upgraded_banner: "Your subscription is active. Welcome aboard!",
+        cancelled_banner: "Checkout cancelled — you were not charged.",
+        checkout_error: "Upgrade failed",
         current_plan: "Current Plan",
         active: "Active",
         cancelled: "Cancelled",
@@ -243,6 +251,9 @@ const i18n = {
     es: {
         title: "Suscripci\u00f3n",
         back: "Configuraci\u00f3n",
+        upgraded_banner: "Tu suscripci\u00f3n est\u00e1 activa. \u00a1Bienvenido!",
+        cancelled_banner: "Pago cancelado \u2014 no se hizo ning\u00fan cargo.",
+        checkout_error: "No se pudo completar la mejora",
         current_plan: "Plan Actual",
         active: "Activo",
         cancelled: "Cancelado",
@@ -391,6 +402,17 @@ function cellClass(value: any): string {
     lang={lang}
     mainClass="flex-1 px-4 py-6 space-y-6"
 >
+            {justUpgraded && (
+                <div class="rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-800 font-semibold shadow-[var(--shadow-card)]" role="status">
+                    ✅ {l.upgraded_banner}
+                </div>
+            )}
+            {checkoutCancelled && (
+                <div class="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-800 shadow-[var(--shadow-card)]" role="status">
+                    {l.cancelled_banner}
+                </div>
+            )}
+
             <!-- Current Plan -->
             <section class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10">
                 <div class="flex items-center justify-between">
@@ -580,6 +602,7 @@ function cellClass(value: any): string {
                         </button>
                     )}
                 </div>
+                <p id="checkout-error" class="mt-3 hidden text-center text-sm font-semibold text-red-600" role="alert" data-prefix={l.checkout_error}></p>
                 {creditUpgradeNote && (
                     <p class="mt-3 text-center text-xs text-brand-ink-soft">{creditUpgradeNote}</p>
                 )}
@@ -690,6 +713,12 @@ function cellClass(value: any): string {
             });
         }
 
+        const errorEl = document.getElementById('checkout-error');
+        const showCheckoutError = (detail) => {
+            if (!errorEl) return;
+            errorEl.textContent = `${errorEl.dataset.prefix}: ${detail}`;
+            errorEl.classList.remove('hidden');
+        };
         document.querySelectorAll('.upgrade-btn').forEach((btn) => {
             btn.addEventListener('click', async (evt) => {
                 const target = evt.currentTarget;
@@ -699,6 +728,7 @@ function cellClass(value: any): string {
                 const originalText = target.textContent;
                 target.disabled = true;
                 target.textContent = '...';
+                errorEl?.classList.add('hidden');
                 try {
                     const resp = await fetch('/api/subscriptions/checkout', {
                         method: 'POST',
@@ -707,7 +737,7 @@ function cellClass(value: any): string {
                     });
                     if (!resp.ok) {
                         const err = await resp.json().catch(() => ({ detail: 'Error' }));
-                        alert('Upgrade failed: ' + (err.detail || resp.statusText));
+                        showCheckoutError(err.detail || resp.statusText);
                         target.disabled = false;
                         target.textContent = originalText;
                         return;
@@ -715,7 +745,7 @@ function cellClass(value: any): string {
                     const data = await resp.json();
                     window.location.href = data.approval_url;
                 } catch (e) {
-                    alert('Network error: ' + e);
+                    showCheckoutError(String(e));
                     target.disabled = false;
                     target.textContent = originalText;
                 }
