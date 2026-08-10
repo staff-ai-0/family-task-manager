@@ -676,6 +676,56 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             if a.template_id in reg_pts:
                 mtotal[a.assigned_to] = mtotal.get(a.assigned_to, 0) + reg_pts[a.template_id]
                 held.setdefault(a.assigned_to, set()).add((a.template_id, a.assigned_date))
+
+        # Turn-taking guard for balancing moves, on PINNED rotations only: a
+        # member never holds more than their fair share
+        # ceil(occurrences / list_size) of a rotation the parent pinned to a
+        # member list. Without it, point-balancing dumped 4 of 6 turns of a
+        # pinned rotation on the point-lightest member (prod: "2ndo piso"
+        # went 1/1/4 — the parent configured "take turns", the balancer
+        # turned it into "Mayra's chore"). AUTO/listless chores stay
+        # uncapped here: with mixed point values, parity can legitimately
+        # need one member to take most of a small chore's days (their
+        # generation-time variety cap already softened that), and a hard cap
+        # deadlocks the pass into a 40-point gap it is not allowed to close.
+        import math as _math2
+        from collections import Counter as _Counter2
+        pinned_rotation_ids = {
+            t.id for t in regular_templates
+            if t.assignment_type == AssignmentType.ROTATE
+            and bool(TaskAssignmentService._rotation_eligible(t, members))
+        }
+        tpl_occ = _Counter2(
+            a.template_id for a in assignments if a.template_id in reg_pts
+        )
+        tpl_cap = {
+            tid: _math2.ceil(n / max(1, len(recv.get(tid, ()))))
+            for tid, n in tpl_occ.items()
+            if tid in pinned_rotation_ids
+        }
+        held_tpl = _Counter2(
+            (a.assigned_to, a.template_id)
+            for a in assignments if a.template_id in reg_pts
+        )
+
+        def _cap_room(uid, tid, extra: int = 1) -> bool:
+            cap = tpl_cap.get(tid)
+            return cap is None or held_tpl[(uid, tid)] + extra <= cap
+
+        member_order = {m.id: i for i, m in enumerate(members)}
+
+        def _reassign(a, new_uid) -> None:
+            old = a.assigned_to
+            key = (a.template_id, a.assigned_date)
+            held[old].discard(key)
+            held.setdefault(new_uid, set()).add(key)
+            held_tpl[(old, a.template_id)] -= 1
+            held_tpl[(new_uid, a.template_id)] += 1
+            p = reg_pts[a.template_id]
+            mtotal[old] -= p
+            mtotal[new_uid] += p
+            a.assigned_to = new_uid
+
         for _ in range(len(assignments) * len(members)):
             hi = max(mtotal, key=lambda u: mtotal[u])
             best = None  # (assignment, receiver, points)
@@ -686,28 +736,106 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                 # least-loaded ELIGIBLE receiver for THIS chore (not the global
                 # min — an over-loaded member's excess may be pinned to a set
                 # that excludes the lightest member) who doesn't already do it
-                # that day.
+                # that day, and who still has turn-taking room for it.
                 cands = [
                     o for o in recv.get(a.template_id, set())
                     if o != hi
                     and (a.template_id, a.assigned_date) not in held.get(o, set())
+                    and _cap_room(o, a.template_id)
                 ]
                 if not cands:
                     continue
-                o = min(cands, key=lambda u: mtotal[u])
+                o = min(cands, key=lambda u: (mtotal[u], member_order[u]))
                 # move only if hi is ahead of o by MORE than the chore's points
                 # (so the move shrinks their gap instead of overshooting)
                 if mtotal[hi] - mtotal[o] > p:
-                    best = (a, o, p)
+                    best = (a, o)
                     break
             if best is None:
                 break
-            a, o, p = best
-            held[hi].discard((a.template_id, a.assigned_date))
-            held.setdefault(o, set()).add((a.template_id, a.assigned_date))
-            a.assigned_to = o
-            mtotal[hi] -= p
-            mtotal[o] += p
+            _reassign(*best)
+
+        # ── Count-evening pass: trade denominations, not points. ──
+        # Point parity alone let one member end at 17 chores while another
+        # sat at 13 (prod week 2026-08-10): a member whose receivable chores
+        # are all small needs MORE of them to reach the same total. A
+        # point-NEUTRAL bundle swap fixes the count without touching parity:
+        # the high-count member hands two small chores to the low-count one
+        # and takes one big chore back (equal point sums). Dates never move;
+        # eligibility, per-day uniqueness and the turn-taking cap all hold.
+        mcount = _Counter2(
+            a.assigned_to for a in assignments if a.template_id in reg_pts
+        )
+        for m in members:
+            mcount.setdefault(m.id, 0)
+        by_member: dict = {}
+        for a in assignments:
+            if a.template_id in reg_pts:
+                by_member.setdefault(a.assigned_to, []).append(a)
+
+        def _takeable(a, uid, extra: int = 1) -> bool:
+            """May `uid` take assignment `a` (eligibility, uniqueness, cap)?"""
+            return (
+                uid in recv.get(a.template_id, set())
+                and (a.template_id, a.assigned_date) not in held.get(uid, set())
+                and _cap_room(uid, a.template_id, extra)
+            )
+
+        def _stable(rows):
+            return sorted(
+                rows,
+                key=lambda a: (reg_pts[a.template_id], str(a.template_id),
+                               a.assigned_date),
+            )
+
+        def _find_bundle(many_id, few_id):
+            """One big chore of `few` ↔ two small chores of `many`, equal points."""
+            for big in _stable(by_member.get(few_id, [])):
+                if not _takeable(big, many_id):
+                    continue
+                p_big = reg_pts[big.template_id]
+                smalls = [
+                    s for s in _stable(by_member.get(many_id, []))
+                    if reg_pts[s.template_id] < p_big and _takeable(s, few_id)
+                ]
+                for i, s1 in enumerate(smalls):
+                    for s2 in smalls[i + 1:]:
+                        if reg_pts[s1.template_id] + reg_pts[s2.template_id] != p_big:
+                            continue
+                        # both smalls may share a template — cap must fit BOTH
+                        if (s2.template_id == s1.template_id
+                                and not _takeable(s2, few_id, extra=2)):
+                            continue
+                        if (s2.template_id == s1.template_id
+                                and s2.assigned_date == s1.assigned_date):
+                            continue
+                        return big, s1, s2
+            return None
+
+        for _ in range(len(assignments)):
+            order = sorted(
+                mcount, key=lambda u: (-mcount[u], member_order[u])
+            )
+            swap = None
+            for many_id in order:
+                for few_id in reversed(order):
+                    if mcount[many_id] - mcount[few_id] < 2:
+                        break
+                    swap = _find_bundle(many_id, few_id)
+                    if swap:
+                        break
+                if swap:
+                    break
+            if swap is None:
+                break
+            big, s1, s2 = swap
+            few_id, many_id = big.assigned_to, s1.assigned_to
+            for row, dest in ((big, many_id), (s1, few_id), (s2, few_id)):
+                by_member[row.assigned_to].remove(row)
+                _reassign(row, dest)
+                by_member.setdefault(dest, []).append(row)
+            mcount[many_id] -= 1
+            mcount[few_id] += 1
 
         # ── Final pass: even each member's chores across their OWN days ──
         # Selection balances who does what and roughly when, but a member's
