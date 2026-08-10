@@ -88,15 +88,38 @@ const proPlan = planForTier("pro");
 // A tier is upgradeable only when its row matches the selected currency AND
 // is wired to PayPal AND is actually priced — otherwise checkout would
 // 404/501, or worse, create a PayPal subscription at a price we never showed.
-const canCheckout = (plan: any) =>
+const canCheckoutCycle = (plan: any, cycle: "monthly" | "annual") =>
     Boolean(
         plan &&
         rowCurrency(plan) === selectedCurrency &&
-        plan.checkout_ready_monthly !== false &&
+        (cycle === "monthly"
+            ? plan.checkout_ready_monthly !== false
+            : plan.checkout_ready_annual !== false) &&
         // A paid tier priced 0 is misconfiguration; selling it would create
         // a PayPal subscription whose price does not match what we showed.
-        (plan.price_monthly_cents ?? 0) > 0,
+        ((cycle === "monthly"
+            ? plan.price_monthly_cents
+            : plan.price_annual_cents) ?? 0) > 0,
     );
+const canCheckout = (plan: any) => canCheckoutCycle(plan, "monthly");
+
+// Per-cycle formatted price for the upgrade buttons ("MX$99/mes",
+// "MX$990/año"); null hides the price rather than showing an unconfirmed one.
+const cyclePrice = (plan: any, cycle: "monthly" | "annual") => {
+    const cents = cycle === "monthly" ? plan?.price_monthly_cents : plan?.price_annual_cents;
+    if (!cents || cents <= 0) return null;
+    return formatPrice(cents, rowCurrency(plan) || selectedCurrency) + (cycle === "monthly" ? l.month : l.year);
+};
+// The cycle toggle only renders when at least one tier can actually be
+// bought annually — the same "never advertise what checkout can't sell"
+// rule as the currency pills.
+const showCycleToggle = [plusPlan, proPlan].some((p) => canCheckoutCycle(p, "annual"));
+// "2 months free" only when the arithmetic holds for every annual-ready
+// tier (annual == 10 × monthly); a marketing claim must never outrun the DB.
+const annualTiers = [plusPlan, proPlan].filter((p) => canCheckoutCycle(p, "annual"));
+const annualNoteApplies =
+    annualTiers.length > 0 &&
+    annualTiers.every((p) => (p.price_annual_cents ?? 0) === 10 * (p.price_monthly_cents ?? 0));
 
 // No price constants live here. A missing plan row renders "—" and disables
 // checkout rather than printing a price the backend never confirmed — which
@@ -214,6 +237,9 @@ const i18n = {
         pro: "Pro",
         month: "/mo",
         year: "/yr",
+        cycle_monthly: "Monthly",
+        cycle_annual: "Annual",
+        annual_free_note: "2 months free",
         upgrade: "Upgrade",
         coming_soon: "Upgrades in this currency are coming soon — checkout is not available yet.",
         cancel: "Cancel Subscription",
@@ -272,6 +298,9 @@ const i18n = {
         pro: "Pro",
         month: "/mes",
         year: "/a\u00f1o",
+        cycle_monthly: "Mensual",
+        cycle_annual: "Anual",
+        annual_free_note: "2 meses gratis",
         upgrade: "Mejorar Plan",
         coming_soon: "Muy pronto podr\u00e1s mejorar tu plan en esta moneda \u2014 el pago a\u00fan no est\u00e1 disponible.",
         cancel: "Cancelar Suscripci\u00f3n",
@@ -569,17 +598,45 @@ function cellClass(value: any): string {
                     </tbody>
                 </table>
 
+                <!-- Billing cycle toggle -->
+                {showCycleToggle && (
+                    <div class="mt-6 flex items-center justify-center gap-2">
+                        <div class="inline-flex rounded-full border border-brand-ink/15 bg-brand-cream-deep p-1" role="group">
+                            <button
+                                class="cycle-pill rounded-full px-4 py-1.5 text-sm font-semibold bg-brand-sky-deep text-white"
+                                data-cycle="monthly"
+                                aria-pressed="true"
+                            >
+                                {l.cycle_monthly}
+                            </button>
+                            <button
+                                class="cycle-pill rounded-full px-4 py-1.5 text-sm font-semibold text-brand-ink-soft"
+                                data-cycle="annual"
+                                aria-pressed="false"
+                            >
+                                {l.cycle_annual}{annualNoteApplies && (
+                                    <span class="ml-1 text-xs font-normal opacity-80">· {l.annual_free_note}</span>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 <!-- Upgrade / Cancel Buttons -->
-                <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                <div class="mt-4 flex flex-col sm:flex-row gap-3 justify-center">
                     {currentPlanName === "free" && (
                         <button
                             class="upgrade-btn px-6 py-2.5 bg-brand-sky-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-sky-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             data-plan="plus"
                             data-cycle="monthly"
                             data-currency={selectedCurrency}
+                            data-price-monthly={cyclePrice(plusPlan, "monthly")}
+                            data-price-annual={cyclePrice(plusPlan, "annual")}
+                            data-ok-monthly={canCheckoutCycle(plusPlan, "monthly") ? "1" : "0"}
+                            data-ok-annual={canCheckoutCycle(plusPlan, "annual") ? "1" : "0"}
                             disabled={!canCheckout(plusPlan)}
                         >
-                            {l.upgrade} → {l.plus}
+                            {l.upgrade} → {l.plus}<span class="upgrade-price font-normal opacity-90">{cyclePrice(plusPlan, "monthly") ? ` · ${cyclePrice(plusPlan, "monthly")}` : ""}</span>
                         </button>
                     )}
                     {currentPlanName !== "pro" && (
@@ -588,9 +645,13 @@ function cellClass(value: any): string {
                             data-plan="pro"
                             data-cycle="monthly"
                             data-currency={selectedCurrency}
+                            data-price-monthly={cyclePrice(proPlan, "monthly")}
+                            data-price-annual={cyclePrice(proPlan, "annual")}
+                            data-ok-monthly={canCheckoutCycle(proPlan, "monthly") ? "1" : "0"}
+                            data-ok-annual={canCheckoutCycle(proPlan, "annual") ? "1" : "0"}
                             disabled={!canCheckout(proPlan)}
                         >
-                            {l.upgrade} → {l.pro}
+                            {l.upgrade} → {l.pro}<span class="upgrade-price font-normal opacity-90">{cyclePrice(proPlan, "monthly") ? ` · ${cyclePrice(proPlan, "monthly")}` : ""}</span>
                         </button>
                     )}
                     {isPaid && isActive && !cancelAtPeriodEnd && (
@@ -712,6 +773,32 @@ function cellClass(value: any): string {
                 }
             });
         }
+
+        // Billing-cycle toggle: flips every upgrade button's cycle, price
+        // suffix and availability. SSR renders the monthly state; annual
+        // state comes entirely from data attributes so no price is ever
+        // composed client-side.
+        const pills = document.querySelectorAll('.cycle-pill');
+        const activePillCls = ['bg-brand-sky-deep', 'text-white'];
+        const idlePillCls = ['text-brand-ink-soft'];
+        pills.forEach((pill) => {
+            pill.addEventListener('click', () => {
+                const cycle = pill.dataset.cycle;
+                pills.forEach((p) => {
+                    const active = p === pill;
+                    p.setAttribute('aria-pressed', String(active));
+                    activePillCls.forEach((c) => p.classList.toggle(c, active));
+                    idlePillCls.forEach((c) => p.classList.toggle(c, !active));
+                });
+                document.querySelectorAll('.upgrade-btn').forEach((btn) => {
+                    btn.dataset.cycle = cycle;
+                    const price = btn.dataset[cycle === 'annual' ? 'priceAnnual' : 'priceMonthly'];
+                    const span = btn.querySelector('.upgrade-price');
+                    if (span) span.textContent = price ? ` · ${price}` : '';
+                    btn.disabled = btn.dataset[cycle === 'annual' ? 'okAnnual' : 'okMonthly'] !== '1';
+                });
+            });
+        });
 
         const errorEl = document.getElementById('checkout-error');
         const showCheckoutError = (detail) => {
