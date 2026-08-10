@@ -96,7 +96,16 @@ class PushService:
         if not rows:
             return 0
 
-        vapid_claims = {"sub": f"mailto:{settings.VAPID_CLAIM_EMAIL}"}
+        # Explicit exp: py-vapid's default is now + EXACTLY 86400s, and RFC
+        # 8292 caps exp at "not more than 24 hours" — an Apple node whose
+        # clock trails ours by seconds computes >24h and rejects the token
+        # with an intermittent 403 BadJwtToken (prod 2026-08-10). 12h keeps
+        # us far from the boundary.
+        import time
+        vapid_claims = {
+            "sub": f"mailto:{settings.VAPID_CLAIM_EMAIL}",
+            "exp": int(time.time()) + 12 * 3600,
+        }
         body = json.dumps(payload)
         sent = 0
         dead_endpoints: list[str] = []
