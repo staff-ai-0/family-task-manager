@@ -11,6 +11,8 @@ stay the PRIMARY fairness metric; these tests pin the secondary invariants:
 2. Chore COUNTS converge (spread <= 1) whenever the template mix makes that
    feasible at point parity — via point-neutral bundle swaps (one 20-pt
    chore for two 10-pt chores).
+3. A member's chores spread over the week: no 4-chore Monday next to an
+   empty Wednesday when equal-point swaps between members can even it.
 """
 
 import math
@@ -18,6 +20,8 @@ import random
 import uuid
 from collections import Counter
 from datetime import date
+
+import pytest
 
 from app.models.task_template import TaskTemplate, AssignmentType
 from app.models.user import User, UserRole
@@ -55,8 +59,41 @@ def _tmpl(family, title, points, interval, atype, members=None, roles=None):
     return t
 
 
-def _run(family, templates, members, rest_days=None):
-    rng = random.Random(f"{family.id}:{WEEK.isoformat()}")
+def _prod_mirror(test_family):
+    """The prod family's exact config (post 2026-08-10: Juan in both 20-pt
+    rotations; Sunday rest). 57 chores / 690 pts over 4 members."""
+    ana = _member(test_family, "Ana", UserRole.TEEN)
+    ari = _member(test_family, "Ariana", UserRole.TEEN)
+    may = _member(test_family, "Mayra", UserRole.PARENT)
+    juan = _member(test_family, "Juan", UserRole.PARENT)
+    members = [ana, ari, may, juan]
+    pt = ["parent", "teen"]
+    f = test_family
+    rot, fix, auto = (AssignmentType.ROTATE, AssignmentType.FIXED,
+                      AssignmentType.AUTO)
+    templates = [
+        _tmpl(f, "cocinar", 10, 7, rot, roles=pt),
+        _tmpl(f, "3er piso", 10, 1, fix, members=[juan]),
+        _tmpl(f, "escaleras", 10, 1, auto),
+        _tmpl(f, "2ndo piso", 20, 1, rot, members=[ana, ari, may, juan]),
+        _tmpl(f, "planta baja", 20, 1, rot, members=[ana, ari, juan]),
+        _tmpl(f, "platos", 10, 1, rot, roles=pt),
+        _tmpl(f, "patio", 10, 7, fix, members=[juan]),
+        _tmpl(f, "bano 1er", 10, 7, rot, members=[ana, ari, may]),
+        _tmpl(f, "bano 3er", 10, 7, fix, members=[juan]),
+        _tmpl(f, "bano estancia", 10, 7, rot, roles=pt),
+        _tmpl(f, "barra", 10, 1, rot, members=[ana, ari]),
+        _tmpl(f, "ordenar 3er", 10, 7, fix, members=[juan]),
+        _tmpl(f, "closet", 10, 7, rot, roles=pt),
+        _tmpl(f, "pasear", 10, 1, rot, members=[ana, ari, juan], roles=pt),
+        _tmpl(f, "basura banos", 10, 3, rot, members=[ana, ari]),
+        _tmpl(f, "basura cocina", 10, 1, rot, roles=pt),
+    ]
+    return templates, members
+
+
+def _run(family, templates, members, rest_days=None, seed=None):
+    rng = random.Random(seed or f"{family.id}:{WEEK.isoformat()}")
     assignments, totals, skipped = TaskAssignmentService._compute_assignments(
         rng,
         family.id,
@@ -131,40 +168,15 @@ class TestCountBalance:
             f"counts diverged: {counts} at points {points}"
         )
 
-    def test_prod_family_mirror_counts_and_turns(self, test_family):
-        # Exact mirror of the prod family config (post 2026-08-10 change:
-        # Juan added to both 20-pt rotations; Sunday rest day). 57 chores,
-        # 690 pts over 4 members. Feasible: counts {15,14,14,14} at point
-        # spread <= 20. Old balancer: counts 13..16 (spread 3 on prod,
-        # 2 in this mirror) and "2ndo piso" turns 1/1/4/0.
-        ana = _member(test_family, "Ana", UserRole.TEEN)
-        ari = _member(test_family, "Ariana", UserRole.TEEN)
-        may = _member(test_family, "Mayra", UserRole.PARENT)
-        juan = _member(test_family, "Juan", UserRole.PARENT)
-        members = [ana, ari, may, juan]
-        pt = ["parent", "teen"]
-        f = test_family
-        rot, fix, auto = (AssignmentType.ROTATE, AssignmentType.FIXED,
-                          AssignmentType.AUTO)
-        templates = [
-            _tmpl(f, "cocinar", 10, 7, rot, roles=pt),
-            _tmpl(f, "3er piso", 10, 1, fix, members=[juan]),
-            _tmpl(f, "escaleras", 10, 1, auto),
-            _tmpl(f, "2ndo piso", 20, 1, rot, members=[ana, ari, may, juan]),
-            _tmpl(f, "planta baja", 20, 1, rot, members=[ana, ari, juan]),
-            _tmpl(f, "platos", 10, 1, rot, roles=pt),
-            _tmpl(f, "patio", 10, 7, fix, members=[juan]),
-            _tmpl(f, "bano 1er", 10, 7, rot, members=[ana, ari, may]),
-            _tmpl(f, "bano 3er", 10, 7, fix, members=[juan]),
-            _tmpl(f, "bano estancia", 10, 7, rot, roles=pt),
-            _tmpl(f, "barra", 10, 1, rot, members=[ana, ari]),
-            _tmpl(f, "ordenar 3er", 10, 7, fix, members=[juan]),
-            _tmpl(f, "closet", 10, 7, rot, roles=pt),
-            _tmpl(f, "pasear", 10, 1, rot, members=[ana, ari, juan], roles=pt),
-            _tmpl(f, "basura banos", 10, 3, rot, members=[ana, ari]),
-            _tmpl(f, "basura cocina", 10, 1, rot, roles=pt),
-        ]
-        assignments = _run(f, templates, members, rest_days=[6])
+    @pytest.mark.parametrize("seed", ["s1", "s2", "s3", "s4", "s5"])
+    def test_prod_family_mirror_counts_and_turns(self, test_family, seed):
+        # Feasible here: counts {15,14,14,14} at point spread <= 20. Old
+        # balancer: counts 13..16 (spread 3 on prod, 2 in this mirror) and
+        # "2ndo piso" turns 1/1/4/0. Seeds vary tie-breaks — the invariants
+        # must hold for every one.
+        templates, members = _prod_mirror(test_family)
+        assignments = _run(test_family, templates, members, rest_days=[6],
+                           seed=seed)
 
         counts = _counts(assignments, members)
         points = _points(assignments, templates, members)
@@ -184,4 +196,25 @@ class TestCountBalance:
             cap = math.ceil(occ / len(t.assigned_user_ids))
             assert max(turns.values()) <= cap, (
                 f"{title}: turns {sorted(turns.values())} exceed cap {cap}"
+            )
+
+
+class TestDaySpread:
+    @pytest.mark.parametrize("seed", ["s1", "s2", "s3", "s4", "s5"])
+    def test_no_member_has_a_lumpy_week(self, test_family, seed):
+        # Prod: one member drew 4 chores on Monday and 1 on Wednesday (and,
+        # pre-fix, 5 on Saturday with Tuesday empty) while equal-point swaps
+        # with other members could have evened it. Bound: nobody's busiest
+        # day exceeds ceil(their_count / material_days).
+        templates, members = _prod_mirror(test_family)
+        assignments = _run(test_family, templates, members, rest_days=[6],
+                           seed=seed)
+        material_days = 6  # Mon-Sat (Sunday rest)
+        for m in members:
+            mine = [a for a in assignments if a.assigned_to == m.id]
+            per_day = Counter(a.assigned_date for a in mine)
+            bound = math.ceil(len(mine) / material_days)
+            assert max(per_day.values()) <= bound, (
+                f"{m.name}: lumpy days "
+                f"{sorted(per_day.values(), reverse=True)} (bound {bound})"
             )

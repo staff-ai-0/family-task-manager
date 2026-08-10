@@ -812,25 +812,54 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                         return big, s1, s2
             return None
 
+        max_reg_pts = max(reg_pts.values(), default=0)
+
+        def _spread_after(delta: dict) -> int:
+            vals = [mtotal[m.id] + delta.get(m.id, 0) for m in members]
+            return max(vals) - min(vals) if vals else 0
+
+        def _find_single(many_id, few_id):
+            """Fallback when rotation caps lock every bundle: hand ONE small
+            chore down. Costs a chore's worth of parity, so only allowed
+            while the resulting point spread stays within one chore
+            (<= the biggest template's points) — the same tolerance the
+            member-balance pass converges to."""
+            p_small = min(reg_pts.values(), default=0)
+            for s in _stable(by_member.get(many_id, [])):
+                p = reg_pts[s.template_id]
+                if p > p_small:
+                    break  # _stable sorts by points — only smallest qualify
+                if not _takeable(s, few_id):
+                    continue
+                if _spread_after({many_id: -p, few_id: p}) <= max_reg_pts:
+                    return s
+            return None
+
         for _ in range(len(assignments)):
             order = sorted(
                 mcount, key=lambda u: (-mcount[u], member_order[u])
             )
-            swap = None
+            move = None
             for many_id in order:
                 for few_id in reversed(order):
                     if mcount[many_id] - mcount[few_id] < 2:
                         break
-                    swap = _find_bundle(many_id, few_id)
-                    if swap:
+                    bundle = _find_bundle(many_id, few_id)
+                    if bundle:
+                        move = (many_id, few_id,
+                                ((bundle[0], many_id),
+                                 (bundle[1], few_id), (bundle[2], few_id)))
                         break
-                if swap:
+                    single = _find_single(many_id, few_id)
+                    if single:
+                        move = (many_id, few_id, ((single, few_id),))
+                        break
+                if move:
                     break
-            if swap is None:
+            if move is None:
                 break
-            big, s1, s2 = swap
-            few_id, many_id = big.assigned_to, s1.assigned_to
-            for row, dest in ((big, many_id), (s1, few_id), (s2, few_id)):
+            many_id, few_id, steps = move
+            for row, dest in steps:
                 by_member[row.assigned_to].remove(row)
                 _reassign(row, dest)
                 by_member.setdefault(dest, []).append(row)
@@ -911,6 +940,59 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                         a_h.assigned_to, a_l.assigned_to = (
                             a_l.assigned_to, a_h.assigned_to)
                         swapped = True
+                        break
+                if not swapped:
+                    break
+
+            # (3) swap an over-loaded member's heavy-day chore with ANOTHER
+            # chore of equal points on their light day held by someone else.
+            # Same-template swaps (2) can't help when the heavy day's chores
+            # and the light day's chores belong to different templates
+            # (prod: a member drew 4 chores on Monday, 1 on Wednesday, and
+            # every Monday/Wednesday pair crossed templates). Equal points
+            # keep parity exact; eligibility, per-day uniqueness and the
+            # turn cap are re-checked because owners change templates.
+            held = {}
+            held_tpl = _Counter2()
+            for a in assignments:
+                if a.template_id in reg_pts:
+                    held.setdefault(a.assigned_to, set()).add(
+                        (a.template_id, a.assigned_date))
+                    held_tpl[(a.assigned_to, a.template_id)] += 1
+            by_date: dict = {}
+            for a in reg:
+                by_date.setdefault(a.assigned_date, []).append(a)
+            for _ in range(len(reg) * len(week_material)):
+                loads = {uid: _day_load(uid) for uid in member_ids}
+                swapped = False
+                for a_h in reg:
+                    h = a_h.assigned_to
+                    lh = loads[h]
+                    if a_h.assigned_date not in lh:
+                        continue
+                    # any day 2+ chores lighter improves h — not only THE
+                    # lightest, whose chores may all be unswappable.
+                    for light in sorted(week_material, key=lambda d: lh[d]):
+                        if lh[a_h.assigned_date] - lh[light] < 2:
+                            break
+                        for a_l in by_date.get(light, []):
+                            o = a_l.assigned_to
+                            if (o == h
+                                    or reg_pts[a_l.template_id]
+                                    != reg_pts[a_h.template_id]):
+                                continue
+                            lo = loads[o]
+                            if lo[a_h.assigned_date] + 1 > max(lo.values()):
+                                continue  # would raise the other's peak
+                            if not (_takeable(a_l, h) and _takeable(a_h, o)):
+                                continue
+                            _reassign(a_l, h)
+                            _reassign(a_h, o)
+                            swapped = True
+                            break
+                        if swapped:
+                            break
+                    if swapped:
                         break
                 if not swapped:
                     break
