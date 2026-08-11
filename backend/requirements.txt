@@ -84,7 +84,7 @@ openai==2.50.0
 # version number suggests: pymupdf rasterizes UNTRUSTED PDF uploads for the
 # receipt scanner, so it is the last dependency that should drift between
 # builds without anyone looking. Declared >=1.24.0, actually running 1.28.0.
-pymupdf==1.28.0
+pymupdf==1.28.2
 
 # Image processing — generates ~200px WebP thumbnails for uploaded gig/task
 # proof + receipt-draft images at upload time (app/core/thumbnails.py). Ships
