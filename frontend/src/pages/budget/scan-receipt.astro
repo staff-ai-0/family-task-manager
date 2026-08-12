@@ -1,83 +1,16 @@
 ---
 /**
- * Receipt scanner landing page.
+ * Addressable scan entry point — no UI of its own.
  *
- * The scan flow itself lives in ReceiptScanSheet, mounted by BudgetShell, so a
- * scan can start from any budget page without a navigation. This page stays as
- * the addressable entry point — the drawer menu, email links, and the FAB's
- * no-JS fallback all point here — and does nothing but open the picker.
+ * The scan flow lives entirely in ReceiptScanSheet (mounted by BudgetShell).
+ * This route survives only so old links keep working — drawer/FAB no-JS
+ * fallbacks, email links — and forwards them to the transactions page, where
+ * ?scan=1 asks the sheet to open the picker on arrival. Browsers that refuse
+ * a picker without a gesture land on a page whose header has the camera
+ * button, so the flow degrades to one more tap instead of a dead end.
  *
- * ?scan=1 makes the sheet open the picker on arrival. Safari can refuse a
- * picker that was not opened by a gesture, which is why the button below is
- * always rendered rather than being a fallback for older browsers.
- *
- * Premium feature (Plus/Pro plans), parent-only.
+ * Rendering a standalone page here again would resurrect the duplicate
+ * "scan screen" this redirect removed — don't.
  */
-
-import BudgetShell from "@components/ui/BudgetShell.astro";
-import { apiFetch } from "@lib/api";
-
-const token = Astro.cookies.get("access_token")?.value;
-if (!token) return Astro.redirect("/login");
-
-const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
-
-const { data: user, ok: userOk } = await apiFetch<any>("/api/auth/me", { token });
-if (!userOk) {
-    Astro.cookies.delete("access_token", { path: "/" });
-    return Astro.redirect("/login");
-}
-
-if (user.role !== "parent") {
-    return Astro.redirect("/dashboard");
-}
-
-const { data: draftsCount } = await apiFetch<{ count: number }>(
-    "/api/budget/receipt-drafts/count",
-    { token },
-);
-const pendingDraftsCount = draftsCount?.count ?? 0;
-
-const es = lang === "es";
-const title = es ? "Escanear ticket" : "Scan receipt";
+return Astro.redirect("/budget/transactions?scan=1");
 ---
-
-<BudgetShell
-    title={`${title} - Budget`}
-    budgetActive="none"
-    pendingDrafts={pendingDraftsCount}
-    role={user.role}
-    lang={lang}
-    mainClass="px-6 py-8 flex-grow max-w-lg mx-auto w-full"
-    containerClass="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col min-h-screen"
->
-    <header slot="before-nav" class="bg-gradient-to-br from-brand-coral to-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-        <div class="flex items-center justify-between mb-2">
-            <a href="/budget/transactions" class="text-white hover:text-brand-cream transition">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                </svg>
-            </a>
-            <h1 class="text-2xl font-display font-extrabold">{title}</h1>
-            <div class="w-6"></div>
-        </div>
-        <p class="text-white/80 text-sm text-center">
-            {es
-                ? "Toma una foto y deja que la IA llene todo."
-                : "Snap a photo and let AI fill in the rest."}
-        </p>
-    </header>
-
-    <button
-        type="button"
-        data-scan-receipt-open
-        class="w-full text-center bg-brand-coral-deep text-white px-6 py-4 rounded-2xl font-bold text-lg shadow-[var(--shadow-card)] press"
-    >
-        {es ? "📷 Elegir o tomar foto" : "📷 Take or choose a photo"}
-    </button>
-    <p class="mt-3 text-center text-sm text-brand-ink-soft">
-        {es
-            ? "Puedes elegir varios tickets a la vez para procesarlos en lote."
-            : "Pick several receipts at once to process them as a batch."}
-    </p>
-</BudgetShell>

@@ -10,7 +10,8 @@
  * Opening it:
  *   - any element with [data-scan-receipt-open] (click is wired here), or
  *   - window.dispatchEvent(new CustomEvent("ftm:scan-receipt")), or
- *   - ?scan=1 in the URL (used by the /budget/scan-receipt wrapper page).
+ *   - ?scan=1 in the URL (/budget/scan-receipt redirects to
+ *     /budget/transactions?scan=1 — the route is link-compat only, no UI).
  *
  * All three call input.click() synchronously inside the originating gesture —
  * iOS discards a file-picker open that has left the user-gesture task.
@@ -544,9 +545,9 @@ const es = lang === "es";
             });
         });
 
-        // Deep link: /budget/scan-receipt?scan=1 opens the picker on arrival.
-        // Not a gesture, so Safari may refuse it; the page keeps a visible
-        // button for exactly that case.
+        // Deep link: ?scan=1 (where /budget/scan-receipt redirects) opens the
+        // picker on arrival. Not a gesture, so Safari may refuse it; the
+        // transactions header keeps a visible camera button for that case.
         if (new URLSearchParams(window.location.search).get("scan") === "1") {
             setTimeout(openPicker, 300);
         }
