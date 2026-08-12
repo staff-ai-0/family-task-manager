@@ -209,9 +209,7 @@ const MODULE_TOUR_STEPS: Record<
         ["tour_budget_parent_accounts", '[data-tour="budget-menu"]', "bottom"],
         ["tour_budget_parent_categories", '[data-tour="budget-categories"]', "top"],
         ["tour_budget_parent_assign", '[data-tour="budget-to-assign"]', "bottom"],
-        // Scanning lives behind the drawer ("Escanear ticket") since the FAB
-        // lost its scan mode — point at the way in, like the accounts step.
-        ["tour_budget_parent_scan", '[data-tour="budget-menu"]', "bottom"],
+        ["tour_budget_parent_scan", "#fab-button", "top"],
         ["tour_budget_parent_reports", '[data-tour="budget-tab-reports"]', "bottom"],
     ],
     "gigs-parent": [

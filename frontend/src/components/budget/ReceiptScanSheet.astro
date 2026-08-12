@@ -547,7 +547,7 @@ const es = lang === "es";
 
         // Deep link: ?scan=1 (where /budget/scan-receipt redirects) opens the
         // picker on arrival. Not a gesture, so Safari may refuse it; the
-        // transactions header keeps a visible camera button for that case.
+        // FAB's Escanear mode is the visible affordance for that case.
         if (new URLSearchParams(window.location.search).get("scan") === "1") {
             setTimeout(openPicker, 300);
         }
