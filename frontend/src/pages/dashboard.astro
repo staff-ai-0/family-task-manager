@@ -100,9 +100,14 @@ const todayCleared = requiredCompleted >= requiredTotal && bonusCompleted >= bon
 const allDone = todayCleared && overdueAssignments.length === 0;
 // Today is clear but overdue blockers remain → nudge at the overdue section.
 const doneButOverdue = todayCleared && overdueAssignments.length > 0;
-const noTasks = requiredTotal === 0 && bonusTotal === 0;
+const noTasks = requiredTotal === 0 && bonusTotal === 0 && overdueAssignments.length === 0;
 
-const progressPercent = requiredTotal > 0 ? Math.round((requiredCompleted / requiredTotal) * 100) : 100;
+// Progress counts everything still owed: today's required chores PLUS
+// prior-day carry-overs. Without the overdue term, a kid whose chores all
+// carried over from yesterday has requiredTotal 0 and loses the progress row
+// exactly when the nudge matters most (kid report, 2026-08-11).
+const owedTotal = requiredTotal + overdueAssignments.length;
+const progressPercent = owedTotal > 0 ? Math.round((requiredCompleted / owedTotal) * 100) : 100;
 
 // Gig trust streak — mirrors backend GIG_AUTO_APPROVE_STREAK default (3).
 // Once a kid hits the threshold, their submitted gigs auto-approve.
@@ -389,14 +394,16 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     <h2 class="text-xl font-bold text-brand-ink tracking-tight">
                         {t(lang, "dashboard_today")}
                     </h2>
-                    {requiredTotal > 0 && (
+                    {owedTotal > 0 && (
                         <span class="text-sm font-medium text-brand-ink-soft">
-                            {t(lang, "dashboard_progress")(requiredCompleted, requiredTotal)}
+                            {t(lang, "dashboard_progress")(requiredCompleted, owedTotal)}
                         </span>
                     )}
                 </div>
-                {requiredTotal > 0 && (
-                    <div class="w-full bg-brand-cream-deep rounded-full h-2.5">
+                <!-- border keeps the empty track visible at 0% — cream-on-cream
+                     otherwise reads as "no progress bar at all" -->
+                {owedTotal > 0 && (
+                    <div class="w-full bg-brand-cream-deep rounded-full h-2.5 border border-brand-ink/10">
                         <div
                             class="bg-brand-sky h-2.5 rounded-full transition-all duration-500"
                             style={`width: ${progressPercent}%`}
