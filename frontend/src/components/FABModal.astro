@@ -79,9 +79,20 @@ const newAccountLabel = lang === "es" ? "＋ Nueva cuenta…" : "＋ New account
                 >
                     ⌨️ {t(lang, "fab_manual")}
                 </button>
-                <!-- No scan mode here: scanning lives in ReceiptScanSheet,
-                     opened by the transactions header camera / drawer entry.
-                     A third button here was one "Escanear" too many. -->
+                <!-- THE scan entry point. Opens the picker in place
+                     (ReceiptScanSheet, mounted by BudgetShell). The href is
+                     the fallback for any page that renders the FAB without
+                     the sheet — the handler below preventDefaults only when
+                     the sheet is actually there. Keep this the only visible
+                     scan button on FAB pages: the transactions header camera
+                     was removed as its duplicate (user report 2026-08-11). -->
+                <a
+                    id="fab-mode-scan"
+                    href={`/budget/scan-receipt?scan=1`}
+                    class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-brand-ink/10 bg-brand-cream text-brand-ink-soft hover:bg-brand-cream-deep text-center transition-colors"
+                >
+                    📸 {t(lang, "fab_scan")}
+                </a>
                 <a
                     href={`/budget/import`}
                     class="flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 border-brand-ink/10 bg-brand-cream text-brand-ink-soft hover:bg-brand-cream-deep text-center transition-colors"
@@ -331,6 +342,18 @@ const newAccountLabel = lang === "es" ? "＋ Nueva cuenta…" : "＋ New account
         if (stepEntry) stepEntry.classList.remove("hidden");
         if (stepConfirm) stepConfirm.classList.add("hidden");
         if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = saveBtn.dataset.originalText || saveBtn.textContent; }
+    }
+
+    // Scan: open the picker in place instead of navigating. input.click()
+    // must stay in this gesture's task — iOS drops a file picker opened
+    // after an await or a timeout.
+    const scanBtn = document.getElementById("fab-mode-scan");
+    if (scanBtn && document.getElementById("receipt-scan-sheet")) {
+        scanBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            closeModal();
+            window.dispatchEvent(new CustomEvent("ftm:scan-receipt"));
+        });
     }
 
     fabBtn.addEventListener("click", openModal);
