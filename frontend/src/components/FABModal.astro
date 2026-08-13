@@ -347,9 +347,17 @@ const newAccountLabel = lang === "es" ? "＋ Nueva cuenta…" : "＋ New account
     // Scan: open the picker in place instead of navigating. input.click()
     // must stay in this gesture's task — iOS drops a file picker opened
     // after an await or a timeout.
+    //
+    // The sheet check happens at CLICK time, not here: this define:vars
+    // script runs inline during HTML parse, and BudgetShell renders
+    // ReceiptScanSheet AFTER the page slot — so at this point the sheet is
+    // never in the DOM yet. Gating registration on it meant the handler was
+    // never attached and every tap fell through to the href (prod report
+    // 2026-08-13: "solo regresa a la página anterior").
     const scanBtn = document.getElementById("fab-mode-scan");
-    if (scanBtn && document.getElementById("receipt-scan-sheet")) {
+    if (scanBtn) {
         scanBtn.addEventListener("click", (e) => {
+            if (!document.getElementById("receipt-scan-sheet")) return; // href fallback
             e.preventDefault();
             closeModal();
             window.dispatchEvent(new CustomEvent("ftm:scan-receipt"));
