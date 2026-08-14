@@ -41,5 +41,11 @@ def test_malformed_hash_returns_false():
     assert not verify_password("anything", "")
 
 
+def test_none_hash_returns_false():
+    # OAuth-only accounts have password_hash NULL; a password login attempt
+    # must fail authentication, not 500 (prod 2026-08-13)
+    assert not verify_password("anything", None)
+
+
 def test_alias_still_exported():
     assert get_password_hash is hash_password
