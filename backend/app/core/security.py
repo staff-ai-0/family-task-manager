@@ -18,8 +18,11 @@ def _password_bytes(password: str) -> bytes:
     return password.encode("utf-8")[:72]
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash"""
+def verify_password(plain_password: str, hashed_password: Optional[str]) -> bool:
+    """Verify password against hash. None/empty hash (OAuth-only account)
+    fails verification instead of raising."""
+    if not hashed_password:
+        return False
     try:
         return bcrypt.checkpw(_password_bytes(plain_password), hashed_password.encode("utf-8"))
     except ValueError:
