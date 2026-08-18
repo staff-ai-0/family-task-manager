@@ -16,8 +16,8 @@
 # PYSEC-2026-1941 (multipart large-file DoS) — both in the path of every
 # request — plus the python-multipart querystring parser bugs.
 fastapi==0.141.1
-starlette==1.4.1
-uvicorn[standard]==0.52.1
+starlette==1.6.0
+uvicorn[standard]==0.52.3
 # 0.0.18 -> 0.0.32 clears PYSEC-2026-3036..3040 (QuerystringParser) and
 # PYSEC-2026-1852 (path traversal, needs non-default UPLOAD_DIR — not our
 # config, fixed regardless). We accept multipart uploads on the receipt scanner.
