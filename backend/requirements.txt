@@ -91,7 +91,7 @@ pymupdf==1.28.2
 Pillow==12.3.0
 
 # Scheduler
-apscheduler==3.10.4
+apscheduler==3.11.3
 
 # Web Push (VAPID) for parent gig-approval notifications. pywebpush is
 # sync — call via asyncio.to_thread() to keep the gig submission path
