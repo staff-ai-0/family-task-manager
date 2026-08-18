@@ -11,4 +11,4 @@ pytest-cov==4.1.0
 # Code Quality — ruff is the single linter (config in backend/ruff.toml).
 # Replaced black/flake8/mypy/isort 2026-07-16: none had config files and none
 # ran in CI; ruff check now gates CI instead.
-ruff==0.15.12
+ruff==0.16.3
