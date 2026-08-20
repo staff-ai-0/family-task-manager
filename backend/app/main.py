@@ -257,8 +257,9 @@ def _start_scheduler() -> AsyncIOScheduler:
 async def _become_leader(handles: "_SchedulerHandles", client, token) -> None:
     """Run once this worker holds the leadership lock — via the initial
     startup race or via poll_for_leadership after losing it. Starts the
-    overdue sweep, every cron job, and the renewal loop; stores everything
-    on `handles` so shutdown finds it regardless of which path ran."""
+    overdue sweep, every cron job, and, when a real lock is held (client is
+    not None), the renewal loop; stores everything on `handles` so shutdown
+    finds it regardless of which path ran."""
     from app.core.scheduler_lock import renew_scheduler_leadership
 
     logger.info("Scheduler leader — starting cron jobs + overdue sweep.")
@@ -267,6 +268,11 @@ async def _become_leader(handles: "_SchedulerHandles", client, token) -> None:
     handles.overdue_task = asyncio.create_task(_overdue_sweep_loop())
     handles.scheduler = _start_scheduler()
 
+    # No client means SCHEDULER_FAIL_OPEN won at startup with Redis
+    # unreachable (see scheduler_lock.py) — there's no lock to renew, so
+    # skip the renew loop and let the scheduler run unsupervised. This
+    # guard was silently dropped once already during this branch's own
+    # development and only caught by review — don't drop it again.
     if client is not None:
         async def _renew_leadership_loop():
             while True:
@@ -281,6 +287,13 @@ async def _become_leader(handles: "_SchedulerHandles", client, token) -> None:
                         "Scheduler leadership lost — pausing scheduled jobs "
                         "in this worker to avoid double-firing sweeps."
                     )
+                    # NOTE: this worker now has no scheduler and nothing ever
+                    # retries — pausing here does NOT re-arm via poll_for_leadership.
+                    # A worker that later loses leadership (vs. losing the startup
+                    # race, which this PR's retry loop does handle) can still end
+                    # up permanently unscheduled, reachable via e.g. redis evicting
+                    # this key under volatile-lru. Known gap, scoped out of the
+                    # 2026-08-20 fix — see docs/superpowers/specs/2026-08-20-scheduler-leader-self-heal.md.
                     if handles.scheduler is not None:
                         handles.scheduler.pause()
                     return
@@ -288,12 +301,31 @@ async def _become_leader(handles: "_SchedulerHandles", client, token) -> None:
         handles.renew_task = asyncio.create_task(_renew_leadership_loop())
 
 
+async def _retry_leadership(handles: "_SchedulerHandles", redis_url: str) -> None:
+    """Background task for a worker that lost the startup leader race: keeps
+    retrying via poll_for_leadership and becomes leader on win. Wrapped in
+    try/except because an unhandled exception here would otherwise sit
+    unretrieved on the task (silent — no log) and later re-raise out of
+    lifespan() at shutdown when the task is awaited, skipping engine.dispose()."""
+    from app.core.scheduler_lock import poll_for_leadership
+
+    try:
+        client, token = await poll_for_leadership(redis_url)
+        logger.info("Scheduler leadership acquired on retry.")
+        await _become_leader(handles, client, token)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.exception(
+            "Scheduler leadership retry failed — cron jobs stay off in this worker."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     from app.core.scheduler_lock import (
         try_acquire_scheduler_leadership,
-        poll_for_leadership,
         release_scheduler_leadership,
     )
 
@@ -328,12 +360,9 @@ async def lifespan(app: FastAPI):
             "without a restart."
         )
 
-        async def _retry_leadership():
-            client, token = await poll_for_leadership(settings.REDIS_URL)
-            logger.info("Scheduler leadership acquired on retry.")
-            await _become_leader(handles, client, token)
-
-        leadership_poll_task = asyncio.create_task(_retry_leadership())
+        leadership_poll_task = asyncio.create_task(
+            _retry_leadership(handles, settings.REDIS_URL)
+        )
 
     yield
 

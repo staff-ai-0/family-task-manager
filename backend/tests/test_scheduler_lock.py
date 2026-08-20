@@ -136,3 +136,57 @@ class TestPollForLeadership:
                 )
         finally:
             await release_scheduler_leadership(holder_client, holder_token, key=key)
+
+    @pytest.mark.asyncio
+    async def test_ignores_fail_open_win_and_keeps_retrying(self, monkeypatch):
+        """A SCHEDULER_FAIL_OPEN synthetic win (is_leader=True, client=None)
+        must NOT be treated as a real win in the retry loop: this worker
+        already lost the startup race to a live leader, so a transient
+        Redis outage is not license to install a second scheduler against
+        a healthy incumbent — that would double-fire the money-moving
+        sweeps this lock exists to prevent. Only a redis-less
+        single-instance deploy legitimately fail-opens, and that always
+        wins at startup (never enters this loop)."""
+        import app.core.scheduler_lock as scheduler_lock_module
+
+        async def _fake_fail_open_win(*args, **kwargs):
+            return True, None, None
+
+        monkeypatch.setattr(
+            scheduler_lock_module,
+            "try_acquire_scheduler_leadership",
+            _fake_fail_open_win,
+        )
+
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(
+                scheduler_lock_module.poll_for_leadership(
+                    settings.REDIS_URL, interval_seconds=0.1
+                ),
+                timeout=0.5,
+            )
+
+    @pytest.mark.asyncio
+    async def test_passes_retrying_true_to_try_acquire(self, monkeypatch):
+        """poll_for_leadership must identify itself as a retrying caller so
+        try_acquire_scheduler_leadership's fail-closed log message is
+        accurate (says 'will keep retrying', not 'PAUSED until restart')."""
+        import app.core.scheduler_lock as scheduler_lock_module
+
+        seen_kwargs = {}
+
+        async def _capture(redis_url, **kwargs):
+            seen_kwargs.update(kwargs)
+            return True, object(), "tok"
+
+        monkeypatch.setattr(
+            scheduler_lock_module,
+            "try_acquire_scheduler_leadership",
+            _capture,
+        )
+
+        client, token = await scheduler_lock_module.poll_for_leadership(
+            settings.REDIS_URL, interval_seconds=0.05
+        )
+        assert client is not None
+        assert seen_kwargs.get("retrying") is True
