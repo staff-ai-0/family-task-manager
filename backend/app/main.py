@@ -267,24 +267,25 @@ async def _become_leader(handles: "_SchedulerHandles", client, token) -> None:
     handles.overdue_task = asyncio.create_task(_overdue_sweep_loop())
     handles.scheduler = _start_scheduler()
 
-    async def _renew_leadership_loop():
-        while True:
-            await asyncio.sleep(60)
-            still_leader = await renew_scheduler_leadership(client, token)
-            if not still_leader:
-                # Another worker took the lock after our TTL lapsed.
-                # Keeping the scheduler running here would mean two
-                # workers firing the money-moving sweeps at once — the
-                # exact thing the lock exists to prevent.
-                logger.error(
-                    "Scheduler leadership lost — pausing scheduled jobs "
-                    "in this worker to avoid double-firing sweeps."
-                )
-                if handles.scheduler is not None:
-                    handles.scheduler.pause()
-                return
+    if client is not None:
+        async def _renew_leadership_loop():
+            while True:
+                await asyncio.sleep(60)
+                still_leader = await renew_scheduler_leadership(client, token)
+                if not still_leader:
+                    # Another worker took the lock after our TTL lapsed.
+                    # Keeping the scheduler running here would mean two
+                    # workers firing the money-moving sweeps at once — the
+                    # exact thing the lock exists to prevent.
+                    logger.error(
+                        "Scheduler leadership lost — pausing scheduled jobs "
+                        "in this worker to avoid double-firing sweeps."
+                    )
+                    if handles.scheduler is not None:
+                        handles.scheduler.pause()
+                    return
 
-    handles.renew_task = asyncio.create_task(_renew_leadership_loop())
+        handles.renew_task = asyncio.create_task(_renew_leadership_loop())
 
 
 @asynccontextmanager
