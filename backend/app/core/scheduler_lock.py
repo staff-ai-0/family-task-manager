@@ -18,10 +18,16 @@ cron fired twice concurrently, including the payday and recurring-post sweeps
 that move family money. Set ``SCHEDULER_FAIL_OPEN=true`` for a single-instance
 deploy that genuinely runs without Redis.
 
-NOTE: non-leader workers do not re-poll for leadership while running; if the
-leader process dies, its lock expires after TTL and the jobs pause until a worker
-restarts (acceptable for the daily/5-min sweeps here, and a deploy restarts all
-workers). Promote to a periodic re-acquire loop if jobs become latency-critical.
+NOTE: non-leader workers retry via ``poll_for_leadership`` (run as a
+background task from app.main's lifespan) so a lost startup race
+self-heals within a few retry intervals instead of leaving the scheduler
+off for the rest of the process life. This replaced the old "never
+re-poll" behavior after a 2026-08-20 incident: a deploy recreated both the
+backend and redis containers back-to-back; redis's AOF persistence
+replayed the previous generation's still-unexpired leader key, both new
+workers lost the race against it, and — under the old behavior — neither
+ever tried again, so the scheduler (all cron jobs, including the weekly
+auto-shuffle) silently stayed off for 6 days until a manual restart.
 """
 import asyncio
 import logging
@@ -62,6 +68,7 @@ async def try_acquire_scheduler_leadership(
     *,
     key: str = LEADER_KEY,
     ttl: int = LEADER_TTL_SECONDS,
+    retrying: bool = False,
 ) -> Tuple[bool, Optional["aioredis.Redis"], Optional[str]]:
     """Attempt to become the scheduler leader.
 
@@ -104,11 +111,58 @@ async def try_acquire_scheduler_leadership(
 
     logger.error(
         "Scheduler leadership: Redis unreachable after %d attempts (%s); "
-        "declining leadership so concurrent workers cannot both run the sweeps. "
-        "Scheduled jobs are PAUSED until a worker restarts with Redis reachable.",
+        "declining leadership so concurrent workers cannot both run the sweeps. %s",
         ACQUIRE_ATTEMPTS, last_error,
+        "This worker will keep retrying in the background." if retrying
+        else "Scheduled jobs are PAUSED until a worker restarts with Redis reachable.",
     )
     return False, None, None
+
+
+async def poll_for_leadership(
+    redis_url: str,
+    *,
+    key: str = LEADER_KEY,
+    ttl: int = LEADER_TTL_SECONDS,
+    interval_seconds: float = 30.0,
+) -> Tuple["aioredis.Redis", str]:
+    """Retry leadership acquisition until this worker wins a REAL lock.
+
+    A worker that lost the startup race calls this from a background task
+    instead of giving up forever (the old behavior — see the module
+    docstring's incident note). Re-attempts
+    ``try_acquire_scheduler_leadership`` every ``interval_seconds`` until it
+    wins, then returns ``(client, token)`` in the exact shape a winning
+    startup call would — the caller starts the scheduler + renew loop from
+    there via the same path a startup win uses.
+
+    A ``SCHEDULER_FAIL_OPEN`` synthetic win (``client is None``, Redis still
+    unreachable after all attempts) is deliberately NOT treated as a win
+    here: this loop only runs for a worker that already lost the startup
+    race to a LIVE leader, so a Redis blip is not license to install a
+    second scheduler against a healthy incumbent — that would double-fire
+    the money-moving sweeps this whole lock exists to prevent. A
+    redis-less single-instance deploy always wins at startup (never enters
+    this loop), so the loop has no legitimate use for a fail-open win; it
+    logs and keeps polling instead.
+
+    Loops forever by design. The caller creates this as a background task
+    and cancels it on shutdown if it never won.
+    """
+    while True:
+        await asyncio.sleep(interval_seconds)
+        is_leader, client, token = await try_acquire_scheduler_leadership(
+            redis_url, key=key, ttl=ttl, retrying=True
+        )
+        if is_leader and client is not None:
+            return client, token
+        if is_leader:
+            logger.warning(
+                "Scheduler leadership: ignoring a SCHEDULER_FAIL_OPEN win in "
+                "the retry loop — this worker already lost the race to a "
+                "live leader, so taking leadership on a Redis blip would "
+                "double-fire the money-moving sweeps."
+            )
 
 
 async def renew_scheduler_leadership(
