@@ -108,12 +108,191 @@ async def _overdue_sweep_loop() -> None:
         await asyncio.sleep(60 * 60)  # 1 hour
 
 
+class _SchedulerHandles:
+    """Mutable holder for the leader-only background state. Both the
+    immediate-win path and the won-on-retry path (poll_for_leadership)
+    populate this, so shutdown can find and clean up whichever one ran
+    without needing to know in advance which path fired."""
+
+    def __init__(self) -> None:
+        self.scheduler: AsyncIOScheduler | None = None
+        self.overdue_task: asyncio.Task | None = None
+        self.renew_task: asyncio.Task | None = None
+        self.leader_client = None
+        self.leader_token = None
+
+
+def _register_cron_jobs(scheduler: AsyncIOScheduler) -> None:
+    """Attach every leader-only cron job to `scheduler`. Single source of
+    truth shared by both the immediate-win and won-on-retry paths — a job
+    added to only one path would silently never run for a worker that wins
+    leadership on retry."""
+
+    async def _pet_decay_sweep():
+        async with AsyncSessionLocal() as session:
+            try:
+                n = await PetService.sweep_decay_all(session)
+                if n:
+                    logger.info("Pet decay sweep notified %d owner(s)", n)
+            except Exception:
+                logger.exception("Pet decay sweep failed")
+
+    async def _pup_snapshot_sweep():
+        async with AsyncSessionLocal() as session:
+            try:
+                n = await AnalyticsService.write_all_snapshots(session)
+                if n:
+                    logger.info("PUP snapshot wrote %d family rows", n)
+            except Exception:
+                logger.exception("PUP snapshot sweep failed")
+
+    async def _jarvis_schedule_sweep():
+        async with AsyncSessionLocal() as session:
+            try:
+                n = await JarvisScheduleService.sweep_due(session)
+                if n:
+                    logger.info("Jarvis schedule sweep fired %d", n)
+            except Exception:
+                logger.exception("Jarvis schedule sweep failed")
+
+    async def _family_bank_payday_sweep():
+        # Family Bank payday (match → interest → allowance) across families,
+        # evaluated in family-local time. Idempotent per family-local week
+        # via last_payday_at, so a restart or duplicate tick never
+        # double-pays. Runs hourly; the service filters to the local payday
+        # weekday + hour>=8 window (spec §D4).
+        async with AsyncSessionLocal() as session:
+            try:
+                from app.services.bank_service import BankService
+                n = await BankService.run_payday_sweep(session)
+                if n:
+                    logger.info("Family Bank payday sweep paid %d kid(s)", n)
+            except Exception:
+                logger.exception("Family Bank payday sweep failed")
+
+    async def _family_purge_sweep():
+        # Hard-delete families soft-deleted longer than the grace window
+        # (FamilyDeletionService.PURGE_RETENTION_DAYS). Self-serve family
+        # deletion only stamps deleted_at + cancels PayPal synchronously;
+        # this sweep does the actual cascade delete + uploads/GCS cleanup.
+        # Leader-only (this whole block runs on the elected leader). Each
+        # family is purged in isolation so one failure never blocks the rest.
+        async with AsyncSessionLocal() as session:
+            try:
+                from app.services.family_deletion_service import (
+                    FamilyDeletionService,
+                )
+                n = await FamilyDeletionService.purge_expired(session)
+                if n:
+                    logger.info(
+                        "Family purge sweep hard-deleted %d family(ies)", n
+                    )
+            except Exception:
+                logger.exception("Family purge sweep failed")
+
+    async def _auto_shuffle_sweep():
+        # Weekly auto-shuffle: families that already use the shuffle get
+        # the new week generated without a parent having to remember the
+        # button. Idempotent per week (service-level guards); hourly so a
+        # Monday spent down self-heals.
+        async with AsyncSessionLocal() as session:
+            try:
+                n = await TaskAssignmentService.auto_shuffle_all(session)
+                if n:
+                    logger.info("Auto-shuffle sweep created %d assignment(s)", n)
+            except Exception:
+                logger.exception("Auto-shuffle sweep failed")
+
+    async def _recurring_post_sweep():
+        # Auto-post due recurring BUDGET transactions (Actual-Budget
+        # schedule parity) — idempotent: posting advances next_due_date.
+        async with AsyncSessionLocal() as session:
+            try:
+                from app.services.budget.recurring_transaction_service import (
+                    RecurringTransactionService,
+                )
+                n = await RecurringTransactionService.post_all_due_all_families(session)
+                if n:
+                    logger.info("Recurring post sweep created %d transaction(s)", n)
+            except Exception:
+                logger.exception("Recurring post sweep failed")
+
+    async def _morning_reminder_sweep():
+        # 'Tienes N tareas hoy' per member with pending chores due today.
+        # Idempotent per local day (DB guard inside the service), so a
+        # restart or duplicate tick never double-sends.
+        async with AsyncSessionLocal() as session:
+            try:
+                n = await TaskAssignmentService.send_morning_reminders(session)
+                if n:
+                    logger.info("Morning reminder sweep sent %d reminder(s)", n)
+            except Exception:
+                logger.exception("Morning reminder sweep failed")
+
+    scheduler.add_job(run_sweep, "cron", hour=3, minute=0, id="subscription_sweep")
+    scheduler.add_job(_pet_decay_sweep, "cron", hour=8, minute=0, id="pet_decay_sweep")
+    scheduler.add_job(_pup_snapshot_sweep, "cron", hour=23, minute=30, id="pup_snapshot_sweep")
+    scheduler.add_job(_jarvis_schedule_sweep, "cron", minute="*/5", id="jarvis_sched_sweep")
+    scheduler.add_job(_family_bank_payday_sweep, "cron", minute=10, id="family_bank_payday")  # hourly
+    scheduler.add_job(_family_purge_sweep, "cron", hour=4, minute=0, id="family_purge_sweep")  # daily
+    scheduler.add_job(_auto_shuffle_sweep, "cron", minute=25, id="auto_shuffle_sweep")  # hourly
+    scheduler.add_job(_recurring_post_sweep, "cron", minute=40, id="recurring_post_sweep")  # hourly
+    scheduler.add_job(
+        _morning_reminder_sweep,
+        "cron",
+        hour=7,
+        minute=30,
+        timezone="America/Mexico_City",
+        id="morning_reminder_sweep",
+    )
+
+
+def _start_scheduler() -> AsyncIOScheduler:
+    scheduler = AsyncIOScheduler()
+    _register_cron_jobs(scheduler)
+    scheduler.start()
+    return scheduler
+
+
+async def _become_leader(handles: "_SchedulerHandles", client, token) -> None:
+    """Run once this worker holds the leadership lock — via the initial
+    startup race or via poll_for_leadership after losing it. Starts the
+    overdue sweep, every cron job, and the renewal loop; stores everything
+    on `handles` so shutdown finds it regardless of which path ran."""
+    from app.core.scheduler_lock import renew_scheduler_leadership
+
+    logger.info("Scheduler leader — starting cron jobs + overdue sweep.")
+    handles.leader_client = client
+    handles.leader_token = token
+    handles.overdue_task = asyncio.create_task(_overdue_sweep_loop())
+    handles.scheduler = _start_scheduler()
+
+    async def _renew_leadership_loop():
+        while True:
+            await asyncio.sleep(60)
+            still_leader = await renew_scheduler_leadership(client, token)
+            if not still_leader:
+                # Another worker took the lock after our TTL lapsed.
+                # Keeping the scheduler running here would mean two
+                # workers firing the money-moving sweeps at once — the
+                # exact thing the lock exists to prevent.
+                logger.error(
+                    "Scheduler leadership lost — pausing scheduled jobs "
+                    "in this worker to avoid double-firing sweeps."
+                )
+                if handles.scheduler is not None:
+                    handles.scheduler.pause()
+                return
+
+    handles.renew_task = asyncio.create_task(_renew_leadership_loop())
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     from app.core.scheduler_lock import (
         try_acquire_scheduler_leadership,
-        renew_scheduler_leadership,
+        poll_for_leadership,
         release_scheduler_leadership,
     )
 
@@ -136,172 +315,45 @@ async def lifespan(app: FastAPI):
     # exactly one worker (prod runs multiple uvicorn workers).
     is_leader, leader_client, leader_token = await try_acquire_scheduler_leadership(settings.REDIS_URL)
 
-    overdue_task = None
-    scheduler = None
-    renew_task = None
+    handles = _SchedulerHandles()
+    leadership_poll_task: asyncio.Task | None = None
 
-    if not is_leader:
-        logger.info("Not the scheduler leader — skipping cron + overdue sweep in this worker.")
+    if is_leader:
+        await _become_leader(handles, leader_client, leader_token)
     else:
-        logger.info("Scheduler leader — starting cron jobs + overdue sweep.")
-        overdue_task = asyncio.create_task(_overdue_sweep_loop())
-
-        async def _pet_decay_sweep():
-            async with AsyncSessionLocal() as session:
-                try:
-                    n = await PetService.sweep_decay_all(session)
-                    if n:
-                        logger.info("Pet decay sweep notified %d owner(s)", n)
-                except Exception:
-                    logger.exception("Pet decay sweep failed")
-
-        async def _pup_snapshot_sweep():
-            async with AsyncSessionLocal() as session:
-                try:
-                    n = await AnalyticsService.write_all_snapshots(session)
-                    if n:
-                        logger.info("PUP snapshot wrote %d family rows", n)
-                except Exception:
-                    logger.exception("PUP snapshot sweep failed")
-
-        async def _jarvis_schedule_sweep():
-            async with AsyncSessionLocal() as session:
-                try:
-                    n = await JarvisScheduleService.sweep_due(session)
-                    if n:
-                        logger.info("Jarvis schedule sweep fired %d", n)
-                except Exception:
-                    logger.exception("Jarvis schedule sweep failed")
-
-        async def _family_bank_payday_sweep():
-            # Family Bank payday (match → interest → allowance) across families,
-            # evaluated in family-local time. Idempotent per family-local week
-            # via last_payday_at, so a restart or duplicate tick never
-            # double-pays. Runs hourly; the service filters to the local payday
-            # weekday + hour>=8 window (spec §D4).
-            async with AsyncSessionLocal() as session:
-                try:
-                    from app.services.bank_service import BankService
-                    n = await BankService.run_payday_sweep(session)
-                    if n:
-                        logger.info("Family Bank payday sweep paid %d kid(s)", n)
-                except Exception:
-                    logger.exception("Family Bank payday sweep failed")
-
-        async def _family_purge_sweep():
-            # Hard-delete families soft-deleted longer than the grace window
-            # (FamilyDeletionService.PURGE_RETENTION_DAYS). Self-serve family
-            # deletion only stamps deleted_at + cancels PayPal synchronously;
-            # this sweep does the actual cascade delete + uploads/GCS cleanup.
-            # Leader-only (this whole block runs on the elected leader). Each
-            # family is purged in isolation so one failure never blocks the rest.
-            async with AsyncSessionLocal() as session:
-                try:
-                    from app.services.family_deletion_service import (
-                        FamilyDeletionService,
-                    )
-                    n = await FamilyDeletionService.purge_expired(session)
-                    if n:
-                        logger.info(
-                            "Family purge sweep hard-deleted %d family(ies)", n
-                        )
-                except Exception:
-                    logger.exception("Family purge sweep failed")
-
-        async def _morning_reminder_sweep():
-            # 'Tienes N tareas hoy' per member with pending chores due today.
-            # Idempotent per local day (DB guard inside the service), so a
-            # restart or duplicate tick never double-sends.
-            async with AsyncSessionLocal() as session:
-                try:
-                    n = await TaskAssignmentService.send_morning_reminders(session)
-                    if n:
-                        logger.info("Morning reminder sweep sent %d reminder(s)", n)
-                except Exception:
-                    logger.exception("Morning reminder sweep failed")
-
-        async def _auto_shuffle_sweep():
-            # Weekly auto-shuffle: families that already use the shuffle get
-            # the new week generated without a parent having to remember the
-            # button. Idempotent per week (service-level guards); hourly so a
-            # Monday spent down self-heals.
-            async with AsyncSessionLocal() as session:
-                try:
-                    n = await TaskAssignmentService.auto_shuffle_all(session)
-                    if n:
-                        logger.info("Auto-shuffle sweep created %d assignment(s)", n)
-                except Exception:
-                    logger.exception("Auto-shuffle sweep failed")
-
-        async def _recurring_post_sweep():
-            # Auto-post due recurring BUDGET transactions (Actual-Budget
-            # schedule parity) — idempotent: posting advances next_due_date.
-            async with AsyncSessionLocal() as session:
-                try:
-                    from app.services.budget.recurring_transaction_service import (
-                        RecurringTransactionService,
-                    )
-                    n = await RecurringTransactionService.post_all_due_all_families(session)
-                    if n:
-                        logger.info("Recurring post sweep created %d transaction(s)", n)
-                except Exception:
-                    logger.exception("Recurring post sweep failed")
-
-        scheduler = AsyncIOScheduler()
-        scheduler.add_job(run_sweep, "cron", hour=3, minute=0, id="subscription_sweep")
-        scheduler.add_job(_pet_decay_sweep, "cron", hour=8, minute=0, id="pet_decay_sweep")
-        scheduler.add_job(_pup_snapshot_sweep, "cron", hour=23, minute=30, id="pup_snapshot_sweep")
-        scheduler.add_job(_jarvis_schedule_sweep, "cron", minute="*/5", id="jarvis_sched_sweep")
-        scheduler.add_job(_family_bank_payday_sweep, "cron", minute=10, id="family_bank_payday")  # hourly
-        scheduler.add_job(_family_purge_sweep, "cron", hour=4, minute=0, id="family_purge_sweep")  # daily
-        scheduler.add_job(_auto_shuffle_sweep, "cron", minute=25, id="auto_shuffle_sweep")  # hourly
-        scheduler.add_job(_recurring_post_sweep, "cron", minute=40, id="recurring_post_sweep")  # hourly
-        scheduler.add_job(
-            _morning_reminder_sweep,
-            "cron",
-            hour=7,
-            minute=30,
-            timezone="America/Mexico_City",
-            id="morning_reminder_sweep",
+        logger.info(
+            "Not the scheduler leader at startup — retrying in the "
+            "background so a lost race against a stale lock self-heals "
+            "without a restart."
         )
-        scheduler.start()
 
-        if leader_client is not None:
-            async def _renew_leadership_loop():
-                while True:
-                    await asyncio.sleep(60)
-                    still_leader = await renew_scheduler_leadership(
-                        leader_client, leader_token
-                    )
-                    if not still_leader:
-                        # Another worker took the lock after our TTL lapsed.
-                        # Keeping the scheduler running here would mean two
-                        # workers firing the money-moving sweeps at once — the
-                        # exact thing the lock exists to prevent.
-                        logger.error(
-                            "Scheduler leadership lost — pausing scheduled jobs "
-                            "in this worker to avoid double-firing sweeps."
-                        )
-                        if scheduler is not None:
-                            scheduler.pause()
-                        return
+        async def _retry_leadership():
+            client, token = await poll_for_leadership(settings.REDIS_URL)
+            logger.info("Scheduler leadership acquired on retry.")
+            await _become_leader(handles, client, token)
 
-            renew_task = asyncio.create_task(_renew_leadership_loop())
+        leadership_poll_task = asyncio.create_task(_retry_leadership())
 
     yield
 
     # Shutdown
     logger.info("Shutting down API...")
-    if scheduler is not None:
-        scheduler.shutdown(wait=True)
-    for _task in (overdue_task, renew_task):
+    if leadership_poll_task is not None:
+        leadership_poll_task.cancel()
+        try:
+            await leadership_poll_task
+        except asyncio.CancelledError:
+            pass
+    if handles.scheduler is not None:
+        handles.scheduler.shutdown(wait=True)
+    for _task in (handles.overdue_task, handles.renew_task):
         if _task is not None:
             _task.cancel()
             try:
                 await _task
             except asyncio.CancelledError:
                 pass
-    await release_scheduler_leadership(leader_client, leader_token)
+    await release_scheduler_leadership(handles.leader_client, handles.leader_token)
     await engine.dispose()
 
 
