@@ -212,6 +212,57 @@ Record each drill (date, dump file, row counts, elapsed time) below:
 |------|------|--------|
 | 2026-07-07 | local-dev `db-20260707-182407.sql.gz` | PASS after adding step 3 (first attempt aborted: `role "jarvis_mcp" does not exist` — pg_dump omits cluster roles). 3 families / 6 users / 68 task_assignments restored in ~2 s. **Prod drill on 10.1.0.91 still pending.** |
 
+## App health watchdog (canonical: on-prem 10.1.0.91)
+
+Alert-only monitor for `family.agent-ia.mx` / `api-family.agent-ia.mx` and
+the `family_onprem_*` container healthchecks. Added 2026-09-15 after the
+frontend container's process died while rootless podman/crun's stored state
+kept reporting `Running:true` (no OOM, no recorded exit) — `restart:
+unless-stopped` in `docker-compose.onprem.yml` never fired because podman
+never saw an exit event, `podman ps` looked fine, and the app was 502ing for
+hours before a human noticed. This is the same failure signature school-admin
+hit on this same host on 2026-07-31 (`school-admin/scripts/check-app-health-91.sh`)
+— this watchdog follows that script's pattern exactly, including its
+deliberate choice to alert only and never auto-recreate containers
+unattended in prod.
+
+`scripts/check-app-health-onprem.sh` (run by the
+`family-onprem-health-check.timer` user unit, every 5 min):
+
+1. Checks `https://family.agent-ia.mx/` and `https://api-family.agent-ia.mx/health` return HTTP 200
+2. Checks `family_onprem_{db,redis,backend,frontend}` all report `podman health=healthy`
+3. Checks `family_onprem_tunnel` is running
+4. On any failure, emails `ALERT_EMAIL` via Resend (de-duped: one "down" email per outage, one "recovered" email when it clears) and logs to `logs/health-check.log`
+
+**If the alert fires with a container stuck `unhealthy` and `podman exec`
+into it errors `is not running` while `podman inspect` still says
+`Running:true`**: plain `podman restart` will fail (`conmon exited
+prematurely` — conmon is already gone). Fix:
+```bash
+podman stop -t 5 <container> && podman start <container>
+```
+
+### Install (one-time, on 10.1.0.91, as user jc — NO sudo)
+
+```bash
+cd /home/jc/family-task-manager
+chmod +x scripts/check-app-health-onprem.sh
+
+# ALERT_EMAIL must be set in .env (RESEND_API_KEY already is, for app email)
+grep -q '^ALERT_EMAIL=' .env || echo 'ALERT_EMAIL=info@agent-ia.mx' >> .env
+
+mkdir -p ~/.config/systemd/user
+cp scripts/systemd/family-onprem-health-check.service ~/.config/systemd/user/
+cp scripts/systemd/family-onprem-health-check.timer   ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now family-onprem-health-check.timer
+
+# Verify
+systemctl --user list-timers family-onprem-health-check.timer
+systemctl --user start family-onprem-health-check.service   # run once now
+tail logs/health-check.log
+```
+
 ## Legacy: GCP VM units (decommissioned 2026-07-05)
 
 `family-backup.service` / `family-backup.timer` are the old SYSTEM-level units

@@ -1,0 +1,10 @@
+# Polls family.agent-ia.mx / api-family.agent-ia.mx / container health every 5 min, on-prem .91.
+[Unit]
+Description=Timer: Family Task Manager app health check (on-prem .91)
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+
+[Install]
+WantedBy=timers.target
