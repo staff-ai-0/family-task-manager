@@ -1,0 +1,11 @@
+# User-level systemd unit for on-prem .91 (rootless podman as jc).
+# Install: ~/.config/systemd/user/  +  systemctl --user enable --now family-onprem-health-check.timer
+# Requires linger (loginctl enable-linger jc) so it fires without an active login.
+[Unit]
+Description=Family Task Manager app health check (on-prem .91)
+After=default.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/home/jc/family-task-manager/.env
+ExecStart=/home/jc/family-task-manager/scripts/check-app-health-onprem.sh
