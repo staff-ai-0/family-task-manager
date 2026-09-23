@@ -1029,11 +1029,24 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                         const fd = new FormData();
                         fd.append("file", fileInput.files[0]);
                         const r = await fetch("/api/assignments/proof-upload", { method: "POST", body: fd });
-                        if (!r.ok) throw new Error(`Upload failed: ${r.status}`);
+                        if (!r.ok) {
+                            if (fileStatus) {
+                                fileStatus.textContent = r.status === 413
+                                    ? (es ? "📸 Foto muy pesada (máx 15MB). Prueba con menor resolución." : "📸 Photo too large (max 15MB). Try a lower resolution.")
+                                    : r.status === 415
+                                    ? (es ? "Formato no soportado (usa JPEG, PNG o WebP)." : "Unsupported format (use JPEG, PNG, or WebP).")
+                                    : (es ? `Error al subir la foto (${r.status}).` : `Upload failed (${r.status}).`);
+                                fileStatus.classList.add("text-red-600");
+                            }
+                            return;
+                        }
                         const data = await r.json();
                         imageUrl = data.proof_image_url;
-                    } catch (err) {
-                        if (fileStatus) fileStatus.textContent = `Upload failed: ${err}`;
+                    } catch {
+                        if (fileStatus) {
+                            fileStatus.textContent = es ? "Error de red al subir la foto." : "Network error uploading photo.";
+                            fileStatus.classList.add("text-red-600");
+                        }
                         return;
                     }
                 }

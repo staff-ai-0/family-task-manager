@@ -18,7 +18,9 @@ from app.core.exceptions import ValidationException
 MB = 1024 * 1024
 MAX_IMPORT_BYTES = 10 * MB        # CSV / OFX / QIF / CAMT bank files
 MAX_RECEIPT_BYTES = 15 * MB       # receipt photos / scanned PDFs
-MAX_PROOF_BYTES = 5 * MB          # gig proof images
+MAX_PROOF_BYTES = 15 * MB         # gig proof images — matches MAX_RECEIPT_BYTES;
+                                   # same source (unresized phone-camera JPEG),
+                                   # 5MB was routinely too low for modern phones
 MAX_BACKUP_BYTES = 25 * MB        # full budget export ZIP (JSON-in-ZIP, small)
 
 _CHUNK = 64 * 1024
