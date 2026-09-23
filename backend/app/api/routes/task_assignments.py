@@ -189,7 +189,7 @@ async def get_daily_progress(
 
 @router.post("/proof-upload")
 async def upload_gig_proof(
-    file: UploadFile = File(..., description="Proof image (JPEG, PNG, WebP). Max 5MB."),
+    file: UploadFile = File(..., description="Proof image (JPEG, PNG, WebP). Max 15MB."),
     current_user: User = Depends(get_current_user),
 ):
     """Upload a proof image for a gig. Returns the URL to store on the assignment.

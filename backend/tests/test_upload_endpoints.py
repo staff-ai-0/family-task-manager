@@ -28,6 +28,20 @@ async def test_proof_upload_accepts_real_jpeg(client, auth_headers):
 
 
 @pytest.mark.asyncio
+async def test_proof_upload_rejects_oversized_file(client, auth_headers):
+    """An over-cap proof photo must be refused with 413 before it is sniffed
+    or written to disk. Content-type header check happens first, so the body
+    itself need not be a real JPEG — only large enough to blow the cap."""
+    oversized = b"\xff\xd8\xff" + b"\x00" * (15 * 1024 * 1024 + 1)
+    files = {"file": ("big.jpg", oversized, "image/jpeg")}
+    resp = await client.post(
+        "/api/task-assignments/proof-upload", files=files, headers=auth_headers
+    )
+    assert resp.status_code == 413, resp.text
+    assert "too large" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
 async def test_csv_import_rejects_oversized_file(client, auth_headers):
     """An over-cap CSV must be refused before the whole body is buffered.
 

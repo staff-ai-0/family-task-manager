@@ -879,11 +879,21 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
                 const fd = new FormData();
                 fd.append("file", fileInput.files[0]);
                 const r = await fetch("/api/assignments/proof-upload", { method: "POST", body: fd });
-                if (!r.ok) throw new Error(`Upload failed: ${r.status}`);
+                if (!r.ok) {
+                    if (statusEl) {
+                        statusEl.textContent = r.status === 413
+                            ? (es ? "📸 Foto muy pesada (máx 15MB). Prueba con menor resolución." : "📸 Photo too large (max 15MB). Try a lower resolution.")
+                            : r.status === 415
+                            ? (es ? "Formato no soportado (usa JPEG, PNG o WebP)." : "Unsupported format (use JPEG, PNG, or WebP).")
+                            : (es ? `Error al subir (${r.status}).` : `Upload failed (${r.status}).`);
+                        statusEl.classList.add("text-red-600");
+                    }
+                    return;
+                }
                 imageUrl = (await r.json()).proof_image_url ?? "";
-            } catch (err) {
+            } catch {
                 if (statusEl) {
-                    statusEl.textContent = es ? `Error al subir: ${err}` : `Upload failed: ${err}`;
+                    statusEl.textContent = es ? "Error de red al subir la foto." : "Network error uploading photo.";
                     statusEl.classList.add("text-red-600");
                 }
                 return;
