@@ -191,7 +191,19 @@ Rules:
 - iva_cents: look for "IVA", "Tax", "Impuesto" line; extract as POSITIVE cents
 - Per item: extract qty when explicit ("2 x", "2 PZA"), brand when present
 - Set confidence based on image clarity and readability
-- If you cannot read the receipt at all, set confidence to 0 and all values to null"""
+- If you cannot read the receipt at all, set confidence to 0 and all values to null
+- Output compact JSON on a single line: no indentation, no newlines, no spaces between tokens"""
+
+
+# Output budget for the extraction JSON. Each item costs ~70 tokens (raw_text
+# roughly doubles it), so the old 4096 capped a receipt at ~48 items: a long
+# supermarket ticket truncated mid-item and surfaced as "Could not parse"
+# (prod 2026-09-26). 16384 fits ~200 items; measured 150 items in ~10.4k
+# tokens / ~40s on gemini-2.5-flash.
+RECEIPT_MAX_TOKENS = 16384
+# Per-request read window for that budget. The shared 60s LLM_TIMEOUT is too
+# tight for a long receipt; Cloudflare drops the origin at 100s, so stay under.
+RECEIPT_TIMEOUT_SECONDS = 90.0
 
 
 async def _get_family_model(family_id: UUID) -> str:
@@ -285,7 +297,6 @@ async def scan_receipt(
     if "gemini" in active_model.lower():
         extra = {"thinking_config": {"thinking_budget": 0}}
 
-    # max_tokens sized for JSON output only; 4096 fits ~80 line items.
     # response_format json_object forces a single JSON value, eliminating
     # the "Here is the JSON:" prose-wrapper failure mode.
     try:
@@ -296,7 +307,8 @@ async def scan_receipt(
         completion = await run_in_threadpool(
             lambda: client.chat.completions.create(
                 model=active_model,
-                max_tokens=4096,
+                max_tokens=RECEIPT_MAX_TOKENS,
+                timeout=RECEIPT_TIMEOUT_SECONDS,
                 response_format={"type": "json_object"},
                 messages=[
                     {
@@ -326,14 +338,30 @@ async def scan_receipt(
             f"(finish_reason={completion.choices[0].finish_reason!r})."
         )
 
+    finish_reason = completion.choices[0].finish_reason
+    if finish_reason == "length":
+        # The JSON was cut off mid-item: the receipt has more lines than the
+        # output budget. Retrying the same image cannot succeed.
+        logger.warning(
+            "receipt scan truncated at max_tokens=%s (%d chars returned)",
+            RECEIPT_MAX_TOKENS, len(response_text),
+        )
+        raise ValidationError(
+            "Receipt too long to read in one scan. "
+            "Photograph it in sections or enter the total manually."
+        )
+
     # Parse JSON from response (handle potential markdown wrapping)
     json_match = re.search(r'\{[\s\S]*\}', response_text)
-    if not json_match:
-        raise ValidationError("Could not parse receipt data from image")
-
     try:
-        data = json.loads(json_match.group())
+        data = json.loads(json_match.group()) if json_match else None
     except json.JSONDecodeError:
+        data = None
+    if not isinstance(data, dict):
+        logger.warning(
+            "unparseable receipt scan (finish_reason=%r): %.300s",
+            finish_reason, response_text,
+        )
         raise ValidationError("Could not parse receipt data from image")
 
     # Build ScannedReceipt

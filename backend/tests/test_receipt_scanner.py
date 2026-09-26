@@ -148,6 +148,53 @@ class TestScanReceipt:
                 with pytest.raises(ValidationError, match="LiteLLM failed|budget exceeded"):
                     await scan_receipt(b"fake-image", "image/jpeg")
 
+    async def _scan_with_mocked_client(self, mock_client):
+        with patch(
+            "app.services.budget.receipt_scanner_service.settings"
+        ) as mock_settings:
+            mock_settings.LITELLM_API_KEY = "sk-fake"
+            mock_settings.LITELLM_API_BASE = "http://10.1.0.99:4000"
+            with patch("app.core.llm.settings", mock_settings), patch(
+                "app.core.llm.OpenAI"
+            ) as mock_openai:
+                mock_openai.return_value = mock_client
+                return await scan_receipt(b"fake-image", "image/jpeg")
+
+    @pytest.mark.asyncio
+    async def test_long_receipt_gets_output_budget_and_timeout_for_it(self):
+        """Prod 2026-09-26: a long supermarket receipt ran out of the old
+        4096-token budget (~48 items) and failed as "Could not parse". The
+        budget must fit ~150+ items, with a read window that lets the model
+        finish producing them (below Cloudflare's 100s origin cap)."""
+        from app.services.budget.receipt_scanner_service import (
+            RECEIPT_MAX_TOKENS,
+            RECEIPT_TIMEOUT_SECONDS,
+        )
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = self._mock_openai_response(
+            '{"total_amount": -100, "confidence": 0.9}'
+        )
+        await self._scan_with_mocked_client(mock_client)
+
+        kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert kwargs["max_tokens"] == RECEIPT_MAX_TOKENS >= 16384
+        assert 60 < kwargs["timeout"] == RECEIPT_TIMEOUT_SECONDS < 100
+
+    @pytest.mark.asyncio
+    async def test_truncated_output_says_receipt_too_long(self):
+        """finish_reason=length means the JSON was cut off mid-item; say so
+        instead of the generic parse error, which reads like a bad photo."""
+        from app.core.exceptions import ValidationError
+
+        completion = self._mock_openai_response('{"items": [{"name": "LECHE", "qty"')
+        completion.choices[0].finish_reason = "length"
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = completion
+
+        with pytest.raises(ValidationError, match="too long"):
+            await self._scan_with_mocked_client(mock_client)
+
     @pytest.mark.asyncio
     async def test_scan_receipt_pdf_is_rasterized_to_png(self):
         """PDF input triggers _pdf_first_page_to_png, downstream sees image/png data URI."""
