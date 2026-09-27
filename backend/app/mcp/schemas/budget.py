@@ -6,7 +6,7 @@ compared to the full app schemas (no family_id, no read-only fields).
 The adapters translate these to the real app service schemas before
 calling into the service layer.
 """
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -228,3 +228,13 @@ class CustomReportCreate(BaseModel):
 class CustomReportUpdate(BaseModel):
     name: Optional[str] = None
     config: Optional[dict] = None
+
+
+# ── spending report (read-only custom op) ─────────────────────────────────
+
+class SpendingReportQuery(BaseModel):
+    """Arguments for budget_spending_report. Dates are ISO ``YYYY-MM-DD``;
+    both default to the current calendar month."""
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    group_by: Literal["category", "group", "payee"] = "category"

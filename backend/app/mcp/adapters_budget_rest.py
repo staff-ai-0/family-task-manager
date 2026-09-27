@@ -566,3 +566,57 @@ def _ser_draft(d) -> dict:
         "confidence": d.confidence,
         "scanned_data": d.scanned_data,
     }
+
+
+# ── spending report (read-only custom op) ──────────────────────────────────
+
+class SpendingReportAdapter(ServiceAdapter):
+    """Aggregated spending for a date range, via ReportService.
+
+    Exists so Jarvis can answer "how much did we spend on X this month?" in
+    one call instead of listing every transaction and summing them itself.
+    Amounts are converted to positive currency units (spent), largest first;
+    categories with net inflow (income) are left out of the spending view.
+
+    Does not read ``families`` (the external /mcp role has no grant there):
+    the caller passes dates, defaulting to the current UTC month.
+    """
+
+    _ROW_KEYS = {
+        "category": ("categories", "category_name", "category"),
+        "group": ("groups", "group_name", "group"),
+        "payee": ("payees", "payee_name", "payee"),
+    }
+
+    async def call_custom(self, op: str, ctx: McpContext, args: dict) -> dict:
+        from app.core.time_utils import utc_today
+        from app.services.budget.report_service import ReportService
+
+        if op != "report":
+            raise ValueError(f"Unknown custom op: {op}")
+        today = utc_today()
+        start = _parse_date(args["start_date"]) if args.get("start_date") else today.replace(day=1)
+        end = _parse_date(args["end_date"]) if args.get("end_date") else today
+        group_by = args.get("group_by") or "category"
+        list_key, name_key, out_key = self._ROW_KEYS[group_by]
+
+        report = await ReportService.get_spending_report(
+            ctx.db, ctx.family_id, start, end, group_by=group_by
+        )
+        rows = []
+        for r in report[list_key]:
+            amount = int(r["amount"])
+            if amount >= 0:
+                continue
+            row = {out_key: r[name_key], "spent": -amount / 100,
+                   "transactions": int(r["transaction_count"])}
+            if group_by == "category":
+                row["group"] = r["group_name"]
+            rows.append(row)
+        rows.sort(key=lambda x: x["spent"], reverse=True)
+        return {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            list_key: rows,
+            "total_spent": round(sum(x["spent"] for x in rows), 2),
+        }
