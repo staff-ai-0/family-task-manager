@@ -15,7 +15,7 @@ as the receipt scanner) for centralized spend tracking. Each call:
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, List
 from uuid import UUID
 
@@ -32,11 +32,13 @@ from app.mcp.confirm import is_destructive
 from app.mcp.context import McpContext, use_context
 from app.mcp.openai_bridge import mcp_tools_to_openai
 from app.mcp.server import server as mcp_server
+from app.models.family import Family
 from app.models.jarvis_message import JarvisMessage
 from app.models.kid_pet import KidPet
 from app.models.task_assignment import TaskAssignment, AssignmentStatus
 from app.models.user import User, UserRole
 from app.services.analytics_service import AnalyticsService
+from app.services.bank_service import _safe_zoneinfo
 from app.services.guide_context import build_support_context
 from app.services.jarvis_pending_action_service import PendingActionService
 from app.core.time_utils import utc_today
@@ -50,9 +52,12 @@ CHAT_MODEL = settings.JARVIS_MODEL or RECEIPT_MODEL
 
 SYSTEM_BASE = (
     "You are Jarvis, a calm, practical family-routines copilot. You help "
-    "the parent see what's going on across chores, gigs, calendar, and "
-    "kids' moods. Be concise — 2-4 sentences, then a clear next step. "
-    "Avoid platitudes. If you don't know, say so."
+    "the parent see what's going on across chores, gigs, calendar, meals, "
+    "shopping, the family budget, and kids' moods. Be concise — 2-4 "
+    "sentences, then a clear next step. Avoid platitudes. The snapshot below "
+    "is partial: before saying you don't know, look it up with your tools "
+    "(e.g. budget_spending_report for any spending question). If the tools "
+    "can't answer either, say so."
 )
 
 # Teen persona: a self-scoped coach with NO tools and NO family-wide visibility.
@@ -148,18 +153,38 @@ _EMPTY_REPLY = {
 
 
 def _build_system(
-    context_block: str, preferred_lang: str, base: str = SYSTEM_BASE
+    context_block: str,
+    preferred_lang: str,
+    base: str = SYSTEM_BASE,
+    today: date | None = None,
 ) -> str:
     """System prompt with a hard language directive so Jarvis replies in the
-    user's app language from the first turn (not just after they switch)."""
+    user's app language from the first turn (not just after they switch).
+
+    ``today`` anchors "this month" / "next week": without it the model guessed
+    the date (a 2026-09-20 meal plan came out as "December 4th to 10th")."""
     lang_name = LANG_NAMES.get(preferred_lang, "English")
+    date_line = (
+        f"\n\nToday is {today.strftime('%A')} {today.isoformat()}."
+        if today else ""
+    )
     return (
         base
         + f"\n\nIMPORTANT: Always respond in {lang_name}, regardless of the "
         "language of the reference material below or earlier turns."
+        + date_line
         + "\n\n"
         + context_block
     )
+
+
+async def _family_today(db: AsyncSession, family_id: UUID) -> date:
+    """Today's date in the family's own timezone (not UTC — a Mexico City
+    evening is already tomorrow in UTC, and month-end would flip)."""
+    tz_name = (
+        await db.execute(select(Family.timezone).where(Family.id == family_id))
+    ).scalar_one_or_none()
+    return datetime.now(_safe_zoneinfo(tz_name)).date()
 
 
 MAX_HISTORY_TURNS = 12
@@ -464,7 +489,8 @@ class JarvisService:
                 {
                     "role": "system",
                     "content": _build_system(
-                        context_block, preferred_lang, base=SYSTEM_SUPPORT
+                        context_block, preferred_lang, base=SYSTEM_SUPPORT,
+                        today=await _family_today(db, family_id),
                     ),
                 }
             ]
@@ -628,6 +654,7 @@ class JarvisService:
                         context_block,
                         preferred_lang,
                         base=SYSTEM_TEEN if teen else SYSTEM_BASE,
+                        today=await _family_today(db, family_id),
                     ),
                 }
             ]
@@ -875,6 +902,7 @@ class JarvisService:
                     context_block,
                     preferred_lang,
                     base=SYSTEM_TEEN if teen else SYSTEM_BASE,
+                    today=await _family_today(db, family_id),
                 ),
             }
         ]

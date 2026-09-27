@@ -81,8 +81,10 @@ def _register_budget_rest() -> None:
         SavedFilterAdapter,
         CustomReportAdapter,
         ReceiptDraftAdapter,
+        SpendingReportAdapter,
     )
     from app.mcp.schemas.budget import (
+        SpendingReportQuery,
         CategoryGroupCreate, CategoryGroupUpdate,
         CategoryCreate, CategoryUpdate,
         PayeeCreate, PayeeUpdate,
@@ -95,6 +97,24 @@ def _register_budget_rest() -> None:
         SavedFilterCreate, SavedFilterUpdate,
         CustomReportCreate, CustomReportUpdate,
     )
+
+    if not _has_spec("budget", "spending"):
+        REGISTRY.append(EntitySpec(
+            name="spending", domain="budget",
+            ops=frozenset({"report"}),
+            create_schema=dict, update_schema=dict,
+            destructive_ops=frozenset(),
+            adapter=SpendingReportAdapter(),
+            summarize=lambda op, p: f"spending report {p.get('start_date', '')}..{p.get('end_date', '')}",
+            op_descriptions=(
+                ("report",
+                 "Total money SPENT per category (default), category group, or payee "
+                 "for a date range (default: current month). Use this for any "
+                 "'how much did we spend on X' question — e.g. food/comida spans "
+                 "groceries and restaurant categories, so sum every matching row."),
+            ),
+            custom_op_schemas=(("report", SpendingReportQuery),),
+        ))
 
     if not _has_spec("budget", "category_group"):
         REGISTRY.append(EntitySpec(
