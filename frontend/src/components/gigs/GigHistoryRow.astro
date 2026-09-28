@@ -1,0 +1,92 @@
+---
+/**
+ * One completed gig claim inside a History job group on /parent/gigs:
+ * who did it, when, what it paid, the kid's proof, the parent's note, the
+ * comment thread and "ask via DM". The group card (title, ×N, total, Repost)
+ * lives in the page; this row is reused for the latest and the older cycles.
+ */
+interface Props {
+    c: any;
+    lang: "en" | "es";
+}
+const { c, lang } = Astro.props;
+const es = lang === "es";
+
+const fmtDay = (iso: string | null) =>
+    iso
+        ? new Date(iso).toLocaleDateString(es ? "es-MX" : "en-US", {
+              month: "short",
+              day: "numeric",
+          })
+        : "—";
+---
+
+<div data-history-card data-claimer={c.claimer_name ?? ""}
+    class={`bg-brand-cream rounded-xl p-3 border ${
+        c.status === "approved" ? "border-emerald-200"
+        : c.status === "rejected" ? "border-red-200 opacity-70"
+        : "border-sky-200"
+    }`}>
+    <div class="flex items-baseline justify-between gap-2">
+        <p class="font-bold text-brand-ink text-sm">{c.claimer_name}</p>
+        <span class={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+            c.status === "approved" ? "bg-emerald-100 text-emerald-700"
+            : c.status === "rejected" ? "bg-red-100 text-red-700"
+            : "bg-sky-100 text-sky-700"
+        }`}>
+            {c.status === "approved"
+                ? `✓ ${es ? "Aprobada" : "Approved"}`
+                : c.status === "rejected"
+                ? (es ? "Rechazada" : "Rejected")
+                : (es ? "Por aprobar" : "Awaiting approval")}
+        </span>
+    </div>
+    <p class="text-[11px] text-brand-ink-soft mt-1">
+        {es ? "Completada" : "Completed"}: {fmtDay(c.completed_at)}
+        {c.approved_at && ` · ${es ? "aprobada" : "approved"} ${fmtDay(c.approved_at)}`}
+        {" · "}
+        <span class="font-bold text-emerald-700">
+            ${c.points_awarded ?? c.gig_points} MXN
+        </span>
+    </p>
+    {c.proof_text && (
+        <p class="text-xs text-brand-ink mt-2 bg-brand-cream-deep rounded-lg p-2 whitespace-pre-wrap">
+            📝 {c.proof_text}
+        </p>
+    )}
+    {c.proof_image_url && (
+        <a href={c.proof_image_url} target="_blank"
+           class="inline-block text-xs text-violet-700 underline mt-2">
+            📷 {es ? "Ver foto" : "View photo"}
+        </a>
+    )}
+    {c.approval_notes && (
+        <p class="text-[11px] text-brand-ink-soft italic mt-1.5">
+            💬 {c.approval_notes}
+        </p>
+    )}
+    <div class="flex items-center gap-3 mt-2">
+        <details class="flex-1" data-comments data-claim-id={c.id}>
+            <summary class="cursor-pointer text-xs font-semibold text-violet-700 select-none">
+                💬 {es ? "Comentarios" : "Comments"}{c.comment_count ? ` (${c.comment_count})` : ""}
+            </summary>
+            <div data-comments-list class="mt-2 space-y-1.5"></div>
+            <form data-comment-form class="mt-2 flex gap-2">
+                <input name="body" required maxlength="1000"
+                    placeholder={es ? "Pregúntale o felicítalo…" : "Ask or congratulate…"}
+                    class="flex-1 px-3 py-2 rounded-xl border border-brand-ink/20 text-sm bg-brand-cream-deep focus:ring-2 focus:ring-violet-400 outline-none" />
+                <button type="submit" class="px-3 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700">
+                    {es ? "Enviar" : "Send"}
+                </button>
+            </form>
+        </details>
+        <form method="POST" class="flex-shrink-0">
+            <input type="hidden" name="action" value="dm-kid" />
+            <input type="hidden" name="kid_id" value={c.claimed_by} />
+            <input type="hidden" name="gig_title" value={c.gig_title} />
+            <button type="submit" class="text-xs font-semibold text-indigo-700 underline">
+                {es ? "Preguntar por DM" : "Ask via DM"}
+            </button>
+        </form>
+    </div>
+</div>
