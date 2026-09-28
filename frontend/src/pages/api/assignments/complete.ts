@@ -1,16 +1,31 @@
 import type { APIRoute } from "astro";
 
+import { completeErrorMessage, completeSuccessMessage } from "../../../lib/completeMessages";
+
 /**
- * POST /api/assignments/complete
- * Marks an assignment as completed
+ * POST /api/assignments/complete — marks an assignment completed.
+ *
+ * Two response modes:
+ * - Form posts (default): 302 back to `next` with a flash cookie (legacy
+ *   pages).
+ * - `Accept: application/json` (the swipe deck, UX-C1): JSON
+ *   `{ ok, message, approval_status? }` with the backend's status, so the
+ *   deck can keep a card on failure instead of navigating.
  */
-export const POST: APIRoute = async ({ request, cookies, redirect }) => {
+export const POST: APIRoute = async ({ request, cookies }) => {
+    const wantsJson = (request.headers.get("accept") ?? "").includes("application/json");
+    const json = (status: number, body: Record<string, unknown>) =>
+        new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
     const token = cookies.get("access_token")?.value;
-    
+    const es = (cookies.get("lang")?.value ?? "es") === "es";
+
     if (!token) {
-        return new Response(null, { status: 302, headers: { Location: "/login" } });
+        return wantsJson
+            ? json(401, { ok: false, message: es ? "Inicia sesión de nuevo." : "Please sign in again." })
+            : new Response(null, { status: 302, headers: { Location: "/login" } });
     }
 
+    let returnTo = "/dashboard";
     try {
         const formData = await request.formData();
         const assignmentId = formData.get("assignment_id")?.toString();
@@ -23,14 +38,16 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         // reject protocol-relative (//) and backslashes (browsers normalize
         // "\" to "/" in Location, so "/\evil.com" would become "//evil.com").
         const nextRaw = formData.get("next")?.toString() ?? "";
-        const returnTo =
+        returnTo =
             nextRaw.startsWith("/") && !nextRaw.startsWith("//") && !nextRaw.includes("\\")
                 ? nextRaw
                 : "/dashboard";
 
         if (!assignmentId) {
+            const msg = es ? "Falta la tarea." : "Assignment ID is required";
+            if (wantsJson) return json(400, { ok: false, message: msg });
             const headers = new Headers({ Location: returnTo });
-            headers.append("Set-Cookie", `flash_error=${encodeURIComponent("Assignment ID is required")}; Path=/`);
+            headers.append("Set-Cookie", `flash_error=${encodeURIComponent(msg)}; Path=/`);
             return new Response(null, { status: 302, headers });
         }
 
@@ -44,69 +61,31 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
             body: JSON.stringify({ proof_text: proofText, proof_image_url: proofImageUrl }),
         });
 
-        const headers = new Headers({ Location: returnTo });
-
         if (!response.ok) {
-            // Kid-facing page: never surface the raw backend `detail` (English,
-            // technical). Map known 4xx cases to friendly bilingual copy.
-            const es = (cookies.get("lang")?.value ?? "es") === "es";
             const error = await response.json().catch(() => ({}) as any);
             const detail = typeof error?.detail === "string" ? error.detail : "";
-            let msg: string;
-            if (detail.includes(" / ")) {
-                // Backend already ships bilingual "es / en" copy — pick a side.
-                const [esPart, enPart] = detail.split(" / ");
-                msg = es ? esPart : (enPart ?? esPart);
-            } else if (/cannot be completed/i.test(detail) && /completed/i.test(detail)) {
-                // Double-tap: the first tap already succeeded.
-                msg = es
-                    ? "¡Esa tarea ya estaba registrada! Tus puntos ya cuentan."
-                    : "That task was already saved! Your points are already counted.";
-            } else if (/mandatory/i.test(detail)) {
-                msg = es
-                    ? "Primero termina tus tareas obligatorias (incluye las atrasadas)."
-                    : "Finish your required chores first (including overdue ones).";
-            } else if (/proof text/i.test(detail)) {
-                msg = es
-                    ? "Cuéntanos qué hiciste para enviar este gig."
-                    : "Tell us what you did to submit this gig.";
-            } else if (response.status >= 400 && response.status < 500) {
-                msg = es
-                    ? "No se pudo guardar la tarea. Intenta de nuevo."
-                    : "Couldn't save the task. Please try again.";
-            } else {
-                msg = es
-                    ? "Algo salió mal. Intenta de nuevo en un momento."
-                    : "Something went wrong. Please try again in a moment.";
-            }
+            const msg = completeErrorMessage(response.status, detail, es);
+            if (wantsJson) return json(response.status, { ok: false, message: msg });
+            const headers = new Headers({ Location: returnTo });
             headers.append("Set-Cookie", `flash_error=${encodeURIComponent(msg)}; Path=/`);
-        } else {
-            // Success flash drives the dashboard's confetti + points pulse
-            // ([data-flash-success]) — without it the kid's most frequent
-            // action gives zero feedback.
-            let msg = "🎉";
-            try {
-                const a = await response.json();
-                const es = cookies.get("lang")?.value === "es";
-                const title = (es && a.template_title_es) || a.template_title || "";
-                // approval_status alone is authoritative: auto-approved gigs
-                // (trust streak / AI validation) come back "approved" with
-                // points already credited.
-                const pending = a.approval_status === "pending";
-                msg = pending
-                    ? (es ? `"${title}" enviada para aprobación 🎉` : `"${title}" submitted for approval 🎉`)
-                    : (es ? `¡"${title}" completada! 🎉` : `"${title}" completed! 🎉`);
-            } catch {
-                // keep the bare celebration if the body can't be parsed
-            }
-            headers.append("Set-Cookie", `flash=${encodeURIComponent(msg)}; Path=/; Max-Age=15`);
+            return new Response(null, { status: 302, headers });
         }
 
+        const assignment = await response.json().catch(() => ({}) as any);
+        const msg = completeSuccessMessage(assignment, es);
+        if (wantsJson) {
+            return json(200, { ok: true, message: msg, approval_status: assignment?.approval_status ?? null });
+        }
+        // Success flash drives the page's celebration ([data-flash-success]).
+        const headers = new Headers({ Location: returnTo });
+        headers.append("Set-Cookie", `flash=${encodeURIComponent(msg)}; Path=/; Max-Age=15`);
         return new Response(null, { status: 302, headers });
     } catch (e) {
         console.error("Complete assignment error:", e);
-        const headers = new Headers({ Location: "/dashboard" });
-        headers.append("Set-Cookie", `flash_error=${encodeURIComponent("An error occurred")}; Path=/`);
+        const msg = completeErrorMessage(500, "", es);
+        if (wantsJson) return json(500, { ok: false, message: msg });
+        const headers = new Headers({ Location: returnTo });
+        headers.append("Set-Cookie", `flash_error=${encodeURIComponent(msg)}; Path=/`);
         return new Response(null, { status: 302, headers });
     }
 };
