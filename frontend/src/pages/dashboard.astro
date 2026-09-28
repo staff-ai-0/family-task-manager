@@ -347,9 +347,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         <GigsIntroBanner lang={lang} show={!user.acknowledged_gigs_intro} />
 
         {isKid && (
-            <div class="px-4 pb-2">
-                <EnablePushButton lang={lang} />
-            </div>
+            <EnablePushButton lang={lang} userId={user.id} class="px-4 pb-2" />
         )}
 
         {flash && (

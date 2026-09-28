@@ -14,8 +14,14 @@
  */
 interface Props {
     lang: string;
+    /** Whoever is looking at THIS device right now — gates the daily heal
+     * re-POST to the subscribing user only (shared-device safety, UX-A). */
+    userId: string;
+    /** Optional classes for the root `#push-root` element, so callers don't
+     * need an extra wrapper div just for spacing. */
+    class?: string;
 }
-const { lang } = Astro.props;
+const { lang, userId, class: rootClass } = Astro.props;
 
 const L = lang === "es"
     ? {
@@ -36,7 +42,7 @@ const L = lang === "es"
     };
 ---
 
-<div id="push-root" hidden>
+<div id="push-root" class={rootClass} hidden>
     <button
         id="enable-push-btn"
         type="button"
@@ -49,12 +55,27 @@ const L = lang === "es"
     <span id="push-status" class="text-xs text-brand-ink-soft ml-2" aria-live="polite"></span>
 </div>
 
-<script define:vars={{ L }}>
+<script define:vars={{ L, userId }}>
     const root = document.getElementById("push-root");
     const btn = document.getElementById("enable-push-btn");
     const status = document.getElementById("push-status");
-    const HEAL_KEY = "ftm-push-heal-at";
+    const OWNER_KEY = "ftm-push-owner";
+    const healKeyFor = (uid) => `ftm-push-heal-at:${uid}`;
     let publicKey = null;
+
+    function safeGetItem(key) {
+        try {
+            return localStorage.getItem(key);
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function safeSetItem(key, value) {
+        try {
+            localStorage.setItem(key, value);
+        } catch (_) {}
+    }
 
     function setStatus(msg, color = "text-brand-ink-soft") {
         status.textContent = msg;
@@ -93,10 +114,11 @@ const L = lang === "es"
 
     async function healDaily(sub) {
         try {
-            const last = Number(localStorage.getItem(HEAL_KEY) || "0");
+            const key = healKeyFor(userId);
+            const last = Number(localStorage.getItem(key) || "0");
             if (Date.now() - last < 86400000) return;
             const r = await postSubscription(sub);
-            if (r.ok) localStorage.setItem(HEAL_KEY, String(Date.now()));
+            if (r.ok) localStorage.setItem(key, String(Date.now()));
         } catch (_) {}
     }
 
@@ -130,7 +152,14 @@ const L = lang === "es"
             const existing = await reg.pushManager.getSubscription();
             if (existing) {
                 if (sameKey(existing.options.applicationServerKey, publicKey)) {
-                    await healDaily(existing);
+                    // Shared device: only heal a subscription we know belongs
+                    // to the person currently looking at the screen. A
+                    // current-key subscription with no/other owner marker is
+                    // left alone — pre-branch status quo — and the button
+                    // stays hidden either way.
+                    if (safeGetItem(OWNER_KEY) === userId) {
+                        await healDaily(existing);
+                    }
                     return;
                 }
                 await existing.unsubscribe().catch(() => {});
@@ -161,7 +190,8 @@ const L = lang === "es"
             });
             const r = await postSubscription(sub);
             if (r.ok) {
-                try { localStorage.setItem(HEAL_KEY, String(Date.now())); } catch (_) {}
+                safeSetItem(OWNER_KEY, userId);
+                safeSetItem(healKeyFor(userId), String(Date.now()));
                 setStatus(L.enabled, "text-green-700");
                 btn.setAttribute("data-state", "enabled");
                 btn.hidden = true;
