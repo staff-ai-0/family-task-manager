@@ -394,3 +394,75 @@ async def test_health_reports_raw_prod_style_pair_as_valid(
     assert body["valid_keys"] is True
     assert body["private_key_length"] == len(priv)
     assert body["public_key_length"] == len(pub)
+
+
+# ── Failure reasons + pruning (UX-A) ─────────────────────────────────────────
+# Prod: one Apple endpoint answered 403 on every send for weeks and was never
+# pruned (only 404/410 pruned), and the log never said WHY — pywebpush's
+# exception omits the body because a 4xx requests.Response is falsy.
+import logging
+
+from pywebpush import WebPushException
+
+
+class _FakeResp:
+    """Mimics requests.Response: falsy for 4xx/5xx, exactly like the real one."""
+
+    def __init__(self, status_code: int, text: str):
+        self.status_code = status_code
+        self.text = text
+
+    def __bool__(self) -> bool:
+        return self.status_code < 400
+
+
+async def _add_sub(db_session, user, endpoint: str) -> None:
+    db_session.add(PushSubscription(user_id=user.id, endpoint=endpoint, p256dh="p", auth="a"))
+    await db_session.commit()
+
+
+async def _endpoints(db_session, user) -> list[str]:
+    return list((await db_session.scalars(
+        select(PushSubscription.endpoint).where(PushSubscription.user_id == user.id)
+    )).all())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status,body,pruned", [
+    (410, "", True),
+    (404, "", True),
+    (403, '{"reason":"VapidPkHashMismatch"}', True),
+    (403, "the key in the authorization header does not correspond to the sender that created the subscription", True),
+    (403, '{"reason":"BadJwtToken"}', False),
+    (500, "upstream boom", False),
+])
+async def test_send_prunes_only_dead_or_foreign_key_subscriptions(
+    db_session, test_parent_user, monkeypatch, status, body, pruned,
+):
+    monkeypatch.setattr(app_settings, "VAPID_PRIVATE_KEY", "fake-private")
+    monkeypatch.setattr(app_settings, "VAPID_PUBLIC_KEY", "fake-public")
+    endpoint = "https://web.push.apple.com/ENDPOINT-X"
+    await _add_sub(db_session, test_parent_user, endpoint)
+
+    exc = WebPushException("Push failed", response=_FakeResp(status, body))
+    with patch("app.services.push_service.webpush", side_effect=exc):
+        sent = await PushService.send_to_user(db_session, test_parent_user.id, {"title": "t"})
+
+    assert sent == 0
+    assert (endpoint in await _endpoints(db_session, test_parent_user)) is (not pruned)
+
+
+@pytest.mark.asyncio
+async def test_send_failure_logs_the_provider_reason(
+    db_session, test_parent_user, monkeypatch, caplog,
+):
+    monkeypatch.setattr(app_settings, "VAPID_PRIVATE_KEY", "fake-private")
+    monkeypatch.setattr(app_settings, "VAPID_PUBLIC_KEY", "fake-public")
+    await _add_sub(db_session, test_parent_user, "https://web.push.apple.com/LOG-ME")
+
+    exc = WebPushException("Push failed", response=_FakeResp(403, '{"reason":"BadJwtToken"}'))
+    with caplog.at_level(logging.WARNING, logger="app.services.push_service"):
+        with patch("app.services.push_service.webpush", side_effect=exc):
+            await PushService.send_to_user(db_session, test_parent_user.id, {"title": "t"})
+
+    assert "reason=BadJwtToken" in caplog.text

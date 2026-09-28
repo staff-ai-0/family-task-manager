@@ -2,7 +2,7 @@
 
 pywebpush is synchronous; wrap each send in asyncio.to_thread so the
 gig-submission request path never blocks on Apple/Google push gateway
-latency. Dead endpoints (HTTP 410 Gone) are pruned automatically.
+latency. Dead endpoints (404/410, or 403 for a subscription made with another VAPID key) are pruned automatically.
 
 If VAPID keys are not configured, sends are skipped with a warning so
 local/dev environments work without push setup.
@@ -40,6 +40,38 @@ def _derive_public_key(private_key: str) -> str:
         serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
     )
     return base64.urlsafe_b64encode(point).rstrip(b"=").decode()
+
+
+# 403 bodies that mean "this subscription was made with a different VAPID
+# key" — the subscription is unusable forever, same as 404/410. Any other 403
+# (e.g. Apple BadJwtToken) is OUR bug, not the device's: log it, never prune,
+# or one bad deploy would silently wipe every device.
+_KEY_MISMATCH_MARKERS = ("VapidPkHashMismatch", "does not correspond")
+
+
+def _push_failure_reason(exc: WebPushException) -> str:
+    """Provider's reason for a failed send: Apple's JSON ``reason`` when the
+    body parses, else the first 200 chars of the body (FCM sends text)."""
+    resp = getattr(exc, "response", None)
+    if resp is None:
+        return ""
+    try:
+        text = resp.text or ""
+    except Exception:
+        return ""
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        return text[:200]
+    if isinstance(data, dict) and data.get("reason"):
+        return str(data["reason"])
+    return text[:200]
+
+
+def _is_dead_subscription(status: int | None, reason: str) -> bool:
+    if status in (404, 410):
+        return True
+    return status == 403 and any(m in reason for m in _KEY_MISMATCH_MARKERS)
 
 
 class PushService:
@@ -162,14 +194,17 @@ class PushService:
                 sent += 1
             except WebPushException as exc:
                 status = getattr(exc.response, "status_code", None)
-                if status in (404, 410):
+                reason = _push_failure_reason(exc)
+                if _is_dead_subscription(status, reason):
                     dead_endpoints.append(sub.endpoint)
+                    log.info(
+                        "pruning push endpoint %s (status=%s reason=%s)",
+                        sub.endpoint[:60], status, reason,
+                    )
                 else:
                     log.warning(
-                        "push send to %s failed (status=%s): %s",
-                        sub.endpoint[:60],
-                        status,
-                        exc,
+                        "push send to %s failed (status=%s reason=%s): %s",
+                        sub.endpoint[:60], status, reason, exc,
                     )
             except Exception:
                 log.exception("unexpected push send failure for %s", sub.endpoint[:60])
