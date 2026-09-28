@@ -4,6 +4,8 @@ import DifficultyChip from "../../components/DifficultyChip.astro";
 import { apiFetch } from "../../lib/api";
 import { gigTerm } from "../../lib/gigTerm";
 import ModuleTour from "@components/ModuleTour.astro";
+import GigHistoryRow from "../../components/gigs/GigHistoryRow.astro";
+import { groupGigHistory } from "../../lib/gigHistory";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -28,12 +30,6 @@ const gt = gigTerm(familyRes.data?.gig_term ?? "gig", lang);
 // include_inactive=true above (not "false") so closed gigs can still be
 // reposted from History; activeOfferings filters back to the visible list.
 const activeOfferings = offerings.filter((item: any) => (item.offering ?? item).is_active);
-const offeringById = new Map(
-    offerings.map((item: any) => {
-        const o = item.offering ?? item;
-        return [o.id, o];
-    }),
-);
 // Claim approvals now live in the unified /parent/approvals queue — keep only the
 // pending count here for the "review" link so there is a single approval surface.
 const pendingCount = Array.isArray(pendingRes.data) ? pendingRes.data.length : 0;
@@ -47,22 +43,11 @@ const history: any[] = (Array.isArray(claimsRes.data) ? claimsRes.data : [])
     .filter((c: any) => c.status !== "claimed")
     .sort((a: any, b: any) => String(claimStamp(b)).localeCompare(String(claimStamp(a))));
 const historyKids = [...new Set(history.map((c: any) => c.claimer_name).filter(Boolean))] as string[];
-const seenGigIds = new Set<string>();
-const historyEnriched = history.map((c: any) => {
-    const isFirstForGig = !seenGigIds.has(c.gig_id);
-    seenGigIds.add(c.gig_id);
-    return {
-        ...c,
-        repostOffering: isFirstForGig ? (offeringById.get(c.gig_id) ?? null) : null,
-    };
-});
-const fmtDay = (iso: string | null) =>
-    iso
-        ? new Date(iso).toLocaleDateString(lang === "es" ? "es-MX" : "en-US", {
-              month: "short",
-              day: "numeric",
-          })
-        : "—";
+// One card per JOB, not per claim: every repost is a new offering (the claim
+// model allows one approved claim per kid per offering), so grouping by
+// gig_id listed every cycle separately and gave each its own Repost button —
+// the "clogged history" report (2026-09-28). See lib/gigHistory.ts.
+const historyGroups = groupGigHistory(history, offerings);
 
 // "Ask about this gig" → find/create the 1:1 DM thread with the kid and
 // jump into it with a prefilled question quoting the gig.
@@ -317,91 +302,44 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     </div>
                 ) : (
                     <div class="space-y-2">
-                        {historyEnriched.map((c: any) => (
-                            <div data-history-card data-claimer={c.claimer_name ?? ""}
-                                class={`bg-brand-cream rounded-2xl p-4 border shadow-[var(--shadow-card)] ${
-                                    c.status === "approved" ? "border-emerald-200"
-                                    : c.status === "rejected" ? "border-red-200 opacity-70"
-                                    : "border-sky-200"
-                                }`}>
-                                <div class="flex items-baseline justify-between gap-2">
-                                    <p class="font-bold text-brand-ink text-sm">
-                                        {c.claimer_name} · {c.gig_title}
-                                    </p>
-                                    <span class={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                                        c.status === "approved" ? "bg-emerald-100 text-emerald-700"
-                                        : c.status === "rejected" ? "bg-red-100 text-red-700"
-                                        : "bg-sky-100 text-sky-700"
-                                    }`}>
-                                        {c.status === "approved"
-                                            ? `✓ ${lang === "es" ? "Aprobada" : "Approved"}`
-                                            : c.status === "rejected"
-                                            ? (lang === "es" ? "Rechazada" : "Rejected")
-                                            : (lang === "es" ? "Por aprobar" : "Awaiting approval")}
+                        {historyGroups.map((g) => (
+                            <div data-history-group
+                                class="bg-brand-cream rounded-2xl p-3 border border-brand-ink/10 shadow-[var(--shadow-card)]">
+                                <div class="flex items-baseline justify-between gap-2 px-1">
+                                    <p class="font-extrabold text-brand-ink text-sm">{g.title}</p>
+                                    <span class="text-[11px] text-brand-ink-soft whitespace-nowrap">
+                                        {g.count > 1 && <span class="font-bold">×{g.count} · </span>}
+                                        <span class="font-bold text-emerald-700">${g.totalPaid} MXN</span>
                                     </span>
                                 </div>
-                                <p class="text-[11px] text-brand-ink-soft mt-1">
-                                    {lang === "es" ? "Completada" : "Completed"}: {fmtDay(c.completed_at)}
-                                    {c.approved_at && ` · ${lang === "es" ? "aprobada" : "approved"} ${fmtDay(c.approved_at)}`}
-                                    {" · "}
-                                    <span class="font-bold text-emerald-700">
-                                        ${c.points_awarded ?? c.gig_points} MXN
-                                    </span>
-                                </p>
-                                {c.proof_text && (
-                                    <p class="text-xs text-brand-ink mt-2 bg-brand-cream-deep rounded-lg p-2 whitespace-pre-wrap">
-                                        📝 {c.proof_text}
-                                    </p>
+                                <div class="mt-2">
+                                    <GigHistoryRow c={g.latest} lang={lang} />
+                                </div>
+                                {g.count > 1 && (
+                                    <details class="mt-2" data-history-older>
+                                        <summary class="cursor-pointer text-xs font-semibold text-brand-ink-soft px-1 select-none">
+                                            {lang === "es" ? `Veces anteriores (${g.count - 1})` : `Earlier times (${g.count - 1})`}
+                                        </summary>
+                                        <div class="mt-2 space-y-2">
+                                            {g.claims.slice(1).map((c: any) => <GigHistoryRow c={c} lang={lang} />)}
+                                        </div>
+                                    </details>
                                 )}
-                                {c.proof_image_url && (
-                                    <a href={c.proof_image_url} target="_blank"
-                                       class="inline-block text-xs text-violet-700 underline mt-2">
-                                        📷 {lang === "es" ? "Ver foto" : "View photo"}
-                                    </a>
-                                )}
-                                {c.approval_notes && (
-                                    <p class="text-[11px] text-brand-ink-soft italic mt-1.5">
-                                        💬 {c.approval_notes}
-                                    </p>
-                                )}
-                                {c.repostOffering && !c.repostOffering.is_active && (
+                                {g.repostOffering && (
                                     <button
                                         class="duplicate-gig-btn w-full mt-2 py-2 text-sm font-semibold text-indigo-700 bg-indigo-100 rounded-xl hover:bg-indigo-200 transition-colors"
-                                        data-title={c.repostOffering.title}
-                                        data-description={c.repostOffering.description ?? ""}
-                                        data-points={c.repostOffering.points}
-                                        data-difficulty={c.repostOffering.difficulty ?? 1}
-                                        data-category={c.repostOffering.category ?? "other"}
-                                        data-allow-multiple={c.repostOffering.allow_multiple ? "1" : "0"}
-                                        data-payout-cadence={c.repostOffering.payout_cadence ?? "immediate"}
+                                        data-repost="1"
+                                        data-title={g.title}
+                                        data-description={g.repostOffering.description ?? ""}
+                                        data-points={g.repostOffering.points}
+                                        data-difficulty={g.repostOffering.difficulty ?? 1}
+                                        data-category={g.repostOffering.category ?? "other"}
+                                        data-allow-multiple={g.repostOffering.allow_multiple ? "1" : "0"}
+                                        data-payout-cadence={g.repostOffering.payout_cadence ?? "immediate"}
                                     >
                                         {lang === "es" ? `↻ Repostar ${gt.one}` : `↻ Repost this ${gt.one}`}
                                     </button>
                                 )}
-                                <div class="flex items-center gap-3 mt-2">
-                                    <details class="flex-1" data-comments data-claim-id={c.id}>
-                                        <summary class="cursor-pointer text-xs font-semibold text-violet-700 select-none">
-                                            💬 {lang === "es" ? "Comentarios" : "Comments"}{c.comment_count ? ` (${c.comment_count})` : ""}
-                                        </summary>
-                                        <div data-comments-list class="mt-2 space-y-1.5"></div>
-                                        <form data-comment-form class="mt-2 flex gap-2">
-                                            <input name="body" required maxlength="1000"
-                                                placeholder={lang === "es" ? "Pregúntale o felicítalo…" : "Ask or congratulate…"}
-                                                class="flex-1 px-3 py-2 rounded-xl border border-brand-ink/20 text-sm bg-brand-cream-deep focus:ring-2 focus:ring-violet-400 outline-none" />
-                                            <button type="submit" class="px-3 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-700">
-                                                {lang === "es" ? "Enviar" : "Send"}
-                                            </button>
-                                        </form>
-                                    </details>
-                                    <form method="POST" class="flex-shrink-0">
-                                        <input type="hidden" name="action" value="dm-kid" />
-                                        <input type="hidden" name="kid_id" value={c.claimed_by} />
-                                        <input type="hidden" name="gig_title" value={c.gig_title} />
-                                        <button type="submit" class="text-xs font-semibold text-indigo-700 underline">
-                                            {lang === "es" ? "Preguntar por DM" : "Ask via DM"}
-                                        </button>
-                                    </form>
-                                </div>
                             </div>
                         ))}
                     </div>
@@ -569,9 +507,17 @@ document.querySelectorAll(".duplicate-gig-btn").forEach(btn => {
         // clear explicitly so the submit handler's `gigId ? PUT : POST`
         // branch takes the create (POST) path.
         editIdInput.value = "";
-        const titleInput = document.getElementById("f-title") as HTMLInputElement;
-        titleInput.value = titleInput.value + (lang === "es" ? " (copia)" : " (copy)");
-        openModal(lang === "es" ? `Duplicar ${termOne}` : `Duplicate ${termOne}`);
+        // Repost (History) posts the SAME job again: keep its title, or every
+        // cycle becomes "X (copia)" and History can't tell they're one job.
+        // Duplicate (active card) makes a variant, so it keeps the suffix.
+        const isRepost = (btn as HTMLElement).dataset.repost === "1";
+        if (!isRepost) {
+            const titleInput = document.getElementById("f-title") as HTMLInputElement;
+            titleInput.value = titleInput.value + (lang === "es" ? " (copia)" : " (copy)");
+        }
+        openModal(isRepost
+            ? (lang === "es" ? `Repostar ${termOne}` : `Repost ${termOne}`)
+            : (lang === "es" ? `Duplicar ${termOne}` : `Duplicate ${termOne}`));
     });
 });
 
@@ -675,8 +621,18 @@ document.querySelectorAll(".archive-gig-btn").forEach(btn => {
 const kidFilter = document.getElementById("history-kid-filter") as HTMLSelectElement | null;
 kidFilter?.addEventListener("change", () => {
     const who = kidFilter.value;
-    document.querySelectorAll<HTMLElement>("[data-history-card]").forEach((card) => {
-        card.classList.toggle("hidden", Boolean(who) && card.dataset.claimer !== who);
+    // Rows are per claim; a job group hides when none of its rows match, and
+    // opens its "earlier times" so a match on an older cycle is visible.
+    document.querySelectorAll<HTMLElement>("[data-history-group]").forEach((group) => {
+        let visible = 0;
+        group.querySelectorAll<HTMLElement>("[data-history-card]").forEach((card) => {
+            const hide = Boolean(who) && card.dataset.claimer !== who;
+            card.classList.toggle("hidden", hide);
+            if (!hide) visible++;
+        });
+        group.classList.toggle("hidden", visible === 0);
+        const older = group.querySelector<HTMLDetailsElement>("details[data-history-older]");
+        if (older && who) older.open = true;
     });
 });
 
