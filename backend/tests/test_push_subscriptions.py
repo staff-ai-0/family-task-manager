@@ -439,9 +439,39 @@ async def _endpoints(db_session, user) -> list[str]:
 async def test_send_prunes_only_dead_or_foreign_key_subscriptions(
     db_session, test_parent_user, monkeypatch, status, body, pruned,
 ):
+    # A valid key pair: the 403 key-mismatch prune rule only fires when OUR
+    # own VAPID keys are trustworthy (see test below for the invalid-keys case).
+    priv, pub = _vapid_pair()
+    _set_keys(monkeypatch, priv, pub)
+    endpoint = "https://web.push.apple.com/ENDPOINT-X"
+    await _add_sub(db_session, test_parent_user, endpoint)
+
+    exc = WebPushException("Push failed", response=_FakeResp(status, body))
+    with patch("app.services.push_service.webpush", side_effect=exc):
+        sent = await PushService.send_to_user(db_session, test_parent_user.id, {"title": "t"})
+
+    assert sent == 0
+    assert (endpoint in await _endpoints(db_session, test_parent_user)) is (not pruned)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status,body,pruned", [
+    (403, '{"reason":"VapidPkHashMismatch"}', False),
+    (403, "the key in the authorization header does not correspond to the sender that created the subscription", False),
+    (410, "", True),
+])
+async def test_send_with_invalid_own_keys_does_not_prune_403(
+    db_session, test_parent_user, monkeypatch, status, body, pruned,
+):
+    """Regression: one bad VAPID key rotation must not prune every device.
+    A 403 key-mismatch is only trustworthy when our OWN configured keys are
+    valid — with an invalid/garbage pair, every real send would 403 too, so
+    the mismatch rule must not fire. 404/410 always prune regardless."""
     monkeypatch.setattr(app_settings, "VAPID_PRIVATE_KEY", "fake-private")
     monkeypatch.setattr(app_settings, "VAPID_PUBLIC_KEY", "fake-public")
-    endpoint = "https://web.push.apple.com/ENDPOINT-X"
+    assert PushService.keypair_status()["valid_keys"] is False
+
+    endpoint = "https://web.push.apple.com/ENDPOINT-BAD-OWN-KEYS"
     await _add_sub(db_session, test_parent_user, endpoint)
 
     exc = WebPushException("Push failed", response=_FakeResp(status, body))

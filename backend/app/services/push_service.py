@@ -68,10 +68,13 @@ def _push_failure_reason(exc: WebPushException) -> str:
     return text[:200]
 
 
-def _is_dead_subscription(status: int | None, reason: str) -> bool:
+def _is_dead_subscription(status: int | None, reason: str, keys_valid: bool) -> bool:
     if status in (404, 410):
         return True
-    return status == 403 and any(m in reason for m in _KEY_MISMATCH_MARKERS)
+    # A 403 key-mismatch is only trustworthy when OUR configured VAPID pair
+    # is itself valid. If our own keys are broken, every send 403s and this
+    # rule would prune every device on one bad key rotation (see module docstring).
+    return status == 403 and keys_valid and any(m in reason for m in _KEY_MISMATCH_MARKERS)
 
 
 class PushService:
@@ -178,6 +181,9 @@ class PushService:
         body = json.dumps(payload)
         sent = 0
         dead_endpoints: list[str] = []
+        # Computed once per call (not per subscription): whether OUR VAPID
+        # pair is itself valid, gating the 403 key-mismatch prune rule below.
+        keys_valid = PushService.keypair_status()["valid_keys"]
 
         for sub in rows:
             try:
@@ -195,7 +201,7 @@ class PushService:
             except WebPushException as exc:
                 status = getattr(exc.response, "status_code", None)
                 reason = _push_failure_reason(exc)
-                if _is_dead_subscription(status, reason):
+                if _is_dead_subscription(status, reason, keys_valid):
                     dead_endpoints.append(sub.endpoint)
                     log.info(
                         "pruning push endpoint %s (status=%s reason=%s)",
