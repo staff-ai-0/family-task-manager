@@ -55,4 +55,13 @@ describe("renderKioskUnpaired", () => {
     it("falls back to Spanish for unknown languages", () => {
         expect(renderKioskUnpaired({ lang: "fr", reason: "missing", signedIn: false })).toContain('lang="es"');
     });
+    it("auto-retries every 30s only when the board is unavailable", () => {
+        const unavailable = renderKioskUnpaired({ lang: "es", reason: "unavailable", signedIn: true });
+        expect(unavailable).toContain('<meta http-equiv="refresh" content="30">');
+
+        const missing = renderKioskUnpaired({ lang: "es", reason: "missing", signedIn: false });
+        const invalid = renderKioskUnpaired({ lang: "es", reason: "invalid", signedIn: false });
+        expect(missing).not.toContain("http-equiv=\"refresh\"");
+        expect(invalid).not.toContain("http-equiv=\"refresh\"");
+    });
 });

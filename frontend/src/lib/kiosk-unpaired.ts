@@ -50,12 +50,18 @@ export function renderKioskUnpaired(opts: {
     const action = opts.reason === "unavailable"
         ? `<button type="button" onclick="location.reload()">${c.retry}</button>`
         : `<a href="${opts.signedIn ? "/parent/kiosk" : "/login"}">${opts.signedIn ? c.pair : c.login}</a>`;
+    // A wall-mounted kiosk has no one to tap "retry" — auto-refresh only when
+    // the backend is transiently down, never for a missing/revoked link
+    // (that needs a human to re-pair, not a retry loop).
+    const autoRetry = opts.reason === "unavailable"
+        ? `\n<meta http-equiv="refresh" content="30">`
+        : "";
     return `<!doctype html>
 <html lang="${htmlLang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
+<meta name="robots" content="noindex">${autoRetry}
 <title>${title}</title>
 <style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0F1A24;color:#FFF8F0;font-family:Nunito,ui-sans-serif,system-ui,sans-serif}
