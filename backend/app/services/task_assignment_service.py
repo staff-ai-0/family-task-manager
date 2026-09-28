@@ -2423,12 +2423,25 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
                     "onboarding advance points_awarded failed", exc_info=True
                 )
             child_lang = getattr(child, "preferred_lang", None) or "es"
+            # A partial grade or a parent note is feedback the kid must see
+            # (UX-C1: the home no longer lists completed tasks), so it picks
+            # the graded copy for BOTH the push and the in-app notification.
+            feedback = (notes or "").strip()
+            graded_key = (
+                "gig_approved_noted" if feedback
+                else "gig_approved_partial" if grade == "partial"
+                else None
+            )
+            copy_params = {
+                "pts": pts,
+                "title": assignment.template.title,
+                "pct": award_pct,
+                "notes": feedback,
+            }
             try:
                 from app.services.push_service import PushService as _PushService
                 _p_title, _p_body = NotificationService.render(
-                    "task_approved_push",
-                    child_lang,
-                    {"title": assignment.template.title, "pts": pts},
+                    graded_key or "task_approved_push", child_lang, copy_params,
                 )
                 await _PushService.send_to_user(db, assignment.assigned_to, {
                     "title": _p_title,
@@ -2445,9 +2458,9 @@ class TaskAssignmentService(BaseFamilyService[TaskAssignment]):
             await NotificationService.create_localized(
                 db,
                 family_id=family_id,
-                key="gig_approved",
+                key=graded_key or "gig_approved",
                 user_id=assignment.assigned_to,
-                params={"pts": pts, "title": assignment.template.title},
+                params=copy_params,
                 link="/dashboard",
                 lang=child_lang,
             )

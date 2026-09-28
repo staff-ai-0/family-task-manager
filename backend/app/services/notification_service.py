@@ -93,6 +93,22 @@ _COPY = {
             "en": "'{title}' approved by parent.",
         },
     },
+    # Graded approvals that carry feedback (UX-C1): the kid home has no
+    # completed list any more, so the credited % and the parent's note travel
+    # in the notification. {pct} is the credited percentage (100 for full).
+    "gig_approved_partial": {
+        "type": NT.GIG_APPROVED,
+        "title": {"es": "✅ +{pts} pts · {pct}%", "en": "✅ +{pts} pts · {pct}%"},
+        "body": {
+            "es": "'{title}' aprobada al {pct}%.",
+            "en": "'{title}' approved at {pct}%.",
+        },
+    },
+    "gig_approved_noted": {
+        "type": NT.GIG_APPROVED,
+        "title": {"es": "✅ +{pts} pts · {pct}%", "en": "✅ +{pts} pts · {pct}%"},
+        "body": {"es": "'{title}' — 💬 {notes}", "en": "'{title}' — 💬 {notes}"},
+    },
     "gig_approved_auto": {
         "type": NT.GIG_APPROVED,
         "title": {"es": "✅ +{pts} pts", "en": "✅ +{pts} pts"},
