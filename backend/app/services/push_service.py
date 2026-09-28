@@ -25,10 +25,47 @@ from app.models.push_subscription import PushSubscription
 log = logging.getLogger(__name__)
 
 
+def _derive_public_key(private_key: str) -> str:
+    """Public key (X9.62 uncompressed point, base64url, unpadded) of a VAPID
+    private key, loaded exactly the way pywebpush loads it for a real send
+    (``Vapid.from_string``: raw 32-byte or DER, base64url). Raises on a key
+    pywebpush could not use either."""
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from py_vapid import Vapid
+
+    vapid = Vapid.from_string(private_key=private_key)
+    point = vapid.public_key.public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
+    )
+    return base64.urlsafe_b64encode(point).rstrip(b"=").decode()
+
+
 class PushService:
     @staticmethod
     def _vapid_configured() -> bool:
         return bool(settings.VAPID_PRIVATE_KEY and settings.VAPID_PUBLIC_KEY)
+
+    @staticmethod
+    def keypair_status() -> dict[str, Any]:
+        """Is the configured VAPID pair one a real send can use?
+
+        ``valid_keys`` means the private key loads and derives exactly the
+        configured public key. Never raises and never returns key material:
+        on failure ``error`` is an exception class name or "KeyMismatch".
+        """
+        pub = (settings.VAPID_PUBLIC_KEY or "").strip().rstrip("=")
+        priv = (settings.VAPID_PRIVATE_KEY or "").strip()
+        if not (pub and priv):
+            return {"configured": False, "valid_keys": False, "error": None}
+        try:
+            derived = _derive_public_key(priv)
+        except Exception as exc:
+            return {"configured": True, "valid_keys": False, "error": type(exc).__name__}
+        if derived != pub:
+            return {"configured": True, "valid_keys": False, "error": "KeyMismatch"}
+        return {"configured": True, "valid_keys": True, "error": None}
 
     @staticmethod
     async def subscribe(

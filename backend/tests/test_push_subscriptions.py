@@ -304,3 +304,93 @@ async def test_push_sent_on_reward_redemption(
                    if len(c.args) >= 2 and c.args[1] == test_child_user.id
                    and len(c.args) >= 3 and c.args[2].get("tag") == "reward-redeemed"]
     assert len(child_calls) == 1
+
+
+# ── VAPID keypair health (UX-A, 2026-09-27) ──────────────────────────────────
+# Prod stores the private key in the 43-char raw form; the old health check
+# assumed PEM (len >= 60) and told parents push was "not configured" while it
+# worked. The check now derives the public key the same way pywebpush loads
+# the private key for a real send (py_vapid.Vapid.from_string: raw or DER).
+import base64
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+
+from app.core.config import settings as app_settings
+
+
+def _vapid_pair(fmt: str = "raw") -> tuple[str, str]:
+    """A fresh P-256 pair as (private, public) env strings. fmt: raw | der."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    if fmt == "raw":
+        secret = key.private_numbers().private_value.to_bytes(32, "big")
+    else:
+        secret = key.private_bytes(
+            serialization.Encoding.DER,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    priv = base64.urlsafe_b64encode(secret).rstrip(b"=").decode()
+    point = key.public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
+    )
+    pub = base64.urlsafe_b64encode(point).rstrip(b"=").decode()
+    return priv, pub
+
+
+def _set_keys(monkeypatch, priv: str, pub: str) -> None:
+    monkeypatch.setattr(app_settings, "VAPID_PRIVATE_KEY", priv)
+    monkeypatch.setattr(app_settings, "VAPID_PUBLIC_KEY", pub)
+
+
+class TestKeypairStatus:
+    def test_raw_pair_is_valid(self, monkeypatch):
+        _set_keys(monkeypatch, *_vapid_pair("raw"))
+        assert PushService.keypair_status() == {
+            "configured": True, "valid_keys": True, "error": None,
+        }
+
+    def test_der_pair_is_valid(self, monkeypatch):
+        _set_keys(monkeypatch, *_vapid_pair("der"))
+        assert PushService.keypair_status()["valid_keys"] is True
+
+    def test_padding_and_whitespace_are_tolerated(self, monkeypatch):
+        priv, pub = _vapid_pair("raw")
+        _set_keys(monkeypatch, f"  {priv}\n", f"{pub}=\n")
+        assert PushService.keypair_status()["valid_keys"] is True
+
+    def test_mismatched_pair_is_invalid(self, monkeypatch):
+        priv, _ = _vapid_pair("raw")
+        _, other_pub = _vapid_pair("raw")
+        _set_keys(monkeypatch, priv, other_pub)
+        status = PushService.keypair_status()
+        assert status == {"configured": True, "valid_keys": False, "error": "KeyMismatch"}
+
+    def test_garbage_private_key_is_invalid_and_not_echoed(self, monkeypatch):
+        _, pub = _vapid_pair("raw")
+        _set_keys(monkeypatch, "not-a-real-key", pub)
+        status = PushService.keypair_status()
+        assert status["configured"] is True
+        assert status["valid_keys"] is False
+        assert status["error"] and "not-a-real-key" not in str(status)
+
+    def test_empty_keys_are_unconfigured(self, monkeypatch):
+        _set_keys(monkeypatch, "", "")
+        assert PushService.keypair_status() == {
+            "configured": False, "valid_keys": False, "error": None,
+        }
+
+
+@pytest.mark.asyncio
+async def test_health_reports_raw_prod_style_pair_as_valid(
+    client: AsyncClient, auth_headers, monkeypatch,
+):
+    priv, pub = _vapid_pair("raw")
+    _set_keys(monkeypatch, priv, pub)
+    r = await client.get("/api/push/health", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["configured"] is True
+    assert body["valid_keys"] is True
+    assert body["private_key_length"] == len(priv)
+    assert body["public_key_length"] == len(pub)

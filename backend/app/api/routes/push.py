@@ -47,13 +47,9 @@ async def push_health(
     the user has subscriptions on file. Returns booleans + counts."""
     from sqlalchemy import func, select
     from app.models.push_subscription import PushSubscription
+    from app.services.push_service import PushService
 
-    pub = settings.VAPID_PUBLIC_KEY or ""
-    priv = settings.VAPID_PRIVATE_KEY or ""
-    configured = bool(pub and priv)
-    # Sanity: VAPID public key in raw form is 65 bytes → 87 base64url chars.
-    # Private key in PEM is multi-line ~200 chars. Allow some slack.
-    valid_keys = configured and len(pub) >= 80 and len(priv) >= 60
+    keys = PushService.keypair_status()
 
     sub_count = int((await db.execute(
         select(func.count()).select_from(PushSubscription).where(
@@ -62,12 +58,12 @@ async def push_health(
     )).scalar() or 0)
 
     return {
-        "configured": configured,
-        "valid_keys": valid_keys,
+        "configured": keys["configured"],
+        "valid_keys": keys["valid_keys"],
         "claim_email": settings.VAPID_CLAIM_EMAIL,
         "subscription_count": sub_count,
-        "public_key_length": len(pub),
-        "private_key_length": len(priv),
+        "public_key_length": len(settings.VAPID_PUBLIC_KEY or ""),
+        "private_key_length": len(settings.VAPID_PRIVATE_KEY or ""),
     }
 
 
