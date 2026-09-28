@@ -58,7 +58,8 @@ const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: off
     ]);
 
 const deck = buildDeck(progress, lang);
-const meter = payMeterView(paycheck);
+// Star mode hides pesos everywhere — the meter shows a $ goal.
+const meter = starMode ? ({ show: false } as const) : payMeterView(paycheck);
 const counter = { done: deck.doneToday, total: deck.totalToday, suffix: es ? "hoy" : "today" };
 const priorInReview = (Array.isArray(weekDone) ? weekDone : []).filter(
     (a: any) => a.template_is_bonus && String(a.assigned_date) < todayStr && a.approval_status === "pending",
