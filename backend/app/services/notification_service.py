@@ -18,6 +18,18 @@ from app.core.exceptions import NotFoundException
 from app.models.notification import Notification, NotificationType as NT
 
 
+# Reminder types that go stale the moment a newer one of the same type exists
+# for the same user: yesterday's "you have 3 chores today", last week's "you
+# have 13 new chores". Creating a new one marks that user's older unread ones
+# read, inside the caller's transaction. Prod 2026-09-27: 664 of 958 unread
+# rows were these, keeping every badge at 75–214.
+SUPERSEDING_TYPES = frozenset({NT.TASK_DUE, NT.TASK_ASSIGNED})
+
+# The unread badge only counts the last N days. Older unread rows stay in the
+# feed; they just stop inflating a number nobody can act on.
+UNREAD_BADGE_WINDOW_DAYS = 14
+
+
 # ---------------------------------------------------------------------------
 # Bilingual copy — key → {type, title{es,en}, body{es,en}|None}
 #
@@ -575,6 +587,28 @@ class NotificationService:
             user_id=user_id,
         )
 
+    @staticmethod
+    async def _supersede_older(
+        db: AsyncSession, family_id: UUID, user_id: Optional[UUID], type: str
+    ) -> None:
+        """Mark the user's older unread reminders of ``type`` read. Runs in the
+        caller's transaction, BEFORE the new row is added, so the new row is
+        never touched and a rollback restores the old ones."""
+        if user_id is None or type not in SUPERSEDING_TYPES:
+            return
+        await db.execute(
+            sql_update(Notification)
+            .where(
+                and_(
+                    Notification.family_id == family_id,
+                    Notification.user_id == user_id,
+                    Notification.type == type,
+                    Notification.is_read.is_(False),
+                )
+            )
+            .values(is_read=True, read_at=datetime.now(timezone.utc))
+        )
+
     # ── Raw create (dynamic content only — prefer create_localized) ─
     @staticmethod
     async def create(
@@ -595,6 +629,7 @@ class NotificationService:
         Failures in push are swallowed — the in-app feed entry is what
         matters; push is a nice-to-have.
         """
+        await NotificationService._supersede_older(db, family_id, user_id, type)
         n = Notification(
             family_id=family_id,
             user_id=user_id,
@@ -665,6 +700,7 @@ class NotificationService:
         user_id: Optional[UUID] = None,
     ) -> Notification:
         """Same as create() but defers commit so callers can batch in their own txn."""
+        await NotificationService._supersede_older(db, family_id, user_id, type)
         n = Notification(
             family_id=family_id,
             user_id=user_id,
@@ -723,6 +759,8 @@ class NotificationService:
                         Notification.user_id.is_(None),
                     ),
                     Notification.is_read.is_(False),
+                    Notification.created_at
+                    >= now - timedelta(days=UNREAD_BADGE_WINDOW_DAYS),
                     or_(
                         Notification.expires_at.is_(None),
                         Notification.expires_at > now,
