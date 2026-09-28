@@ -7,20 +7,27 @@
 import "../styles/global.css";
 import { apiFetch } from "../lib/api";
 import { fmtTime } from "../lib/datetime";
+import { kioskFailureReason, kioskUnpairedStatus, renderKioskUnpaired, type UnpairedReason } from "../lib/kiosk-unpaired";
+
+const lang = Astro.cookies.get("lang")?.value ?? "es";
+const signedIn = Boolean(Astro.cookies.get("access_token")?.value);
+const unpaired = (reason: UnpairedReason, apiStatus?: number) =>
+    new Response(renderKioskUnpaired({ lang, reason, signedIn }), {
+        status: kioskUnpairedStatus(reason, apiStatus),
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
 
 const token = Astro.url.searchParams.get("token");
 if (!token) {
-    return new Response("Missing token", { status: 400 });
+    return unpaired("missing");
 }
 
 const { data, ok, status } = await apiFetch<any>(
     `/api/kiosk/snapshot?token=${encodeURIComponent(token)}`,
 );
 if (!ok || !data) {
-    return new Response("Invalid token", { status: status ?? 401 });
+    return unpaired(kioskFailureReason(status), status);
 }
-
-const lang = Astro.cookies.get("lang")?.value ?? "es";
 
 // Only called from the template, i.e. after `labels` below is initialized.
 function formatTime(iso: string, allDay: boolean): string {
