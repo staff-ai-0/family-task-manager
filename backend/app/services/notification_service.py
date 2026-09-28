@@ -216,6 +216,14 @@ _COPY = {
             "en": "'{title}' was not approved. {notes}",
         },
     },
+    "gig_published": {
+        "type": NT.GIG_PUBLISHED,
+        "title": {"es": "💵 Nuevo: {title}", "en": "💵 New: {title}"},
+        "body": {
+            "es": "${pesos} MXN · tócalo para apartarlo",
+            "en": "${pesos} MXN · tap to claim",
+        },
+    },
     # ── 1-tap points (W4.5) ─────────────────────────────────────────
     "points_adjusted": {
         "type": NT.POINTS_ADJUSTED,

@@ -120,7 +120,60 @@ class GigOfferingService:
         db.add(offering)
         await db.commit()
         await db.refresh(offering)
+        await GigOfferingService._notify_gig_published(db, offering, created_by)
         return offering
+
+    @staticmethod
+    async def _notify_gig_published(
+        db: AsyncSession, offering: GigOffering, actor_id: Optional[UUID]
+    ) -> int:
+        """Tell the kids who may claim it that a gig is on the board (UX-C1).
+
+        Recipients: participating members (active AND parent-approved) whose
+        role the gig allows (``allowed_roles``, default teen + child), never
+        the actor and never the gig's creator — a proposer already got
+        "propuesta aprobada". Best-effort: a failure is logged and never
+        fails or rolls back the post. Returns how many were notified.
+        """
+        import logging
+
+        try:
+            from app.models.user import User
+            from app.services.notification_service import NotificationService
+            from app.services.task_assignment_service import TaskAssignmentService
+
+            allowed = {str(r).lower() for r in (offering.allowed_roles or ["teen", "child"])}
+            members = (
+                await db.execute(
+                    select(User.id, User.role).where(
+                        and_(
+                            User.family_id == offering.family_id,
+                            TaskAssignmentService._participating_member_clause(),
+                        )
+                    )
+                )
+            ).all()
+            skip = {actor_id, offering.created_by}
+            sent = 0
+            for user_id, role in members:
+                role_value = str(getattr(role, "value", role)).lower()
+                if user_id in skip or role_value not in allowed:
+                    continue
+                await NotificationService.create_localized(
+                    db,
+                    family_id=offering.family_id,
+                    key="gig_published",
+                    user_id=user_id,
+                    params={"title": offering.title, "pesos": offering.points},
+                    link="/gigs",
+                )
+                sent += 1
+            return sent
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "gig_published fan-out failed for offering %s", offering.id, exc_info=True
+            )
+            return 0
 
     @staticmethod
     async def update(
@@ -183,6 +236,8 @@ class GigOfferingService:
                     "notify kid of implicit proposal approval failed",
                     exc_info=True,
                 )
+        if implicit_approval:
+            await GigOfferingService._notify_gig_published(db, offering, acting_user_id)
         return offering
 
     @staticmethod
@@ -376,4 +431,6 @@ class GigOfferingService:
                 logging.getLogger(__name__).warning(
                     "notify kid of proposal decision failed", exc_info=True
                 )
+        if approve:
+            await GigOfferingService._notify_gig_published(db, offering, reviewer_id)
         return offering
