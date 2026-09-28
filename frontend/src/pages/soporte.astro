@@ -1,6 +1,7 @@
 ---
 import ChatShell from "@components/ui/ChatShell.astro";
 import { apiFetch } from "../lib/api";
+import { formatActionLabel } from "../lib/jarvis-actions";
 
 /**
  * /soporte — support-assistant chat (the support-ftm agent; canonical entry:
@@ -130,6 +131,13 @@ const exampleChips = es
                         : "bg-brand-cream border border-brand-ink/10 text-brand-ink"
                 }`}>
                     <p class="whitespace-pre-wrap">{m.content}</p>
+                    {Array.isArray(m.actions) && m.actions.length > 0 && (
+                        <div class="mt-2 flex flex-wrap gap-1">
+                            {m.actions.map((a: string) => (
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">⚡ {formatActionLabel(a)}</span>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         ))

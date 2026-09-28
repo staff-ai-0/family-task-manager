@@ -3,6 +3,7 @@ import ChatShell from "@components/ui/ChatShell.astro";
 import UpgradePrompt from "@components/UpgradePrompt.astro";
 import { apiFetch } from "../../lib/api";
 import { isFreePlan } from "../../lib/plan";
+import { formatActionLabel } from "../../lib/jarvis-actions";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -187,6 +188,13 @@ if (isTeen) {
                                 : "bg-brand-cream border border-brand-ink/10 text-brand-ink"
                         }`}>
                             <p class="whitespace-pre-wrap">{m.content}</p>
+                            {Array.isArray(m.actions) && m.actions.length > 0 && (
+                                <div class="mt-2 flex flex-wrap gap-1">
+                                    {m.actions.map((a: string) => (
+                                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">⚡ {formatActionLabel(a)}</span>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 ))
@@ -219,6 +227,7 @@ if (isTeen) {
 
 <script>
     import { streamJarvisChat } from "../../lib/jarvis-chat";
+    import { formatActionLabel } from "../../lib/jarvis-actions";
 
     document.addEventListener("astro:page-load", () => {
         const form = document.getElementById("chat-form") as HTMLFormElement | null;
@@ -459,7 +468,7 @@ if (isTeen) {
                             bot.innerHTML = `<div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm bg-brand-cream border border-brand-ink/10 text-brand-ink"><p class="whitespace-pre-wrap"></p>${actionBadges}</div>${modelCard}`;
                             (bot.querySelector("p") as HTMLElement).textContent = payload.reply ?? "";
                             bot.querySelectorAll("span.bg-violet-100").forEach((el, i) => {
-                                (el as HTMLElement).textContent = "⚡ " + actions[i];
+                                (el as HTMLElement).textContent = "⚡ " + formatActionLabel(actions[i]);
                             });
                             scroll.insertBefore(bot, pending);
                             scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
