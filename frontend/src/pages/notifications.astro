@@ -48,6 +48,10 @@ if (!user) {
 }
 const feed = feedRaw ?? { unread: 0, items: [] };
 const groups = groupByDay(feed.items ?? [], user.timezone);
+// The unread COUNT respects the 14-day badge window (backend), but a
+// notification older than that window can still be unread in the list —
+// "Mark all read" must stay visible for it even when unread reads 0.
+const hasUnreadItems = feed.unread > 0 || (feed.items ?? []).some((n: any) => !n.is_read);
 const bucketLabel: Record<DayBucket, string> = lang === "es"
     ? { today: "Hoy", yesterday: "Ayer", earlier: "Antes" }
     : { today: "Today", yesterday: "Yesterday", earlier: "Earlier" };
@@ -102,7 +106,7 @@ const iconFor = (type: string): string => {
     <p slot="header-extra" class="text-rose-100 text-sm mt-1">
         {feed.unread} {labels.unread}
     </p>
-            {feed.unread > 0 && (
+            {hasUnreadItems && (
                 <form method="POST" class="flex justify-end">
                     <input type="hidden" name="action" value="read_all" />
                     <button
