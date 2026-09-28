@@ -15,6 +15,7 @@ as the receipt scanner) for centralized spend tracking. Each call:
 
 import json
 import logging
+import re
 from datetime import date, datetime, timezone
 from typing import Any, List
 from uuid import UUID
@@ -58,6 +59,8 @@ SYSTEM_BASE = (
     "is partial: before saying you don't know, look it up with your tools "
     "(e.g. budget_spending_report for any spending question). If the tools "
     "can't answer either, say so."
+    " Write money with its currency symbol and thousands separators "
+    "(e.g. $13,849 MXN) — never as a bare integer or in cents."
 )
 
 # Teen persona: a self-scoped coach with NO tools and NO family-wide visibility.
@@ -72,6 +75,8 @@ SYSTEM_TEEN = (
     "actions. If they ask you to do something (create, delete, approve, move "
     "money), tell them to do it in the app or ask a parent. Be concise (2-4 "
     "sentences) and upbeat. If you don't know, say so."
+    " Write money with its currency symbol and thousands separators "
+    "(e.g. $13,849 MXN) — never as a bare integer or in cents."
 )
 
 
@@ -120,6 +125,20 @@ _SUPPORT_NOT_CONFIGURED = {
         "Escríbenos a soporte@agent-ia.mx."
     ),
 }
+
+
+# Assistant rows are stored as reply + "\n\n[actions: a(ok), b(pending)]" so
+# the model sees what it did when history is replayed. Humans must not.
+_ACTIONS_SUFFIX = re.compile(r"\n\n\[actions: ([^\]\n]*)\]\s*\Z")
+
+
+def split_actions_suffix(content: str) -> tuple[str, list[str]]:
+    """Split a stored assistant message into (display text, action labels)."""
+    match = _ACTIONS_SUFFIX.search(content or "")
+    if not match:
+        return content, []
+    actions = [a.strip() for a in match.group(1).split(",") if a.strip()]
+    return content[: match.start()], actions
 
 
 def _support_api_key() -> str:

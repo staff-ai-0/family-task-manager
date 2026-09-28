@@ -1,36 +1,85 @@
 ---
+/**
+ * Push opt-in, shown only when there is something useful to show (UX-A):
+ *   - iOS Safari tab (no PushManager until installed) → install hint
+ *   - other browsers without push → nothing
+ *   - permission denied → one-line note
+ *   - server has no push key → nothing
+ *   - already subscribed with the CURRENT server key → nothing (and the
+ *     subscription is re-posted at most daily, so a row the server pruned
+ *     comes back)
+ *   - subscribed with an OLD server key → unsubscribed, button offered
+ *     (every send to it would 403 forever)
+ *   - otherwise → the button
+ */
 interface Props {
     lang: string;
+    /** Whoever is looking at THIS device right now — gates the daily heal
+     * re-POST to the subscribing user only (shared-device safety, UX-A). */
+    userId: string;
+    /** Optional classes for the root `#push-root` element, so callers don't
+     * need an extra wrapper div just for spacing. */
+    class?: string;
 }
-const { lang } = Astro.props;
+const { lang, userId, class: rootClass } = Astro.props;
 
 const L = lang === "es"
-    ? { enable: "Activar notificaciones", enabled: "Notificaciones activas", unsupported: "Notificaciones no soportadas", denied: "Permiso denegado", err: "Error" }
-    : { enable: "Enable push notifications", enabled: "Notifications enabled", unsupported: "Push not supported", denied: "Permission denied", err: "Error" };
+    ? {
+        enable: "Activar notificaciones",
+        enabled: "Notificaciones activas",
+        denied: "Permiso denegado",
+        err: "Error",
+        install: "Para recibir avisos, instala la app: Compartir → Agregar a inicio.",
+        blocked: "Avisos bloqueados en este navegador.",
+    }
+    : {
+        enable: "Enable push notifications",
+        enabled: "Notifications enabled",
+        denied: "Permission denied",
+        err: "Error",
+        install: "To get alerts, install the app: Share → Add to Home Screen.",
+        blocked: "Notifications are blocked in this browser.",
+    };
 ---
 
-<button
-    id="enable-push-btn"
-    type="button"
-    class="px-3 py-2 rounded-lg border border-brand-sky text-brand-sky-deep text-sm font-medium hover:bg-brand-sky/10 transition-colors disabled:opacity-60"
-    data-state="idle"
->
-    {L.enable}
-</button>
-<span id="push-status" class="text-xs text-brand-ink-soft ml-2" aria-live="polite"></span>
+<div id="push-root" class={rootClass} hidden>
+    <button
+        id="enable-push-btn"
+        type="button"
+        hidden
+        class="px-3 py-2 rounded-lg border border-brand-sky text-brand-sky-deep text-sm font-medium hover:bg-brand-sky/10 transition-colors disabled:opacity-60"
+        data-state="idle"
+    >
+        {L.enable}
+    </button>
+    <span id="push-status" class="text-xs text-brand-ink-soft ml-2" aria-live="polite"></span>
+</div>
 
-<script define:vars={{ L }}>
+<script define:vars={{ L, userId }}>
+    const root = document.getElementById("push-root");
     const btn = document.getElementById("enable-push-btn");
     const status = document.getElementById("push-status");
+    const OWNER_KEY = "ftm-push-owner";
+    const healKeyFor = (uid) => `ftm-push-heal-at:${uid}`;
+    let publicKey = null;
+
+    function safeGetItem(key) {
+        try {
+            return localStorage.getItem(key);
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function safeSetItem(key, value) {
+        try {
+            localStorage.setItem(key, value);
+        } catch (_) {}
+    }
 
     function setStatus(msg, color = "text-brand-ink-soft") {
         status.textContent = msg;
         status.className = `text-xs ${color} ml-2`;
-    }
-
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-        btn.disabled = true;
-        setStatus(L.unsupported, "text-red-700");
     }
 
     function urlBase64ToUint8Array(b64) {
@@ -42,40 +91,110 @@ const L = lang === "es"
         return arr;
     }
 
+    function sameKey(buf, b64) {
+        if (!buf || !b64) return false;
+        const a = new Uint8Array(buf);
+        const b = urlBase64ToUint8Array(b64);
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+        return true;
+    }
+
+    function postSubscription(sub) {
+        const json = sub.toJSON();
+        return fetch("/api/push/subscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                endpoint: json.endpoint,
+                keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+            }),
+        });
+    }
+
+    async function healDaily(sub) {
+        try {
+            const key = healKeyFor(userId);
+            const last = Number(localStorage.getItem(key) || "0");
+            if (Date.now() - last < 86400000) return;
+            const r = await postSubscription(sub);
+            if (r.ok) localStorage.setItem(key, String(Date.now()));
+        } catch (_) {}
+    }
+
+    async function decide() {
+        const standalone = window.matchMedia("(display-mode: standalone)").matches
+            || navigator.standalone === true;
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+            || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        const supported = "serviceWorker" in navigator
+            && "PushManager" in window
+            && "Notification" in window;
+
+        if (!supported) {
+            // iOS exposes Web Push only to Home Screen apps.
+            if (isIOS && !standalone) {
+                setStatus(L.install);
+                root.hidden = false;
+            }
+            return;
+        }
+        if (Notification.permission === "denied") {
+            setStatus(L.blocked);
+            root.hidden = false;
+            return;
+        }
+        try {
+            const keyResp = await fetch("/api/push/public-key");
+            if (!keyResp.ok) return;
+            publicKey = (await keyResp.json()).public_key;
+            const reg = await navigator.serviceWorker.register("/sw.js");
+            const existing = await reg.pushManager.getSubscription();
+            if (existing) {
+                if (sameKey(existing.options.applicationServerKey, publicKey)) {
+                    // Shared device: only heal a subscription we know belongs
+                    // to the person currently looking at the screen. A
+                    // current-key subscription with no/other owner marker is
+                    // left alone — pre-branch status quo — and the button
+                    // stays hidden either way.
+                    if (safeGetItem(OWNER_KEY) === userId) {
+                        await healDaily(existing);
+                    }
+                    return;
+                }
+                await existing.unsubscribe().catch(() => {});
+            }
+        } catch (_) {
+            return;
+        }
+        btn.hidden = false;
+        root.hidden = false;
+    }
+
     btn.addEventListener("click", async () => {
         btn.disabled = true;
         setStatus("…");
         try {
-            const keyResp = await fetch("/api/push/public-key");
-            if (!keyResp.ok) {
-                setStatus(L.err, "text-red-700");
-                btn.disabled = false;
-                return;
+            if (!publicKey) {
+                const keyResp = await fetch("/api/push/public-key");
+                if (!keyResp.ok) throw new Error("no key");
+                publicKey = (await keyResp.json()).public_key;
             }
-            const { public_key } = await keyResp.json();
-            // Layout.astro registers /sw.js on every page, but re-register
-            // here: register() is idempotent and — unlike serviceWorker.ready,
-            // which never rejects — its failure is catchable, so a broken
-            // registration surfaces as an error instead of hanging the button.
+            // register() is idempotent and, unlike serviceWorker.ready, its
+            // failure is catchable — a broken registration surfaces as an error.
             const reg = await navigator.serviceWorker.register("/sw.js");
             await navigator.serviceWorker.ready;
             const sub = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(public_key),
+                applicationServerKey: urlBase64ToUint8Array(publicKey),
             });
-
-            const json = sub.toJSON();
-            const r = await fetch("/api/push/subscribe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    endpoint: json.endpoint,
-                    keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
-                }),
-            });
+            const r = await postSubscription(sub);
             if (r.ok) {
+                safeSetItem(OWNER_KEY, userId);
+                safeSetItem(healKeyFor(userId), String(Date.now()));
                 setStatus(L.enabled, "text-green-700");
                 btn.setAttribute("data-state", "enabled");
+                btn.hidden = true;
             } else {
                 setStatus(L.err, "text-red-700");
                 btn.disabled = false;
@@ -87,4 +206,6 @@ const L = lang === "es"
             btn.disabled = false;
         }
     });
+
+    decide();
 </script>

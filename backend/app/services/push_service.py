@@ -2,7 +2,7 @@
 
 pywebpush is synchronous; wrap each send in asyncio.to_thread so the
 gig-submission request path never blocks on Apple/Google push gateway
-latency. Dead endpoints (HTTP 410 Gone) are pruned automatically.
+latency. Dead endpoints (404/410, or 403 for a subscription made with another VAPID key) are pruned automatically.
 
 If VAPID keys are not configured, sends are skipped with a warning so
 local/dev environments work without push setup.
@@ -25,10 +25,82 @@ from app.models.push_subscription import PushSubscription
 log = logging.getLogger(__name__)
 
 
+def _derive_public_key(private_key: str) -> str:
+    """Public key (X9.62 uncompressed point, base64url, unpadded) of a VAPID
+    private key, loaded exactly the way pywebpush loads it for a real send
+    (``Vapid.from_string``: raw 32-byte or DER, base64url). Raises on a key
+    pywebpush could not use either."""
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from py_vapid import Vapid
+
+    vapid = Vapid.from_string(private_key=private_key)
+    point = vapid.public_key.public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
+    )
+    return base64.urlsafe_b64encode(point).rstrip(b"=").decode()
+
+
+# 403 bodies that mean "this subscription was made with a different VAPID
+# key" — the subscription is unusable forever, same as 404/410. Any other 403
+# (e.g. Apple BadJwtToken) is OUR bug, not the device's: log it, never prune,
+# or one bad deploy would silently wipe every device.
+_KEY_MISMATCH_MARKERS = ("VapidPkHashMismatch", "does not correspond")
+
+
+def _push_failure_reason(exc: WebPushException) -> str:
+    """Provider's reason for a failed send: Apple's JSON ``reason`` when the
+    body parses, else the first 200 chars of the body (FCM sends text)."""
+    resp = getattr(exc, "response", None)
+    if resp is None:
+        return ""
+    try:
+        text = resp.text or ""
+    except Exception:
+        return ""
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        return text[:200]
+    if isinstance(data, dict) and data.get("reason"):
+        return str(data["reason"])
+    return text[:200]
+
+
+def _is_dead_subscription(status: int | None, reason: str, keys_valid: bool) -> bool:
+    if status in (404, 410):
+        return True
+    # A 403 key-mismatch is only trustworthy when OUR configured VAPID pair
+    # is itself valid. If our own keys are broken, every send 403s and this
+    # rule would prune every device on one bad key rotation (see module docstring).
+    return status == 403 and keys_valid and any(m in reason for m in _KEY_MISMATCH_MARKERS)
+
+
 class PushService:
     @staticmethod
     def _vapid_configured() -> bool:
         return bool(settings.VAPID_PRIVATE_KEY and settings.VAPID_PUBLIC_KEY)
+
+    @staticmethod
+    def keypair_status() -> dict[str, Any]:
+        """Is the configured VAPID pair one a real send can use?
+
+        ``valid_keys`` means the private key loads and derives exactly the
+        configured public key. Never raises and never returns key material:
+        on failure ``error`` is an exception class name or "KeyMismatch".
+        """
+        pub = (settings.VAPID_PUBLIC_KEY or "").strip().rstrip("=")
+        priv = (settings.VAPID_PRIVATE_KEY or "").strip()
+        if not (pub and priv):
+            return {"configured": False, "valid_keys": False, "error": None}
+        try:
+            derived = _derive_public_key(priv)
+        except Exception as exc:
+            return {"configured": True, "valid_keys": False, "error": type(exc).__name__}
+        if derived != pub:
+            return {"configured": True, "valid_keys": False, "error": "KeyMismatch"}
+        return {"configured": True, "valid_keys": True, "error": None}
 
     @staticmethod
     async def subscribe(
@@ -109,6 +181,9 @@ class PushService:
         body = json.dumps(payload)
         sent = 0
         dead_endpoints: list[str] = []
+        # Computed once per call (not per subscription): whether OUR VAPID
+        # pair is itself valid, gating the 403 key-mismatch prune rule below.
+        keys_valid = PushService.keypair_status()["valid_keys"]
 
         for sub in rows:
             try:
@@ -125,14 +200,17 @@ class PushService:
                 sent += 1
             except WebPushException as exc:
                 status = getattr(exc.response, "status_code", None)
-                if status in (404, 410):
+                reason = _push_failure_reason(exc)
+                if _is_dead_subscription(status, reason, keys_valid):
                     dead_endpoints.append(sub.endpoint)
+                    log.info(
+                        "pruning push endpoint %s (status=%s reason=%s)",
+                        sub.endpoint[:60], status, reason,
+                    )
                 else:
                     log.warning(
-                        "push send to %s failed (status=%s): %s",
-                        sub.endpoint[:60],
-                        status,
-                        exc,
+                        "push send to %s failed (status=%s reason=%s): %s",
+                        sub.endpoint[:60], status, reason, exc,
                     )
             except Exception:
                 log.exception("unexpected push send failure for %s", sub.endpoint[:60])

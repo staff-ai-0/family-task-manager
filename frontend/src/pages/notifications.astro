@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
+import { groupByDay, safeNotificationLink, type DayBucket } from "../lib/notifications";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -17,6 +18,17 @@ if (Astro.request.method === "POST") {
                 token,
             });
         }
+    } else if (action === "open") {
+        // One tap = read + go. The link is echoed back from the form, so it
+        // is guarded to same-origin paths before redirecting.
+        const id = data.get("notif_id");
+        if (id) {
+            await apiFetch(`/api/notifications/${encodeURIComponent(String(id))}/read`, {
+                method: "POST",
+                token,
+            });
+        }
+        return Astro.redirect(safeNotificationLink(data.get("link")));
     } else if (action === "read_all") {
         await apiFetch("/api/notifications/read-all", {
             method: "POST",
@@ -35,12 +47,25 @@ if (!user) {
     return Astro.redirect("/login");
 }
 const feed = feedRaw ?? { unread: 0, items: [] };
+const groups = groupByDay(feed.items ?? [], user.timezone);
+// The unread COUNT respects the 14-day badge window (backend), but a
+// notification older than that window can still be unread in the list —
+// "Mark all read" must stay visible for it even when unread reads 0.
+const hasUnreadItems = feed.unread > 0 || (feed.items ?? []).some((n: any) => !n.is_read);
+const bucketLabel: Record<DayBucket, string> = lang === "es"
+    ? { today: "Hoy", yesterday: "Ayer", earlier: "Antes" }
+    : { today: "Today", yesterday: "Yesterday", earlier: "Earlier" };
+const cardClass = (n: any) =>
+    `press w-full text-left bg-brand-cream rounded-2xl p-4 border shadow-[var(--shadow-card)] ${
+        n.is_read ? "border-brand-ink/10 opacity-75" : "border-brand-ink/30"
+    }`;
 
 const labels = {
     title: lang === "es" ? "Notificaciones" : "Notifications",
     empty: lang === "es" ? "Sin notificaciones." : "No notifications.",
     mark_all: lang === "es" ? "Marcar todas leídas" : "Mark all read",
     unread: lang === "es" ? "sin leer" : "unread",
+    unread_one: lang === "es" ? "Sin leer" : "Unread",
 };
 
 function timeAgo(iso: string): string {
@@ -81,7 +106,7 @@ const iconFor = (type: string): string => {
     <p slot="header-extra" class="text-rose-100 text-sm mt-1">
         {feed.unread} {labels.unread}
     </p>
-            {feed.unread > 0 && (
+            {hasUnreadItems && (
                 <form method="POST" class="flex justify-end">
                     <input type="hidden" name="action" value="read_all" />
                     <button
@@ -98,49 +123,46 @@ const iconFor = (type: string): string => {
                     <p class="text-brand-ink-soft text-sm">{labels.empty}</p>
                 </div>
             ) : (
-                <ul class="space-y-2">
-                    {feed.items.map((n: any) => (
-                        <li class={`bg-brand-cream rounded-2xl p-4 border shadow-[var(--shadow-card)] ${n.is_read ? "border-brand-ink/10 opacity-70" : "border-brand-ink/30"}`}>
-                            <div class="flex items-start gap-3">
-                                <span class="text-2xl flex-shrink-0">{iconFor(n.type)}</span>
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-baseline justify-between gap-2">
-                                        <p class={`font-semibold text-sm ${n.is_read ? "text-brand-ink-soft" : "text-brand-ink"}`}>
-                                            {n.title}
-                                        </p>
-                                        <span class="text-xs text-brand-ink-soft whitespace-nowrap">
-                                            {timeAgo(n.created_at)}
-                                        </span>
-                                    </div>
-                                    {n.body && (
-                                        <p class="text-xs text-brand-ink-soft mt-1">{n.body}</p>
-                                    )}
-                                    <div class="flex gap-2 mt-2">
-                                        {n.link && (
-                                            <a
-                                                href={n.link}
-                                                class="text-xs font-semibold text-brand-sky-deep hover:underline"
-                                            >
-                                                {lang === "es" ? "Ver →" : "View →"}
-                                            </a>
-                                        )}
-                                        {!n.is_read && (
-                                            <form method="POST" class="inline">
-                                                <input type="hidden" name="action" value="mark_read" />
-                                                <input type="hidden" name="notif_id" value={n.id} />
-                                                <button
-                                                    type="submit"
-                                                    class="text-xs text-brand-ink-soft hover:text-brand-ink underline"
-                                                >
-                                                    {lang === "es" ? "Marcar leída" : "Mark read"}
-                                                </button>
-                                            </form>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </li>
+                <div class="space-y-5">
+                    {groups.map((g) => (
+                        <section class="space-y-2">
+                            <h2 class="px-1 text-xs font-bold uppercase tracking-wider text-brand-ink-soft">
+                                {bucketLabel[g.bucket]}
+                            </h2>
+                            <ul class="space-y-2">
+                                {g.items.map((n: any) => (
+                                    <li>
+                                        <form method="POST">
+                                            <input type="hidden" name="action" value="open" />
+                                            <input type="hidden" name="notif_id" value={n.id} />
+                                            <input type="hidden" name="link" value={n.link ?? ""} />
+                                            <button type="submit" class={cardClass(n)}>
+                                                <span class="flex items-start gap-3">
+                                                    <span class="text-2xl flex-shrink-0" aria-hidden="true">{iconFor(n.type)}</span>
+                                                    <span class="flex-1 min-w-0 block">
+                                                        <span class="flex items-baseline justify-between gap-2">
+                                                            <span class={`text-sm ${n.is_read ? "font-medium text-brand-ink-soft" : "font-bold text-brand-ink"}`}>
+                                                                {n.title}
+                                                            </span>
+                                                            <span class="flex items-center gap-1.5 text-xs text-brand-ink-soft whitespace-nowrap">
+                                                                {!n.is_read && (
+                                                                    <span class="h-2 w-2 rounded-full bg-brand-coral" role="img" aria-label={labels.unread_one}></span>
+                                                                )}
+                                                                {timeAgo(n.created_at)}
+                                                            </span>
+                                                        </span>
+                                                        {n.body && (
+                                                            <span class="block text-xs text-brand-ink-soft mt-1">{n.body}</span>
+                                                        )}
+                                                    </span>
+                                                </span>
+                                            </button>
+                                        </form>
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
                     ))}
-                </ul>
+                </div>
             )}
 </PageLayout>

@@ -21,6 +21,7 @@ from app.services.jarvis_service import (
     JarvisService,
     JarvisSupportNotConfigured,
     JarvisUpstreamError,
+    split_actions_suffix,
 )
 from app.services.jarvis_pending_action_service import PendingActionService
 from app.services.jarvis_mcp_token_service import TokenService
@@ -58,6 +59,7 @@ class HistoryItem(BaseModel):
     content: str
     created_at: datetime
     mode: Optional[str] = None
+    actions: List[str] = []
 
     model_config = {"from_attributes": True}
 
@@ -158,7 +160,13 @@ async def history(
         role=current_user.role,
         mode=mode,
     )
-    return [HistoryItem.model_validate(r) for r in rows]
+    items: list[HistoryItem] = []
+    for row in rows:
+        item = HistoryItem.model_validate(row)
+        if item.role == "assistant":
+            item.content, item.actions = split_actions_suffix(item.content)
+        items.append(item)
+    return items
 
 
 @router.delete("/history", status_code=status.HTTP_204_NO_CONTENT)

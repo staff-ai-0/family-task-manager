@@ -141,9 +141,7 @@ const onbPct = Math.round((onbDone / onbTotal) * 100);
         )}
         <GigsIntroBanner lang={lang} show={!user.acknowledged_gigs_intro} />
 
-        <div class="px-4 mt-4 flex items-center">
-            <EnablePushButton lang={lang} />
-        </div>
+        <EnablePushButton lang={lang} userId={user.id} class="px-4 mt-4 flex items-center" />
     </Fragment>
             <a href="/family-cup" class="block mb-6">
                 <BossBattleBar boss={boss} lang={lang} />

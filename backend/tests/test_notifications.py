@@ -464,3 +464,118 @@ class TestMorningReminderSweep:
             .all()
         )
         assert {n.user_id for n in rows} == {test_child_user.id}
+
+
+from sqlalchemy import update as sa_update
+
+from app.services.notification_service import UNREAD_BADGE_WINDOW_DAYS
+
+
+async def _mk(db, family_id, user_id, type_, title):
+    return await NotificationService.create(
+        db, family_id=family_id, user_id=user_id, type=type_, title=title, push=False,
+    )
+
+
+async def _is_read(db, notif_id) -> bool:
+    row = (await db.execute(
+        select(Notification.is_read).where(Notification.id == notif_id)
+    )).scalar_one()
+    return bool(row)
+
+
+class TestSupersedingReminders:
+    """UX-A 2026-09-27: prod had 958 unread rows, 664 of them stale
+    task_due / task_assigned reminders. A newer reminder of the same type for
+    the same user marks the older unread ones read."""
+
+    async def test_new_task_due_marks_older_unread_task_due_read(
+        self, db_session, test_family, test_child_user,
+    ):
+        old = await _mk(db_session, test_family.id, test_child_user.id, NotificationType.TASK_DUE, "yesterday")
+        new = await _mk(db_session, test_family.id, test_child_user.id, NotificationType.TASK_DUE, "today")
+        assert await _is_read(db_session, old.id) is True
+        assert await _is_read(db_session, new.id) is False
+        refreshed = (await db_session.execute(
+            select(Notification).where(Notification.id == old.id)
+        )).scalar_one()
+        assert refreshed.read_at is not None
+
+    async def test_new_task_assigned_marks_older_task_assigned_read(
+        self, db_session, test_family, test_child_user,
+    ):
+        old = await _mk(db_session, test_family.id, test_child_user.id, NotificationType.TASK_ASSIGNED, "last week")
+        await _mk(db_session, test_family.id, test_child_user.id, NotificationType.TASK_ASSIGNED, "this week")
+        assert await _is_read(db_session, old.id) is True
+
+    async def test_supersede_is_scoped_to_same_user_type_and_family(
+        self, db_session, test_family, test_child_user, test_teen_user,
+        other_family, other_parent,
+    ):
+        survivors = [
+            await _mk(db_session, test_family.id, test_child_user.id, NotificationType.GIG_APPROVED, "other type"),
+            await _mk(db_session, test_family.id, test_teen_user.id, NotificationType.TASK_DUE, "other user"),
+            await _mk(db_session, test_family.id, None, NotificationType.TASK_DUE, "family-wide"),
+            await _mk(db_session, other_family.id, other_parent.id, NotificationType.TASK_DUE, "other family"),
+        ]
+        await _mk(db_session, test_family.id, test_child_user.id, NotificationType.TASK_DUE, "trigger")
+        for n in survivors:
+            assert await _is_read(db_session, n.id) is False, n.title
+
+    async def test_other_types_never_supersede(
+        self, db_session, test_family, test_child_user,
+    ):
+        first = await _mk(db_session, test_family.id, test_child_user.id, NotificationType.GIG_APPROVED, "gig 1")
+        await _mk(db_session, test_family.id, test_child_user.id, NotificationType.GIG_APPROVED, "gig 2")
+        assert await _is_read(db_session, first.id) is False
+
+    async def test_create_no_commit_supersedes_on_commit(
+        self, db_session, test_family, test_child_user,
+    ):
+        old = await _mk(db_session, test_family.id, test_child_user.id, NotificationType.TASK_ASSIGNED, "old")
+        await NotificationService.create_no_commit(
+            db_session, family_id=test_family.id, user_id=test_child_user.id,
+            type=NotificationType.TASK_ASSIGNED, title="new",
+        )
+        await db_session.commit()
+        assert await _is_read(db_session, old.id) is True
+
+    async def test_supersede_rolls_back_with_the_new_row(
+        self, db_session, test_family, test_child_user,
+    ):
+        old = await _mk(db_session, test_family.id, test_child_user.id, NotificationType.TASK_DUE, "old")
+        old_id = old.id
+        user_id = test_child_user.id
+        await NotificationService.create_no_commit(
+            db_session, family_id=test_family.id, user_id=user_id,
+            type=NotificationType.TASK_DUE, title="never committed",
+        )
+        await db_session.rollback()
+        assert await _is_read(db_session, old_id) is False
+        rows = (await db_session.execute(
+            select(Notification).where(
+                Notification.user_id == user_id,
+                Notification.type == NotificationType.TASK_DUE,
+            )
+        )).scalars().all()
+        assert len(rows) == 1
+
+
+class TestUnreadBadgeWindow:
+    async def test_unread_count_ignores_rows_older_than_window(
+        self, db_session, test_family, test_child_user,
+    ):
+        now = datetime.now(timezone.utc)
+        fresh = await _mk(db_session, test_family.id, test_child_user.id, NotificationType.GIG_APPROVED, "fresh")
+        edge = await _mk(db_session, test_family.id, test_child_user.id, NotificationType.GIG_APPROVED, "13 days")
+        stale = await _mk(db_session, test_family.id, test_child_user.id, NotificationType.GIG_APPROVED, "15 days")
+        await db_session.execute(sa_update(Notification).where(Notification.id == edge.id)
+                                 .values(created_at=now - timedelta(days=UNREAD_BADGE_WINDOW_DAYS - 1)))
+        await db_session.execute(sa_update(Notification).where(Notification.id == stale.id)
+                                 .values(created_at=now - timedelta(days=UNREAD_BADGE_WINDOW_DAYS + 1)))
+        await db_session.commit()
+
+        assert await NotificationService.unread_count(db_session, test_child_user.id, test_family.id) == 2
+        # Old rows are still in the feed — they just stop inflating the badge.
+        feed = await NotificationService.list_for_user(db_session, test_child_user.id, test_family.id)
+        assert {n.title for n in feed} >= {fresh.title, edge.title, stale.title}

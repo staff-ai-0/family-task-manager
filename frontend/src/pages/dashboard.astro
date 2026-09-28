@@ -10,6 +10,7 @@ import { apiFetch } from "../lib/api";
 import { fmtDateTime } from "../lib/datetime";
 import { t } from "../lib/i18n";
 import { stageLabel } from "../lib/pet-art";
+import { pickDashboardRoutines, routineName, routineProgress } from "../lib/routines";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -17,10 +18,12 @@ const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
 
 // /auth/me, daily progress (assignments + gating status) and the family-cup
 // boss are independent — fetch in parallel instead of serially.
-const [{ data: user, ok: userOk }, { data: progress }, { data: familyCup }] = await Promise.all([
+const [{ data: user, ok: userOk }, { data: progress }, { data: familyCup }, { data: routinesToday }] = await Promise.all([
     apiFetch<any>("/api/auth/me", { token }),
     apiFetch<any>("/api/task-assignments/progress", { token }),
     apiFetch<any>("/api/family-cup/", { token }),
+    // Icon tap-through routines. apiFetch never throws; null → no strip.
+    apiFetch<any>("/api/routines/today", { token }),
 ]);
 if (!userOk) {
     Astro.cookies.delete("access_token", { path: "/" });
@@ -39,6 +42,7 @@ if (user.role === "parent") {
 // Cooperative weekly boss battle (points/analytics based, no pet). Best-effort —
 // a null just hides the bar.
 const boss = familyCup?.boss ?? null;
+const dashboardRoutines = pickDashboardRoutines(routinesToday?.routines);
 
 const requiredTotal = progress?.required_total ?? 0;
 const requiredCompleted = progress?.required_completed ?? 0;
@@ -188,6 +192,23 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                     {user.name.charAt(0).toUpperCase()}
                 </div>
             </div>
+            {dashboardRoutines.length > 0 && (
+                <div class="mb-4 space-y-2" data-routines-strip>
+                    {dashboardRoutines.map((r) => (
+                        <a
+                            href="/routines"
+                            class="press flex items-center gap-3 rounded-2xl bg-brand-cream/20 border border-white/30 px-4 py-3"
+                        >
+                            <span class="text-2xl leading-none" aria-hidden="true">{r.icon || "⭐"}</span>
+                            <span class="flex-1 font-bold">{routineName(r, lang)}</span>
+                            <span class="text-sm font-extrabold tabular-nums">{routineProgress(r)}</span>
+                            <svg class="h-4 w-4 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                            </svg>
+                        </a>
+                    ))}
+                </div>
+            )}
             <div class="bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 flex items-center justify-between border border-white/30">
                 <div>
                     <p class="text-brand-cream text-xs font-semibold uppercase tracking-wider mb-1">
@@ -326,9 +347,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         <GigsIntroBanner lang={lang} show={!user.acknowledged_gigs_intro} />
 
         {isKid && (
-            <div class="px-4 pb-2">
-                <EnablePushButton lang={lang} />
-            </div>
+            <EnablePushButton lang={lang} userId={user.id} class="px-4 pb-2" />
         )}
 
         {flash && (
