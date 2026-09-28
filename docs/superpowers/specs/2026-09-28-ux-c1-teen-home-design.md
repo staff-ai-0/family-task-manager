@@ -113,3 +113,14 @@ The proof flow (photo upload modal + submit) currently lives inline in `dashboar
 ## Rollout
 
 One PR → CI → merge → `deploy-onprem.sh` (no migration: the new notification type is a string constant on a `String(48)` column) → the manual checks above. The new-gig notification check is the **only prod write**: post one clearly named test gig ("Prueba UX-C1") in the **demo** family as the demo parent, confirm the demo teen and child get "💵 Nuevo", then archive the gig. Never in the owner's real family.
+
+## Plan-time refinements (2026-09-28)
+
+Recorded in the plan (`docs/superpowers/plans/2026-09-28-ux-c1-deck-home.md`):
+counts update client-side after each completion, while the pay meter and a
+newly unlocked bonus refresh on reload (celebration offers "Ver bonus");
+the kid page splits into `KidHeader` (header slot) + `KidHome` (body);
+prior-day gigs awaiting a decision survive as a "⏳ N en revisión" chip;
+payday card and GigsIntroBanner leave `/dashboard`; star-mode children use the
+points goal and see no gigs row; `/api/assignments/complete` gains a JSON mode
+for the deck (form mode unchanged).
