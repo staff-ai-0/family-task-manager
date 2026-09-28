@@ -61,7 +61,8 @@ Success = after deploy, on prod:
 - New `PushService.keypair_status() -> dict` returning
   `{"configured": bool, "valid_keys": bool, "error": str | None}`.
   `configured` = both keys non-empty. `valid_keys` = the private key loads via
-  `py_vapid.Vapid.from_string()` (accepts raw base64url and PEM) **and** its
+  `py_vapid.Vapid.from_string()` (raw or DER, base64url — exactly what
+  pywebpush uses for a real send; a PEM string would fail there too) **and** its
   derived public key (X9.62 uncompressed point, base64url, no padding)
   equals `VAPID_PUBLIC_KEY` with any `=` padding stripped. Any exception →
   `valid_keys=False`, `error` = exception class name (never key material).
@@ -91,9 +92,11 @@ to show, in this order:
 2. `PushManager` missing otherwise → hide the whole component.
 3. `Notification.permission === "denied"` → hide button, show "Avisos
    bloqueados en el navegador" / EN.
-4. Existing subscription (`reg.pushManager.getSubscription()` non-null) →
-   hide the whole component.
-5. `GET /api/push/public-key` returns non-2xx → hide the whole component.
+4. `GET /api/push/public-key` returns non-2xx → hide the whole component.
+5. Existing subscription made with the **current** server key → hide the
+   whole component, and re-post it to `/api/push/subscribe` at most once a
+   day (a row the server pruned comes back). Made with an **older** key →
+   unsubscribe it and fall through to 6 (every send to it would 403).
 6. Otherwise → current button, current subscribe flow.
 
 ### 2. Notification noise (F7)
@@ -157,9 +160,12 @@ depends on it). No schema change.
 
 **`frontend/src/pages/kiosk.astro`** — replace both
 `return new Response("Missing token", 400)` and
-`return new Response("Invalid token", …)` with a rendered, branded,
-standalone page (same document shell the kiosk already uses). HTTP status
-stays 400 (missing) / the API's status (invalid).
+`return new Response("Invalid token", …)` with a branded standalone HTML
+page (rendered by a pure helper in `frontend/src/lib/kiosk-unpaired.ts`,
+because the page bails out before its own template). Three reasons:
+missing token → 400; invalid/revoked token (4xx from the snapshot API) → that
+status; backend unreachable or 5xx → 503 with "Tablero no disponible /
+Reintentar" (a wall tablet mid-deploy must not be told its link expired).
 
 - Title: "Esta pantalla no está vinculada" / "This screen isn't paired".
 - Subtitle: missing → "Abre el enlace de kiosko desde Ajustes → Kiosko";
@@ -176,8 +182,9 @@ stays 400 (missing) / the API's status (invalid).
   New inline SVG icon (sun-over-list), same stroke style as the others.
   Not tied to the module registry (routines are core, like tasks).
 - `frontend/src/pages/dashboard.astro`: SSR-fetch `GET /api/routines/today`
-  (fail-open: any error → no strip). If it returns ≥1 routine, render a
-  compact strip at the top of the main content, above the points cards: one
+  (fail-open: any error → no strip). If it returns ≥1 routine with steps,
+  render a compact strip inside the kid header, right under the greeting and
+  above the points card: one
   row per routine (max 2, morning/evening first) — icon, localized name,
   `steps_done/total_steps`, ✓ when `completed`, whole row links to
   `/routines`. No routines → nothing rendered.
