@@ -36,5 +36,14 @@ export function safeNotificationLink(link: unknown): string {
     if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("/\\")) {
         return "/notifications";
     }
-    return path;
+    // Belt-and-suspenders: the WHATWG URL parser strips embedded tab/newline
+    // bytes before parsing, so "/\t/evil.example/x" becomes "//evil.example/x"
+    // (protocol-relative) even though the startsWith checks above missed it.
+    // Resolving against a sentinel origin and checking it survived catches that.
+    try {
+        const u = new URL(path, "http://x.invalid");
+        return u.origin === "http://x.invalid" ? u.pathname + u.search + u.hash : "/notifications";
+    } catch (_) {
+        return "/notifications";
+    }
 }

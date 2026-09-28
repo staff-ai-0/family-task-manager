@@ -50,7 +50,13 @@ describe("safeNotificationLink", () => {
         [""],
         [null],
         [undefined],
+        ["/\t/evil.example/x"],
+        ["/\n/evil.example/x"],
+        ["/\r\n//evil.example"],
     ])("sends %s back to /notifications", (link) => {
         expect(safeNotificationLink(link)).toBe("/notifications");
+    });
+    it("keeps a same-origin path unchanged after the sentinel-origin resolve", () => {
+        expect(safeNotificationLink("/parent/approvals?x=1")).toBe("/parent/approvals?x=1");
     });
 });
