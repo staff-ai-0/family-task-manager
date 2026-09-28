@@ -212,7 +212,7 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
         };
 
         function later() {
-            if (busy || order.length < 2) return;
+            if (busy || submitting || order.length < 2) return;
             order.push(order.shift()!);
             layout();
         }
@@ -285,6 +285,12 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
         const photoLabel = root.querySelector<HTMLElement>("[data-proof-photo-label]");
         const proofTitle = root.querySelector<HTMLElement>("[data-proof-title]");
         let proofCard: HTMLElement | null = null;
+        // Single-flight guard for the proof-submit handler specifically:
+        // `busy` (above) only becomes true once complete() runs, but the
+        // submit handler awaits an upload *before* calling complete(), so it
+        // needs its own flag to reject a second tap while that upload is
+        // still in flight.
+        let submitting = false;
 
         function openProof(card: HTMLElement) {
             if (!dialog) return;
@@ -314,10 +320,15 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
         });
         dialog?.addEventListener("cancel", cancelProof);
 
-        root.querySelector("[data-proof-submit]")?.addEventListener("click", async () => {
-            if (!proofCard || busy) return;
+        root.querySelector<HTMLButtonElement>("[data-proof-submit]")?.addEventListener("click", async (e) => {
+            if (!proofCard || busy || submitting) return;
             const card = proofCard;
+            const btn = e.currentTarget as HTMLButtonElement;
+            submitting = true;
+            btn.disabled = true;
             const fail = (msg: string) => {
+                submitting = false;
+                btn.disabled = false;
                 if (status) {
                     status.textContent = msg;
                     status.classList.add("text-red-600");
@@ -344,6 +355,12 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
                     return fail(t.network);
                 }
             }
+            // The upload (if any) has settled. If the sheet was cancelled
+            // meanwhile, cancelProof() already cleared proofCard and sprang
+            // this card back — do not complete a task the user backed out of.
+            submitting = false;
+            btn.disabled = false;
+            if (proofCard !== card) return;
             proofCard = null;
             dialog?.close();
             await complete(card, text, imageUrl);
@@ -351,7 +368,7 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
 
         function done() {
             const card = order[0];
-            if (!card || busy || card.dataset.locked === "1") return;
+            if (!card || busy || submitting || card.dataset.locked === "1") return;
             if (card.dataset.proof === "1" || card.dataset.bonus === "1") openProof(card);
             else void complete(card);
         }
@@ -375,7 +392,7 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
         stack.addEventListener("pointerdown", (e) => {
             const target = e.target as HTMLElement;
             const card = target.closest<HTMLElement>("[data-deck-card]");
-            if (!card || card !== order[0] || busy || target.closest("button")) return;
+            if (!card || card !== order[0] || busy || submitting || target.closest("button")) return;
             dragging = card;
             startX = e.clientX;
             dx = 0;
