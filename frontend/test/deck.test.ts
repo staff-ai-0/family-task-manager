@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDeck } from "../src/lib/deck";
+import { afterComplete, buildDeck } from "../src/lib/deck";
 
 const a = (over: Record<string, unknown>) => ({
     id: "a",
@@ -44,6 +44,23 @@ describe("buildDeck", () => {
         expect(deck.cards[0]).toMatchObject({ overdue: true, overdueCount: 2 });
         expect(deck.cards[1]).toMatchObject({ overdue: true, overdueCount: 1 });
         expect(deck.cards[2].overdue).toBe(false);
+    });
+
+    it("carries every grouped overdue instance id, oldest first", () => {
+        const deck = buildDeck(progress({
+            overdue_assignments: [
+                a({ id: "o2", template_id: "dishes", assigned_date: "2026-09-26" }),
+                a({ id: "o3", template_id: "dishes", assigned_date: "2026-09-27" }),
+                a({ id: "o1", template_id: "dishes", assigned_date: "2026-09-25" }),
+                a({ id: "b1", template_id: "bed", assigned_date: "2026-09-26" }),
+            ],
+            assignments: [a({ id: "r1", template_id: "trash" })],
+        }), "es");
+        expect(deck.cards.map((c) => [c.id, c.overdueIds])).toEqual([
+            ["o1", ["o1", "o2", "o3"]],
+            ["b1", ["b1"]],
+            ["r1", []],
+        ]);
     });
 
     it("works when only overdue chores exist", () => {
@@ -102,5 +119,22 @@ describe("buildDeck", () => {
             ],
         }), "es");
         expect(deck).toMatchObject({ doneToday: 2, totalToday: 5, inReview: 1 });
+    });
+});
+
+describe("afterComplete", () => {
+    it("advances a grouped overdue card to its next-oldest instance, then ends", () => {
+        expect(afterComplete({ id: "o1", overdueIds: ["o1", "o2", "o3"] })).toEqual({ nextId: "o2", remaining: 2 });
+        expect(afterComplete({ id: "o2", overdueIds: ["o1", "o2", "o3"] })).toEqual({ nextId: "o3", remaining: 1 });
+        expect(afterComplete({ id: "o3", overdueIds: ["o1", "o2", "o3"] })).toEqual({ nextId: null, remaining: 0 });
+    });
+
+    it("removes single overdue and non-overdue cards", () => {
+        expect(afterComplete({ id: "o1", overdueIds: ["o1"] })).toEqual({ nextId: null, remaining: 0 });
+        expect(afterComplete({ id: "r1", overdueIds: [] })).toEqual({ nextId: null, remaining: 0 });
+    });
+
+    it("never repeats an id the card is not on", () => {
+        expect(afterComplete({ id: "zz", overdueIds: ["o1", "o2"] })).toEqual({ nextId: null, remaining: 0 });
     });
 });

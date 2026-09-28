@@ -5,6 +5,8 @@
  * swipe left / "← Después" / ← sends it to the back (this page session only).
  * Proof-required and bonus cards open the photo/note sheet first. A card is
  * removed only after the server says OK; failures spring it back with a toast.
+ * A grouped overdue card (×N) stays on top, advancing to its next-oldest
+ * instance, until its last instance is done.
  */
 import type { DeckCard } from "../../lib/deck";
 
@@ -85,13 +87,15 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
                 data-locked={c.locked ? "1" : "0"}
                 data-proof={c.requiresProof ? "1" : "0"}
                 data-bonus={c.isBonus ? "1" : "0"}
+                data-overdue={c.overdue ? "1" : undefined}
+                data-overdue-ids={c.overdue ? c.overdueIds.join(",") : undefined}
                 class="absolute inset-0 rounded-[var(--radius-card)] border-2 border-brand-ink bg-white p-4 shadow-[var(--shadow-card)] select-none touch-pan-y will-change-transform"
                 style={`z-index:${cards.length - i}`}
             >
                 <div class="flex flex-wrap gap-1.5">
                     {c.overdue && (
                         <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-                            {L.overdue}{c.overdueCount > 1 ? ` ×${c.overdueCount}` : ""}
+                            {L.overdue}<span data-overdue-count>{c.overdueCount > 1 ? ` ×${c.overdueCount}` : ""}</span>
                         </span>
                     )}
                     {c.isBonus && !c.locked && (
@@ -158,6 +162,7 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
 <script>
     import { showToast } from "../../lib/toast";
     import { celebrate } from "../../lib/celebrate";
+    import { afterComplete } from "../../lib/deck";
 
     const SWIPE_RATIO = 0.3;
 
@@ -257,11 +262,27 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
                     return;
                 }
                 const isBonus = card.dataset.bonus === "1";
+                // "N/M hoy" counts today's required chores only — an overdue
+                // instance is a past day's chore.
+                if (!isBonus && card.dataset.overdue !== "1") bumpCounters();
+                showToast(body.message || "🎉", "success", 2500);
+                root.dispatchEvent(new CustomEvent("ftm:deck-completed", { bubbles: true, detail: { isBonus } }));
+                const next = afterComplete({
+                    id: card.dataset.id ?? "",
+                    overdueIds: (card.dataset.overdueIds ?? "").split(",").filter(Boolean),
+                });
+                if (next.nextId) {
+                    // Grouped overdue card: the next-oldest instance takes
+                    // this card's place on top; the day is not done yet.
+                    card.dataset.id = next.nextId;
+                    const count = card.querySelector<HTMLElement>("[data-overdue-count]");
+                    if (count) count.textContent = next.remaining > 1 ? ` ×${next.remaining}` : "";
+                    order = [card, ...order.filter((c) => c !== card)];
+                    layout();
+                    return;
+                }
                 order = order.filter((c) => c !== card);
                 flyOff(card);
-                showToast(body.message || "🎉", "success", 2500);
-                if (!isBonus) bumpCounters();
-                root.dispatchEvent(new CustomEvent("ftm:deck-completed", { bubbles: true, detail: { isBonus } }));
                 const actionable = order.filter((c) => c.dataset.locked !== "1");
                 if (actionable.length === 0) {
                     finish(order.length > 0);
