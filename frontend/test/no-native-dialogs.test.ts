@@ -11,7 +11,7 @@ function walk(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {
         const path = join(dir, name);
         if (statSync(path).isDirectory()) return walk(path);
-        return /\.(astro|ts)$/.test(name) ? [path] : [];
+        return /\.(astro|ts|tsx|js|jsx|mjs)$/.test(name) ? [path] : [];
     });
 }
 
@@ -25,6 +25,22 @@ describe("scanSource", () => {
             `<form onsubmit="return confirm('Delete?')">`,
         ].join("\n");
         expect(scanSource(src).map((h) => h.line)).toEqual([1, 2, 3, 4, 4, 4, 5]);
+    });
+    it("flags globalThis./self. and the optional-chained window?. spellings", () => {
+        const src = [
+            "globalThis.alert(1);",
+            "self.confirm(2);",
+            "window?.prompt(3);",
+            "globalThis?.alert(4);",
+            "self?.confirm(5);",
+        ].join("\n");
+        expect(scanSource(src)).toEqual([
+            { line: 1, match: "globalThis.alert(" },
+            { line: 2, match: "self.confirm(" },
+            { line: 3, match: "window?.prompt(" },
+            { line: 4, match: "globalThis?.alert(" },
+            { line: 5, match: "self?.confirm(" },
+        ]);
     });
     it("ignores lookalikes", () => {
         const src = [

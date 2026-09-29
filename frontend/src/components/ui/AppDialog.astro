@@ -118,6 +118,8 @@
                     title.textContent = o.title;
                     body.textContent = o.body ?? "";
                     body.hidden = !o.body;
+                    if (o.body) dlg.setAttribute("aria-describedby", "app-dialog-body");
+                    else dlg.removeAttribute("aria-describedby");
                     ok.textContent = o.confirmLabel ?? labels.ok;
                     cancel.textContent = o.cancelLabel ?? labels.cancel;
                     ok.classList.toggle("bg-red-600", !!o.danger);
@@ -159,6 +161,14 @@
         dlg.addEventListener("click", (e) => {
             if (e.target === dlg) finish(cancelled());
         });
+        // Fail-safe: if the dialog closes by some path other than finish()
+        // (e.g. a future call to dlg.close(), or a browser/OS dismissal we
+        // don't otherwise handle), settle the pending promise instead of
+        // stalling the queue forever. finish() itself clears `settle` before
+        // calling dlg.close(), so this is a no-op on the normal path.
+        dlg.addEventListener("close", () => {
+            if (settle) finish(cancelled());
+        });
         // Keep keyboard shortcuts (BottomNav, MoreSheet, budget page hotkeys) from
         // firing behind the modal sheet. The native `cancel` event on Esc still
         // fires (it's dispatched on `dlg` directly, not reached via bubbling here).
@@ -172,13 +182,16 @@
             "submit",
             async (e) => {
                 const form = e.target;
-                if (!(form instanceof HTMLFormElement)) return;
-                const opts = confirmOptionsFromDataset(form.dataset);
-                if (!opts) return;
+                // Presence of the attribute is the gate — not confirmOptionsFromDataset's
+                // return value — so a present-but-empty data-confirm-sheet="" (generic
+                // title) still gets intercepted (F1).
+                if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-confirm-sheet")) return;
                 if (form.dataset.confirmSheetOk === "1") {
                     delete form.dataset.confirmSheetOk;
                     return;
                 }
+                const opts = confirmOptionsFromDataset(form.dataset, document.documentElement.lang);
+                if (!opts) return;
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 const submitter = (e as SubmitEvent).submitter;
@@ -197,12 +210,12 @@
             "click",
             async (e) => {
                 const el = (e.target as Element | null)?.closest?.("a[data-confirm-sheet], button[data-confirm-sheet]");
-                if (!(el instanceof HTMLElement)) return;
+                if (!(el instanceof HTMLElement) || !el.hasAttribute("data-confirm-sheet")) return;
                 if (el.dataset.confirmSheetOk === "1") {
                     delete el.dataset.confirmSheetOk;
                     return;
                 }
-                const opts = confirmOptionsFromDataset(el.dataset);
+                const opts = confirmOptionsFromDataset(el.dataset, document.documentElement.lang);
                 if (!opts) return;
                 e.preventDefault();
                 e.stopImmediatePropagation();

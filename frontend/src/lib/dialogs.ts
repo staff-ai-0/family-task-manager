@@ -46,6 +46,13 @@ export function defaultLabels(lang: string): { ok: string; cancel: string } {
 
 const asNumber = (value: string) => Number(value.trim().replace(",", "."));
 
+// A comma followed by EXACTLY three digits at the end ("1,000", "12,500")
+// reads as thousands grouping to a human, but asNumber() below treats the
+// comma as a decimal separator ("1,000" -> 1) — silently wrong by 3 orders
+// of magnitude. Anything else with a comma ("12,50", "12,5", "1,0005")
+// keeps the existing decimal-comma behavior.
+const AMBIGUOUS_THOUSANDS = /,\d{3}$/;
+
 export function isPromptValueValid(
     value: string,
     opts: Pick<PromptOptions, "requireMatch" | "inputType" | "minLength">,
@@ -53,7 +60,10 @@ export function isPromptValueValid(
     if (opts.requireMatch !== undefined) return value.trim() === opts.requireMatch.trim();
     if (opts.minLength !== undefined && value.trim().length < opts.minLength) return false;
     if (opts.inputType === "number") {
-        return value.trim() === "" || ((value.match(/,/g) ?? []).length <= 1 && Number.isFinite(asNumber(value)));
+        const trimmed = value.trim();
+        if (trimmed === "") return true;
+        if (AMBIGUOUS_THOUSANDS.test(trimmed)) return false;
+        return (trimmed.match(/,/g) ?? []).length <= 1 && Number.isFinite(asNumber(trimmed));
     }
     return true;
 }
@@ -86,10 +96,19 @@ export function promptSheet(opts: PromptOptions): Promise<string | null> {
     );
 }
 
-/** `data-confirm-sheet` / `-body` / `-label` / `-danger` → ConfirmOptions. */
-export function confirmOptionsFromDataset(ds: Record<string, string | undefined>): ConfirmOptions | null {
-    const title = ds.confirmSheet;
-    if (!title) return null;
+/**
+ * `data-confirm-sheet` / `-body` / `-label` / `-danger` → ConfirmOptions.
+ * Presence of the attribute is the trigger, not its value: an element with
+ * `data-confirm-sheet=""` still gets a confirm, just with a generic title
+ * (`lang` picks the fallback copy) — only a wholly absent attribute (or the
+ * unrelated legacy `data-confirm`) yields null.
+ */
+export function confirmOptionsFromDataset(
+    ds: Record<string, string | undefined>,
+    lang: string = "",
+): ConfirmOptions | null {
+    if (ds.confirmSheet === undefined) return null;
+    const title = ds.confirmSheet || (lang === "es" ? "¿Continuar?" : "Continue?");
     return {
         title,
         body: ds.confirmBody || undefined,

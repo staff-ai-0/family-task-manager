@@ -92,7 +92,7 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                             : "Too many attempts. Wait a moment and try again.")
                         : (data.message || data.detail || "Login failed");
                     // Toast library is loaded by the module script below;
-                    // if it hasn't arrived yet, fall back to alert.
+                    // if it hasn't arrived yet, fall back to logging to the console.
                     if (window.__showToast) {
                         window.__showToast(msg, "error");
                     } else {

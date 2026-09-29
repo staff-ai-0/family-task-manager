@@ -280,11 +280,13 @@ test.describe('Reward Management', () => {
         return;
       }
 
-      // The redeem form is gated by a client-side window.confirm() (see
-      // rewards.astro's data-redeem-form handler) — without a handler,
-      // Playwright auto-dismisses it and the POST never fires.
-      page.on('dialog', (dialog) => dialog.accept());
+      // The redeem form is gated by the in-app confirm sheet (see
+      // rewards.astro's data-confirm-sheet + components/ui/AppDialog.astro)
+      // — there's no native window.confirm() any more, so drive the sheet
+      // itself instead of an auto-accepting dialog handler.
       await redeemButton.click();
+      await page.locator('#app-dialog[open]').waitFor();
+      await page.locator('#app-dialog-ok').click();
 
       // Redeem is a server-side form POST that sets a flash banner and
       // redirects. Two valid outcomes (frontend/src/pages/rewards.astro):

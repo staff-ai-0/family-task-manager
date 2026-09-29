@@ -67,13 +67,22 @@ test.describe('UX polish (#55)', () => {
       });
       expect(r.status()).toBe(201);
     }
-    page.on('dialog', (d) => d.accept()); // auto-accept the "Archive?" confirm
     await page.goto(`${BASE_URL}/parent/gigs`);
     await page.waitForLoadState('networkidle');
+
+    // Archiving is gated by the in-app confirm sheet (parent/gigs.astro's
+    // confirmSheet() call + components/ui/AppDialog.astro) — no native
+    // window.confirm() any more, so drive the sheet itself after each click
+    // instead of an auto-accepting dialog handler.
+    const acceptArchiveConfirm = async () => {
+      await page.locator('#app-dialog[open]').waitFor();
+      await page.locator('#app-dialog-ok').click();
+    };
 
     expect(await page.locator('[data-gig-card]').count()).toBeGreaterThanOrEqual(2);
     const cardA = page.locator('[data-gig-card]', { hasText: titleA });
     await cardA.locator('.archive-gig-btn').click();
+    await acceptArchiveConfirm();
 
     // In-place removal: A vanishes, B stays — no full-page reload to empty-state.
     await expect(page.locator('[data-gig-card]', { hasText: titleA })).toHaveCount(0);
@@ -82,6 +91,7 @@ test.describe('UX polish (#55)', () => {
 
     // Cleanup: archive B too so this run doesn't leave data for the next one.
     await cardB.locator('.archive-gig-btn').click();
+    await acceptArchiveConfirm();
     await expect(page.locator('[data-gig-card]', { hasText: titleB })).toHaveCount(0);
   });
 });

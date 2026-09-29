@@ -2,7 +2,10 @@
  * Finds native alert/confirm/prompt calls in source text (UX-B1 guard).
  * A call preceded by a letter, digit, `_`, `$` or `.` is not native
  * (confirmSheet, obj.confirm, google.accounts.id.prompt) — except the
- * explicit window.alert/confirm/prompt forms.
+ * explicit window.alert/confirm/prompt forms (also globalThis./self., and
+ * the optional-chained window?./globalThis?./self?. spellings — all four
+ * are just as native as the bare call and would otherwise slip through the
+ * lookbehind above because of the dot/`?.` right before the function name).
  *
  * Line comments, block comments and HTML comments are stripped — but only
  * when they start outside a string literal, so a block-comment opener
@@ -14,7 +17,7 @@
  * comments DO carry across lines, since real multi-line comments do.
  */
 const BARE = /(?<![A-Za-z0-9_.$])(?:alert|confirm|prompt)\s*\(/g;
-const WINDOW = /\bwindow\.(?:alert|confirm|prompt)\s*\(/g;
+const WINDOW = /\b(?:window|globalThis|self)(?:\?\.|\.)(?:alert|confirm|prompt)\s*\(/g;
 
 export function scanSource(text: string): { line: number; match: string }[] {
     const hits: { line: number; match: string }[] = [];

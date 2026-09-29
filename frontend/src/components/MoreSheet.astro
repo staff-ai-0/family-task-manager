@@ -164,6 +164,7 @@ const links = isParent ? parentLinks : kidLinks;
                     {es ? "English" : "Español"}
                 </button>
             </form>
+            <!-- Confirm logout so an accidental tap on a shared tablet doesn't force a full re-login. -->
             <form
                 method="POST"
                 action="/api/auth/logout"

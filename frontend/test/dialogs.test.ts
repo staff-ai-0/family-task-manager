@@ -50,6 +50,14 @@ describe("isPromptValueValid", () => {
             expect(isPromptValueValid(bad, { inputType: "number" })).toBe(false);
         }
     });
+    it("rejects a comma read as thousands grouping, but not a decimal comma", () => {
+        for (const bad of ["1,000", "12,500"]) {
+            expect(isPromptValueValid(bad, { inputType: "number" })).toBe(false);
+        }
+        for (const ok of ["12,50", "12,5", "0,5", "1,0005"]) {
+            expect(isPromptValueValid(ok, { inputType: "number" })).toBe(true);
+        }
+    });
     it("plain text is always valid, even empty", () => {
         expect(isPromptValueValid("", {})).toBe(true);
     });
@@ -69,9 +77,29 @@ describe("confirmOptionsFromDataset", () => {
         expect(confirmOptionsFromDataset({ confirmSheet: "¿Seguro?", confirmBody: "Detalle" }))
             .toEqual({ title: "¿Seguro?", body: "Detalle", confirmLabel: undefined, danger: false });
     });
-    it("is null without a title", () => {
+    it("is null without the attribute (the legacy data-confirm doesn't count)", () => {
+        expect(confirmOptionsFromDataset({})).toBeNull();
         expect(confirmOptionsFromDataset({ confirm: "legacy admin attribute" })).toBeNull();
-        expect(confirmOptionsFromDataset({ confirmSheet: "" })).toBeNull();
+    });
+    it("an empty data-confirm-sheet still confirms, with a generic title", () => {
+        expect(confirmOptionsFromDataset({ confirmSheet: "" }, "es")).toEqual({
+            title: "¿Continuar?",
+            body: undefined,
+            confirmLabel: undefined,
+            danger: false,
+        });
+        expect(confirmOptionsFromDataset({ confirmSheet: "" }, "en")).toEqual({
+            title: "Continue?",
+            body: undefined,
+            confirmLabel: undefined,
+            danger: false,
+        });
+        expect(confirmOptionsFromDataset({ confirmSheet: "" })).toEqual({
+            title: "Continue?",
+            body: undefined,
+            confirmLabel: undefined,
+            danger: false,
+        });
     });
 });
 

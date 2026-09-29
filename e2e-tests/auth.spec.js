@@ -156,14 +156,16 @@ test.describe('Authentication', () => {
       expect(accessToken).toBeDefined();
 
       // Logout lives in the "More" bottom-sheet (MoreSheet.astro), not a top
-      // nav slot — open it first. It's a form submit gated by a
-      // window.confirm() ("Log out?"/"¿Cerrar sesión?"), so needs a dialog
-      // handler too.
+      // nav slot — open it first. It's a form submit gated by the in-app
+      // confirm sheet ("Log out?"/"¿Cerrar sesión?", data-confirm-sheet +
+      // components/ui/AppDialog.astro) — no native window.confirm() any
+      // more, so drive the sheet itself instead of a dialog handler.
       await page.locator('#more-nav-btn').click();
-      page.on('dialog', (dialog) => dialog.accept());
       const logoutButton = page.locator('form[data-logout-form] button');
       if (await logoutButton.count() > 0) {
         await logoutButton.click();
+        await page.locator('#app-dialog[open]').waitFor();
+        await page.locator('#app-dialog-ok').click();
 
         // Wait for redirect to login
         await page.waitForURL('**/login', { timeout: 5000 });
