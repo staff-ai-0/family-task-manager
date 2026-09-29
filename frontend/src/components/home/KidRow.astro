@@ -1,0 +1,109 @@
+---
+/**
+ * One kid on the parent home (UX-C2): today's count, overdue chip, weekly pay
+ * meter (bar only, no $ — C1 rule) or a plain progress bar, goal line, and a
+ * "⏰ Recordar" nudge capped server-side at one per kid per 3 h.
+ */
+import { nudgeLabel, type KidRowView } from "../../lib/parentHub";
+
+interface Props {
+    view: KidRowView;
+    lang: "es" | "en";
+}
+const { view, lang } = Astro.props;
+const es = lang === "es";
+const label = nudgeLabel(view.nudge, lang);
+const showButton = view.nudge.kind === "ready" || view.nudge.kind === "cooldown";
+---
+
+<li data-kid-row data-kid-id={view.id} data-kid-name={view.name}
+    class="bg-white rounded-2xl border border-brand-ink/10 p-3 shadow-[var(--shadow-card)] flex items-center gap-3">
+    <a href="/parent/day" class="flex-1 min-w-0 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-brand-cream-deep flex items-center justify-center font-bold text-sm text-brand-sky-deep shrink-0" aria-hidden="true">
+            {view.initial}
+        </div>
+        <div class="flex-1 min-w-0">
+            <p class="text-sm text-brand-ink truncate">
+                <span class="font-bold">{view.name}</span>
+                {view.doneLabel && <span class="text-brand-ink-soft"> · {view.doneLabel}</span>}
+                {view.overdueChip && (
+                    <span class="ml-1 inline-block rounded-full bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-bold">{view.overdueChip}</span>
+                )}
+            </p>
+            {view.meter.show ? (
+                <div class="mt-1.5 h-1.5 rounded-full bg-brand-ink/10 flex overflow-hidden" role="img" aria-label={es ? "Pago de la semana" : "Weekly pay"}>
+                    <span class="bg-emerald-500" style={`width:${view.meter.greenPct}%`}></span>
+                    <span class="bg-red-400" style={`width:${view.meter.redPct}%`}></span>
+                </div>
+            ) : view.doneLabel ? (
+                <div class="mt-1.5 h-1.5 rounded-full bg-brand-ink/10 overflow-hidden">
+                    <span class="block h-full bg-brand-sky-deep" style={`width:${view.progressPct}%`}></span>
+                </div>
+            ) : null}
+            {view.goalLine && <p class="text-[11px] text-brand-ink-soft mt-1 truncate">{view.goalLine}</p>}
+        </div>
+    </a>
+    {view.nudge.kind === "done" && <span class="text-xs font-extrabold text-emerald-700 whitespace-nowrap">{label}</span>}
+    {showButton && (
+        <button type="button" data-nudge-btn disabled={view.nudge.kind === "cooldown"}
+            class="shrink-0 rounded-xl border px-2.5 py-1.5 text-xs font-bold whitespace-nowrap border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:border-brand-ink/10 disabled:bg-brand-cream-deep disabled:text-brand-ink-soft disabled:font-semibold">
+            {label}
+        </button>
+    )}
+</li>
+
+<script>
+    import { NUDGE_COOLDOWN_MS, nudgeLabel } from "../../lib/parentHub";
+    import { showToast } from "../../lib/toast";
+
+    function initNudges() {
+        const lang = document.documentElement.lang === "es" ? "es" : "en";
+        const es = lang === "es";
+        document.querySelectorAll<HTMLButtonElement>("[data-nudge-btn]").forEach((btn) => {
+            if (btn.dataset.bound === "1") return;
+            btn.dataset.bound = "1";
+            btn.addEventListener("click", async () => {
+                if (btn.disabled) return;
+                const row = btn.closest<HTMLElement>("[data-kid-row]");
+                const id = row?.dataset.kidId;
+                const name = row?.dataset.kidName ?? "";
+                if (!id) return;
+                btn.disabled = true;
+                let res: Response;
+                try {
+                    res = await fetch(`/api/oversight/nudge/${encodeURIComponent(id)}`, { method: "POST" });
+                } catch {
+                    showToast(es ? "No se pudo enviar. Intenta de nuevo." : "Couldn't send. Try again.", "error");
+                    btn.disabled = false;
+                    return;
+                }
+                if (res.ok) {
+                    btn.textContent = es ? "Enviado · ahora" : "Sent · just now";
+                    showToast(es ? `Recordatorio enviado a ${name}` : `Reminder sent to ${name}`, "success");
+                    return;
+                }
+                const body = await res.json().catch(() => null);
+                if (res.status === 429) {
+                    // The cap is shared across both parents, so a 429 here can
+                    // mean the OTHER parent already nudged — the relabel alone
+                    // doesn't say that, so explain it.
+                    const retry = Number(body?.retry_after_seconds ?? 0);
+                    const hoursAgo = Math.max(0, Math.floor((NUDGE_COOLDOWN_MS / 1000 - retry) / 3600));
+                    btn.textContent = nudgeLabel({ kind: "cooldown", hoursAgo }, lang) ?? "";
+                    showToast(es ? `Ya se le recordó hace poco a ${name}` : `${name} was reminded recently`, "info");
+                    return;
+                }
+                if (res.status === 409) {
+                    showToast(es ? `Nada pendiente para ${name}` : `Nothing left for ${name}`, "info");
+                    btn.remove();
+                    return;
+                }
+                showToast(es ? "No se pudo enviar. Intenta de nuevo." : "Couldn't send. Try again.", "error");
+                btn.disabled = false;
+            });
+        });
+    }
+
+    document.addEventListener("astro:page-load", initNudges);
+    if (document.readyState !== "loading") initNudges();
+</script>

@@ -1,0 +1,108 @@
+---
+/**
+ * "Configura tu familia" (UX-C2): replaces the old onboarding widget and the
+ * gigs intro banner. Shown only while setup is incomplete and not dismissed
+ * (the page decides). The first-task step keeps its guided-mission button;
+ * the missions script in parent/index.astro consumes [data-mission].
+ */
+import { t } from "../../lib/i18n";
+
+interface Props {
+    onboarding: { task_created: boolean; reward_created: boolean; child_invited: boolean; points_awarded: boolean };
+    lang: "es" | "en";
+    showModuleStarter: boolean;
+}
+const { onboarding, lang, showModuleStarter } = Astro.props;
+const es = lang === "es";
+const steps = [
+    { done: onboarding.task_created, label: t(lang, "pd_onb_task") as string, href: "/parent/tasks", mission: "first-task" },
+    { done: onboarding.reward_created, label: t(lang, "pd_onb_reward") as string, href: "/parent/rewards", mission: null },
+    { done: onboarding.child_invited, label: t(lang, "pd_onb_invite") as string, href: "/parent/members#invite", mission: null },
+    {
+        done: onboarding.points_awarded,
+        label: t(lang, "pd_onb_approve") as string,
+        href: onboarding.child_invited ? "/parent/approvals" : null,
+        mission: null,
+    },
+];
+const done = steps.filter((s) => s.done).length;
+const pct = Math.round((done / steps.length) * 100);
+---
+
+<section id="onboarding-widget" aria-labelledby="setup-heading"
+    class="mb-6 rounded-2xl border border-brand-coral/30 bg-brand-coral/10 p-4 shadow-[var(--shadow-card)]">
+    <div class="flex items-center justify-between gap-2">
+        <h2 id="setup-heading" class="font-bold text-brand-ink text-sm">
+            {es ? `Configura tu familia · ${done} de 4` : `Set up your family · ${done} of 4`}
+        </h2>
+        <button id="dismiss-onboarding" type="button" aria-label={es ? "Ocultar" : "Hide"}
+            class="text-brand-ink-soft hover:text-brand-ink text-xl leading-none px-1 disabled:opacity-50">×</button>
+    </div>
+    <div class="mt-2 h-2 rounded-full bg-brand-cream-deep overflow-hidden" role="progressbar"
+        aria-valuenow={done} aria-valuemin={0} aria-valuemax={4} aria-label={t(lang, "onboarding_progress_label") as string}>
+        <div class="h-full bg-brand-coral rounded-full" style={`width:${pct}%`}></div>
+    </div>
+    <a href="/parent/starter-packs"
+        class="mt-3 flex items-center justify-between gap-3 rounded-xl bg-brand-sky-deep/10 border border-brand-sky-deep/30 px-3 py-2 text-sm font-semibold text-brand-ink hover:bg-brand-sky-deep/20">
+        <span>📦 {es ? "Empieza en minutos con un paquete por edad" : "Start in minutes with an age starter pack"}</span>
+        <span class="text-brand-sky-deep" aria-hidden="true">→</span>
+    </a>
+    {showModuleStarter && (
+        <a href="/parent/settings/family#modules-section"
+            class="mt-2 flex items-center justify-between gap-3 rounded-xl bg-brand-mint/10 border border-brand-mint-deep/30 px-3 py-2 text-sm font-semibold text-brand-ink hover:bg-brand-mint/20">
+            <span>🎛️ {es ? "¿Solo tareas y domingo, o la app completa? Elige tus módulos" : "Just chores & allowance, or the full app? Pick your modules"}</span>
+            <span class="text-brand-mint-deep" aria-hidden="true">→</span>
+        </a>
+    )}
+    <ol class="mt-3 space-y-1.5 text-sm">
+        {steps.map((s) => (
+            <li class="flex items-center gap-2">
+                <span aria-hidden="true">{s.done ? "✅" : "◻"}</span>
+                <span class={s.done ? "line-through text-brand-ink-soft" : "text-brand-ink"}>{s.label}</span>
+                {!s.done && s.mission && (
+                    <button type="button" data-mission={s.mission} class="ml-auto text-xs font-semibold text-brand-sky-deep hover:underline">
+                        🧭 {t(lang, "pd_onb_task_cta")}
+                    </button>
+                )}
+                {!s.done && s.href && (
+                    <a href={s.href} aria-label={s.label}
+                        class={`${s.mission ? "" : "ml-auto "}text-xs font-semibold text-brand-sky-deep hover:underline`}>›</a>
+                )}
+            </li>
+        ))}
+    </ol>
+    <p class="mt-3 text-xs text-brand-ink-soft">
+        {es ? "¿Cómo funcionan puntos y dinero?" : "How do points and money work?"}
+        <a href={es ? "/ayuda" : "/help"} class="font-semibold text-brand-sky-deep hover:underline">{es ? "Ver guía" : "Read the guide"}</a>
+    </p>
+</section>
+
+<script>
+    import { showToast } from "../../lib/toast";
+
+    function initSetupDismiss() {
+        const btn = document.getElementById("dismiss-onboarding") as HTMLButtonElement | null;
+        if (!btn || btn.dataset.bound === "1") return;
+        btn.dataset.bound = "1";
+        btn.addEventListener("click", async () => {
+            btn.disabled = true;
+            try {
+                const r = await fetch("/api/families/onboarding/dismiss", { method: "POST" });
+                if (r.ok) {
+                    document.getElementById("onboarding-widget")?.remove();
+                    return;
+                }
+            } catch {
+                /* fall through to the retry toast */
+            }
+            btn.disabled = false;
+            showToast(
+                document.documentElement.lang === "es" ? "No se pudo ocultar. Intenta de nuevo." : "Couldn't hide it. Try again.",
+                "error",
+            );
+        });
+    }
+
+    document.addEventListener("astro:page-load", initSetupDismiss);
+    if (document.readyState !== "loading") initSetupDismiss();
+</script>

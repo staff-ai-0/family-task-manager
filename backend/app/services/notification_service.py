@@ -23,7 +23,8 @@ from app.models.notification import Notification, NotificationType as NT
 # have 13 new chores". Creating a new one marks that user's older unread ones
 # read, inside the caller's transaction. Prod 2026-09-27: 664 of 958 unread
 # rows were these, keeping every badge at 75–214.
-SUPERSEDING_TYPES = frozenset({NT.TASK_DUE, NT.TASK_ASSIGNED})
+# A parent nudge (UX-C2) supersedes the kid's older unread nudge the same way.
+SUPERSEDING_TYPES = frozenset({NT.TASK_DUE, NT.TASK_ASSIGNED, NT.PARENT_NUDGE})
 
 # The unread badge only counts the last N days. Older unread rows stay in the
 # feed; they just stop inflating a number nobody can act on.
@@ -238,6 +239,23 @@ _COPY = {
         "body": {
             "es": "${pesos} MXN · tócalo para apartarlo",
             "en": "${pesos} MXN · tap to claim",
+        },
+    },
+    # ── Parent → kid nudge (UX-C2) ─────────────────────────────────
+    "parent_nudge": {
+        "type": NT.PARENT_NUDGE,
+        "title": {"es": "⏰ Te faltan {n} tareas", "en": "⏰ {n} chores to go"},
+        "body": {
+            "es": "{parent} te lo recuerda · tócalo para verlas",
+            "en": "{parent} is reminding you · tap to see them",
+        },
+    },
+    "parent_nudge_one": {
+        "type": NT.PARENT_NUDGE,
+        "title": {"es": "⏰ Te falta 1 tarea", "en": "⏰ 1 chore to go"},
+        "body": {
+            "es": "{parent} te lo recuerda · tócala para verla",
+            "en": "{parent} is reminding you · tap to see it",
         },
     },
     # ── 1-tap points (W4.5) ─────────────────────────────────────────

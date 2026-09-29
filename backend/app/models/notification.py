@@ -22,6 +22,7 @@ class NotificationType:
     GIG_PENDING_REVIEW = "gig_pending_review"
     GIG_COMMENT = "gig_comment"
     GIG_PUBLISHED = "gig_published"
+    PARENT_NUDGE = "parent_nudge"
     LATE_PENALTY_APPLIED = "late_penalty_applied"
     REWARDS_LOCKED = "rewards_locked"
     REWARD_REDEEMED = "reward_redeemed"
