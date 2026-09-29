@@ -1,0 +1,219 @@
+---
+/**
+ * The one in-app confirm/prompt sheet (UX-B1). Mounted once by Layout.astro.
+ * Native <dialog> + showModal(): top layer (always above the bottom nav),
+ * Esc handling and an inert page behind it. Bottom sheet on phones, centered
+ * card from `sm`. Callers use lib/dialogs.ts (or window.ftmDialogs from
+ * define:vars scripts); declarative confirms use data-confirm-sheet.
+ */
+---
+
+<dialog
+    id="app-dialog"
+    aria-labelledby="app-dialog-title"
+    class="app-dialog p-0 bg-transparent backdrop:bg-black/40"
+>
+    <form method="dialog" class="app-dialog-panel bg-brand-cream text-brand-ink border-2 border-brand-ink rounded-t-3xl sm:rounded-3xl shadow-[var(--shadow-card)] px-5 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+        <h2 id="app-dialog-title" class="font-display text-lg font-extrabold leading-tight"></h2>
+        <p id="app-dialog-body" class="mt-2 text-sm text-brand-ink-soft whitespace-pre-line" hidden></p>
+        <div id="app-dialog-field" class="mt-4" hidden>
+            <label id="app-dialog-label" for="app-dialog-input" class="sr-only"></label>
+            <input
+                id="app-dialog-input"
+                autocomplete="off"
+                class="w-full rounded-xl border-2 border-brand-ink/20 bg-white px-3 py-2.5 text-base text-brand-ink outline-none focus:border-brand-sky-deep"
+            />
+        </div>
+        <div class="mt-5 flex gap-2">
+            <button type="button" id="app-dialog-cancel"
+                class="flex-1 rounded-xl border-2 border-brand-ink/15 bg-white py-3 text-sm font-bold text-brand-ink"></button>
+            <button type="submit" id="app-dialog-ok"
+                class="flex-1 rounded-xl py-3 text-sm font-bold text-white disabled:opacity-40"></button>
+        </div>
+    </form>
+</dialog>
+
+<style>
+    .app-dialog {
+        position: fixed;
+        inset: auto 0 0 0;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        max-height: 100dvh;
+    }
+    @media (min-width: 640px) {
+        .app-dialog {
+            inset: 0;
+            margin: auto;
+            width: min(24rem, calc(100% - 2rem));
+            height: fit-content;
+        }
+    }
+    .app-dialog[open] .app-dialog-panel {
+        animation: app-sheet-in 160ms ease-out;
+    }
+    @keyframes app-sheet-in {
+        from { transform: translateY(24px); opacity: 0; }
+        to { transform: none; opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .app-dialog[open] .app-dialog-panel { animation: none; }
+    }
+</style>
+
+<script>
+    import {
+        confirmOptionsFromDataset,
+        confirmSheet,
+        defaultLabels,
+        isPromptValueValid,
+        promptSheet,
+        queueToast,
+        registerDialogHost,
+        takeQueuedToast,
+        type DialogRequest,
+    } from "../../lib/dialogs";
+    import { showToast } from "../../lib/toast";
+
+    function initAppDialog() {
+        const dlg = document.getElementById("app-dialog") as HTMLDialogElement | null;
+        if (!dlg || dlg.dataset.bound === "1") return;
+        dlg.dataset.bound = "1";
+
+        const title = dlg.querySelector<HTMLElement>("#app-dialog-title")!;
+        const body = dlg.querySelector<HTMLElement>("#app-dialog-body")!;
+        const field = dlg.querySelector<HTMLElement>("#app-dialog-field")!;
+        const label = dlg.querySelector<HTMLElement>("#app-dialog-label")!;
+        const input = dlg.querySelector<HTMLInputElement>("#app-dialog-input")!;
+        const ok = dlg.querySelector<HTMLButtonElement>("#app-dialog-ok")!;
+        const cancel = dlg.querySelector<HTMLButtonElement>("#app-dialog-cancel")!;
+
+        let current: DialogRequest | null = null;
+        let settle: ((v: boolean | string | null) => void) | null = null;
+        let returnFocus: HTMLElement | null = null;
+
+        const cancelled = () => (current?.kind === "prompt" ? null : false);
+        const finish = (value: boolean | string | null) => {
+            const resolve = settle;
+            settle = null;
+            current = null;
+            if (dlg.open) dlg.close();
+            returnFocus?.focus?.();
+            returnFocus = null;
+            resolve?.(value);
+        };
+        const validate = () => {
+            ok.disabled = current?.kind === "prompt" ? !isPromptValueValid(input.value, current.opts) : false;
+        };
+
+        registerDialogHost({
+            open(req) {
+                return new Promise((resolve) => {
+                    current = req;
+                    settle = resolve;
+                    returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                    const labels = defaultLabels(document.documentElement.lang);
+                    const o = req.opts;
+                    title.textContent = o.title;
+                    body.textContent = o.body ?? "";
+                    body.hidden = !o.body;
+                    ok.textContent = o.confirmLabel ?? labels.ok;
+                    cancel.textContent = o.cancelLabel ?? labels.cancel;
+                    ok.classList.toggle("bg-red-600", !!o.danger);
+                    ok.classList.toggle("bg-brand-sky-deep", !o.danger);
+                    if (req.kind === "prompt") {
+                        field.hidden = false;
+                        label.textContent = req.opts.label ?? o.title;
+                        input.type = "text";
+                        input.inputMode = req.opts.inputType === "number" ? "decimal" : "text";
+                        input.placeholder = req.opts.placeholder ?? "";
+                        input.value = req.opts.defaultValue ?? "";
+                    } else {
+                        field.hidden = true;
+                    }
+                    validate();
+                    dlg.showModal();
+                    if (req.kind === "prompt") {
+                        input.focus();
+                        input.select();
+                    } else {
+                        (o.danger ? cancel : ok).focus();
+                    }
+                });
+            },
+        });
+
+        dlg.addEventListener("submit", (e) => {
+            e.preventDefault();
+            if (!current || ok.disabled) return;
+            finish(current.kind === "prompt" ? input.value : true);
+        });
+        cancel.addEventListener("click", () => finish(cancelled()));
+        // Esc
+        dlg.addEventListener("cancel", (e) => {
+            e.preventDefault();
+            finish(cancelled());
+        });
+        // Tap on the backdrop (the click lands on the <dialog> itself, outside the panel)
+        dlg.addEventListener("click", (e) => {
+            if (e.target === dlg) finish(cancelled());
+        });
+        input.addEventListener("input", validate);
+
+        // Declarative confirms: <form data-confirm-sheet="…"> and
+        // <a|button data-confirm-sheet="…">. After "OK" the original action is
+        // replayed once (flag data-confirm-sheet-ok lets it through).
+        document.addEventListener(
+            "submit",
+            async (e) => {
+                const form = e.target;
+                if (!(form instanceof HTMLFormElement)) return;
+                const opts = confirmOptionsFromDataset(form.dataset);
+                if (!opts) return;
+                if (form.dataset.confirmSheetOk === "1") {
+                    delete form.dataset.confirmSheetOk;
+                    return;
+                }
+                e.preventDefault();
+                const submitter = (e as SubmitEvent).submitter;
+                if (await confirmSheet(opts)) {
+                    form.dataset.confirmSheetOk = "1";
+                    form.requestSubmit(submitter instanceof HTMLElement && (submitter as HTMLButtonElement).form === form ? submitter : undefined);
+                }
+            },
+            true,
+        );
+        document.addEventListener(
+            "click",
+            async (e) => {
+                const el = (e.target as Element | null)?.closest?.("a[data-confirm-sheet], button[data-confirm-sheet]");
+                if (!(el instanceof HTMLElement)) return;
+                if (el.dataset.confirmSheetOk === "1") {
+                    delete el.dataset.confirmSheetOk;
+                    return;
+                }
+                const opts = confirmOptionsFromDataset(el.dataset);
+                if (!opts) return;
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                if (await confirmSheet(opts)) {
+                    el.dataset.confirmSheetOk = "1";
+                    el.click();
+                }
+            },
+            true,
+        );
+
+        // For define:vars / is:inline scripts, which cannot import modules.
+        window.ftmDialogs = { confirmSheet, promptSheet, toast: showToast, queueToast };
+
+        const pending = takeQueuedToast();
+        if (pending) showToast(pending.message, pending.type, pending.type === "error" ? 6000 : 4000);
+    }
+
+    document.addEventListener("astro:page-load", initAppDialog);
+    // astro:page-load is one-shot on DOMContentLoaded; a module running after
+    // it would miss it (see WelcomeTour.astro). data-bound keeps this idempotent.
+    if (document.readyState !== "loading") initAppDialog();
+</script>
