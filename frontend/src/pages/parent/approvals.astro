@@ -289,6 +289,8 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                 </section>
             )}
     <script>
+        import { submitDecision, type Decision } from "../../lib/approvalActions";
+
         document.addEventListener("astro:page-load", () => {
             const lists = document.querySelectorAll(".approvals-list");
             if (!lists.length) return;
@@ -302,50 +304,26 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
             async function decide(
                 li: HTMLLIElement,
                 approve: boolean,
-                grade: string | null = null,
+                grade: Decision["grade"] = null,
                 partialPct: number | null = null,
             ): Promise<boolean> {
-                const id = li.dataset.id!;
-                const kind = li.dataset.kind;
                 const notes = li.querySelector<HTMLTextAreaElement>("[data-notes]");
-                const noteVal = notes?.value.trim() || null;
-                try {
-                    let r: Response;
-                    if (kind === "gig") {
-                        r = await fetch(`/api/gigs/claims/${id}/approve`, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ approved: approve, notes: noteVal }),
-                        });
-                    } else if (kind === "redemption") {
-                        r = await fetch(`/api/rewards/redemptions/${id}/${approve ? "approve" : "reject"}`, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ notes: noteVal }),
-                        });
-                    } else {
-                        r = await fetch("/api/assignments/approve", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                                assignment_id: id, approve, notes: noteVal,
-                                grade, partial_credit_pct: partialPct,
-                            }),
-                        });
-                    }
-                    if (r.ok) {
-                        li.remove();
-                        return true;
-                    }
-                    // Surface the backend reason (e.g. "Insufficient points.
-                    // Need X, have Y") instead of a blanket error.
-                    const err = await r.json().catch(() => null);
-                    lastError = (err && (err.detail || err.message)) || null;
-                    return false;
-                } catch {
-                    lastError = null;
-                    return false;
+                const res = await submitDecision({
+                    kind: li.dataset.kind as Decision["kind"],
+                    id: li.dataset.id!,
+                    approve,
+                    grade,
+                    partialPct,
+                    notes: notes?.value.trim() || null,
+                });
+                if (res.ok) {
+                    li.remove();
+                    return true;
                 }
+                // Surface the backend reason (e.g. "Insufficient points.
+                // Need X, have Y") instead of a blanket error.
+                lastError = res.error;
+                return false;
             }
             let lastError: string | null = null;
 
