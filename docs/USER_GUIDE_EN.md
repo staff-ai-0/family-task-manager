@@ -208,7 +208,7 @@ Once registered, you can invite the rest of your family members.
 
 ### Invite by email
 
-1. Go to **Management** (`/parent`) → **Members** (`/parent/members`)
+1. Open **More** → **Members** (`/parent/members`)
 2. In the **"Register New Member"** section, fill in:
    - **Full name** of the member
    - **Email address** — This will be their username
@@ -288,7 +288,19 @@ The app has a bottom navigation bar (**Bottom Nav**) that appears on every scree
 | **Rewards** | `/rewards` | Everyone |
 | **Profile** | `/profile` | Everyone |
 | **Budget** | `/budget` | Parents |
-| **Management** | `/parent` | Parents |
+| **Home** | `/parent` | Parents |
+
+### Parent home
+
+**Home** (`/parent`) shows what needs you today, in this order:
+
+1. **Set up your family** — only while setup steps are missing.
+2. **To review** — the 3 oldest submissions (chores with a photo, gigs and reward redemptions). **✓ Approve** decides in one tap; **Almost** gives partial credit (25/50/75 %) and **Missed** lets you leave a note. "See all" opens **Approve**.
+3. **Today** — one row per kid: today's chores done, overdue ones, the weekly pay bar and their goal. **⏰ Remind** sends them a notice; it works once every 3 hours per kid (shared by both parents).
+4. **To pay** — money owed (gigs and chore paychecks).
+5. **My tasks today** — your own chores.
+6. **Budget** — this month's spending against the budget and receipts to review. To scan a receipt, use the budget's **Scan** button.
+7. **Family Cup** — this week's boss.
 
 ### Changing the language
 
@@ -369,7 +381,7 @@ Templates are reusable tasks that serve as blueprints for generating weekly assi
 
 ### Creating a new template
 
-1. Go to **Management** → **Tasks** (`/parent/tasks`)
+1. Open **More** → **Tasks** (`/parent/tasks`)
 2. In the **"Create New Template"** section, fill in:
    - **Task title** — Short, clear name (e.g., "Make the bed")
    - **Description (optional)** — Additional details on how to do it
@@ -523,7 +535,7 @@ Parents create and manage the rewards that children can redeem.
 
 ### Creating a reward
 
-1. Go to **Management** → **Rewards** (`/parent/rewards`)
+1. Open **More** → **Rewards** (`/parent/rewards`)
 2. In the **"Create New Reward"** section, fill in:
    - **Reward name** — E.g., "Movie at the theater", "Double ice cream", "30 extra minutes of video games"
    - **Cost in Points** — How many points it costs to redeem (e.g., 100, 250, 500)
@@ -554,7 +566,7 @@ Consequences are penalties that parents assign when a member fails to meet their
 
 ### Creating a consequence (Parents)
 
-1. Go to **Management** → **Consequences** (`/parent/consequences`)
+1. Open **More** → **Consequences** (`/parent/consequences`)
 2. In the **"Create Consequence"** section, fill in:
    - **Consequence title** — E.g., "No video games for 3 days"
    - **Assign to** — Select the member
@@ -2521,7 +2533,7 @@ The page **refreshes automatically every 60 seconds**, so it always reflects the
 
 **Route:** `/parent/kiosk`
 
-1. Go to **Management** → **Wall displays** (`/parent/kiosk`)
+1. Open **More** → **Wall displays** (`/parent/kiosk`)
 2. In the name box, type a label for the device (e.g., "Kitchen," "Living Room"), then click **"Create"**
 3. The app shows a one-time box with the device's full URL, for example `https://.../kiosk?token=...`
    - **Important:** Copy and save this URL now. For security, the full token is **shown only once** and is not displayed again afterward.
@@ -2549,9 +2561,7 @@ The Analytics page turns weeks of task and gig activity into a single at-a-glanc
 
 **Route:** `/parent/analytics`
 
-1. Go to **Management** (`/parent`)
-2. Open **Settings**
-3. Tap **"Analytics"** (described as "PUP Score + completion trends")
+1. Open **More** → **Analytics** (`/parent/analytics`)
 
 The page is parent-only; teens and children are redirected away if they try to open it.
 
@@ -2620,7 +2630,7 @@ Jarvis is your family's AI copilot — a chat assistant that can answer question
 
 ## 25.1 Opening Jarvis
 
-1. Go to **Management** (`/parent`) and open **Jarvis** (`/parent/jarvis`).
+1. Open **More** → **Jarvis** (`/parent/jarvis`).
 2. You will see the chat screen headed **🤖 Jarvis** with the subtitle "Family copilot — ask anything".
 3. If this is your first time, the screen shows **"No messages yet. Ask Jarvis something."**
 
@@ -2773,7 +2783,7 @@ Yes. After importing, each transaction becomes a normal transaction that you can
 
 ### 5. How do I change my child's password?
 
-Go to **Management** → **Members**. From there you can manage the accounts of family members. You can also use the "Forgot my password" feature from the login screen.
+Open **More** → **Members**. From there you can manage the accounts of family members. You can also use the "Forgot my password" feature from the login screen.
 
 ### 6. Why do I not see the Budget button?
 

@@ -208,7 +208,7 @@ Una vez registrado, puede invitar a los demas miembros de la familia.
 
 ### Invitar por correo electronico
 
-1. Vaya a **Gestion** (`/parent`) → **Miembros** (`/parent/members`)
+1. Abra **Más** → **Miembros** (`/parent/members`)
 2. En la seccion **"Registrar Nuevo Miembro"**, complete:
    - **Nombre completo** del miembro
    - **Correo electronico** — Sera su usuario
@@ -288,7 +288,19 @@ La aplicacion tiene una barra de navegacion inferior (**Bottom Nav**) que aparec
 | **Premios** | `/rewards` | Todos |
 | **Perfil** | `/profile` | Todos |
 | **Presupuesto** | `/budget` | Padres |
-| **Gestion** | `/parent` | Padres |
+| **Inicio** | `/parent` | Padres |
+
+### Inicio de padres
+
+**Inicio** (`/parent`) muestra lo que necesita su atención hoy, en este orden:
+
+1. **Configura tu familia** — solo mientras falten pasos de configuración.
+2. **Por revisar** — las 3 entregas más antiguas (tareas con foto, gigs y canjes de premios). **✓ Aprobar** decide con un toque; **Casi** da crédito parcial (25/50/75 %) y **No hecha** permite dejar una nota. "Ver todas" abre **Aprobar**.
+3. **Hoy** — una fila por hijo: tareas hechas de hoy, atrasadas, la barra del pago semanal y su meta. **⏰ Recordar** le manda un aviso; solo se puede una vez cada 3 horas por hijo (entre ambos padres).
+4. **Por pagar** — dinero pendiente (gigs y cheques de tareas).
+5. **Mis tareas de hoy** — sus propias tareas.
+6. **Presupuesto** — lo gastado del mes contra lo presupuestado y los tickets por revisar. Para escanear un ticket use el botón **Escanear** del presupuesto.
+7. **Family Cup** — el jefe de la semana.
 
 ### Cambio de idioma
 
@@ -369,7 +381,7 @@ Las plantillas son tareas reutilizables que sirven como moldes para generar asig
 
 ### Crear una nueva plantilla
 
-1. Vaya a **Gestion** → **Tareas** (`/parent/tasks`)
+1. Abra **Más** → **Tareas** (`/parent/tasks`)
 2. En la seccion **"Crear Nueva Plantilla"**, complete:
    - **Titulo de la tarea** — Nombre corto y claro (ej: "Tender la cama")
    - **Descripcion (opcional)** — Detalles adicionales de como se hace
@@ -523,7 +535,7 @@ Los padres crean y administran los premios que los hijos pueden canjear.
 
 ### Crear un premio
 
-1. Vaya a **Gestion** → **Premios** (`/parent/rewards`)
+1. Abra **Más** → **Premios** (`/parent/rewards`)
 2. En la seccion **"Crear Nuevo Premio"**, complete:
    - **Nombre del premio** — Ej: "Pelicula en el cine", "Helado doble", "30 min extra de videojuegos"
    - **Costo en Puntos** — Cuantos puntos cuesta canjearlo (ej: 100, 250, 500)
@@ -554,7 +566,7 @@ Las consecuencias son sanciones que los padres asignan cuando un miembro no cump
 
 ### Crear una consecuencia (Padres)
 
-1. Vaya a **Gestion** → **Consecuencias** (`/parent/consequences`)
+1. Abra **Más** → **Consecuencias** (`/parent/consequences`)
 2. En la seccion **"Crear Consecuencia"**, complete:
    - **Titulo de la consecuencia** — Ej: "Sin videojuegos por 3 dias"
    - **Asignar a** — Seleccione el miembro
@@ -2379,7 +2391,7 @@ La pagina **se actualiza cada 60 segundos**.
 
 **Ruta:** `/parent/kiosk`
 
-1. Vaya a **Gestion** → **Pantallas de pared** (`/parent/kiosk`)
+1. Abra **Más** → **Pantallas de pared** (`/parent/kiosk`)
 2. Escriba una etiqueta (ej: "Cocina") y **"Crear"**
 3. Copie la URL de una sola vez (**Importante:** el token se muestra **solo una vez**)
 4. Abra la URL en la pantalla compartida
@@ -2401,9 +2413,7 @@ La pagina **se actualiza cada 60 segundos**.
 
 **Ruta:** `/parent/analytics`
 
-1. Vaya a **Gestion** (`/parent`)
-2. Abra **Configuracion**
-3. Toque **"Analitica"**
+1. Abra **Más** → **Analitica** (`/parent/analytics`)
 
 ## 24.2 El PUP Score
 
@@ -2449,7 +2459,7 @@ Jarvis es el copiloto de IA de su familia — un asistente de chat que responde 
 
 ## 25.1 Abrir Jarvis
 
-1. Vaya a **Gestion** (`/parent`) y abra **Jarvis** (`/parent/jarvis`)
+1. Abra **Más** → **Jarvis** (`/parent/jarvis`)
 2. Vera la pantalla **🤖 Jarvis** ("Copiloto familiar — pregunta lo que sea")
 3. La primera vez: **"Sin mensajes aun. Preguntale algo a Jarvis."**
 
@@ -2592,7 +2602,7 @@ Si. Despues de importar, cada movimiento se convierte en una transaccion normal 
 
 ### 5. Como cambio la contrasena de mi hijo?
 
-Vaya a **Gestion** → **Miembros**. Desde ahi puede gestionar las cuentas de los miembros de la familia. Tambien puede usar la funcion de "Olvidé mi contrasena" desde la pantalla de login.
+Abra **Más** → **Miembros**. Desde ahi puede gestionar las cuentas de los miembros de la familia. Tambien puede usar la funcion de "Olvidé mi contrasena" desde la pantalla de login.
 
 ### 6. Por que no veo el boton de Presupuesto?
 
