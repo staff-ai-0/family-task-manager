@@ -1,0 +1,159 @@
+---
+/**
+ * "Por revisar" on the parent home (UX-C2): the oldest pending decisions,
+ * 3 visible, up to 8 rendered; a decided card leaves only after a 2xx and
+ * the next hidden one slides in. Bulk approval stays on /parent/approvals.
+ */
+import ReviewCard from "./ReviewCard.astro";
+import EnablePushButton from "../EnablePushButton.astro";
+import type { ReviewItem } from "../../lib/reviewQueue";
+
+interface Props {
+    items: ReviewItem[];
+    lang: "es" | "en";
+    tz: string | null;
+    userId: string;
+}
+const { items, lang, tz, userId } = Astro.props;
+const es = lang === "es";
+const RENDERED = 8;
+const VISIBLE = 3;
+const rendered = items.slice(0, RENDERED);
+const total = items.length;
+---
+
+<section data-review-root data-total={total} data-lang={lang} class="mb-6" aria-labelledby="review-heading">
+    <div class="flex items-center justify-between mb-2 px-1">
+        <h2 id="review-heading" class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft">
+            {es ? "Por revisar" : "To review"}<span data-review-heading-count hidden={total === 0}> · <span data-review-count>{total}</span></span>
+        </h2>
+        {total > 0 && (
+            <a data-review-all href="/parent/approvals" class="text-xs font-semibold text-brand-sky-deep hover:underline">
+                {es ? "Ver todas" : "See all"} (<span data-review-count>{total}</span>) ›
+            </a>
+        )}
+    </div>
+    <ul data-review-list class="space-y-2">
+        {rendered.map((item, i) => <ReviewCard item={item} lang={lang} tz={tz} hidden={i >= VISIBLE} />)}
+    </ul>
+    <p data-review-empty hidden={total > 0} class="rounded-xl bg-emerald-50 text-emerald-700 text-sm font-semibold px-3 py-2">
+        ✓ {es ? "Nada por revisar" : "Nothing to review"}
+    </p>
+    <a data-review-more hidden href="/parent/approvals"
+        class="block rounded-xl border border-brand-sky-deep/30 bg-brand-sky/10 px-3 py-2 text-sm font-semibold text-brand-sky-deep">
+        {es ? <>Quedan <span data-review-more-count></span></> : <><span data-review-more-count></span> left</>} · {es ? "Ver todas ›" : "See all ›"}
+    </a>
+    <EnablePushButton
+        lang={lang}
+        userId={userId}
+        class="mt-2 flex items-center"
+        label={es ? "🔔 Avísame cuando haya algo que revisar" : "🔔 Tell me when something needs review"}
+    />
+</section>
+
+<script>
+    import { submitDecision, type Decision } from "../../lib/approvalActions";
+    import { advanceQueue, type QueueState } from "../../lib/reviewQueue";
+    import { showToast } from "../../lib/toast";
+
+    function initReview() {
+        const root = document.querySelector<HTMLElement>("[data-review-root]");
+        if (!root || root.dataset.bound === "1") return;
+        root.dataset.bound = "1";
+        const es = root.dataset.lang === "es";
+        const cards = () => Array.from(root.querySelectorAll<HTMLElement>("[data-review-card]"));
+        let state: QueueState = {
+            visible: cards().filter((c) => !c.hidden).map((c) => c.dataset.id!),
+            hidden: cards().filter((c) => c.hidden).map((c) => c.dataset.id!),
+            total: Number(root.dataset.total || "0"),
+        };
+        let busy = false;
+
+        const setBusy = (on: boolean) => {
+            busy = on;
+            root.querySelectorAll<HTMLButtonElement>("[data-review-card] button").forEach((b) => (b.disabled = on));
+        };
+        const collapse = (card: HTMLElement) => {
+            card.querySelector<HTMLElement>("[data-review-expand]")?.setAttribute("hidden", "");
+            delete card.dataset.mode;
+        };
+        const expand = (card: HTMLElement, mode: "partial" | "reject") => {
+            cards().forEach((c) => { if (c !== card) collapse(c); });
+            if (card.dataset.mode === mode) { collapse(card); return; }
+            card.dataset.mode = mode;
+            const panel = card.querySelector<HTMLElement>("[data-review-expand]");
+            panel?.removeAttribute("hidden");
+            panel?.querySelector<HTMLElement>("[data-review-pcts]")?.toggleAttribute("hidden", mode !== "partial");
+            panel?.querySelector<HTMLTextAreaElement>("[data-review-note]")?.focus();
+        };
+        const render = (reveal: string | null, empty: boolean, elsewhere: number) => {
+            if (reveal) root.querySelector<HTMLElement>(`[data-review-card][data-id="${CSS.escape(reveal)}"]`)?.removeAttribute("hidden");
+            root.querySelectorAll("[data-review-count]").forEach((el) => (el.textContent = String(state.total)));
+            if (empty) {
+                root.querySelector("[data-review-heading-count]")?.setAttribute("hidden", "");
+                root.querySelector("[data-review-all]")?.setAttribute("hidden", "");
+                root.querySelector("[data-review-empty]")?.removeAttribute("hidden");
+            }
+            const more = root.querySelector<HTMLElement>("[data-review-more]");
+            if (more) {
+                more.toggleAttribute("hidden", elsewhere === 0);
+                more.querySelectorAll("[data-review-more-count]").forEach((el) => (el.textContent = String(elsewhere)));
+            }
+        };
+        const decide = async (card: HTMLElement, d: Pick<Decision, "approve" | "grade" | "partialPct">) => {
+            if (busy) return;
+            setBusy(true);
+            const notes = card.querySelector<HTMLTextAreaElement>("[data-review-note]")?.value.trim() || null;
+            const res = await submitDecision({
+                kind: card.dataset.kind as Decision["kind"],
+                id: card.dataset.id!,
+                notes,
+                ...d,
+            });
+            setBusy(false);
+            if (!res.ok) {
+                showToast(res.error || (es ? "No se pudo guardar. Intenta de nuevo." : "Couldn't save. Try again."), "error");
+                return;
+            }
+            const next = advanceQueue(state, card.dataset.id!);
+            state = { visible: next.visible, hidden: next.hidden, total: next.total };
+            card.remove();
+            render(next.reveal, next.empty, next.remainingElsewhere);
+        };
+
+        root.addEventListener("click", (e) => {
+            const target = e.target as HTMLElement;
+            const card = target.closest<HTMLElement>("[data-review-card]");
+            if (!card || busy) return;
+            const kind = card.dataset.kind;
+            const action = target.closest<HTMLElement>("[data-review-action]")?.dataset.reviewAction;
+            if (action === "approve") {
+                void decide(card, { approve: true, grade: kind === "task" ? "full" : null });
+                return;
+            }
+            if (action === "partial" || action === "reject") {
+                expand(card, action);
+                return;
+            }
+            const pct = target.closest<HTMLElement>("[data-pct]");
+            if (pct) {
+                card.querySelectorAll<HTMLElement>("[data-pct]").forEach((b) =>
+                    b.setAttribute("aria-pressed", b === pct ? "true" : "false"));
+                return;
+            }
+            if (target.closest("[data-review-confirm]")) {
+                if (card.dataset.mode === "partial") {
+                    const sel = card.querySelector<HTMLElement>('[data-pct][aria-pressed="true"]');
+                    void decide(card, { approve: true, grade: "partial", partialPct: Number(sel?.dataset.pct ?? 50) });
+                } else if (card.dataset.mode === "reject") {
+                    void decide(card, { approve: false, grade: kind === "task" ? "missed" : null });
+                }
+            }
+        });
+    }
+
+    document.addEventListener("astro:page-load", initReview);
+    // astro:page-load is one-shot on DOMContentLoaded; a module running after it
+    // would miss it (see WelcomeTour.astro). data-bound keeps this idempotent.
+    if (document.readyState !== "loading") initReview();
+</script>

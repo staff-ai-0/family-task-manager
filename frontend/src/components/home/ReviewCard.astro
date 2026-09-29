@@ -1,0 +1,93 @@
+---
+/**
+ * One pending decision on the parent home (UX-C2). ✓ decides in one tap;
+ * "Casi" / "No hecha" expand an inline panel (percent chips + note) with a
+ * confirm button. Behavior lives in ReviewSection's script.
+ */
+import type { ReviewItem } from "../../lib/reviewQueue";
+import { fmtDateTime } from "../../lib/datetime";
+
+interface Props {
+    item: ReviewItem;
+    lang: "es" | "en";
+    tz: string | null;
+    hidden?: boolean;
+}
+const { item, lang, tz, hidden = false } = Astro.props;
+const es = lang === "es";
+const when = item.when ? fmtDateTime(item.when, lang, tz) : "";
+const initial = (item.kidName.trim().charAt(0) || "?").toUpperCase();
+const chipClass =
+    item.kind === "task"
+        ? "bg-violet-100 text-violet-700"
+        : item.kind === "gig"
+            ? "bg-emerald-100 text-emerald-700"
+            : "bg-amber-100 text-amber-700";
+const rejectLabel =
+    item.kind === "redemption" ? (es ? "✗ Rechazar" : "✗ Reject") : (es ? "✗ No hecha" : "✗ Missed");
+---
+
+<li
+    data-review-card
+    data-kind={item.kind}
+    data-id={item.id}
+    hidden={hidden}
+    class="bg-white rounded-2xl border border-brand-ink/10 p-3 shadow-[var(--shadow-card)]"
+>
+    <div class="flex gap-3">
+        <div class="w-8 h-8 rounded-full bg-brand-cream-deep flex items-center justify-center font-bold text-sm text-brand-sky-deep shrink-0" aria-hidden="true">
+            {initial}
+        </div>
+        <div class="flex-1 min-w-0">
+            <p class="font-bold text-brand-ink text-sm leading-tight truncate">{item.title}</p>
+            <p class="text-xs text-brand-ink-soft mt-0.5">
+                {item.kidName}{when && ` · ${when}`}
+                <span class={`ml-1 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-bold ${chipClass}`}>{item.chip}</span>
+            </p>
+            {item.proofText && <p class="text-xs text-brand-ink mt-1 line-clamp-2">{item.proofText}</p>}
+        </div>
+        {item.proofImageUrl && (
+            <a href={item.proofImageUrl} target="_blank" rel="noopener" class="shrink-0" aria-label={es ? "Ver foto de prueba" : "View proof photo"}>
+                <img src={`${item.proofImageUrl}?size=thumb`} alt="" loading="lazy" class="w-12 h-12 rounded-lg object-cover border border-brand-ink/10" />
+            </a>
+        )}
+    </div>
+    <div class="flex gap-2 mt-3">
+        <button type="button" data-review-action="reject"
+            class="flex-1 rounded-xl border border-red-300 text-red-700 py-2 text-xs font-bold hover:bg-red-50 disabled:opacity-50">
+            {rejectLabel}
+        </button>
+        {item.allowPartial && (
+            <button type="button" data-review-action="partial"
+                class="flex-1 rounded-xl border border-amber-400 text-amber-700 py-2 text-xs font-bold hover:bg-amber-50 disabled:opacity-50">
+                {es ? "Casi" : "Almost"}
+            </button>
+        )}
+        <button type="button" data-review-action="approve"
+            class="flex-1 rounded-xl bg-emerald-600 text-white py-2 text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">
+            {es ? "✓ Aprobar" : "✓ Approve"}
+        </button>
+    </div>
+    <div data-review-expand hidden class="mt-3 space-y-2">
+        {item.allowPartial && (
+            <div data-review-pcts hidden>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-semibold text-brand-ink-soft">{es ? "Crédito:" : "Credit:"}</span>
+                    {[25, 50, 75].map((pct) => (
+                        <button type="button" data-pct={pct} aria-pressed={pct === 50 ? "true" : "false"}
+                            class="px-3 py-1 rounded-full border border-brand-ink/20 text-xs font-bold text-brand-ink-soft aria-pressed:bg-amber-100 aria-pressed:border-amber-400 aria-pressed:text-amber-800 disabled:opacity-50">
+                            {pct}%
+                        </button>
+                    ))}
+                </div>
+            </div>
+        )}
+        <textarea data-review-note rows="2" maxlength="500"
+            class="w-full rounded-lg border border-brand-ink/20 p-2 text-sm bg-brand-cream focus:ring-2 focus:ring-amber-500 outline-none"
+            placeholder={es ? "Nota para tu hijo/a (opcional)" : "Note for your kid (optional)"}></textarea>
+        <button type="button" data-review-confirm
+            class="w-full rounded-xl bg-brand-ink text-white py-2 text-xs font-bold hover:opacity-90 disabled:opacity-50">
+            {es ? "Confirmar" : "Confirm"}
+        </button>
+    </div>
+</li>
