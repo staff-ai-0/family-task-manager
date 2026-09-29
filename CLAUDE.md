@@ -332,6 +332,8 @@ Two layers, with separate state:
 
 Pages live in `frontend/src/pages/` (file-based routing, SSR via Node adapter, no client framework — vanilla `<script>` islands). All server-side API calls go through same-origin Astro proxy routes (`/api/*`) to `http://backend:8000`. Auth state via cookies + `frontend/src/middleware.ts` (CSP/security headers, CSRF origin check, transparent token refresh).
 
+**Dialogs (UX-B1):** never use native `alert` / `confirm` / `prompt` — a vitest guard (`frontend/test/no-native-dialogs.test.ts`) fails CI on them. Use `showToast` (`lib/toast.ts`) for messages, `queueToast` when a reload follows, and `confirmSheet` / `promptSheet` (`lib/dialogs.ts`) for questions; forms/links/buttons can use `data-confirm-sheet` (+ `-label`, `-body`, `-danger`) instead of a handler. `define:vars` / `is:inline` scripts can't import: they use `window.ftmDialogs`. The host is `components/ui/AppDialog.astro`, mounted once in `Layout.astro`. Page transitions are CSS-only (`@view-transition` in `global.css`).
+
 Key frontend pages:
 - `/parent` — parent "Today" hub (UX-C2): review top 3 inline (shared request code `lib/approvalActions.ts`, also used by `/parent/approvals`), per-kid rows with a nudge (`POST /api/oversight/nudge/{kid_id}`, one per kid per 3 h across both parents, `parent_nudge` notification that supersedes the previous one), to pay, own chores deck, budget glance (**no scan button** — the two-scan-triggers rule), Family Cup. The old tile grid is gone; every page it linked is in the More sheet.
 - `/budget/` — dashboard · `/budget/transactions` · `/budget/scan-receipt` · `/budget/receipt-drafts` · `/budget/import` · `/budget/reports/`

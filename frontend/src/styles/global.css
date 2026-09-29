@@ -183,3 +183,22 @@ body[data-ui-mode="adult"] {
   --color-brand-cream:      #FAFAFA;
   --color-brand-cream-deep: #EEEEEE;
 }
+
+/* ---------- Page transitions (UX-B1) ----------
+   Cross-document view transitions: a quick cross-fade between pages.
+   Browsers without support navigate as before. The bottom nav has its own
+   view-transition-name so it stays put instead of fading. */
+@view-transition {
+  navigation: auto;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 150ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
