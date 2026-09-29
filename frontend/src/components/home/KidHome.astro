@@ -40,7 +40,7 @@ const gigsRow = showGigs && gigs.length > 0;
 const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ? "es-MX" : "en-US")}`;
 ---
 
-<div class="space-y-5" data-kid-home>
+<div class="space-y-5 max-w-md mx-auto w-full" data-kid-home>
     {routines.length > 0 && (
         <div class="space-y-2">
             {routines.map((r) => (
