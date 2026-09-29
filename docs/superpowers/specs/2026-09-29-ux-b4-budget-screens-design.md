@@ -22,8 +22,9 @@
 
 `frontend/src/components/MonthSummaryBar.astro` (rendered only by `frontend/src/pages/budget/index.astro`):
 
-- Figures, left to right: **Asignado / Budgeted** (Σ `total_budgeted` of non-income groups), **Gastado / Spent** (|Σ `total_activity`| of non-income groups), **Restante / Left** (budgeted − spent).
-- **Left** is green when ≥ 0 and red when < 0 (spent more than assigned).
+- Figures, left to right: **Asignado / Budgeted** (Σ `total_budgeted` of non-income groups), **Gastado / Spent** (|Σ `total_activity`| of non-income groups), **Disponible / Available** (Σ `total_available` of non-income groups — the sum of the category rows' "disponible", carryover included).
+- **Available** is green when ≥ 0 and red when < 0.
+- *Amended at final review (2026-09-29):* the third figure was first specified as "Restante / Left" = budgeted − spent; with rollover on by default that contradicted each row's "disponible" whenever money carried over, so it now shows the rows' own number.
 - **Bar:** width = spent / budgeted, clamped 0–100 %; red when over budget, amber at ≥ 75 %, green otherwise (today's thresholds, now against the budget instead of income).
 - **Caption:** "{N} % del presupuesto gastado" / "{N}% of budget spent". When nothing is budgeted: "Sin presupuesto asignado este mes" / "Nothing budgeted this month", and the bar is empty.
 - **Income leaves this bar.** It stays visible in the category list's Income group and on Transactions.

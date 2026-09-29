@@ -98,15 +98,16 @@ export type BudgetGlance =
       };
 
 /** Expense-group totals for a budget month (non-income groups only):
- *  budgeted = Σ total_budgeted, spent = |Σ total_activity|. The one
- *  implementation behind the parent-home card and the month summary bar,
- *  and the same math as pages/budget/index.astro. */
-function expenseTotals(month: any): { budgetedCents: number; spentCents: number } | null {
+ *  budgeted = Σ total_budgeted, spent = |Σ total_activity|, available =
+ *  Σ total_available (the per-row "disponible", carryover included). The one
+ *  implementation behind the parent-home card and the month summary bar. */
+function expenseTotals(month: any): { budgetedCents: number; spentCents: number; availableCents: number } | null {
     if (!month || !Array.isArray(month.category_groups)) return null;
     const expense = month.category_groups.filter((g: any) => !g?.is_income);
     return {
         budgetedCents: expense.reduce((s: number, g: any) => s + (Number(g?.total_budgeted) || 0), 0),
         spentCents: Math.abs(expense.reduce((s: number, g: any) => s + (Number(g?.total_activity) || 0), 0)),
+        availableCents: expense.reduce((s: number, g: any) => s + (Number(g?.total_available) || 0), 0),
     };
 }
 
@@ -138,7 +139,8 @@ export function budgetGlanceView(month: any, draftsCount: number, lang: "es" | "
 export interface MonthSummary {
     budgetedCents: number;
     spentCents: number;
-    leftCents: number;
+    /** Σ of the category rows' "disponible" — so the bar and the rows agree. */
+    availableCents: number;
     pct: number;
     over: boolean;
     tone: "over" | "warn" | "ok";
@@ -146,11 +148,13 @@ export interface MonthSummary {
     hasBudget: boolean;
 }
 
-/** Month screen summary bar (UX-B4): Budgeted / Spent / Left, in the same
- *  envelope terms as Ready-to-assign. Always renders (zeros when data is
+/** Month screen summary bar (UX-B4): Budgeted / Spent / Available, in the
+ *  same envelope terms as Ready-to-assign and the category rows (Available
+ *  includes carryover, like each row). Always renders (zeros when data is
  *  missing), unlike the parent-home card which hides. */
 export function monthSummaryView(month: any, lang: "es" | "en"): MonthSummary {
-    const { budgetedCents, spentCents } = expenseTotals(month) ?? { budgetedCents: 0, spentCents: 0 };
+    const { budgetedCents, spentCents, availableCents } =
+        expenseTotals(month) ?? { budgetedCents: 0, spentCents: 0, availableCents: 0 };
     const hasBudget = budgetedCents > 0;
     const pct = spentPct(spentCents, budgetedCents);
     const over = hasBudget && spentCents > budgetedCents;
@@ -158,7 +162,7 @@ export function monthSummaryView(month: any, lang: "es" | "en"): MonthSummary {
     return {
         budgetedCents,
         spentCents,
-        leftCents: budgetedCents - spentCents,
+        availableCents,
         pct,
         over,
         tone: over ? "over" : pct >= 75 ? "warn" : "ok",

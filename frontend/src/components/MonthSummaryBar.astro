@@ -1,7 +1,8 @@
 ---
 /**
- * Month screen summary (UX-B4): Budgeted / Spent / Left — the same envelope
- * story as "Ready to assign" above it. Numbers come from monthSummaryView
+ * Month screen summary (UX-B4): Budgeted / Spent / Available — the same
+ * envelope story as "Ready to assign" above it and the category rows below
+ * (Available is the sum of the rows' "disponible", carryover included). Numbers come from monthSummaryView
  * (lib/parentHub.ts), shared with the parent home's budget card.
  */
 import type { MonthSummary } from "../lib/parentHub";
@@ -18,7 +19,7 @@ const barColor = view.tone === "over" ? "bg-red-500" : view.tone === "warn" ? "b
 const labels = {
     budgeted: es ? "Asignado" : "Budgeted",
     spent: es ? "Gastado" : "Spent",
-    left: es ? "Restante" : "Left",
+    available: es ? "Disponible" : "Available",
 };
 ---
 
@@ -33,9 +34,9 @@ const labels = {
             <div class="text-sm font-bold text-red-500">{formatCurrency(view.spentCents)}</div>
         </div>
         <div class="flex-1">
-            <div class="text-[10px] text-brand-ink-soft uppercase">{labels.left}</div>
-            <div class:list={["text-sm font-bold", view.leftCents >= 0 ? "text-brand-mint-deep" : "text-red-500"]}>
-                {formatCurrency(view.leftCents)}
+            <div class="text-[10px] text-brand-ink-soft uppercase">{labels.available}</div>
+            <div class:list={["text-sm font-bold", view.availableCents >= 0 ? "text-brand-mint-deep" : "text-red-500"]}>
+                {formatCurrency(view.availableCents)}
             </div>
         </div>
     </div>

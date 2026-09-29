@@ -174,7 +174,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
         <!-- Month card (UX-B4): the tabs come first, like Month and Reports;
              this card replaces the old tall header (no back arrow — the tabs
              and the bottom nav already navigate). -->
-        <section slot="after-nav" class="px-4 pt-3" aria-label={es ? "Mes" : "Month"}>
+        <section slot="after-nav" class="px-4 pt-3 pb-3" aria-label={es ? "Mes" : "Month"}>
             <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] p-3">
                 <div class="flex items-center justify-between">
                     <a href={prevMonthUrl} class="p-1.5 rounded-full border-2 border-brand-ink text-brand-ink hover:bg-brand-cream-deep transition" aria-label={es ? "Mes anterior" : "Previous month"}>
