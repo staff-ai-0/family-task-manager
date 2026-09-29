@@ -6,7 +6,7 @@ review systems (legacy task-assignment gigs + new gig board). Approve/reject
 actions stay on their existing endpoints. The only write here is the parent →
 kid nudge (UX-C2), which creates one notification.
 """
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.exceptions import NotFoundException
 from app.models.consequence import Consequence
 from app.models.gig import GigClaim, GigClaimStatus
 from app.models.notification import Notification, NotificationType
@@ -35,6 +36,19 @@ from app.services.reward_goal_service import RewardGoalService
 from app.services.task_assignment_service import TaskAssignmentService
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+# One nudge per kid per window, shared by every parent in the family.
+NUDGE_COOLDOWN = timedelta(hours=3)
+
+
+class NudgeRefused(Exception):
+    """A nudge the rules refuse: "nothing_to_nudge" (409) or
+    "nudge_cooldown" (429, with retry_after_seconds)."""
+
+    def __init__(self, reason: str, retry_after_seconds: int = 0):
+        super().__init__(reason)
+        self.reason = reason
+        self.retry_after_seconds = retry_after_seconds
 
 
 class OversightService:
@@ -288,3 +302,61 @@ class OversightService:
 
         items.sort(key=lambda i: (i.completed_at is None, i.completed_at or _EPOCH))
         return items
+
+    @staticmethod
+    async def nudge(
+        db: AsyncSession,
+        family_id: UUID,
+        parent: User,
+        kid_id: UUID,
+        now: Optional[datetime] = None,
+    ) -> dict:
+        """Remind a kid of their open required chores (today + overdue).
+
+        404 for anyone who is not an active teen/child of this family (no
+        cross-family existence oracle); refused when nothing is open or when
+        any parent nudged this kid within NUDGE_COOLDOWN."""
+        now = now or datetime.now(timezone.utc)
+        kid = (
+            await db.execute(
+                select(User).where(
+                    User.id == kid_id,
+                    User.family_id == family_id,
+                    User.role.in_([UserRole.CHILD, UserRole.TEEN]),
+                    User.is_active.is_(True),
+                )
+            )
+        ).scalar_one_or_none()
+        if kid is None:
+            raise NotFoundException("Member not found")
+
+        today = await TaskAssignmentService._family_local_today(db, family_id)
+        today_counts = await OversightService._required_today_counts(
+            db, family_id, today, user_id=kid.id
+        )
+        overdue = await OversightService._overdue_counts(
+            db, family_id, today, user_id=kid.id
+        )
+        open_n = today_counts.get(kid.id, (0, 0, 0))[2] + overdue.get(kid.id, 0)
+        if open_n == 0:
+            raise NudgeRefused("nothing_to_nudge")
+
+        last = (await OversightService._last_nudges(db, family_id, user_id=kid.id)).get(kid.id)
+        if last is not None and now - last < NUDGE_COOLDOWN:
+            remaining = NUDGE_COOLDOWN - (now - last)
+            retry = max(1, min(int(NUDGE_COOLDOWN.total_seconds()), int(remaining.total_seconds()) + 1))
+            raise NudgeRefused("nudge_cooldown", retry_after_seconds=retry)
+
+        parts = (parent.name or "").split()
+        parent_first = parts[0] if parts else {"es": "Tu familia", "en": "Your family"}
+        from app.services.notification_service import NotificationService
+
+        note = await NotificationService.create_localized(
+            db,
+            family_id,
+            "parent_nudge_one" if open_n == 1 else "parent_nudge",
+            user_id=kid.id,
+            params={"n": open_n, "parent": parent_first},
+            link="/dashboard",
+        )
+        return {"sent": True, "open": open_n, "nudged_at": note.created_at}

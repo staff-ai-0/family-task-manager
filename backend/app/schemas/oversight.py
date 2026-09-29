@@ -58,3 +58,9 @@ class PendingApprovalItem(BaseModel):
     proof_text: Optional[str] = None
     proof_image_url: Optional[str] = None
     ai_score: Optional[float] = None  # tasks only; gig claims have no AI validation
+
+
+class NudgeResponse(BaseModel):
+    sent: bool
+    open: int
+    nudged_at: datetime
