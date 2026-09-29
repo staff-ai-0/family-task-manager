@@ -298,7 +298,9 @@ const members: any[] = family?.members ?? [];
                                                 />
                                                 <button
                                                     type="submit"
-                                                    onclick={`return confirm('${t(lang, "confirm_delete")}')`}
+                                                    data-confirm-sheet={t(lang, "confirm_delete")}
+                                                    data-confirm-label={lang === "es" ? "Eliminar" : "Delete"}
+                                                    data-confirm-danger
                                                     class="h-7 w-7 rounded-lg bg-brand-cream-deep hover:bg-red-100 text-brand-ink-soft hover:text-red-500 flex items-center justify-center transition-colors"
                                                 >
                                                     <svg

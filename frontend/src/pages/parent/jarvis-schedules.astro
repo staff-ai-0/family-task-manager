@@ -198,7 +198,7 @@ const labels = {
                                         {s.is_active ? "⏸" : "▶"}
                                     </button>
                                 </form>
-                                <form method="POST" class="inline" onsubmit={`return confirm('${labels.confirm}')`}>
+                                <form method="POST" class="inline" data-confirm-sheet={labels.confirm} data-confirm-label={lang === "es" ? "Eliminar" : "Delete"} data-confirm-danger>
                                     <input type="hidden" name="action" value="delete" />
                                     <input type="hidden" name="schedule_id" value={s.id} />
                                     <button type="submit" class="text-[10px] px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200">

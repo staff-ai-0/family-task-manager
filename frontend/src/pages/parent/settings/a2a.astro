@@ -57,6 +57,8 @@ const { data: cfg } = a2aLocked
 </Layout>
 
 <script>
+  import { showToast } from "../../../lib/toast";
+
   const es = document.documentElement.lang === "es";
   const form = document.getElementById("form") as HTMLFormElement | null;
   const saveBtn = document.getElementById("a2a-save") as HTMLButtonElement | null;
@@ -86,7 +88,7 @@ const { data: cfg } = a2aLocked
         const msg = detail?.error === "upgrade_required"
           ? (es ? "Requiere plan Plus — ve a Suscripción." : "Requires the Plus plan — see Subscription.")
           : (typeof detail === "string" ? detail : (es ? "Error al guardar." : "Save failed."));
-        alert(msg);
+        showToast(msg, "error", 6000);
         return;
       }
       if (body?.secret) {
@@ -95,10 +97,10 @@ const { data: cfg } = a2aLocked
         out.textContent = (es ? "Secreto nuevo (cópialo): " : "New secret (copy now): ") + body.secret;
         if (rotate) rotate.checked = false;
       } else {
-        alert(es ? "Guardado." : "Saved.");
+        showToast(es ? "Guardado." : "Saved.", "success");
       }
     } catch {
-      alert(es ? "Error de conexión. Intenta de nuevo." : "Connection error. Please try again.");
+      showToast(es ? "Error de conexión. Intenta de nuevo." : "Connection error. Please try again.", "error", 6000);
     } finally {
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = label; }
     }

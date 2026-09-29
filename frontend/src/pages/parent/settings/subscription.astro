@@ -762,7 +762,13 @@ function cellClass(value: any): string {
         const cancelBtn = document.getElementById('cancel-sub-btn');
         if (cancelBtn) {
             cancelBtn.addEventListener('click', async () => {
-                if (!confirm(cancelConfirm)) return;
+                const es = document.documentElement.lang === "es";
+                if (!(await window.ftmDialogs?.confirmSheet({
+                    title: cancelConfirm,
+                    confirmLabel: es ? "Cancelar suscripción" : "Cancel subscription",
+                    cancelLabel: es ? "Mantener plan" : "Keep plan",
+                    danger: true,
+                }))) return;
                 try {
                     const res = await fetch('/api/subscriptions/cancel', { method: 'POST' });
                     if (res.ok) {

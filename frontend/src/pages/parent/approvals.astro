@@ -290,6 +290,8 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
             )}
     <script>
         import { submitDecision, type Decision } from "../../lib/approvalActions";
+        import { confirmSheet } from "../../lib/dialogs";
+        import { showToast } from "../../lib/toast";
 
         document.addEventListener("astro:page-load", () => {
             const lists = document.querySelectorAll(".approvals-list");
@@ -365,7 +367,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                                 ok = await decide(li, action === "approve");
                             }
                             if (ok) afterChange();
-                            else { alert(lastError || (es ? "Error al procesar" : "Error processing")); btn.disabled = false; }
+                            else { showToast(lastError || (es ? "Error al procesar" : "Error processing"), "error", 6000); btn.disabled = false; }
                         });
                     });
                     li.querySelectorAll<HTMLButtonElement>("[data-partial-chips] button[data-pct]").forEach((chip) => {
@@ -373,7 +375,7 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                             chip.disabled = true;
                             const ok = await decide(li, true, "partial", parseInt(chip.dataset.pct!, 10));
                             if (ok) afterChange();
-                            else { alert(lastError || (es ? "Error al procesar" : "Error processing")); chip.disabled = false; }
+                            else { showToast(lastError || (es ? "Error al procesar" : "Error processing"), "error", 6000); chip.disabled = false; }
                         });
                     });
                 });
@@ -401,12 +403,15 @@ const fmtDate = (d: string) => fmtDateTime(d, lang, user.timezone);
                 afterChange();  // refresh section counts + hide emptied sections
                 document.querySelectorAll<HTMLButtonElement>("#batch-bar button").forEach((b) => (b.disabled = false));
                 btn.textContent = original;
-                if (failed) alert(es ? `${failed} no se pudieron aprobar` : `${failed} could not be approved`);
+                if (failed) showToast(es ? `${failed} no se pudieron aprobar` : `${failed} could not be approved`, "error", 6000);
             }
 
             const allBtn = document.getElementById("approve-all") as HTMLButtonElement | null;
-            allBtn?.addEventListener("click", () => {
-                if (!window.confirm(es ? "¿Aprobar todo el trabajo pendiente?" : "Approve all pending work?")) return;
+            allBtn?.addEventListener("click", async () => {
+                if (!(await confirmSheet({
+                    title: es ? "¿Aprobar todo el trabajo pendiente?" : "Approve all pending work?",
+                    confirmLabel: es ? "Aprobar todo" : "Approve all",
+                }))) return;
                 batchApprove(allBtn, () => true);
             });
 
