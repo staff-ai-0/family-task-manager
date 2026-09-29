@@ -1,56 +1,49 @@
 ---
+/**
+ * Month screen summary (UX-B4): Budgeted / Spent / Left — the same envelope
+ * story as "Ready to assign" above it. Numbers come from monthSummaryView
+ * (lib/parentHub.ts), shared with the parent home's budget card.
+ */
+import type { MonthSummary } from "../lib/parentHub";
+
 interface Props {
-    income: number;
-    spent: number;
-    budgeted: number;
+    view: MonthSummary;
     lang: "en" | "es";
     formatCurrency: (amount: number) => string;
 }
 
-const { income, spent, budgeted, lang, formatCurrency } = Astro.props;
-
-const available = income - Math.abs(spent);
-const usagePercent = income > 0 ? Math.min((Math.abs(spent) / income) * 100, 100) : 0;
-const usageRounded = Math.round(usagePercent);
-
-const barColor = usagePercent > 95
-    ? "bg-red-500"
-    : usagePercent >= 75
-        ? "bg-brand-sun-deep"
-        : "bg-brand-mint-deep";
-
+const { view, lang, formatCurrency } = Astro.props;
+const es = lang === "es";
+const barColor = view.tone === "over" ? "bg-red-500" : view.tone === "warn" ? "bg-brand-sun-deep" : "bg-brand-mint-deep";
 const labels = {
-    income: lang === "es" ? "Ingresos" : "Income",
-    spent: lang === "es" ? "Gastado" : "Spent",
-    available: lang === "es" ? "Disponible" : "Available",
-    usage: lang === "es"
-        ? `${usageRounded}% del presupuesto usado`
-        : `${usageRounded}% of budget used`,
+    budgeted: es ? "Asignado" : "Budgeted",
+    spent: es ? "Gastado" : "Spent",
+    left: es ? "Restante" : "Left",
 };
 ---
 
 <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink/10 shadow-[var(--shadow-card)] p-4 mx-4 mt-3">
     <div class="flex text-center">
         <div class="flex-1">
-            <div class="text-[10px] text-brand-ink-soft uppercase">{labels.income}</div>
-            <div class="text-sm font-bold text-brand-mint-deep">{formatCurrency(income)}</div>
+            <div class="text-[10px] text-brand-ink-soft uppercase">{labels.budgeted}</div>
+            <div class="text-sm font-bold text-brand-ink">{formatCurrency(view.budgetedCents)}</div>
         </div>
         <div class="flex-1">
             <div class="text-[10px] text-brand-ink-soft uppercase">{labels.spent}</div>
-            <div class="text-sm font-bold text-red-500">{formatCurrency(Math.abs(spent))}</div>
+            <div class="text-sm font-bold text-red-500">{formatCurrency(view.spentCents)}</div>
         </div>
         <div class="flex-1">
-            <div class="text-[10px] text-brand-ink-soft uppercase">{labels.available}</div>
-            <div class:list={["text-sm font-bold", available >= 0 ? "text-brand-mint-deep" : "text-red-500"]}>
-                {formatCurrency(available)}
+            <div class="text-[10px] text-brand-ink-soft uppercase">{labels.left}</div>
+            <div class:list={["text-sm font-bold", view.leftCents >= 0 ? "text-brand-mint-deep" : "text-red-500"]}>
+                {formatCurrency(view.leftCents)}
             </div>
         </div>
     </div>
     <div class="w-full bg-brand-cream-deep rounded-full h-2 mt-3">
         <div
             class:list={["h-2 rounded-full transition-all duration-300", barColor]}
-            style={`width: ${usagePercent}%`}
+            style={`width: ${view.hasBudget ? view.pct : 0}%`}
         ></div>
     </div>
-    <div class="text-[10px] text-brand-ink-soft text-right mt-1">{labels.usage}</div>
+    <div class="text-[10px] text-brand-ink-soft text-right mt-1">{view.caption}</div>
 </div>

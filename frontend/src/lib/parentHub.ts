@@ -97,27 +97,75 @@ export type BudgetGlance =
           draftsCount: number;
       };
 
+/** Expense-group totals for a budget month (non-income groups only):
+ *  budgeted = Σ total_budgeted, spent = |Σ total_activity|. The one
+ *  implementation behind the parent-home card and the month summary bar,
+ *  and the same math as pages/budget/index.astro. */
+function expenseTotals(month: any): { budgetedCents: number; spentCents: number } | null {
+    if (!month || !Array.isArray(month.category_groups)) return null;
+    const expense = month.category_groups.filter((g: any) => !g?.is_income);
+    return {
+        budgetedCents: expense.reduce((s: number, g: any) => s + (Number(g?.total_budgeted) || 0), 0),
+        spentCents: Math.abs(expense.reduce((s: number, g: any) => s + (Number(g?.total_activity) || 0), 0)),
+    };
+}
+
+const spentPct = (spentCents: number, budgetedCents: number) =>
+    budgetedCents > 0 ? Math.max(0, Math.min(100, Math.round((spentCents / budgetedCents) * 100))) : 0;
+
 /** Same math as the budget dashboard (pages/budget/index.astro): expense
  *  groups only; spent = |Σ activity|, budgeted = Σ total_budgeted. */
 export function budgetGlanceView(month: any, draftsCount: number, lang: "es" | "en"): BudgetGlance {
-    if (!month || !Array.isArray(month.category_groups)) return { show: false };
-    const expense = month.category_groups.filter((g: any) => !g?.is_income);
-    const budgetedCents = expense.reduce((s: number, g: any) => s + (Number(g?.total_budgeted) || 0), 0);
-    const spentCents = Math.abs(expense.reduce((s: number, g: any) => s + (Number(g?.total_activity) || 0), 0));
+    const totals = expenseTotals(month);
+    if (!totals) return { show: false };
+    const { budgetedCents, spentCents } = totals;
     if (budgetedCents <= 0 && spentCents <= 0) return { show: false };
-    const pct = budgetedCents > 0 ? Math.max(0, Math.min(100, Math.round((spentCents / budgetedCents) * 100))) : 0;
     const drafts = n(draftsCount);
     const es = lang === "es";
     return {
         show: true,
         spentCents,
         budgetedCents,
-        pct,
+        pct: spentPct(spentCents, budgetedCents),
         over: budgetedCents > 0 && spentCents > budgetedCents,
         draftsLine: drafts > 0
             ? (es ? `🧾 ${drafts} ticket${drafts === 1 ? "" : "s"} por revisar` : `🧾 ${drafts} receipt${drafts === 1 ? "" : "s"} to review`)
             : null,
         draftsCount: drafts,
+    };
+}
+
+export interface MonthSummary {
+    budgetedCents: number;
+    spentCents: number;
+    leftCents: number;
+    pct: number;
+    over: boolean;
+    tone: "over" | "warn" | "ok";
+    caption: string;
+    hasBudget: boolean;
+}
+
+/** Month screen summary bar (UX-B4): Budgeted / Spent / Left, in the same
+ *  envelope terms as Ready-to-assign. Always renders (zeros when data is
+ *  missing), unlike the parent-home card which hides. */
+export function monthSummaryView(month: any, lang: "es" | "en"): MonthSummary {
+    const { budgetedCents, spentCents } = expenseTotals(month) ?? { budgetedCents: 0, spentCents: 0 };
+    const hasBudget = budgetedCents > 0;
+    const pct = spentPct(spentCents, budgetedCents);
+    const over = hasBudget && spentCents > budgetedCents;
+    const es = lang === "es";
+    return {
+        budgetedCents,
+        spentCents,
+        leftCents: budgetedCents - spentCents,
+        pct,
+        over,
+        tone: over ? "over" : pct >= 75 ? "warn" : "ok",
+        caption: hasBudget
+            ? (es ? `${pct} % del presupuesto gastado` : `${pct}% of budget spent`)
+            : (es ? "Sin presupuesto asignado este mes" : "Nothing budgeted this month"),
+        hasBudget,
     };
 }
 
