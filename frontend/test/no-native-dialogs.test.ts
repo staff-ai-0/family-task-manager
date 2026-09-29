@@ -51,6 +51,28 @@ describe("scanSource", () => {
             { line: 6, match: "alert(" },
         ]);
     });
+    it("does not treat comment markers inside strings as comment starts", () => {
+        const cases: [string, { line: number; match: string }[]][] = [
+            ['const s = "/* oops";\nalert("real");', [{ line: 2, match: "alert(" }]],
+            ['const s = "/* oops"; alert("x");', [{ line: 1, match: "alert(" }]],
+            ["const url = `www.example.com//path`; alert(url);", [{ line: 1, match: "alert(" }]],
+            ['const s = "//cdn.example.com/lib.js"; confirm("y");', [{ line: 1, match: "confirm(" }]],
+        ];
+        for (const [src, expected] of cases) {
+            expect(scanSource(src)).toEqual(expected);
+        }
+    });
+    it("still flags a native call inside an HTML attribute string", () => {
+        const src = `<button onclick="return confirm('x')">Del</button>`;
+        expect(scanSource(src)).toEqual([{ line: 1, match: "confirm(" }]);
+    });
+    it("strips HTML comments, single- and multi-line, but not code after them", () => {
+        const singleLine = ["<!-- old code used confirm('Delete?') -->", 'alert("real");'].join("\n");
+        expect(scanSource(singleLine)).toEqual([{ line: 2, match: "alert(" }]);
+
+        const multiLine = ["<!--", " confirm(", "-->", 'alert("real");'].join("\n");
+        expect(scanSource(multiLine)).toEqual([{ line: 4, match: "alert(" }]);
+    });
 });
 
 describe("frontend/src", () => {
