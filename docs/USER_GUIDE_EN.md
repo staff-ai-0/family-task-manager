@@ -295,7 +295,7 @@ The app has a bottom navigation bar (**Bottom Nav**) that appears on every scree
 **Home** (`/parent`) shows what needs you today, in this order:
 
 1. **Set up your family** — only while setup steps are missing.
-2. **To review** — the 3 oldest submissions (chores with a photo, gigs and reward redemptions). **✓ Approve** decides in one tap; **Almost** gives partial credit (25/50/75 %) and **Missed** lets you leave a note. "See all" opens **Approve**.
+2. **To review** — the 3 oldest submissions (chores awaiting approval, gigs and reward redemptions). **✓ Approve** decides in one tap; **Almost** gives partial credit (25/50/75 %) and **Missed** lets you leave a note. "See all" opens **Approve**.
 3. **Today** — one row per kid: today's chores done, overdue ones, the weekly pay bar and their goal. **⏰ Remind** sends them a notice; it works once every 3 hours per kid (shared by both parents).
 4. **To pay** — money owed (gigs and chore paychecks).
 5. **My tasks today** — your own chores.
@@ -523,7 +523,7 @@ graph LR
 
 ### If there are no rewards available
 
-If you see the message "No rewards yet", ask a parent to add rewards from the Management section.
+If you see the message "No rewards yet", ask a parent to add rewards from **More** → **Rewards**.
 
 ---
 

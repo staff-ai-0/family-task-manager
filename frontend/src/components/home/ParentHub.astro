@@ -20,7 +20,7 @@ interface Props {
     userId: string;
     setup: { onboarding: any; showModuleStarter: boolean } | null;
     reviewItems: ReviewItem[];
-    kidRows: KidRowView[];
+    kidRows: KidRowView[] | null;
     pay: { owedCents: number; cashCents: number; paychecksCents: number; href: string; paidNames: string[] };
     myDeck: ReturnType<typeof buildDeck> | null;
     budget: { view: Extract<BudgetGlance, { show: true }>; monthName: string } | null;
@@ -35,6 +35,10 @@ const paidLine = pay.paidNames.length
         : `${pay.paidNames.join(", ")} got their Family Bank payday.`
     : null;
 const showPay = pay.owedCents > 0 || paidLine !== null;
+// Nothing owed but a recent payday to show: link to the Family Bank page the
+// old payday banner used, not the (possibly $0) payouts page, and say "View".
+const payHref = pay.owedCents > 0 ? pay.href : "/parent/settings/family-bank";
+const payLabel = pay.owedCents > 0 ? (es ? "Pagar ›" : "Pay ›") : (es ? "Ver ›" : "View ›");
 const bossName = boss ? (es ? boss.name_es : boss.name_en) : "";
 const label = "text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft";
 ---
@@ -44,23 +48,25 @@ const label = "text-xs font-extrabold uppercase tracking-wider text-brand-ink-so
 
     <ReviewSection items={reviewItems} lang={lang} tz={tz} userId={userId} />
 
-    <section class="mb-6" aria-labelledby="kids-heading">
-        <h2 id="kids-heading" class={`${label} mb-2 px-1`}>{es ? "Hoy" : "Today"}</h2>
-        {kidRows.length > 0 ? (
-            <ul class="space-y-2">
-                {kidRows.map((view) => <KidRow view={view} lang={lang} />)}
-            </ul>
-        ) : (
-            <a href="/parent/members#invite" class="block rounded-xl bg-white border border-brand-ink/10 px-3 py-2 text-sm text-brand-ink-soft">
-                {es ? "Invita a tus hijos para ver su día aquí ›" : "Invite your kids to see their day here ›"}
-            </a>
-        )}
-    </section>
+    {kidRows !== null && (
+        <section class="mb-6" aria-labelledby="kids-heading">
+            <h2 id="kids-heading" class={`${label} mb-2 px-1`}>{es ? "Hoy" : "Today"}</h2>
+            {kidRows.length > 0 ? (
+                <ul class="space-y-2">
+                    {kidRows.map((view) => <KidRow view={view} lang={lang} />)}
+                </ul>
+            ) : (
+                <a href="/parent/members#invite" class="block rounded-xl bg-white border border-brand-ink/10 px-3 py-2 text-sm text-brand-ink-soft">
+                    {es ? "Invita a tus hijos para ver su día aquí ›" : "Invite your kids to see their day here ›"}
+                </a>
+            )}
+        </section>
+    )}
 
     {showPay && (
         <section class="mb-6" aria-labelledby="pay-heading">
             <h2 id="pay-heading" class={`${label} mb-2 px-1`}>{es ? "Por pagar" : "To pay"}</h2>
-            <a href={pay.href}
+            <a href={payHref}
                 class="flex items-center justify-between gap-3 rounded-2xl bg-gradient-to-br from-emerald-700 to-emerald-600 text-white px-4 py-3 shadow-[var(--shadow-card)] hover:from-emerald-800 hover:to-emerald-700 transition-colors">
                 <div class="min-w-0">
                     {pay.owedCents > 0 && (
@@ -73,7 +79,7 @@ const label = "text-xs font-extrabold uppercase tracking-wider text-brand-ink-so
                     )}
                     {paidLine && <p class="text-xs text-emerald-50 mt-1">🏦 {paidLine}</p>}
                 </div>
-                <span class="text-sm font-bold whitespace-nowrap">{es ? "Pagar ›" : "Pay ›"}</span>
+                <span class="text-sm font-bold whitespace-nowrap">{payLabel}</span>
             </a>
         </section>
     )}

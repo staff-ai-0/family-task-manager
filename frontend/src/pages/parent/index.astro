@@ -28,10 +28,18 @@ if (flash) Astro.cookies.delete("flash", { path: "/" });
 const flashError = Astro.cookies.get("flash_error")?.value;
 if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 
+// Budget glance needs the same month + module check as the fetch below, but
+// resolved up front so its two requests can join the first wave instead of
+// firing in a second one after it.
+const budgetOn = modOn("budget");
+const budgetYear = now.getFullYear();
+const budgetMonth = now.getMonth() + 1;
+
 // Every fetch is fail-open (apiFetch never throws): a missing piece hides its section.
 const [
     familyRes, progressRes, cupRes, oversightRes, bankFamilyRes, payoutRes,
     taskPendingRes, gigPendingRes, redemptionRes, onboardingRes,
+    monthRes, draftsRes,
 ] = await Promise.all([
     apiFetch<any>("/api/families/me", { token }),
     apiFetch<any>("/api/task-assignments/progress", { token }),
@@ -43,6 +51,12 @@ const [
     apiFetch<any[]>("/api/gigs/claims/pending-approvals", { token }),
     apiFetch<any[]>("/api/rewards/redemptions/pending", { token }),
     apiFetch<any>("/api/families/onboarding", { token }),
+    budgetOn
+        ? apiFetch<any>(`/api/budget/month/${budgetYear}/${budgetMonth}`, { token })
+        : Promise.resolve({ data: null }),
+    budgetOn
+        ? apiFetch<{ count: number }>("/api/budget/receipt-drafts/count", { token })
+        : Promise.resolve({ data: null }),
 ]);
 const family = familyRes.data;
 
@@ -54,11 +68,16 @@ const myHasChores =
 const myDeck = myHasChores ? buildDeck(myProgress, lang) : null;
 
 // Kids today: oversight summary + each kid's weekly paycheck (few kids → parallel).
-const kids: any[] = oversightRes.data?.members ?? [];
-const paychecks = await Promise.all(
-    kids.map((k) => apiFetch<any>(`/api/bank/chore-paycheck/${k.user_id}`, { token })),
-);
-const kidRows = kids.map((k, i) => kidRowView(k, paychecks[i].data, now, lang));
+// A failed summary fetch is NOT "no kids" — kidRows stays null so ParentHub
+// hides the whole "Hoy" section instead of showing the invite-your-kids line.
+let kidRows: ReturnType<typeof kidRowView>[] | null = null;
+if (oversightRes.data) {
+    const kids: any[] = oversightRes.data.members ?? [];
+    const paychecks = await Promise.all(
+        kids.map((k) => apiFetch<any>(`/api/bank/chore-paycheck/${k.user_id}`, { token })),
+    );
+    kidRows = kids.map((k, i) => kidRowView(k, paychecks[i].data, now, lang));
+}
 
 // To pay: money owed + anyone whose Family Bank payday fired in the last 2 days.
 const bankFamily = Array.isArray(bankFamilyRes.data) ? bankFamilyRes.data : [];
@@ -87,15 +106,9 @@ const setup =
 
 // Budget glance: same month + math as the budget dashboard. No scan button.
 let budget: { view: any; monthName: string } | null = null;
-if (modOn("budget")) {
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const [monthRes, draftsRes] = await Promise.all([
-        apiFetch<any>(`/api/budget/month/${year}/${month}`, { token }),
-        apiFetch<{ count: number }>("/api/budget/receipt-drafts/count", { token }),
-    ]);
+if (budgetOn) {
     const view = budgetGlanceView(monthRes.data, draftsRes.data?.count ?? 0, lang);
-    if (view.show) budget = { view, monthName: monthLabel(year, month, lang) };
+    if (view.show) budget = { view, monthName: monthLabel(budgetYear, budgetMonth, lang) };
 }
 
 const boss = cupRes.data?.boss ?? null;

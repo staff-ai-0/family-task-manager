@@ -76,6 +76,13 @@ const total = items.length;
         const collapse = (card: HTMLElement) => {
             card.querySelector<HTMLElement>("[data-review-expand]")?.setAttribute("hidden", "");
             delete card.dataset.mode;
+            // A note (or a non-default % chip) must not survive a collapsed,
+            // abandoned panel — otherwise a later one-tap "Aprobar" would
+            // silently send text nobody can see any more.
+            const note = card.querySelector<HTMLTextAreaElement>("[data-review-note]");
+            if (note) note.value = "";
+            card.querySelectorAll<HTMLElement>("[data-pct]").forEach((b) =>
+                b.setAttribute("aria-pressed", b.dataset.pct === "50" ? "true" : "false"));
         };
         const expand = (card: HTMLElement, mode: "partial" | "reject") => {
             cards().forEach((c) => { if (c !== card) collapse(c); });

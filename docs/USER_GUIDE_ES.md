@@ -295,7 +295,7 @@ La aplicacion tiene una barra de navegacion inferior (**Bottom Nav**) que aparec
 **Inicio** (`/parent`) muestra lo que necesita su atención hoy, en este orden:
 
 1. **Configura tu familia** — solo mientras falten pasos de configuración.
-2. **Por revisar** — las 3 entregas más antiguas (tareas con foto, gigs y canjes de premios). **✓ Aprobar** decide con un toque; **Casi** da crédito parcial (25/50/75 %) y **No hecha** permite dejar una nota. "Ver todas" abre **Aprobar**.
+2. **Por revisar** — las 3 entregas más antiguas (tareas por aprobar, gigs y canjes de premios). **✓ Aprobar** decide con un toque; **Casi** da crédito parcial (25/50/75 %) y **No hecha** permite dejar una nota. "Ver todas" abre **Aprobar**.
 3. **Hoy** — una fila por hijo: tareas hechas de hoy, atrasadas, la barra del pago semanal y su meta. **⏰ Recordar** le manda un aviso; solo se puede una vez cada 3 horas por hijo (entre ambos padres).
 4. **Por pagar** — dinero pendiente (gigs y cheques de tareas).
 5. **Mis tareas de hoy** — sus propias tareas.
@@ -523,7 +523,7 @@ graph LR
 
 ### Si no hay premios disponibles
 
-Si ve el mensaje "Sin premios aun", pida a un padre que agregue premios desde la seccion de Gestion.
+Si ve el mensaje "Sin premios aun", pida a un padre que agregue premios desde **Más** → **Premios**.
 
 ---
 

@@ -84,9 +84,13 @@ const showButton = view.nudge.kind === "ready" || view.nudge.kind === "cooldown"
                 }
                 const body = await res.json().catch(() => null);
                 if (res.status === 429) {
+                    // The cap is shared across both parents, so a 429 here can
+                    // mean the OTHER parent already nudged — the relabel alone
+                    // doesn't say that, so explain it.
                     const retry = Number(body?.retry_after_seconds ?? 0);
                     const hoursAgo = Math.max(0, Math.floor((NUDGE_COOLDOWN_MS / 1000 - retry) / 3600));
                     btn.textContent = nudgeLabel({ kind: "cooldown", hoursAgo }, lang) ?? "";
+                    showToast(es ? `Ya se le recordó hace poco a ${name}` : `${name} was reminded recently`, "info");
                     return;
                 }
                 if (res.status === 409) {
