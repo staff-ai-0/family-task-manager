@@ -330,19 +330,23 @@ const {
 
     // Hold-for-next-month (Actual parity): park part of RTA for next month.
     document.getElementById(`${baseRoute}-hold-btn`)?.addEventListener('click', async () => {
-        const current = prompt(lang === 'es'
-            ? 'Cantidad ($) a guardar para el próximo mes (0 para liberar):'
-            : 'Amount ($) to hold for next month (0 to release):');
+        const current = (await window.ftmDialogs?.promptSheet({
+            title: lang === 'es'
+                ? 'Cantidad ($) a guardar para el próximo mes (0 para liberar):'
+                : 'Amount ($) to hold for next month (0 to release):',
+            inputType: 'number',
+            confirmLabel: lang === 'es' ? 'Guardar' : 'Save',
+        })) ?? null;
         if (current === null) return;
         const cents = Math.round(parseFloat(current || '0') * 100);
-        if (isNaN(cents) || cents < 0) { alert(lang === 'es' ? 'Cantidad inválida' : 'Invalid amount'); return; }
+        if (isNaN(cents) || cents < 0) { window.ftmDialogs?.toast(lang === 'es' ? 'Cantidad inválida' : 'Invalid amount', 'error', 6000); return; }
         const res = await fetch(`/api/budget/months/${year}/${month}/hold`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ amount: cents }),
         });
         if (res.ok) location.reload();
-        else alert(lang === 'es' ? 'No se pudo guardar.' : 'Could not hold.');
+        else window.ftmDialogs?.toast(lang === 'es' ? 'No se pudo guardar.' : 'Could not hold.', 'error', 6000);
     });
 
     // Also handle the global open-assign-funds-modal button (header button)

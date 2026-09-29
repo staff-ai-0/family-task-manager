@@ -697,7 +697,7 @@ document.addEventListener("astro:after-swap", initFilters);
             category_id: r.querySelector(".split-cat").value || null,
         })).filter(sp => sp.amount !== 0);
         if (splits.length < 2) {
-            alert(es ? "Se necesitan al menos 2 renglones." : "At least 2 rows required.");
+            window.ftmDialogs?.toast(es ? "Se necesitan al menos 2 renglones." : "At least 2 rows required.", "info");
             return;
         }
         try {
@@ -723,7 +723,7 @@ document.addEventListener("astro:after-swap", initFilters);
             });
             window.location.reload();
         } catch (e) {
-            alert((es ? "No se pudo dividir: " : "Split failed: ") + e.message);
+            window.ftmDialogs?.toast((es ? "No se pudo dividir: " : "Split failed: ") + e.message, "error", 6000);
         }
     });
 
@@ -1231,21 +1231,25 @@ document.addEventListener("astro:after-swap", initFilters);
                 });
                 const data = await preview.json();
                 if (!data.pairs || data.pairs.length === 0) {
-                    alert(es ? "No se encontraron duplicados." : "No duplicates found.");
+                    window.ftmDialogs?.toast(es ? "No se encontraron duplicados." : "No duplicates found.", "info");
                     return;
                 }
                 const msg = es
                     ? `Se encontraron ${data.pairs.length} par(es) duplicado(s). ¿Limpiar ahora?`
                     : `Found ${data.pairs.length} duplicate pair(s). Clean up now?`;
-                if (!confirm(msg)) return;
+                if (!(await window.ftmDialogs?.confirmSheet({
+                    title: msg,
+                    confirmLabel: es ? "Limpiar" : "Clean up",
+                    danger: true,
+                }))) return;
                 const res = await fetch("/api/budget/transactions/deduplicate", { method: "POST" });
                 const result = await res.json();
-                alert(es
-                    ? `${result.merged} duplicado(s) eliminado(s). Recargando...`
-                    : `${result.merged} duplicate(s) removed. Reloading...`);
+                window.ftmDialogs?.queueToast(es
+                    ? `${result.merged} duplicado(s) eliminado(s).`
+                    : `${result.merged} duplicate(s) removed.`, "success");
                 window.location.reload();
             } catch (e) {
-                alert(es ? "Error al limpiar duplicados." : "Error removing duplicates.");
+                window.ftmDialogs?.toast(es ? "Error al limpiar duplicados." : "Error removing duplicates.", "error", 6000);
             } finally {
                 btn.disabled = false;
                 btn.textContent = "Dedup";
@@ -1261,21 +1265,24 @@ document.addEventListener("astro:after-swap", initFilters);
         if (!btn) return;
         btn.addEventListener("click", async () => {
             const es = document.documentElement.lang === "es";
-            if (!confirm(es
-                ? "Categorizar con IA todas las transacciones sin categoría. ¿Continuar?"
-                : "AI-categorize all uncategorized transactions. Continue?")) return;
+            if (!(await window.ftmDialogs?.confirmSheet({
+                title: es
+                    ? "Categorizar con IA todas las transacciones sin categoría. ¿Continuar?"
+                    : "AI-categorize all uncategorized transactions. Continue?",
+                confirmLabel: es ? "Categorizar" : "Categorize",
+            }))) return;
             btn.disabled = true;
             const label = btn.querySelector("svg")?.nextSibling;
             btn.textContent = es ? "Categorizando..." : "Categorizing...";
             try {
                 const res = await fetch("/api/budget/transactions/auto-categorize", { method: "POST" });
                 const r = await res.json();
-                alert(es
-                    ? `${r.applied} de ${r.scanned} categorizadas. Recargando...`
-                    : `${r.applied} of ${r.scanned} categorized. Reloading...`);
+                window.ftmDialogs?.queueToast(es
+                    ? `${r.applied} de ${r.scanned} categorizadas.`
+                    : `${r.applied} of ${r.scanned} categorized.`, "success");
                 window.location.reload();
             } catch (e) {
-                alert(es ? "Error al categorizar." : "Categorization error.");
+                window.ftmDialogs?.toast(es ? "Error al categorizar." : "Categorization error.", "error", 6000);
             } finally {
                 btn.disabled = false;
             }
@@ -1287,6 +1294,9 @@ document.addEventListener("astro:after-swap", initFilters);
 </script>
 
 <script>
+import { confirmSheet, promptSheet } from "../../lib/dialogs";
+import { showToast } from "../../lib/toast";
+
 // ── Power tools: bulk-select, saved filters, tags-on-edit ──────────────────
 function initPowerTools() {
     // Runs on both script-eval and astro:page-load — guard against double
@@ -1351,7 +1361,7 @@ function initPowerTools() {
                 transaction_ids: [...picked], updates: { category_id: v },
             });
             window.location.reload();
-        } catch (e) { alert((e as Error).message); }
+        } catch (e) { showToast((e as Error).message, "error", 6000); }
     });
     document.getElementById("bulk-clear")?.addEventListener("click", async () => {
         if (picked.size === 0) return;
@@ -1360,11 +1370,15 @@ function initPowerTools() {
                 transaction_ids: [...picked], updates: { cleared: true },
             });
             window.location.reload();
-        } catch (e) { alert((e as Error).message); }
+        } catch (e) { showToast((e as Error).message, "error", 6000); }
     });
     document.getElementById("bulk-delete")?.addEventListener("click", async () => {
         if (picked.size === 0) return;
-        if (!confirm(es ? `¿Eliminar ${picked.size} transacciones? (van a la papelera)` : `Delete ${picked.size} transactions? (recycle bin)`)) return;
+        if (!(await confirmSheet({
+            title: es ? `¿Eliminar ${picked.size} transacciones? (van a la papelera)` : `Delete ${picked.size} transactions? (recycle bin)`,
+            confirmLabel: es ? "Eliminar" : "Delete",
+            danger: true,
+        }))) return;
         try {
             const ids = [...picked];
             await bulkCall("/api/budget/transactions/bulk-delete", { transaction_ids: ids });
@@ -1373,7 +1387,7 @@ function initPowerTools() {
                 ids.map((id) => ({ url: `/api/budget/recycle-bin/transactions/${id}/restore`, method: "POST" })),
             );
             window.location.reload();
-        } catch (e) { alert((e as Error).message); }
+        } catch (e) { showToast((e as Error).message, "error", 6000); }
     });
 
     // ── Saved filters ──
@@ -1407,7 +1421,11 @@ function initPowerTools() {
                 // on touch — name the chip it belongs to explicitly.
                 del.setAttribute("aria-label", es ? `Borrar filtro ${f.name}` : `Delete filter ${f.name}`);
                 del.addEventListener("click", async () => {
-                    if (!confirm(es ? `¿Borrar filtro "${f.name}"?` : `Delete filter "${f.name}"?`)) return;
+                    if (!(await confirmSheet({
+                        title: es ? `¿Borrar filtro "${f.name}"?` : `Delete filter "${f.name}"?`,
+                        confirmLabel: es ? "Eliminar" : "Delete",
+                        danger: true,
+                    }))) return;
                     await fetch(`/api/budget/saved-filters/${f.id}`, { method: "DELETE" });
                     window.location.reload();
                 });
@@ -1425,10 +1443,14 @@ function initPowerTools() {
         if (params.get("category")) conditions.push({ field: "category_id", operator: "eq", value: params.get("category") });
         if (params.get("search")) conditions.push({ field: "search", operator: "contains", value: params.get("search") });
         if (conditions.length === 0) {
-            alert(es ? "Aplica primero un filtro (cuenta, categoría o búsqueda)." : "Apply a filter first (account, category or search).");
+            showToast(es ? "Aplica primero un filtro (cuenta, categoría o búsqueda)." : "Apply a filter first (account, category or search).", "info");
             return;
         }
-        const name = prompt(es ? "Nombre del filtro:" : "Filter name:");
+        const name = await promptSheet({
+            title: es ? "Guardar filtro" : "Save filter",
+            label: es ? "Nombre del filtro:" : "Filter name:",
+            confirmLabel: es ? "Guardar" : "Save",
+        });
         if (!name || !name.trim()) return;
         const res = await fetch("/api/budget/saved-filters/", {
             method: "POST",
@@ -1436,7 +1458,7 @@ function initPowerTools() {
             body: JSON.stringify({ name: name.trim(), conditions, conditions_op: "and" }),
         });
         if (res.ok) window.location.reload();
-        else alert(es ? "No se pudo guardar." : "Could not save.");
+        else showToast(es ? "No se pudo guardar." : "Could not save.", "error", 6000);
     });
 
     // ── Tags on the edit sheet ──

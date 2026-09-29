@@ -916,7 +916,10 @@ window.openPayeeModal = function(p) {
 
 // ─── CATEGORIES CRUD ─────────────────────────────────────────────────────────
 window.promptNewGroup = async function() {
-    const name = prompt(es ? "Nombre del nuevo grupo:" : "New group name:");
+    const name = (await window.ftmDialogs?.promptSheet({
+        title: es ? "Nombre del nuevo grupo:" : "New group name:",
+        confirmLabel: es ? "Crear" : "Create",
+    })) ?? null;
     if (!name || !name.trim()) return;
     try {
         await apiCall("/api/budget/categories/groups", "POST", { name: name.trim() });
@@ -926,7 +929,11 @@ window.promptNewGroup = async function() {
 };
 
 window.promptRenameGroup = async function(id, current) {
-    const name = prompt(es ? "Nuevo nombre del grupo:" : "New group name:", current);
+    const name = (await window.ftmDialogs?.promptSheet({
+        title: es ? "Nuevo nombre del grupo:" : "New group name:",
+        defaultValue: current,
+        confirmLabel: es ? "Guardar" : "Save",
+    })) ?? null;
     if (!name || !name.trim() || name.trim() === current) return;
     try {
         await apiCall(`/api/budget/categories/groups/${id}`, "PUT", { name: name.trim() });
@@ -958,7 +965,10 @@ window.confirmDeleteGroup = function(id, name) {
 };
 
 window.promptAddCategory = async function(groupId, groupName) {
-    const name = prompt((es ? "Nueva categoría en " : "New category in ") + groupName + ":");
+    const name = (await window.ftmDialogs?.promptSheet({
+        title: (es ? "Nueva categoría en " : "New category in ") + groupName,
+        confirmLabel: es ? "Crear" : "Create",
+    })) ?? null;
     if (!name || !name.trim()) return;
     try {
         await apiCall("/api/budget/categories/", "POST", { group_id: groupId, name: name.trim() });
@@ -968,7 +978,11 @@ window.promptAddCategory = async function(groupId, groupName) {
 };
 
 window.promptRenameCategory = async function(id, current) {
-    const name = prompt(es ? "Nuevo nombre:" : "New name:", current);
+    const name = (await window.ftmDialogs?.promptSheet({
+        title: es ? "Nuevo nombre:" : "New name:",
+        defaultValue: current,
+        confirmLabel: es ? "Guardar" : "Save",
+    })) ?? null;
     if (!name || !name.trim() || name.trim() === current) return;
     try {
         await apiCall(`/api/budget/categories/${id}`, "PUT", { name: name.trim() });
@@ -986,10 +1000,11 @@ window.toggleCategoryHidden = async function(id, hide) {
 
 window.promptCategoryNotes = async function(id, name) {
     const cats = await apiCall(`/api/budget/categories/${id}`, "GET");
-    const val = prompt(
-        (es ? "Notas para " : "Notes for ") + name + ":",
-        cats?.notes || ""
-    );
+    const val = (await window.ftmDialogs?.promptSheet({
+        title: (es ? "Notas para " : "Notes for ") + name,
+        defaultValue: cats?.notes || "",
+        confirmLabel: es ? "Guardar" : "Save",
+    })) ?? null;
     if (val === null) return;
     try {
         await apiCall(`/api/budget/categories/${id}`, "PUT", { notes: val.trim() || null });
@@ -999,11 +1014,13 @@ window.promptCategoryNotes = async function(id, name) {
 };
 
 window.promptCategoryGoal = async function(id, name, currentCents) {
-    const val = prompt(
-        (es ? "Meta mensual para " : "Monthly goal for ") + name +
-        (es ? " ($, 0 para quitar):" : " ($, 0 to clear):"),
-        currentCents ? (currentCents / 100).toFixed(0) : ""
-    );
+    const val = (await window.ftmDialogs?.promptSheet({
+        title: (es ? "Meta mensual para " : "Monthly goal for ") + name +
+            (es ? " ($, 0 para quitar):" : " ($, 0 to clear):"),
+        defaultValue: currentCents ? (currentCents / 100).toFixed(0) : "",
+        inputType: "number",
+        confirmLabel: es ? "Guardar" : "Save",
+    })) ?? null;
     if (val === null) return;
     const cents = Math.round(parseFloat(val || "0") * 100);
     if (isNaN(cents) || cents < 0) { showToast(es ? "Cantidad inválida" : "Invalid amount", "error"); return; }
@@ -1120,10 +1137,16 @@ window.restoreBackup = async function() {
     const f = input?.files?.[0];
     if (!f) { showToast(es ? "Elige un archivo ZIP" : "Pick a ZIP file", "error"); return; }
     const word = es ? "RESTAURAR" : "RESTORE";
-    const typed = prompt(es
-        ? `Esto BORRA todo el presupuesto actual. Escribe ${word} para confirmar:`
-        : `This WIPES the current budget. Type ${word} to confirm:`);
-    if (typed !== word) return;
+    const typed = (await window.ftmDialogs?.promptSheet({
+        title: es ? "Restaurar copia" : "Restore backup",
+        body: es
+            ? `Esto BORRA todo el presupuesto actual. Escribe ${word} para confirmar:`
+            : `This WIPES the current budget. Type ${word} to confirm:`,
+        requireMatch: word,
+        danger: true,
+        confirmLabel: es ? "Restaurar" : "Restore",
+    })) ?? null;
+    if (typed?.trim() !== word) return;
     const fd = new FormData();
     fd.append("file", f);
     try {

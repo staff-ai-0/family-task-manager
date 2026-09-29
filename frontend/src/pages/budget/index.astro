@@ -283,6 +283,9 @@ const jarvisQuestions: string[] =
 
         <!-- Assign Funds modal (triggered from BudgetMonthNav ready-to-assign button) -->
 <script>
+    import { promptSheet } from "../../lib/dialogs";
+    import { showToast } from "../../lib/toast";
+
     // "+" on each expense group header: create a category in that group.
     // Delegated once at page level (BudgetCategoryGroup renders many times).
     document.addEventListener("click", async (ev) => {
@@ -290,10 +293,12 @@ const jarvisQuestions: string[] =
         const btn = t instanceof Element ? t.closest(".quick-add-btn") : null;
         if (!btn) return;
         const isEs = document.documentElement.lang !== "en";
-        const name = prompt(
-            (isEs ? "Nueva categoría en " : "New category in ") +
-                (btn.getAttribute("data-group-name") || "") + ":"
-        );
+        const groupName = btn.getAttribute("data-group-name") || "";
+        const name = await promptSheet({
+            title: (isEs ? "Nueva categoría en " : "New category in ") + groupName,
+            label: isEs ? "Nombre" : "Name",
+            confirmLabel: isEs ? "Crear" : "Create",
+        });
         if (!name || !name.trim()) return;
         // The /api/budget proxy injects the auth cookie server-side.
         const res = await fetch("/api/budget/categories/", {
@@ -308,9 +313,11 @@ const jarvisQuestions: string[] =
             location.reload();
         } else {
             const data = await res.json().catch(() => ({}));
-            alert(
+            showToast(
                 (isEs ? "No se pudo crear la categoría. " : "Could not create the category. ") +
-                    (data.message || data.detail || "")
+                    (data.message || data.detail || ""),
+                "error",
+                6000
             );
         }
     });
@@ -354,6 +361,9 @@ const jarvisQuestions: string[] =
 </BudgetShell>
 
 <script>
+    import { confirmSheet } from "../../lib/dialogs";
+    import { showToast } from "../../lib/toast";
+
     document.addEventListener("astro:page-load", () => {
         const btn = document.getElementById("copy-last-month") as HTMLButtonElement | null;
         const msg = document.getElementById("copy-last-month-msg");
@@ -365,15 +375,18 @@ const jarvisQuestions: string[] =
             const verb = closed
                 ? (es ? "reabrir" : "reopen")
                 : (es ? "cerrar" : "close");
-            if (!window.confirm(closed
-                ? (es ? "¿Reabrir este mes para permitir cambios?" : "Reopen this month to allow changes?")
-                : (es ? "¿Cerrar este mes? Las asignaciones quedan bloqueadas hasta reabrir." : "Close this month? Allocations lock until reopened."))) return;
+            if (!(await confirmSheet({
+                title: closed
+                    ? (es ? "¿Reabrir este mes para permitir cambios?" : "Reopen this month to allow changes?")
+                    : (es ? "¿Cerrar este mes? Las asignaciones quedan bloqueadas hasta reabrir." : "Close this month? Allocations lock until reopened."),
+                confirmLabel: closed ? (es ? "Reabrir" : "Reopen") : (es ? "Cerrar mes" : "Close month"),
+            }))) return;
             try {
                 const res = await fetch(`/api/budget/months/${lockBtn.dataset.year}/${lockBtn.dataset.month}/${closed ? "reopen" : "close"}`, { method: "POST" });
                 if (!res.ok) throw new Error(String(res.status));
                 window.location.reload();
             } catch {
-                alert(es ? `No se pudo ${verb} el mes.` : `Could not ${verb} the month.`);
+                showToast(es ? `No se pudo ${verb} el mes.` : `Could not ${verb} the month.`, "error", 6000);
             }
         });
         document.getElementById("autofill-more")?.addEventListener("click", () => {
@@ -382,9 +395,12 @@ const jarvisQuestions: string[] =
         document.querySelectorAll<HTMLButtonElement>(".autofill-opt").forEach((opt) => {
             opt.addEventListener("click", async () => {
                 const strategy = opt.dataset.strategy;
-                if (!window.confirm(es
-                    ? "¿Llenar las categorías sin presupuesto con esta estrategia?"
-                    : "Fill un-budgeted categories using this strategy?")) return;
+                if (!(await confirmSheet({
+                    title: es
+                        ? "¿Llenar las categorías sin presupuesto con esta estrategia?"
+                        : "Fill un-budgeted categories using this strategy?",
+                    confirmLabel: es ? "Llenar" : "Fill",
+                }))) return;
                 opt.disabled = true;
                 try {
                     const res = await fetch("/api/budget/allocations/auto-fill", {
@@ -416,9 +432,12 @@ const jarvisQuestions: string[] =
             });
         });
         btn.addEventListener("click", async () => {
-            if (!window.confirm(es
-                ? "¿Copiar los montos del mes anterior a las categorías sin presupuesto de este mes?"
-                : "Copy last month's amounts into this month's un-budgeted categories?")) return;
+            if (!(await confirmSheet({
+                title: es
+                    ? "¿Copiar los montos del mes anterior a las categorías sin presupuesto de este mes?"
+                    : "Copy last month's amounts into this month's un-budgeted categories?",
+                confirmLabel: es ? "Copiar" : "Copy",
+            }))) return;
             const original = btn.textContent;
             btn.disabled = true;
             btn.textContent = btn.dataset.busy || "…";
@@ -453,7 +472,7 @@ const jarvisQuestions: string[] =
             } catch (e) {
                 btn.disabled = false;
                 btn.textContent = original;
-                alert(es ? "No se pudo copiar el mes anterior." : "Could not copy last month.");
+                showToast(es ? "No se pudo copiar el mes anterior." : "Could not copy last month.", "error", 6000);
             }
         });
     });
