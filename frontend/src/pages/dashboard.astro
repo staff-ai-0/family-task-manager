@@ -65,10 +65,14 @@ const priorInReview = (Array.isArray(weekDone) ? weekDone : []).filter(
     (a: any) => a.template_is_bonus && String(a.assigned_date) < todayStr && a.approval_status === "pending",
 ).length;
 
+// Star mode: a points goal the child can already afford reads "Meta
+// alcanzada → canjea", not "Elige una meta".
 const goal = starMode
-    ? (rewardGoal && !rewardGoal.affordable
-        ? { kind: "points" as const, title: rewardGoal.reward_title, icon: rewardGoal.reward_icon ?? "🎯", pct: rewardGoal.progress_pct ?? 0, ptsToGo: rewardGoal.pts_to_go ?? 0 }
-        : { kind: "none" as const, href: "/rewards" })
+    ? (!rewardGoal
+        ? { kind: "none" as const, href: "/rewards" }
+        : rewardGoal.affordable
+            ? { kind: "reached" as const, title: rewardGoal.reward_title }
+            : { kind: "points" as const, title: rewardGoal.reward_title, icon: rewardGoal.reward_icon ?? "🎯", pct: rewardGoal.progress_pct ?? 0, ptsToGo: rewardGoal.pts_to_go ?? 0 })
     : (bankGoal && bankGoal.status !== "cancelled"
         ? { kind: "cash" as const, name: bankGoal.name, emoji: bankGoal.emoji ?? "🎯", savedCents: bankGoal.saved_cents ?? 0, targetCents: bankGoal.target_cents ?? 0, pct: bankGoal.progress_pct ?? 0 }
         : { kind: "none" as const, href: "/bank" });
@@ -76,7 +80,9 @@ const goal = starMode
 const boss = familyCup?.boss ?? null;
 const board: any[] = Array.isArray(familyCup?.leaderboard) ? familyCup.leaderboard : [];
 const rank = board.findIndex((e: any) => String(e.user_id) === String(user.id)) + 1;
-const cup = boss
+// Same rule as BossBattleBar: no active boss (nothing mandatory assigned this
+// week) → no Family Cup tile.
+const cup = boss && boss.active
     ? { rank, bossName: (es ? boss.name_es : boss.name_en) ?? "", bossHp: boss.current_hp ?? 0, bossMaxHp: boss.max_hp ?? 0, defeated: Boolean(boss.defeated) }
     : null;
 
@@ -130,6 +136,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
     <KidHome
         lang={lang}
         userId={user.id}
+        starMode={starMode}
         deck={deck}
         choreMode={meter.show}
         deckCounter={meter.show ? null : counter}

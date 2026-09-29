@@ -27,7 +27,7 @@ const bg = skin === "teen" ? "bg-[#1E2230]" : "bg-brand-sky-deep";
         </div>
         <a
             href={starMode ? "/rewards" : "/bank"}
-            data-points-badge
+            data-points-badge={starMode ? "" : undefined}
             class="shrink-0 rounded-full bg-white/15 border border-white/25 px-3 py-1.5 text-sm font-extrabold"
         >
             {starMode ? `⭐ ${points}` : money(cashCents)}
@@ -37,9 +37,11 @@ const bg = skin === "teen" ? "bg-[#1E2230]" : "bg-brand-sky-deep";
         <div class="mt-4 rounded-2xl bg-white/10 border border-white/15 px-4 py-3">
             <div class="flex justify-between gap-2 text-[11px] opacity-90">
                 <span>💵 {es ? "Pago de la semana" : "This week's pay"} · {es ? "meta" : "goal"} {money(meter.capCents)}</span>
-                <span data-today-counter data-done={counter.done} data-total={counter.total} data-suffix={counter.suffix}>
-                    {counter.done}/{counter.total} {counter.suffix}
-                </span>
+                {counter.total > 0 && (
+                    <span data-today-counter data-done={counter.done} data-total={counter.total} data-suffix={counter.suffix}>
+                        {counter.done}/{counter.total} {counter.suffix}
+                    </span>
+                )}
             </div>
             <div
                 class="mt-2 h-2 rounded-full bg-white/15 flex overflow-hidden"

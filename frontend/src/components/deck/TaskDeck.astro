@@ -15,10 +15,12 @@ interface Props {
     lang: "en" | "es";
     variant?: "full" | "compact";
     choreMode?: boolean;
+    /** CHILD star mode: point chips read "+N ⭐" (no "pts"). */
+    starMode?: boolean;
     heading: string;
     counter?: { done: number; total: number; suffix: string } | null;
 }
-const { cards, lang, variant = "full", choreMode = false, heading, counter = null } = Astro.props;
+const { cards, lang, variant = "full", choreMode = false, starMode = false, heading, counter = null } = Astro.props;
 const es = lang === "es";
 
 const L = {
@@ -65,7 +67,7 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
     <div class="flex items-baseline justify-between px-1 mb-2 gap-2">
         <h2 class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft">
             {heading}
-            {counter && (
+            {counter && counter.total > 0 && (
                 <span
                     class="ml-1 normal-case tracking-normal font-bold"
                     data-today-counter
@@ -102,7 +104,7 @@ const stackHeight = variant === "compact" ? "h-40" : "h-44";
                         <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Bonus</span>
                     )}
                     {!c.locked && c.points > 0 && (
-                        <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">+{c.points} pts</span>
+                        <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">+{c.points} {starMode ? "⭐" : "pts"}</span>
                     )}
                     {c.requiresProof && (
                         <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">{L.photo}</span>

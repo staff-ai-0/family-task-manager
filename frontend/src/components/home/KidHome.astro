@@ -2,6 +2,9 @@
 /**
  * Kid home body (UX-C1): routines strip, task deck, in-review chip, "Gana
  * extra" gigs row with push opt-in, and the goal / Family Cup / pet tiles.
+ * The push opt-in (and its daily subscription heal) renders exactly once:
+ * inside the gigs row, or below the tiles when there is no gigs row —
+ * EnablePushButton uses fixed element ids.
  */
 import TaskDeck from "../deck/TaskDeck.astro";
 import EnablePushButton from "../EnablePushButton.astro";
@@ -13,6 +16,8 @@ import { routineName, routineProgress, type DashboardRoutine } from "../../lib/r
 interface Props {
     lang: "en" | "es";
     userId: string;
+    /** CHILD star mode: point chips read "+N ⭐". */
+    starMode: boolean;
     deck: Deck;
     choreMode: boolean;
     /** Shown in the deck heading only when the header has no pay meter. */
@@ -24,12 +29,14 @@ interface Props {
     goal:
         | { kind: "cash"; name: string; emoji: string; savedCents: number; targetCents: number; pct: number }
         | { kind: "points"; title: string; icon: string; pct: number; ptsToGo: number }
+        | { kind: "reached"; title: string }
         | { kind: "none"; href: string };
     cup: { rank: number; bossName: string; bossHp: number; bossMaxHp: number; defeated: boolean } | null;
     pet: { name: string; species: string; stage: number; status: string } | null;
 }
-const { lang, userId, deck, choreMode, deckCounter, inReview, routines, gigs, showGigs, goal, cup, pet } = Astro.props;
+const { lang, userId, starMode, deck, choreMode, deckCounter, inReview, routines, gigs, showGigs, goal, cup, pet } = Astro.props;
 const es = lang === "es";
+const gigsRow = showGigs && gigs.length > 0;
 const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ? "es-MX" : "en-US")}`;
 ---
 
@@ -51,6 +58,7 @@ const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ?
         lang={lang}
         variant="full"
         choreMode={choreMode}
+        starMode={starMode}
         heading={es ? "Tus tareas" : "Your tasks"}
         counter={deckCounter}
     />
@@ -61,7 +69,7 @@ const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ?
         </a>
     )}
 
-    {showGigs && gigs.length > 0 && (
+    {gigsRow && (
         <section data-kid-gigs>
             <div class="flex items-baseline justify-between px-1 mb-2">
                 <h2 class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft">{es ? "Gana extra" : "Earn extra"}</h2>
@@ -102,6 +110,11 @@ const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ?
                 <div class="h-1.5 rounded-full bg-brand-cream-deep mt-1.5 overflow-hidden"><div class="h-full bg-amber-400" style={`width:${goal.pct}%`}></div></div>
             </a>
         )}
+        {goal.kind === "reached" && (
+            <a href="/rewards" class="rounded-2xl bg-amber-50 border-2 border-amber-300 p-3 text-sm font-extrabold text-brand-ink flex items-center shadow-[var(--shadow-card)]">
+                <span class="line-clamp-3">🎉 {es ? `¡Meta alcanzada! Canjea ${goal.title} →` : `Goal reached! Redeem ${goal.title} →`}</span>
+            </a>
+        )}
         {goal.kind === "none" && (
             <a href={goal.href} class="rounded-2xl bg-white border border-dashed border-brand-ink/20 p-3 text-sm font-bold text-brand-sky-deep flex items-center">
                 🎯 {es ? "Elige una meta →" : "Pick a goal →"}
@@ -132,4 +145,6 @@ const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ?
             </a>
         )}
     </div>
+
+    {!gigsRow && <EnablePushButton lang={lang} userId={userId} class="px-1" />}
 </div>
