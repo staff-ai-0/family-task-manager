@@ -20,8 +20,10 @@ interface Props {
     /** Optional classes for the root `#push-root` element, so callers don't
      * need an extra wrapper div just for spacing. */
     class?: string;
+    /** Optional custom text for the button; defaults to L.enable. */
+    label?: string;
 }
-const { lang, userId, class: rootClass } = Astro.props;
+const { lang, userId, class: rootClass, label } = Astro.props;
 
 const L = lang === "es"
     ? {
@@ -50,7 +52,7 @@ const L = lang === "es"
         class="px-3 py-2 rounded-lg border border-brand-sky text-brand-sky-deep text-sm font-medium hover:bg-brand-sky/10 transition-colors disabled:opacity-60"
         data-state="idle"
     >
-        {L.enable}
+        {label ?? L.enable}
     </button>
     <span id="push-status" class="text-xs text-brand-ink-soft ml-2" aria-live="polite"></span>
 </div>

@@ -1,23 +1,19 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
-import GigsIntroBanner from "../components/GigsIntroBanner.astro";
 import VerifyEmailBanner from "../components/VerifyEmailBanner.astro";
-import DifficultyChip from "../components/DifficultyChip.astro";
-import EnablePushButton from "../components/EnablePushButton.astro";
-import BossBattleBar from "../components/BossBattleBar.astro";
-import PetAvatar from "../components/pet/PetAvatar.astro";
+import KidHeader from "../components/home/KidHeader.astro";
+import KidHome from "../components/home/KidHome.astro";
 import { apiFetch } from "../lib/api";
-import { fmtDateTime } from "../lib/datetime";
 import { t } from "../lib/i18n";
-import { stageLabel } from "../lib/pet-art";
-import { pickDashboardRoutines, routineName, routineProgress } from "../lib/routines";
+import { buildDeck } from "../lib/deck";
+import { claimableGigs, payMeterView } from "../lib/kidHome";
+import { pickDashboardRoutines } from "../lib/routines";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
 const lang = (Astro.cookies.get("lang")?.value ?? "es") as "en" | "es";
+const es = lang === "es";
 
-// /auth/me, daily progress (assignments + gating status) and the family-cup
-// boss are independent — fetch in parallel instead of serially.
 const [{ data: user, ok: userOk }, { data: progress }, { data: familyCup }, { data: routinesToday }] = await Promise.all([
     apiFetch<any>("/api/auth/me", { token }),
     apiFetch<any>("/api/task-assignments/progress", { token }),
@@ -30,143 +26,65 @@ if (!userOk) {
     return Astro.redirect("/login");
 }
 
-// Parents' home is /parent — their personal-tasks view lives there now
-// (docs/superpowers/specs/2026-07-24-merge-parent-dashboard-design.md).
-// Kids keep this page unchanged. module_off survives the hop so the
-// "section switched off" banner still shows.
+// Parents' home is /parent — their own chores render there as a compact deck.
+// module_off survives the hop so the "section switched off" banner still shows.
 if (user.role === "parent") {
     const moduleOff = Astro.url.searchParams.get("module_off") === "1";
     return Astro.redirect(`/parent${moduleOff ? "?module_off=1" : ""}`);
 }
 
-// Cooperative weekly boss battle (points/analytics based, no pet). Best-effort —
-// a null just hides the bar.
-const boss = familyCup?.boss ?? null;
-const dashboardRoutines = pickDashboardRoutines(routinesToday?.routines);
+// ── Kid home (TEEN + CHILD), UX-C1 ────────────────────────────────────────
+const skin = user.role === "teen" ? "teen" : "child";
+const isChild = user.role === "child";
+const starMode = isChild && (user.star_mode ?? false);
+const modOn = (k: string) => user.enabled_modules == null || user.enabled_modules.includes(k);
+const none = Promise.resolve({ data: null as any });
 
-const requiredTotal = progress?.required_total ?? 0;
-const requiredCompleted = progress?.required_completed ?? 0;
-const bonusUnlocked = progress?.bonus_unlocked ?? false;
-const bonusTotal = progress?.bonus_total ?? 0;
-const bonusCompleted = progress?.bonus_completed ?? 0;
-const assignments: any[] = progress?.assignments ?? [];
-// Prior-day mandatory tasks that went OVERDUE — invisible before, but still
-// blocking bonus/gigs. Surface them so the kid can finish and unlock.
-const overdueAssignments: any[] = progress?.overdue_assignments ?? [];
+// Anchor the prior-day "in review" lookup on YESTERDAY so a gig submitted
+// yesterday is found even when today is Monday (yesterday = previous week).
+const todayStr = String(progress?.date ?? new Date().toISOString().slice(0, 10));
+const y = new Date(`${todayStr}T00:00:00`);
+y.setDate(y.getDate() - 1);
+const yesterdayStr = [y.getFullYear(), String(y.getMonth() + 1).padStart(2, "0"), String(y.getDate()).padStart(2, "0")].join("-");
 
-// Group overdue by template: N missed copies of the same daily chore collapse
-// into ONE card with a ×N badge + the oldest date, instead of a wall of
-// identical cards. Completing the card completes the OLDEST instance first
-// (same per-instance endpoint — we just pick the oldest id).
-const overdueByTemplate = new Map<string, any[]>();
-for (const a of overdueAssignments) {
-    const key = String(a.template_id ?? a.template_title);
-    if (!overdueByTemplate.has(key)) overdueByTemplate.set(key, []);
-    overdueByTemplate.get(key)!.push(a);
-}
-const overdueGroups = [...overdueByTemplate.values()].map((items) => {
-    const sorted = [...items].sort((x: any, y: any) =>
-        String(x.due_date ?? x.assigned_date ?? "").localeCompare(String(y.due_date ?? y.assigned_date ?? "")),
-    );
-    return { oldest: sorted[0], count: sorted.length };
-});
-
-function fmtShortDate(iso: string | null | undefined): string {
-    if (!iso) return "";
-    // fmtDateTime routes bare dates ("2026-07-24") through the tz-neutral
-    // calendar path and timestamps through the family-tz path.
-    return fmtDateTime(String(iso), lang, user.timezone, {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-    });
-}
-
-const requiredAssignments = assignments.filter((a: any) => !a.template_is_bonus);
-const bonusAssignments = assignments.filter((a: any) => a.template_is_bonus);
-
-const pendingRequired = requiredAssignments.filter((a: any) => a.status === "pending");
-const completedRequired = requiredAssignments.filter((a: any) => a.status === "completed");
-// Gigs that are completed but awaiting/already had parent decision live in
-// the "pending" bucket from a UI point of view (the assignment row is COMPLETED
-// but approval_status drives the badge). Keep "completed" as the final state.
-const pendingBonus = bonusAssignments.filter((a: any) => a.status === "pending");
-const awaitingApprovalBonus = bonusAssignments.filter(
-    (a: any) => a.status === "completed" && a.approval_status === "pending"
-);
-const completedBonus = bonusAssignments.filter(
-    (a: any) => a.status === "completed" && a.approval_status !== "pending"
-);
-
-// Only celebrate when required-today AND overdue blockers are ALL clear —
-// otherwise "All done!" renders while overdue chores still lock bonus/gigs.
-const todayCleared = requiredCompleted >= requiredTotal && bonusCompleted >= bonusTotal && (requiredTotal + bonusTotal) > 0;
-const allDone = todayCleared && overdueAssignments.length === 0;
-// Today is clear but overdue blockers remain → nudge at the overdue section.
-const doneButOverdue = todayCleared && overdueAssignments.length > 0;
-const noTasks = requiredTotal === 0 && bonusTotal === 0 && overdueAssignments.length === 0;
-
-// Progress counts everything still owed: today's required chores PLUS
-// prior-day carry-overs. Without the overdue term, a kid whose chores all
-// carried over from yesterday has requiredTotal 0 and loses the progress row
-// exactly when the nudge matters most (kid report, 2026-08-11).
-const owedTotal = requiredTotal + overdueAssignments.length;
-const progressPercent = owedTotal > 0 ? Math.round((requiredCompleted / owedTotal) * 100) : 100;
-
-// Gig trust streak — mirrors backend GIG_AUTO_APPROVE_STREAK default (3).
-// Once a kid hits the threshold, their submitted gigs auto-approve.
-const TRUST_THRESHOLD = 3;
-const isKid = user.role === "teen" || user.role === "child";
-// Star Mode (P2): young-kid display — render POINTS as stars, hide peso amounts.
-const starMode = isKid && (user.star_mode ?? false);
-const trustStreak = user.gig_trust_streak ?? 0;
-const toAutoApprove = Math.max(0, TRUST_THRESHOLD - trustStreak);
-
-let activeGoal: any = null;
-// Payday surface: the most recent "Domingo de pago" notification (last 3 days).
-// Backend localizes title/body to the kid's preferred_lang, so we render as-is.
-let recentPayday: any = null;
-// Virtual pet nudge (Quest Mode entry point). Best-effort — null just hides it.
-let pet: any = null;
-// Gigs submitted on PRIOR days that are still awaiting a parent decision (or
-// were just rejected) vanish from today's progress payload — surface them.
-let recentSubmittedGigs: any[] = [];
-if (isKid) {
-    // Anchor the /week fetch on YESTERDAY so a gig submitted yesterday is
-    // found even when today is Monday (yesterday = previous week).
-    const todayStr = String(progress?.date ?? new Date().toISOString().slice(0, 10));
-    const yesterday = new Date(`${todayStr}T00:00:00`);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = [
-        yesterday.getFullYear(),
-        String(yesterday.getMonth() + 1).padStart(2, "0"),
-        String(yesterday.getDate()).padStart(2, "0"),
-    ].join("-");
-    // These four are independent of each other — parallelize.
-    const [{ data: goalData }, { data: petData }, { data: notifData }, { data: weekDone }] = await Promise.all([
-        apiFetch<any>("/api/rewards/goal", { token }),
-        apiFetch<any>("/api/pet/", { token }),
-        apiFetch<any>("/api/notifications/?limit=20", { token }),
-        apiFetch<any>(
-            `/api/task-assignments/week?week_of=${yesterdayStr}&status=completed&user_id=${user.id}`,
-            { token },
-        ),
+const [{ data: paycheck }, { data: bankGoal }, { data: rewardGoal }, { data: offerings }, { data: pet }, { data: weekDone }] =
+    await Promise.all([
+        apiFetch<any>(`/api/bank/chore-paycheck/${user.id}`, { token }),
+        starMode ? none : apiFetch<any>("/api/bank/goals/me", { token }),
+        starMode ? apiFetch<any>("/api/rewards/goal", { token }) : none,
+        modOn("gigs") && !starMode ? apiFetch<any>("/api/gigs/offerings", { token }) : none,
+        isChild && modOn("pet") ? apiFetch<any>("/api/pet/", { token }) : none,
+        apiFetch<any>(`/api/task-assignments/week?week_of=${yesterdayStr}&status=completed&user_id=${user.id}`, { token }),
     ]);
-    activeGoal = goalData ?? null;
-    pet = petData ?? null;
-    const notifItems: any[] = notifData?.items ?? [];
-    const paydayCutoff = Date.now() - 3 * 24 * 3600 * 1000;
-    recentPayday = notifItems.find(
-        (n: any) => n.type === "payday" && new Date(n.created_at).getTime() >= paydayCutoff,
-    ) ?? null;
-    recentSubmittedGigs = (Array.isArray(weekDone) ? weekDone : []).filter(
-        (a: any) =>
-            a.template_is_bonus &&
-            String(a.assigned_date) < todayStr &&
-            (a.approval_status === "pending" ||
-                (a.approval_status === "rejected" && String(a.assigned_date) >= yesterdayStr)),
-    );
-}
+
+const deck = buildDeck(progress, lang);
+// Star mode hides pesos everywhere — the meter shows a $ goal.
+const meter = starMode ? ({ show: false } as const) : payMeterView(paycheck);
+const counter = { done: deck.doneToday, total: deck.totalToday, suffix: es ? "hoy" : "today" };
+const priorInReview = (Array.isArray(weekDone) ? weekDone : []).filter(
+    (a: any) => a.template_is_bonus && String(a.assigned_date) < todayStr && a.approval_status === "pending",
+).length;
+
+// Star mode: a points goal the child can already afford reads "Meta
+// alcanzada → canjea", not "Elige una meta".
+const goal = starMode
+    ? (!rewardGoal
+        ? { kind: "none" as const, href: "/rewards" }
+        : rewardGoal.affordable
+            ? { kind: "reached" as const, title: rewardGoal.reward_title }
+            : { kind: "points" as const, title: rewardGoal.reward_title, icon: rewardGoal.reward_icon ?? "🎯", pct: rewardGoal.progress_pct ?? 0, ptsToGo: rewardGoal.pts_to_go ?? 0 })
+    : (bankGoal && bankGoal.status !== "cancelled"
+        ? { kind: "cash" as const, name: bankGoal.name, emoji: bankGoal.emoji ?? "🎯", savedCents: bankGoal.saved_cents ?? 0, targetCents: bankGoal.target_cents ?? 0, pct: bankGoal.progress_pct ?? 0 }
+        : { kind: "none" as const, href: "/bank" });
+
+const boss = familyCup?.boss ?? null;
+const board: any[] = Array.isArray(familyCup?.leaderboard) ? familyCup.leaderboard : [];
+const rank = board.findIndex((e: any) => String(e.user_id) === String(user.id)) + 1;
+// Same rule as BossBattleBar: no active boss (nothing mandatory assigned this
+// week) → no Family Cup tile.
+const cup = boss && boss.active
+    ? { rank, bossName: (es ? boss.name_es : boss.name_en) ?? "", bossHp: boss.current_hp ?? 0, bossMaxHp: boss.max_hp ?? 0, defeated: Boolean(boss.defeated) }
+    : null;
 
 const flash = Astro.cookies.get("flash")?.value;
 if (flash) Astro.cookies.delete("flash", { path: "/" });
@@ -182,174 +100,27 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
     completedTour={user.completed_welcome_tour ?? true}
     tourUserKey={user.id}
 >
-    <header slot="header" class="bg-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <div class="flex justify-between items-center mb-6">
-                <div>
-                    <p class="text-brand-cream text-sm font-medium">{t(lang, "dashboard_hello")}</p>
-                    <h1 class="text-2xl font-bold">{user.name}</h1>
-                </div>
-                <div class="h-12 w-12 rounded-full bg-brand-sky border-2 border-white flex items-center justify-center text-lg font-bold">
-                    {user.name.charAt(0).toUpperCase()}
-                </div>
-            </div>
-            {dashboardRoutines.length > 0 && (
-                <div class="mb-4 space-y-2" data-routines-strip>
-                    {dashboardRoutines.map((r) => (
-                        <a
-                            href="/routines"
-                            class="press flex items-center gap-3 rounded-2xl bg-brand-cream/20 border border-white/30 px-4 py-3"
-                        >
-                            <span class="text-2xl leading-none" aria-hidden="true">{r.icon || "⭐"}</span>
-                            <span class="flex-1 font-bold">{routineName(r, lang)}</span>
-                            <span class="text-sm font-extrabold tabular-nums">{routineProgress(r)}</span>
-                            <svg class="h-4 w-4 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
-                            </svg>
-                        </a>
-                    ))}
-                </div>
-            )}
-            <div class="bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 flex items-center justify-between border border-white/30">
-                <div>
-                    <p class="text-brand-cream text-xs font-semibold uppercase tracking-wider mb-1">
-                        {starMode ? (lang === "es" ? "Mis estrellas" : "My stars") : t(lang, "dashboard_my_points")}
-                    </p>
-                    <p data-points-badge class="text-3xl font-extrabold tracking-tight">
-                        {starMode ? `⭐ ${user.points}` : user.points}
-                    </p>
-                    {starMode && (
-                        <div class="mt-1 text-lg leading-none tracking-wide" aria-hidden="true">
-                            {"⭐".repeat(Math.min(Math.max(user.points, 0), 10))}
-                            {user.points > 10 && <span class="text-sm font-bold text-brand-cream/90"> +{user.points - 10}</span>}
-                        </div>
-                    )}
-                </div>
-                <div class="bg-brand-sun p-3 rounded-xl shadow-inner">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-brand-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                    </svg>
-                </div>
-            </div>
-            {isKid && !starMode && (
-                <div class="mt-3 bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 flex items-center justify-between border border-white/30">
-                    <div>
-                        <p class="text-brand-cream text-xs font-semibold uppercase tracking-wider mb-1">
-                            {lang === "es" ? "Mi dinero (de gigs)" : "My cash (from gigs)"}
-                        </p>
-                        <p data-cash-badge class="text-3xl font-extrabold tracking-tight">
-                            ${(user.cash_cents / 100).toFixed(2)}<span class="text-base font-semibold"> MXN</span>
-                        </p>
-                        <p class="text-[11px] text-brand-cream/80 mt-0.5">
-                            {lang === "es" ? "pendiente de pago" : "pending payout"}
-                        </p>
-                    </div>
-                    <div class="bg-brand-mint p-3 rounded-xl shadow-inner">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-brand-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    </div>
-                </div>
-            )}
-            {isKid && !starMode && (
-                <a href="/bank" class="mt-2 block text-center text-xs font-semibold text-brand-cream/90 hover:text-white py-1 transition-colors">
-                    🏦 {lang === "es" ? "Abrir Mi Banco →" : "Open My Bank →"}
-                </a>
-            )}
-            {isKid && trustStreak > 0 && (
-                <div class="mt-3 bg-white/15 backdrop-blur-sm rounded-xl px-4 py-2.5 flex items-center gap-3 border border-white/20">
-                    <span class="text-2xl">🔥</span>
-                    <div class="flex-1">
-                        <p class="text-sm font-bold text-white">
-                            {lang === "es" ? `Racha de ${trustStreak} gigs` : `${trustStreak}-gig streak`}
-                        </p>
-                        <p class="text-xs text-brand-cream">
-                            {toAutoApprove > 0
-                                ? (lang === "es"
-                                    ? `${toAutoApprove} más para auto-aprobación`
-                                    : `${toAutoApprove} more to auto-approve`)
-                                : (lang === "es"
-                                    ? "¡Tus gigs se aprueban al instante!"
-                                    : "Your gigs auto-approve instantly!")}
-                        </p>
-                    </div>
-                </div>
-            )}
-            {isKid && (
-                <div class="mt-3">
-                    {activeGoal && !activeGoal.affordable && (
-                        <a
-                            href="/rewards"
-                            class="flex items-center gap-3 bg-white/15 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-white/20 hover:bg-white/25 transition-colors"
-                        >
-                            <span class="text-xl">{activeGoal.reward_icon ?? "🎯"}</span>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-xs text-brand-cream font-semibold uppercase tracking-wider mb-0.5">
-                                    {lang === "es" ? "Tu Meta" : "Your Goal"}
-                                </p>
-                                <p class="text-sm font-bold text-white truncate">{activeGoal.reward_title}</p>
-                                <div class="w-full bg-white/20 rounded-full h-1.5 mt-1 overflow-hidden">
-                                    <div
-                                        class="h-1.5 bg-brand-sun rounded-full transition-all duration-500"
-                                        style={`width: ${activeGoal.progress_pct}%`}
-                                    ></div>
-                                </div>
-                                <p class="text-xs text-brand-cream mt-0.5">
-                                    {starMode
-                                        ? (lang === "es"
-                                            ? `${activeGoal.pts_to_go} ⭐ para lograrlo`
-                                            : `${activeGoal.pts_to_go} ⭐ to go`)
-                                        : (lang === "es"
-                                            ? `${activeGoal.pts_to_go} pts para lograrlo`
-                                            : `${activeGoal.pts_to_go} pts to go`)}
-                                </p>
-                            </div>
-                        </a>
-                    )}
-                    {activeGoal && activeGoal.affordable && (
-                        <a
-                            href="/rewards"
-                            class="flex items-center gap-3 bg-brand-sun/30 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-brand-sun/50 hover:bg-brand-sun/40 transition-colors"
-                        >
-                            <span class="text-2xl">🎉</span>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-bold text-white">
-                                    {lang === "es" ? "¡Meta alcanzada!" : "Goal reached!"}
-                                </p>
-                                <p class="text-xs text-brand-cream truncate">
-                                    {lang === "es"
-                                        ? `Puedes canjear ${activeGoal.reward_title} →`
-                                        : `Redeem ${activeGoal.reward_title} →`}
-                                </p>
-                            </div>
-                        </a>
-                    )}
-                    {!activeGoal && (
-                        <a
-                            href="/rewards"
-                            class="block text-center text-xs text-brand-cream/70 hover:text-brand-cream py-1 transition-colors"
-                        >
-                            {lang === "es" ? "Elige una meta →" : "Set a goal →"}
-                        </a>
-                    )}
-                </div>
-            )}
-        </header>
+    <KidHeader
+        slot="header"
+        name={user.name}
+        lang={lang}
+        skin={skin}
+        starMode={starMode}
+        cashCents={user.cash_cents ?? 0}
+        points={user.points ?? 0}
+        meter={meter}
+        counter={counter}
+    />
 
     <Fragment slot="banner">
         {Astro.url.searchParams.get("module_off") === "1" && (
             <div class="mx-4 mt-3 rounded-xl border border-brand-ink/15 bg-brand-cream px-4 py-2.5 text-sm text-brand-ink-soft">
-                {lang === "es"
+                {es
                     ? "Esa sección está desactivada para tu familia. Un padre puede activarla en Ajustes → Módulos."
                     : "That section is switched off for your family. A parent can enable it in Settings → Modules."}
             </div>
         )}
         <VerifyEmailBanner lang={lang} show={!(user.email_verified ?? true)} userId={user.id} />
-        <GigsIntroBanner lang={lang} show={!user.acknowledged_gigs_intro} />
-
-        {isKid && (
-            <EnablePushButton lang={lang} userId={user.id} class="px-4 pb-2" />
-        )}
-
         {flash && (
             <div data-flash-success class="mx-4 mt-4 p-3 bg-brand-mint/20 border border-brand-mint text-brand-mint-deep text-sm rounded-xl">
                 {flash}
@@ -361,761 +132,44 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
             </div>
         )}
     </Fragment>
-            <!-- Payday surface: "Domingo de pago" summary after a payday sweep -->
-            {isKid && recentPayday && (
-                <a
-                    href={recentPayday.link || "/bank"}
-                    class="mb-6 flex items-center gap-4 bg-brand-mint/20 border-2 border-brand-ink rounded-[var(--radius-card)] p-4 shadow-[var(--shadow-card)] hover:-translate-y-0.5 transition-transform"
-                >
-                    <span class="text-3xl">🎉</span>
-                    <div class="min-w-0 flex-1">
-                        <p class="font-display font-extrabold text-brand-ink leading-tight">{recentPayday.title}</p>
-                        {recentPayday.body && (
-                            <p class="text-sm text-brand-ink-soft mt-0.5">{recentPayday.body}</p>
-                        )}
-                    </div>
-                    <span class="text-brand-mint-deep font-bold flex-shrink-0">→</span>
-                </a>
-            )}
 
-            <!-- Cooperative weekly boss battle (Family Cup) -->
-            <a href="/family-cup" class="block mb-6">
-                <BossBattleBar boss={boss} lang={lang} />
-            </a>
-
-            <!-- Virtual pet nudge → Quest Mode -->
-            {isKid && pet && (
-                <a
-                    href="/pet/quests"
-                    class="mb-6 flex items-center gap-4 bg-brand-cream rounded-[var(--radius-card)] p-4 border-2 border-brand-ink shadow-[var(--shadow-card)] hover:-translate-y-0.5 transition-transform"
-                >
-                    <PetAvatar species={pet.species} stage={pet.evolution_stage} status={pet.status_label} size="md" />
-                    <div class="flex-1 min-w-0">
-                        <p class="font-display font-extrabold text-brand-ink leading-tight truncate">{pet.name}</p>
-                        <p class="text-xs text-brand-ink-soft">
-                            {stageLabel(pet.evolution_stage, lang)} · {lang === "es" ? "Nivel" : "Level"} {pet.level}
-                        </p>
-                        <p class="text-sm font-semibold text-brand-sky-deep mt-0.5">
-                            {pet.status_label === "starving"
-                                ? (lang === "es" ? "🍖 ¡Tu mascota tiene hambre!" : "🍖 Your pet is hungry!")
-                                : pet.status_label === "sad"
-                                    ? (lang === "es" ? "😞 Tu mascota te extraña" : "😞 Your pet misses you")
-                                    : (lang === "es" ? "🗺️ Completa misiones para alimentarla" : "🗺️ Finish quests to feed it")}
-                        </p>
-                    </div>
-                    <span class="text-brand-sky-deep font-bold flex-shrink-0">→</span>
-                </a>
-            )}
-
-            <!-- Today header + Progress bar -->
-            <div class="mb-6" data-tour="today-tasks">
-                <div class="flex justify-between items-end mb-2 px-1">
-                    <h2 class="text-xl font-bold text-brand-ink tracking-tight">
-                        {t(lang, "dashboard_today")}
-                    </h2>
-                    {owedTotal > 0 && (
-                        <span class="text-sm font-medium text-brand-ink-soft">
-                            {t(lang, "dashboard_progress")(requiredCompleted, owedTotal)}
-                        </span>
-                    )}
-                </div>
-                <!-- border keeps the empty track visible at 0% — cream-on-cream
-                     otherwise reads as "no progress bar at all" -->
-                {owedTotal > 0 && (
-                    <div class="w-full bg-brand-cream-deep rounded-full h-2.5 border border-brand-ink/10">
-                        <div
-                            class="bg-brand-sky h-2.5 rounded-full transition-all duration-500"
-                            style={`width: ${progressPercent}%`}
-                        ></div>
-                    </div>
-                )}
-            </div>
-
-            <!-- No tasks state -->
-            {noTasks && (
-                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)]">
-                    <div class="w-16 h-16 bg-brand-cream-deep rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-brand-ink-soft" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                    </div>
-                    <p class="text-brand-ink-soft text-sm">{t(lang, "dashboard_no_assignments")}</p>
-                </div>
-            )}
-
-            <!-- All done state -->
-            {allDone && !noTasks && (
-                <div class="bg-brand-cream rounded-2xl p-8 text-center border border-brand-ink/10 shadow-[var(--shadow-card)] mb-6">
-                    <div class="w-16 h-16 bg-brand-mint/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-brand-mint-deep" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                        </svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-brand-ink">{t(lang, "dashboard_all_done")}</h3>
-                    <p class="text-brand-ink-soft mt-1 text-sm">{t(lang, "dashboard_all_done_subtitle")}</p>
-                </div>
-            )}
-
-            <!-- Today cleared but overdue blockers remain: nudge, don't celebrate -->
-            {doneButOverdue && !noTasks && (
-                <a href="#overdue-section" class="block bg-brand-sun/20 rounded-2xl p-6 text-center border border-brand-sun shadow-[var(--shadow-card)] mb-6 hover:bg-brand-sun/30 transition-colors">
-                    <span class="text-3xl">⏰</span>
-                    <h3 class="text-lg font-bold text-brand-ink mt-2">
-                        {lang === "es" ? "Aún tienes tareas atrasadas" : "You still have overdue chores"}
-                    </h3>
-                    <p class="text-brand-ink-soft mt-1 text-sm">
-                        {lang === "es"
-                            ? "Termínalas para desbloquear bonus y gigs ↓"
-                            : "Finish them to unlock bonus tasks and gigs ↓"}
-                    </p>
-                </a>
-            )}
-
-            <!-- Overdue (Atrasadas) — prior-day mandatory tasks that block bonus/gigs -->
-            {overdueGroups.length > 0 && (
-                <div class="mb-8" id="overdue-section">
-                    <div class="flex items-center gap-2 mb-3 px-1">
-                        <span class="text-lg">⏰</span>
-                        <h3 class="text-lg font-bold text-red-600">
-                            {lang === "es" ? "Atrasadas" : "Overdue"}
-                        </h3>
-                    </div>
-                    <p class="text-xs text-brand-ink-soft mb-3 px-1">
-                        {lang === "es"
-                            ? "Termina estas para desbloquear tareas bonus y gigs."
-                            : "Finish these to unlock bonus tasks and gigs."}
-                    </p>
-                    <div class="space-y-3">
-                        {overdueGroups.map(({ oldest: a, count }: any) => (
-                            <div class="bg-red-50 rounded-2xl p-5 shadow-[var(--shadow-card)] border border-red-200 flex justify-between items-center">
-                                <div class="pr-4 flex-1">
-                                    <h3 class="font-bold text-brand-ink text-lg mb-1 flex items-center gap-2 flex-wrap">
-                                        <span>{lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}</span>
-                                        {count > 1 && (
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-extrabold bg-red-600 text-white">
-                                                ×{count}
-                                            </span>
-                                        )}
-                                    </h3>
-                                    <p class="text-brand-ink-soft text-sm line-clamp-2">
-                                        {(lang === "es" && a.template_description_es ? a.template_description_es : a.template_description) || "--"}
-                                    </p>
-                                    <div class="flex items-center gap-2 mt-3 flex-wrap">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-                                            {lang === "es"
-                                                ? `desde ${fmtShortDate(a.due_date ?? a.assigned_date)}`
-                                                : `since ${fmtShortDate(a.due_date ?? a.assigned_date)}`}
-                                        </span>
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-brand-sky/20 text-brand-sky-deep">
-                                            {starMode ? `+${a.template_points} ⭐` : `+${a.template_points} pts`}
-                                        </span>
-                                        <DifficultyChip level={a.template_effort_level ?? 1} lang={lang} />
-                                    </div>
-                                </div>
-                                {a.can_complete && (
-                                    <form method="POST" action="/api/assignments/complete" data-complete-form data-is-bonus="0" data-requires-proof={a.template_requires_proof ? "1" : "0"}>
-                                        <input type="hidden" name="assignment_id" value={a.id} />
-                                        <input type="hidden" name="proof_text" value="" />
-                                        <input type="hidden" name="proof_image_url" value="" />
-                                        <button
-                                            type="submit"
-                                            class="h-12 w-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-600 hover:text-white transition-colors active:scale-95 flex-shrink-0 shadow-[var(--shadow-card)]"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        </button>
-                                    </form>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            <!-- Required Tasks Section -->
-            {requiredTotal > 0 && (
-                <div class="mb-8">
-                    <div class="flex justify-between items-end mb-3 px-1">
-                        <h3 class="text-lg font-bold text-brand-ink">{t(lang, "dashboard_required")}</h3>
-                        <span class="text-sm text-brand-ink-soft">
-                            {t(lang, "dashboard_tasks_count")(pendingRequired.length)}
-                        </span>
-                    </div>
-                    <div class="space-y-3">
-                        {pendingRequired.map((a: any) => (
-                            <div class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-ink/10 hover:shadow-[var(--shadow-card)] transition-all flex justify-between items-center">
-                                <div class="pr-4 flex-1">
-                                    <h3 class="font-bold text-brand-ink text-lg mb-1">
-                                        {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
-                                    </h3>
-                                    <p class="text-brand-ink-soft text-sm line-clamp-2">
-                                        {(lang === "es" && a.template_description_es ? a.template_description_es : a.template_description) || "--"}
-                                    </p>
-                                    <div class="flex items-center gap-2 mt-3 flex-wrap">
-                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-sky/20 text-brand-sky-deep">
-                                            {starMode ? `+${a.template_points} ⭐` : `+${a.template_points} pts`}
-                                        </span>
-                                        <DifficultyChip level={a.template_effort_level ?? 1} lang={lang} />
-                                    </div>
-                                </div>
-                                {a.can_complete && (
-                                    <form method="POST" action="/api/assignments/complete" data-complete-form data-is-bonus="0" data-requires-proof={a.template_requires_proof ? "1" : "0"}>
-                                        <input type="hidden" name="assignment_id" value={a.id} />
-                                        <input type="hidden" name="proof_text" value="" />
-                                        <input type="hidden" name="proof_image_url" value="" />
-                                        <button
-                                            type="submit"
-                                            class="h-12 w-12 rounded-full bg-brand-cream-deep text-brand-sky-deep flex items-center justify-center hover:bg-brand-sky-deep hover:text-white transition-colors active:scale-95 flex-shrink-0 shadow-[var(--shadow-card)]"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        </button>
-                                    </form>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Completed required tasks (collapsible) */}
-                    {completedRequired.length > 0 && (
-                        <details class="mt-3 group">
-                            <summary class="flex justify-between items-center px-1 mb-2 cursor-pointer list-none">
-                                <span class="text-sm font-medium text-brand-ink-soft">{t(lang, "dashboard_completed")}</span>
-                                <span class="text-xs text-brand-ink-soft">
-                                    {t(lang, "dashboard_tasks_count")(completedRequired.length)}
-                                </span>
-                            </summary>
-                            <div class="space-y-2">
-                                {completedRequired.map((a: any) => (
-                                    <div class="bg-brand-cream/60 rounded-2xl px-5 py-3 border border-brand-ink/10 flex items-center gap-4 opacity-70">
-                                        <div class="h-8 w-8 rounded-full bg-brand-mint/20 flex items-center justify-center flex-shrink-0">
-                                            <svg class="h-4 w-4 text-brand-mint-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <p class="font-medium text-brand-ink-soft line-through">
-                                                {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
-                                            </p>
-                                            <p class="text-xs text-brand-ink-soft">
-                                                {a.approval_status === "pending"
-                                                    ? (lang === "es" ? "⏳ Esperando aprobación de la foto" : "⏳ Awaiting photo approval")
-                                                    : a.completion_grade === "partial"
-                                                        ? (() => {
-                                                            const pct = a.partial_credit_pct ?? 50;
-                                                            const earned = Math.floor((a.template_points * pct + 50) / 100);
-                                                            return `${lang === "es" ? "Casi" : "Almost"} (${pct}%) · +${earned}${starMode ? " ⭐" : " pts"}`;
-                                                        })()
-                                                        : (starMode
-                                                            ? `+${a.template_points} ⭐`
-                                                            : t(lang, "dashboard_earned")(a.template_points))}
-                                            </p>
-                                            {a.completion_grade === "partial" && a.approval_notes && (
-                                                <p class="text-xs mt-1 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 no-underline">
-                                                    💬 {a.approval_notes}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </details>
-                    )}
-                </div>
-            )}
-
-            <!-- Prior-day gigs still awaiting a parent decision (or just rejected).
-                 Today's pending gigs already render inside the bonus section; these
-                 would otherwise vanish from the kid's view entirely. -->
-            {recentSubmittedGigs.length > 0 && (
-                <div class="mb-8">
-                    <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider px-1 mb-2">
-                        {lang === "es" ? "Esperando aprobación" : "Awaiting approval"}
-                    </p>
-                    <div class="space-y-2">
-                        {recentSubmittedGigs.map((a: any) => {
-                            const rejected = a.approval_status === "rejected";
-                            return (
-                                <div class:list={[
-                                    "rounded-2xl px-5 py-3 border flex items-center gap-4",
-                                    rejected ? "bg-red-50 border-red-200" : "bg-brand-cream/80 border-brand-sun",
-                                ]}>
-                                    <div class="flex-1 min-w-0">
-                                        <p class="font-medium text-brand-ink truncate">
-                                            {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
-                                        </p>
-                                        <p class="text-xs text-brand-ink-soft">
-                                            {fmtShortDate(a.assigned_date)}
-                                            {!rejected && (lang === "es" ? " · Un padre la revisará pronto" : " · A parent will review soon")}
-                                        </p>
-                                        {rejected && a.approval_notes && (
-                                            <p class="text-xs mt-1 px-2 py-1 rounded-lg bg-red-100/60 border border-red-200 text-red-800">
-                                                💬 {a.approval_notes}
-                                            </p>
-                                        )}
-                                    </div>
-                                    <span class:list={[
-                                        "text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0",
-                                        rejected ? "bg-red-100 text-red-700" : "bg-brand-sun/20 text-brand-sun-deep",
-                                    ]}>
-                                        {rejected
-                                            ? (a.completion_grade === "missed"
-                                                ? (lang === "es" ? "No hecha" : "Missed")
-                                                : (lang === "es" ? "Rechazada" : "Rejected"))
-                                            : (lang === "es" ? "Pendiente" : "Pending")}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
-            <!-- Bonus Tasks Section -->
-            {bonusTotal > 0 && (
-                <div>
-                    <div class="flex justify-between items-end mb-3 px-1">
-                        <h3 class="text-lg font-bold text-brand-sun-deep">{t(lang, "dashboard_bonus")}</h3>
-                        <span class="text-sm text-brand-ink-soft">
-                            {t(lang, "dashboard_tasks_count")(pendingBonus.length)}
-                        </span>
-                    </div>
-
-                    <!-- Locked state -->
-                    {!bonusUnlocked ? (
-                        <div class="bg-brand-sun/20 rounded-2xl p-5 border border-brand-sun text-center">
-                            <div class="w-12 h-12 bg-brand-sun/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                                <svg class="w-6 h-6 text-brand-sun-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                </svg>
-                            </div>
-                            {overdueAssignments.length > 0 ? (
-                                <p class="text-brand-sun-deep text-sm font-medium">
-                                    {lang === "es"
-                                        ? `Termina tu tarea atrasada "${overdueAssignments[0].template_title_es || overdueAssignments[0].template_title}" para desbloquear`
-                                        : `Finish your overdue task "${overdueAssignments[0].template_title}" to unlock`}
-                                </p>
-                            ) : (
-                                <>
-                                    <p class="text-brand-sun-deep text-sm font-medium">{t(lang, "dashboard_bonus_locked")}</p>
-                                    <p class="text-brand-sun-deep text-xs mt-1">
-                                        {t(lang, "dashboard_progress")(requiredCompleted, requiredTotal)}
-                                    </p>
-                                </>
-                            )}
-                        </div>
-                    <!-- Unlocked bonus tasks -->
-                    ) : (
-                        <div>
-                            <div class="mb-3 px-1">
-                                <p class="text-xs text-brand-mint-deep font-medium">{t(lang, "dashboard_bonus_unlocked")}</p>
-                            </div>
-                            <div class="space-y-3">
-                                {pendingBonus.map((a: any) => (
-                                    <div class="bg-brand-cream rounded-2xl p-5 shadow-[var(--shadow-card)] border border-brand-sun hover:shadow-[var(--shadow-card)] transition-all flex justify-between items-center">
-                                        <div class="pr-4 flex-1">
-                                            <div class="flex items-center gap-2 mb-1 flex-wrap">
-                                                <h3 class="font-bold text-brand-ink text-lg">
-                                                    {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
-                                                </h3>
-                                                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-sun/20 text-brand-sun-deep">
-                                                    {t(lang, "dashboard_bonus_badge")}
-                                                </span>
-                                            </div>
-                                            <p class="text-brand-ink-soft text-sm line-clamp-2">
-                                                {(lang === "es" && a.template_description_es ? a.template_description_es : a.template_description) || "--"}
-                                            </p>
-                                            <div class="flex items-center gap-2 mt-3">
-                                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-sun/20 text-brand-sun-deep">
-                                                    {starMode ? `+${a.template_points} ⭐` : `+${a.template_points} pts`}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        {a.can_complete && (
-                                            <form method="POST" action="/api/assignments/complete" data-complete-form data-is-bonus="1" data-requires-proof={a.template_requires_proof ? "1" : "0"}>
-                                                <input type="hidden" name="assignment_id" value={a.id} />
-                                                <input type="hidden" name="proof_text" value="" />
-                                                <input type="hidden" name="proof_image_url" value="" />
-                                                <button
-                                                    type="submit"
-                                                    class="h-12 w-12 rounded-full bg-brand-sun/20 text-brand-sun-deep flex items-center justify-center hover:bg-brand-sun-deep hover:text-white transition-colors active:scale-95 flex-shrink-0 shadow-[var(--shadow-card)]"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                                    </svg>
-                                                </button>
-                                            </form>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Gigs awaiting parent approval */}
-                            {awaitingApprovalBonus.length > 0 && (
-                                <div class="mt-4 space-y-2">
-                                    <p class="text-xs font-semibold text-brand-ink-soft uppercase tracking-wider px-1">
-                                        {lang === "es" ? "Pendiente de aprobación" : "Awaiting approval"}
-                                    </p>
-                                    {awaitingApprovalBonus.map((a: any) => (
-                                        <div class="bg-brand-cream/80 rounded-2xl px-5 py-3 border border-brand-sun flex items-center gap-4">
-                                            <div class="h-8 w-8 rounded-full bg-brand-sun/20 flex items-center justify-center flex-shrink-0">
-                                                <svg class="h-4 w-4 text-brand-sun-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                </svg>
-                                            </div>
-                                            <div class="flex-1 min-w-0">
-                                                <p class="font-medium text-brand-ink truncate">
-                                                    {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
-                                                </p>
-                                                <p class="text-xs text-brand-ink-soft">
-                                                    {lang === "es" ? "Un padre la revisará pronto" : "A parent will review soon"} · +{a.template_points} {starMode ? "⭐" : "pts"}
-                                                </p>
-                                            </div>
-                                            <span class="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-sun/20 text-brand-sun-deep">
-                                                {lang === "es" ? "Pendiente" : "Pending"}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Completed bonus tasks */}
-                            {completedBonus.length > 0 && (
-                                <details class="mt-3 group">
-                                    <summary class="flex justify-between items-center px-1 mb-2 cursor-pointer list-none">
-                                        <span class="text-sm font-medium text-brand-ink-soft">{t(lang, "dashboard_completed")}</span>
-                                        <span class="text-xs text-brand-ink-soft">
-                                            {t(lang, "dashboard_tasks_count")(completedBonus.length)}
-                                        </span>
-                                    </summary>
-                                    <div class="space-y-2">
-                                        {completedBonus.map((a: any) => {
-                                            const rejected = a.approval_status === "rejected";
-                                            return (
-                                                <div class:list={[
-                                                    "rounded-2xl px-5 py-3 border flex items-center gap-4 opacity-80",
-                                                    rejected
-                                                        ? "bg-red-50 border-red-200"
-                                                        : "bg-brand-cream/60 border-brand-sun",
-                                                ]}>
-                                                    <div class:list={[
-                                                        "h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0",
-                                                        rejected ? "bg-red-100" : "bg-brand-mint/20",
-                                                    ]}>
-                                                        {rejected ? (
-                                                            <svg class="h-4 w-4 text-red-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                                            </svg>
-                                                        ) : (
-                                                            <svg class="h-4 w-4 text-brand-mint-deep" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                                            </svg>
-                                                        )}
-                                                    </div>
-                                                    <div class="flex-1 min-w-0">
-                                                        <p class:list={[
-                                                            "font-medium truncate",
-                                                            rejected ? "text-red-700" : "text-brand-ink-soft line-through",
-                                                        ]}>
-                                                            {lang === "es" && a.template_title_es ? a.template_title_es : a.template_title}
-                                                        </p>
-                                                        <p class="text-xs text-brand-ink-soft">
-                                                            {rejected
-                                                                ? (lang === "es" ? "Rechazada" : "Rejected")
-                                                                : (starMode
-                                                                    ? `+${a.template_points} ⭐`
-                                                                    : t(lang, "dashboard_earned")(a.template_points))}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </details>
-                            )}
-                        </div>
-                    )}
-                </div>
-            )}
-
-    <!-- Gig proof-of-work modal (only triggered for bonus tasks) -->
-    <dialog id="gig-proof-modal" class="rounded-2xl p-0 backdrop:bg-black/40 max-w-md w-full md:w-[28rem] border-2 border-brand-ink shadow-[var(--shadow-pop)] bg-brand-cream">
-        <div class="p-5 space-y-3">
-            <div>
-                <p class="text-xs font-medium text-brand-sun-deep uppercase tracking-wider">{t(lang, "dashboard_bonus_badge")}</p>
-                <h3 class="text-lg font-bold text-brand-ink">
-                    {lang === "es" ? "Cuéntanos qué hiciste" : "Tell us what you did"}
-                </h3>
-                <p class="text-sm text-brand-ink-soft mt-1">
-                    {lang === "es"
-                        ? "Un padre revisará esto y aprobará los puntos."
-                        : "A parent will review this and approve the points."}
-                </p>
-            </div>
-            <textarea
-                id="gig-proof-text"
-                rows="5"
-                class="w-full border border-brand-ink/20 rounded-lg p-3 bg-brand-cream text-brand-ink placeholder-brand-ink-soft text-sm focus:ring-2 focus:ring-sky-500 outline-none"
-                placeholder={lang === "es"
-                    ? "¿Qué aprendiste / hiciste / lograste?"
-                    : "What did you learn / make / accomplish?"}
-            ></textarea>
-            <div>
-                <label id="gig-proof-image-label" class="block text-xs text-brand-ink-soft mb-1"
-                    data-optional={lang === "es" ? "Foto (opcional)" : "Photo (optional)"}
-                    data-required={lang === "es" ? "📸 Foto (obligatoria)" : "📸 Photo (required)"}>
-                    {lang === "es" ? "Foto (opcional)" : "Photo (optional)"}
-                </label>
-                <input
-                    id="gig-proof-image"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    class="block w-full text-sm text-brand-ink file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-brand-cream-deep file:text-brand-ink hover:file:bg-brand-mint/40"
-                />
-                <p id="gig-proof-image-status" class="text-xs text-brand-ink-soft mt-1"></p>
-            </div>
-            <div class="flex justify-end gap-2 pt-1">
-                <button type="button" id="gig-proof-cancel" class="px-4 py-2 rounded-lg bg-brand-cream-deep text-brand-ink font-semibold text-sm">
-                    {lang === "es" ? "Cancelar" : "Cancel"}
-                </button>
-                <button type="button" id="gig-proof-submit" class="px-4 py-2 rounded-lg bg-brand-sun-deep text-white font-semibold text-sm shadow-[var(--shadow-card)]">
-                    {lang === "es" ? "Enviar para aprobación" : "Submit for approval"}
-                </button>
-            </div>
-        </div>
-    </dialog>
+    <KidHome
+        lang={lang}
+        userId={user.id}
+        starMode={starMode}
+        deck={deck}
+        choreMode={meter.show}
+        deckCounter={meter.show ? null : counter}
+        inReview={deck.inReview + priorInReview}
+        routines={pickDashboardRoutines(routinesToday?.routines)}
+        gigs={claimableGigs(offerings, user.role)}
+        showGigs={modOn("gigs") && !starMode}
+        goal={goal}
+        cup={cup}
+        pet={pet ? { name: pet.name, species: pet.species, stage: pet.evolution_stage, status: pet.status_label } : null}
+    />
 
     <script>
-        // Lightweight, dependency-free confetti burst. Respects reduced-motion.
-        function fireConfetti() {
-            if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-            if (document.getElementById("confetti-canvas")) return;
-            const canvas = document.createElement("canvas");
-            canvas.id = "confetti-canvas";
-            canvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999";
-            document.body.appendChild(canvas);
-            const ctx = canvas.getContext("2d");
-            if (!ctx) { canvas.remove(); return; }
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            const colors = ["#4FB8E6", "#FFC857", "#6BCB77", "#FF6B6B", "#A78BFA"];
-            const N = 90;
-            const parts = Array.from({ length: N }, () => ({
-                x: canvas.width / 2,
-                y: canvas.height / 3,
-                vx: (Math.random() - 0.5) * 14,
-                vy: Math.random() * -15 - 4,
-                size: Math.random() * 7 + 4,
-                color: colors[Math.floor(Math.random() * colors.length)],
-                rot: Math.random() * Math.PI,
-                vr: (Math.random() - 0.5) * 0.3,
-            }));
-            let frame = 0;
-            const tick = () => {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                parts.forEach((p) => {
-                    p.vy += 0.4; // gravity
-                    p.x += p.vx; p.y += p.vy; p.rot += p.vr;
-                    ctx.save();
-                    ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-                    ctx.fillStyle = p.color;
-                    ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-                    ctx.restore();
-                });
-                frame++;
-                if (frame < 110) requestAnimationFrame(tick);
-                else canvas.remove();
-            };
-            requestAnimationFrame(tick);
-        }
-
-        document.addEventListener("astro:page-load", () => {
-            // Celebrate a just-completed task/gig (success flash present after redirect).
-            if (document.querySelector("[data-flash-success]")) {
-                fireConfetti();
-                const pts = document.querySelector<HTMLElement>("[data-points-badge]");
-                if (pts && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-                    pts.animate(
-                        [{ transform: "scale(1)" }, { transform: "scale(1.25)" }, { transform: "scale(1)" }],
-                        { duration: 600, easing: "ease-out" },
-                    );
-                }
-            }
-
-            const modal = document.getElementById("gig-proof-modal") as HTMLDialogElement | null;
-            if (!modal) return;
-            const textarea = document.getElementById("gig-proof-text") as HTMLTextAreaElement | null;
-            const cancelBtn = document.getElementById("gig-proof-cancel");
-            const submitBtn = document.getElementById("gig-proof-submit");
-            if (!textarea || !cancelBtn || !submitBtn) return;
-
-            // Track which form opened the modal so we can submit it on confirm.
-            let pendingForm: HTMLFormElement | null = null;
-
-            // In-flight guard: disable the Complete button + swap it for a
-            // "Guardando… / Saving…" spinner pill so a double-tap can't fire
-            // the request twice (the second one used to surface a raw English
-            // backend error right after the success).
-            function markInFlight(form: HTMLFormElement) {
-                form.dataset.inflight = "1";
-                const btn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-                if (!btn) return;
-                const es = document.documentElement.lang === "es";
-                btn.disabled = true;
-                btn.className =
-                    "h-12 px-4 rounded-full bg-brand-cream-deep text-brand-ink-soft flex items-center gap-2 flex-shrink-0 shadow-[var(--shadow-card)] text-sm font-semibold cursor-wait";
-                btn.innerHTML =
-                    '<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg>' +
-                    (es ? "Guardando…" : "Saving…");
-            }
-
-            document.querySelectorAll<HTMLFormElement>("form[data-complete-form]").forEach((f) => {
-                f.addEventListener("submit", (ev) => {
-                    if (f.dataset.inflight === "1") {
-                        ev.preventDefault();
-                        return;
-                    }
-                    const isBonus = f.dataset.isBonus === "1";
-                    const requiresProof = f.dataset.requiresProof === "1";
-                    // mandatory WITHOUT photo proof: submit normally (locked
-                    // against re-submission while the redirect is in flight)
-                    if (!isBonus && !requiresProof) {
-                        markInFlight(f);
-                        return;
-                    }
-                    ev.preventDefault();
-                    pendingForm = f;
-                    textarea.value = "";
-                    if (fileInput) fileInput.value = "";
-                    if (fileStatus) {
-                        fileStatus.textContent = "";
-                        fileStatus.classList.remove("text-red-600");
-                    }
-                    const imgLabel = document.getElementById("gig-proof-image-label");
-                    if (imgLabel) {
-                        imgLabel.textContent = requiresProof
-                            ? imgLabel.dataset.required ?? ""
-                            : imgLabel.dataset.optional ?? "";
-                    }
-                    modal.showModal();
-                    setTimeout(() => textarea.focus(), 50);
-                });
-            });
-
-            cancelBtn.addEventListener("click", () => {
-                pendingForm = null;
-                modal.close();
-            });
-
-            const fileInput = document.getElementById("gig-proof-image") as HTMLInputElement | null;
-            const fileStatus = document.getElementById("gig-proof-image-status");
-
-            submitBtn.addEventListener("click", async () => {
-                if (!pendingForm) {
-                    modal.close();
-                    return;
-                }
-                const isBonusForm = pendingForm.dataset.isBonus === "1";
-                const requiresPhoto = pendingForm.dataset.requiresProof === "1";
-                const es = document.documentElement.lang === "es";
-
-                const text = textarea.value.trim();
-                // Gigs still require proof text; proof-required chores only
-                // need the photo (text optional).
-                if (isBonusForm && !text) {
-                    textarea.focus();
-                    textarea.classList.add("ring-2", "ring-red-400");
-                    setTimeout(() => textarea.classList.remove("ring-2", "ring-red-400"), 1500);
-                    return;
-                }
-                if (requiresPhoto && !fileInput?.files?.length) {
-                    if (fileStatus) {
-                        fileStatus.textContent = es
-                            ? "📸 Esta tarea requiere una foto del trabajo terminado."
-                            : "📸 This task requires a photo of the finished work.";
-                        fileStatus.classList.add("text-red-600");
-                    }
-                    return;
-                }
-
-                // Upload image first if present
-                let imageUrl: string | null = null;
-                if (fileInput?.files?.length) {
-                    if (fileStatus) fileStatus.textContent = "Uploading…";
-                    try {
-                        const fd = new FormData();
-                        fd.append("file", fileInput.files[0]);
-                        const r = await fetch("/api/assignments/proof-upload", { method: "POST", body: fd });
-                        if (!r.ok) {
-                            if (fileStatus) {
-                                fileStatus.textContent = r.status === 413
-                                    ? (es ? "📸 Foto muy pesada (máx 15MB). Prueba con menor resolución." : "📸 Photo too large (max 15MB). Try a lower resolution.")
-                                    : r.status === 415
-                                    ? (es ? "Formato no soportado (usa JPEG, PNG o WebP)." : "Unsupported format (use JPEG, PNG, or WebP).")
-                                    : (es ? `Error al subir la foto (${r.status}).` : `Upload failed (${r.status}).`);
-                                fileStatus.classList.add("text-red-600");
-                            }
-                            return;
-                        }
-                        const data = await r.json();
-                        imageUrl = data.proof_image_url;
-                    } catch {
-                        if (fileStatus) {
-                            fileStatus.textContent = es ? "Error de red al subir la foto." : "Network error uploading photo.";
-                            fileStatus.classList.add("text-red-600");
-                        }
-                        return;
-                    }
-                }
-
-                const proofInput = pendingForm.querySelector<HTMLInputElement>('input[name="proof_text"]');
-                if (proofInput) proofInput.value = text;
-                const imageInput = pendingForm.querySelector<HTMLInputElement>('input[name="proof_image_url"]');
-                if (imageInput) imageInput.value = imageUrl || "";
-
-                const submittingForm = pendingForm;
-                pendingForm = null;
-                modal.close();
-                markInFlight(submittingForm);
-                // submit() bypasses our submit listener, avoiding a re-trigger of the modal.
-                submittingForm.submit();
-            });
-
-            // Close on backdrop click
-            modal.addEventListener("click", (e) => {
-                const rect = (e.target as HTMLDialogElement).getBoundingClientRect?.();
-                if (e.target === modal) {
-                    pendingForm = null;
-                    modal.close();
-                }
-            });
-        });
-    </script>
-
-    <script>
+        import { celebrate } from "../lib/celebrate";
         import { buildMission } from "../lib/tourSteps";
         import { runMission } from "../lib/missionRunner";
 
-        function resumeMissions() {
-            if ((window as any).__ftmMissionInit) return;
-            (window as any).__ftmMissionInit = true;
+        function onLoad() {
+            if ((window as any).__ftmKidHomeInit) return;
+            (window as any).__ftmKidHomeInit = true;
+            // Legacy redirects (e.g. gig claims) still land here with a success flash.
+            if (document.querySelector("[data-flash-success]")) celebrate();
+            // /dashboard hosts none of the current mission targets, so this is the
+            // "user wandered off mid-flow" degrade path: the runner finds no element
+            // for the active step and ends gracefully.
             const lang = document.documentElement.lang === "es" ? "es" : "en";
-            // /dashboard hosts none of the current mission targets, so this is
-            // effectively the "user wandered off mid-flow" degrade path: the
-            // runner finds no element for the active step and ends gracefully
-            // instead of leaving a stale popover following the user around.
             for (const id of ["first-task", "first-gig"] as const) {
                 if (sessionStorage.getItem("ftm_mission_" + id)) runMission(buildMission(id, lang), lang);
             }
         }
-
-        document.addEventListener("astro:page-load", resumeMissions);
-        // The one-shot astro:page-load fires on DOMContentLoaded; a module
-        // that executes after that would miss it (see WelcomeTour.astro).
-        // Self-trigger if the DOM is already ready — __ftmMissionInit keeps
-        // this idempotent.
-        if (document.readyState !== "loading") resumeMissions();
+        document.addEventListener("astro:page-load", onLoad);
+        // The one-shot astro:page-load fires on DOMContentLoaded; self-trigger if
+        // the DOM is already ready (the init flag keeps this idempotent).
+        if (document.readyState !== "loading") onLoad();
     </script>
 </PageLayout>

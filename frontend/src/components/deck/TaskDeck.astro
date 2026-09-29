@@ -1,0 +1,483 @@
+---
+/**
+ * One-card-at-a-time task deck (UX-C1), used by the kid home and the parent's
+ * "Mis tareas de hoy". Swipe right / "Hecho →" / → completes the top card;
+ * swipe left / "← Después" / ← sends it to the back (this page session only).
+ * Proof-required and bonus cards open the photo/note sheet first. A card is
+ * removed only after the server says OK; failures spring it back with a toast.
+ * A grouped overdue card (×N) stays on top, advancing to its next-oldest
+ * instance, until its last instance is done.
+ */
+import type { DeckCard } from "../../lib/deck";
+
+interface Props {
+    cards: DeckCard[];
+    lang: "en" | "es";
+    variant?: "full" | "compact";
+    choreMode?: boolean;
+    /** CHILD star mode: point chips read "+N ⭐" (no "pts"). */
+    starMode?: boolean;
+    heading: string;
+    counter?: { done: number; total: number; suffix: string } | null;
+}
+const { cards, lang, variant = "full", choreMode = false, starMode = false, heading, counter = null } = Astro.props;
+const es = lang === "es";
+
+const L = {
+    later: es ? "Después" : "Later",
+    done: es ? "Hecho" : "Done",
+    overdue: es ? "Atrasada" : "Overdue",
+    photo: es ? "📷 requiere foto" : "📷 photo needed",
+    pay: es ? "Cuenta para tu pago de la semana" : "Counts toward this week's pay",
+    lockedTitle: es ? "Termina las de hoy" : "Finish today's first",
+    lockedBody: (n: number) => (es ? `${n} bonus te esperan` : `${n} bonus waiting`),
+    idle: es ? "Nada pendiente hoy" : "Nothing due today",
+    seeBonus: es ? "Ver bonus" : "See bonus",
+    cancel: es ? "Cancelar" : "Cancel",
+    send: es ? "Enviar" : "Send",
+};
+const i18n = {
+    of: es ? "de" : "of",
+    dayDone: es ? "¡Día completo!" : "Day complete!",
+    bonusUnlocked: es ? "Bonus desbloqueado" : "Bonus unlocked",
+    failed: es ? "No se pudo guardar. Intenta de nuevo." : "Couldn't save. Try again.",
+    network: es ? "Sin conexión. Intenta de nuevo." : "No connection. Try again.",
+    photoRequired: es ? "📸 Foto del trabajo terminado (requerida)" : "📸 Photo of the finished work (required)",
+    photoOptional: es ? "📸 Foto (opcional)" : "📸 Photo (optional)",
+    noteBonus: es ? "¿Qué hiciste? (requerido)" : "What did you do? (required)",
+    noteOptional: es ? "Nota (opcional)" : "Note (optional)",
+    needNote: es ? "Cuéntanos qué hiciste." : "Tell us what you did.",
+    needPhoto: es ? "📸 Esta tarea requiere una foto." : "📸 This task needs a photo.",
+    uploading: es ? "Subiendo…" : "Uploading…",
+    tooBig: es ? "📸 Foto muy pesada (máx 15MB)." : "📸 Photo too large (max 15MB).",
+    badType: es ? "Formato no soportado (JPEG, PNG o WebP)." : "Unsupported format (JPEG, PNG or WebP).",
+    uploadFailed: es ? "Error al subir la foto" : "Upload failed",
+};
+const stackHeight = variant === "compact" ? "h-40" : "h-44";
+---
+
+<section
+    data-deck
+    data-variant={variant}
+    data-tour={variant === "full" ? "today-tasks" : undefined}
+    aria-label={heading}
+    tabindex="0"
+    class="outline-none focus-visible:ring-2 focus-visible:ring-brand-sky rounded-2xl"
+>
+    <div class="flex items-baseline justify-between px-1 mb-2 gap-2">
+        <h2 class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft">
+            {heading}
+            {counter && counter.total > 0 && (
+                <span
+                    class="ml-1 normal-case tracking-normal font-bold"
+                    data-today-counter
+                    data-done={counter.done}
+                    data-total={counter.total}
+                    data-suffix={counter.suffix}
+                >· {counter.done}/{counter.total}{counter.suffix ? ` ${counter.suffix}` : ""}</span>
+            )}
+        </h2>
+        <span class="text-xs font-bold text-brand-ink-soft" data-deck-pos></span>
+    </div>
+
+    <div class={`relative ${stackHeight}`} data-deck-stack hidden={cards.length === 0}>
+        {cards.map((c, i) => (
+            <article
+                data-deck-card
+                data-id={c.id}
+                data-title={c.title}
+                data-locked={c.locked ? "1" : "0"}
+                data-proof={c.requiresProof ? "1" : "0"}
+                data-bonus={c.isBonus ? "1" : "0"}
+                data-overdue={c.overdue ? "1" : undefined}
+                data-overdue-ids={c.overdue ? c.overdueIds.join(",") : undefined}
+                class="absolute inset-0 rounded-[var(--radius-card)] border-2 border-brand-ink bg-white p-4 shadow-[var(--shadow-card)] select-none touch-pan-y will-change-transform"
+                style={`z-index:${cards.length - i}`}
+            >
+                <div class="flex flex-wrap gap-1.5">
+                    {c.overdue && (
+                        <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                            {L.overdue}<span data-overdue-count>{c.overdueCount > 1 ? ` ×${c.overdueCount}` : ""}</span>
+                        </span>
+                    )}
+                    {c.isBonus && !c.locked && (
+                        <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Bonus</span>
+                    )}
+                    {!c.locked && c.points > 0 && (
+                        <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">+{c.points} {starMode ? "⭐" : "pts"}</span>
+                    )}
+                    {c.requiresProof && (
+                        <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">{L.photo}</span>
+                    )}
+                </div>
+                {c.locked ? (
+                    <>
+                        <p class="mt-2 text-lg font-extrabold leading-tight text-brand-ink">🔒 {L.lockedTitle}</p>
+                        <p class="text-xs text-brand-ink-soft mt-0.5">{L.lockedBody(c.lockedCount)}</p>
+                    </>
+                ) : (
+                    <>
+                        <p class="mt-2 text-lg font-extrabold leading-tight text-brand-ink line-clamp-2">{c.title}</p>
+                        {choreMode && !c.isBonus && <p class="text-xs text-brand-ink-soft mt-0.5">{L.pay}</p>}
+                    </>
+                )}
+                <div class="absolute left-4 right-4 bottom-4 flex gap-2">
+                    <button type="button" data-deck-later class="flex-1 rounded-xl bg-brand-cream-deep py-2.5 text-sm font-bold text-brand-ink disabled:opacity-40">← {L.later}</button>
+                    {!c.locked && (
+                        <button type="button" data-deck-done class="flex-1 rounded-xl bg-brand-mint-deep py-2.5 text-sm font-extrabold text-white">{L.done} →</button>
+                    )}
+                </div>
+            </article>
+        ))}
+    </div>
+    <p class="mt-3 text-center text-xs tracking-[0.3em] text-brand-ink-soft" data-deck-dots aria-hidden="true"></p>
+
+    <div data-deck-empty class={cards.length ? "hidden" : ""}>
+        <div data-deck-idle class="rounded-2xl border border-brand-ink/10 bg-white p-5 text-center text-sm font-semibold text-brand-ink-soft">
+            {L.idle}
+        </div>
+        <div data-deck-party class="hidden text-center py-4">
+            <p class="text-4xl" aria-hidden="true">🔥</p>
+            <p class="font-extrabold text-lg text-brand-ink" data-deck-party-title></p>
+            <p class="text-sm text-brand-ink-soft" data-deck-party-sub></p>
+            <button type="button" data-deck-reload class="hidden mt-3 rounded-xl bg-brand-sun px-4 py-2 text-sm font-extrabold text-brand-ink border-2 border-brand-ink shadow-[var(--shadow-card)]">{L.seeBonus}</button>
+        </div>
+    </div>
+
+    <dialog data-proof-dialog class="rounded-2xl p-0 backdrop:bg-black/40 max-w-md w-[calc(100%-2rem)] border-2 border-brand-ink bg-brand-cream">
+        <div class="p-5 space-y-3">
+            <h3 class="text-lg font-bold text-brand-ink" data-proof-title></h3>
+            <label class="block text-xs text-brand-ink-soft" data-proof-photo-label for="deck-proof-file"></label>
+            <input id="deck-proof-file" type="file" accept="image/jpeg,image/png,image/webp" data-proof-file class="block w-full text-sm" />
+            <textarea data-proof-text rows="3" maxlength="4000" class="w-full rounded-xl border border-brand-ink/20 bg-white p-2 text-sm"></textarea>
+            <p data-proof-status class="text-xs text-brand-ink-soft" aria-live="polite"></p>
+            <div class="flex justify-end gap-2">
+                <button type="button" data-proof-cancel class="px-4 py-2 rounded-lg bg-brand-cream-deep text-brand-ink font-semibold text-sm">{L.cancel}</button>
+                <button type="button" data-proof-submit class="px-4 py-2 rounded-lg bg-brand-mint-deep text-white font-semibold text-sm shadow-[var(--shadow-card)]">{L.send}</button>
+            </div>
+        </div>
+    </dialog>
+
+    <script type="application/json" data-deck-i18n set:html={JSON.stringify(i18n)}></script>
+</section>
+
+<script>
+    import { showToast } from "../../lib/toast";
+    import { celebrate } from "../../lib/celebrate";
+    import { afterComplete } from "../../lib/deck";
+
+    const SWIPE_RATIO = 0.3;
+
+    function bumpCounters() {
+        document.querySelectorAll<HTMLElement>("[data-today-counter]").forEach((el) => {
+            const done = Math.min(Number(el.dataset.done ?? 0) + 1, Number(el.dataset.total ?? 0));
+            el.dataset.done = String(done);
+            const suffix = el.dataset.suffix ? ` ${el.dataset.suffix}` : "";
+            const prefix = el.textContent?.trim().startsWith("·") ? "· " : "";
+            el.textContent = `${prefix}${done}/${el.dataset.total}${suffix}`;
+        });
+    }
+
+    function initDeck(root: HTMLElement) {
+        if (root.dataset.deckReady) return;
+        root.dataset.deckReady = "1";
+        const t: Record<string, string> = JSON.parse(
+            root.querySelector<HTMLScriptElement>("script[data-deck-i18n]")?.textContent || "{}",
+        );
+        const stack = root.querySelector<HTMLElement>("[data-deck-stack]")!;
+        const pos = root.querySelector<HTMLElement>("[data-deck-pos]");
+        const dots = root.querySelector<HTMLElement>("[data-deck-dots]");
+        const emptyBox = root.querySelector<HTMLElement>("[data-deck-empty]")!;
+        const idle = root.querySelector<HTMLElement>("[data-deck-idle]");
+        const party = root.querySelector<HTMLElement>("[data-deck-party]");
+        const partyTitle = root.querySelector<HTMLElement>("[data-deck-party-title]");
+        const partySub = root.querySelector<HTMLElement>("[data-deck-party-sub]");
+        const reloadBtn = root.querySelector<HTMLButtonElement>("[data-deck-reload]");
+        let order: HTMLElement[] = [...root.querySelectorAll<HTMLElement>("[data-deck-card]")];
+        let busy = false;
+
+        function layout() {
+            order.forEach((card, i) => {
+                card.style.zIndex = String(order.length - i);
+                card.hidden = i > 2;
+                card.style.transition = "transform 200ms ease, opacity 200ms ease";
+                card.style.transform = i === 0 ? "" : `translate(${i * 6}px, ${i * 6}px)`;
+                card.style.opacity = i === 0 ? "1" : "0.55";
+                card.style.pointerEvents = i === 0 ? "auto" : "none";
+                card.setAttribute("aria-hidden", i === 0 ? "false" : "true");
+                card.querySelectorAll("button").forEach((b) => (b.tabIndex = i === 0 ? 0 : -1));
+            });
+            const laterBtn = order[0]?.querySelector<HTMLButtonElement>("[data-deck-later]");
+            if (laterBtn) laterBtn.disabled = order.length < 2;
+            if (pos) pos.textContent = order.length ? `1 ${t.of} ${order.length}` : "";
+            if (dots) dots.textContent = order.length > 1 ? "●" + "○".repeat(Math.min(order.length - 1, 6)) : "";
+        }
+
+        const springBack = (card: HTMLElement) => {
+            card.style.transition = "transform 200ms ease";
+            card.style.transform = "";
+        };
+
+        // The focused button can leave with its card (removed, or sent to the
+        // back where it is aria-hidden): park focus on the deck itself so
+        // ←/→ keep working.
+        const refocus = () => root.focus({ preventScroll: true });
+
+        function later() {
+            if (busy || submitting || order.length < 2) return;
+            order.push(order.shift()!);
+            layout();
+            refocus();
+        }
+
+        function flyOff(card: HTMLElement) {
+            card.style.transition = "transform 250ms ease, opacity 250ms ease";
+            card.style.transform = "translateX(120%) rotate(12deg)";
+            card.style.opacity = "0";
+            setTimeout(() => card.remove(), 260);
+        }
+
+        function finish(bonusUnlocked: boolean) {
+            stack.hidden = true;
+            if (dots) dots.textContent = "";
+            if (pos) pos.textContent = "";
+            emptyBox.classList.remove("hidden");
+            idle?.classList.add("hidden");
+            party?.classList.remove("hidden");
+            if (partyTitle) partyTitle.textContent = t.dayDone;
+            if (partySub) partySub.textContent = bonusUnlocked ? t.bonusUnlocked : "";
+            reloadBtn?.classList.toggle("hidden", !bonusUnlocked);
+            celebrate();
+            root.dispatchEvent(new CustomEvent("ftm:deck-empty", { bubbles: true }));
+        }
+
+        /** UI after the server accepted the completion. Runs OUTSIDE
+         * complete()'s fetch try on purpose: a UI error here must never spring
+         * back a card that is already completed, nor claim "Sin conexión". */
+        function onCompleted(card: HTMLElement, message: string) {
+            const isBonus = card.dataset.bonus === "1";
+            // "N/M hoy" counts today's required chores only — an overdue
+            // instance is a past day's chore.
+            if (!isBonus && card.dataset.overdue !== "1") bumpCounters();
+            showToast(message || "🎉", "success", 2500);
+            root.dispatchEvent(new CustomEvent("ftm:deck-completed", { bubbles: true, detail: { isBonus } }));
+            const next = afterComplete({
+                id: card.dataset.id ?? "",
+                overdueIds: (card.dataset.overdueIds ?? "").split(",").filter(Boolean),
+            });
+            if (next.nextId) {
+                // Grouped overdue card: the next-oldest instance takes this
+                // card's place on top; the day is not done yet.
+                card.dataset.id = next.nextId;
+                const count = card.querySelector<HTMLElement>("[data-overdue-count]");
+                if (count) count.textContent = next.remaining > 1 ? ` ×${next.remaining}` : "";
+                order = [card, ...order.filter((c) => c !== card)];
+                layout();
+            } else {
+                order = order.filter((c) => c !== card);
+                flyOff(card);
+                const actionable = order.filter((c) => c.dataset.locked !== "1");
+                if (actionable.length === 0) {
+                    finish(order.length > 0);
+                } else {
+                    order = [...actionable, ...order.filter((c) => c.dataset.locked === "1")];
+                    layout();
+                }
+            }
+            refocus();
+        }
+
+        async function complete(card: HTMLElement, proofText = "", proofImageUrl = "") {
+            busy = true;
+            let message = "";
+            try {
+                const fd = new FormData();
+                fd.append("assignment_id", card.dataset.id ?? "");
+                fd.append("proof_text", proofText);
+                fd.append("proof_image_url", proofImageUrl);
+                const r = await fetch("/api/assignments/complete", {
+                    method: "POST",
+                    body: fd,
+                    headers: { Accept: "application/json" },
+                });
+                const body = await r.json().catch(() => ({}) as any);
+                if (!r.ok || !body.ok) {
+                    springBack(card);
+                    showToast(body.message || t.failed, "error");
+                    return;
+                }
+                message = body.message || "";
+            } catch {
+                springBack(card);
+                showToast(t.network, "error");
+                return;
+            } finally {
+                busy = false;
+            }
+            onCompleted(card, message);
+        }
+
+        // ── Proof sheet ──────────────────────────────────────────────
+        const dialog = root.querySelector<HTMLDialogElement>("[data-proof-dialog]");
+        const fileInput = root.querySelector<HTMLInputElement>("[data-proof-file]");
+        const textInput = root.querySelector<HTMLTextAreaElement>("[data-proof-text]");
+        const status = root.querySelector<HTMLElement>("[data-proof-status]");
+        const photoLabel = root.querySelector<HTMLElement>("[data-proof-photo-label]");
+        const proofTitle = root.querySelector<HTMLElement>("[data-proof-title]");
+        let proofCard: HTMLElement | null = null;
+        // Single-flight guard for the proof-submit handler specifically:
+        // `busy` (above) only becomes true once complete() runs, but the
+        // submit handler awaits an upload *before* calling complete(), so it
+        // needs its own flag to reject a second tap while that upload is
+        // still in flight.
+        let submitting = false;
+
+        function openProof(card: HTMLElement) {
+            if (!dialog) return;
+            proofCard = card;
+            const isBonus = card.dataset.bonus === "1";
+            if (proofTitle) proofTitle.textContent = card.dataset.title ?? "";
+            if (photoLabel) photoLabel.textContent = card.dataset.proof === "1" ? t.photoRequired : t.photoOptional;
+            if (textInput) {
+                textInput.value = "";
+                textInput.placeholder = isBonus ? t.noteBonus : t.noteOptional;
+            }
+            if (fileInput) fileInput.value = "";
+            if (status) {
+                status.textContent = "";
+                status.classList.remove("text-red-600");
+            }
+            dialog.showModal();
+            // A bonus needs "what did you do?" — start there, not on the file picker.
+            if (isBonus) textInput?.focus();
+        }
+
+        const cancelProof = () => {
+            if (proofCard) springBack(proofCard);
+            proofCard = null;
+        };
+        root.querySelector("[data-proof-cancel]")?.addEventListener("click", () => {
+            dialog?.close();
+            cancelProof();
+        });
+        dialog?.addEventListener("cancel", cancelProof);
+        // Backdrop tap = Cancel. The dialog's padding is 0, so only the
+        // backdrop hits the <dialog> itself; requiring the press to START
+        // there too keeps a text selection dragged out of the textarea from
+        // closing the sheet.
+        let pressOnBackdrop = false;
+        dialog?.addEventListener("pointerdown", (e) => {
+            pressOnBackdrop = e.target === dialog;
+        });
+        dialog?.addEventListener("click", (e) => {
+            if (e.target !== dialog || !pressOnBackdrop) return;
+            pressOnBackdrop = false;
+            dialog.close();
+            cancelProof();
+        });
+
+        root.querySelector<HTMLButtonElement>("[data-proof-submit]")?.addEventListener("click", async (e) => {
+            if (!proofCard || busy || submitting) return;
+            const card = proofCard;
+            const btn = e.currentTarget as HTMLButtonElement;
+            submitting = true;
+            btn.disabled = true;
+            const fail = (msg: string) => {
+                submitting = false;
+                btn.disabled = false;
+                if (status) {
+                    status.textContent = msg;
+                    status.classList.add("text-red-600");
+                }
+            };
+            const text = textInput?.value.trim() ?? "";
+            if (card.dataset.bonus === "1" && !text) return fail(t.needNote);
+            if (card.dataset.proof === "1" && !fileInput?.files?.length) return fail(t.needPhoto);
+            let imageUrl = "";
+            if (fileInput?.files?.length) {
+                if (status) {
+                    status.textContent = t.uploading;
+                    status.classList.remove("text-red-600");
+                }
+                try {
+                    const up = new FormData();
+                    up.append("file", fileInput.files[0]);
+                    const r = await fetch("/api/assignments/proof-upload", { method: "POST", body: up });
+                    if (!r.ok) {
+                        return fail(r.status === 413 ? t.tooBig : r.status === 415 ? t.badType : `${t.uploadFailed} (${r.status})`);
+                    }
+                    imageUrl = (await r.json()).proof_image_url ?? "";
+                } catch {
+                    return fail(t.network);
+                }
+            }
+            // The upload (if any) has settled. If the sheet was cancelled
+            // meanwhile, cancelProof() already cleared proofCard and sprang
+            // this card back — do not complete a task the user backed out of.
+            submitting = false;
+            btn.disabled = false;
+            if (proofCard !== card) return;
+            proofCard = null;
+            dialog?.close();
+            await complete(card, text, imageUrl);
+        });
+
+        function done() {
+            const card = order[0];
+            if (!card || busy || submitting || card.dataset.locked === "1") return;
+            if (card.dataset.proof === "1" || card.dataset.bonus === "1") openProof(card);
+            else void complete(card);
+        }
+
+        // ── Buttons, keys, swipe ─────────────────────────────────────
+        root.addEventListener("click", (e) => {
+            const target = e.target as HTMLElement;
+            if (target.closest("[data-deck-later]")) later();
+            else if (target.closest("[data-deck-done]")) done();
+            else if (target.closest("[data-deck-reload]")) location.reload();
+        });
+        root.addEventListener("keydown", (e) => {
+            if ((e.target as HTMLElement).closest("dialog")) return;
+            if (e.key === "ArrowRight") { e.preventDefault(); done(); }
+            else if (e.key === "ArrowLeft") { e.preventDefault(); later(); }
+        });
+
+        let startX = 0;
+        let dx = 0;
+        let dragging: HTMLElement | null = null;
+        stack.addEventListener("pointerdown", (e) => {
+            const target = e.target as HTMLElement;
+            const card = target.closest<HTMLElement>("[data-deck-card]");
+            if (!card || card !== order[0] || busy || submitting || target.closest("button")) return;
+            dragging = card;
+            startX = e.clientX;
+            dx = 0;
+            card.style.transition = "none";
+            card.setPointerCapture(e.pointerId);
+        });
+        stack.addEventListener("pointermove", (e) => {
+            if (!dragging) return;
+            dx = e.clientX - startX;
+            dragging.style.transform = `translateX(${dx}px) rotate(${dx / 20}deg)`;
+        });
+        const endDrag = () => {
+            if (!dragging) return;
+            const card = dragging;
+            dragging = null;
+            const threshold = card.offsetWidth * SWIPE_RATIO;
+            if (dx > threshold && card.dataset.locked !== "1") done();
+            else if (dx < -threshold && order.length > 1) later();
+            else springBack(card);
+        };
+        stack.addEventListener("pointerup", endDrag);
+        stack.addEventListener("pointercancel", endDrag);
+
+        layout();
+    }
+
+    function initAll() {
+        document.querySelectorAll<HTMLElement>("[data-deck]").forEach(initDeck);
+    }
+    document.addEventListener("astro:page-load", initAll);
+    if (document.readyState !== "loading") initAll();
+</script>

@@ -1,0 +1,150 @@
+---
+/**
+ * Kid home body (UX-C1): routines strip, task deck, in-review chip, "Gana
+ * extra" gigs row with push opt-in, and the goal / Family Cup / pet tiles.
+ * The push opt-in (and its daily subscription heal) renders exactly once:
+ * inside the gigs row, or below the tiles when there is no gigs row —
+ * EnablePushButton uses fixed element ids.
+ */
+import TaskDeck from "../deck/TaskDeck.astro";
+import EnablePushButton from "../EnablePushButton.astro";
+import PetAvatar from "../pet/PetAvatar.astro";
+import type { Deck } from "../../lib/deck";
+import type { GigChip } from "../../lib/kidHome";
+import { routineName, routineProgress, type DashboardRoutine } from "../../lib/routines";
+
+interface Props {
+    lang: "en" | "es";
+    userId: string;
+    /** CHILD star mode: point chips read "+N ⭐". */
+    starMode: boolean;
+    deck: Deck;
+    choreMode: boolean;
+    /** Shown in the deck heading only when the header has no pay meter. */
+    deckCounter: { done: number; total: number; suffix: string } | null;
+    inReview: number;
+    routines: DashboardRoutine[];
+    gigs: GigChip[];
+    showGigs: boolean;
+    goal:
+        | { kind: "cash"; name: string; emoji: string; savedCents: number; targetCents: number; pct: number }
+        | { kind: "points"; title: string; icon: string; pct: number; ptsToGo: number }
+        | { kind: "reached"; title: string }
+        | { kind: "none"; href: string };
+    cup: { rank: number; bossName: string; bossHp: number; bossMaxHp: number; defeated: boolean } | null;
+    pet: { name: string; species: string; stage: number; status: string } | null;
+}
+const { lang, userId, starMode, deck, choreMode, deckCounter, inReview, routines, gigs, showGigs, goal, cup, pet } = Astro.props;
+const es = lang === "es";
+const gigsRow = showGigs && gigs.length > 0;
+const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString(es ? "es-MX" : "en-US")}`;
+---
+
+<div class="space-y-5 max-w-md mx-auto w-full" data-kid-home>
+    {routines.length > 0 && (
+        <div class="space-y-2">
+            {routines.map((r) => (
+                <a href="/routines" class="press flex items-center gap-3 rounded-2xl bg-white border border-brand-ink/10 px-4 py-3 shadow-[var(--shadow-card)]">
+                    <span class="text-2xl leading-none" aria-hidden="true">{r.icon || "⭐"}</span>
+                    <span class="flex-1 font-bold text-brand-ink">{routineName(r, lang)}</span>
+                    <span class="text-sm font-extrabold tabular-nums text-brand-ink">{routineProgress(r)}</span>
+                </a>
+            ))}
+        </div>
+    )}
+
+    <TaskDeck
+        cards={deck.cards}
+        lang={lang}
+        variant="full"
+        choreMode={choreMode}
+        starMode={starMode}
+        heading={es ? "Tus tareas" : "Your tasks"}
+        counter={deckCounter}
+    />
+
+    {inReview > 0 && (
+        <a href="/notifications" class="inline-flex items-center gap-1.5 rounded-full bg-sky-100 text-sky-800 px-3 py-1 text-xs font-bold">
+            ⏳ {inReview} {es ? "en revisión" : "in review"}
+        </a>
+    )}
+
+    {gigsRow && (
+        <section data-kid-gigs>
+            <div class="flex items-baseline justify-between px-1 mb-2">
+                <h2 class="text-xs font-extrabold uppercase tracking-wider text-brand-ink-soft">{es ? "Gana extra" : "Earn extra"}</h2>
+                <a href="/gigs" class="text-xs font-bold text-brand-sky-deep">{es ? "ver todos ›" : "see all ›"}</a>
+            </div>
+            <div class="flex gap-2 overflow-x-auto pb-1 snap-x">
+                {gigs.map((g) => (
+                    <a href="/gigs" class="snap-start shrink-0 w-32 rounded-2xl border border-brand-ink/10 bg-white p-3 shadow-[var(--shadow-card)]">
+                        {g.isNew && (
+                            <span class="inline-block mb-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{es ? "Nuevo" : "New"}</span>
+                        )}
+                        <p class="text-sm font-bold text-brand-ink leading-tight line-clamp-2">{g.title}</p>
+                        <p class="text-base font-extrabold text-emerald-700 mt-1">${g.pesos}</p>
+                    </a>
+                ))}
+            </div>
+            <EnablePushButton
+                lang={lang}
+                userId={userId}
+                class="mt-2 px-1"
+                label={es ? "🔔 Avísame de gigs nuevos" : "🔔 Tell me about new gigs"}
+            />
+        </section>
+    )}
+
+    <div class="grid grid-cols-2 gap-2">
+        {goal.kind === "cash" && (
+            <a href="/bank" class="rounded-2xl bg-white border border-brand-ink/10 p-3 shadow-[var(--shadow-card)]">
+                <p class="text-xs font-bold text-brand-ink truncate">{goal.emoji || "🎯"} {goal.name}</p>
+                <p class="text-sm font-extrabold text-brand-ink mt-0.5">{money(goal.savedCents)} / {money(goal.targetCents)}</p>
+                <div class="h-1.5 rounded-full bg-brand-cream-deep mt-1.5 overflow-hidden"><div class="h-full bg-amber-400" style={`width:${goal.pct}%`}></div></div>
+            </a>
+        )}
+        {goal.kind === "points" && (
+            <a href="/rewards" class="rounded-2xl bg-white border border-brand-ink/10 p-3 shadow-[var(--shadow-card)]">
+                <p class="text-xs font-bold text-brand-ink truncate">{goal.icon || "🎯"} {goal.title}</p>
+                <p class="text-sm font-extrabold text-brand-ink mt-0.5">{goal.ptsToGo} ⭐ {es ? "para lograrlo" : "to go"}</p>
+                <div class="h-1.5 rounded-full bg-brand-cream-deep mt-1.5 overflow-hidden"><div class="h-full bg-amber-400" style={`width:${goal.pct}%`}></div></div>
+            </a>
+        )}
+        {goal.kind === "reached" && (
+            <a href="/rewards" class="rounded-2xl bg-amber-50 border-2 border-amber-300 p-3 text-sm font-extrabold text-brand-ink flex items-center shadow-[var(--shadow-card)]">
+                <span class="line-clamp-3">🎉 {es ? `¡Meta alcanzada! Canjea ${goal.title} →` : `Goal reached! Redeem ${goal.title} →`}</span>
+            </a>
+        )}
+        {goal.kind === "none" && (
+            <a href={goal.href} class="rounded-2xl bg-white border border-dashed border-brand-ink/20 p-3 text-sm font-bold text-brand-sky-deep flex items-center">
+                🎯 {es ? "Elige una meta →" : "Pick a goal →"}
+            </a>
+        )}
+        {cup ? (
+            <a href="/family-cup" class="rounded-2xl bg-white border border-brand-ink/10 p-3 shadow-[var(--shadow-card)]">
+                <p class="text-xs font-bold text-brand-ink">🏆 {es ? "Copa familiar" : "Family Cup"}</p>
+                <p class="text-sm font-extrabold text-brand-ink mt-0.5">
+                    {cup.rank > 0 ? `${cup.rank}º` : "—"} · {cup.defeated ? (es ? "¡Jefe vencido!" : "Boss beaten!") : `${cup.bossHp}/${cup.bossMaxHp} HP`}
+                </p>
+                <p class="text-[11px] text-brand-ink-soft truncate">{cup.bossName}</p>
+            </a>
+        ) : <div></div>}
+        {pet && (
+            <a href="/pet/quests" class="col-span-2 flex items-center gap-3 rounded-2xl bg-white border border-brand-ink/10 p-3 shadow-[var(--shadow-card)]">
+                <PetAvatar species={pet.species} stage={pet.stage} status={pet.status} size="sm" />
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-extrabold text-brand-ink truncate">🐾 {pet.name}</p>
+                    <p class="text-xs text-brand-ink-soft">
+                        {pet.status === "starving"
+                            ? (es ? "¡Tiene hambre!" : "Hungry!")
+                            : pet.status === "sad"
+                                ? (es ? "Te extraña" : "Misses you")
+                                : (es ? "Cuídala con tus tareas" : "Care for it with your chores")}
+                    </p>
+                </div>
+            </a>
+        )}
+    </div>
+
+    {!gigsRow && <EnablePushButton lang={lang} userId={userId} class="px-1" />}
+</div>

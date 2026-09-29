@@ -260,3 +260,72 @@ async def test_contradictory_grade_combinations_rejected(
             db_session, a.id, test_family.id, test_parent_user.id,
             approve=approve, grade=grade,
         )
+
+
+# ── Graded feedback reaches the kid (UX-C1) ──────────────────────────────────
+# The old completed list showed "Casi (50%)" + the parent's 💬 note; the deck
+# home has no completed list, so the approval notification carries it now.
+# The immediate push (tag "task-approved") uses the same copy choice.
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "lang,grade,pct,notes,title,body,push_title,push_body",
+    [
+        # full, no notes → unchanged gig_approved / task_approved_push copy
+        ("es", None, None, None,
+         "✅ +20 pts", "'Trastes' aprobada por tus papás.",
+         "¡Tarea aprobada! 🎉", "Trastes — 20 pts"),
+        # whitespace-only notes are not feedback
+        ("es", "full", None, "   ",
+         "✅ +20 pts", "'Trastes' aprobada por tus papás.",
+         "¡Tarea aprobada! 🎉", "Trastes — 20 pts"),
+        # partial, no notes → gig_approved_partial
+        ("es", "partial", 25, None,
+         "✅ +5 pts · 25%", "'Trastes' aprobada al 25%.", None, None),
+        ("en", "partial", None, "",
+         "✅ +10 pts · 50%", "'Trastes' approved at 50%.", None, None),
+        # full with notes → gig_approved_noted at 100%
+        ("en", "full", None, "  Great job!  ",
+         "✅ +20 pts · 100%", "'Trastes' — 💬 Great job!", None, None),
+        # partial with notes → gig_approved_noted
+        ("es", "partial", None, "dobla mejor las camisas",
+         "✅ +10 pts · 50%", "'Trastes' — 💬 dobla mejor las camisas", None, None),
+    ],
+)
+async def test_approval_notification_carries_grade_and_notes(
+    db_session, test_family, test_parent_user, test_child_user,
+    lang, grade, pct, notes, title, body, push_title, push_body,
+):
+    from unittest.mock import AsyncMock, patch
+
+    from app.models.notification import Notification, NotificationType
+
+    test_child_user.preferred_lang = lang
+    await db_session.commit()
+    chore = await _make_chore_template(db_session, test_family, points=20)
+    a = await _make_pending(db_session, test_family, test_child_user, chore)
+
+    with patch(
+        "app.services.push_service.PushService.send_to_user",
+        new_callable=AsyncMock,
+        return_value=1,
+    ) as mock_send:
+        await TaskAssignmentService.approve_gig(
+            db_session, a.id, test_family.id, test_parent_user.id,
+            approve=True, grade=grade, partial_credit_pct=pct, notes=notes,
+        )
+
+    notifs = (await db_session.execute(
+        select(Notification).where(
+            Notification.user_id == test_child_user.id,
+            Notification.type == NotificationType.GIG_APPROVED,
+        )
+    )).scalars().all()
+    assert [(n.title, n.body) for n in notifs] == [(title, body)]
+
+    pushes = [c.args[2] for c in mock_send.call_args_list
+              if len(c.args) >= 3 and c.args[2].get("tag") == "task-approved"]
+    assert len(pushes) == 1
+    assert (pushes[0]["title"], pushes[0]["body"]) == (
+        push_title or title, push_body or body,
+    )

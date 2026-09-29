@@ -64,6 +64,8 @@ class GigOfferingResponse(BaseModel):
     status: str = "approved"
     review_notes: Optional[str] = None
     created_by: Optional[UUID] = None
+    created_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
