@@ -96,7 +96,7 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                     if (window.__showToast) {
                         window.__showToast(msg, "error");
                     } else {
-                        alert(msg);
+                        console.error(msg);
                     }
                 }
             } catch (err) {
@@ -104,7 +104,7 @@ const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
                 if (window.__showToast) {
                     window.__showToast("An error occurred during login", "error");
                 } else {
-                    alert("An error occurred during login");
+                    console.error("An error occurred during login");
                 }
             }
         };

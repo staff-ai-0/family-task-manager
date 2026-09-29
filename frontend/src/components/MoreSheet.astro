@@ -164,7 +164,14 @@ const links = isParent ? parentLinks : kidLinks;
                     {es ? "English" : "Español"}
                 </button>
             </form>
-            <form method="POST" action="/api/auth/logout" class="flex-1" data-logout-form>
+            <form
+                method="POST"
+                action="/api/auth/logout"
+                class="flex-1"
+                data-logout-form
+                data-confirm-sheet={es ? "¿Cerrar sesión?" : "Log out?"}
+                data-confirm-label={es ? "Cerrar sesión" : "Log out"}
+            >
                 <input type="hidden" name="action" value="logout" />
                 <button type="submit" class="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-red-300 text-red-700 font-semibold text-sm hover:bg-red-50 transition-colors">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
@@ -232,13 +239,6 @@ const links = isParent ? parentLinks : kidLinks;
             const first = f[0], last = f[f.length - 1];
             if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
             else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-        });
-
-        // Confirm logout so an accidental tap on a shared tablet doesn't force
-        // a full re-login.
-        const es = document.documentElement.lang === "es";
-        sheet.querySelector<HTMLFormElement>("form[data-logout-form]")?.addEventListener("submit", (e) => {
-            if (!window.confirm(es ? "¿Cerrar sesión?" : "Log out?")) e.preventDefault();
         });
     });
 </script>

@@ -462,6 +462,8 @@ const shortDT = (iso: string | null) =>
 
 <script>
     import { normalizeErrorDetail } from "../../../lib/errors";
+    import { confirmSheet, promptSheet, queueToast } from "../../../lib/dialogs";
+    import { showToast } from "../../../lib/toast";
 
     // Every operator action requires a typed reason, which is recorded in the
     // audit log alongside the change. Failures surface the backend's actual
@@ -500,8 +502,18 @@ const shortDT = (iso: string | null) =>
         confirmMsg: string | undefined,
         control: HTMLButtonElement | null,
     ) {
-        if (confirmMsg && !window.confirm(confirmMsg)) return;
-        const reason = window.prompt("Reason for this action (recorded in the audit log):");
+        if (
+            confirmMsg &&
+            !(await confirmSheet({ title: confirmMsg, confirmLabel: "Continue", danger: true }))
+        )
+            return;
+        const reason = await promptSheet({
+            title: "Reason for this action",
+            body: "Recorded in the audit log.",
+            label: "Reason",
+            minLength: 3,
+            confirmLabel: "Continue",
+        });
         if (!reason || reason.trim().length < 3) return;
 
         const original = control?.textContent ?? "";
@@ -517,13 +529,13 @@ const shortDT = (iso: string | null) =>
             });
             const body = await res.json().catch(() => ({}));
             if (!res.ok) {
-                window.alert(`Failed (${res.status}): ${errorMessageFrom(body)}`);
+                showToast(`Failed (${res.status}): ${errorMessageFrom(body)}`, "error", 6000);
                 return;
             }
-            if (body.warning) window.alert(body.warning);
+            if (body.warning) queueToast(body.warning, "info");
             window.location.reload();
         } catch (e) {
-            window.alert(`Request failed: ${e}`);
+            showToast(`Request failed: ${e}`, "error", 6000);
         } finally {
             if (control) {
                 control.disabled = false;

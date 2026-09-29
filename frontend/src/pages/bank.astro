@@ -517,6 +517,7 @@ function countdownText(): string {
     import { mutate } from "../lib/mutate";
     import { showToast } from "../lib/toast";
     import { createDialog } from "../lib/dialog";
+    import { confirmSheet } from "../lib/dialogs";
 
     // Savings-goal card: propose a goal (kid → pending) + change (cancel).
     document.addEventListener("astro:page-load", () => {
@@ -589,7 +590,11 @@ function countdownText(): string {
             const card = document.querySelector<HTMLElement>("[data-goal-card]");
             const id = card?.dataset.goalId;
             if (!id) return;
-            if (!confirm(es ? "¿Cambiar tu meta? Se borrará la actual." : "Change your goal? This clears the current one.")) return;
+            if (!(await confirmSheet({
+                title: es ? "¿Cambiar tu meta? Se borrará la actual." : "Change your goal? This clears the current one.",
+                confirmLabel: es ? "Cambiar meta" : "Change goal",
+                danger: true,
+            }))) return;
             const res = await mutate(`/api/bank/goals/${id}`, {
                 method: "DELETE",
                 errorFallback: es ? "No se pudo cambiar" : "Could not change",
