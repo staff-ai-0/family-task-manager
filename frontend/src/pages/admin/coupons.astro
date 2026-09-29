@@ -201,6 +201,8 @@ const shortDate = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
 
 <script>
     import { normalizeErrorDetail } from "../../lib/errors";
+    import { confirmSheet, promptSheet } from "../../lib/dialogs";
+    import { showToast } from "../../lib/toast";
 
     // Same three backend error-body shapes as the family-detail actions page:
     // FastAPI HTTPException {detail: string}, RequestValidationError
@@ -296,10 +298,14 @@ const shortDate = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
                 const id = btn.dataset.deactivate;
                 const code = btn.dataset.code ?? id;
                 if (
-                    !window.confirm(
-                        `Deactivate ${code}? Credits already granted keep running — ` +
-                            `the code just stops being redeemable. This cannot be undone here.`,
-                    )
+                    !(await confirmSheet({
+                        title: `Deactivate ${code}?`,
+                        body:
+                            `Credits already granted keep running — the code just stops ` +
+                            `being redeemable. This cannot be undone here.`,
+                        confirmLabel: "Deactivate",
+                        danger: true,
+                    }))
                 ) {
                     return;
                 }
@@ -317,9 +323,9 @@ const shortDate = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
                         return;
                     }
                     const body = await res.json().catch(() => ({}));
-                    window.alert(`Failed (${res.status}): ${errorMessageFrom(body)}`);
+                    showToast(`Failed (${res.status}): ${errorMessageFrom(body)}`, "error", 6000);
                 } catch (e) {
-                    window.alert(`Request failed: ${e}`);
+                    showToast(`Request failed: ${e}`, "error", 6000);
                 } finally {
                     btn.disabled = false;
                     btn.textContent = original;
@@ -400,16 +406,16 @@ const shortDate = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
                             btn.className = "ml-2 text-red-600 underline";
                             btn.textContent = "Revoke";
                             btn.addEventListener("click", async () => {
-                                const reason = window.prompt(
-                                    `Revoke this credit for ${r.family_name}? Reason (audited):`,
-                                );
-                                // Cancel, or a reason too short for the API's
-                                // min_length=3 — do not fire a doomed request.
+                                const reason = await promptSheet({
+                                    title: `Revoke this credit for ${r.family_name}?`,
+                                    label: "Reason (audited)",
+                                    minLength: 3,
+                                    danger: true,
+                                    confirmLabel: "Revoke",
+                                });
+                                // Cancel — the sheet itself enforces the API's
+                                // min_length=3, so no doomed request can fire.
                                 if (reason === null) return;
-                                if (reason.trim().length < 3) {
-                                    window.alert("A reason of at least 3 characters is required.");
-                                    return;
-                                }
                                 btn.disabled = true;
                                 btn.textContent = "…";
                                 try {
@@ -426,15 +432,17 @@ const shortDate = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
                                         btn.remove();
                                         return;
                                     }
-                                    window.alert(
+                                    showToast(
                                         res.status === 409
                                             ? "That credit was already revoked."
                                             : res.status === 404
                                                 ? "That credit no longer exists."
                                                 : "Could not revoke the credit.",
+                                        "error",
+                                        6000,
                                     );
                                 } catch (e) {
-                                    window.alert(`Request failed: ${e}`);
+                                    showToast(`Request failed: ${e}`, "error", 6000);
                                 }
                                 btn.disabled = false;
                                 btn.textContent = "Revoke";

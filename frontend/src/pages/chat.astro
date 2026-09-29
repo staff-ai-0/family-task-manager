@@ -358,6 +358,8 @@ import { serializeForClient } from "@lib/safe-vars";
     // Optimistic reaction toggles — replaces a full page reload on every emoji
     // tap. Bundled (not is:inline) so it can import the shared mutate() helper.
     import { mutate } from "../lib/mutate";
+    import { confirmSheet, promptSheet } from "../lib/dialogs";
+    import { showToast } from "../lib/toast";
 
     document.addEventListener("astro:page-load", () => {
         const feed = document.getElementById("chat-feed");
@@ -415,7 +417,11 @@ import { serializeForClient } from "@lib/safe-vars";
             if (editBtn) {
                 const bodyEl = wrapper.querySelector<HTMLElement>("[data-msg-body]");
                 const current = bodyEl?.textContent ?? "";
-                const next = prompt(isEs ? "Editar mensaje:" : "Edit message:", current);
+                const next = await promptSheet({
+                    title: isEs ? "Editar mensaje" : "Edit message",
+                    defaultValue: current,
+                    confirmLabel: isEs ? "Guardar" : "Save",
+                });
                 if (next === null || !next.trim() || next.trim() === current) return;
                 const res = await fetch(`/api/chat/${msgId}`, {
                     method: "PUT",
@@ -426,17 +432,21 @@ import { serializeForClient } from "@lib/safe-vars";
                     if (bodyEl) bodyEl.textContent = next.trim();
                     wrapper.querySelector("[data-edited-mark]")?.classList.remove("hidden");
                 } else {
-                    alert(isEs ? "No se pudo editar el mensaje." : "Could not edit the message.");
+                    showToast(isEs ? "No se pudo editar el mensaje." : "Could not edit the message.", "error", 6000);
                 }
                 return;
             }
 
-            if (!confirm(isEs ? "¿Borrar este mensaje para toda la familia?" : "Delete this message for the whole family?")) return;
+            if (!(await confirmSheet({
+                title: isEs ? "¿Borrar este mensaje para toda la familia?" : "Delete this message for the whole family?",
+                confirmLabel: isEs ? "Borrar" : "Delete",
+                danger: true,
+            }))) return;
             const res = await fetch(`/api/chat/${msgId}`, { method: "DELETE" });
             if (res.ok) {
                 wrapper.remove();
             } else {
-                alert(isEs ? "No se pudo borrar el mensaje." : "Could not delete the message.");
+                showToast(isEs ? "No se pudo borrar el mensaje." : "Could not delete the message.", "error", 6000);
             }
         });
 

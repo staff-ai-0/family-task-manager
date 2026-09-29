@@ -218,7 +218,12 @@ const labels = {
                                     {labels.archive}
                                 </button>
                             </form>
-                            <form method="POST" onsubmit={`return confirm('${labels.confirm_delete}')`}>
+                            <form
+                                method="POST"
+                                data-confirm-sheet={labels.confirm_delete}
+                                data-confirm-label={labels.delete}
+                                data-confirm-danger
+                            >
                                 <input type="hidden" name="action" value="delete_list" />
                                 <input type="hidden" name="list_id" value={detail.id} />
                                 <button

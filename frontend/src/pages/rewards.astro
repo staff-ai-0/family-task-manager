@@ -223,7 +223,16 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
                                 </p>
                             </div>
                             <div class="flex gap-2">
-                                <form method="POST" class="flex-1" data-redeem-form data-reward-name={reward.title} data-reward-cost={reward.points_cost}>
+                                <!-- Confirm before spending points; a one-tap redeem let a young kid drain their balance by accident. -->
+                                <form
+                                    method="POST"
+                                    class="flex-1"
+                                    data-redeem-form
+                                    data-confirm-sheet={lang === "es"
+                                        ? `¿Canjear "${reward.title}" por ${reward.points_cost} puntos?`
+                                        : `Redeem "${reward.title}" for ${reward.points_cost} points?`}
+                                    data-confirm-label={lang === "es" ? "Canjear" : "Redeem"}
+                                >
                                     <input type="hidden" name="reward_id" value={reward.id} />
                                     <button
                                         type="submit"
@@ -273,24 +282,3 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
         completed={user.completed_tours}
     />
 </PageLayout>
-
-<script>
-    // Confirm before spending points — a bare one-tap redeem let a young kid
-    // drain their balance by accident.
-    document.addEventListener("astro:page-load", () => {
-        const es = document.documentElement.lang === "es";
-        document.querySelectorAll("form[data-redeem-form]").forEach((form) => {
-            form.addEventListener("submit", (e) => {
-                const f = e.currentTarget as HTMLFormElement;
-                const name = f.dataset.rewardName || "";
-                const cost = f.dataset.rewardCost || "";
-                const msg = es
-                    ? `¿Canjear "${name}" por ${cost} puntos?`
-                    : `Redeem "${name}" for ${cost} points?`;
-                if (!window.confirm(msg)) {
-                    e.preventDefault();
-                }
-            });
-        });
-    });
-</script>

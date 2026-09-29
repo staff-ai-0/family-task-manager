@@ -125,9 +125,11 @@ test.describe('Operator console', () => {
     // on), so running this suite can never switch /budget or /gigs off for the
     // specs that run after it.
     const reason = `e2e audit probe ${Date.now()}`;
-    // Every operator action prompts for a reason before it fires; an unhandled
-    // prompt is auto-dismissed by Playwright and submitAction would bail.
-    page.on('dialog', (d) => d.accept(reason));
+    // Every operator action prompts for a reason before it fires — via the
+    // in-app prompt sheet (submitAction's promptSheet() call +
+    // components/ui/AppDialog.astro), not a native window.prompt() — so
+    // drive the sheet itself: fill the reason (>= 3 chars, submitAction's
+    // own minLength) and confirm.
 
     const form = page.locator('form[data-action$="/modules"]');
     await expect(form).toBeVisible();
@@ -137,6 +139,9 @@ test.describe('Operator console', () => {
       (r) => r.url().includes('/modules') && r.request().method() === 'POST'
     );
     await form.getByRole('button', { name: 'Save modules' }).click();
+    await page.locator('#app-dialog[open]').waitFor();
+    await page.locator('#app-dialog-input').fill(reason);
+    await page.locator('#app-dialog-ok').click();
     expect((await posted).status()).toBe(200);
 
     // submitAction reloads the page on success.

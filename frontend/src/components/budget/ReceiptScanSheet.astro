@@ -190,6 +190,9 @@ const es = lang === "es";
 </div>
 
 <script>
+    import { confirmSheet } from "../../lib/dialogs";
+    import { showToast } from "../../lib/toast";
+
     function initReceiptScanSheet() {
         const root = document.getElementById("receipt-scan-sheet");
         if (!root || (root as any).__rssInit) return;
@@ -282,9 +285,13 @@ const es = lang === "es";
 
                 if (status === 403) {
                     // Premium gate — a real path to upgrade, not a dead end.
-                    const go = confirm(es
-                        ? "El escaneo de recibos requiere un plan Plus o Pro. ¿Ver los planes?"
-                        : "Receipt scanning requires a Plus or Pro plan. See the plans?");
+                    const go = await confirmSheet({
+                        title: es
+                            ? "El escaneo de recibos requiere un plan Plus o Pro"
+                            : "Receipt scanning requires a Plus or Pro plan",
+                        body: es ? "¿Ver los planes?" : "See the plans?",
+                        confirmLabel: es ? "Ver planes" : "See plans",
+                    });
                     if (go) window.location.href = "/parent/settings/subscription";
                     return;
                 }
@@ -299,14 +306,14 @@ const es = lang === "es";
                 if (status >= 400 || !b?.success) {
                     // Surface the backend's real reason (model config, no
                     // accounts) rather than a generic failure.
-                    alert(b?.message || b?.detail || (es ? "Error escaneando." : "Scan failed."));
+                    showToast(b?.message || b?.detail || (es ? "Error escaneando." : "Scan failed."), "error", 6000);
                     return;
                 }
                 showConfirmCard(b);
             } catch {
                 clearInterval(ticker);
                 overlay.classList.add("hidden");
-                alert(es ? "Error escaneando." : "Scan failed.");
+                showToast(es ? "Error escaneando." : "Scan failed.", "error", 6000);
             }
         }
 
@@ -438,11 +445,11 @@ const es = lang === "es";
                     clearInterval(ticker);
                     overlay.classList.add("hidden");
                     if (r2?.success) showConfirmCard(r2);
-                    else alert(es ? "Error guardando." : "Save failed.");
+                    else showToast(es ? "Error guardando." : "Save failed.", "error", 6000);
                 } catch {
                     clearInterval(ticker);
                     overlay.classList.add("hidden");
-                    alert(es ? "Error guardando." : "Save failed.");
+                    showToast(es ? "Error guardando." : "Save failed.", "error", 6000);
                 }
             });
 

@@ -2,6 +2,7 @@
 import "../styles/global.css";
 import { t } from "../lib/i18n";
 import ToastContainer from "../components/ToastContainer.astro";
+import AppDialog from "../components/ui/AppDialog.astro";
 import Head from "../components/meta/Head.astro";
 interface Props {
 	title?: string;
@@ -46,6 +47,52 @@ const resolvedUiMode = uiMode
 <!doctype html>
 <html lang={lang} data-theme={theme === "dark" ? "dark" : undefined}>
 	<head>
+		<script is:inline>
+			// UX-B1 fail-safe (F1): Astro streams <body> before AppDialog's
+			// module script finishes registering its own submit/click
+			// intercepts (BottomNav's backend calls delay it) — so a
+			// data-confirm-sheet form/button is briefly tappable with NO
+			// confirm gating at all. This must be is:inline (not bundled or
+			// hoisted by Astro) so it parses and runs before ANY body
+			// markup, and it must be plain ES5: nothing here can rely on
+			// build tooling. While window.ftmDialogs is undefined (the real
+			// host, registered by AppDialog.astro, isn't ready yet) it
+			// blocks the same taps the host would normally intercept — a
+			// tap during that window does nothing (the spec's fail-safe
+			// rule), never a real submit/click. Once the host exists this
+			// is a permanent no-op; the host's own listeners take over and
+			// this guard never sees a declarative-confirm replay (replay
+			// only happens after the host has already resolved a confirm,
+			// i.e. only once the host — and window.ftmDialogs — exist).
+			(function () {
+				function hostMissing() {
+					return !window.ftmDialogs;
+				}
+				document.addEventListener(
+					"submit",
+					function (e) {
+						if (!hostMissing()) return;
+						var form = e.target;
+						if (!form || !form.hasAttribute || !form.hasAttribute("data-confirm-sheet")) return;
+						e.preventDefault();
+						e.stopImmediatePropagation();
+					},
+					true,
+				);
+				document.addEventListener(
+					"click",
+					function (e) {
+						if (!hostMissing()) return;
+						var target = e.target;
+						var el = target && target.closest && target.closest("a[data-confirm-sheet], button[data-confirm-sheet]");
+						if (!el) return;
+						e.preventDefault();
+						e.stopImmediatePropagation();
+					},
+					true,
+				);
+			})();
+		</script>
 		<Head
 			title={title}
 			description={description}
@@ -71,6 +118,7 @@ const resolvedUiMode = uiMode
 	</head>
 <body class="bg-brand-cream text-brand-ink antialiased" data-ui-mode={resolvedUiMode}>
     <ToastContainer />
+    <AppDialog />
 
     <!-- Email verification prompts render per-page via VerifyEmailBanner.astro
          (dashboard) — the old global #verify-banner strip lived here and

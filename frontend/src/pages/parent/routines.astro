@@ -311,7 +311,11 @@ const L = {
 
         document.querySelectorAll(".del-routine").forEach((btn) => {
             btn.addEventListener("click", async () => {
-                if (!confirm(L.confirm_del)) return;
+                if (!(await window.ftmDialogs?.confirmSheet({
+                    title: L.confirm_del,
+                    confirmLabel: L.del,
+                    danger: true,
+                }))) return;
                 try {
                     await api("/api/routines/" + btn.dataset.id, { method: "DELETE" });
                     location.reload();

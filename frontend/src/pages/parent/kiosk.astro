@@ -250,7 +250,7 @@ function timeAgo(iso: string | null): string {
                                 {baseUrl}/kiosk?token={d.token.slice(0, 12)}…
                             </code>
                         </div>
-                        <form method="POST" onsubmit={`return confirm('${labels.confirm}')`}>
+                        <form method="POST" data-confirm-sheet={labels.confirm} data-confirm-label={labels.revoke} data-confirm-danger>
                             <input type="hidden" name="action" value="delete" />
                             <input type="hidden" name="device_id" value={d.id} />
                             <button

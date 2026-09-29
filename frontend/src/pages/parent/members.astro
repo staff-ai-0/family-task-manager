@@ -404,7 +404,9 @@ if (!joinCodeOk && joinCodeError) {
                       <form
                         method="POST"
                         class="inline-flex"
-                        onsubmit={`return confirm('${lang === "es" ? "¿Rechazar esta solicitud? La cuenta será eliminada." : "Reject this request? The account will be deleted."}');`}
+                        data-confirm-sheet={lang === "es" ? "¿Rechazar esta solicitud? La cuenta será eliminada." : "Reject this request? The account will be deleted."}
+                        data-confirm-label={lang === "es" ? "Rechazar" : "Reject"}
+                        data-confirm-danger
                       >
                         <input type="hidden" name="action" value="reject_member" />
                         <input type="hidden" name="member_id" value={m.id} />
@@ -496,11 +498,7 @@ if (!joinCodeOk && joinCodeError) {
                   method="POST"
                   class="inline-flex"
                   data-member-name={m.name}
-                  onsubmit={`const n=this.dataset.memberName;const v=prompt(${JSON.stringify(
-                    lang === "es"
-                      ? "Borrado PERMANENTE (tareas, puntos e historial). Escribe el nombre exacto para confirmar:"
-                      : "PERMANENT deletion (tasks, points, history). Type the exact name to confirm:",
-                  )}+"\\n\\n"+n);if(v===null||v.trim()!==n.trim())return false;this.querySelector('[name=confirm_name]').value=v;return true;`}
+                  data-typed-delete
                 >
                   <input type="hidden" name="action" value="delete" />
                   <input type="hidden" name="member_id" value={m.id} />
@@ -596,8 +594,41 @@ if (!joinCodeOk && joinCodeError) {
 
   <script>
     import { showToast } from '../../lib/toast';
+    import { confirmSheet, promptSheet } from '../../lib/dialogs';
+
+    function initTypedDelete() {
+        document.querySelectorAll<HTMLFormElement>("form[data-typed-delete]").forEach((form) => {
+            if (form.dataset.bound === "1") return;
+            form.dataset.bound = "1";
+            form.addEventListener("submit", async (e) => {
+                if (form.dataset.typedOk === "1") {
+                    delete form.dataset.typedOk;
+                    return;
+                }
+                e.preventDefault();
+                const name = form.dataset.memberName ?? "";
+                const es = document.documentElement.lang === "es";
+                const typed = await promptSheet({
+                    title: es ? `¿Eliminar a ${name} para siempre?` : `Delete ${name} permanently?`,
+                    body: es
+                        ? "Borrado PERMANENTE (tareas, puntos e historial). Escribe el nombre exacto para confirmar."
+                        : "PERMANENT deletion (tasks, points, history). Type the exact name to confirm.",
+                    label: es ? "Nombre del miembro" : "Member name",
+                    placeholder: name,
+                    requireMatch: name,
+                    danger: true,
+                    confirmLabel: es ? "Eliminar" : "Delete",
+                });
+                if (typed === null) return;
+                form.querySelector<HTMLInputElement>("[name=confirm_name]")!.value = typed;
+                form.dataset.typedOk = "1";
+                form.requestSubmit();
+            });
+        });
+    }
 
     document.addEventListener('astro:page-load', () => {
+    initTypedDelete();
     // Open invitation modal
     document.getElementById('open-invitation-modal')?.addEventListener('click', () => {
       const modal = document.getElementById('invitation-modal');
@@ -666,7 +697,12 @@ if (!joinCodeOk && joinCodeError) {
     // credentials:'include' — the proxy reads it server-side (locals.token),
     // so we must NOT try to read access_token from document.cookie here.
     (window as any).cancelInvitation = async (invitationId: string, familyId: string, lang = 'en', btn?: HTMLButtonElement) => {
-      if (!confirm(lang === "es" ? "¿Cancelar esta invitación?" : "Cancel this invitation?")) {
+      if (!(await confirmSheet({
+        title: lang === "es" ? "¿Cancelar esta invitación?" : "Cancel this invitation?",
+        confirmLabel: lang === "es" ? "Cancelar invitación" : "Cancel invitation",
+        cancelLabel: lang === "es" ? "Volver" : "Back",
+        danger: true,
+      }))) {
         return;
       }
       try {

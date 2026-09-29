@@ -443,6 +443,8 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 
 <script>
 import { createDialog } from "../../lib/dialog";
+import { confirmSheet } from "../../lib/dialogs";
+import { showToast } from "../../lib/toast";
 
 const lang = document.cookie.split(";").find(c => c.trim().startsWith("lang="))?.split("=")[1] ?? "es";
 const modal = document.getElementById("gig-modal")!;
@@ -562,7 +564,7 @@ form.addEventListener("submit", async (e) => {
     } else {
         const err = await res.json().catch(() => ({ detail: "Error" }));
         btn.disabled = false;
-        alert(err.detail ?? "Error");
+        showToast(err.detail ?? "Error", "error", 6000);
     }
 });
 
@@ -571,7 +573,11 @@ document.querySelectorAll<HTMLElement>("[data-proposal-card]").forEach(card => {
     card.querySelectorAll<HTMLButtonElement>("[data-proposal-action]").forEach(btn => {
         btn.addEventListener("click", async () => {
             const approve = btn.dataset.proposalAction === "approve";
-            if (!approve && !confirm(lang === "es" ? "¿Rechazar esta propuesta?" : "Reject this proposal?")) return;
+            if (!approve && !(await confirmSheet({
+                title: lang === "es" ? "¿Rechazar esta propuesta?" : "Reject this proposal?",
+                confirmLabel: lang === "es" ? "Rechazar" : "Reject",
+                danger: true,
+            }))) return;
             const id = card.dataset.id;
             const pointsInput = card.querySelector<HTMLInputElement>("[data-proposal-points]");
             const notesInput = card.querySelector<HTMLInputElement>("[data-proposal-notes]");
@@ -592,7 +598,7 @@ document.querySelectorAll<HTMLElement>("[data-proposal-card]").forEach(card => {
             } else {
                 const err = await res.json().catch(() => ({ detail: "Error" }));
                 btn.disabled = false;
-                alert(err.detail ?? "Error");
+                showToast(err.detail ?? "Error", "error", 6000);
             }
         });
     });
@@ -600,7 +606,10 @@ document.querySelectorAll<HTMLElement>("[data-proposal-card]").forEach(card => {
 
 document.querySelectorAll(".archive-gig-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
-        if (!confirm(lang === "es" ? `¿Archivar esta ${termOne.toLowerCase()}?` : `Archive this ${termOne.toLowerCase()}?`)) return;
+        if (!(await confirmSheet({
+            title: lang === "es" ? `¿Archivar esta ${termOne.toLowerCase()}?` : `Archive this ${termOne.toLowerCase()}?`,
+            confirmLabel: lang === "es" ? "Archivar" : "Archive",
+        }))) return;
         const b = btn as HTMLElement;
         const res = await fetch(`/api/gigs/offerings/${b.dataset.id}`, { method: "DELETE" });
         if (res.ok) {
@@ -612,7 +621,7 @@ document.querySelectorAll(".archive-gig-btn").forEach(btn => {
             }
         } else {
             const err = await res.json().catch(() => ({ detail: "Error" }));
-            alert(err.detail ?? "Error");
+            showToast(err.detail ?? "Error", "error", 6000);
         }
     });
 });

@@ -299,7 +299,7 @@ const i18n = {
                 const gig_ids = ids("gig");
                 const reward_ids = ids("reward");
                 if (!chore_ids.length && !gig_ids.length && !reward_ids.length) {
-                    alert(i18n.nothingSelected);
+                    window.ftmDialogs?.toast(i18n.nothingSelected, "info");
                     return;
                 }
                 const original = btn.innerHTML;

@@ -647,6 +647,9 @@ document.addEventListener("astro:after-swap", initReportTabs);
 </script>
 
 <script>
+import { confirmSheet } from "../../lib/dialogs";
+import { showToast } from "../../lib/toast";
+
 // Custom reports: list chips, run (render table), create, delete.
 function initCustomReports() {
     if ((window as any).__crInit) return;
@@ -703,7 +706,11 @@ function initCustomReports() {
                 // ✕ alone announces as a bare "button" — name the report it deletes.
                 del.setAttribute("aria-label", es ? `Borrar reporte ${r.name}` : `Delete report ${r.name}`);
                 del.addEventListener("click", async () => {
-                    if (!confirm(es ? `¿Borrar reporte "${r.name}"?` : `Delete report "${r.name}"?`)) return;
+                    if (!(await confirmSheet({
+                        title: es ? `¿Borrar reporte "${r.name}"?` : `Delete report "${r.name}"?`,
+                        confirmLabel: es ? "Eliminar" : "Delete",
+                        danger: true,
+                    }))) return;
                     await fetch(`/api/budget/custom-reports/${r.id}`, { method: "DELETE" });
                     loadReports();
                 });
@@ -720,7 +727,7 @@ function initCustomReports() {
 
     document.getElementById("cr-save")?.addEventListener("click", async () => {
         const name = (document.getElementById("cr-name") as HTMLInputElement).value.trim();
-        if (!name) { alert(es ? "Ponle nombre al reporte." : "Name the report."); return; }
+        if (!name) { showToast(es ? "Ponle nombre al reporte." : "Name the report.", "info"); return; }
         const res = await fetch("/api/budget/custom-reports/", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -739,7 +746,7 @@ function initCustomReports() {
             loadReports();
         } else {
             const e = await res.json().catch(() => ({}));
-            alert((e as any).message || (e as any).detail || (es ? "No se pudo guardar." : "Could not save."));
+            showToast((e as any).message || (e as any).detail || (es ? "No se pudo guardar." : "Could not save."), "error", 6000);
         }
     });
 }

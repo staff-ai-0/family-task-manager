@@ -730,6 +730,7 @@ const weekdays = es
     import { mutate } from "../../../lib/mutate";
     import { showToast } from "../../../lib/toast";
     import { createDialog } from "../../../lib/dialog";
+    import { confirmSheet } from "../../../lib/dialogs";
 
     // Star Mode toggle + savings-goal set/approve/clear (parent).
     document.addEventListener("astro:page-load", () => {
@@ -779,7 +780,11 @@ const weekdays = es
                 const block = btn.closest("[data-goal-block]") as HTMLElement;
                 const id = block?.dataset.goalId;
                 if (!id) return;
-                if (!confirm(es ? "¿Quitar esta meta?" : "Remove this goal?")) return;
+                if (!(await confirmSheet({
+                    title: es ? "¿Quitar esta meta?" : "Remove this goal?",
+                    confirmLabel: es ? "Quitar" : "Remove",
+                    danger: true,
+                }))) return;
                 const res = await mutate(`/api/bank/goals/${id}`, {
                     method: "DELETE",
                     errorFallback: es ? "No se pudo quitar" : "Could not remove",

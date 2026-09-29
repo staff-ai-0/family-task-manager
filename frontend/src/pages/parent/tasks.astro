@@ -246,7 +246,8 @@ function freqLabel(tmpl: any): string {
                             size="sm"
                             type="submit"
                             class="w-full"
-                            onclick={`return confirm('${t(lang, "shuffle_confirm")}')`}
+                            data-confirm-sheet={t(lang, "shuffle_confirm")}
+                            data-confirm-label={lang === "es" ? "Mezclar" : "Shuffle"}
                         >
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -361,7 +362,9 @@ function freqLabel(tmpl: any): string {
                                             <input type="hidden" name="template_id" value={tmpl.id} />
                                             <button
                                                 type="submit"
-                                                onclick={`return confirm('${t(lang, "pt_delete_confirm")}')`}
+                                                data-confirm-sheet={t(lang, "pt_delete_confirm")}
+                                                data-confirm-label={lang === "es" ? "Eliminar" : "Delete"}
+                                                data-confirm-danger
                                                 class="h-8 w-8 rounded-lg bg-brand-cream-deep hover:bg-red-100 text-brand-ink-soft hover:text-red-500 flex items-center justify-center transition-colors"
                                             >
                                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
