@@ -159,6 +159,10 @@
         dlg.addEventListener("click", (e) => {
             if (e.target === dlg) finish(cancelled());
         });
+        // Keep keyboard shortcuts (BottomNav, MoreSheet, budget page hotkeys) from
+        // firing behind the modal sheet. The native `cancel` event on Esc still
+        // fires (it's dispatched on `dlg` directly, not reached via bubbling here).
+        dlg.addEventListener("keydown", (e) => e.stopPropagation());
         input.addEventListener("input", validate);
 
         // Declarative confirms: <form data-confirm-sheet="…"> and
@@ -176,10 +180,15 @@
                     return;
                 }
                 e.preventDefault();
+                e.stopImmediatePropagation();
                 const submitter = (e as SubmitEvent).submitter;
                 if (await confirmSheet(opts)) {
                     form.dataset.confirmSheetOk = "1";
-                    form.requestSubmit(submitter instanceof HTMLElement && (submitter as HTMLButtonElement).form === form ? submitter : undefined);
+                    try {
+                        form.requestSubmit(submitter instanceof HTMLElement && (submitter as HTMLButtonElement).form === form ? submitter : undefined);
+                    } finally {
+                        delete form.dataset.confirmSheetOk;
+                    }
                 }
             },
             true,
@@ -199,7 +208,11 @@
                 e.stopImmediatePropagation();
                 if (await confirmSheet(opts)) {
                     el.dataset.confirmSheetOk = "1";
-                    el.click();
+                    try {
+                        el.click();
+                    } finally {
+                        delete el.dataset.confirmSheetOk;
+                    }
                 }
             },
             true,
