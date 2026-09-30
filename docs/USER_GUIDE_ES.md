@@ -2460,7 +2460,7 @@ Jarvis es el copiloto de IA de su familia — un asistente de chat que responde 
 ## 25.1 Abrir Jarvis
 
 1. Abra **Más** → **Jarvis** (`/parent/jarvis`)
-2. Vera la pantalla **🤖 Jarvis** ("Copiloto familiar — pregunta lo que sea")
+2. Vera la pantalla **Jarvis** ("Copiloto familiar — pregunta lo que sea")
 3. La primera vez: **"Sin mensajes aun. Preguntale algo a Jarvis."**
 
 ## 25.2 Conversar con Jarvis

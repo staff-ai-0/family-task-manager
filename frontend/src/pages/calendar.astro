@@ -1,5 +1,6 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
+import Icon from "@components/ui/Icon.astro";
 import { apiFetch } from "../lib/api";
 import { dayKeyInTz, fmtTime } from "../lib/datetime";
 import { t } from "../lib/i18n";
@@ -182,14 +183,15 @@ const sourceIcon = (src: string): string => {
         {user.role === "parent" && (
             <a
                 href="/calendar/scan"
-                class="px-3 py-1.5 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-400 text-xs font-bold whitespace-nowrap shadow-[var(--shadow-card)]"
+                class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white text-brand-ink border-2 border-brand-ink hover:bg-brand-cream text-xs font-bold whitespace-nowrap shadow-[var(--shadow-card)]"
             >
-                📄 {labels.scan_cta}
+                <Icon name="document" class="h-4 w-4" />
+                {labels.scan_cta}
             </a>
         )}
         <a
             href="/calendar/month"
-            class="px-3 py-1.5 rounded-lg bg-brand-ink/10 hover:bg-brand-ink/10 text-xs font-semibold whitespace-nowrap"
+            class="px-3 py-1.5 rounded-lg bg-brand-ink/10 hover:bg-brand-ink/15 text-xs font-semibold whitespace-nowrap"
         >
             {lang === "es" ? "Vista mes" : "Month view"}
         </a>

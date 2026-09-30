@@ -136,7 +136,7 @@ function isToday(d: Date): boolean {
     <!-- Header (week-navigator widget — page-owned via header slot) -->
     <header slot="header" class={`${headerToneClass("sky")} pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]`}>
             <div class="flex items-center gap-3 mb-4">
-                <a href="/parent" class="text-brand-ink transition-colors">
+                <a href="/parent" class="p-1 -m-1 rounded-lg text-brand-ink hover:bg-brand-ink/10 transition-colors">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
@@ -150,7 +150,7 @@ function isToday(d: Date): boolean {
             <div class="flex items-center justify-between mt-4 bg-brand-ink/10 backdrop-blur-md rounded-xl px-4 py-3 border border-brand-ink/20">
                 <a
                     href={`/parent/assignments?week=${prevWeek}${memberFilter !== "all" ? `&member=${memberFilter}` : ""}`}
-                    class="text-brand-ink transition-colors p-1"
+                    class="text-brand-ink hover:bg-brand-ink/10 rounded-lg transition-colors p-1"
                     title={t(lang, "pac_prev_week")}
                 >
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -163,7 +163,7 @@ function isToday(d: Date): boolean {
                 </div>
                 <a
                     href={`/parent/assignments?week=${nextWeek}${memberFilter !== "all" ? `&member=${memberFilter}` : ""}`}
-                    class="text-brand-ink transition-colors p-1"
+                    class="text-brand-ink hover:bg-brand-ink/10 rounded-lg transition-colors p-1"
                     title={t(lang, "pac_next_week")}
                 >
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

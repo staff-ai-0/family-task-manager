@@ -9,7 +9,7 @@ const read = (p: string) => readFileSync(fileURLToPath(new URL(`../src/${p}`, im
 const EXPECTED = [
     "bell", "pet", "meals", "shopping", "calendar", "chat", "dm", "profile", "members", "rewards",
     "consequences", "assignments", "jarvis", "kiosk", "operator", "settings", "tasks", "payouts",
-    "analytics", "help", "support", "routines", "back", "close", "language", "logout",
+    "analytics", "help", "support", "routines", "back", "close", "language", "logout", "document",
 ];
 
 describe("ICONS — the one line-icon set", () => {
@@ -27,6 +27,14 @@ describe("chrome renders through Icon", () => {
         expect(src).toMatch(/import Icon from "\.\/ui\/Icon\.astro"/);
         expect(src).not.toMatch(/const I\s*=\s*\{/);
         expect(src).not.toMatch(/<svg\b/);
+    });
+    it("calendar header action is a line icon on an on-palette pill (F-6)", () => {
+        const src = read("pages/calendar.astro");
+        const actions = src.slice(src.indexOf('slot="actions"'), src.indexOf('slot="header-extra"'));
+        expect(actions).toMatch(/<Icon name="document"/);
+        expect(actions).not.toMatch(/\p{Extended_Pictographic}/u);
+        expect(actions).not.toMatch(/fuchsia/);
+        expect(actions).toMatch(/bg-white text-brand-ink border-2 border-brand-ink/);
     });
     it("PageHeader back link uses Icon", () => {
         const src = read("components/ui/PageHeader.astro");
