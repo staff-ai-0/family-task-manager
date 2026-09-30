@@ -67,18 +67,17 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
 
 <PageLayout
     title={t(lang, "rewards_title") as string}
-    headerClass="bg-gradient-to-br from-amber-500 to-orange-500"
-    dark
+    tone="coral"
     role={user.role}
     active="rewards"
     lang={lang as "en" | "es"}
 >
     <div slot="header-extra">
-        <p class="text-amber-100 text-sm mt-1 mb-5">
+        <p class="text-brand-ink text-sm mt-1 mb-5">
             {t(lang, "rewards_subtitle")}
         </p>
         <div
-            class="bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 flex items-center gap-4 border border-white/30"
+            class="bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 flex items-center gap-4 border border-brand-ink/20"
         >
             <div class="bg-brand-sun p-3 rounded-xl">
                 <svg
@@ -97,7 +96,7 @@ if (flashError) Astro.cookies.delete("flash_error", { path: "/" });
             </div>
             <div>
                 <p
-                    class="text-amber-100 text-xs font-semibold uppercase tracking-wider"
+                    class="text-brand-ink text-xs font-semibold uppercase tracking-wider"
                 >
                     {t(lang, "rewards_available_points")}
                 </p>

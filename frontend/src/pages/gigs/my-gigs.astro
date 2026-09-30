@@ -38,9 +38,7 @@ const sl = (s: string) => statusLabel[s]?.[lang] ?? s;
 
 <PageLayout
     title={lang === "es" ? `Mis ${gt.Many}` : `My ${gt.Many}`}
-    headerClass="bg-gradient-to-br from-violet-700 to-violet-500"
-    dark
-    backClass="text-violet-200 hover:text-white"
+    tone="sun"
     backHref="/gigs"
     backLabel={lang === "es" ? `Tablero de ${gt.Many}` : `${gt.One} Board`}
     role={user.role?.toLowerCase()}

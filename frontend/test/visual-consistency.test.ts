@@ -37,13 +37,13 @@ const GLOBAL_RULES: RuleId[] = ["dark-theme", "header-class-prop"];
  */
 const ALLOWANCE: Record<RuleId, number> = {
     "header-gradient": 6,
-    "light-text-in-header": 46,
-    "white-on-brand-fill": 104,
+    "light-text-in-header": 34,
+    "white-on-brand-fill": 103,
     "deep-text": 308,
     "faint-text": 1,
     "h1-emoji": 7,
     "dark-theme": 0,
-    "header-class-prop": 36,
+    "header-class-prop": 4,
 };
 
 function walk(dir: string): string[] {

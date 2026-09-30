@@ -34,9 +34,7 @@ const byKey = (row: any): Record<string, any> => {
 
 <PageLayout
     title={es ? "Sobres de mis hijos" : "Kids' envelopes"}
-    headerClass="bg-gradient-to-br from-brand-mint-deep to-brand-mint"
-    dark
-    backClass="text-white/80 hover:text-white"
+    tone="mint"
     backHref="/parent/settings"
     backLabel={es ? "Volver" : "Back"}
     role={user.role}

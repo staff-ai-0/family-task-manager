@@ -80,9 +80,7 @@ const members: any[] = family?.members ?? [];
 
 <PageLayout
     title={t(lang, "pc_title") as string}
-    headerClass="bg-gradient-to-br from-rose-700 to-red-600"
-    dark
-    backClass="text-rose-200"
+    tone="coral"
     backHref="/parent"
     backLabel={t(lang, "back_parent") as string}
     role={user.role}
@@ -90,7 +88,7 @@ const members: any[] = family?.members ?? [];
     lang={lang as "en" | "es"}
     mainClass="flex-1 px-4 py-6 space-y-6"
 >
-    <p slot="header-extra" class="text-rose-200 text-sm mt-1">
+    <p slot="header-extra" class="text-brand-ink text-sm mt-1">
         {(t(lang, "pc_total_count") as Function)(consequences.length)}
     </p>
             {

@@ -76,8 +76,7 @@ const L = {
 
 <PageLayout
     title={`⛅ ${L.title}`}
-    headerClass="bg-gradient-to-br from-brand-sky to-brand-mint"
-    dark
+    tone="sky"
     role={user.role}
     active="parent"
     lang={lang}
@@ -86,7 +85,7 @@ const L = {
     containerClass="w-full max-w-md md:max-w-3xl mx-auto bg-brand-cream-deep"
 >
     <div slot="header-extra">
-        <p class="text-sm/relaxed opacity-90">{L.subtitle}</p>
+        <p class="text-sm/relaxed">{L.subtitle}</p>
     </div>
 
     <div id="routines-toast" class="fixed left-1/2 -translate-x-1/2 bottom-24 z-[60] hidden px-4 py-2 rounded-full bg-brand-ink text-brand-cream text-sm font-semibold shadow-[var(--shadow-card)]"></div>

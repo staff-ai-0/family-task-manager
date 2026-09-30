@@ -63,9 +63,7 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
 
 <PageLayout
     title={t(lang, "pr_title") as string}
-    headerClass="bg-gradient-to-br from-amber-600 to-orange-500"
-    dark
-    backClass="text-amber-200 hover:text-white"
+    tone="coral"
     backHref="/parent"
     backLabel={t(lang, "back_parent") as string}
     role={user.role}
@@ -73,7 +71,7 @@ const rewards: any[] = Array.isArray(rewardsRaw) ? rewardsRaw : [];
     lang={lang}
     mainClass="flex-1 px-4 py-6 space-y-6"
 >
-    <p slot="header-extra" class="text-amber-100 text-sm mt-1">
+    <p slot="header-extra" class="text-brand-ink text-sm mt-1">
         {t(lang, "pr_active_rewards")(rewards.length)}
     </p>
             {
