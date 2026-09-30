@@ -33,7 +33,8 @@ export type RuleId =
     | "faint-text"
     | "h1-emoji"
     | "dark-theme"
-    | "header-class-prop";
+    | "header-class-prop"
+    | "hover-text-vanishes";
 
 export const RULE_IDS: readonly RuleId[] = [
     "header-gradient",
@@ -46,6 +47,7 @@ export const RULE_IDS: readonly RuleId[] = [
     "h1-emoji",
     "dark-theme",
     "header-class-prop",
+    "hover-text-vanishes",
 ];
 
 /** One-shot codemod regex (UX-B3 Task 6): text-brand-X-deep → text-brand-X-text. */
@@ -95,6 +97,15 @@ const SLOT_HEADER_OPEN = /<([A-Za-z][\w.:-]*)\b([^>]*?(?<![\w-])slot=["']header[
 const H1_BLOCK = /<h1\b[^>]*>([\s\S]*?)<\/h1>/g;
 // PageLayout/PageHeader render their `title` prop as the page <h1>.
 const TITLE_ATTR = /<(?:PageLayout|PageHeader)\b[^>]*?\btitle=(\{`[^`]*`\}|\{[^}]*\}|"[^"]*")/g;
+// A hover fill in the same color as the resting text, with no hover text swap:
+// the label disappears on hover (and stays gone on iOS, where hover sticks after a tap).
+const QUOTED_SEGMENT = /"([^"\n]*)"|'([^'\n]*)'|`([^`\n]*)`/g;
+const SAME_COLOR_PAIRS: [string, string][] = [
+    ["hover:bg-brand-ink", "text-brand-ink"],
+    ["hover:bg-white", "text-white"],
+    ["hover:bg-brand-cream", "text-brand-cream"],
+];
+
 // CSS declaration blocks (.css files, <style> blocks): brand background + white text.
 const CSS_BLOCK = /\{([^{}]*)\}/g;
 const CSS_BRAND_BG = /background(?:-color)?\s*:\s*var\(\s*--color-brand-(?:sky|mint|coral|sun)(?:-deep)?(?![\w-])/;
@@ -575,6 +586,17 @@ export function scanVisual(raw: string): Hit[] {
             hits.push({ rule: "h1-emoji", line: lineAt(text, (m.index ?? 0) + m[0].length - m[1].length), match: "title=" });
         }
     }
+
+    text.split("\n").forEach((l, i) => {
+        for (const q of l.matchAll(QUOTED_SEGMENT)) {
+            const tokens = new Set((q[1] ?? q[2] ?? q[3] ?? "").split(/[\s"'`{}]+/));
+            if ([...tokens].some((t) => t.startsWith("hover:text-"))) continue;
+            if (SAME_COLOR_PAIRS.some(([hover, txt]) => tokens.has(hover) && tokens.has(txt))) {
+                hits.push({ rule: "hover-text-vanishes", line: i + 1, match: q[0].slice(0, 60) });
+                break;
+            }
+        }
+    });
 
     for (const m of text.matchAll(CSS_BLOCK)) {
         const body = m[1];

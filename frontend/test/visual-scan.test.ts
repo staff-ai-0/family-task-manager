@@ -450,3 +450,22 @@ describe("scanVisual — h1-emoji via PageLayout / PageHeader title", () => {
         expect(rules(src, "h1-emoji")).toEqual([]);
     });
 });
+
+describe("scanVisual — hover-text-vanishes", () => {
+    it("flags a hover fill in the same color as the text with no hover text swap", () => {
+        const src = [
+            '<button class="w-full bg-brand-sun-deep hover:bg-brand-ink text-brand-ink">Redeem</button>',
+            'class={`w-full ${ok ? "bg-brand-sun-deep hover:bg-brand-ink text-brand-ink" : "bg-slate-200"}`}',
+            '<a class="bg-brand-ink hover:bg-white text-white">x</a>',
+        ].join("\n");
+        expect(rules(src, "hover-text-vanishes").map((h) => h.line)).toEqual([1, 2, 3]);
+    });
+    it("leaves hovers with a text swap or a different color alone", () => {
+        const src = [
+            '<button class="bg-brand-sun-deep hover:bg-brand-ink text-brand-ink hover:text-brand-cream">a</button>',
+            '<button class="bg-brand-sun-deep hover:bg-brand-sun text-brand-ink">b</button>',
+            '<button class="bg-brand-ink text-white hover:bg-brand-ink/90">c</button>',
+        ].join("\n");
+        expect(rules(src, "hover-text-vanishes")).toEqual([]);
+    });
+});

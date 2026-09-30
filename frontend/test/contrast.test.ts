@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { contrastRatio, mix } from "./support/contrast";
+import { contrastRatio, mix, parseModeOverrides } from "./support/contrast";
 
 const CSS = readFileSync(fileURLToPath(new URL("../src/styles/global.css", import.meta.url)), "utf8");
 const AA = 4.5;
@@ -33,17 +33,27 @@ describe("mix", () => {
     });
 });
 
-/** --color-brand-* overrides declared in each `body[data-ui-mode="<mode>"] { … }` block. */
-function modeOverrides(): Record<string, Record<string, string>> {
-    const modes: Record<string, Record<string, string>> = { default: {} };
-    for (const m of CSS.matchAll(/body\[data-ui-mode="([a-z]+)"\]\s*\{([^}]*)\}/g)) {
-        const vars = (modes[m[1]] ??= {});
-        for (const v of m[2].matchAll(/--color-brand-([a-z-]+):\s*(#[0-9A-Fa-f]{6})/g)) vars[v[1]] = v[2];
-    }
-    return modes;
-}
+describe("parseModeOverrides", () => {
+    const THEME = "@theme {\n  --color-brand-sky: #4FB8E6;\n}\n";
+    it("reads hex overrides per body[data-ui-mode] block", () => {
+        const css = THEME + 'body[data-ui-mode="adult"] {\n  --color-brand-cream: #FAFAFA;\n}\n';
+        expect(parseModeOverrides(css)).toEqual({ default: {}, adult: { cream: "#FAFAFA" } });
+    });
+    it("refuses a brand override it cannot check (oklch / var / short hex)", () => {
+        for (const v of ["oklch(0.6 0.2 250)", "var(--color-indigo-500)", "#fff"]) {
+            const css = THEME + `body[data-ui-mode="teen"] {\n  --color-brand-coral: ${v};\n}\n`;
+            expect(() => parseModeOverrides(css), v).toThrow(/#RRGGBB/);
+        }
+    });
+    it("refuses a brand override outside @theme that no body[data-ui-mode] block covers", () => {
+        for (const sel of ['[data-ui-mode="teen"] body', 'body[data-ui-mode="teen"], .x', "body[data-ui-mode='teen']"]) {
+            const css = THEME + `${sel} {\n  --color-brand-coral: #5C7CFA;\n}\n`;
+            expect(() => parseModeOverrides(css), sel).toThrow(/not in a parsed/);
+        }
+    });
+});
 
-const MODES = modeOverrides();
+const MODES = parseModeOverrides(CSS);
 
 it("parses the default and adult UI modes", () => {
     expect(Object.keys(MODES)).toEqual(expect.arrayContaining(["default", "adult"]));
