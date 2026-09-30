@@ -23,6 +23,7 @@ import {
     formatDate,
 } from "@lib/api/budget";
 import { t } from "@lib/i18n";
+import { buttonClass } from "@lib/buttonClasses";
 
 // --- Auth ---
 const token = Astro.cookies.get("access_token")?.value;
@@ -176,7 +177,7 @@ const reportsLocked = planName === "free";
                         <option value="last_365">{es ? "Últimos 12 meses" : "Last 12 months"}</option>
                     </select>
                 </div>
-                <button id="cr-save" class="w-full py-2 text-sm font-bold rounded-lg bg-brand-sky-deep text-white hover:bg-brand-ink transition">
+                <button id="cr-save" class={`${buttonClass("secondary", "sm")} w-full`}>
                     {es ? "Guardar reporte" : "Save report"}
                 </button>
             </div>
@@ -318,7 +319,7 @@ const reportsLocked = planName === "free";
                             type="button"
                             class={`horizon-btn px-3 py-1 rounded-full text-xs font-bold transition-colors ${
                                 horizon === h
-                                    ? "bg-brand-sky-deep text-white"
+                                    ? "bg-brand-sky-deep text-brand-ink"
                                     : "bg-brand-cream-deep text-brand-ink-soft"
                             }`}
                             data-horizon={h}
@@ -589,7 +590,7 @@ function initReportTabs() {
                 const btn = t as HTMLElement;
                 const isActive = btn.dataset.tab === id;
                 btn.classList.toggle("bg-brand-sky-deep", isActive);
-                btn.classList.toggle("text-white", isActive);
+                btn.classList.toggle("text-brand-ink", isActive);
                 btn.classList.toggle("bg-brand-cream-deep", !isActive);
                 btn.classList.toggle("text-brand-ink-soft", !isActive);
             });

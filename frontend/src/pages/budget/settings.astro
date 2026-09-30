@@ -8,6 +8,7 @@ import SettingsAccordion from "@components/SettingsAccordion.astro";
 import { apiFetch } from "@lib/api";
 import { fmtDate } from "@lib/datetime";
 import { formatCurrency } from "@lib/api/budget";
+import { buttonClass } from "@lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -97,10 +98,10 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- ACCOUNTS -->
         <SettingsAccordion id="accounts" title={es ? "Cuentas" : "Accounts"} icon="🏦">
             <div class="flex justify-end gap-2 mb-3">
-                <button onclick="openTransferModal()" class="px-3 py-1.5 border border-brand-sky-deep text-brand-sky-text hover:bg-brand-sky-deep hover:text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openTransferModal()" class={buttonClass("secondary", "sm")}>
                     ⇄ {es ? "Transferir" : "Transfer"}
                 </button>
-                <button onclick="openAccountModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openAccountModal()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nueva cuenta" : "New account"}
                 </button>
             </div>
@@ -146,7 +147,7 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- CATEGORIES -->
         <SettingsAccordion id="categories" title={es ? "Categorías" : "Categories"} icon="🏷️">
             <div class="flex justify-end mb-3">
-                <button onclick="promptNewGroup()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="promptNewGroup()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nuevo grupo" : "New group"}
                 </button>
             </div>
@@ -214,10 +215,10 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- PAYEES -->
         <SettingsAccordion id="payees" title={es ? "Beneficiarios" : "Payees"} icon="👤">
             <div class="flex justify-end mb-3">
-                <button onclick="openPayeeMerge()" class="px-3 py-1.5 border border-brand-sky-deep text-brand-sky-text hover:bg-brand-sky-deep hover:text-white text-sm font-semibold rounded-lg transition mr-2">
+                <button onclick="openPayeeMerge()" class={`${buttonClass("secondary", "sm")} mr-2`}>
                     ⇉ {es ? "Fusionar" : "Merge"}
                 </button>
-                <button onclick="openPayeeModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openPayeeModal()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nuevo" : "New"}
                 </button>
             </div>
@@ -257,7 +258,7 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- CATEGORIZATION RULES -->
         <SettingsAccordion id="rules" title={es ? "Reglas de categorización" : "Categorization Rules"} icon="🤖">
             <div class="flex justify-end mb-3">
-                <button onclick="openRuleModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openRuleModal()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nueva regla" : "New rule"}
                 </button>
             </div>
@@ -299,10 +300,10 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- RECURRING TRANSACTIONS -->
         <SettingsAccordion id="recurring" title={es ? "Transacciones recurrentes" : "Recurring Transactions"} icon="🔄">
             <div class="flex justify-end gap-2 mb-3">
-                <button onclick="detectSubscriptions()" class="px-3 py-1.5 border border-brand-sky-deep text-brand-sky-text hover:bg-brand-sky-deep hover:text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="detectSubscriptions()" class={buttonClass("secondary", "sm")}>
                     🔍 {es ? "Detectar suscripciones" : "Detect subscriptions"}
                 </button>
-                <button onclick="openRecurringModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openRecurringModal()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nueva" : "New"}
                 </button>
             </div>
@@ -351,7 +352,7 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- GOALS -->
         <SettingsAccordion id="goals" title={es ? "Metas" : "Goals"} icon="🎯">
             <div class="flex justify-end mb-3">
-                <button onclick="openGoalModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openGoalModal()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nueva meta" : "New goal"}
                 </button>
             </div>
@@ -391,7 +392,7 @@ import { serializeForClient } from "@lib/safe-vars";
         <!-- TAGS -->
         <SettingsAccordion id="tags" title={es ? "Etiquetas" : "Tags"} icon="🏷️">
             <div class="flex justify-end mb-3">
-                <button onclick="openTagModal()" class="px-3 py-1.5 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                <button onclick="openTagModal()" class={buttonClass("secondary", "sm")}>
                     + {es ? "Nueva etiqueta" : "New tag"}
                 </button>
             </div>
@@ -434,7 +435,7 @@ import { serializeForClient } from "@lib/safe-vars";
                             <option value={m.id} selected={m.id === aiModels.current_model}>{m.label}</option>
                         ))}
                     </select>
-                    <button id="ai-model-save-btn" class="px-4 py-2 bg-brand-sky-deep hover:bg-brand-ink text-white text-sm font-semibold rounded-lg transition">
+                    <button id="ai-model-save-btn" class={buttonClass("secondary", "sm")}>
                         {es ? "Guardar" : "Save"}
                     </button>
                 </div>
@@ -549,7 +550,7 @@ import { serializeForClient } from "@lib/safe-vars";
             <button onclick="closeSettingsModal()" class="flex-1 py-2.5 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold rounded-xl transition">
                 {es ? "Cancelar" : "Cancel"}
             </button>
-            <button id="modal-save-btn" class="flex-1 py-2.5 bg-brand-sky-deep hover:bg-brand-ink text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition">
+            <button id="modal-save-btn" class={`${buttonClass("secondary", "sm")} flex-1`}>
                 {es ? "Guardar" : "Save"}
             </button>
         </div>
@@ -598,7 +599,8 @@ function showToast(msg, type = "success") {
     const t = document.getElementById("settings-toast");
     if (!t) return;
     t.textContent = msg;
-    t.className = `fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-[var(--shadow-pop)] ${type === "success" ? "bg-brand-mint-deep" : "bg-red-600"}`;
+    const toneClass = type === "success" ? "bg-brand-mint-deep text-brand-ink" : "bg-red-600 text-white";
+    t.className = `fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] px-4 py-2.5 rounded-xl text-sm font-semibold shadow-[var(--shadow-pop)] ${toneClass}`;
     t.classList.remove("hidden");
     setTimeout(() => t.classList.add("hidden"), 3000);
 }
@@ -1074,7 +1076,7 @@ window.detectSubscriptions = async function() {
                             <p class="text-sm font-medium text-brand-ink truncate">${escapeHtml(c.payee_name)}</p>
                             <p class="text-xs text-brand-ink-soft">${fmtc(c.amount_cents)} · ${escapeHtml(c.cadence)}</p>
                         </div>
-                        <button data-cand="${i}" class="cand-create text-xs px-2 py-1 rounded-lg bg-brand-sky-deep text-white whitespace-nowrap">
+                        <button data-cand="${i}" class="cand-create press inline-flex items-center justify-center gap-2 font-display font-extrabold border-2 border-brand-ink rounded-full shadow-[var(--shadow-card)] tracking-tight whitespace-nowrap select-none cursor-pointer px-4 py-2 text-sm bg-brand-sky text-brand-ink hover:bg-brand-sky-deep">
                             + ${es ? "Crear" : "Create"}
                         </button>
                     </div>`).join("")}

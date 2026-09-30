@@ -9,6 +9,8 @@
  * Props mirror AssignFundsModal (same visual pattern).
  */
 
+import { buttonClass } from "../lib/buttonClasses";
+
 interface Props {
     categories: any[]; // flattened expense categories [{id, name, group_name}]
     lang: "en" | "es";
@@ -23,12 +25,12 @@ const baseRoute = "move-money";
 
 <div id={`${baseRoute}-modal`} class="hidden fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-6">
     <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-pop)] max-w-md w-full">
-        <div class="bg-brand-mint-deep text-white px-6 py-4 rounded-t-[var(--radius-card)]">
+        <div class="bg-brand-mint-deep text-brand-ink px-6 py-4 rounded-t-[var(--radius-card)]">
             <div class="flex items-center justify-between">
                 <h2 class="text-xl font-bold">
                     {lang === "es" ? "Mover dinero" : "Move money"}
                 </h2>
-                <button id={`${baseRoute}-close-btn`} class="text-white hover:text-brand-cream transition">
+                <button id={`${baseRoute}-close-btn`} class="text-brand-ink hover:text-brand-ink-soft transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -92,7 +94,7 @@ const baseRoute = "move-money";
                     {lang === "es" ? "Cancelar" : "Cancel"}
                 </button>
                 <button id={`${baseRoute}-confirm-btn`}
-                    class="flex-1 bg-brand-mint-deep text-white px-4 py-2 rounded-lg font-semibold hover:bg-brand-ink transition text-sm">
+                    class={`${buttonClass("mint", "sm")} flex-1`}>
                     {lang === "es" ? "Mover" : "Move"}
                 </button>
             </div>

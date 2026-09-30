@@ -4,6 +4,7 @@
  * Opened by FABButton, posts transactions to the API.
  */
 import { t } from "@lib/i18n";
+import { buttonClass } from "../lib/buttonClasses";
 import AccountCreateModal from "./AccountCreateModal.astro";
 
 interface Props {
@@ -186,7 +187,7 @@ const newAccountLabel = lang === "es" ? "＋ Nueva cuenta…" : "＋ New account
             <!-- Save -->
             <button
                 id="fab-save"
-                class="w-full py-3 bg-brand-sky-deep hover:bg-brand-ink active:scale-[0.98] text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition-all duration-150"
+                class={`${buttonClass("secondary", "md")} w-full`}
             >
                 {t(lang, "fab_save")}
             </button>
@@ -201,7 +202,7 @@ const newAccountLabel = lang === "es" ? "＋ Nueva cuenta…" : "＋ New account
             <div class="flex gap-3">
                 <button
                     id="fab-another"
-                    class="flex-1 py-3 bg-brand-sky-deep hover:bg-brand-ink text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition-colors"
+                    class={`${buttonClass("secondary", "md")} flex-1`}
                 >
                     {t(lang, "fab_another")}
                 </button>

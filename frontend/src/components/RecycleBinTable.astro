@@ -7,6 +7,8 @@
  * proxy routes, which attach the caller's credentials from the httpOnly cookie.
  */
 
+import { buttonClass } from "../lib/buttonClasses";
+
 interface DeletedItem {
   id: string;
   type: "transaction" | "account" | "category" | "category_group";
@@ -113,7 +115,7 @@ interface DeletedItem {
       </button>
       <button
         id="restore-confirm-btn"
-        class="px-4 py-2 text-white bg-brand-mint-deep hover:bg-brand-ink rounded-lg transition"
+        class={buttonClass("mint", "sm")}
       >
         Restore
       </button>
@@ -403,9 +405,8 @@ interface DeletedItem {
 
   function showNotification(message, type) {
     const notification = document.createElement("div");
-    notification.className = `fixed top-4 right-4 px-4 py-3 rounded-lg text-white ${
-      type === "success" ? "bg-brand-mint-deep" : "bg-red-600"
-    } shadow-[var(--shadow-pop)] z-40`;
+    const toneClass = type === "success" ? "bg-brand-mint-deep text-brand-ink" : "bg-red-600 text-white";
+    notification.className = `fixed top-4 right-4 px-4 py-3 rounded-lg ${toneClass} shadow-[var(--shadow-pop)] z-40`;
     notification.textContent = message;
     document.body.appendChild(notification);
 

@@ -2,6 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
 import { fmtDate } from "../../../lib/datetime";
+import { buttonClass } from "../../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -535,7 +536,7 @@ function cellClass(value: any): string {
                             {toggleCurrencies.map((cur) => (
                                 <a
                                     href={currencyHref(cur)}
-                                    class={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${selectedCurrency === cur ? "bg-brand-sky-deep text-white" : "text-brand-ink-soft hover:text-brand-ink"}`}
+                                    class={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${selectedCurrency === cur ? "bg-brand-sky-deep text-brand-ink" : "text-brand-ink-soft hover:text-brand-ink"}`}
                                     aria-current={selectedCurrency === cur ? "true" : undefined}
                                 >
                                     {cur === "MXN" ? "MX$" : "US$"}
@@ -601,7 +602,7 @@ function cellClass(value: any): string {
                     <div class="mt-6 flex items-center justify-center gap-2">
                         <div class="inline-flex rounded-full border border-brand-ink/15 bg-brand-cream-deep p-1" role="group">
                             <button
-                                class="cycle-pill rounded-full px-4 py-1.5 text-sm font-semibold bg-brand-sky-deep text-white"
+                                class="cycle-pill rounded-full px-4 py-1.5 text-sm font-semibold bg-brand-sky-deep text-brand-ink"
                                 data-cycle="monthly"
                                 aria-pressed="true"
                             >
@@ -624,7 +625,7 @@ function cellClass(value: any): string {
                 <div class="mt-4 flex flex-col sm:flex-row gap-3 justify-center">
                     {currentPlanName === "free" && (
                         <button
-                            class="upgrade-btn px-6 py-2.5 bg-brand-sky-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-sky-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            class={`${buttonClass("secondary", "sm")} upgrade-btn disabled:opacity-50 disabled:cursor-not-allowed`}
                             data-plan="plus"
                             data-cycle="monthly"
                             data-currency={selectedCurrency}
@@ -639,7 +640,7 @@ function cellClass(value: any): string {
                     )}
                     {currentPlanName !== "pro" && (
                         <button
-                            class="upgrade-btn px-6 py-2.5 bg-brand-coral-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-coral-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            class={`${buttonClass("primary", "sm")} upgrade-btn disabled:opacity-50 disabled:cursor-not-allowed`}
                             data-plan="pro"
                             data-cycle="monthly"
                             data-currency={selectedCurrency}
@@ -685,7 +686,7 @@ function cellClass(value: any): string {
                     />
                     <button
                         type="submit"
-                        class="px-4 py-2 bg-brand-sky-deep text-white text-sm font-semibold rounded-lg hover:bg-brand-sky-deep transition-colors"
+                        class={buttonClass("secondary", "sm")}
                     >
                         {l.coupon_apply}
                     </button>
@@ -783,7 +784,7 @@ function cellClass(value: any): string {
         // state comes entirely from data attributes so no price is ever
         // composed client-side.
         const pills = document.querySelectorAll('.cycle-pill');
-        const activePillCls = ['bg-brand-sky-deep', 'text-white'];
+        const activePillCls = ['bg-brand-sky-deep', 'text-brand-ink'];
         const idlePillCls = ['text-brand-ink-soft'];
         pills.forEach((pill) => {
             pill.addEventListener('click', () => {

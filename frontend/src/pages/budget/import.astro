@@ -9,6 +9,7 @@ import { apiFetch } from "@lib/api";
 import { headerToneClass } from "@lib/headerTone";
 import { getAccounts } from "@lib/api/budget";
 import type { BudgetAccount } from "@lib/api/budget";
+import { buttonClass } from "@lib/buttonClasses";
 
 // Authentication check
 const token = Astro.cookies.get("access_token")?.value;
@@ -186,7 +187,7 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                     <button 
                         type="submit"
                         id="import-btn"
-                        class="w-full bg-brand-sky-deep text-white px-6 py-3 rounded-lg font-semibold hover:bg-brand-sky-deep transition"
+                        class={`${buttonClass("secondary", "md")} w-full`}
                     >
                         {lang === "es" ? "Importar Transacciones" : "Import Transactions"}
                     </button>
@@ -203,7 +204,7 @@ const { data: accounts, ok: accountsOk } = await getAccounts(token);
                     <button 
                         type="button"
                         onclick="location.href='/budget/transactions'"
-                        class="mt-4 w-full bg-brand-sky-deep text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-brand-sky-deep transition"
+                        class={`${buttonClass("secondary", "sm")} mt-4 w-full`}
                     >
                         {lang === "es" ? "Ver Movimientos Importados" : "View Imported Transactions"}
                     </button>

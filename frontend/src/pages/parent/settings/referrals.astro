@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
+import { buttonClass } from "../../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -119,7 +120,7 @@ const shareText = lang === "es"
                         <button
                             id="copy-link-btn"
                             type="button"
-                            class="flex-1 sm:flex-none bg-brand-coral hover:bg-brand-coral-deep text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+                            class={`${buttonClass("primary", "sm")} flex-1 sm:flex-none`}
                         >
                             {labels.copy}
                         </button>

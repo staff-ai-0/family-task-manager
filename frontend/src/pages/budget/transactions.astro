@@ -12,6 +12,7 @@ import { apiFetch } from "@lib/api";
 import { isFreePlan } from "@lib/plan";
 import { getTransactions, getAccounts, getCategories, getCategoryGroups, formatCurrency, formatDate } from "@lib/api/budget";
 import type { BudgetTransaction, BudgetAccount, BudgetCategory } from "@lib/api/budget";
+import { buttonClass } from "@lib/buttonClasses";
 
 // Authentication check
 const token = Astro.cookies.get("access_token")?.value;
@@ -286,7 +287,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                     <option value={cat.id}>{cat.name}</option>
                 ))}
             </select>
-            <button id="bulk-clear" class="text-xs px-2 py-1 rounded-lg bg-brand-mint-deep text-white">✓ {es ? "Conciliar" : "Clear"}</button>
+            <button id="bulk-clear" class="text-xs px-2 py-1 rounded-lg bg-brand-mint-deep text-brand-ink">✓ {es ? "Conciliar" : "Clear"}</button>
             <button id="bulk-delete" class="text-xs px-2 py-1 rounded-lg bg-red-500 text-white">🗑 {es ? "Eliminar" : "Delete"}</button>
             <button id="bulk-cancel" class="text-xs px-2 py-1 rounded-lg border border-brand-cream/40">{es ? "Salir" : "Exit"}</button>
         </div>
@@ -509,7 +510,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                             <span class="text-xs font-semibold" id="split-remaining"></span>
                         </div>
                         <button id="split-save-btn" type="button"
-                            class="w-full py-2 text-sm font-bold rounded-lg bg-brand-sky-deep text-white hover:bg-brand-ink transition disabled:opacity-50">
+                            class={`${buttonClass("secondary", "sm")} w-full disabled:opacity-50`}>
                             {es ? "Crear división" : "Create split"}
                         </button>
                     </div>
@@ -544,7 +545,7 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
                         <button id="edit-cancel-btn" class="flex-1 py-3 bg-brand-cream-deep hover:bg-brand-cream-deep text-brand-ink font-semibold rounded-xl transition">
                             {es ? "Cancelar" : "Cancel"}
                         </button>
-                        <button id="edit-save-btn" class="flex-1 py-3 bg-brand-sky-deep hover:bg-brand-ink text-white font-semibold rounded-xl shadow-[var(--shadow-card)] transition">
+                        <button id="edit-save-btn" class={`${buttonClass("secondary", "md")} flex-1`}>
                             {es ? "Guardar" : "Save"}
                         </button>
                     </div>
@@ -1471,7 +1472,7 @@ function initPowerTools() {
                 b.type = "button";
                 b.textContent = t.name;
                 const on = active.has(t.id);
-                b.className = `text-xs px-2 py-0.5 rounded-full border ${on ? "bg-brand-sky-deep text-white border-brand-sky-deep" : "bg-brand-cream text-brand-ink-soft border-brand-ink/20"}`;
+                b.className = `text-xs px-2 py-0.5 rounded-full border ${on ? "bg-brand-sky-deep text-brand-ink border-brand-sky-deep" : "bg-brand-cream text-brand-ink-soft border-brand-ink/20"}`;
                 b.addEventListener("click", async () => {
                     if (active.has(t.id)) active.delete(t.id); else active.add(t.id);
                     await fetch(`/api/budget/tags/transactions/${txId}/tags`, {

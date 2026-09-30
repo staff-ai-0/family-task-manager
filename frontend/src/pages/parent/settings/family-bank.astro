@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
+import { buttonClass } from "../../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -147,7 +148,7 @@ const weekdays = es
             <p class="text-brand-ink-soft text-sm mb-4">
                 {es ? "Invita a tus hijos para darles su Banco Familiar." : "Invite your kids to give them a Family Bank."}
             </p>
-            <a href="/parent/members#invite" class="inline-block bg-brand-mint-deep text-white px-5 py-2 rounded-xl font-semibold text-sm shadow-[var(--shadow-card)]">
+            <a href="/parent/members#invite" class={`${buttonClass("mint", "sm")} inline-block`}>
                 {es ? "Invitar a un hijo" : "Invite a kid"}
             </a>
         </div>
@@ -172,7 +173,7 @@ const weekdays = es
                                 class="w-24 rounded-xl border border-brand-ink/20 bg-white pl-7 pr-2 py-2 text-sm text-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-mint-deep disabled:opacity-50 disabled:bg-brand-cream-deep" />
                         </div>
                         <button type="button" id="point-value-save" disabled={automationLocked}
-                            class="rounded-xl bg-brand-mint-deep text-white text-sm font-bold px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            class={`${buttonClass("mint", "sm")} disabled:opacity-50 disabled:cursor-not-allowed`}>
                             {es ? "Guardar" : "Save"}
                         </button>
                     </div>
@@ -193,7 +194,7 @@ const weekdays = es
                         <div class="bg-brand-cream-deep px-5 py-4 border-b-2 border-brand-ink">
                             <div class="flex items-center justify-between mb-3">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 rounded-full bg-brand-mint-deep text-white flex items-center justify-center font-bold">
+                                    <div class="w-10 h-10 rounded-full bg-brand-mint-deep text-brand-ink flex items-center justify-center font-bold">
                                         {(k.name ?? "?").charAt(0).toUpperCase()}
                                     </div>
                                     <div>
@@ -222,7 +223,7 @@ const weekdays = es
                                     {es ? "Mover dinero" : "Move money"}
                                 </button>
                                 <button type="button" data-kid-settle-share
-                                    class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-sun-deep text-white hover:opacity-90 transition-opacity">
+                                    class={buttonClass("sun", "sm")}>
                                     {es ? "Liquidar Compartir" : "Settle Share"}
                                 </button>
                             </div>
@@ -240,7 +241,7 @@ const weekdays = es
                                         <div class="flex items-center gap-2">
                                             {goal.pending_approval && (
                                                 <button type="button" data-goal-approve
-                                                    class="text-xs font-bold px-3 py-1 rounded-lg bg-brand-mint-deep text-white hover:opacity-90 transition-opacity">
+                                                    class={buttonClass("mint", "sm")}>
                                                     {es ? "Aprobar" : "Approve"}
                                                 </button>
                                             )}
@@ -436,7 +437,7 @@ const weekdays = es
                             </label>
 
                             <button type="button" data-kid-save disabled={automationLocked}
-                                class="w-full py-3 bg-brand-mint-deep text-white font-bold rounded-xl border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint active:scale-[.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                class={`${buttonClass("mint", "md")} w-full disabled:opacity-50 disabled:cursor-not-allowed`}>
                                 {es ? "Guardar automatización" : "Save automation"}
                             </button>
                         </div>
@@ -480,7 +481,7 @@ const weekdays = es
                 placeholder="0.00" />
             <div id="pb-error" class="hidden text-sm text-red-600 mt-3"></div>
             <button id="pb-submit" type="button"
-                class="w-full mt-4 py-3 bg-brand-mint-deep text-white font-bold rounded-xl border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint active:scale-[.99] transition-all">
+                class={`${buttonClass("mint", "md")} w-full mt-4`}>
                 {es ? "Confirmar" : "Confirm"}
             </button>
         </div>
@@ -506,7 +507,7 @@ const weekdays = es
                 placeholder="0.00" />
             <div id="goal-error" class="hidden text-sm text-red-600 mt-3"></div>
             <button id="goal-submit" type="button"
-                class="w-full mt-4 py-3 bg-brand-mint-deep text-white font-bold rounded-xl border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint active:scale-[.99] transition-all">
+                class={`${buttonClass("mint", "md")} w-full mt-4`}>
                 {es ? "Crear meta" : "Create goal"}
             </button>
         </div>

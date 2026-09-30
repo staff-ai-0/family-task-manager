@@ -1,6 +1,7 @@
 ---
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../../../lib/api";
+import { buttonClass } from "../../../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -54,7 +55,7 @@ const byKey = (row: any): Record<string, any> => {
             <p class="text-brand-ink-soft text-sm mb-4">
                 {es ? "Invita a tus hijos para darles sus sobres." : "Invite your kids to give them their envelopes."}
             </p>
-            <a href="/parent/members#invite" class="inline-block bg-brand-mint-deep text-white px-5 py-2 rounded-xl font-semibold text-sm shadow-[var(--shadow-card)]">
+            <a href="/parent/members#invite" class={`${buttonClass("mint", "sm")} inline-block`}>
                 {es ? "Invitar a un hijo" : "Invite a kid"}
             </a>
         </div>
@@ -68,7 +69,7 @@ const byKey = (row: any): Record<string, any> => {
                     <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] overflow-hidden">
                         <div class="bg-brand-cream-deep px-5 py-4 border-b-2 border-brand-ink flex items-center justify-between">
                             <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-full bg-brand-mint-deep text-white flex items-center justify-center font-bold">
+                                <div class="w-10 h-10 rounded-full bg-brand-mint-deep text-brand-ink flex items-center justify-center font-bold">
                                     {(row.name ?? "?").charAt(0).toUpperCase()}
                                 </div>
                                 <div>

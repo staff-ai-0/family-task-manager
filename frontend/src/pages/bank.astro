@@ -2,6 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
 import { headerToneClass } from "../lib/headerTone";
+import { buttonClass } from "../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -322,7 +323,7 @@ function countdownText(): string {
             </div>
             <div id="bank-modal-error" class="hidden text-sm text-red-600 mt-3"></div>
             <button id="bank-modal-submit" type="button"
-                class="press w-full mt-4 py-3 bg-brand-mint-deep text-white font-bold rounded-xl border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint active:scale-[.99] transition-all">
+                class={`${buttonClass("mint", "md")} w-full mt-4`}>
                 {es ? "Confirmar" : "Confirm"}
             </button>
         </div>
@@ -356,7 +357,7 @@ function countdownText(): string {
                 placeholder="0.00" />
             <div id="goal-error" class="hidden text-sm text-red-600 mt-3"></div>
             <button id="goal-submit" type="button"
-                class="press w-full mt-4 py-3 bg-brand-mint-deep text-white font-bold rounded-xl border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint active:scale-[.99] transition-all">
+                class={`${buttonClass("mint", "md")} w-full mt-4`}>
                 {es ? "Guardar mi meta" : "Save my goal"}
             </button>
         </div>

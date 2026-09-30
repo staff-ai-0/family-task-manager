@@ -2,6 +2,7 @@
 import PageLayout from "@components/ui/PageLayout.astro";
 import { apiFetch } from "../lib/api";
 import { headerToneClass } from "../lib/headerTone";
+import { buttonClass } from "../lib/buttonClasses";
 
 const token = Astro.cookies.get("access_token")?.value;
 if (!token) return Astro.redirect("/login");
@@ -161,7 +162,7 @@ const ORDER = ["spend", "save", "share"];
     </section>
 
     <div class="mt-6 flex gap-3">
-        <a href="/bank" class="flex-1 text-center press bg-brand-mint-deep text-white font-bold rounded-[var(--radius-card)] px-4 py-3 border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-mint transition-colors">
+        <a href="/bank" class={`${buttonClass("mint", "md")} flex-1 text-center`}>
             {es ? "Mover mi dinero 🏦" : "Move my money 🏦"}
         </a>
         <a href="/dashboard" class="flex-1 text-center press bg-brand-cream text-brand-ink font-bold rounded-[var(--radius-card)] px-4 py-3 border-2 border-brand-ink shadow-[var(--shadow-card)] hover:bg-brand-cream-deep transition-colors">

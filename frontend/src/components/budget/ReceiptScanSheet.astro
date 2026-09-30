@@ -29,6 +29,8 @@
  *
  * @prop lang "en" | "es"
  */
+import { buttonClass } from "../../lib/buttonClasses";
+
 interface Props {
     lang?: "en" | "es";
 }
@@ -119,7 +121,7 @@ const es = lang === "es";
                 <button
                     data-slot="done"
                     type="button"
-                    class="block w-full text-center bg-brand-coral-deep text-white px-4 py-3 rounded-xl font-semibold press"
+                    class={`${buttonClass("primary", "md")} block w-full text-center`}
                 >{es ? "✓ Listo, guardar" : "✓ Looks good — save"}</button>
                 <div class="flex gap-2">
                     <a
@@ -163,7 +165,7 @@ const es = lang === "es";
             <a
                 data-slot="done-link"
                 href="/budget/transactions"
-                class="hidden block w-full text-center bg-brand-coral-deep text-white px-4 py-3 rounded-xl font-semibold press"
+                class={`${buttonClass("primary", "md")} hidden block w-full text-center`}
             >{es ? "Ver transacciones" : "View transactions"}</a>
         </div>
     </template>
@@ -182,7 +184,7 @@ const es = lang === "es";
                 <button
                     data-slot="force-save"
                     type="button"
-                    class="bg-brand-coral-deep text-white px-4 py-2 rounded-xl font-semibold press"
+                    class={buttonClass("primary", "sm")}
                 >{es ? "Guardar de todas formas" : "Save anyway"}</button>
             </div>
         </form>
