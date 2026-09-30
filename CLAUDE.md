@@ -303,6 +303,7 @@ Fully wired (routes + services + models + frontend), multi-tenant by `family_id`
 |--------|--------|-------|
 | **Jarvis** (AI copilot) | `/api/jarvis`, `/api/jarvis/schedules`, `/mcp` | Parent-facing LLM assistant via LiteLLM (tool-calling + SSE streaming) + cron-driven scheduled prompts. MCP server (`/mcp`) + in-app MCP client; full family-scoped CRUD over activity domains; destructive ops HITL-gated. See `docs/JARVIS_MCP.md`. |
 | **Pet** | `/api/pet` | Gamified virtual pet per kid (`kid_pet`, `pup_snapshot`); decays over time, fed by completing work. |
+| **Progress** (UX-D1) | `/api/progress` | Kid/teen daily chore **streak** (all non-bonus chores done by end of day, family tz; first miss per Mon–Sun week forgiven 🛡️) and 10-step **rank** from XP = earning points (`task_completed`/`bonus`/`gig_approved`) + gig pesos (`gig_earned` ÷ 100). Derived from ledgers on read — no stored counters; only `users.last_seen_rank` (one-time rank-up celebration). Thresholds in `progress_service.py`; names only in `frontend/src/lib/progress.ts`. Independent of the pet. |
 | **Meals** | `/api/meals` | Meal planning + recipe import; syncs to shopping lists. |
 | **Shopping** | `/api/shopping` | Family shopping lists; receipt-scan + meal-plan integration. |
 | **Calendar** | `/api/calendar` | Family events + AI calendar-image scanner. |

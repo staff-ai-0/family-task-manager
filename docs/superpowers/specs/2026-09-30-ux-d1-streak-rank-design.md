@@ -1,7 +1,7 @@
 # UX-D1 — Streak + Rank — Design
 
 **Date:** 2026-09-30
-**Status:** design approved in chat (2026-09-30), pending written-spec review
+**Status:** approved 2026-09-30; implemented on feat/ux-d1-streak-rank
 **Program:** UX/GUI program, sub-project **D1** of D (progression & engagement loop). D was split into D1 streak + rank (this spec, the backbone), D2 badges, D3 weekly challenge, D4 mystery reward + app-icon badge + smart pushes.
 **Evidence:** `docs/audit/2026-09-27-ux-competitive/findings.md` (row D; competitor scan: layered progression — daily streak → weekly challenge → rank → badges — outlasts pet/points novelty, which fades in 4–8 weeks; PointUp 15 ranks, Nimbi 10 levels).
 
