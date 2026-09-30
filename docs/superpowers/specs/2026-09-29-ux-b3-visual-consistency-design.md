@@ -144,6 +144,7 @@ export function buttonClass(variant?: ButtonVariant, size?: ButtonSize): string;
 5. An emoji inside an `<h1>` element's text.
 6. `[data-theme="dark"]` or `prefers-color-scheme: dark` in any source file.
 7. `headerClass=` passed to `PageLayout` / `PageHeader` / `ChatShell` (belt-and-braces; the removed prop already fails `astro check`).
+8. White / pale text (`text-white[/NN]`, `text-<hue>-50…300`) inside a `<header>` block whose fill is not a dark hero (`bg-brand-ink`, `bg-[#…]`), or on a `slot="header-extra"` / `slot="actions"` element — the leftover-light-text failure of recoloring headers. *(Added at planning, 2026-09-29.)*
 
 Out-of-scope files listed in "Not in B3" are exempt by an explicit path allowlist in the test (auth/landing/legal/404-500 pages, `admin/*`, `AdminShell`, `kiosk.astro`, `GuideShell`) — each entry commented with why.
 
