@@ -48,7 +48,7 @@ export function progressView(resp: any, skin: Skin, lang: "es" | "en"): Progress
     const barPct = next == null ? 100 : Math.max(0, Math.min(100, Math.round(((xp - floor) / Math.max(1, next - floor)) * 100)));
     const toNextLabel = next == null
         ? (es ? "¡Rango máximo!" : "Top rank!")
-        : es ? `${next - xp} XP para ${rankName(rank + 1, skin, lang)}` : `${next - xp} XP to ${rankName(rank + 1, skin, lang)}`;
+        : es ? `${Math.max(0, next - xp)} XP para ${rankName(rank + 1, skin, lang)}` : `${Math.max(0, next - xp)} XP to ${rankName(rank + 1, skin, lang)}`;
     const celebrate = resp.celebrate_rank == null ? null : clampRank(resp.celebrate_rank);
     const week = Array.isArray(resp.week) ? resp.week.slice(0, 7) : [];
     return {

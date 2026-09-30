@@ -65,6 +65,11 @@ describe("progressView", () => {
         expect(v.celebrateRank).toBe(4);
         expect(v.celebrateName).toBe("Pro");
     });
+    it("never shows a negative XP-to-next", () => {
+        const v = progressView(resp({ xp: 650, rank_floor_xp: 300, next_rank_xp: 600 }), "child", "es")!;
+        expect(v.toNextLabel).toBe("0 XP para Estrella");
+        expect(v.barPct).toBe(100);
+    });
 });
 
 describe("progressLine (parent hub)", () => {
