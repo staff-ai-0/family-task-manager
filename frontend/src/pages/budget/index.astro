@@ -16,6 +16,7 @@ import FABButton from "@components/FABButton.astro";
 import FABModal from "@components/FABModal.astro";
 import { apiFetch } from "@lib/api";
 import { getMonthBudget, getCategoryGroups, formatCurrency, getMonthStatus } from "@lib/api/budget";
+import { monthSummaryView } from "@lib/parentHub";
 import { t } from "@lib/i18n";
 import ModuleTour from "@components/ModuleTour.astro";
 
@@ -65,7 +66,6 @@ const expenseGroups = budget?.category_groups?.filter((g: any) => !g.is_income) 
 
 const totalIncome = budget?.totals?.income ?? incomeGroups.reduce((sum: number, g: any) => sum + g.total_activity, 0);
 const totalBudgeted = expenseGroups.reduce((sum: number, g: any) => sum + g.total_budgeted, 0);
-const totalSpent = Math.abs(expenseGroups.reduce((sum: number, g: any) => sum + g.total_activity, 0));
 const readyToAssign = budget?.ready_to_assign !== undefined ? budget.ready_to_assign : (totalIncome - totalBudgeted);
 
 // --- Goals by category map ---
@@ -127,9 +127,7 @@ const jarvisQuestions: string[] =
 
         <!-- Month summary bar -->
         <MonthSummaryBar
-            income={totalIncome}
-            spent={totalSpent}
-            budgeted={totalBudgeted}
+            view={monthSummaryView(budget, lang)}
             lang={lang}
             formatCurrency={formatCurrency}
         />

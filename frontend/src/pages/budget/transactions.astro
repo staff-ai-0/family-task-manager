@@ -171,68 +171,48 @@ const categoriesJson = JSON.stringify(allCategoriesForEdit);
     mainClass="px-4 py-4 flex-grow"
     containerClass="w-full max-w-md md:max-w-4xl lg:max-w-6xl mx-auto bg-brand-cream-deep flex flex-col"
 >
-        <!-- Header -->
-        <header slot="before-nav" class="bg-brand-sky-deep text-white pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)]">
-            <div class="flex items-center justify-between mb-6">
-                <a href="/budget" class="text-white hover:text-brand-cream transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </a>
-                <h1 class="text-2xl font-bold">{es ? "Transacciones" : "Transactions"}</h1>
-                <!-- No header scan button: the FAB's Escanear mode is the one
-                     visible scan entry on this page (duplicate removed after
-                     user report 2026-08-11). Spacer keeps the title centered. -->
-                <div class="w-6"></div>
-            </div>
-
-            <!-- Month navigation -->
-            <div class="flex items-center justify-center gap-4 mb-4">
-                <a href={prevMonthUrl} class="p-1.5 rounded-full hover:bg-white/20 transition" aria-label={es ? "Mes anterior" : "Previous month"}>
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </a>
-                <span class="text-sm font-bold capitalize min-w-[10rem] text-center">{monthLabel}</span>
-                {isCurrentMonth ? (
-                    <span class="p-1.5 opacity-30" aria-hidden="true">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                        </svg>
-                    </span>
-                ) : (
-                    <a href={nextMonthUrl} class="p-1.5 rounded-full hover:bg-white/20 transition" aria-label={es ? "Mes siguiente" : "Next month"}>
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        <!-- Month card (UX-B4): the tabs come first, like Month and Reports;
+             this card replaces the old tall header (no back arrow — the tabs
+             and the bottom nav already navigate). -->
+        <section slot="after-nav" class="px-4 pt-3 pb-3" aria-label={es ? "Mes" : "Month"}>
+            <div class="bg-brand-cream rounded-[var(--radius-card)] border-2 border-brand-ink shadow-[var(--shadow-card)] p-3">
+                <div class="flex items-center justify-between">
+                    <a href={prevMonthUrl} class="p-1.5 rounded-full border-2 border-brand-ink text-brand-ink hover:bg-brand-cream-deep transition" aria-label={es ? "Mes anterior" : "Previous month"}>
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
                         </svg>
                     </a>
-                )}
-            </div>
-
-            <!-- Summary -->
-            <div class="bg-brand-cream/20 backdrop-blur-md rounded-2xl p-4 border border-white/30">
-                <div class="grid grid-cols-3 gap-3 text-center">
+                    <span class="text-sm font-extrabold text-brand-ink capitalize">{monthLabel}</span>
+                    {isCurrentMonth ? (
+                        <span class="p-1.5 rounded-full border-2 border-brand-ink/20 text-brand-ink/30" aria-hidden="true">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                            </svg>
+                        </span>
+                    ) : (
+                        <a href={nextMonthUrl} class="p-1.5 rounded-full border-2 border-brand-ink text-brand-ink hover:bg-brand-cream-deep transition" aria-label={es ? "Mes siguiente" : "Next month"}>
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                            </svg>
+                        </a>
+                    )}
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center mt-3">
                     <div>
-                        <p class="text-brand-cream text-xs font-semibold uppercase tracking-wider mb-1">
-                            {es ? "Ingresos" : "Income"}
-                        </p>
-                        <p class="text-lg font-bold text-green-300">{formatCurrency(totalIncome)}</p>
+                        <p class="text-[10px] font-semibold uppercase tracking-wider text-brand-ink-soft">{es ? "Ingresos" : "Income"}</p>
+                        <p class="text-sm font-bold text-brand-mint-deep">{formatCurrency(totalIncome)}</p>
                     </div>
                     <div>
-                        <p class="text-brand-cream text-xs font-semibold uppercase tracking-wider mb-1">
-                            {es ? "Gastos" : "Expenses"}
-                        </p>
-                        <p class="text-lg font-bold text-red-300">{formatCurrency(totalExpenses)}</p>
+                        <p class="text-[10px] font-semibold uppercase tracking-wider text-brand-ink-soft">{es ? "Gastos" : "Expenses"}</p>
+                        <p class="text-sm font-bold text-red-500">{formatCurrency(totalExpenses)}</p>
                     </div>
                     <div>
-                        <p class="text-brand-cream text-xs font-semibold uppercase tracking-wider mb-1">{es ? "Neto" : "Net"}</p>
-                        <p class={`text-lg font-bold ${netAmount >= 0 ? 'text-white' : 'text-red-300'}`}>
-                            {formatCurrency(netAmount)}
-                        </p>
+                        <p class="text-[10px] font-semibold uppercase tracking-wider text-brand-ink-soft">{es ? "Neto" : "Net"}</p>
+                        <p class={`text-sm font-bold ${netAmount >= 0 ? "text-brand-ink" : "text-red-500"}`}>{formatCurrency(netAmount)}</p>
                     </div>
                 </div>
             </div>
-        </header>
+        </section>
 
         <!-- Filter Bar -->
         <div slot="after-nav" class="px-4 py-3 bg-brand-cream border-b border-brand-ink/10 flex flex-wrap gap-2">

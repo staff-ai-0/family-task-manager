@@ -7,6 +7,7 @@ import {
     greetingDate,
     kidRowView,
     monthLabel,
+    monthSummaryView,
     nudgeLabel,
 } from "../src/lib/parentHub";
 
@@ -158,5 +159,57 @@ describe("greetingDate / monthLabel / firstName", () => {
         expect(firstName("Juan Carlos Martinez")).toBe("Juan");
         expect(firstName("   ")).toBe("");
         expect(firstName(null)).toBe("");
+    });
+});
+
+describe("monthSummaryView", () => {
+    const month = (groups: unknown[]) => ({ category_groups: groups });
+    // total_available defaults to budgeted + activity (no carryover), as the backend computes per group.
+    const expense = (budgeted: number, activity: number, available = budgeted + activity) => ({ is_income: false, total_budgeted: budgeted, total_activity: activity, total_available: available });
+    const income = (activity: number) => ({ is_income: true, total_budgeted: 0, total_activity: activity });
+
+    it("budgeted, spent and left for a normal month", () => {
+        const v = monthSummaryView(month([expense(1_000_000, -450_000), expense(200_000, -150_000), income(3_000_000)]), "es");
+        expect(v).toMatchObject({ budgetedCents: 1_200_000, spentCents: 600_000, availableCents: 600_000, pct: 50, over: false, tone: "ok", hasBudget: true });
+        expect(v.caption).toBe("50 % del presupuesto gastado");
+        expect(monthSummaryView(month([expense(1_000, -500)]), "en").caption).toBe("50% of budget spent");
+    });
+    it("warns from 75 % and goes red over budget", () => {
+        expect(monthSummaryView(month([expense(1_000, -750)]), "es").tone).toBe("warn");
+        const over = monthSummaryView(month([expense(1_000, -1_010)]), "es");
+        expect(over).toMatchObject({ pct: 100, over: true, tone: "over", availableCents: -10 });
+    });
+    it("spending with nothing budgeted", () => {
+        const v = monthSummaryView(month([expense(0, -1_907_800)]), "es");
+        expect(v).toMatchObject({ budgetedCents: 0, spentCents: 1_907_800, availableCents: -1_907_800, pct: 0, over: false, hasBudget: false });
+        expect(v.caption).toBe("Sin presupuesto asignado este mes");
+        expect(monthSummaryView(month([expense(0, -1)]), "en").caption).toBe("Nothing budgeted this month");
+    });
+    it("missing or malformed month data is all zeros", () => {
+        for (const m of [null, undefined, {}, { category_groups: "x" }]) {
+            expect(monthSummaryView(m, "es")).toMatchObject({ budgetedCents: 0, spentCents: 0, availableCents: 0, pct: 0, over: false, hasBudget: false });
+        }
+    });
+    it("available matches the category rows when money carries over", () => {
+        // $1,000 carried over + $5,000 budgeted − $5,500 spent → the row says +$500 disponible.
+        const v = monthSummaryView(month([expense(500_000, -550_000, 50_000)]), "es");
+        expect(v).toMatchObject({ budgetedCents: 500_000, spentCents: 550_000, availableCents: 50_000, over: true, tone: "over" });
+        // Last month overspent: the row carries the debt, and so does the bar.
+        expect(monthSummaryView(month([expense(500_000, -100_000, -20_000)]), "es").availableCents).toBe(-20_000);
+    });
+    it("a group without total_available counts as zero available", () => {
+        expect(monthSummaryView(month([{ is_income: false, total_budgeted: 1_000, total_activity: -200 }]), "es").availableCents).toBe(0);
+    });
+    it("income groups never count", () => {
+        expect(monthSummaryView(month([income(5_000_000)]), "es")).toMatchObject({ budgetedCents: 0, spentCents: 0 });
+    });
+    it("agrees with the parent-home budget card on the same data", () => {
+        const m = month([expense(1_200_000, -824_000), income(3_000_000)]);
+        const card = budgetGlanceView(m, 0, "es");
+        const bar = monthSummaryView(m, "es");
+        expect(card.show).toBe(true);
+        if (card.show) {
+            expect([bar.budgetedCents, bar.spentCents, bar.pct, bar.over]).toEqual([card.budgetedCents, card.spentCents, card.pct, card.over]);
+        }
     });
 });
