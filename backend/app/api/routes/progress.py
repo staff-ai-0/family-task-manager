@@ -6,7 +6,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.progress import AckRankRequest, ProgressResponse
-from app.services.progress_service import KID_ROLES, ProgressService, rank_for_xp
+from app.services.progress_service import KID_ROLES, ProgressService
 
 router = APIRouter()
 
@@ -27,7 +27,5 @@ async def ack_rank(
 ) -> Response:
     if current_user.role not in KID_ROLES:
         raise HTTPException(status_code=404, detail="Not found")
-    held = rank_for_xp(await ProgressService.xp_for(db, current_user.family_id, current_user.id))
-    current_user.last_seen_rank = max(current_user.last_seen_rank or 1, min(data.rank, held))
-    await db.commit()
+    await ProgressService.ack_rank(db, current_user, data.rank)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

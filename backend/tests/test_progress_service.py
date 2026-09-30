@@ -3,11 +3,14 @@ from datetime import datetime, time, timedelta, timezone
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select, update
+
 from app.models.cash_transaction import CashTransaction, CashTransactionType as CT
 from app.models.family import Family
 from app.models.point_transaction import PointTransaction, TransactionType as PT
 from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAssignment
 from app.models.task_template import AssignmentType, TaskTemplate
+from app.models.user import User
 from app.services.progress_service import DayState as S, ProgressService
 
 from conftest import family_local_today
@@ -169,3 +172,51 @@ class TestProgressFor:
     async def test_rank_one_never_celebrates(self, db_session, test_child_user):
         r = await ProgressService.progress_for(db_session, test_child_user)
         assert r.rank == 1 and r.celebrate_rank is None
+
+
+class TestAckRank:
+    """Controller ruling T3-2: ack_rank must be a single atomic UPDATE, never
+    a read-modify-write on a (possibly stale, e.g. two-tab) in-memory ORM
+    object — otherwise a late commit of a stale read can LOWER
+    last_seen_rank, breaking the "only moves up" invariant."""
+
+    async def test_stale_in_memory_user_cannot_lower_stored_value(self, db_session, test_child_user):
+        kid = test_child_user
+        await _pt(db_session, kid, PT.TASK_COMPLETED, 650)  # rank 4
+
+        # Simulate "tab A already holds last_seen_rank=4 in the DB" without
+        # ever refreshing `kid` — its in-memory last_seen_rank stays None,
+        # exactly like a second stale in-memory User object would after a
+        # concurrent request already committed the rank-4 ack.
+        await db_session.execute(
+            update(User)
+            .where(User.id == kid.id)
+            .values(last_seen_rank=4)
+            .execution_options(synchronize_session=False)
+        )
+        await db_session.commit()
+        assert kid.last_seen_rank is None  # confirms the staleness this test relies on
+
+        # "Tab B" acks a lower rank (2) using the stale in-memory object.
+        await ProgressService.ack_rank(db_session, kid, 2)
+
+        stored = (
+            await db_session.execute(select(User.last_seen_rank).where(User.id == kid.id))
+        ).scalar_one()
+        assert stored == 4  # must NOT have been lowered to 2
+
+    async def test_ack_raises_from_none_and_never_exceeds_held_rank(self, db_session, test_child_user):
+        kid = test_child_user
+        await _pt(db_session, kid, PT.TASK_COMPLETED, 650)  # rank 4
+
+        await ProgressService.ack_rank(db_session, kid, 4)
+        stored = (
+            await db_session.execute(select(User.last_seen_rank).where(User.id == kid.id))
+        ).scalar_one()
+        assert stored == 4  # raised from NULL
+
+        await ProgressService.ack_rank(db_session, kid, 9)  # clamped to held rank
+        stored2 = (
+            await db_session.execute(select(User.last_seen_rank).where(User.id == kid.id))
+        ).scalar_one()
+        assert stored2 == 4  # never above the held rank

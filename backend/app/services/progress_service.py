@@ -96,7 +96,7 @@ from datetime import datetime  # noqa: E402
 from uuid import UUID  # noqa: E402
 from zoneinfo import ZoneInfo  # noqa: E402
 
-from sqlalchemy import and_, func, select  # noqa: E402
+from sqlalchemy import and_, func, select, update  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from app.models.cash_transaction import CashTransaction, CashTransactionType  # noqa: E402
@@ -183,6 +183,28 @@ class ProgressService:
             else:
                 states[day] = DayState.today if day == today else DayState.missed
         return states
+
+    @staticmethod
+    async def ack_rank(db: AsyncSession, user: User, rank: int) -> None:
+        """Raise last_seen_rank up to min(rank, held) — never lowers it.
+
+        A single atomic UPDATE, not a read-modify-write on the ORM object:
+        two concurrent acks (e.g. two tabs) each holding a stale in-memory
+        `user.last_seen_rank` must not be able to race each other into
+        lowering the stored value — the later commit would otherwise
+        overwrite the DB's current (higher) value with
+        max(<stale value>, clamped). func.greatest/func.coalesce reads the
+        row's CURRENT value inside the UPDATE itself, so whichever
+        transaction commits last still only moves the value up.
+        """
+        held = rank_for_xp(await ProgressService.xp_for(db, user.family_id, user.id))
+        clamped = min(rank, held)
+        await db.execute(
+            update(User)
+            .where(User.id == user.id, User.family_id == user.family_id)
+            .values(last_seen_rank=func.greatest(func.coalesce(User.last_seen_rank, 1), clamped))
+        )
+        await db.commit()
 
     @staticmethod
     async def progress_for(db: AsyncSession, user: User) -> ProgressResponse:
