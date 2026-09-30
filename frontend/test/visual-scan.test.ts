@@ -53,6 +53,26 @@ describe("scanVisual — light-text-in-header", () => {
         ].join("\n");
         expect(rules(src, "light-text-in-header").map((h) => h.line)).toEqual([1]);
     });
+    it("flags text-brand-ink-soft on a header-extra slot line (T4-2: below AA on sky/coral)", () => {
+        const src = '<p slot="header-extra" class="text-brand-ink-soft text-sm">sub</p>';
+        expect(rules(src, "light-text-in-header")).toHaveLength(1);
+    });
+    it("flags text-brand-ink-soft (with variant + alpha) inside a light <header> block", () => {
+        const src = [
+            '<header class={headerToneClass("sky")}>',
+            '  <p class="text-brand-ink-soft/80">sub</p>',
+            "</header>",
+        ].join("\n");
+        expect(rules(src, "light-text-in-header")).toHaveLength(1);
+    });
+    it("allows text-brand-ink-soft in a dark hero header (dark-hero exception)", () => {
+        const src = '<header class="bg-brand-ink text-white"><p class="text-brand-ink-soft">x</p></header>';
+        expect(rules(src, "light-text-in-header")).toEqual([]);
+    });
+    it("leaves text-brand-ink-soft legal in a page body outside any header/slot", () => {
+        const src = '<p class="text-brand-ink-soft">just body copy</p>';
+        expect(rules(src, "light-text-in-header")).toEqual([]);
+    });
 });
 
 describe("scanVisual — white-on-brand-fill", () => {

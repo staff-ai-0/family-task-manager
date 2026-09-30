@@ -46,6 +46,10 @@ const WHITE_TEXT = new RegExp(`${START}${V}text-white(?:/\\d+)?(?![\\w-])`);
 const DEEP_TEXT = new RegExp(`${START}${V}text-brand-(?:sky|mint|coral|sun)-deep(?![\\w-])`, "g");
 const FAINT_TEXT = new RegExp(`${START}${V}text-(?:slate|gray)-(?:400|500)(?![\\w-])`, "g");
 const LIGHT_TEXT = new RegExp(`${START}${V}text-(?:white(?:/\\d+)?|[a-z]+-(?:50|100|200|300))(?![\\w-])`, "g");
+// text-brand-ink-soft is legal body copy but fails AA on the sky/coral tone fills (T4-2
+// controller ruling); flagged ONLY alongside LIGHT_TEXT in the two header contexts below
+// (never in white-on-brand-fill, faint-text or anywhere else — ink-soft stays legal in bodies).
+const INK_SOFT_TEXT = new RegExp(`${START}${V}text-brand-ink-soft(?:/\\d+)?(?![\\w-])`, "g");
 const QUOTED = /"([^"\n]*)"|'([^'\n]*)'/g; // backtick literals are handled separately — they can span lines
 const BACKTICK_LITERAL = /`([^`]*)`/g;
 const CLASS_LIST_BRAND_FILL = /classList\.(?:add|toggle|replace)\(([^)]*)\)/g;
@@ -101,6 +105,7 @@ export function scanVisual(raw: string): Hit[] {
         if (HEADER_CLASS.test(l)) hits.push({ rule: "header-class-prop", line, match: "headerClass=" });
         if (SLOT_LINE.test(l)) {
             for (const m of l.matchAll(LIGHT_TEXT)) hits.push({ rule: "light-text-in-header", line, match: m[0] });
+            for (const m of l.matchAll(INK_SOFT_TEXT)) hits.push({ rule: "light-text-in-header", line, match: m[0] });
         }
     });
 
@@ -142,6 +147,9 @@ export function scanVisual(raw: string): Hit[] {
         if (!DARK_HERO.test(attrs)) {
             const block = m[0];
             for (const t of block.matchAll(LIGHT_TEXT)) {
+                hits.push({ rule: "light-text-in-header", line: lineAt(text, start + (t.index ?? 0)), match: t[0] });
+            }
+            for (const t of block.matchAll(INK_SOFT_TEXT)) {
                 hits.push({ rule: "light-text-in-header", line: lineAt(text, start + (t.index ?? 0)), match: t[0] });
             }
         }
