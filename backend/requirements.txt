@@ -39,7 +39,9 @@ alembic==1.13.1
 # mint and verify our own HS256 tokens with a single algorithm and a static
 # secret (app/core/security.py). Bumped anyway — being incidentally safe is not
 # the same as being safe.
-PyJWT==2.13.0
+# 2.13.0 -> 2.14.0 clears CVE-2026-102274 (a malformed RSA JWK aborts a whole
+# PyJWKSet): JWKS-only, not a path we use, but the pip-audit CI gate is blocking.
+PyJWT==2.14.0
 bcrypt==5.0.0
 # bumped from 2.5.3/2.1.0: mcp==1.28.1  # PYSEC-2026-1617, -3482 (SSE/HTTP), -3483 (WebSocket) requires pydantic-settings>=2.5.2 (pulls pydantic>=2.7).
 # These are the versions the suite is validated against; the old pins make a clean image build unresolvable.
