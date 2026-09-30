@@ -52,6 +52,8 @@ A day's **state**:
 
 **Streak count**, walking back from yesterday (and including today if it is already `done`): each `done` day adds 1; `none` days are skipped; the **first `missed` day of each Monday–Sunday week is forgiven** (shown as a shield 🛡️, adds 0, doesn't break); any further `missed` day in the same week ends the walk. Lookback 365 days.
 
+Legacy rows (added at planning): an assignment with `status = completed` but `completed_at` NULL (written before completion timestamps existed) counts as done on time.
+
 Consequences: retroactive "mark done for kid" after the day doesn't restore that day (completed too late); a later `missed`/`rejected` grade can lower a streak already shown.
 
 ### Celebration
