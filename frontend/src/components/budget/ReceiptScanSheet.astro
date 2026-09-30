@@ -113,7 +113,7 @@ const es = lang === "es";
                 </div>
             </div>
 
-            <div data-slot="iva-pill" class="inline-block px-3 py-1 rounded-full bg-brand-cream-deep text-xs font-semibold text-brand-ink hidden"></div>
+            <div data-slot="iva-pill" hidden class="inline-block px-3 py-1 rounded-full bg-brand-cream-deep text-xs font-semibold text-brand-ink"></div>
 
             <ul data-slot="items" class="border-t border-brand-ink/10 pt-3 divide-y divide-brand-ink/5 hidden"></ul>
 
@@ -165,7 +165,8 @@ const es = lang === "es";
             <a
                 data-slot="done-link"
                 href="/budget/transactions"
-                class={`${buttonClass("primary", "md")} hidden block w-full text-center`}
+                hidden
+                class={`${buttonClass("primary", "md")} block w-full text-center`}
             >{es ? "Ver transacciones" : "View transactions"}</a>
         </div>
     </template>
@@ -355,7 +356,7 @@ const es = lang === "es";
             if (tx.iva_cents) {
                 const iva = slot("iva-pill");
                 iva.textContent = `IVA ${money(tx.iva_cents, currency)}`;
-                iva.classList.remove("hidden");
+                iva.hidden = false;
             }
 
             const items = b.items || [];
@@ -524,7 +525,7 @@ const es = lang === "es";
             slot("summary").textContent = es
                 ? `✓ ${created} creados · 📋 ${drafts} en revisión · ⚠ ${dups} duplicados · ✗ ${errors} errores`
                 : `✓ ${created} created · 📋 ${drafts} drafts · ⚠ ${dups} duplicates · ✗ ${errors} errors`;
-            slot("done-link").classList.remove("hidden");
+            slot("done-link").hidden = false;
         }
 
         // ── Entry points ─────────────────────────────────────────────────

@@ -398,7 +398,8 @@ const dowLabels = lang === "es"
                     id="tcm-submit"
                     type="button"
                     data-tour="task-submit"
-                    class={`hidden flex-1 active:scale-[0.98] transition-all duration-150 ${buttonClass("secondary", "sm")}`}
+                    hidden
+                    class={`flex-1 active:scale-[0.98] transition-all duration-150 ${buttonClass("secondary", "sm")}`}
                 >
                     {lang === "es" ? "Crear tarea" : "Create Task"}
                 </button>
@@ -633,14 +634,14 @@ const dowLabels = lang === "es"
             step2.classList.add("hidden");
             step2.classList.remove("flex");
             if (backBtn) backBtn.classList.add("hidden");
-            if (submitBtn) submitBtn.classList.add("hidden");
+            if (submitBtn) submitBtn.hidden = true;
         } else {
             step1.classList.add("hidden");
             step1.classList.remove("flex");
             step2.classList.remove("hidden");
             step2.classList.add("flex");
             if (backBtn) backBtn.classList.remove("hidden");
-            if (submitBtn) submitBtn.classList.remove("hidden");
+            if (submitBtn) submitBtn.hidden = false;
             setTimeout(() => nameInput?.focus(), 100);
         }
     }
@@ -991,7 +992,7 @@ const dowLabels = lang === "es"
 
     // Back-compat: hide back/submit at init (step 1 is shown)
     if (backBtn) backBtn.classList.add("hidden");
-    if (submitBtn) submitBtn.classList.add("hidden");
+    if (submitBtn) submitBtn.hidden = true;
 
     // View Transitions re-init
     document.addEventListener("astro:after-swap", initTaskCreateModal);
