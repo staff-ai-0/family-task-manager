@@ -131,7 +131,10 @@ class OversightService:
 
     @staticmethod
     async def get_summary(db: AsyncSession, family_id: UUID) -> OversightSummary:
-        """Per-kid cards + unified pending counts. Nine fixed queries, no N+1."""
+        """Per-kid cards + unified pending counts. Nine fixed queries, plus 3
+        small progress queries per kid (ProgressService.xp_for's two sums,
+        day_states) for streak/rank — not row-count N+1, but not O(1) either.
+        """
         kids = list(
             (
                 await db.execute(

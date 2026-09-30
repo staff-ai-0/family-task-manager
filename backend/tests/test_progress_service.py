@@ -1,7 +1,6 @@
 """UX-D1 progress queries against the test DB (family-scoped, tz-aware)."""
 from datetime import datetime, time, timedelta, timezone
 from uuid import uuid4
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, update
 
@@ -12,8 +11,6 @@ from app.models.task_assignment import ApprovalStatus, AssignmentStatus, TaskAss
 from app.models.task_template import AssignmentType, TaskTemplate
 from app.models.user import User
 from app.services.progress_service import DayState as S, ProgressService
-
-from conftest import family_local_today
 
 
 async def _pt(db, kid, typ, points):
@@ -176,6 +173,17 @@ class TestDayStates:
         chore = await _template(db_session, test_family.id)
         y = today - timedelta(days=1)
         await _assign(db_session, kid, chore, y, completed_at=None)  # status COMPLETED, no timestamp
+        states = await ProgressService.day_states(db_session, test_family.id, kid.id, today, tz)
+        assert states[y] == S.done
+
+    async def test_partial_grade_counts_as_done(self, db_session, test_family, test_child_user):
+        """Only `missed` excludes a day — `partial` (a graded-down but still
+        approved completion) completed on its own day still counts done."""
+        kid = test_child_user
+        today, tz = await ProgressService.family_today(db_session, test_family.id)
+        chore = await _template(db_session, test_family.id)
+        y = today - timedelta(days=1)
+        await _assign(db_session, kid, chore, y, completed_at=_at(y, 18, tz), grade="partial")
         states = await ProgressService.day_states(db_session, test_family.id, kid.id, today, tz)
         assert states[y] == S.done
 
