@@ -12,6 +12,7 @@
  *   actions — right of title row (buttons, icon-links)
  *   sub     — below title row (subtitle line, stat, breadcrumb)
  */
+import Icon from "./Icon.astro";
 import { headerToneClass, type HeaderTone } from "../../lib/headerTone";
 
 interface Props {
@@ -28,9 +29,7 @@ const { title, tone = "cream", backHref, backLabel, lang = "en", class: classNam
 <header class={`${headerToneClass(tone)} pt-12 pb-6 px-6 rounded-b-[var(--radius-tile)] shadow-[var(--shadow-card)] ${className}`}>
   {backHref && (
     <a href={backHref} class="text-brand-ink hover:underline text-sm font-bold flex items-center gap-1 mb-3">
-      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-      </svg>
+      <Icon name="back" class="h-4 w-4" />
       {backLabel ?? (lang === "es" ? "Volver" : "Back")}
     </a>
   )}
