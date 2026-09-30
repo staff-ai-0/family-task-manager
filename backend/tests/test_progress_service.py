@@ -77,6 +77,48 @@ class TestXp:
         await db_session.commit()
         assert await ProgressService.xp_for(db_session, test_child_user.family_id, test_child_user.id) == 0
 
+    async def test_split_gig_pay_sums_before_flooring(self, db_session, test_child_user):
+        """F1: CashService.credit_split_rows writes one gig_earned row per jar
+        (save/share/spend), each possibly under a dollar. Flooring PER ROW
+        (3 + 1 + 0 = 4) undercounts a $5 gig split 350/100/50 cents; flooring
+        AFTER summing (500 // 100 = 5) is correct."""
+        kid = test_child_user
+        await _ct(db_session, kid, CT.GIG_EARNED, 350)
+        await _ct(db_session, kid, CT.GIG_EARNED, 100)
+        await _ct(db_session, kid, CT.GIG_EARNED, 50)
+        assert await ProgressService.xp_for(db_session, kid.family_id, kid.id) == 5
+
+    async def test_reopen_correction_nets_points_not_discarded(self, db_session, test_child_user):
+        """F2: patch_assignment's reopen claw-back writes a negative
+        TASK_COMPLETED row. The old `points > 0` filter discarded it, so a
+        reopen+redo double-counted the original award."""
+        kid = test_child_user
+        await _pt(db_session, kid, PT.TASK_COMPLETED, 40)
+        await _pt(db_session, kid, PT.TASK_COMPLETED, -40)  # reopen claws back
+        await _pt(db_session, kid, PT.TASK_COMPLETED, 40)   # redone
+        assert await ProgressService.xp_for(db_session, kid.family_id, kid.id) == 40
+
+    async def test_collaboration_resplit_nets_points_for_first_kid(self, db_session, test_child_user, test_teen_user):
+        """F2: _settle_collaboration's re-split writes a negative GIG_APPROVED
+        delta on the original completer when a sibling joins. The first
+        kid's net share must reflect the claw-back, not the original award."""
+        kid, sibling = test_child_user, test_teen_user
+        await _pt(db_session, kid, PT.GIG_APPROVED, 30)
+        await _pt(db_session, kid, PT.GIG_APPROVED, -15)     # re-split claws back half
+        await _pt(db_session, sibling, PT.GIG_APPROVED, 15)  # sibling's new share
+        assert await ProgressService.xp_for(db_session, kid.family_id, kid.id) == 15
+        assert await ProgressService.xp_for(db_session, kid.family_id, sibling.id) == 15
+
+    async def test_net_points_cannot_go_below_zero(self, db_session, test_child_user):
+        kid = test_child_user
+        await _pt(db_session, kid, PT.TASK_COMPLETED, -10)  # a lone correction row
+        assert await ProgressService.xp_for(db_session, kid.family_id, kid.id) == 0
+
+    async def test_net_cash_cannot_go_below_zero(self, db_session, test_child_user):
+        kid = test_child_user
+        await _ct(db_session, kid, CT.GIG_EARNED, -500)  # a lone claw-back row
+        assert await ProgressService.xp_for(db_session, kid.family_id, kid.id) == 0
+
 
 class TestDayStates:
     async def test_done_missed_none_and_bonus_ignored(self, db_session, test_family, test_child_user):

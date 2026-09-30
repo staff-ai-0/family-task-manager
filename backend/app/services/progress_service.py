@@ -120,23 +120,36 @@ class ProgressService:
 
     @staticmethod
     async def xp_for(db: AsyncSession, family_id: UUID, user_id: UUID) -> int:
+        """Sum ALL rows of the earning types — positive AND negative — then
+        clamp each part at 0, instead of filtering to `> 0` rows.
+
+        Parent corrections write negative rows against the same types as the
+        original award (reopening a chore claws back TASK_COMPLETED; a
+        collaboration gig re-split claws back GIG_APPROVED via
+        `_settle_collaboration`), so filtering to `points > 0` /
+        `amount_cents > 0` discarded the claw-back and let a redo
+        double-count. Cash is netted in CENTS and floored AFTER summing —
+        flooring each `gig_earned` row (one per jar from
+        `CashService.credit_split_rows`) before summing undercounts a split
+        gig (e.g. $5 split 350/100/50 cents floors to 3+1+0=4, not 5).
+        """
         points = (await db.execute(
             select(func.coalesce(func.sum(PointTransaction.points), 0)).where(
                 PointTransaction.family_id == family_id,
                 PointTransaction.user_id == user_id,
-                PointTransaction.points > 0,
                 PointTransaction.type.in_(XP_POINT_TYPES),
             )
         )).scalar()
-        pesos = (await db.execute(
-            select(func.coalesce(func.sum(CashTransaction.amount_cents // 100), 0)).where(
+        pesos_cents = (await db.execute(
+            select(func.coalesce(func.sum(CashTransaction.amount_cents), 0)).where(
                 CashTransaction.family_id == family_id,
                 CashTransaction.user_id == user_id,
-                CashTransaction.amount_cents > 0,
                 CashTransaction.type == CashTransactionType.GIG_EARNED,
             )
         )).scalar()
-        return int(points or 0) + int(pesos or 0)
+        points_xp = max(0, int(points or 0))
+        cash_xp = max(0, int(pesos_cents or 0)) // 100
+        return points_xp + cash_xp
 
     @staticmethod
     async def day_states(

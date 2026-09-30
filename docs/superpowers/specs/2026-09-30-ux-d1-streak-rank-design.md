@@ -15,12 +15,17 @@ Kids and teens keep coming back after the points/pet novelty fades: every day of
 
 ## Rules
 
-### XP (only ever grows)
+### XP
 
-`xp(user) = Σ point_transactions.points WHERE user = kid AND points > 0 AND type IN (task_completed, bonus, gig_approved)`
-`        + Σ floor(cash_transactions.amount_cents / 100) WHERE user = kid AND type = gig_earned AND amount_cents > 0`
+`xp(user) = max(0, Σ point_transactions.points WHERE user = kid AND type IN (task_completed, bonus, gig_approved))`
+`        + max(0, Σ cash_transactions.amount_cents WHERE user = kid AND type = gig_earned) // 100`
 
-Excluded: `reward_redeemed`, `penalty`, `parent_adjustment`, `transfer` (points); `payout`, `adjustment`, `allowance` (chore points converted to cash — would double-count), `interest`, `match`, `jar_transfer` (cash). Spending never lowers XP. Family-scoped: every query filters by the kid's `family_id`.
+Each part sums ALL rows of its type — positive and negative — then clamps at
+0; the per-row floor was replaced by floor-after-sum (1 XP per $1 earned), so
+a $5 gig split 350/100/50 cents across jars (`CashService.credit_split_rows`)
+gives 5 XP, not `3 + 1 + 0 = 4`.
+
+Excluded: `reward_redeemed`, `penalty`, `parent_adjustment`, `transfer` (points); `payout`, `adjustment`, `allowance` (chore points converted to cash — would double-count), `interest`, `match`, `jar_transfer` (cash). Spending never lowers XP; parent corrections (reopening a chore, re-splitting a shared gig) do, and XP never goes below 0. Family-scoped: every query filters by the kid's `family_id`.
 
 ### Ranks
 
