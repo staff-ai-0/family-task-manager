@@ -429,3 +429,24 @@ describe("scanVisual — white-on-brand-fill in CSS blocks", () => {
         expect(rules(css, "white-on-brand-fill")).toEqual([]);
     });
 });
+
+describe("scanVisual — h1-emoji via PageLayout / PageHeader title", () => {
+    it("flags an emoji in a PageLayout / PageHeader title attribute", () => {
+        const src = [
+            "<PageLayout",
+            "    title={`📅 ${labels.title}`}",
+            "    role={user.role}",
+            ">",
+            '<PageHeader title={es ? "🎯 Meta" : "🎯 Goal"} tone="sky" />',
+        ].join("\n");
+        expect(rules(src, "h1-emoji").map((h) => h.line)).toEqual([2, 5]);
+    });
+    it("ignores emoji-free titles and other components' title/icon props", () => {
+        const src = [
+            '<PageLayout title="Settings" tone="cream">',
+            '<SettingsAccordion id="accounts" title={es ? "Cuentas" : "Accounts"} icon="🏦">',
+            '<Card title="🎯 goal" />',
+        ].join("\n");
+        expect(rules(src, "h1-emoji")).toEqual([]);
+    });
+});
