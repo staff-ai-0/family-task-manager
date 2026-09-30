@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { contrastRatio } from "./support/contrast";
+import { contrastRatio, mix, parseModeOverrides } from "./support/contrast";
 
 const CSS = readFileSync(fileURLToPath(new URL("../src/styles/global.css", import.meta.url)), "utf8");
 const AA = 4.5;
@@ -25,25 +25,67 @@ describe("contrastRatio", () => {
     });
 });
 
-describe("brand token contrast (WCAG AA, UX-B3)", () => {
-    const ink = () => token("ink");
+describe("mix", () => {
+    it("composites fg over bg by alpha", () => {
+        expect(mix("#000000", "#FFFFFF", 0.5)).toBe("#808080");
+        expect(mix("#4FB8E6", "#FFFFFF", 1)).toBe("#4FB8E6");
+        expect(mix("#4FB8E6", "#FFFFFF", 0)).toBe("#FFFFFF");
+    });
+});
+
+describe("parseModeOverrides", () => {
+    const THEME = "@theme {\n  --color-brand-sky: #4FB8E6;\n}\n";
+    it("reads hex overrides per body[data-ui-mode] block", () => {
+        const css = THEME + 'body[data-ui-mode="adult"] {\n  --color-brand-cream: #FAFAFA;\n}\n';
+        expect(parseModeOverrides(css)).toEqual({ default: {}, adult: { cream: "#FAFAFA" } });
+    });
+    it("refuses a brand override it cannot check (oklch / var / short hex)", () => {
+        for (const v of ["oklch(0.6 0.2 250)", "var(--color-indigo-500)", "#fff"]) {
+            const css = THEME + `body[data-ui-mode="teen"] {\n  --color-brand-coral: ${v};\n}\n`;
+            expect(() => parseModeOverrides(css), v).toThrow(/#RRGGBB/);
+        }
+    });
+    it("refuses a brand override outside @theme that no body[data-ui-mode] block covers", () => {
+        for (const sel of ['[data-ui-mode="teen"] body', 'body[data-ui-mode="teen"], .x', "body[data-ui-mode='teen']"]) {
+            const css = THEME + `${sel} {\n  --color-brand-coral: #5C7CFA;\n}\n`;
+            expect(() => parseModeOverrides(css), sel).toThrow(/not in a parsed/);
+        }
+    });
+});
+
+const MODES = parseModeOverrides(CSS);
+
+it("parses the default and adult UI modes", () => {
+    expect(Object.keys(MODES)).toEqual(expect.arrayContaining(["default", "adult"]));
+});
+
+it("teen mode uses the default palette (decision 2026-09-30: teen = corners only)", () => {
+    expect(MODES.teen ?? {}).toEqual({});
+});
+
+describe.each(Object.entries(MODES))("brand token contrast in %s mode (WCAG AA)", (_mode, over) => {
+    const tok = (name: string) => over[name] ?? token(name);
+    const surfaces = () => [WHITE, tok("cream"), tok("cream-deep")];
 
     it.each(["sky", "mint", "sun", "coral", "cream"])("ink text on the %s header tone", (tone) => {
-        expect(contrastRatio(ink(), token(tone))).toBeGreaterThanOrEqual(AA);
+        expect(contrastRatio(tok("ink"), tok(tone))).toBeGreaterThanOrEqual(AA);
     });
 
     it.each(["sky-deep", "mint-deep", "sun-deep", "coral-deep"])("ink text on the %s hover fill", (fill) => {
-        expect(contrastRatio(ink(), token(fill))).toBeGreaterThanOrEqual(AA);
+        expect(contrastRatio(tok("ink"), tok(fill))).toBeGreaterThanOrEqual(AA);
     });
 
-    const surfaces = () => [["white", WHITE], ["cream", token("cream")], ["cream-deep", token("cream-deep")]] as const;
-    it.each(["sky-text", "mint-text", "coral-text", "sun-text"])("%s on white, cream and cream-deep", (shade) => {
-        for (const [, bg] of surfaces()) {
-            expect(contrastRatio(token(shade), bg)).toBeGreaterThanOrEqual(AA);
+    it.each(["sky", "mint", "coral", "sun"])("%s-text on white, cream and cream-deep", (hue) => {
+        for (const bg of surfaces()) expect(contrastRatio(tok(`${hue}-text`), bg)).toBeGreaterThanOrEqual(AA);
+    });
+
+    it.each(["sky", "mint", "coral", "sun"])("%s-text on its own tint (30 percent) over white, cream and cream-deep", (hue) => {
+        for (const bg of surfaces()) {
+            expect(contrastRatio(tok(`${hue}-text`), mix(tok(hue), bg, 0.3))).toBeGreaterThanOrEqual(AA);
         }
     });
 
     it("white text on the ink parent-hub hero", () => {
-        expect(contrastRatio(WHITE, ink())).toBeGreaterThanOrEqual(AA);
+        expect(contrastRatio(WHITE, tok("ink"))).toBeGreaterThanOrEqual(AA);
     });
 });

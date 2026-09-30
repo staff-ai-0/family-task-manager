@@ -21,9 +21,9 @@
 
   /* Text-safe shades (UX-B3): ≥ 4.5:1 on white, cream and cream-deep.
      Use these for colored TEXT; the -deep shades are fills/hovers only. */
-  --color-brand-sky-text:   #1A6F99;
-  --color-brand-mint-text:  #1E7552;
-  --color-brand-coral-text: #B8431F;
+  --color-brand-sky-text:   #165F84;
+  --color-brand-mint-text:  #1B694A;
+  --color-brand-coral-text: #9E3A1B;
   --color-brand-sun-text:   #8A5A00;
 
   /* skin/hair tokens used by illustrations only */
@@ -158,20 +158,10 @@
 }
 
 /* ---------- Teen UI mode (W4.2) ----------
-   Activated by data-ui-mode="teen" on <body>. Less saturated colors,
-   slightly denser type, less playful corner rounding. Functionality
-   stays the same — this is purely a visual register shift. */
-body[data-ui-mode="teen"] {
-  --color-brand-cream:      #ECECEF;
-  --color-brand-cream-deep: #D8D8DE;
-  --color-brand-sun:        #B8B8C2;
-  --color-brand-sun-deep:   #8A8AA0;
-  --color-brand-coral:      #5C7CFA;
-  --color-brand-coral-deep: #3B5BDB;
-  --color-brand-mint:       #20C997;
-  --color-brand-mint-deep:  #12B886;
-}
-
+   Activated by data-ui-mode="teen" on <body>. Teens use the same brand
+   palette as kids (their own colors were dropped 2026-09-30: dark text on
+   the teen blue failed contrast); only the corner rounding is less
+   playful. Their home header keeps its dark skin (KidHeader). */
 body[data-ui-mode="teen"] .rounded-2xl { border-radius: 0.75rem; }
 body[data-ui-mode="teen"] .rounded-xl  { border-radius: 0.5rem; }
 

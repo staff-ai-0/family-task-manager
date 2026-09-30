@@ -407,3 +407,65 @@ describe("DEEP_TEXT_CODEMOD", () => {
         expect(run(s)).toBe(s);
     });
 });
+
+describe("scanVisual — white-on-brand-fill in CSS blocks", () => {
+    it("flags a CSS block with a brand background and white text", () => {
+        const css = [
+            ".driver-popover .driver-popover-next-btn {",
+            "    background: var(--color-brand-sky-deep, #2563eb);",
+            "    color: #fff;",
+            "}",
+            ".b { background-color: var(--color-brand-mint); color: white; }",
+        ].join("\n");
+        expect(rules(css, "white-on-brand-fill").map((h) => h.line)).toEqual([3, 5]);
+    });
+    it("leaves CSS blocks with ink text, ink backgrounds or no brand var alone", () => {
+        const css = [
+            ".a { background: var(--color-brand-sky); color: var(--color-brand-ink); }",
+            ".b { background: var(--color-brand-ink); color: #fff; }",
+            ".c { background-color: #fff; color: white; }",
+            "const style = { background: 'var(--color-brand-sky)', border: 0 };",
+        ].join("\n");
+        expect(rules(css, "white-on-brand-fill")).toEqual([]);
+    });
+});
+
+describe("scanVisual — h1-emoji via PageLayout / PageHeader title", () => {
+    it("flags an emoji in a PageLayout / PageHeader title attribute", () => {
+        const src = [
+            "<PageLayout",
+            "    title={`📅 ${labels.title}`}",
+            "    role={user.role}",
+            ">",
+            '<PageHeader title={es ? "🎯 Meta" : "🎯 Goal"} tone="sky" />',
+        ].join("\n");
+        expect(rules(src, "h1-emoji").map((h) => h.line)).toEqual([2, 5]);
+    });
+    it("ignores emoji-free titles and other components' title/icon props", () => {
+        const src = [
+            '<PageLayout title="Settings" tone="cream">',
+            '<SettingsAccordion id="accounts" title={es ? "Cuentas" : "Accounts"} icon="🏦">',
+            '<Card title="🎯 goal" />',
+        ].join("\n");
+        expect(rules(src, "h1-emoji")).toEqual([]);
+    });
+});
+
+describe("scanVisual — hover-text-vanishes", () => {
+    it("flags a hover fill in the same color as the text with no hover text swap", () => {
+        const src = [
+            '<button class="w-full bg-brand-sun-deep hover:bg-brand-ink text-brand-ink">Redeem</button>',
+            'class={`w-full ${ok ? "bg-brand-sun-deep hover:bg-brand-ink text-brand-ink" : "bg-slate-200"}`}',
+            '<a class="bg-brand-ink hover:bg-white text-white">x</a>',
+        ].join("\n");
+        expect(rules(src, "hover-text-vanishes").map((h) => h.line)).toEqual([1, 2, 3]);
+    });
+    it("leaves hovers with a text swap or a different color alone", () => {
+        const src = [
+            '<button class="bg-brand-sun-deep hover:bg-brand-ink text-brand-ink hover:text-brand-cream">a</button>',
+            '<button class="bg-brand-sun-deep hover:bg-brand-sun text-brand-ink">b</button>',
+            '<button class="bg-brand-ink text-white hover:bg-brand-ink/90">c</button>',
+        ].join("\n");
+        expect(rules(src, "hover-text-vanishes")).toEqual([]);
+    });
+});
